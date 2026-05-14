@@ -57,7 +57,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
       },
       {
         value: "acceptEdits",
-        label: "Accept Edits",
+        label: "Auto",
         shortLabel: "Auto",
         description: "Auto-approve file edits.",
         tone: "success",

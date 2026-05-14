@@ -32,10 +32,12 @@ describe("SessionControlIcon", () => {
     });
     expect(resolveConfiguredSessionControlValue("claude", "mode", "acceptEdits")).toMatchObject({
       icon: "sparkles",
+      label: "Auto",
       shortLabel: "Auto",
     });
     expect(resolveConfiguredSessionControlValue("claude", "mode", "auto")).toMatchObject({
       icon: "sparkles",
+      label: "Auto",
       shortLabel: "Auto",
     });
   });
