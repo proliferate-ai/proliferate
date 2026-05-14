@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import asyncio
+import json
+from collections.abc import AsyncGenerator, AsyncIterator
+from typing import cast
+from uuid import UUID
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.server.cloud.live.service import stream_session_events
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.shared import AuthSession
 
@@ -37,6 +44,31 @@ async def _create_enrolled_target(
     assert worker_enroll.status_code == 200
     worker = worker_enroll.json()
     return enrollment["target"]["id"], {"Authorization": f"Bearer {worker['workerToken']}"}
+
+
+def _sse_event(frame: str) -> str:
+    for line in frame.splitlines():
+        if line.startswith("event: "):
+            return line.removeprefix("event: ")
+    raise AssertionError(f"SSE frame has no event line: {frame}")
+
+
+def _sse_data(frame: str) -> dict[str, object]:
+    for line in frame.splitlines():
+        if line.startswith("data: "):
+            value: object = json.loads(line.removeprefix("data: "))
+            assert isinstance(value, dict)
+            return cast("dict[str, object]", value)
+    raise AssertionError(f"SSE frame has no data line: {frame}")
+
+
+async def _next_stream_frame(stream: AsyncIterator[str]) -> str:
+    return await anext(stream)
+
+
+def _mapping(value: object) -> dict[str, object]:
+    assert isinstance(value, dict)
+    return cast("dict[str, object]", value)
 
 
 class TestCloudEventSyncApi:
@@ -182,3 +214,95 @@ class TestCloudEventSyncApi:
         )
         assert duplicate_mismatch.status_code == 409
         assert duplicate_mismatch.json()["detail"]["code"] == "cloud_event_duplicate_mismatch"
+
+    @pytest.mark.asyncio
+    async def test_session_stream_emits_snapshot_and_live_projection_patch(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-event-stream",
+        )
+        target_id, worker_headers = await _create_enrolled_target(
+            client,
+            auth,
+            suffix="stream",
+        )
+        uploaded = await client.post(
+            "/v1/cloud/worker/events/batches",
+            headers=worker_headers,
+            json={
+                "events": [
+                    {
+                        "workspaceId": "workspace-stream",
+                        "sessionId": "session-stream",
+                        "seq": 1,
+                        "timestamp": "2026-05-13T00:00:00Z",
+                        "event": {
+                            "type": "session_started",
+                            "nativeSessionId": "native-stream",
+                            "sourceAgentKind": "codex",
+                        },
+                    }
+                ]
+            },
+        )
+        assert uploaded.status_code == 200
+
+        stream = cast(
+            "AsyncGenerator[str, None]",
+            stream_session_events(
+                target_id=UUID(target_id),
+                session_id="session-stream",
+                after_seq=1,
+            ),
+        )
+        try:
+            snapshot_frame = await asyncio.wait_for(anext(stream), timeout=1)
+            assert _sse_event(snapshot_frame) == "snapshot"
+            snapshot = _sse_data(snapshot_frame)
+            assert _mapping(snapshot["session"])["sessionId"] == "session-stream"
+
+            patch_task: asyncio.Task[str] = asyncio.create_task(_next_stream_frame(stream))
+
+            live_uploaded = await client.post(
+                "/v1/cloud/worker/events/batches",
+                headers=worker_headers,
+                json={
+                    "events": [
+                        {
+                            "workspaceId": "workspace-stream",
+                            "sessionId": "session-stream",
+                            "seq": 2,
+                            "timestamp": "2026-05-13T00:00:01Z",
+                            "turnId": "turn-stream",
+                            "itemId": "item-stream",
+                            "event": {
+                                "type": "item_completed",
+                                "item": {
+                                    "kind": "assistant_message",
+                                    "status": "completed",
+                                    "sourceAgentKind": "codex",
+                                    "contentParts": [
+                                        {"type": "text", "text": "streamed response"}
+                                    ],
+                                },
+                            },
+                        }
+                    ]
+                },
+            )
+            assert live_uploaded.status_code == 200
+
+            patch_frame = await asyncio.wait_for(patch_task, timeout=2)
+            assert _sse_event(patch_frame) == "patch"
+            patch_envelope = _sse_data(patch_frame)
+            assert patch_envelope["kind"] == "projection_patch"
+            patch = _mapping(patch_envelope["patch"])
+            assert patch["eventType"] == "item_completed"
+            assert _mapping(patch["transcriptItem"])["text"] == "streamed response"
+        finally:
+            await stream.aclose()

@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections import defaultdict
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import engine as db_engine
 from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.errors import CloudApiError
@@ -25,21 +22,23 @@ from proliferate.server.cloud.events.domain.projection import (
     transcript_item_text,
 )
 from proliferate.server.cloud.events.models import (
+    CloudSessionPatchResponse,
     CloudSessionSnapshotResponse,
     WorkerEventBatchRequest,
     WorkerEventBatchResponse,
     WorkerEventSessionAck,
     pending_interaction_response,
-    session_event_response,
     session_projection_response,
     transcript_item_response,
+)
+from proliferate.server.cloud.live.service import (
+    projection_patch_from_event,
+    publish_session_patch,
 )
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 
 SESSION_DURABLE_EVENT_HARD_CAP = 10_000
 SESSION_PAYLOAD_BYTES_HARD_CAP = 25 * 1024 * 1024
-STREAM_POLL_SECONDS = 0.5
-STREAM_EVENT_LIMIT = 100
 
 
 @dataclass(frozen=True)
@@ -66,6 +65,7 @@ async def ingest_worker_event_batch(
     received_by_session: dict[str, list[int]] = defaultdict(list)
     workspace_by_session: dict[str, str | None] = {}
     cloud_workspace_by_session: dict[str, UUID | None] = {}
+    projection_patches: list[CloudSessionPatchResponse] = []
 
     for event in body.events:
         if event.seq <= 0:
@@ -139,13 +139,15 @@ async def ingest_worker_event_batch(
             duplicate_events += 1
             continue
         accepted_events += 1
-        await _apply_projection(
-            db,
-            auth=auth,
-            cloud_workspace_id=cloud_workspace_id,
-            workspace_id=current_workspace_id,
-            envelope=envelope,
-            payload_json=payload_decision.payload_json,
+        projection_patches.append(
+            await _apply_projection(
+                db,
+                auth=auth,
+                cloud_workspace_id=cloud_workspace_id,
+                workspace_id=current_workspace_id,
+                envelope=envelope,
+                payload_json=payload_decision.payload_json,
+            )
         )
 
     session_acks: list[WorkerEventSessionAck] = []
@@ -171,6 +173,9 @@ async def ingest_worker_event_batch(
                 last_contiguous_seq=cursor,
             )
         )
+
+    for patch in projection_patches:
+        await publish_session_patch(patch)
 
     return WorkerEventBatchResponse(
         accepted_events=accepted_events,
@@ -248,53 +253,6 @@ async def ensure_visible_session_target(
     return target_id
 
 
-async def list_session_events_after(
-    db: AsyncSession,
-    *,
-    target_id: UUID,
-    session_id: str,
-    after_seq: int,
-    limit: int = 200,
-) -> list[dict[str, object]]:
-    events = await events_store.list_events_after(
-        db,
-        target_id=target_id,
-        session_id=session_id,
-        after_seq=after_seq,
-        limit=limit,
-    )
-    return [session_event_response(event).model_dump(by_alias=True) for event in events]
-
-
-async def stream_session_events(
-    *,
-    target_id: UUID,
-    session_id: str,
-    after_seq: int,
-) -> AsyncIterator[str]:
-    cursor = max(0, after_seq)
-    while True:
-        async with db_engine.async_session_factory() as stream_db:
-            events = await list_session_events_after(
-                stream_db,
-                target_id=target_id,
-                session_id=session_id,
-                after_seq=cursor,
-                limit=STREAM_EVENT_LIMIT,
-            )
-        for event in events:
-            seq = _int_value(event["seq"])
-            cursor = max(cursor, seq)
-            yield _sse_event(
-                event="session_event",
-                event_id=str(seq),
-                data=event,
-            )
-        if not events:
-            yield ": keepalive\n\n"
-            await asyncio.sleep(STREAM_POLL_SECONDS)
-
-
 async def _apply_projection(
     db: AsyncSession,
     *,
@@ -303,7 +261,7 @@ async def _apply_projection(
     workspace_id: str | None,
     envelope: dict[str, object],
     payload_json: str | None,
-) -> None:
+) -> CloudSessionPatchResponse:
     session_id = str(envelope["sessionId"])
     seq = _int_value(envelope["seq"])
     occurred_at = envelope.get("timestamp")
@@ -312,7 +270,7 @@ async def _apply_projection(
     event_payload = event if isinstance(event, dict) else {}
     current_event_type = event_type(envelope)
     patch = _session_projection_patch(current_event_type, event_payload, timestamp)
-    await events_store.upsert_session_projection(
+    session_projection = await events_store.upsert_session_projection(
         db,
         target_id=auth.target_id,
         cloud_workspace_id=cloud_workspace_id,
@@ -329,12 +287,14 @@ async def _apply_projection(
         started_at=patch.started_at,
         ended_at=patch.ended_at,
     )
+    transcript_item = None
+    pending_interaction = None
 
     if current_event_type in {"item_started", "item_completed"}:
         item_id = transcript_item_id(envelope)
         if item_id is not None:
             item = transcript_item_payload(event_payload)
-            await events_store.upsert_transcript_item(
+            transcript_item = await events_store.upsert_transcript_item(
                 db,
                 target_id=auth.target_id,
                 cloud_workspace_id=cloud_workspace_id,
@@ -355,7 +315,7 @@ async def _apply_projection(
     elif current_event_type == "interaction_requested":
         request_id = _str_or_none(event_payload.get("requestId"))
         if request_id:
-            await events_store.upsert_pending_interaction(
+            pending_interaction = await events_store.upsert_pending_interaction(
                 db,
                 target_id=auth.target_id,
                 cloud_workspace_id=cloud_workspace_id,
@@ -372,7 +332,7 @@ async def _apply_projection(
     elif current_event_type == "interaction_resolved":
         request_id = _str_or_none(event_payload.get("requestId"))
         if request_id:
-            await events_store.resolve_pending_interaction(
+            pending_interaction = await events_store.resolve_pending_interaction(
                 db,
                 target_id=auth.target_id,
                 session_id=session_id,
@@ -381,6 +341,15 @@ async def _apply_projection(
                 occurred_at=timestamp,
                 payload_json=payload_json,
             )
+    return projection_patch_from_event(
+        target_id=auth.target_id,
+        session_id=session_id,
+        seq=seq,
+        event_type=current_event_type,
+        session=session_projection,
+        transcript_item=transcript_item,
+        pending_interaction=pending_interaction,
+    )
 
 
 def _session_projection_patch(
@@ -426,8 +395,3 @@ def _int_value(value: object) -> int:
     if isinstance(value, str):
         return int(value)
     raise TypeError(f"Expected integer-compatible value, got {type(value).__name__}.")
-
-
-def _sse_event(*, event: str, event_id: str, data: object) -> str:
-    encoded = json.dumps(data, separators=(",", ":"), sort_keys=True)
-    return f"id: {event_id}\nevent: {event}\ndata: {encoded}\n\n"
