@@ -1906,7 +1906,7 @@ body {
   --tab-max-width: 156px;
   --tab-shell-max-width: 160px;
   --tab-height: var(--workspace-shell-action-size);
-  --tab-container-padding: calc((var(--tab-system-height) - var(--tab-height) - 1px) / 2);
+  --tab-container-padding: calc((var(--tab-system-height) - var(--tab-height) - 2px) / 2);
   --tab-stable-end-margin: 0px;
   --tab-gap: 3px;
   --tab-bar-mask-size: 28px;
@@ -1946,6 +1946,7 @@ body {
   color: var(--right-panel-tab-text-secondary);
   font-size: var(--right-panel-tab-font-size);
   line-height: var(--right-panel-tab-line-height);
+  border-top: 1px solid var(--right-panel-tab-border);
   border-bottom: 1px solid var(--right-panel-tab-border);
 }
 
