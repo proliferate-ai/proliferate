@@ -248,29 +248,39 @@ const scratchEditorTheme = EditorView.theme({
   },
   ".scratch-task-checkbox": {
     display: "inline-flex",
-    width: "0.98em",
-    height: "0.98em",
-    margin: "0 0.65ch 0 0.16ch",
+    width: "1.85ch",
+    height: "1em",
+    margin: "0 0.18ch 0 0",
+    alignItems: "center",
+    justifyContent: "center",
+    boxSizing: "border-box",
+    lineHeight: "1",
+    position: "relative",
+    top: "0.1em",
+  },
+  ".scratch-task-box": {
+    display: "inline-flex",
+    width: "0.78em",
+    height: "0.78em",
     alignItems: "center",
     justifyContent: "center",
     boxSizing: "border-box",
     border: "1px solid color-mix(in oklab, var(--color-sidebar-muted-foreground) 72%, transparent)",
-    borderRadius: "0.24em",
+    borderRadius: "0.18em",
     background: "transparent",
     color: "transparent",
-    verticalAlign: "-0.14em",
   },
-  ".scratch-task-checkbox[data-checked=\"true\"]": {
+  ".scratch-task-checkbox[data-checked=\"true\"] .scratch-task-box": {
     borderColor: "color-mix(in oklab, var(--color-foreground) 68%, transparent)",
     background: "color-mix(in oklab, var(--color-foreground) 8%, transparent)",
     color: "var(--color-foreground)",
   },
   ".scratch-task-check": {
-    width: "0.48em",
-    height: "0.28em",
-    marginTop: "-0.08em",
+    width: "0.38em",
+    height: "0.22em",
+    marginTop: "-0.06em",
     border: "solid currentColor",
-    borderWidth: "0 0 0.12em 0.12em",
+    borderWidth: "0 0 0.095em 0.095em",
     transform: "rotate(-45deg)",
   },
 });
@@ -366,11 +376,14 @@ class ScratchTaskWidget extends WidgetType {
     checkbox.tabIndex = 0;
     checkbox.setAttribute("aria-checked", String(this.options.checked));
     checkbox.setAttribute("aria-label", this.options.checked ? "Mark task incomplete" : "Mark task complete");
+    const box = document.createElement("span");
+    box.className = "scratch-task-box";
     if (this.options.checked) {
       const check = document.createElement("span");
       check.className = "scratch-task-check";
-      checkbox.appendChild(check);
+      box.appendChild(check);
     }
+    checkbox.appendChild(box);
     checkbox.addEventListener("mousedown", (event) => {
       event.preventDefault();
     });
