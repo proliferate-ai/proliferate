@@ -411,8 +411,7 @@ describe("RightPanel tab shortcuts", () => {
 
   it("does not intercept angle tab-cycle shell shortcuts from right-panel text inputs", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
-    fireEvent.click(screen.getByRole("tab", { name: "Files" }));
-    const input = screen.getByTestId("files-panel-input");
+    const input = screen.getByTestId("scratch-panel-input");
 
     input.focus();
     expect(document.activeElement).toBe(input);
