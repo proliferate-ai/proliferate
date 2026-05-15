@@ -61,7 +61,7 @@ export function FilePathContextMenuContent({
             disabled={!canOpen}
             trailing={<ChevronRight className="size-3.5" />}
             className={openWithActive
-              ? "bg-primary text-primary-foreground hover:bg-primary focus:bg-primary [&_*]:text-primary-foreground"
+              ? "bg-[var(--color-link-foreground)] text-white hover:bg-[var(--color-link-foreground)] focus:bg-[var(--color-link-foreground)] [&_*]:text-white"
               : ""}
           />
           {openWithActive && (

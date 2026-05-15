@@ -58,7 +58,7 @@ export function PaneSideOverlay({
         role="dialog"
         aria-label={label}
         className={[
-          "pointer-events-auto absolute bottom-2 right-2 top-2 flex min-w-0 flex-col overflow-hidden rounded-lg border border-sidebar-border/80 bg-sidebar-background/95 shadow-floating backdrop-blur",
+          "pointer-events-auto absolute bottom-2 right-2 top-2 flex min-w-0 flex-col overflow-hidden rounded-lg border border-sidebar-border/80 bg-sidebar-background/95 shadow-floating-dark backdrop-blur",
           widthClassName,
         ].join(" ")}
       >
