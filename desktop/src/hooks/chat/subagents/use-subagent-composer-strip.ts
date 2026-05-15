@@ -8,6 +8,14 @@ import {
 import { recordSubagentChildRelationshipHint } from "@/hooks/sessions/workflows/session-relationship-hints";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { formatSubagentLabel } from "@/lib/domain/chat/subagents/provenance";
+import type {
+  DelegatedAgentIdentity,
+  DelegatedWorkStatusCategory,
+} from "@/lib/domain/delegated-work/model";
+import {
+  delegatedWorkStatusCategoryFromLabel,
+} from "@/lib/domain/delegated-work/presentation";
+import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
 
 const EMPTY_CHILDREN: ChildSubagentSummary[] = [];
 
@@ -15,7 +23,9 @@ export interface SubagentComposerStripRow {
   sessionLinkId: string;
   childSessionId: string;
   label: string;
+  identity: DelegatedAgentIdentity;
   statusLabel: string;
+  statusCategory: DelegatedWorkStatusCategory;
   latestCompletionLabel: string | null;
   wakeScheduled: boolean;
 }
@@ -163,11 +173,23 @@ function buildSubagentRow(
   child: ChildSubagentSummary,
   ordinal: number,
 ): SubagentComposerStripRow {
+  const label = formatSubagentLabel(child.label ?? child.title, ordinal);
+  const statusLabel = formatSessionStatus(child.status);
   return {
     sessionLinkId: child.sessionLinkId,
     childSessionId: child.childSessionId,
-    label: formatSubagentLabel(child.label ?? child.title, ordinal),
-    statusLabel: formatSessionStatus(child.status),
+    label,
+    identity: buildDelegatedAgentIdentity({
+      id: child.sessionLinkId,
+      title: label,
+      sessionId: child.childSessionId,
+      sessionLinkId: child.sessionLinkId,
+    }),
+    statusLabel,
+    statusCategory: delegatedWorkStatusCategoryFromLabel({
+      statusLabel,
+      wakeScheduled: child.wakeScheduled,
+    }),
     latestCompletionLabel: child.latestCompletion
       ? formatCompletionLabel(child.latestCompletion.outcome)
       : null,

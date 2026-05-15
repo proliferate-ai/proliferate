@@ -28,8 +28,10 @@ DelegatedWorkItem
   id
   kind: subagent | cowork | plan_review | code_review
   title
-  avatarName
-  color
+  generatedName
+  shortId
+  displayName
+  colorToken
   scope
   status
   latestResult
@@ -57,14 +59,28 @@ Names:
 
 | Field | Example | Use |
 | --- | --- | --- |
-| `title` | `API Surface Check` | tabs, sidebar, popovers, transcript, details |
-| `avatarName` | `Mary` | hover-only friendly texture |
-| `color` | `green` | deterministic visual grouping |
+| `title` | `API Surface Check` | sidebar, popovers, transcript, details |
+| `generatedName` | `Mary` | primary friendly agent identity; chat header tab label |
+| `shortId` | `abc123` | compact stable disambiguator |
+| `displayName` | `Mary (API Surface Check abc123)` | composer, transcript receipts, tool-call rows, hover/details |
+| `colorToken` | `delegated-agent-3` | deterministic semantic identity color |
 | product handle | `subagent_abc123`, `review_abc123` | action routing, debug/details |
 
-Do not replace serious titles with friendly names in normal UI. A bubble may
-show `M`; hover may show `Mary`; the row title should still be
-`API Surface Check`.
+Delegated-agent identity is generated and stable for a delegated-work id. Normal
+UI should use the canonical display handle when the surface represents the agent
+itself:
+
+```text
+GeneratedName (title ID)
+Mary (API Surface Check abc123)
+```
+
+The serious `title` remains available for details, search, and dense secondary
+copy. Chat header tabs are intentionally denser and show only `generatedName`;
+their hover card exposes the full `displayName`, origin, parent/source context,
+and status. Composer rows, transcript receipts, and creation rows should not
+fall back to a title-only display when the generated identity can be resolved.
+Raw ids do not appear outside debug/details surfaces.
 
 ## Status Model
 
@@ -105,6 +121,15 @@ wake_scheduled: muted/neutral with explicit label
 finished: neutral
 closed: hidden by default
 ```
+
+Composer visibility:
+
+- Hide `finished` items only when they succeeded and have no action needed.
+- Hide `closed` items by default.
+- Keep `failed`, `needs_attention`, `feedback_ready`, and
+  `waiting_for_revision` visible until the user acts or dismisses the item.
+- `parent_revising` keeps the delegated-work item visible but must not disable
+  normal parent chat input.
 
 Avoid using one word for both action and state. For example, state is
 `Wake scheduled`; action is `Notify me` or `Wake parent`.
@@ -170,38 +195,44 @@ Rules:
 
 Tabs carry lightweight delegated-work presence.
 
-Target tab shape:
+Target delegated-agent tab shape:
 
 ```text
-[X] [provider] Main session title                  [M][A][S] +2
+[X] Main session  [X] robot Mary  [other tabs]
 ```
 
 Rules:
 
 - The close `X` lives on the left side of the tab.
-- Provider/harness icon appears after the close control or near the title.
-- The right side is reserved for delegated-work indicators.
+- A delegated-agent tab uses a robot icon colored by the agent's deterministic
+  semantic identity token. The text remains normal tab text color.
+- A delegated-agent tab label is only the generated agent name. The full
+  `GeneratedName (title ID)` identity stays in the hover card and transcript
+  receipts.
+- Running, attention, and error states use a status ring/badge around or beside
+  the robot. Status must remain visible and must not replace the robot icon.
 - The parent tab is the anchor. It is not itself a member of the delegated
   agent group.
-- The delegated-agent cluster/pill attaches immediately to the right edge of
-  the parent tab.
-- Show up to three overlapping bubbles.
-- Show `+N` when more items exist.
-- Bubbles use deterministic color from delegated-work id.
-- Bubble text is the avatar initial, not the product title.
-- Hover on a bubble shows friendly name, title, and status.
-- Click on the cluster opens the delegated-work popover scoped to that tab.
+- Open delegated-agent tabs appear immediately to the right of the parent tab
+  and remain contiguous with sibling delegated-agent tabs for that parent.
+- Delegated-agent tabs are shorter by default than normal chat tabs.
+- Hover on a delegated-agent tab shows origin, parent/source context, and
+  status.
+- Closing a delegated-agent tab hides the tab only. It does not delete the
+  delegated item or end active work.
 
 Example hover:
 
 ```text
-Mary
-API Surface Check
+Mary (API Surface Check abc123)
+Subagent
+Parent: Main session
 Running
 ```
 
-Review runs may contribute one bubble for the review run or bubbles for active
-reviewers depending on density. The popover must reveal the full structure.
+Review runs are logical delegated-work items. Reviewer sessions remain real
+chat tabs, and each reviewer tab uses its own generated identity. Review
+`kind: code` maps to `code_review`; review `kind: plan` maps to `plan_review`.
 
 ### Attached Agent Tabs
 
@@ -211,7 +242,7 @@ right of the parent session tab, inside the parent's attached-agent run.
 Target expanded shape:
 
 ```text
-[X] Main session [M][A]+1  [X] API Surface Check  [X] Plan Review  [other tabs]
+[X] Main session  [X] robot Mary  [X] robot Nina
 ```
 
 Rules:
@@ -220,8 +251,6 @@ Rules:
 - All open delegated-agent tabs for the same parent remain contiguous.
 - The parent remains the left anchor and is not visually grouped inside the
   delegated-agent run.
-- The delegated-agent pill/cluster remains attached to the parent tab even when
-  one or more child tabs are open.
 - Cowork child tabs must carry their managed `workspaceId`, relationship
   source, and link handle through the tab view model. Selecting a cowork child
   tab opens that session in the managed cowork workspace, not in the parent's
@@ -244,7 +273,6 @@ Needs attention
 Running
 Queued
 Wake scheduled
-Finished
 ```
 
 Kinds may be grouped inside sections when needed:
@@ -259,16 +287,26 @@ Needs attention
 
 Running
   API Surface Check              Running             Open
-  cowork: auth-workspace         2 sessions          Open workspace
 ```
+
+The composer Agents popover surfaces review and same-workspace subagent work
+only. Cowork managed workspaces and their coding sessions live in the cowork
+sidebar (`CoworkThreadsSection` → `CoworkManagedWorkspaceList`) and are not
+duplicated above the composer.
 
 Row rules:
 
-- primary text is title
+- primary text is the generated display identity
 - secondary text is status or scope
 - actions are short and direct
 - icon-only actions need tooltips
 - raw ids do not appear unless the user opens debug/details
+- Finished successful work is hidden by default unless it produced an action or
+  durable notice that still needs attention.
+
+The `Agents` trigger stays generic when it represents zero or multiple visible
+items. It may show a colored robot identity only when exactly one specific
+active/attention item is represented by the control.
 
 Primary actions by kind:
 
@@ -339,9 +377,9 @@ The transcript is the durable story of the workflow.
 Examples:
 
 ```text
-Started subagent: API Surface Check
+Created subagent Mary (API Surface Check abc123) with prompt "Check SDK usage."
 
-Subagent API Surface Check completed. Result available.
+Mary (API Surface Check abc123) finished a turn · Open
 
 Plan Review completed round 1.
 2 reviewers approved. 1 reviewer requested changes.
@@ -353,6 +391,11 @@ Rules:
 - Review feedback renders as a first-class artifact, with reviewer details one
   click away.
 - Subagent creation/completion receipts should be concise.
+- Adjacent subagent creation receipts from the same assistant/tool-call cluster
+  group together. Creation receipts do not group with send, wake, status, read,
+  search, close, or generic tool calls.
+- Parent messages rendered in a child session show
+  `Sent by parent - {parent chat title}`.
 - Wake prompts and queued outbound prompts belong in composer outbound state,
   not only as silent background state.
 - Do not paste long raw child transcripts into parent transcript receipts.
@@ -461,7 +504,6 @@ Components:
 ```text
 desktop/src/components/workspace/shell/tabs/
   WorkspaceTabStrip.tsx
-  ChatTabDelegatedIndicators.tsx
   ChatTabWithMenu.tsx
   tab-rendering.tsx
   TabContextMenu.tsx

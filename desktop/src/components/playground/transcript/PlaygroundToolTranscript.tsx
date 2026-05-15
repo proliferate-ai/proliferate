@@ -11,6 +11,9 @@ import type { ScenarioKey } from "@/config/playground";
 import { PLAYGROUND_END_TURN_DIFF_TRANSCRIPT } from "@/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
 import {
   PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL,
+  PLAYGROUND_SUBAGENT_CREATION_GROUP_TRANSCRIPT,
+  PLAYGROUND_SUBAGENT_CREATION_SINGLE_TRANSCRIPT,
+  PLAYGROUND_SUBAGENT_PARENT_SEND_TRANSCRIPT,
   PLAYGROUND_SUBAGENT_TRANSCRIPT,
   PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT,
 } from "@/lib/domain/chat/__fixtures__/playground/tool-transcript-fixtures";
@@ -152,6 +155,33 @@ export function renderPlaygroundToolTranscript(
           stickyBottomInsetPx={stickyBottomInsetPx}
         />
       );
+    case "tool-subagent-creation-single":
+      return (
+        <MessageListTranscript
+          activeSessionId="playground-subagent-creation-single"
+          selectedWorkspaceId={selectedWorkspaceId}
+          transcript={PLAYGROUND_SUBAGENT_CREATION_SINGLE_TRANSCRIPT}
+          stickyBottomInsetPx={stickyBottomInsetPx}
+        />
+      );
+    case "tool-subagent-creations":
+      return (
+        <MessageListTranscript
+          activeSessionId="playground-subagent-creations"
+          selectedWorkspaceId={selectedWorkspaceId}
+          transcript={PLAYGROUND_SUBAGENT_CREATION_GROUP_TRANSCRIPT}
+          stickyBottomInsetPx={stickyBottomInsetPx}
+        />
+      );
+    case "subagent-parent-send-card":
+      return (
+        <MessageListTranscript
+          activeSessionId="playground-subagent-child"
+          selectedWorkspaceId={selectedWorkspaceId}
+          transcript={PLAYGROUND_SUBAGENT_PARENT_SEND_TRANSCRIPT}
+          stickyBottomInsetPx={stickyBottomInsetPx}
+        />
+      );
     case "end-turn-multi-file-diff":
       return (
         <MessageListTranscript
@@ -195,6 +225,7 @@ function MessageListTranscript({
         transcript={transcript}
         sessionViewState="idle"
         bottomInsetPx={stickyBottomInsetPx}
+        onOpenSession={() => {}}
       />
     </div>
   );

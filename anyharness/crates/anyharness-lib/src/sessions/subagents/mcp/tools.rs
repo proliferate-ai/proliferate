@@ -141,16 +141,12 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" },
+                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
                     "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
                     "prompt": { "type": "string" },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
-                "required": ["prompt"],
-                "anyOf": [
-                    { "required": ["subagentId"] },
-                    { "required": ["childSessionId"] }
-                ]
+                "required": ["prompt"]
             }),
         ),
         tool_definition(
@@ -159,13 +155,9 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" },
+                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
                     "childSessionId": { "type": "string", "description": "Deprecated legacy target." }
-                },
-                "anyOf": [
-                    { "required": ["subagentId"] },
-                    { "required": ["childSessionId"] }
-                ]
+                }
             }),
         ),
         tool_definition(
@@ -174,13 +166,9 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" },
+                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
                     "childSessionId": { "type": "string", "description": "Deprecated legacy target." }
-                },
-                "anyOf": [
-                    { "required": ["subagentId"] },
-                    { "required": ["childSessionId"] }
-                ]
+                }
             }),
         ),
         tool_definition(
@@ -189,14 +177,10 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" },
+                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
                     "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 10 }
-                },
-                "anyOf": [
-                    { "required": ["subagentId"] },
-                    { "required": ["childSessionId"] }
-                ]
+                }
             }),
         ),
         tool_definition(
@@ -205,16 +189,12 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" },
+                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
                     "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
                     "query": { "type": "string" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 25 }
                 },
-                "required": ["query"],
-                "anyOf": [
-                    { "required": ["subagentId"] },
-                    { "required": ["childSessionId"] }
-                ]
+                "required": ["query"]
             }),
         ),
         tool_definition(
@@ -223,7 +203,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" },
+                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
                     "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
                     "sinceSeq": { "type": "integer" },
                     "limit": {
@@ -231,11 +211,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
                         "minimum": 1,
                         "maximum": READ_EVENTS_MAX_LIMIT
                     }
-                },
-                "anyOf": [
-                    { "required": ["subagentId"] },
-                    { "required": ["childSessionId"] }
-                ]
+                }
             }),
         ),
         tool_definition(
@@ -244,13 +220,9 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" },
+                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
                     "childSessionId": { "type": "string", "description": "Deprecated legacy target." }
-                },
-                "anyOf": [
-                    { "required": ["subagentId"] },
-                    { "required": ["childSessionId"] }
-                ]
+                }
             }),
         ),
         ]);
@@ -262,6 +234,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use super::{build_tool_list, SubagentMcpContext, MUTATING_TOOL_NAMES};
+    use serde_json::Value;
 
     fn context(can_create: bool, existing_subagent_count: usize) -> SubagentMcpContext {
         SubagentMcpContext {
@@ -285,6 +258,24 @@ mod tests {
             .collect::<Vec<_>>()
     }
 
+    fn assert_no_top_level_schema_combinators(tools: &[Value]) {
+        for tool in tools {
+            let name = tool
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("<unknown>");
+            let schema = tool
+                .get("inputSchema")
+                .unwrap_or_else(|| panic!("tool {name} is missing inputSchema"));
+            for keyword in ["oneOf", "anyOf", "allOf"] {
+                assert!(
+                    schema.get(keyword).is_none(),
+                    "tool {name} inputSchema uses unsupported top-level {keyword}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn tool_list_exposes_launch_options_before_create() {
         let tools = build_tool_list(&context(true, 0));
@@ -301,6 +292,13 @@ mod tests {
 
         assert!(serialized.contains("wakeOnCompletion"));
         assert!(serialized.contains("schedule_subagent_wake"));
+    }
+
+    #[test]
+    fn tool_input_schemas_do_not_use_top_level_combinators() {
+        let tools = build_tool_list(&context(true, 1));
+
+        assert_no_top_level_schema_combinators(&tools);
     }
 
     #[test]

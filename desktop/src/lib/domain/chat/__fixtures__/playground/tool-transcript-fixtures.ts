@@ -103,6 +103,177 @@ const subagentReadItem = toolCallItem({
   ],
 });
 
+const creationGroupItems = [
+  subagentCreationFixture("tool-agent-api", "API Surface Check", "Check API surface consistency.", 1),
+  subagentCreationFixture("tool-agent-tests", "Test Plan Review", "Review test coverage for delegated work.", 2),
+];
+
+const singleCreationItem = subagentCreationFixture(
+  "tool-agent-single",
+  "Runtime Survey",
+  "Inspect the runtime server SDK path and report API mismatches.",
+  1,
+);
+
+export const PLAYGROUND_SUBAGENT_CREATION_SINGLE_TRANSCRIPT: TranscriptState = {
+  sessionMeta: {
+    sessionId: "playground-subagent-creation-single",
+    title: "Single subagent creation",
+    updatedAt: "2026-04-12T00:00:02Z",
+    nativeSessionId: null,
+    sourceAgentKind: "codex",
+  },
+  turnOrder: ["turn-subagent-creation-single"],
+  turnsById: {
+    "turn-subagent-creation-single": {
+      turnId: "turn-subagent-creation-single",
+      itemOrder: [singleCreationItem.itemId],
+      startedAt: "2026-04-12T00:00:00Z",
+      completedAt: "2026-04-12T00:00:03Z",
+      stopReason: "end_turn",
+      fileBadges: [],
+    },
+  },
+  itemsById: {
+    [singleCreationItem.itemId]: {
+      ...singleCreationItem,
+      turnId: "turn-subagent-creation-single",
+    },
+  },
+  openAssistantItemId: null,
+  openThoughtItemId: null,
+  pendingInteractions: [],
+  availableCommands: [],
+  liveConfig: null,
+  currentModeId: null,
+  usageState: null,
+  unknownEvents: [],
+  isStreaming: false,
+  lastSeq: 3,
+  pendingPrompts: [],
+  linkCompletionsByCompletionId: {},
+  latestLinkCompletionBySessionLinkId: {},
+};
+
+export const PLAYGROUND_SUBAGENT_CREATION_GROUP_TRANSCRIPT: TranscriptState = {
+  sessionMeta: {
+    sessionId: "playground-subagent-creations",
+    title: "Subagent creation grouping",
+    updatedAt: "2026-04-12T00:00:02Z",
+    nativeSessionId: null,
+    sourceAgentKind: "codex",
+  },
+  turnOrder: ["turn-subagent-creations"],
+  turnsById: {
+    "turn-subagent-creations": {
+      turnId: "turn-subagent-creations",
+      itemOrder: creationGroupItems.map((item) => item.itemId),
+      startedAt: "2026-04-12T00:00:00Z",
+      completedAt: "2026-04-12T00:00:03Z",
+      stopReason: "end_turn",
+      fileBadges: [],
+    },
+  },
+  itemsById: Object.fromEntries(creationGroupItems.map((item) => [item.itemId, item])),
+  openAssistantItemId: null,
+  openThoughtItemId: null,
+  pendingInteractions: [],
+  availableCommands: [],
+  liveConfig: null,
+  currentModeId: null,
+  usageState: null,
+  unknownEvents: [],
+  isStreaming: false,
+  lastSeq: 4,
+  pendingPrompts: [],
+  linkCompletionsByCompletionId: {},
+  latestLinkCompletionBySessionLinkId: {},
+};
+
+export const PLAYGROUND_SUBAGENT_PARENT_SEND_TRANSCRIPT: TranscriptState = {
+  sessionMeta: {
+    sessionId: "playground-subagent-child",
+    title: "Runtime Survey child",
+    updatedAt: "2026-04-21T02:36:00Z",
+    nativeSessionId: null,
+    sourceAgentKind: "codex",
+  },
+  turnOrder: ["turn-parent-send"],
+  turnsById: {
+    "turn-parent-send": {
+      turnId: "turn-parent-send",
+      itemOrder: ["parent-sent-message", "child-response"],
+      startedAt: "2026-04-21T02:35:00Z",
+      completedAt: "2026-04-21T02:36:00Z",
+      stopReason: "end_turn",
+      fileBadges: [],
+    },
+  },
+  itemsById: {
+    "parent-sent-message": {
+      kind: "user_message",
+      itemId: "parent-sent-message",
+      turnId: "turn-parent-send",
+      status: "completed",
+      sourceAgentKind: "system",
+      messageId: null,
+      title: null,
+      nativeToolName: null,
+      parentToolCallId: null,
+      rawInput: undefined,
+      rawOutput: undefined,
+      contentParts: [],
+      timestamp: "2026-04-21T02:35:00Z",
+      startedSeq: 1,
+      lastUpdatedSeq: 1,
+      completedSeq: 1,
+      completedAt: "2026-04-21T02:35:00Z",
+      text: "Please inspect the runtime server SDK path for delegated-work regressions.",
+      isStreaming: false,
+      promptProvenance: {
+        type: "agentSession",
+        sourceSessionId: "playground-parent-session",
+        sessionLinkId: "link-runtime-survey",
+        label: "Parent delegation session",
+      },
+    },
+    "child-response": {
+      kind: "assistant_prose",
+      itemId: "child-response",
+      turnId: "turn-parent-send",
+      status: "completed",
+      sourceAgentKind: "codex",
+      messageId: null,
+      title: null,
+      nativeToolName: null,
+      parentToolCallId: null,
+      rawInput: undefined,
+      rawOutput: undefined,
+      contentParts: [],
+      timestamp: "2026-04-21T02:36:00Z",
+      startedSeq: 2,
+      lastUpdatedSeq: 2,
+      completedSeq: 2,
+      completedAt: "2026-04-21T02:36:00Z",
+      text: "I will inspect the delegated-work identity path and report back.",
+      isStreaming: false,
+    },
+  },
+  openAssistantItemId: null,
+  openThoughtItemId: null,
+  pendingInteractions: [],
+  availableCommands: [],
+  liveConfig: null,
+  currentModeId: null,
+  usageState: null,
+  unknownEvents: [],
+  isStreaming: false,
+  lastSeq: 2,
+  pendingPrompts: [],
+  linkCompletionsByCompletionId: {},
+  latestLinkCompletionBySessionLinkId: {},
+};
+
 export const PLAYGROUND_SUBAGENT_TRANSCRIPT: TranscriptState = {
   sessionMeta: {
     sessionId: "playground-subagent",
@@ -162,6 +333,37 @@ export const PLAYGROUND_SUBAGENT_TRANSCRIPT: TranscriptState = {
   linkCompletionsByCompletionId: {},
   latestLinkCompletionBySessionLinkId: {},
 };
+
+function subagentCreationFixture(
+  itemId: string,
+  label: string,
+  prompt: string,
+  seq: number,
+) {
+  return toolCallItem({
+    itemId,
+    toolCallId: itemId,
+    turnId: "turn-subagent-creations",
+    title: "mcp__subagents__create_subagent",
+    nativeToolName: "mcp__subagents__create_subagent",
+    semanticKind: "subagent",
+    rawInput: {
+      agentKind: "codex",
+      label,
+      modelId: "gpt-5.4",
+      prompt,
+    },
+    rawOutput: {
+      childSessionId: `child-${itemId}`,
+      sessionLinkId: `link-${itemId}`,
+      promptStatus: "queued",
+      wakeScheduled: false,
+    },
+    startedSeq: seq,
+    lastUpdatedSeq: seq,
+    completedSeq: seq,
+  });
+}
 
 export const PLAYGROUND_SUBAGENT_WAKE_QUEUE: PendingPromptQueueEntry[] = [{
   seq: 7,

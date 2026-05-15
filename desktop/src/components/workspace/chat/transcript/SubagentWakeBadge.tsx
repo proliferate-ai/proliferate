@@ -1,78 +1,84 @@
 import { Button } from "@/components/ui/Button";
+import { Robot } from "@/components/ui/icons";
+import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
 
 interface SubagentWakeBadgeProps {
   label?: string | null;
   childSessionId?: string | null;
+  sessionLinkId?: string | null;
   outcome?: string | null;
   titleFallback?: string;
+  originKind?: "subagent" | "cowork";
+  parentTitle?: string | null;
   onOpenChild?: (childSessionId: string) => void;
 }
 
 export function SubagentWakeBadge({
   label,
   childSessionId,
+  sessionLinkId,
   outcome,
   titleFallback = "Subagent",
   onOpenChild,
 }: SubagentWakeBadgeProps) {
   const title = label?.trim() || titleFallback;
-  const receiptTitle = formatWakeTitle(title, outcome);
-  const detail = formatWakeDetail(outcome);
+  const identity = buildDelegatedAgentIdentity({
+    id: sessionLinkId ?? childSessionId ?? title,
+    title,
+    sessionId: childSessionId ?? null,
+    sessionLinkId: sessionLinkId ?? null,
+  });
+  const receiptText = formatWakeReceipt(identity.displayName, outcome);
   const canOpenChild = !!childSessionId && !!onOpenChild;
-
-  return (
+  const openChild = () => {
+    if (canOpenChild) {
+      onOpenChild(childSessionId!);
+    }
+  };
+  const content = (
+    <>
+      <Robot className={`size-3.5 shrink-0 ${identity.textColorClassName}`} />
+      <span className="min-w-0 truncate">{receiptText}</span>
+    </>
+  );
+  const chip = canOpenChild ? (
+    <Button
+      type="button"
+      variant="unstyled"
+      size="unstyled"
+      data-telemetry-mask
+      data-chat-transcript-ignore
+      title={`Open ${identity.displayName}`}
+      aria-label={`Open ${identity.displayName}`}
+      onClick={openChild}
+      className="inline-flex max-w-[77%] items-center gap-1.5 rounded-2xl bg-foreground/5 px-3 py-1.5 text-[length:var(--text-chat)] font-normal leading-[var(--text-chat--line-height)] text-foreground hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {content}
+    </Button>
+  ) : (
     <div
-      className="grid max-w-[77%] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 break-words rounded-2xl bg-foreground/5 px-3 py-2 text-foreground"
+      className="inline-flex max-w-[77%] items-center gap-1.5 rounded-2xl bg-foreground/5 px-3 py-1.5 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-foreground"
       data-telemetry-mask
     >
-      <div className="min-w-0 text-chat leading-[var(--text-chat--line-height)]">
-        <div className="truncate font-medium">{receiptTitle}</div>
-        <div className="truncate text-muted-foreground">{detail}</div>
-      </div>
-      {canOpenChild && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          data-chat-transcript-ignore
-          title={`Open ${title}`}
-          aria-label={`Open ${title}`}
-          onClick={() => onOpenChild(childSessionId)}
-          className="h-7 shrink-0 px-2"
-        >
-          Open
-        </Button>
-      )}
+      {content}
     </div>
   );
+
+  return chip;
 }
 
-function formatWakeTitle(title: string, outcome: string | null | undefined): string {
+function formatWakeReceipt(title: string, outcome: string | null | undefined): string {
   const normalized = normalizeOutcome(outcome);
   if (!normalized || normalized === "completed") {
-    return `${title} finished`;
+    return `${title} finished a turn`;
   }
   if (normalized === "failed") {
-    return `${title} failed`;
+    return `${title} failed a turn`;
   }
   if (normalized === "cancelled" || normalized === "canceled") {
-    return `${title} cancelled`;
+    return `${title} cancelled a turn`;
   }
-  return `${title} ${normalized}`;
-}
-
-function formatWakeDetail(outcome: string | null | undefined): string {
-  const normalized = normalizeOutcome(outcome);
-  if (!normalized || normalized === "completed") {
-    return "Completed turn";
-  }
-  if (normalized === "failed") {
-    return "Failed turn";
-  }
-  if (normalized === "cancelled" || normalized === "canceled") {
-    return "Cancelled turn";
-  }
-  return `${normalized.replace(/\b\w/g, (char) => char.toUpperCase())} turn`;
+  return `${title} ${normalized} a turn`;
 }
 
 function normalizeOutcome(outcome: string | null | undefined): string | null {

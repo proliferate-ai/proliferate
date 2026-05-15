@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from "react";
 import type { ReviewAssignmentDetail, ReviewRunDetail } from "@anyharness/sdk";
 import { useScheduleSubagentWakeMutation } from "@anyharness/sdk-react";
-import { useCoworkComposerStrip } from "@/hooks/cowork/facade/use-cowork-composer-strip";
 import { useSubagentComposerStrip } from "@/hooks/chat/subagents/use-subagent-composer-strip";
 import { useActiveReviewRun } from "@/hooks/reviews/facade/use-active-review-run";
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
@@ -11,8 +10,19 @@ import {
   type DelegatedWorkSummary,
   type DelegatedWorkSummaryCandidate,
 } from "@/lib/domain/chat/subagents/delegated-work";
+import type { DelegatedAgentIdentity } from "@/lib/domain/delegated-work/model";
+import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+import {
+  delegatedWorkStatusCategoryFromLabel,
+  type DelegatedAgentTriggerCandidate,
+  reviewRunStatusCategory,
+  selectSingleDelegatedAgentTriggerIdentity,
+  shouldShowDelegatedWorkInComposer,
+} from "@/lib/domain/delegated-work/presentation";
 import {
   latestReviewRound,
+  reviewAssignmentStatusLabel,
+  reviewKindLabel,
   reviewRunReplacesStartingReview,
 } from "@/lib/domain/reviews/review-runs";
 import { useReviewUiStore, type StartingReviewState } from "@/stores/reviews/review-ui-store";
@@ -22,6 +32,7 @@ import { useToastStore } from "@/stores/toast/toast-store";
 
 export interface DelegatedWorkComposerViewModel {
   summary: DelegatedWorkSummary;
+  singleAgent: DelegatedAgentIdentity | null;
   review: {
     run: ReviewRunDetail | null;
     startingReview: StartingReviewState | null;
@@ -33,7 +44,6 @@ export interface DelegatedWorkComposerViewModel {
     retryAssignment: (reviewRunId: string, assignmentId: string) => void;
     dismiss: (reviewRunId: string) => void;
   } | null;
-  cowork: ReturnType<typeof useCoworkComposerStrip>;
   subagents: (ReturnType<typeof useSubagentComposerStrip> & {
     scheduleWake: (childSessionId: string) => void;
     isSchedulingWake: boolean;
@@ -43,7 +53,6 @@ export interface DelegatedWorkComposerViewModel {
 export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | null {
   const activeReviewRun = useActiveReviewRun();
   const reviewActions = useReviewActions();
-  const cowork = useCoworkComposerStrip();
   const subagents = useSubagentComposerStrip();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
@@ -73,6 +82,9 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
   const review = useMemo<DelegatedWorkComposerViewModel["review"]>(() => {
     const visibleRun = run && (!startingReview || runReplacesStartingReview) ? run : null;
     const visibleStartingReview = visibleRun ? null : startingReview;
+    if (visibleRun && !shouldShowReviewRunInComposer(visibleRun)) {
+      return null;
+    }
     if (!visibleRun && !visibleStartingReview) {
       return null;
     }
@@ -122,8 +134,15 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
     if (!subagents) {
       return null;
     }
+    const visibleRows = subagents.rows.filter((row) =>
+      shouldShowDelegatedWorkInComposer({ statusCategory: row.statusCategory })
+    );
+    if (visibleRows.length === 0) {
+      return null;
+    }
     return {
       ...subagents,
+      rows: visibleRows,
       isSchedulingWake: scheduleWakeMutation.isPending,
       scheduleWake: (childSessionId) => {
         const parentSessionId = subagents.parent?.parentSessionId ?? activeSessionId;
@@ -143,20 +162,37 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
 
   const summary = useMemo(() => deriveDelegatedWorkSummary([
     ...reviewSummaryCandidates(review),
-    ...coworkSummaryCandidates(cowork),
     ...subagentSummaryCandidates(subagentModel),
-  ]), [cowork, review, subagentModel]);
+  ]), [review, subagentModel]);
 
-  if (!review && !cowork && !subagentModel) {
+  const singleAgent = useMemo(() => {
+    const agents = [
+      ...reviewVisibleAgents(review, selectedWorkspaceId),
+      ...subagentVisibleAgents(subagentModel),
+    ];
+    return selectSingleDelegatedAgentTriggerIdentity(agents);
+  }, [review, selectedWorkspaceId, subagentModel]);
+
+  if (!review && !subagentModel) {
     return null;
   }
 
   return {
     summary,
+    singleAgent,
     review,
-    cowork,
     subagents: subagentModel,
   };
+}
+
+function shouldShowReviewRunInComposer(run: ReviewRunDetail): boolean {
+  const category = reviewRunStatusCategory(run.status);
+  return shouldShowDelegatedWorkInComposer({
+    statusCategory: category,
+    hasActionNeeded: run.status === "feedback_ready"
+      || run.status === "waiting_for_revision"
+      || run.status === "system_failed",
+  });
 }
 
 function reviewSummaryCandidates(
@@ -184,19 +220,6 @@ function reviewSummaryCandidates(
   return [{ priority: "finished", label: "finished" }];
 }
 
-function coworkSummaryCandidates(
-  cowork: DelegatedWorkComposerViewModel["cowork"],
-): DelegatedWorkSummaryCandidate[] {
-  if (!cowork) return [];
-  const running = cowork.rows.flatMap((row) => row.sessions)
-    .filter((session) => session.statusLabel === "Working").length;
-  const failed = cowork.rows.flatMap((row) => row.sessions)
-    .filter((session) => session.statusLabel === "Failed").length;
-  if (failed > 0) return [{ priority: "failed", label: "failed", count: failed }];
-  if (running > 0) return [{ priority: "running", label: "running", count: running }];
-  return [{ priority: "finished", label: cowork.summary.label }];
-}
-
 function subagentSummaryCandidates(
   subagents: DelegatedWorkComposerViewModel["subagents"],
 ): DelegatedWorkSummaryCandidate[] {
@@ -208,6 +231,73 @@ function subagentSummaryCandidates(
   if (running > 0) return [{ priority: "running", label: "running", count: running }];
   if (wake > 0) return [{ priority: "wake_scheduled", label: "wake scheduled", count: wake }];
   return [{ priority: "finished", label: subagents.summary.label }];
+}
+
+function subagentVisibleAgents(
+  subagents: DelegatedWorkComposerViewModel["subagents"],
+): DelegatedAgentTriggerCandidate[] {
+  return subagents?.rows.map((row) => ({
+    identity: row.identity,
+    statusCategory: row.statusCategory,
+  })) ?? [];
+}
+
+function reviewVisibleAgents(
+  review: DelegatedWorkComposerViewModel["review"],
+  workspaceId: string | null,
+): DelegatedAgentTriggerCandidate[] {
+  if (!review) {
+    return [];
+  }
+  if (review.startingReview) {
+    return review.startingReview.reviewers.map((reviewer) => ({
+      identity: buildDelegatedAgentIdentity({
+        id: reviewer.id,
+        title: reviewer.label,
+      }),
+      statusCategory: "running",
+    }));
+  }
+  const run = review.run;
+  if (!run) {
+    return [];
+  }
+  const round = latestReviewRound(run);
+  if (!round) {
+    return [{
+      identity: buildDelegatedAgentIdentity({
+        id: run.id,
+        title: reviewKindLabel(run.kind),
+        workspaceId,
+        sessionId: run.parentSessionId,
+        sessionLinkId: run.id,
+      }),
+      statusCategory: reviewRunStatusCategory(run.status),
+    }];
+  }
+  return round.assignments
+    .map((assignment) => ({
+      assignment,
+      statusCategory: delegatedWorkStatusCategoryFromLabel({
+        statusLabel: reviewAssignmentStatusLabel(assignment),
+      }),
+    }))
+    .filter(({ assignment, statusCategory }) => shouldShowDelegatedWorkInComposer({
+      statusCategory,
+      hasActionNeeded: assignment.status === "retryable_failed"
+        || assignment.status === "system_failed"
+        || assignment.status === "timed_out",
+    }))
+    .map(({ assignment, statusCategory }) => ({
+      identity: buildDelegatedAgentIdentity({
+        id: assignment.id,
+        title: assignment.personaLabel || reviewKindLabel(run.kind),
+        workspaceId,
+        sessionId: assignment.reviewerSessionId ?? null,
+        sessionLinkId: assignment.sessionLinkId ?? assignment.id,
+      }),
+      statusCategory,
+    }));
 }
 
 function errorMessage(error: unknown): string {

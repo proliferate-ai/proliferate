@@ -3,10 +3,13 @@ import { Button } from "@/components/ui/Button";
 import {
   FileText,
   RefreshCw,
+  Robot,
   StopSquare,
   X,
 } from "@/components/ui/icons";
 import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
+import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+import type { DelegatedAgentIdentity } from "@/lib/domain/delegated-work/model";
 import {
   latestReviewRound,
   reviewAssignmentStatusLabel,
@@ -67,6 +70,12 @@ function ReviewRunRows({
           <ReviewAssignmentRow
             key={assignment.id}
             assignment={assignment}
+            identity={buildDelegatedAgentIdentity({
+              id: assignment.id,
+              title: assignment.personaLabel,
+              sessionId: assignment.reviewerSessionId ?? null,
+              sessionLinkId: assignment.sessionLinkId ?? assignment.id,
+            })}
             onOpenCritique={() => {
               review.openCritique(assignment);
               onClose();
@@ -174,11 +183,13 @@ function ReviewRunRows({
 
 function ReviewAssignmentRow({
   assignment,
+  identity,
   onOpenCritique,
   onOpenReviewerSession,
   onRetryAssignment,
 }: {
   assignment: ReviewAssignmentDetail;
+  identity: DelegatedAgentIdentity;
   onOpenCritique: () => void;
   onOpenReviewerSession: (sessionId: string) => void;
   onRetryAssignment: () => void;
@@ -196,8 +207,11 @@ function ReviewAssignmentRow({
         className="h-7 w-full min-w-0 justify-between rounded-md px-1.5 py-0 text-left hover:bg-transparent disabled:cursor-default"
         onClick={() => canOpenSession && onOpenReviewerSession(assignment.reviewerSessionId!)}
       >
-        <span className="min-w-0 truncate text-sm text-foreground">
-          {assignment.personaLabel}
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Robot className={`size-3.5 shrink-0 ${identity.textColorClassName}`} />
+          <span className="min-w-0 truncate text-sm text-foreground">
+            {identity.displayName}
+          </span>
         </span>
         <span className="shrink-0 text-xs text-muted-foreground">
           {reviewAssignmentStatusLabel(assignment)}
@@ -233,15 +247,26 @@ function ReviewAssignmentRow({
 function StartingReviewRows({ startingReview }: { startingReview: StartingReviewState }) {
   return (
     <div className="space-y-0.5">
-      {startingReview.reviewers.map((reviewer, index) => (
-        <div
-          key={`${reviewer.id}-${index}`}
-          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 py-1"
-        >
-          <span className="truncate text-sm font-medium text-foreground">{reviewer.label}</span>
-          <span className="text-xs text-muted-foreground">Starting</span>
-        </div>
-      ))}
+      {startingReview.reviewers.map((reviewer, index) => {
+        const identity = buildDelegatedAgentIdentity({
+          id: reviewer.id,
+          title: reviewer.label,
+        });
+        return (
+          <div
+            key={`${reviewer.id}-${index}`}
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 py-1"
+          >
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Robot className={`size-3.5 shrink-0 ${identity.textColorClassName}`} />
+              <span className="truncate text-sm font-medium text-foreground">
+                {identity.displayName}
+              </span>
+            </span>
+            <span className="text-xs text-muted-foreground">Starting</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

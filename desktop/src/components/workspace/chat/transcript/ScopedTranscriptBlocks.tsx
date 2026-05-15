@@ -8,6 +8,7 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import type { TurnDisplayBlock } from "@/lib/domain/chat/transcript/transcript-presentation";
+import { SubagentCreationGroupBlock } from "./SubagentCreationGroupBlock";
 
 export function ScopedTranscriptBlocks({
   displayBlocks,
@@ -73,6 +74,15 @@ export function TurnDisplayBlockNode({
     );
   }
 
+  if (block.kind === "subagent_creations") {
+    return (
+      <SubagentCreationGroupBlock
+        itemIds={block.itemIds}
+        transcript={transcript}
+      />
+    );
+  }
+
   return (
     <Fragment>
       {renderItem(block.itemId)}
@@ -89,6 +99,9 @@ export function getTurnDisplayBlockKey(block: TurnDisplayBlock): string {
   }
   if (block.kind === "inline_tools") {
     return `inline-tools-${block.blockId}`;
+  }
+  if (block.kind === "subagent_creations") {
+    return `subagent-creations-${block.blockId}`;
   }
   return `item-${block.itemId}`;
 }

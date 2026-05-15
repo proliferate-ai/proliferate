@@ -1,13 +1,24 @@
+import type {
+  DelegatedAgentIdentity,
+  DelegatedWorkStatusCategory,
+} from "@/lib/domain/delegated-work/model";
+import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+import {
+  delegatedWorkStatusCategoryFromLabel,
+} from "@/lib/domain/delegated-work/presentation";
+
 type PlaygroundSubagentStripRow = {
   sessionLinkId: string;
   childSessionId: string;
   label: string;
+  identity: DelegatedAgentIdentity;
   statusLabel: string;
+  statusCategory: DelegatedWorkStatusCategory;
   latestCompletionLabel: string | null;
   wakeScheduled: boolean;
 };
 
-export const PLAYGROUND_SUBAGENT_STRIP_ROWS: PlaygroundSubagentStripRow[] = [
+const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
   {
     sessionLinkId: "link-haiku-session-lifecycle",
     childSessionId: "298c62c7-b359-4cc7-a65e-b297ebabce2f",
@@ -88,7 +99,22 @@ export const PLAYGROUND_SUBAGENT_STRIP_ROWS: PlaygroundSubagentStripRow[] = [
     latestCompletionLabel: null,
     wakeScheduled: true,
   },
-];
+] satisfies Omit<PlaygroundSubagentStripRow, "identity" | "statusCategory">[];
+
+export const PLAYGROUND_SUBAGENT_STRIP_ROWS: PlaygroundSubagentStripRow[] =
+  RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS.map((row) => ({
+    ...row,
+    identity: buildDelegatedAgentIdentity({
+      id: row.sessionLinkId,
+      title: row.label,
+      sessionId: row.childSessionId,
+      sessionLinkId: row.sessionLinkId,
+    }),
+    statusCategory: delegatedWorkStatusCategoryFromLabel({
+      statusLabel: row.statusLabel,
+      wakeScheduled: row.wakeScheduled,
+    }),
+  }));
 
 export type PlaygroundReviewComposerStatus =
   | "Starting"

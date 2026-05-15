@@ -9,12 +9,14 @@ import {
   getToolCallShellCommand,
   isExplorationParsedCommand,
 } from "@/lib/domain/chat/transcript/transcript-tool-commands";
+import { isSubagentCreationAction } from "@/lib/domain/chat/subagents/subagent-tool-presentation";
 
 export type TurnDisplayBlock =
   | { kind: "item"; itemId: string }
   | { kind: "inline_tool"; itemId: string }
   | { kind: "inline_tools"; blockId: string; itemIds: string[] }
-  | { kind: "collapsed_actions"; blockId: string; itemIds: string[] };
+  | { kind: "collapsed_actions"; blockId: string; itemIds: string[] }
+  | { kind: "subagent_creations"; blockId: string; itemIds: string[] };
 
 export interface CompletedHistorySummary {
   messages: number;
@@ -45,6 +47,7 @@ export function buildTranscriptDisplayBlocks({
   const blocks: TurnDisplayBlock[] = [];
   let pendingActionIds: string[] = [];
   let pendingInlineActionIds: string[] = [];
+  let pendingSubagentCreationIds: string[] = [];
   const trailingInlineActionIds = collectTrailingInlineActionIds(
     rootIds,
     transcript,
@@ -79,12 +82,31 @@ export function buildTranscriptDisplayBlocks({
     }
     pendingInlineActionIds = [];
   };
+  const flushSubagentCreations = () => {
+    if (pendingSubagentCreationIds.length === 0) return;
+    const firstId = pendingSubagentCreationIds[0] ?? "subagent-creations";
+    const lastId = pendingSubagentCreationIds[pendingSubagentCreationIds.length - 1] ?? firstId;
+    blocks.push({
+      kind: "subagent_creations",
+      blockId: `${firstId}-${lastId}`,
+      itemIds: pendingSubagentCreationIds,
+    });
+    pendingSubagentCreationIds = [];
+  };
 
   for (const itemId of rootIds) {
     const item = transcript.itemsById[itemId];
     if (!item) continue;
 
+    if (item.kind === "tool_call" && isSubagentCreationAction(item)) {
+      flushActions();
+      flushInlineActions();
+      pendingSubagentCreationIds.push(itemId);
+      continue;
+    }
+
     if (item.kind === "tool_call" && isCollapsibleAction(item, childrenByParentId)) {
+      flushSubagentCreations();
       if (
         trailingInlineActionIds.has(itemId)
         || (isActiveToolCall(item) && (isKnownRealAction(item) || isPendingCommand(item)))
@@ -98,11 +120,13 @@ export function buildTranscriptDisplayBlocks({
       continue;
     }
 
+    flushSubagentCreations();
     flushActions();
     flushInlineActions();
     blocks.push({ kind: "item", itemId });
   }
 
+  flushSubagentCreations();
   flushActions();
   flushInlineActions();
   return blocks;

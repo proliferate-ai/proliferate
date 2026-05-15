@@ -14,8 +14,8 @@ export function UserMessageProvenanceChrome({
   const title = label?.trim() || "Parent agent";
   const content = (
     <>
-      <span className="shrink-0 text-muted-foreground/70">From parent</span>
-      <span className="shrink-0 text-muted-foreground/50">·</span>
+      <span className="shrink-0 text-muted-foreground/70">Sent by parent</span>
+      <span className="shrink-0 text-muted-foreground/50">-</span>
       <span className="min-w-0 truncate">{title}</span>
     </>
   );

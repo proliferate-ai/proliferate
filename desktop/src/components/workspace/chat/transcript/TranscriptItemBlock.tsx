@@ -76,6 +76,7 @@ export function TranscriptItemBlock({
             <SubagentWakeBadge
               label={wakeProvenance.label ?? completion?.label ?? null}
               childSessionId={childSessionId}
+              sessionLinkId={wakeProvenance.sessionLinkId}
               outcome={completion?.outcome ?? null}
               titleFallback={
                 wakeProvenance.type === "linkWake"
@@ -83,6 +84,8 @@ export function TranscriptItemBlock({
                   ? "Coding session"
                   : "Subagent"
               }
+              originKind={childRole === "cowork-coding-child" ? "cowork" : "subagent"}
+              parentTitle={transcript.sessionMeta.title}
               onOpenChild={canOpenChild
                 ? (targetSessionId) => {
                   recordRelationshipHint(targetSessionId, {

@@ -141,7 +141,6 @@ export function ComposerAddActionPopover({
                     onClick={(event) => {
                       event.stopPropagation();
                       onConfigureReview(rectToReviewAnchor(event.currentTarget.getBoundingClientRect()));
-                      close();
                     }}
                   >
                     <Settings className="size-3.5" />

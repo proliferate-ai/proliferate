@@ -1,31 +1,25 @@
 import type { ReviewRunDetail } from "@anyharness/sdk";
 import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
+import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+import type { DelegatedWorkStatusCategory } from "@/lib/domain/delegated-work/model";
+import {
+  delegatedWorkStatusCategoryFromLabel,
+  selectSingleDelegatedAgentTriggerIdentity,
+  type DelegatedAgentTriggerCandidate,
+} from "@/lib/domain/delegated-work/presentation";
 import {
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
   type PlaygroundReviewComposerRow,
   type PlaygroundReviewComposerState,
 } from "@/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
 import { noop } from "@/components/playground/PlaygroundComposerActions";
-import {
-  PLAYGROUND_COWORK_ROWS,
-  PLAYGROUND_COWORK_SUMMARY,
-} from "@/components/playground/delegation/PlaygroundDelegatedWorkFixtures";
 
 export function buildPlaygroundDelegatedWorkViewModel(args: {
   reviewState?: PlaygroundReviewComposerState | null;
-  cowork?: boolean;
   subagentRows?: typeof PLAYGROUND_SUBAGENT_STRIP_ROWS;
 }): DelegatedWorkComposerViewModel {
   const reviewRun = args.reviewState
     ? buildPlaygroundReviewRun(args.reviewState)
-    : null;
-  const cowork = args.cowork
-    ? {
-      rows: PLAYGROUND_COWORK_ROWS,
-      summary: PLAYGROUND_COWORK_SUMMARY,
-      openWorkspace: noop,
-      openSession: noop,
-    }
     : null;
   const subagents = args.subagentRows
     ? {
@@ -46,17 +40,31 @@ export function buildPlaygroundDelegatedWorkViewModel(args: {
         : args.reviewState.summary.label,
       active: args.reviewState.summary.active,
     }
-    : cowork
-      ? { label: cowork.summary.detail ?? cowork.summary.label, active: cowork.summary.active }
-      : subagents
-        ? {
-          label: subagents.summary.detail ?? subagents.summary.label,
-          active: subagents.summary.active,
-        }
-        : { label: "No active work", active: false };
+    : subagents
+      ? {
+        label: subagents.summary.detail ?? subagents.summary.label,
+        active: subagents.summary.active,
+      }
+      : { label: "No active work", active: false };
+  const visibleAgents: DelegatedAgentTriggerCandidate[] = [
+    ...(args.reviewState?.rows.map((row) => ({
+      identity: buildDelegatedAgentIdentity({
+        id: row.id,
+        title: row.label,
+        sessionId: `reviewer-session-${row.id}`,
+        sessionLinkId: `reviewer-link-${row.id}`,
+      }),
+      statusCategory: playgroundReviewStatusCategory(row.status),
+    })) ?? []),
+    ...(subagents?.rows.map((row) => ({
+      identity: row.identity,
+      statusCategory: row.statusCategory,
+    })) ?? []),
+  ];
 
   return {
     summary,
+    singleAgent: selectSingleDelegatedAgentTriggerIdentity(visibleAgents),
     review: reviewRun ? {
       run: reviewRun,
       startingReview: null,
@@ -68,9 +76,17 @@ export function buildPlaygroundDelegatedWorkViewModel(args: {
       retryAssignment: noop,
       dismiss: noop,
     } : null,
-    cowork,
     subagents,
   };
+}
+
+function playgroundReviewStatusCategory(
+  status: PlaygroundReviewComposerRow["status"],
+): DelegatedWorkStatusCategory {
+  if (status === "Failed") {
+    return "failed";
+  }
+  return delegatedWorkStatusCategoryFromLabel({ statusLabel: status });
 }
 
 function buildPlaygroundReviewRun(state: PlaygroundReviewComposerState): ReviewRunDetail {

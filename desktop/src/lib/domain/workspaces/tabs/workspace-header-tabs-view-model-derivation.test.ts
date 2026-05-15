@@ -9,24 +9,19 @@ import type {
 } from "./workspace-header-tabs-model-helpers";
 
 describe("workspace header tab view model derivation", () => {
-  it("sorts delegated indicators by attention priority", () => {
+  it("adds generated delegated-agent identity to child tabs", () => {
     const tabs = buildHeaderChatTabs({
       groupedTabs: [{
-        sessionId: "parent",
-        parentSessionId: null,
+        sessionId: "working",
+        parentSessionId: "parent",
         groupRootSessionId: "parent",
-        isChild: false,
+        isChild: true,
       }],
-      rowsBySessionId: new Map(),
-      childrenByParentSessionId: new Map([[
-        "parent",
-        [
-          delegatedChildRow("done", "Done", false),
-          delegatedChildRow("failed", "Failed", false),
-          delegatedChildRow("working", "Working", false),
-          delegatedChildRow("wake", "Idle", true),
-        ],
+      rowsBySessionId: new Map([[
+        "working",
+        delegatedChildRow("working", "Working", false),
       ]]),
+      childrenByParentSessionId: new Map(),
       resolvedSessionIds: new Set(["parent"]),
       knownSessions: new Map<string, KnownHeaderSession>([[
         "parent",
@@ -35,8 +30,13 @@ describe("workspace header tab view model derivation", () => {
       manualGroupByTopLevelSessionId: new Map(),
     });
 
-    expect(tabs[0]?.delegatedIndicators.map((indicator) => indicator.sessionId))
-      .toEqual(["failed", "working", "wake", "done"]);
+    expect(tabs[0]?.delegatedAgent).toMatchObject({
+      kind: "cowork",
+      originLabel: "Cowork",
+      statusCategory: "running",
+    });
+    expect(tabs[0]?.delegatedAgent?.identity.displayName)
+      .toMatch(/\(.+ [a-z0-9]{6}\)/u);
   });
 
   it("carries cowork child routing metadata onto child tabs", () => {

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { selectPrimaryPendingInteraction } from "@anyharness/sdk";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
@@ -10,7 +11,7 @@ import {
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { useActiveReviewRun } from "@/hooks/reviews/facade/use-active-review-run";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 
 export type ChatAvailabilityState = ChatInputAvailabilityState;
 
@@ -26,11 +27,16 @@ export function useChatAvailabilityState(options?: {
   const activeSessionId = options && "activeSessionId" in options
     ? options.activeSessionId ?? null
     : storedActiveSessionId;
+  const primaryPendingInteractionKind = useSessionTranscriptStore((state) => {
+    const transcript = activeSessionId
+      ? state.entriesById[activeSessionId]?.transcript ?? null
+      : null;
+    return transcript ? selectPrimaryPendingInteraction(transcript)?.kind ?? null : null;
+  });
   const { data: workspaceCollections } = useWorkspaces();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const mobility = useWorkspaceMobilityState();
   const configuredLaunch = useConfiguredLaunchReadiness();
-  const activeReviewRun = useActiveReviewRun();
 
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   const selectedCloudWorkspace =
@@ -55,10 +61,9 @@ export function useChatAvailabilityState(options?: {
       statusDescription: mobility.status.description ?? null,
       selectedEffectiveOwner: mobility.selectedLogicalWorkspace?.effectiveOwner ?? null,
     },
-    hasBusyReview: activeReviewRun.hasBusyReview,
+    pendingInteractionKind: primaryPendingInteractionKind,
   }), [
     activeSessionId,
-    activeReviewRun.hasBusyReview,
     connectionState,
     configuredLaunch.disabledReason,
     configuredLaunch.isLoading,
@@ -67,6 +72,7 @@ export function useChatAvailabilityState(options?: {
     mobility.selectedLogicalWorkspace?.effectiveOwner,
     mobility.status.description,
     pendingWorkspaceEntry,
+    primaryPendingInteractionKind,
     selectedCloudRuntime.state?.actionBlockReason,
     selectedCloudRuntime.state?.phase,
     selectedCloudWorkspace?.actionBlockReason,

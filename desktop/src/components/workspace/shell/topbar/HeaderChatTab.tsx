@@ -167,19 +167,6 @@ export function HeaderChatTab({
         onCloseOthers={() => onCloseOthers(tab.id)}
         onCloseRight={() => onCloseRight(tab.id)}
         onDismiss={() => onDismiss(tab.id)}
-        onOpenDelegatedSession={(indicator) => {
-          clearSelection();
-          if (indicator.source === "cowork" && indicator.workspaceId) {
-            void openCoworkCodingSession({
-              workspaceId: indicator.workspaceId,
-              sessionId: indicator.sessionId,
-              parentSessionId: indicator.parentSessionId,
-              sessionLinkId: indicator.sessionLinkId,
-            });
-            return;
-          }
-          onActivate(indicator.sessionId);
-        }}
       />
     </div>
   );

@@ -1,4 +1,5 @@
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
+import type { DelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/model";
 import type { GroupedChatTab } from "@/lib/domain/workspaces/tabs/grouping";
 import type { HeaderStripRow } from "@/lib/domain/workspaces/tabs/group-rows";
 import type { ManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
@@ -19,21 +20,7 @@ export interface HeaderChatTabEntry extends GroupedChatTab {
   visualGroupId: string | null;
   manualGroupId: ManualChatGroupId | null;
   isHierarchyResolved: boolean;
-  delegatedIndicators: HeaderDelegatedWorkIndicator[];
-}
-
-export interface HeaderDelegatedWorkIndicator {
-  id: string;
-  sessionId: string;
-  parentSessionId: string;
-  sessionLinkId: string;
-  workspaceId: string | null;
-  title: string;
-  avatarName: string;
-  initial: string;
-  colorClassName: string;
-  statusLabel: string;
-  source: "subagent" | "review" | "cowork";
+  delegatedAgent: DelegatedWorkTabIdentity | null;
 }
 
 export interface HeaderChatMenuEntry {

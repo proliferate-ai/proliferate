@@ -88,6 +88,7 @@ function blockIncludesCompletedHistory(
   switch (block.kind) {
     case "collapsed_actions":
     case "inline_tools":
+    case "subagent_creations":
       return block.itemIds.some((itemId) => completedHistoryIds.has(itemId));
     case "inline_tool":
     case "item":
@@ -104,6 +105,7 @@ function serializeDisplayBlock(
   switch (block.kind) {
     case "collapsed_actions":
     case "inline_tools":
+    case "subagent_creations":
       return serializeItemIds(
         block.itemIds,
         transcript,

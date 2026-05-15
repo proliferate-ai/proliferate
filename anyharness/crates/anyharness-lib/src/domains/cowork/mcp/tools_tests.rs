@@ -59,6 +59,24 @@ fn tool_names(tools: Vec<Value>) -> HashSet<String> {
         .collect()
 }
 
+fn assert_no_top_level_schema_combinators(tools: &[Value]) {
+    for tool in tools {
+        let name = tool
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("<unknown>");
+        let schema = tool
+            .get("inputSchema")
+            .unwrap_or_else(|| panic!("tool {name} is missing inputSchema"));
+        for keyword in ["oneOf", "anyOf", "allOf"] {
+            assert!(
+                schema.get(keyword).is_none(),
+                "tool {name} inputSchema uses unsupported top-level {keyword}"
+            );
+        }
+    }
+}
+
 #[test]
 fn artifact_tools_are_always_available() {
     let names = tool_names(build_tool_list(false));
@@ -79,6 +97,13 @@ fn delegation_tools_are_available_when_enabled() {
     assert!(names.contains("create_coding_session"));
     assert!(names.contains("send_coding_message"));
     assert!(names.contains("read_coding_events"));
+}
+
+#[test]
+fn tool_input_schemas_do_not_use_top_level_combinators() {
+    let tools = build_tool_list(true);
+
+    assert_no_top_level_schema_combinators(&tools);
 }
 
 #[test]

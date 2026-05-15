@@ -51,6 +51,7 @@ export function buildCoworkChildRows(
         || `Cowork agent ${workspaceIndex + 1}.${sessionIndex + 1}`,
       agentKind: session.agentKind,
       source: "cowork",
+      reviewKind: null,
       meta: workspace.label?.trim() || "Cowork",
       statusLabel: formatCoworkSessionStatus(session.status),
       wakeScheduled: session.wakeScheduled,

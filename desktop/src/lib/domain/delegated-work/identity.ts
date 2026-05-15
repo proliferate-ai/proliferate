@@ -1,3 +1,8 @@
+import type {
+  DelegatedAgentIdentity,
+  DelegatedAgentOpenTarget,
+} from "@/lib/domain/delegated-work/model";
+
 const FRIENDLY_NAMES = [
   "Mary",
   "Allen",
@@ -9,31 +14,141 @@ const FRIENDLY_NAMES = [
   "Maya",
 ];
 
-const COLORS = [
-  "bg-emerald-500",
-  "bg-sky-500",
-  "bg-rose-500",
-  "bg-amber-500",
-  "bg-violet-500",
-  "bg-cyan-500",
-  "bg-lime-500",
-  "bg-fuchsia-500",
-];
+const COLOR_IDENTITIES = [
+  {
+    token: "delegated-agent-1",
+    colorClassName: "bg-delegated-agent-1",
+    textColorClassName: "text-delegated-agent-1",
+    borderColorClassName: "border-delegated-agent-1",
+    colorVar: "var(--color-delegated-agent-1)",
+  },
+  {
+    token: "delegated-agent-2",
+    colorClassName: "bg-delegated-agent-2",
+    textColorClassName: "text-delegated-agent-2",
+    borderColorClassName: "border-delegated-agent-2",
+    colorVar: "var(--color-delegated-agent-2)",
+  },
+  {
+    token: "delegated-agent-3",
+    colorClassName: "bg-delegated-agent-3",
+    textColorClassName: "text-delegated-agent-3",
+    borderColorClassName: "border-delegated-agent-3",
+    colorVar: "var(--color-delegated-agent-3)",
+  },
+  {
+    token: "delegated-agent-4",
+    colorClassName: "bg-delegated-agent-4",
+    textColorClassName: "text-delegated-agent-4",
+    borderColorClassName: "border-delegated-agent-4",
+    colorVar: "var(--color-delegated-agent-4)",
+  },
+  {
+    token: "delegated-agent-5",
+    colorClassName: "bg-delegated-agent-5",
+    textColorClassName: "text-delegated-agent-5",
+    borderColorClassName: "border-delegated-agent-5",
+    colorVar: "var(--color-delegated-agent-5)",
+  },
+  {
+    token: "delegated-agent-6",
+    colorClassName: "bg-delegated-agent-6",
+    textColorClassName: "text-delegated-agent-6",
+    borderColorClassName: "border-delegated-agent-6",
+    colorVar: "var(--color-delegated-agent-6)",
+  },
+  {
+    token: "delegated-agent-7",
+    colorClassName: "bg-delegated-agent-7",
+    textColorClassName: "text-delegated-agent-7",
+    borderColorClassName: "border-delegated-agent-7",
+    colorVar: "var(--color-delegated-agent-7)",
+  },
+  {
+    token: "delegated-agent-8",
+    colorClassName: "bg-delegated-agent-8",
+    textColorClassName: "text-delegated-agent-8",
+    borderColorClassName: "border-delegated-agent-8",
+    colorVar: "var(--color-delegated-agent-8)",
+  },
+] as const;
 
 export interface DelegatedWorkVisualIdentity {
-  avatarName: string;
+  generatedName: string;
   initial: string;
   colorClassName: string;
+  textColorClassName: string;
+  borderColorClassName: string;
+  colorToken: string;
+  colorVar: string;
 }
 
 export function delegatedWorkVisualIdentity(id: string): DelegatedWorkVisualIdentity {
   const index = stableIndex(id);
-  const avatarName = FRIENDLY_NAMES[index % FRIENDLY_NAMES.length] ?? "Mary";
+  const generatedName = FRIENDLY_NAMES[index % FRIENDLY_NAMES.length] ?? "Mary";
+  const color = COLOR_IDENTITIES[index % COLOR_IDENTITIES.length] ?? COLOR_IDENTITIES[0];
   return {
-    avatarName,
-    initial: avatarName.slice(0, 1),
-    colorClassName: COLORS[index % COLORS.length] ?? "bg-emerald-500",
+    generatedName,
+    initial: generatedName.slice(0, 1),
+    colorClassName: color.colorClassName,
+    textColorClassName: color.textColorClassName,
+    borderColorClassName: color.borderColorClassName,
+    colorToken: color.token,
+    colorVar: color.colorVar,
   };
+}
+
+export function buildDelegatedAgentIdentity({
+  id,
+  title,
+  workspaceId,
+  sessionId,
+  sessionLinkId,
+}: {
+  id: string;
+  title: string | null | undefined;
+  workspaceId?: string | null;
+  sessionId?: string | null;
+  sessionLinkId?: string | null;
+}): DelegatedAgentIdentity {
+  const seed = sessionLinkId?.trim() || sessionId?.trim() || id;
+  const visual = delegatedWorkVisualIdentity(seed);
+  const resolvedTitle = normalizeTitle(title);
+  const shortId = shortDelegatedWorkId(seed);
+  return {
+    id,
+    generatedName: visual.generatedName,
+    initial: visual.initial,
+    title: resolvedTitle,
+    shortId,
+    displayName: `${visual.generatedName} (${resolvedTitle} ${shortId})`,
+    colorToken: visual.colorToken,
+    colorClassName: visual.colorClassName,
+    textColorClassName: visual.textColorClassName,
+    borderColorClassName: visual.borderColorClassName,
+    colorVar: visual.colorVar,
+    openTarget: sessionId
+      ? {
+        workspaceId: workspaceId ?? null,
+        sessionId,
+        sessionLinkId: sessionLinkId ?? null,
+      } satisfies DelegatedAgentOpenTarget
+      : null,
+  };
+}
+
+export function shortDelegatedWorkId(id: string | null | undefined): string {
+  const normalized = id?.trim() ?? "";
+  const withoutPrefix = normalized
+    .replace(/^(client-session|pending-session|subagent|review|cowork|session|link)[:_-]+/u, "")
+    .replace(/[^a-zA-Z0-9]+/gu, "");
+  const compact = withoutPrefix || normalized.replace(/[^a-zA-Z0-9]+/gu, "");
+  return compact.length > 6 ? compact.slice(0, 6) : compact || "agent";
+}
+
+function normalizeTitle(title: string | null | undefined): string {
+  const trimmed = title?.replace(/\s+/gu, " ").trim();
+  return trimmed && trimmed.length > 0 ? trimmed : "Agent";
 }
 
 function stableIndex(value: string): number {

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { HeaderWorkspaceShellStripRow } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import {
+  CHROME_DELEGATED_TAB_MAX_WIDTH,
   computeHeaderStripLayout,
 } from "@/lib/domain/workspaces/tabs/chrome-layout";
 import type { WorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
@@ -18,6 +19,11 @@ export function useHeaderTabsLayout({
       reservedWidth: 0,
       rows: shellRows.map((row) => ({
         kind: row.kind === "chat" && row.row.kind === "pill" ? "pill" : "tab",
+        maxWidth: row.kind === "chat"
+          && row.row.kind === "tab"
+          && row.row.tab.delegatedAgent
+          ? CHROME_DELEGATED_TAB_MAX_WIDTH
+          : undefined,
       })),
     });
   }, [shellRows, width]);

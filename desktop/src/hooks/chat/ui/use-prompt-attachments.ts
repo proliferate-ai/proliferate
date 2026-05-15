@@ -39,26 +39,22 @@ export function usePromptAttachments(
   const [entries, setEntries] = useState<AttachmentEntry[]>([]);
   const entriesRef = useRef<AttachmentEntry[]>([]);
 
-  useEffect(() => {
-    entriesRef.current = entries;
-  }, [entries]);
-
   useEffect(() => () => {
     for (const entry of entriesRef.current) {
       revokeAttachmentObjectUrl(entry);
     }
+    entriesRef.current = [];
   }, []);
 
   useEffect(() => {
-    setEntries((current) => {
-      if (current.length === 0) {
-        return current;
-      }
-      for (const entry of current) {
-        revokeAttachmentObjectUrl(entry);
-      }
-      return [];
-    });
+    if (entriesRef.current.length === 0) {
+      return;
+    }
+    for (const entry of entriesRef.current) {
+      revokeAttachmentObjectUrl(entry);
+    }
+    entriesRef.current = [];
+    setEntries([]);
   }, [scopeKey, canAttachEmbeddedContext, canAttachImages]);
 
   const descriptors = useMemo(
@@ -118,7 +114,9 @@ export function usePromptAttachments(
       return;
     }
 
-    setEntries((current) => [...current, ...next].slice(0, MAX_PROMPT_ATTACHMENTS));
+    const updated = [...entriesRef.current, ...next].slice(0, MAX_PROMPT_ATTACHMENTS);
+    entriesRef.current = updated;
+    setEntries(updated);
   }, [canAttachEmbeddedContext, canAttachImages]);
 
   const addTextPaste = useCallback((text: string): boolean => {
@@ -144,27 +142,32 @@ export function usePromptAttachments(
         objectUrl: null,
       },
     };
-    setEntries((current) => [...current, entry].slice(0, MAX_PROMPT_ATTACHMENTS));
+    const updated = [...entriesRef.current, entry].slice(0, MAX_PROMPT_ATTACHMENTS);
+    entriesRef.current = updated;
+    setEntries(updated);
     return true;
   }, [canAttachEmbeddedContext]);
 
   const removeAttachment = useCallback((id: string) => {
-    setEntries((current) => {
-      const removed = current.find((entry) => entry.descriptor.id === id);
-      if (removed) {
-        revokeAttachmentObjectUrl(removed);
-      }
-      return current.filter((entry) => entry.descriptor.id !== id);
-    });
+    const removed = entriesRef.current.find((entry) => entry.descriptor.id === id);
+    if (!removed) {
+      return;
+    }
+    revokeAttachmentObjectUrl(removed);
+    const updated = entriesRef.current.filter((entry) => entry.descriptor.id !== id);
+    entriesRef.current = updated;
+    setEntries(updated);
   }, []);
 
   const clearAttachments = useCallback(() => {
-    setEntries((current) => {
-      for (const entry of current) {
-        revokeAttachmentObjectUrl(entry);
-      }
-      return [];
-    });
+    if (entriesRef.current.length === 0) {
+      return;
+    }
+    for (const entry of entriesRef.current) {
+      revokeAttachmentObjectUrl(entry);
+    }
+    entriesRef.current = [];
+    setEntries([]);
   }, []);
 
   const snapshotForSubmit = useCallback((): PromptAttachmentSnapshot[] => {

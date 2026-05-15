@@ -1,6 +1,7 @@
 import {
   memo,
   useCallback,
+  useEffect,
   useState,
 } from "react";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
@@ -114,6 +115,33 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     width: shellStrip.width,
     shellRows: viewModel.shellRows,
   });
+  const contentWidth = layout.widths.length > 0
+    ? (layout.positions[layout.positions.length - 1] ?? 0)
+      + (layout.widths[layout.widths.length - 1] ?? 0)
+    : 0;
+
+  const activeTabIndex = viewModel.shellRows.findIndex((shellRow) =>
+    shellRow.kind === "chat"
+    && shellRow.row.kind === "tab"
+    && shellRow.row.tab.isActive
+  );
+
+  useEffect(() => {
+    const strip = shellStrip.ref.current;
+    if (!strip || activeTabIndex < 0) {
+      return;
+    }
+    const tabLeft = layout.positions[activeTabIndex] ?? 0;
+    const tabWidth = layout.widths[activeTabIndex] ?? 0;
+    const tabRight = tabLeft + tabWidth;
+    const viewLeft = strip.scrollLeft;
+    const viewRight = viewLeft + strip.clientWidth;
+    if (tabLeft < viewLeft) {
+      strip.scrollTo({ left: tabLeft, behavior: "smooth" });
+    } else if (tabRight > viewRight) {
+      strip.scrollTo({ left: tabRight - strip.clientWidth, behavior: "smooth" });
+    }
+  }, [activeTabIndex, layout.positions, layout.widths, shellStrip.ref]);
 
   const dismissChatSession = useCallback((sessionId: string) => {
     void dismissSession(sessionId).then(() => {
@@ -252,6 +280,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
         <WorkspaceTabStrip
           label="Workspace tabs"
           stripRef={shellStrip.ref}
+          contentWidth={contentWidth}
           className="h-7 min-w-0 flex-1"
           {...shellDrag.stripDragProps}
         >

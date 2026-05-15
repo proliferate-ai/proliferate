@@ -1,7 +1,8 @@
-export const CHROME_TAB_MIN_WIDTH = 48;
+export const CHROME_TAB_MIN_WIDTH = 84;
 export const CHROME_TAB_COMPACT_WIDTH = 60;
 export const CHROME_TAB_SMALL_WIDTH = 84;
 export const CHROME_TAB_MAX_WIDTH = 160;
+export const CHROME_DELEGATED_TAB_MAX_WIDTH = CHROME_TAB_SMALL_WIDTH;
 export const CHROME_TAB_GAP = 3;
 export const CHROME_TAB_CONTENT_MARGIN = 0;
 export const CHROME_TAB_CONTENT_OVERLAP_WIDTH = -CHROME_TAB_GAP;
@@ -21,7 +22,7 @@ export interface ChromeTabLayoutInput {
 }
 
 export interface HeaderStripLayoutInput {
-  rows: Array<{ kind: "pill" | "tab" }>;
+  rows: Array<{ kind: "pill" | "tab"; maxWidth?: number }>;
   containerWidth: number;
   reservedWidth?: number;
   minTabWidth?: number;
@@ -113,7 +114,9 @@ export function computeHeaderStripLayout({
   const tabAvailable = Math.max(0, available - fixedWidth);
   const tabWidths = computeSegmentedTabWidths({
     availableWidth: tabAvailable,
-    tabCount,
+    maxWidths: rows
+      .filter((row) => row.kind === "tab")
+      .map((row) => row.maxWidth ?? maxTabWidth),
     overlapCount: adjacentTabOverlapCount,
     minWidth: minTabWidth,
     maxWidth: maxTabWidth,
@@ -148,28 +151,33 @@ export function computeHeaderStripLayout({
 
 function computeSegmentedTabWidths(args: {
   availableWidth: number;
-  tabCount: number;
+  maxWidths: readonly number[];
   overlapCount: number;
   minWidth: number;
   maxWidth: number;
   overlapWidth: number;
 }): number[] {
-  if (args.tabCount <= 0) {
+  const tabCount = args.maxWidths.length;
+  if (tabCount <= 0) {
     return [];
   }
 
   const cumulativeOverlap = args.overlapCount * args.overlapWidth;
-  const unclamped = Math.floor((args.availableWidth + cumulativeOverlap) / args.tabCount);
-  const width = Math.min(args.maxWidth, Math.max(args.minWidth, unclamped));
-  const widths = Array.from({ length: args.tabCount }, () => width);
+  const unclamped = Math.floor((args.availableWidth + cumulativeOverlap) / tabCount);
+  const baseWidth = Math.max(args.minWidth, unclamped);
+  const widths = args.maxWidths.map((maxWidth) =>
+    Math.min(Math.min(args.maxWidth, maxWidth), baseWidth)
+  );
 
-  if (width !== unclamped || args.availableWidth <= 0) {
+  if (baseWidth !== unclamped || args.availableWidth <= 0) {
     return widths;
   }
 
-  let remainder = args.availableWidth - (width * args.tabCount - cumulativeOverlap);
+  let remainder = args.availableWidth
+    - (widths.reduce((sum, width) => sum + width, 0) - cumulativeOverlap);
   for (let index = 0; index < widths.length && remainder > 0; index += 1) {
-    if (widths[index] < args.maxWidth) {
+    const maxWidth = Math.min(args.maxWidth, args.maxWidths[index] ?? args.maxWidth);
+    if (widths[index] < maxWidth) {
       widths[index] += 1;
       remainder -= 1;
     }

@@ -59,9 +59,12 @@ export type ScenarioKey =
   | "tool-cowork-artifact"
   | "tool-generic-result"
   | "tool-subagent-task"
+  | "tool-subagent-creation-single"
+  | "tool-subagent-creations"
+  | "subagent-parent-send-card"
   | "end-turn-multi-file-diff"
   | "git-diff-panel"
-  | "agents-cowork-only"
+  | "subagents-composer-single"
   | "subagents-composer-few"
   | "subagents-composer-many"
   | "subagents-review-starting-plan"
@@ -148,9 +151,12 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "tool-cowork-artifact": { label: "Tool artifact" },
   "tool-generic-result": { label: "Tool generic result" },
   "tool-subagent-task": { label: "Tool subagent task" },
+  "tool-subagent-creation-single": { label: "Tool subagent creation" },
+  "tool-subagent-creations": { label: "Tool subagent creations" },
+  "subagent-parent-send-card": { label: "Parent send receipt" },
   "end-turn-multi-file-diff": { label: "End-turn diff" },
   "git-diff-panel": { label: "Git diff panel" },
-  "agents-cowork-only": { label: "Agents cowork only" },
+  "subagents-composer-single": { label: "Agents single" },
   "subagents-composer-few": { label: "Agents subagents (3)" },
   "subagents-composer-many": { label: "Agents subagents (10)" },
   "subagents-review-starting-plan": { label: "Review starting (plan)" },

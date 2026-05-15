@@ -9,11 +9,13 @@ export function ReviewModelSettingsMenu({
   reviewer,
   modelGroups,
   modelsLoading,
+  className,
   onSelect,
 }: {
   reviewer: ReviewerDraft;
   modelGroups: AgentModelGroup[];
   modelsLoading: boolean;
+  className?: string;
   onSelect: (group: AgentModelGroup, model: AgentModelOption) => void;
 }) {
   const selectedModel = selectedReviewerModel(modelGroups, reviewer);
@@ -23,7 +25,7 @@ export function ReviewModelSettingsMenu({
         ? `${selectedModel.group.providerDisplayName} · ${selectedModel.model.displayName}`
         : modelsLoading ? "Loading models" : "Choose model"}
       leading={<ProviderIcon kind={reviewer.agentKind} className="size-4" />}
-      className="w-full min-w-0"
+      className={className ?? "w-full min-w-0"}
       menuClassName="w-80"
       groups={modelGroups.map((group) => ({
         id: group.kind,

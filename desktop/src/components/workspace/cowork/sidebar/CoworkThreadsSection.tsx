@@ -4,7 +4,6 @@ import { SidebarShowToggleRow } from "@/components/workspace/shell/sidebar/Sideb
 import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-status";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useCoworkThreads } from "@/hooks/access/anyharness/cowork/use-cowork-threads";
-import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
 import { useWorkspaceSidebarActivityStates } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -15,12 +14,10 @@ const DEFAULT_VISIBLE_THREAD_COUNT = 5;
 
 export function CoworkThreadsSection() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const workspaceActivities = useWorkspaceSidebarActivityStates();
   const { status, isLoading: statusLoading } = useCoworkStatus();
   const { threads, isLoading: threadsLoading } = useCoworkThreads(status?.enabled ?? false);
   const { createThread, openThread, isCreatingThread } = useCoworkThreadWorkflow();
-  const openCodingSession = useOpenCoworkCodingSession();
   const [expanded, setExpanded] = useState(false);
   const threadsCollapsed = useWorkspaceUiStore((s) => s.threadsCollapsed);
   const setThreadsCollapsed = useWorkspaceUiStore((s) => s.setThreadsCollapsed);
@@ -29,20 +26,11 @@ export function CoworkThreadsSection() {
   }, [setThreadsCollapsed, threadsCollapsed]);
 
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
-  const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<Set<string>>(new Set());
   const toggleThreadExpanded = useCallback((threadId: string) => {
     setExpandedThreadIds((prev) => {
       const next = new Set(prev);
       if (next.has(threadId)) next.delete(threadId);
       else next.add(threadId);
-      return next;
-    });
-  }, []);
-  const toggleWorkspaceExpanded = useCallback((ownershipId: string) => {
-    setExpandedWorkspaceIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(ownershipId)) next.delete(ownershipId);
-      else next.add(ownershipId);
       return next;
     });
   }, []);
@@ -121,11 +109,7 @@ export function CoworkThreadsSection() {
                   onToggleExpanded={() => toggleThreadExpanded(thread.id)}
                   onSelect={() => { void openThread(thread.workspaceId); }}
                   selectedWorkspaceId={selectedWorkspaceId}
-                  activeSessionId={activeSessionId}
-                  expandedWorkspaceIds={expandedWorkspaceIds}
-                  onToggleWorkspaceExpanded={toggleWorkspaceExpanded}
                   onOpenWorkspace={(workspaceId) => { void openThread(workspaceId); }}
-                  onOpenSession={(input) => { void openCodingSession(input); }}
                 />
               ))}
               {toggleLabel && (

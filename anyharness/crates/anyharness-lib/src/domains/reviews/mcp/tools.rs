@@ -58,14 +58,10 @@ pub fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "reviewId": { "type": "string" },
+                    "reviewId": { "type": "string", "description": "Preferred stable review target. Provide either reviewId or deprecated reviewRunId." },
                     "reviewRunId": { "type": "string", "description": "Deprecated alias for reviewId." },
                     "revisedPlanId": { "type": "string" }
-                },
-                "anyOf": [
-                    { "required": ["reviewId"] },
-                    { "required": ["reviewRunId"] }
-                ]
+                }
             }),
         ));
     }
@@ -86,6 +82,7 @@ pub fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use super::{parent_tool_list, reviewer_tool_list, MUTATING_TOOL_NAMES};
+    use serde_json::Value;
 
     fn names(tools: &[serde_json::Value]) -> Vec<String> {
         tools
@@ -93,6 +90,24 @@ mod tests {
             .filter_map(|tool| tool.get("name").and_then(|value| value.as_str()))
             .map(str::to_string)
             .collect::<Vec<_>>()
+    }
+
+    fn assert_no_top_level_schema_combinators(tools: &[Value]) {
+        for tool in tools {
+            let name = tool
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("<unknown>");
+            let schema = tool
+                .get("inputSchema")
+                .unwrap_or_else(|| panic!("tool {name} is missing inputSchema"));
+            for keyword in ["oneOf", "anyOf", "allOf"] {
+                assert!(
+                    schema.get(keyword).is_none(),
+                    "tool {name} inputSchema uses unsupported top-level {keyword}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -111,6 +126,13 @@ mod tests {
         let with_signal = names(&parent_tool_list(true));
         assert!(with_signal.contains(&"mark_review_revision_ready".to_string()));
         assert!(with_signal.contains(&"get_review_status".to_string()));
+    }
+
+    #[test]
+    fn tool_input_schemas_do_not_use_top_level_combinators() {
+        let tools = parent_tool_list(true);
+
+        assert_no_top_level_schema_combinators(&tools);
     }
 
     #[test]

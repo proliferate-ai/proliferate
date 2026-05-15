@@ -1,8 +1,8 @@
 import { PopoverButton } from "@/components/ui/PopoverButton";
+import { Robot } from "@/components/ui/icons";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
 import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
-import { AgentsPopoverCoworkSection } from "./AgentsPopoverCoworkSection";
 import { AgentsPopoverReviewSection } from "./AgentsPopoverReviewSection";
 import { AgentsPopoverSubagentSection } from "./AgentsPopoverSubagentSection";
 
@@ -13,20 +13,25 @@ export function DelegatedWorkComposerControl({
 }) {
   const sectionCount = [
     viewModel.review,
-    viewModel.cowork,
     viewModel.subagents,
   ].filter(Boolean).length;
   const singleSection = sectionCount === 1;
   const singleSectionDetail = singleSection ? viewModel.summary.label : null;
+  const singleAgent = viewModel.singleAgent;
 
   return (
     <PopoverButton
       trigger={(
         <ComposerControlButton
-          label="Agents"
-          detail={viewModel.summary.label}
+          icon={singleAgent ? (
+            <Robot className={`size-3.5 ${singleAgent.textColorClassName}`} />
+          ) : undefined}
+          label={singleAgent ? singleAgent.displayName : "Agents"}
+          detail={singleAgent ? null : viewModel.summary.label}
           active={viewModel.summary.active}
-          aria-label={`Agents, ${viewModel.summary.label}`}
+          aria-label={singleAgent
+            ? `Agent, ${singleAgent.displayName}`
+            : `Agents, ${viewModel.summary.label}`}
           className="max-w-[15rem]"
         />
       )}
@@ -44,13 +49,6 @@ export function DelegatedWorkComposerControl({
             {viewModel.review && (
               <AgentsPopoverReviewSection
                 review={viewModel.review}
-                detail={singleSectionDetail}
-                onClose={close}
-              />
-            )}
-            {viewModel.cowork && (
-              <AgentsPopoverCoworkSection
-                cowork={viewModel.cowork}
                 detail={singleSectionDetail}
                 onClose={close}
               />
