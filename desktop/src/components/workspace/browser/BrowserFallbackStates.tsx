@@ -20,7 +20,7 @@ export function BrowserUnavailableOverlay({
   return (
     <div className="pointer-events-auto absolute inset-0 z-10 flex items-center justify-center bg-sidebar-background/95 px-8 backdrop-blur">
       <div className="flex max-w-72 flex-col items-center text-center">
-        <div className="mb-4 flex size-11 items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-muted-foreground">
+        <div className="mb-4 flex size-11 items-center justify-center rounded-lg border border-sidebar-border bg-foreground/5 text-sidebar-muted-foreground">
           <CircleAlert className="size-5" />
         </div>
         <p className="text-sm font-medium text-sidebar-foreground">
@@ -56,7 +56,7 @@ export function BrowserEmptyState({
   return (
     <div className="flex h-full items-center justify-center px-8 text-center">
       <div className="flex max-w-72 flex-col items-center">
-        <div className="mb-4 flex size-12 items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-muted-foreground">
+        <div className="mb-4 flex size-12 items-center justify-center rounded-lg border border-sidebar-border bg-foreground/5 text-sidebar-muted-foreground">
           <Globe className="size-6 opacity-70" />
         </div>
         <p className="text-sm font-medium text-sidebar-foreground">{title}</p>

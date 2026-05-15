@@ -837,143 +837,448 @@
   background-color: transparent;
 }
 
-/* Shared light-mode foundation.
-   Light mode needs its own hierarchy rather than a mechanical inversion of
-   dark mode: white document surfaces, quiet gray under-surfaces, foreground-
-   alpha borders, and blue as the only strong interactive accent. */
-:root[data-mode="light"] {
-  --color-scrollbar-thumb: color-mix(in oklab, #1a1c1f 8%, transparent);
-  --color-scrollbar-thumb-active: color-mix(in oklab, #1a1c1f 16%, transparent);
+/* ========================================================================
+ * SHIP LIGHT — warm-tinted light palette
+ * ======================================================================== */
 
-  --shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-keystone: 0 1px 2px 0 rgb(0 0 0 / 0.06), 0 0 0 0.5px rgb(0 0 0 / 0.04);
-  --shadow-floating: 0 16px 32px -8px rgb(0 0 0 / 0.18);
-  --shadow-popover: 0 0 0 0.5px var(--color-popover-ring), 0 8px 16px -4px rgb(0 0 0 / 0.12);
+:root[data-mode="light"] {
+  --color-scrollbar-thumb: rgba(0, 0, 0, 0.08);
+  --color-scrollbar-thumb-active: rgba(0, 0, 0, 0.16);
+
+  --color-background: hsl(44 0% 100%);
+  --color-foreground: hsl(39 8% 16%);
+  --color-overlay: hsl(0 0% 0%);
+
+  --color-primary: hsl(14 15% 22%);
+  --color-primary-foreground: hsl(44 9% 95%);
+
+  --color-secondary: hsl(44 10% 98%);
+  --color-secondary-foreground: hsl(39 8% 16%);
+
+  --color-accent: hsl(44 10% 98%);
+  --color-accent-foreground: hsl(39 8% 16%);
+  --color-muted: hsl(44 10% 98%);
+  --color-muted-foreground: hsl(36 4% 54%);
+  --color-faint: hsl(37 5% 63%);
+  --color-helper: hsl(37 5% 63%);
+
+  --color-card: hsl(44 0% 100%);
+  --color-card-foreground: hsl(38 9% 12%);
+
+  --color-popover: hsl(44 0% 100%);
+  --color-popover-foreground: hsl(38 9% 12%);
+  --color-popover-accent: hsl(18 14% 7% / 0.05);
+  --color-popover-ring: hsl(38 9% 12% / 0.05);
+
+  --color-border: hsl(44 8% 91%);
+  --color-input: hsl(18 14% 7% / 0.1);
+  --color-input-border: hsl(18 14% 7% / 0.1);
+  --color-separator: hsl(44 8% 91%);
+  --color-ring: hsl(39 8% 16%);
+
+  --color-highlight: hsl(42 33% 97%);
+  --color-highlight-foreground: hsl(14 13% 31%);
+  --color-highlight-muted: hsl(33 35% 69%);
+  --color-border-highlight: hsl(23 17% 57%);
+  --color-unread: hsl(23 17% 57%);
+  --color-special: hsl(33 35% 69%);
+
+  --color-destructive: hsl(0 72% 51%);
+  --color-destructive-foreground: hsl(0 86% 97%);
+  --color-success: hsl(142 76% 36%);
+  --color-success-foreground: hsl(138 76% 97%);
+  --color-warning: hsl(42 33% 97%);
+  --color-warning-foreground: hsl(14 13% 31%);
+  --color-warning-foreground-secondary: hsl(23 17% 57%);
+  --color-warning-border: hsl(39 38% 86%);
+  --color-info: hsl(199 89% 48%);
+  --color-info-foreground: hsl(199 89% 95%);
+  --color-positive: hsl(142 76% 36%);
+  --color-positive-muted: hsl(138 76% 97%);
+  --color-positive-foreground: hsl(138 76% 97%);
+
+  --color-link: hsl(42 33% 97%);
+  --color-link-foreground: hsl(23 17% 57%);
+  --color-link-elevated: hsl(38 33% 93%);
+
+  --color-tip: hsl(58 100% 100%);
+  --color-tip-border: hsl(42 33% 97%);
+  --color-tip-secondary: hsl(58 100% 100%);
+  --color-tip-secondary-border: hsl(42 33% 97%);
+  --color-tip-muted: hsl(23 17% 57%);
+  --color-tip-foreground: hsl(14 15% 22%);
+  --color-plan-border: hsl(33 35% 69%);
+
+  --color-switch-background: hsl(39 8% 16%);
+  --color-switch-foreground: hsl(44 0% 100%);
+
+  --color-composer-background: hsl(44 10% 98% / 0.82);
+
+  --color-prose-border: hsl(38 7% 81%);
+
+  --color-sidebar: hsl(44 10% 98%);
+  --color-sidebar-background: hsl(44 10% 98%);
+  --color-sidebar-foreground: hsl(18 14% 7% / 0.62);
+  --color-sidebar-primary: hsl(39 8% 16%);
+  --color-sidebar-primary-foreground: hsl(44 9% 95%);
+  --color-sidebar-muted-foreground: hsl(18 14% 7% / 0.4);
+  --color-sidebar-accent: hsl(18 14% 7% / 0.035);
+  --color-sidebar-accent-foreground: hsl(18 14% 7% / 0.8);
+  --color-sidebar-border: hsl(18 14% 7% / 0.08);
+  --color-sidebar-ring: hsl(37 5% 63%);
+  --color-sidebar-blue: hsl(221 83% 53%);
+
+  --color-status-backlog: hsl(36 4% 54%);
+  --color-status-backlog-hover: hsl(38 6% 35%);
+  --color-status-in-progress: hsl(50 100% 44%);
+  --color-status-in-progress-hover: hsl(50 100% 36%);
+  --color-status-in-review: hsl(142 76% 36%);
+  --color-status-in-review-hover: hsl(142 72% 29%);
+  --color-status-done: hsl(33 35% 69%);
+  --color-status-done-hover: hsl(23 17% 57%);
+  --color-status-canceled: hsl(37 5% 63%);
+  --color-status-canceled-hover: hsl(36 4% 54%);
+
+  --color-delegated-agent-1: hsl(221 83% 53%);
+  --color-delegated-agent-2: hsl(292 100% 46%);
+  --color-delegated-agent-3: hsl(0 72% 51%);
+  --color-delegated-agent-4: hsl(36 95% 42%);
+  --color-delegated-agent-5: hsl(265 80% 55%);
+  --color-delegated-agent-6: hsl(192 90% 36%);
+  --color-delegated-agent-7: hsl(25 95% 46%);
+  --color-delegated-agent-8: hsl(199 89% 42%);
+
+  --color-todo-in-progress: hsl(221 83% 53%);
+  --color-todo-completed: hsl(142 76% 36%);
+  --color-todo-pending: hsl(37 5% 44%);
+
+  --color-app-switcher-bg: hsl(38 7% 81%);
+
+  --color-git-green: hsl(142 76% 36%);
+  --color-git-red: hsl(0 72% 51%);
+  --color-git-yellow: hsl(50 100% 59%);
+  --color-git-gray: hsl(37 5% 63%);
+  --color-git-new-line: hsl(142 76% 44%);
+  --color-git-removed-line: hsl(0 100% 45%);
+
+  --color-terminal-black: hsl(39 8% 16%);
+  --color-terminal-red: hsl(0 72% 51%);
+  --color-terminal-green: hsl(142 76% 36%);
+  --color-terminal-yellow: hsl(50 100% 59%);
+  --color-terminal-blue: hsl(221 83% 53%);
+  --color-terminal-magenta: hsl(292 100% 46%);
+  --color-terminal-cyan: hsl(192 90% 36%);
+  --color-terminal-white: hsl(44 8% 91%);
+
+  --color-terminal-bright-black: hsl(37 5% 44%);
+  --color-terminal-bright-red: hsl(0 84% 60%);
+  --color-terminal-bright-green: hsl(142 71% 45%);
+  --color-terminal-bright-yellow: hsl(50 100% 69%);
+  --color-terminal-bright-blue: hsl(217 91% 60%);
+  --color-terminal-bright-magenta: hsl(292 100% 54%);
+  --color-terminal-bright-cyan: hsl(189 94% 43%);
+  --color-terminal-bright-white: hsl(44 9% 95%);
+
+  --color-file-icon-folder: hsl(0 0% 17%);
+  --color-file-icon-neutral: hsl(0 0% 17%);
+  --color-file-icon-muted: hsl(0 0% 43%);
+  --color-file-icon-accent: hsl(0 0% 17%);
+  --color-file-icon-red: hsl(0 0% 17%);
+
+  --git-new-line-bg: color-mix(in oklab, hsl(142 76% 44%) 10%, transparent);
+  --git-new-line-border: color-mix(in oklab, hsl(142 76% 44%) 60%, transparent);
+  --git-new-line-highlight: color-mix(in oklab, hsl(142 76% 44%) 20%, transparent);
+  --git-removed-line-bg: color-mix(in oklab, hsl(0 100% 45%) 10%, transparent);
+  --git-removed-line-border: color-mix(in oklab, hsl(0 100% 45%) 60%, transparent);
+  --git-removed-line-highlight: color-mix(in oklab, hsl(0 100% 45%) 20%, transparent);
+  --color-diff-main-surface: hsl(44 0% 100%);
+  --color-diff-surface: color-mix(in srgb, hsl(44 0% 100%) 94%, hsl(39 8% 16%));
+  --color-diff-panel-surface: color-mix(in oklab, hsl(39 8% 16%) 3%, transparent);
+  --color-diff-header-surface: var(--color-diff-surface);
+  --color-diff-added: hsl(142 76% 44%);
+  --color-diff-deleted: hsl(0 100% 45%);
+  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
+  --color-diff-added-bg: var(--diffs-bg-addition-override);
+  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
+}
+
+
+/* ========================================================================
+ * MONO LIGHT — cool neutral light palette
+ * (Original preset shares this via the combined selector.)
+ * ======================================================================== */
+
+:root[data-theme="mono"][data-mode="light"],
+:root[data-theme="original"][data-mode="light"] {
+  --color-scrollbar-thumb: rgba(0, 0, 0, 0.08);
+  --color-scrollbar-thumb-active: rgba(0, 0, 0, 0.16);
 
   --color-background: #ffffff;
-  --color-foreground: #1a1c1f;
+  --color-foreground: #0d0d0d;
   --color-overlay: #000000;
 
-  --color-primary: #1a1c1f;
+  --color-primary: #0d0d0d;
   --color-primary-foreground: #ffffff;
 
-  --color-secondary: color-mix(in oklab, var(--color-foreground) 5%, transparent);
-  --color-secondary-foreground: var(--color-foreground);
-  --color-accent: color-mix(in oklab, var(--color-foreground) 5%, transparent);
-  --color-accent-foreground: var(--color-foreground);
-  --color-muted: color-mix(in oklab, var(--color-foreground) 2.5%, transparent);
-  --color-muted-foreground: color-mix(in oklab, var(--color-foreground) 70%, transparent);
-  --color-faint: color-mix(in oklab, var(--color-foreground) 50%, transparent);
-  --color-helper: color-mix(in oklab, var(--color-foreground) 70%, transparent);
+  --color-secondary: #f5f5f5;
+  --color-secondary-foreground: #0d0d0d;
 
-  --color-card: color-mix(in oklab, var(--color-foreground) 3.5%, transparent);
-  --color-card-foreground: var(--color-foreground);
+  --color-accent: #f5f5f5;
+  --color-accent-foreground: #0d0d0d;
+  --color-muted: #f5f5f5;
+  --color-muted-foreground: rgba(13, 13, 13, 0.695);
+  --color-faint: rgba(13, 13, 13, 0.495);
+  --color-helper: rgba(13, 13, 13, 0.695);
+
+  --color-card: #ffffff;
+  --color-card-foreground: #0d0d0d;
+
   --color-popover: #ffffff;
-  --color-popover-foreground: var(--color-foreground);
-  --color-popover-accent: color-mix(in oklab, var(--color-foreground) 5%, transparent);
-  --color-popover-ring: color-mix(in oklab, var(--color-foreground) 8%, transparent);
+  --color-popover-foreground: #0d0d0d;
+  --color-popover-accent: rgba(13, 13, 13, 0.05);
+  --color-popover-ring: rgba(13, 13, 13, 0.078);
 
-  --color-border: color-mix(in oklab, var(--color-foreground) 8%, transparent);
-  --color-input: color-mix(in oklab, var(--color-foreground) 10%, transparent);
-  --color-input-border: color-mix(in oklab, var(--color-foreground) 8%, transparent);
-  --color-separator: color-mix(in oklab, var(--color-foreground) 5%, transparent);
-  --color-ring: #339cff;
+  --color-border: rgba(13, 13, 13, 0.078);
+  --color-input: rgba(13, 13, 13, 0.1);
+  --color-input-border: rgba(13, 13, 13, 0.1);
+  --color-separator: #f5f5f5;
+  --color-ring: #0285ff;
 
-  --color-highlight: #e5f3ff;
-  --color-highlight-foreground: var(--color-foreground);
-  --color-highlight-muted: #339cff;
-  --color-border-highlight: #339cff;
-  --color-unread: #339cff;
-  --color-special: #339cff;
+  --color-highlight: #dfefff;
+  --color-highlight-foreground: #0d0d0d;
+  --color-highlight-muted: #0285ff;
+  --color-border-highlight: #0285ff;
+  --color-unread: #0285ff;
+  --color-special: #0285ff;
 
-  --color-destructive: #d53538;
+  --color-destructive: #ba2623;
   --color-destructive-foreground: #ffffff;
-  --color-success: #008809;
+  --color-success: #00a240;
   --color-success-foreground: #ffffff;
   --color-warning: #fff8e6;
-  --color-warning-foreground: var(--color-foreground);
-  --color-warning-foreground-secondary: color-mix(in oklab, var(--color-foreground) 50%, transparent);
-  --color-warning-border: color-mix(in oklab, #bd5800 20%, transparent);
-  --color-info: #0169cc;
+  --color-warning-foreground: #0d0d0d;
+  --color-warning-foreground-secondary: rgba(13, 13, 13, 0.495);
+  --color-warning-border: rgba(13, 13, 13, 0.078);
+  --color-info: #0285ff;
   --color-info-foreground: #ffffff;
-  --color-positive: #008809;
-  --color-positive-muted: color-mix(in oklab, #00a240 10%, transparent);
+  --color-positive: #00a240;
+  --color-positive-muted: rgba(0, 162, 64, 0.1);
   --color-positive-foreground: #ffffff;
 
-  --color-link: #e5f3ff;
-  --color-link-foreground: #0169cc;
-  --color-link-elevated: #d8e8f7;
-  --color-tip: #e5f3ff;
-  --color-tip-border: color-mix(in oklab, #0169cc 12%, transparent);
-  --color-tip-secondary: #d8e8f7;
-  --color-tip-secondary-border: color-mix(in oklab, #0169cc 16%, transparent);
-  --color-tip-muted: #0169cc;
-  --color-tip-foreground: var(--color-foreground);
-  --color-plan-border: #339cff;
+  --color-link: #dfefff;
+  --color-link-foreground: #0285ff;
+  --color-link-elevated: #dceeff;
 
-  --color-switch-background: var(--color-foreground);
+  --color-tip: #dfefff;
+  --color-tip-border: rgba(13, 13, 13, 0.078);
+  --color-tip-secondary: #dceeff;
+  --color-tip-secondary-border: rgba(13, 13, 13, 0.078);
+  --color-tip-muted: #0285ff;
+  --color-tip-foreground: #0d0d0d;
+  --color-plan-border: #0285ff;
+
+  --color-switch-background: #0d0d0d;
   --color-switch-foreground: #ffffff;
 
-  --color-composer-background: rgb(255 255 255 / 0.864);
-  --color-composer-border: rgb(0 0 0 / 0.1);
-  --color-composer-control-foreground: color-mix(in oklab, var(--color-foreground) 50%, transparent);
-  --color-composer-control-active-foreground: var(--color-foreground);
-  --color-composer-control-muted-foreground: color-mix(in oklab, var(--color-foreground) 50%, transparent);
-  --color-composer-control-hover: color-mix(in oklab, var(--color-foreground) 5.5%, transparent);
-  --color-composer-send-background: var(--color-foreground);
-  --color-composer-send-foreground: #ffffff;
-  --color-composer-shadow: 0 4px 16px 0 rgb(0 0 0 / 0.05);
-  --color-composer-backdrop-filter: blur(16px);
+  --color-composer-background: #f4f4f4;
 
-  --color-prose-border: color-mix(in oklab, var(--color-foreground) 12%, transparent);
+  --color-prose-border: rgba(13, 13, 13, 0.117);
 
-  --color-sidebar: #f9f9f9;
-  --color-sidebar-background: #f9f9f9;
-  --color-sidebar-foreground: var(--color-foreground);
-  --color-sidebar-primary: var(--color-foreground);
-  --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-muted-foreground: color-mix(in oklab, var(--color-foreground) 50%, transparent);
-  --color-sidebar-accent: color-mix(in oklab, var(--color-foreground) 5%, transparent);
-  --color-sidebar-accent-foreground: var(--color-foreground);
-  --color-sidebar-border: color-mix(in oklab, var(--color-foreground) 8%, transparent);
-  --color-sidebar-ring: #339cff;
-  --color-sidebar-blue: #0169cc;
+  --color-sidebar: #f5f5f5;
+  --color-sidebar-background: #f5f5f5;
+  --color-sidebar-foreground: rgba(13, 13, 13, 0.74);
+  --color-sidebar-primary: #0d0d0d;
+  --color-sidebar-primary-foreground: #0d0d0d;
+  --color-sidebar-muted-foreground: rgba(13, 13, 13, 0.42);
+  --color-sidebar-accent: rgba(13, 13, 13, 0.036);
+  --color-sidebar-accent-foreground: #0d0d0d;
+  --color-sidebar-border: rgba(13, 13, 13, 0.068);
+  --color-sidebar-ring: #0285ff;
+  --color-sidebar-blue: #0285ff;
 
-  --color-status-backlog: color-mix(in oklab, var(--color-foreground) 50%, transparent);
-  --color-status-backlog-hover: color-mix(in oklab, var(--color-foreground) 70%, transparent);
-  --color-status-in-progress: #bd5800;
-  --color-status-in-progress-hover: #9a4600;
-  --color-status-in-review: #008809;
-  --color-status-in-review-hover: #006f07;
-  --color-status-done: #0169cc;
-  --color-status-done-hover: #0057aa;
-  --color-status-canceled: color-mix(in oklab, var(--color-foreground) 50%, transparent);
-  --color-status-canceled-hover: color-mix(in oklab, var(--color-foreground) 70%, transparent);
+  --color-status-backlog: rgba(13, 13, 13, 0.495);
+  --color-status-backlog-hover: rgba(13, 13, 13, 0.695);
+  --color-status-in-progress: #e0c200;
+  --color-status-in-progress-hover: #b89e00;
+  --color-status-in-review: #00a240;
+  --color-status-in-review-hover: #008833;
+  --color-status-done: #0285ff;
+  --color-status-done-hover: #0070d6;
+  --color-status-canceled: rgba(13, 13, 13, 0.495);
+  --color-status-canceled-hover: rgba(13, 13, 13, 0.695);
 
-  --color-delegated-agent-1: #0169cc;
-  --color-delegated-agent-2: #751ed9;
-  --color-delegated-agent-3: #d53538;
-  --color-delegated-agent-4: #bd5800;
-  --color-delegated-agent-5: #924ff7;
-  --color-delegated-agent-6: #0071ea;
-  --color-delegated-agent-7: #e25507;
-  --color-delegated-agent-8: #006aff;
+  --color-todo-in-progress: #0285ff;
+  --color-todo-completed: #00a240;
+  --color-todo-pending: rgba(13, 13, 13, 0.495);
 
-  --color-todo-in-progress: #0169cc;
-  --color-todo-completed: #008809;
-  --color-todo-pending: color-mix(in oklab, var(--color-foreground) 50%, transparent);
+  --color-app-switcher-bg: rgba(13, 13, 13, 0.1);
 
-  --color-app-switcher-bg: color-mix(in oklab, var(--color-foreground) 10%, transparent);
-  --color-brand-logo-tile: #ffffff;
-
-  --color-git-green: #008809;
+  --color-git-green: #00a240;
   --color-git-red: #ba2623;
-  --color-git-yellow: #bd5800;
-  --color-git-gray: color-mix(in oklab, var(--color-foreground) 50%, transparent);
+  --color-git-yellow: #ffc300;
+  --color-git-gray: rgba(13, 13, 13, 0.495);
   --color-git-new-line: #00a240;
   --color-git-removed-line: #ba2623;
 
-  --color-terminal-black: #000000;
+  --color-terminal-black: rgba(13, 13, 13, 0.495);
+  --color-terminal-red: #e02e2a;
+  --color-terminal-green: #00a240;
+  --color-terminal-yellow: #ffc300;
+  --color-terminal-blue: #0285ff;
+  --color-terminal-magenta: #924ff7;
+  --color-terminal-cyan: #0285ff;
+  --color-terminal-white: #0d0d0d;
+
+  --color-terminal-bright-black: rgba(13, 13, 13, 0.695);
+  --color-terminal-bright-red: #e02e2a;
+  --color-terminal-bright-green: #00a240;
+  --color-terminal-bright-yellow: #ffc300;
+  --color-terminal-bright-blue: #0285ff;
+  --color-terminal-bright-magenta: #924ff7;
+  --color-terminal-bright-cyan: #0285ff;
+  --color-terminal-bright-white: #0d0d0d;
+
+  --git-new-line-bg: color-mix(in oklab, #00a240 10%, transparent);
+  --git-new-line-border: color-mix(in oklab, #00a240 60%, transparent);
+  --git-new-line-highlight: color-mix(in oklab, #00a240 15%, transparent);
+  --git-removed-line-bg: color-mix(in oklab, #ba2623 10%, transparent);
+  --git-removed-line-border: color-mix(in oklab, #ba2623 60%, transparent);
+  --git-removed-line-highlight: color-mix(in oklab, #ba2623 15%, transparent);
+  --color-diff-main-surface: #ffffff;
+  --color-diff-surface: color-mix(in srgb, #ffffff 94%, #0d0d0d);
+  --color-diff-panel-surface: color-mix(in oklab, #0d0d0d 3%, transparent);
+  --color-diff-header-surface: var(--color-diff-surface);
+  --color-diff-added: #00a240;
+  --color-diff-deleted: #ba2623;
+  --diffs-fg: #0d0d0d;
+  --diffs-mixer: #0d0d0d;
+  --color-diff-added-bg: var(--diffs-bg-addition-override);
+  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
+}
+
+/* Mono light tracks Codex Electron light without changing the original preset. */
+:root[data-theme="mono"][data-mode="light"] {
+  --color-scrollbar-thumb: rgba(13, 13, 13, 0.08);
+  --color-scrollbar-thumb-active: rgba(13, 13, 13, 0.16);
+
+  --color-background: #ffffff;
+  --color-foreground: #0d0d0d;
+  --color-overlay: #000000;
+
+  --color-primary: #0d0d0d;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: rgba(13, 13, 13, 0.05);
+  --color-secondary-foreground: #0d0d0d;
+
+  --color-accent: rgba(13, 13, 13, 0.05);
+  --color-accent-foreground: #0d0d0d;
+  --color-muted: rgba(13, 13, 13, 0.025);
+  --color-muted-foreground: rgba(13, 13, 13, 0.7);
+  --color-faint: rgba(13, 13, 13, 0.5);
+  --color-helper: rgba(13, 13, 13, 0.7);
+
+  --color-card: rgba(13, 13, 13, 0.035);
+  --color-card-foreground: #0d0d0d;
+
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0d0d0d;
+  --color-popover-accent: rgba(13, 13, 13, 0.05);
+  --color-popover-ring: rgba(13, 13, 13, 0.08);
+
+  --color-border: rgba(13, 13, 13, 0.08);
+  --color-input: rgba(13, 13, 13, 0.1);
+  --color-input-border: rgba(13, 13, 13, 0.08);
+  --color-separator: rgba(13, 13, 13, 0.05);
+  --color-ring: #0169cc;
+
+  --color-highlight: #deecf8;
+  --color-highlight-foreground: #0d0d0d;
+  --color-highlight-muted: #0169cc;
+  --color-border-highlight: #0169cc;
+  --color-unread: #0169cc;
+  --color-special: #0169cc;
+
+  --color-destructive: #e02e2a;
+  --color-destructive-foreground: #ffffff;
+  --color-success: #00a240;
+  --color-success-foreground: #ffffff;
+  --color-warning: #fff8e6;
+  --color-warning-foreground: #0d0d0d;
+  --color-warning-foreground-secondary: rgba(13, 13, 13, 0.5);
+  --color-warning-border: rgba(13, 13, 13, 0.08);
+  --color-info: #0169cc;
+  --color-info-foreground: #ffffff;
+  --color-positive: #00a240;
+  --color-positive-muted: rgba(0, 162, 64, 0.1);
+  --color-positive-foreground: #ffffff;
+
+  --color-link: #deecf8;
+  --color-link-foreground: #0169cc;
+  --color-link-elevated: #d8e8f7;
+
+  --color-tip: #deecf8;
+  --color-tip-border: rgba(13, 13, 13, 0.08);
+  --color-tip-secondary: #d8e8f7;
+  --color-tip-secondary-border: rgba(13, 13, 13, 0.08);
+  --color-tip-muted: #0169cc;
+  --color-tip-foreground: #0d0d0d;
+  --color-plan-border: #0169cc;
+
+  --color-switch-background: #0d0d0d;
+  --color-switch-foreground: #ffffff;
+
+  --color-composer-background: rgba(255, 255, 255, 0.864);
+  --color-composer-border: rgba(0, 0, 0, 0.1);
+  --color-composer-control-foreground: rgba(13, 13, 13, 0.5);
+  --color-composer-control-active-foreground: #0d0d0d;
+  --color-composer-control-muted-foreground: rgba(13, 13, 13, 0.5);
+  --color-composer-control-hover: rgba(13, 13, 13, 0.055);
+  --color-composer-send-background: #0d0d0d;
+  --color-composer-send-foreground: #ffffff;
+  --color-composer-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.05);
+  --color-composer-backdrop-filter: blur(16px);
+
+  --color-prose-border: rgba(13, 13, 13, 0.12);
+
+  --color-sidebar: #f5f5f5;
+  --color-sidebar-background: #f5f5f5;
+  --color-sidebar-foreground: #1a1c1f;
+  --color-sidebar-primary: #1a1c1f;
+  --color-sidebar-primary-foreground: #1a1c1f;
+  --color-sidebar-muted-foreground: color-mix(in oklab, #1a1c1f 50%, transparent);
+  --color-sidebar-accent: color-mix(in oklab, #1a1c1f 5%, transparent);
+  --color-sidebar-accent-foreground: #1a1c1f;
+  --color-sidebar-border: color-mix(in oklab, #1a1c1f 8%, transparent);
+  --color-sidebar-ring: #0169cc;
+  --color-sidebar-blue: #0169cc;
+
+  --color-status-backlog: rgba(13, 13, 13, 0.5);
+  --color-status-backlog-hover: rgba(13, 13, 13, 0.7);
+  --color-status-in-progress: #bd5800;
+  --color-status-in-progress-hover: #9a4600;
+  --color-status-in-review: #00a240;
+  --color-status-in-review-hover: #008833;
+  --color-status-done: #0169cc;
+  --color-status-done-hover: #0057aa;
+  --color-status-canceled: rgba(13, 13, 13, 0.5);
+  --color-status-canceled-hover: rgba(13, 13, 13, 0.7);
+
+  --color-todo-in-progress: #0169cc;
+  --color-todo-completed: #00a240;
+  --color-todo-pending: rgba(13, 13, 13, 0.5);
+
+  --color-app-switcher-bg: rgba(13, 13, 13, 0.1);
+
+  --color-git-green: #00a240;
+  --color-git-red: #ba2623;
+  --color-git-yellow: #ffc300;
+  --color-git-gray: rgba(13, 13, 13, 0.5);
+  --color-git-new-line: #00a240;
+  --color-git-removed-line: #ba2623;
+
+  --color-terminal-black: rgba(13, 13, 13, 0.5);
   --color-terminal-red: #d53538;
   --color-terminal-green: #008809;
   --color-terminal-yellow: #bd5800;
@@ -981,6 +1286,7 @@
   --color-terminal-magenta: #751ed9;
   --color-terminal-cyan: #0071ea;
   --color-terminal-white: #666666;
+
   --color-terminal-bright-black: #000000;
   --color-terminal-bright-red: #f44a4c;
   --color-terminal-bright-green: #59d24e;
@@ -990,30 +1296,20 @@
   --color-terminal-bright-cyan: #20b8ff;
   --color-terminal-bright-white: #828282;
 
-  --color-file-icon-folder: #1a1c1f;
-  --color-file-icon-neutral: #1a1c1f;
-  --color-file-icon-muted: color-mix(in oklab, var(--color-foreground) 50%, transparent);
-  --color-file-icon-accent: #1a1c1f;
-  --color-file-icon-red: #1a1c1f;
-
-  --git-new-line-bg: color-mix(in oklab, #00a240 10%, transparent);
+  --git-new-line-bg: color-mix(in oklab, #00a240 15%, transparent);
   --git-new-line-border: color-mix(in oklab, #00a240 60%, transparent);
   --git-new-line-highlight: color-mix(in oklab, #00a240 15%, transparent);
-  --git-removed-line-bg: color-mix(in oklab, #ba2623 10%, transparent);
+  --git-removed-line-bg: color-mix(in oklab, #ba2623 15%, transparent);
   --git-removed-line-border: color-mix(in oklab, #ba2623 60%, transparent);
   --git-removed-line-highlight: color-mix(in oklab, #ba2623 15%, transparent);
   --color-diff-main-surface: #ffffff;
-  --color-diff-code-surface: #fafafa;
-  --color-diff-surface: color-mix(in srgb, #ffffff 94%, #1a1c1f);
-  --color-diff-panel-surface: color-mix(in oklab, #1a1c1f 3%, transparent);
+  --color-diff-surface: color-mix(in srgb, #ffffff 94%, #0d0d0d);
+  --color-diff-panel-surface: color-mix(in oklab, #0d0d0d 3%, transparent);
   --color-diff-header-surface: var(--color-diff-surface);
-  --color-code-block-background: var(--color-diff-surface);
   --color-diff-added: #00a240;
   --color-diff-deleted: #ba2623;
-  --diffs-fg: var(--color-foreground);
-  --diffs-mixer: var(--color-foreground);
-  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 85%, var(--diffs-addition-color-override));
-  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 85%, var(--diffs-deletion-color-override));
+  --diffs-fg: #0d0d0d;
+  --diffs-mixer: #0d0d0d;
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }

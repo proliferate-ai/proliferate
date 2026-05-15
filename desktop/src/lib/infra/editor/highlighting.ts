@@ -39,8 +39,8 @@ const PROLIFERATE_LIGHT_THEME = {
   name: "proliferate-light",
   type: "light" as const,
   settings: [
-    { settings: { foreground: "#1a1c1f", background: "#ffffff" } },
-    { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: "#777777" } },
+    { settings: { foreground: "#0d0d0d", background: "#ffffff" } },
+    { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: "#949494" } },
     { scope: ["string", "string.quoted"], settings: { foreground: "#008809" } },
     { scope: ["constant.numeric", "constant.language"], settings: { foreground: "#bd5800" } },
     { scope: ["keyword", "keyword.control", "keyword.operator.expression", "keyword.operator.new"], settings: { foreground: "#d53538" } },
@@ -138,7 +138,7 @@ const CODEX_MARKDOWN_COLORS = {
     emphasis: "#FFD452",
   },
   light: {
-    foreground: "#1a1c1f",
+    foreground: "#0d0d0d",
     muted: "#666666",
     string: "#008809",
     heading: "#d53538",

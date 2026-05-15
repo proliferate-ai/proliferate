@@ -43,14 +43,14 @@ export function CoworkThreadRow({
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex flex-1 items-center gap-2 truncate text-base leading-5 text-sidebar-foreground">
+          <div className="flex flex-1 items-center gap-2 truncate text-base leading-5 text-foreground">
             {coworkThreadTitle(thread)}
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
           {!active && !canExpand && (
-            <div className="truncate text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground group-focus-within:opacity-0 group-hover:opacity-0">
+            <div className="truncate text-right text-sm leading-4 tabular-nums text-foreground/40 group-focus-within:opacity-0 group-hover:opacity-0">
               {formatSidebarRelativeTime(thread.updatedAt)}
             </div>
           )}
@@ -63,7 +63,7 @@ export function CoworkThreadRow({
                 event.stopPropagation();
                 onToggleExpanded();
               }}
-              className="inline-flex size-5 shrink-0 items-center justify-center rounded text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-offset-[-2px]"
+              className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-foreground focus-visible:outline-offset-[-2px]"
             >
               {expanded
                 ? <ChevronDown className="size-3" />

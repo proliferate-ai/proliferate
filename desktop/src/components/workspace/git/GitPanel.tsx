@@ -277,7 +277,7 @@ function GitReviewEmptyState({
   return (
     <div className="flex min-h-[260px] items-center justify-center px-4 py-8">
       <div className="flex max-w-[280px] flex-col items-center text-center">
-        <div className="mb-3 flex size-9 items-center justify-center rounded-lg border border-sidebar-border/70 bg-sidebar-accent text-sidebar-muted-foreground">
+        <div className="mb-3 flex size-9 items-center justify-center rounded-lg border border-sidebar-border/70 bg-foreground/5 text-sidebar-muted-foreground">
           <Icon className="size-4" />
         </div>
         <p className="text-sm font-medium text-sidebar-foreground">
