@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import type { ContentPart } from "@anyharness/sdk";
-import { FileIcon, Link2, LoaderCircle, X } from "@/components/ui/icons";
+import { FileIcon, Link2, Spinner, X } from "@/components/ui/icons";
 import { Button } from "@/components/ui/Button";
 import { FilePathLink } from "@/components/ui/content/FilePathLink";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
@@ -277,7 +277,7 @@ function PromptImagePreview({
   return (
     <div className={previewFrameClassName(variant)} title={image.isError ? "Image unavailable" : "Loading image"}>
       {image.isLoading ? (
-        <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+        <Spinner className="size-4 text-muted-foreground" />
       ) : (
         <FileIcon className="size-4 text-muted-foreground" />
       )}

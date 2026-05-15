@@ -377,6 +377,24 @@ describe("RightPanel tab shortcuts", () => {
     expect(screen.queryByTestId("git-panel")).toBeNull();
   });
 
+  it("does not intercept angle tab-cycle shell shortcuts after clicking panel content", async () => {
+    const { container } = render(<RightPanelHarness isWorkspaceReady />);
+    const root = container.querySelector("[data-right-panel-root='true']");
+    if (!(root instanceof HTMLElement)) {
+      throw new Error("Expected right panel root");
+    }
+
+    fireEvent.pointerDown(root);
+    expect(document.activeElement).toBe(root);
+
+    fireEvent.keyDown(window, angleTabEvent("next"));
+    fireEvent.keyDown(window, angleTabEvent("previous"));
+
+    await Promise.resolve();
+
+    expect(screen.queryByTestId("git-panel")).toBeNull();
+  });
+
   it("does not intercept primary-number shell shortcuts from right-panel text inputs", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
     const input = screen.getByTestId("scratch-panel-input");
@@ -385,6 +403,21 @@ describe("RightPanel tab shortcuts", () => {
     expect(document.activeElement).toBe(input);
 
     fireEvent.keyDown(window, primaryDigitEvent(3));
+
+    await Promise.resolve();
+
+    expect(screen.queryByTestId("git-panel")).toBeNull();
+  });
+
+  it("does not intercept angle tab-cycle shell shortcuts from right-panel text inputs", async () => {
+    render(<RightPanelHarness isWorkspaceReady />);
+    const input = screen.getByTestId("scratch-panel-input");
+
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    fireEvent.keyDown(window, angleTabEvent("next"));
+    fireEvent.keyDown(window, angleTabEvent("previous"));
 
     await Promise.resolve();
 
@@ -526,6 +559,16 @@ function primaryDigitEvent(digit: number) {
   return {
     key: String(digit),
     code: `Digit${digit}`,
+    ...(isApplePlatform() ? { metaKey: true } : { ctrlKey: true }),
+  };
+}
+
+function angleTabEvent(direction: "next" | "previous") {
+  return {
+    key: direction === "next" ? ">" : "<",
+    code: direction === "next" ? "Period" : "Comma",
+    shiftKey: true,
+    altKey: true,
     ...(isApplePlatform() ? { metaKey: true } : { ctrlKey: true }),
   };
 }

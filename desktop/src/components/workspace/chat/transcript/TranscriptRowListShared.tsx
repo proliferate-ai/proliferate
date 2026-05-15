@@ -1,5 +1,5 @@
 import type { ReactNode, RefObject } from "react";
-import { LoaderCircle } from "@/components/ui/icons";
+import { Spinner } from "@/components/ui/icons";
 import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 
@@ -162,7 +162,7 @@ export function estimateRenderableRowHeight(
 export function TranscriptHistoryLoadingRow() {
   return (
     <div className="flex justify-center pb-3 text-muted-foreground" role="status">
-      <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+      <Spinner className="size-4" />
       <span className="sr-only">Loading earlier messages</span>
     </div>
   );

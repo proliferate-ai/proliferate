@@ -1679,6 +1679,29 @@ body {
   animation: brand-mark-fade-out 0.22s ease-out forwards;
 }
 
+/* ---- Compact spinner ----
+   Shared current-color spinner for small controls. Keep this separate from
+   the braille/session loading vocabulary below. */
+@keyframes proliferate-spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.proliferate-spinner {
+  animation: proliferate-spinner-rotate 1.1s linear infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proliferate-spinner {
+    animation: none;
+    transform: rotate(45deg);
+    will-change: auto;
+  }
+}
+
 /* ---- Braille sweep loading text ----
    This must stay CSS-driven. The previous React ticker updated every 60ms and
    forced the chat shell to commit continuously while a loader was visible. */

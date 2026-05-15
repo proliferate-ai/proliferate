@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { ComposerAttachedPanel } from "@/components/workspace/chat/input/ComposerAttachedPanel";
 import { CloudStatusCompactHeader } from "@/components/workspace/chat/surface/CloudStatusCompactHeader";
-import { CircleAlert, LoaderCircle } from "@/components/ui/icons";
+import { CircleAlert, Spinner } from "@/components/ui/icons";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import type { SelectedCloudRuntimeViewModel } from "@/lib/domain/workspaces/cloud/cloud-runtime-state";
 
@@ -73,7 +73,7 @@ export function CloudRuntimeAttachedPanelView({
           phaseLabel={state.subtitle ?? "Reconnecting runtime"}
           tone={tone}
           statusIcon={state.phase === "resuming"
-            ? <LoaderCircle className="size-3 animate-spin" />
+            ? <Spinner className="size-3" />
             : <CircleAlert className="size-3" />}
           primaryAction={primaryAction}
           expanded={expanded}

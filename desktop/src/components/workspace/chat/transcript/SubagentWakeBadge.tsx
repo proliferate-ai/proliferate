@@ -1,6 +1,4 @@
-import { Button } from "@/components/ui/Button";
-import { Robot } from "@/components/ui/icons";
-import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+import { DelegatedAgentReceiptName } from "@/components/workspace/chat/transcript/DelegatedAgentReceiptName";
 
 interface SubagentWakeBadgeProps {
   label?: string | null;
@@ -22,63 +20,37 @@ export function SubagentWakeBadge({
   onOpenChild,
 }: SubagentWakeBadgeProps) {
   const title = label?.trim() || titleFallback;
-  const identity = buildDelegatedAgentIdentity({
-    id: sessionLinkId ?? childSessionId ?? title,
-    title,
-    sessionId: childSessionId ?? null,
-    sessionLinkId: sessionLinkId ?? null,
-  });
-  const receiptText = formatWakeReceipt(identity.displayName, outcome);
-  const canOpenChild = !!childSessionId && !!onOpenChild;
-  const openChild = () => {
-    if (canOpenChild) {
-      onOpenChild(childSessionId!);
-    }
-  };
-  const content = (
-    <>
-      <Robot className={`size-3.5 shrink-0 ${identity.textColorClassName}`} />
-      <span className="min-w-0 truncate">{receiptText}</span>
-    </>
-  );
-  const chip = canOpenChild ? (
-    <Button
-      type="button"
-      variant="unstyled"
-      size="unstyled"
-      data-telemetry-mask
-      data-chat-transcript-ignore
-      title={`Open ${identity.displayName}`}
-      aria-label={`Open ${identity.displayName}`}
-      onClick={openChild}
-      className="inline-flex max-w-[77%] items-center gap-1.5 rounded-2xl bg-foreground/5 px-3 py-1.5 text-[length:var(--text-chat)] font-normal leading-[var(--text-chat--line-height)] text-foreground hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      {content}
-    </Button>
-  ) : (
-    <div
-      className="inline-flex max-w-[77%] items-center gap-1.5 rounded-2xl bg-foreground/5 px-3 py-1.5 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-foreground"
-      data-telemetry-mask
-    >
-      {content}
-    </div>
-  );
+  const receiptText = formatWakeReceipt(outcome);
 
-  return chip;
+  return (
+    <p
+      className="max-w-[77%] text-right text-chat leading-[var(--text-chat--line-height)] text-muted-foreground"
+      data-telemetry-mask
+    >
+      <DelegatedAgentReceiptName
+        id={sessionLinkId ?? childSessionId ?? title}
+        title={title}
+        sessionId={childSessionId ?? null}
+        sessionLinkId={sessionLinkId ?? null}
+        onOpenSession={onOpenChild}
+      />
+      <span> {receiptText}.</span>
+    </p>
+  );
 }
 
-function formatWakeReceipt(title: string, outcome: string | null | undefined): string {
+function formatWakeReceipt(outcome: string | null | undefined): string {
   const normalized = normalizeOutcome(outcome);
   if (!normalized || normalized === "completed") {
-    return `${title} finished a turn`;
+    return "finished a turn";
   }
   if (normalized === "failed") {
-    return `${title} failed a turn`;
+    return "failed a turn";
   }
   if (normalized === "cancelled" || normalized === "canceled") {
-    return `${title} cancelled a turn`;
+    return "cancelled a turn";
   }
-  return `${title} ${normalized} a turn`;
+  return `${normalized} a turn`;
 }
 
 function normalizeOutcome(outcome: string | null | undefined): string | null {

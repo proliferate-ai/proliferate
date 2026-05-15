@@ -341,4 +341,92 @@ describe("shortcut dispatch policy", () => {
       target: null,
     } as KeyboardEvent)).toBe(true);
   });
+
+  it("allows tab index shortcuts from right-panel text inputs even when handled locally", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.tabByIndex, {
+      key: "3",
+      code: "Digit3",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: true,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+  });
+
+  it("allows angle tab cycling from right-panel text inputs even when handled locally", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.previousTabAngle, {
+      key: "<",
+      code: "Comma",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: true,
+      defaultPrevented: true,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTabAngle, {
+      key: ">",
+      code: "Period",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: true,
+      defaultPrevented: true,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+  });
+
+  it("allows tab index shortcuts from terminal focus zones", () => {
+    vi.stubGlobal("document", {
+      activeElement: {
+        closest: () => ({
+          getAttribute: () => "terminal",
+        }),
+      },
+    });
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.tabByIndex, {
+      key: "4",
+      code: "Digit4",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
+  });
+
+  it("allows tab cycling from browser focus zones", () => {
+    vi.stubGlobal("document", {
+      activeElement: {
+        closest: () => ({
+          getAttribute: () => "browser",
+        }),
+      },
+    });
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTabAngle, {
+      key: ">",
+      code: "Period",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: true,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
+  });
 });

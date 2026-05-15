@@ -570,14 +570,6 @@ export function CircleAlert({ className, ...props }: IconProps) {
   );
 }
 
-export function LoaderCircle({ className, ...props }: IconProps) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M21 12a9 9 0 1 1-6.22-8.56" />
-    </svg>
-  );
-}
-
 export function StopSquare({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
@@ -901,16 +893,26 @@ export function ExpandAll({ className, ...props }: IconProps) {
 /** Spinning ring indicator — 3/4 arc that rotates. */
 export function Spinner({ className }: { className?: string }) {
   return (
-    <div className={`inline-flex animate-spin ${className ?? ""}`} style={{ animationDuration: "2s" }}>
-      <svg className="size-full" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <div
+      className={`proliferate-spinner inline-flex shrink-0 ${className ?? ""}`}
+      data-loading-spinner
+    >
+      <svg
+        aria-hidden="true"
+        className="size-full overflow-visible"
+        viewBox="0 0 20 20"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
         <circle
           cx="10"
           cy="10"
-          r="7.5"
+          r="7.25"
           stroke="currentColor"
           strokeWidth="1.5"
           strokeLinecap="round"
-          strokeDasharray="28 19"
+          strokeDasharray="30 18"
+          opacity="0.72"
         />
       </svg>
     </div>
