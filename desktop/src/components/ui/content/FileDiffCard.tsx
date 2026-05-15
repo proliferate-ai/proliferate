@@ -202,6 +202,7 @@ export function FileDiffCard({
   const handleOpenAction = onOpenAction ?? onOpenFile;
   const showChildren = !!children && (!collapsible || isExpanded);
   const basename = extractBasename(filePath);
+  const displayPath = formatDiffHeaderPath(filePath);
   const surfaceTextClass = surface === "sidebar" ? "text-sidebar-foreground" : "text-foreground";
   const surfaceActionClass = surface === "sidebar"
     ? "text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-sidebar-ring"
@@ -221,7 +222,7 @@ export function FileDiffCard({
         {basename}
       </span>
       <span className="hidden min-w-0 truncate text-chat leading-[var(--text-chat--line-height)] [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:inline">
-        {filePath}
+        {displayPath}
       </span>
     </>
   );
@@ -253,7 +254,7 @@ export function FileDiffCard({
           className={`z-10 select-none bg-[var(--codex-diffs-surface)] ${surface === "sidebar" ? "sticky top-0" : ""} ${canExpand ? "cursor-pointer" : ""}`}
         >
           <div className="bg-[var(--codex-diffs-header-surface)] px-2 py-[2px]">
-            <div className="group @container/diff-header relative flex items-center gap-2 rounded-[6px] px-1 py-0.5 text-chat leading-[var(--text-chat--line-height)] hover:bg-[var(--codex-diffs-separator-surface)]">
+            <div className="group/diff-header @container/diff-header relative flex items-center gap-2 rounded-[6px] px-1 py-0.5 text-chat leading-[var(--text-chat--line-height)] hover:bg-[var(--codex-diffs-separator-surface)]">
               <div className={`flex min-w-0 flex-1 items-center gap-2 ${surfaceTextClass}`}>
                 {onOpenFile ? (
                   <Button
@@ -283,7 +284,7 @@ export function FileDiffCard({
 
               <div className="ms-auto flex shrink-0 items-center gap-1">
                 {actions && (
-                  <div className="flex items-center opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100">
+                  <div className="hidden items-center group-hover/diff-header:flex group-focus-within/diff-header:flex">
                     {actions}
                   </div>
                 )}
@@ -293,7 +294,7 @@ export function FileDiffCard({
                   className="leading-none"
                 />
                 {handleOpenAction && (
-                  <div className="shrink-0 opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100">
+                  <div className="hidden shrink-0 group-hover/diff-header:flex group-focus-within/diff-header:flex">
                     <Button
                       type="button"
                       variant="ghost"
@@ -347,4 +348,25 @@ export function FileDiffCard({
 function extractBasename(path: string): string {
   const segments = path.split(/[\\/]/).filter(Boolean);
   return segments[segments.length - 1] ?? path;
+}
+
+function formatDiffHeaderPath(path: string): string {
+  if (!path.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(path)) {
+    return path;
+  }
+
+  const normalized = path.replace(/\\/g, "/");
+  const homeMatch = normalized.match(/^\/Users\/[^/]+\/(.+)$/);
+  const compactPath = homeMatch?.[1] ?? normalized.replace(/^\/+/, "");
+  const segments = compactPath.split("/").filter(Boolean);
+
+  if (segments.length === 0) {
+    return path;
+  }
+
+  if (segments.length <= 3) {
+    return segments.join("/");
+  }
+
+  return segments.slice(-3).join("/");
 }
