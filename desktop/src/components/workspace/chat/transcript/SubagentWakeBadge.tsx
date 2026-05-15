@@ -1,4 +1,5 @@
 import { DelegatedAgentReceiptName } from "@/components/workspace/chat/transcript/DelegatedAgentReceiptName";
+import { Button } from "@/components/ui/Button";
 
 interface SubagentWakeBadgeProps {
   label?: string | null;
@@ -21,20 +22,45 @@ export function SubagentWakeBadge({
 }: SubagentWakeBadgeProps) {
   const title = label?.trim() || titleFallback;
   const receiptText = formatWakeReceipt(outcome);
-
-  return (
-    <p
-      className="max-w-[77%] text-right text-chat leading-[var(--text-chat--line-height)] text-muted-foreground"
-      data-telemetry-mask
-    >
+  const targetChildSessionId = childSessionId?.trim() || null;
+  const canOpenChild = Boolean(targetChildSessionId && onOpenChild);
+  const className =
+    "max-w-[77%] text-right text-chat leading-[var(--text-chat--line-height)] text-muted-foreground";
+  const content = (
+    <>
       <DelegatedAgentReceiptName
         id={sessionLinkId ?? childSessionId ?? title}
         title={title}
         sessionId={childSessionId ?? null}
         sessionLinkId={sessionLinkId ?? null}
-        onOpenSession={onOpenChild}
       />
       <span> {receiptText}.</span>
+    </>
+  );
+
+  if (canOpenChild && targetChildSessionId) {
+    return (
+      <Button
+        type="button"
+        variant="unstyled"
+        size="unstyled"
+        className={`${className} inline-block whitespace-normal rounded-sm hover:text-foreground focus-visible:text-foreground focus-visible:underline`}
+        aria-label={`Open ${title} session`}
+        title={title}
+        data-telemetry-mask
+        onClick={() => onOpenChild?.(targetChildSessionId)}
+      >
+        {content}
+      </Button>
+    );
+  }
+
+  return (
+    <p
+      className={className}
+      data-telemetry-mask
+    >
+      {content}
     </p>
   );
 }

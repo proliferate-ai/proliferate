@@ -19,13 +19,13 @@ describe("SubagentWakeBadge", () => {
       />,
     );
 
-    const receipt = container.querySelector("p");
+    const receipt = container.querySelector("button");
     expect(receipt?.className).toContain("text-chat");
     expect(receipt?.className).toContain("text-muted-foreground");
     expect(receipt?.textContent).toContain("finished a turn.");
   });
 
-  it("renders the delegated identity as the only clickable target", () => {
+  it("opens the child session from the full receipt", () => {
     const onOpenChild = vi.fn();
     const { container } = render(
       <SubagentWakeBadge
@@ -36,11 +36,24 @@ describe("SubagentWakeBadge", () => {
       />,
     );
 
-    const openButton = screen.getByRole("button", { name: /Open .*explore-dotfiles/ });
-    expect(openButton.textContent).not.toContain("finished a turn");
-    fireEvent.click(openButton);
+    const receiptButton = screen.getByRole("button", { name: "Open explore-dotfiles session" });
+    expect(receiptButton.textContent).toContain("finished a turn.");
+    fireEvent.click(screen.getByText("finished a turn."));
     expect(onOpenChild).toHaveBeenCalledWith("child-session");
     expect(container.querySelectorAll("button")).toHaveLength(1);
+  });
+
+  it("renders static receipt text when no child target exists", () => {
+    render(
+      <SubagentWakeBadge
+        label="explore-dotfiles"
+        sessionLinkId="session-link"
+        onOpenChild={() => {}}
+      />,
+    );
+
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByText("finished a turn.")).toBeTruthy();
   });
 
   it("renders receipts without a chip shell", () => {
@@ -53,7 +66,7 @@ describe("SubagentWakeBadge", () => {
       />,
     );
 
-    expect(container.firstElementChild?.tagName).toBe("P");
+    expect(container.firstElementChild?.tagName).toBe("BUTTON");
     expect(container.firstElementChild?.className).toContain("max-w-[77%]");
     expect(container.firstElementChild?.className).not.toContain("rounded-2xl");
     expect(container.firstElementChild?.className).not.toContain("bg-foreground/5");
