@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type KeyboardEvent,
 } from "react";
 import { Textarea } from "@/components/ui/Textarea";
 import {
@@ -21,6 +22,7 @@ import {
 import { useWorkspaceScratchPad } from "@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad";
 import { useWorkspaceScratchPadMutations } from "@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { applyScratchMarkdownEnterAutoformat } from "@/lib/domain/workspaces/scratch/markdown-list-autoformat";
 
 const SAVE_DEBOUNCE_MS = 500;
 const SCRATCH_PLACEHOLDER = "- [ ] Capture follow-ups\n- [ ] Keep durable workspace notes here";
@@ -183,6 +185,37 @@ export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
     updateDraft(draft.replace(COMPLETED_TASK_PATTERN, ""));
   }, [draft, updateDraft]);
 
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      event.key !== "Enter"
+      || event.altKey
+      || event.ctrlKey
+      || event.metaKey
+      || event.shiftKey
+      || event.nativeEvent.isComposing
+    ) {
+      return;
+    }
+
+    const textarea = event.currentTarget;
+    const result = applyScratchMarkdownEnterAutoformat({
+      value: draft,
+      selectionStart: textarea.selectionStart ?? draft.length,
+      selectionEnd: textarea.selectionEnd ?? textarea.selectionStart ?? draft.length,
+    });
+
+    if (!result) {
+      return;
+    }
+
+    event.preventDefault();
+    updateDraft(result.value);
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
+    });
+  }, [draft, updateDraft]);
+
   const handleCopyContent = useCallback(async () => {
     await copyText(draft);
     setCopied(true);
@@ -235,6 +268,7 @@ export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
           wrap={wordWrap ? "soft" : "off"}
           spellCheck
           onChange={handleChange}
+          onKeyDown={handleKeyDown}
           onBlur={handleBlur}
           className={`h-full overflow-auto px-4 py-3 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] text-foreground placeholder:text-sidebar-muted-foreground/65 disabled:cursor-not-allowed ${wordWrap ? "whitespace-pre-wrap" : "whitespace-pre"}`}
         />
