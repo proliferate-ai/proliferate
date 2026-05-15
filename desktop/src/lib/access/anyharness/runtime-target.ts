@@ -3,10 +3,13 @@ import {
   getCloudWorkspace,
   getCloudWorkspaceConnection,
 } from "@proliferate/cloud-sdk/client/workspaces";
+import { ensureSshAnyHarnessTunnel } from "@/lib/access/tauri/ssh-tunnel";
+import { getSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile";
+import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 
 export interface RuntimeTarget {
-  location: "local" | "cloud";
+  location: "local" | "cloud" | "target";
   baseUrl: string;
   authToken?: string;
   anyharnessWorkspaceId: string;
@@ -19,6 +22,30 @@ export async function resolveRuntimeTargetForWorkspace(
   runtimeUrl: string,
   workspaceId: string,
 ): Promise<RuntimeTarget> {
+  const targetWorkspace = parseTargetWorkspaceSyntheticId(workspaceId);
+  if (targetWorkspace) {
+    const profile = await getSshDirectTargetProfile(targetWorkspace.targetId);
+    if (!profile) {
+      throw new Error(
+        "SSH direct access is not configured for this target. Add the SSH host, user, and key in Compute settings.",
+      );
+    }
+    const tunnel = await ensureSshAnyHarnessTunnel({
+      targetId: profile.targetId,
+      sshHost: profile.sshHost,
+      sshUser: profile.sshUser,
+      sshPort: profile.sshPort,
+      identityFile: profile.identityFile ?? null,
+      remoteAnyHarnessPort: profile.remoteAnyHarnessPort,
+    });
+    return {
+      location: "target",
+      baseUrl: tunnel.localUrl,
+      anyharnessWorkspaceId: targetWorkspace.anyharnessWorkspaceId,
+      runtimeGeneration: 0,
+    };
+  }
+
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
   if (!cloudWorkspaceId) {
     return {

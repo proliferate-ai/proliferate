@@ -64,6 +64,12 @@ export interface CloudWorkspaceCreatorContext {
   label?: string | null;
 }
 
+export interface CloudWorkspaceDirectTargetContext {
+  targetId: string;
+  targetKind: string;
+  anyharnessWorkspaceId: string;
+}
+
 export interface CloudWorkspaceSummary {
   id: string;
   displayName: string | null;
@@ -86,6 +92,7 @@ export interface CloudWorkspaceSummary {
   repoFilesLastFailedPath?: string | null;
   origin?: CloudWorkspaceOriginContext | null;
   creatorContext?: CloudWorkspaceCreatorContext | null;
+  directTargetContext?: CloudWorkspaceDirectTargetContext | null;
 }
 
 export interface CloudRepoConfigSummary {

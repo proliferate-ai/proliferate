@@ -56,6 +56,8 @@ pub struct CommandResultRequest {
 
 pub const SUPPORTED_COMMAND_KINDS: &[&str] = &[
     "start_session",
+    "configure_git_identity",
+    "ensure_repo_checkout",
     "materialize_workspace",
     "materialize_environment",
     "send_prompt",

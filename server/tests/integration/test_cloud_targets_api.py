@@ -13,6 +13,32 @@ from proliferate.constants.organizations import (
 )
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from tests.e2e.cloud.helpers.auth import create_user_and_login
+from tests.e2e.cloud.helpers.github import seed_linked_github_account
+
+
+async def _accept_initial_git_identity_command(
+    client: AsyncClient,
+    worker_headers: dict[str, str],
+) -> None:
+    lease = await client.post(
+        "/v1/cloud/worker/commands/lease",
+        headers=worker_headers,
+        json={"supportedKinds": ["configure_git_identity"], "leaseTimeoutSeconds": 300},
+    )
+    assert lease.status_code == 200
+    command = lease.json()["command"]
+    if command is None:
+        return
+    result = await client.post(
+        f"/v1/cloud/worker/commands/{command['commandId']}/result",
+        headers=worker_headers,
+        json={
+            "leaseId": command["leaseId"],
+            "status": "accepted",
+            "result": {"provider": "github"},
+        },
+    )
+    assert result.status_code == 200
 
 
 class TestCloudTargetsApi:
@@ -26,6 +52,11 @@ class TestCloudTargetsApi:
             client,
             db_session,
             email_prefix="cloud-targets",
+        )
+        await seed_linked_github_account(
+            db_session,
+            user_id=auth.user_id,
+            access_token="gh-cloud-targets-token",
         )
 
         create = await client.post(
@@ -64,6 +95,7 @@ class TestCloudTargetsApi:
         worker = worker_enroll.json()
         assert worker["targetId"] == target_id
         worker_headers = {"Authorization": f"Bearer {worker['workerToken']}"}
+        await _accept_initial_git_identity_command(client, worker_headers)
 
         heartbeat = await client.post(
             "/v1/cloud/worker/heartbeat",
@@ -140,6 +172,11 @@ class TestCloudTargetsApi:
             client,
             db_session,
             email_prefix="cloud-target-member",
+        )
+        await seed_linked_github_account(
+            db_session,
+            user_id=owner.user_id,
+            access_token="gh-cloud-target-owner-token",
         )
         organization = Organization(name="Cloud Target Org")
         db_session.add(organization)

@@ -112,6 +112,7 @@ from proliferate.server.cloud.workspaces.models import (
     WorkspaceConnection,
     WorkspaceCreatorContext,
     WorkspaceDetail,
+    WorkspaceDirectTargetContext,
     WorkspaceSummary,
     credential_freshness_payload,
     workspace_detail_payload,
@@ -150,6 +151,24 @@ def _creator_context_for_automation_run(
         automation_id=str(run.automation_id),
         automation_run_id=str(run.id),
         label=run.title_snapshot,
+    )
+
+
+def _direct_target_context_for_automation_run(
+    run: AutomationRunValue | None,
+) -> WorkspaceDirectTargetContext | None:
+    if (
+        run is None
+        or run.cloud_target_id_snapshot is None
+        or run.cloud_target_kind_snapshot is None
+        or run.cloud_target_kind_snapshot == "managed_cloud"
+        or not run.anyharness_workspace_id
+    ):
+        return None
+    return WorkspaceDirectTargetContext(
+        target_id=str(run.cloud_target_id_snapshot),
+        target_kind=run.cloud_target_kind_snapshot,
+        anyharness_workspace_id=run.anyharness_workspace_id,
     )
 
 
@@ -247,6 +266,9 @@ async def list_cloud_workspaces_for_user(
                 action_block_kind=action_block_kind,
                 action_block_reason=action_block_reason,
                 creator_context=_creator_context_for_automation_run(
+                    automation_runs_by_workspace.get(workspace.id)
+                ),
+                direct_target_context=_direct_target_context_for_automation_run(
                     automation_runs_by_workspace.get(workspace.id)
                 ),
             )
@@ -363,6 +385,9 @@ async def _build_workspace_detail_for_request(
         creator_context=_creator_context_for_automation_run(
             automation_runs_by_workspace.get(workspace.id)
         ),
+        direct_target_context=_direct_target_context_for_automation_run(
+            automation_runs_by_workspace.get(workspace.id)
+        ),
     )
 
 
@@ -392,6 +417,9 @@ async def _build_workspace_detail(
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
         creator_context=_creator_context_for_automation_run(
+            automation_runs_by_workspace.get(workspace.id)
+        ),
+        direct_target_context=_direct_target_context_for_automation_run(
             automation_runs_by_workspace.get(workspace.id)
         ),
     )
@@ -1094,6 +1122,21 @@ async def get_cloud_connection(
     workspace_id: UUID,
 ) -> WorkspaceConnection:
     workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
+    automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
+        user_id=user_id,
+        cloud_workspace_ids=[workspace.id],
+    )
+    latest_run = automation_runs_by_workspace.get(workspace.id)
+    if (
+        latest_run is not None
+        and latest_run.cloud_target_kind_snapshot is not None
+        and latest_run.cloud_target_kind_snapshot != "managed_cloud"
+    ):
+        raise CloudApiError(
+            "direct_target_connection_required",
+            "This workspace runs on an SSH target and must be opened through direct target access.",
+            status_code=409,
+        )
     try:
         target = await get_workspace_connection(workspace)
     except CloudRuntimeReconnectError as exc:

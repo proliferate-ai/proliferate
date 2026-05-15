@@ -273,6 +273,7 @@ def _emit_cloud_event(message: str, payload: dict[str, object]) -> None:
 
 def _cloud_base_url() -> str:
     for candidate in (
+        settings.cloud_worker_base_url,
         settings.api_base_url,
         settings.cloud_mcp_oauth_callback_base_url,
         settings.cloud_mcp_oauth_callback_fallback_base_url,
@@ -658,22 +659,29 @@ async def _wait_for_worker_target_online(
     last_status = "missing"
     last_detail: str | None = None
     last_anyharness_version: str | None = None
+    last_worker_version: str | None = None
+    last_supervisor_version: str | None = None
     for _attempt in range(max(1, total_attempts)):
         async with db_engine.async_session_factory() as db:
             target = await targets_store.get_target_by_id(db, target_id)
         if target is not None:
             last_status = target.status
             last_detail = target.status_record.status_detail if target.status_record else None
-            last_anyharness_version = (
-                target.current_versions.anyharness_version
-                if target.current_versions is not None
-                else None
-            )
+            if target.current_versions is not None:
+                last_anyharness_version = target.current_versions.anyharness_version
+                last_worker_version = target.current_versions.worker_version
+                last_supervisor_version = target.current_versions.supervisor_version
+            else:
+                last_anyharness_version = None
+                last_worker_version = None
+                last_supervisor_version = None
             if (
                 target.status == CloudTargetStatus.online.value
                 and target.status_record is not None
                 and target.status_record.worker_id is not None
                 and last_anyharness_version
+                and last_worker_version
+                and last_supervisor_version
             ):
                 return
         await asyncio.sleep(delay_seconds)
@@ -682,7 +690,9 @@ async def _wait_for_worker_target_online(
         "Proliferate Worker did not report an online AnyHarness runtime "
         f"for target {target_id}; last_status={last_status}; "
         f"last_detail={last_detail or '<none>'}; "
-        f"last_anyharness_version={last_anyharness_version or '<none>'}."
+        f"last_anyharness_version={last_anyharness_version or '<none>'}; "
+        f"last_worker_version={last_worker_version or '<none>'}; "
+        f"last_supervisor_version={last_supervisor_version or '<none>'}."
     )
 
 

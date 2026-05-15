@@ -19,6 +19,7 @@ import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-work
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { buildAutomationRowViewModel } from "@/lib/domain/automations/run/view-model";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
+import { targetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import type {
   AutomationRecord,
@@ -115,12 +116,15 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     if (!run.anyharnessWorkspaceId) {
       return;
     }
+    const workspaceId = run.targetKindSnapshot === "ssh" && run.targetIdSnapshot
+      ? targetWorkspaceSyntheticId(run.targetIdSnapshot, run.anyharnessWorkspaceId)
+      : run.anyharnessWorkspaceId;
     try {
       await refetchWorkspaces();
       navigate("/");
       if (run.anyharnessSessionId) {
         const result = await openWorkspaceSession({
-          workspaceId: run.anyharnessWorkspaceId,
+          workspaceId,
           sessionId: run.anyharnessSessionId,
         });
         if (result.result === "stale") {
@@ -128,7 +132,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
         }
         return;
       }
-      await selectWorkspace(run.anyharnessWorkspaceId, { force: true });
+      await selectWorkspace(workspaceId, { force: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to open workspace.";
       showToast(message);

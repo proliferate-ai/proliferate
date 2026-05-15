@@ -8,6 +8,7 @@ import {
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
   markWorkspaceViewed,
@@ -159,6 +160,92 @@ export async function runWorkspaceSelection(
 ): Promise<void> {
   const logicalWorkspace = findLogicalWorkspace(deps.logicalWorkspaces, request.workspaceId);
   if (!logicalWorkspace) {
+    const targetWorkspace = parseTargetWorkspaceSyntheticId(request.workspaceId);
+    if (targetWorkspace) {
+      const selectionStartedAt = startLatencyTimer();
+      const previousSelection = useSessionSelectionStore.getState();
+      const currentId = previousSelection.selectedWorkspaceId;
+      if (currentId === request.workspaceId && !request.options?.force) {
+        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_already_selected");
+        return;
+      }
+
+      logLatency("workspace.select.start", {
+        workspaceId: request.workspaceId,
+        logicalWorkspaceId: request.workspaceId,
+        force: !!request.options?.force,
+        preservePending: !!request.options?.preservePending,
+        targetId: targetWorkspace.targetId,
+      });
+
+      const workspaceUiState = useWorkspaceUiStore.getState();
+      const initialActiveSessionId = resolveInitialActiveSessionId(
+        request.workspaceId,
+        request.workspaceId,
+        request.options,
+        workspaceUiState,
+      );
+      deps.cache.cancelPreviousWorkspaceDisplayQueries({
+        runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
+        previousWorkspaceIds: [
+          previousSelection.selectedLogicalWorkspaceId,
+          previousSelection.selectedWorkspaceId,
+        ],
+        nextWorkspaceIds: [request.workspaceId],
+      });
+      deps.setSelectedLogicalWorkspaceId(request.workspaceId);
+      deps.setSelectedWorkspace(request.workspaceId, {
+        clearPending: !request.options?.preservePending,
+        initialActiveSessionId,
+      });
+      prepareOptimisticWorkspaceSessionShell({
+        sessionId: initialActiveSessionId,
+        workspaceId: request.workspaceId,
+        workspaceUiKey: request.workspaceId,
+      });
+
+      const context: WorkspaceSelectionContext = {
+        workspaceId: request.workspaceId,
+        logicalWorkspaceId: request.workspaceId,
+        selectionNonce: useSessionSelectionStore.getState().workspaceSelectionNonce,
+        selectionStartedAt,
+        cloudWorkspaceId: null,
+      };
+      if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
+        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
+        return;
+      }
+
+      const connectionResult = await resolveSelectionConnection(deps, context, { kind: "local" });
+      if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
+        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
+        return;
+      }
+
+      const bootstrapResult = await deps.bootstrapWorkspace({
+        workspaceId: context.workspaceId,
+        logicalWorkspaceId: context.logicalWorkspaceId,
+        runtimeUrl: connectionResult.runtimeUrl,
+        workspaceConnection: connectionResult.workspaceConnection,
+        startedAt: context.selectionStartedAt,
+        latencyFlowId: request.options?.latencyFlowId,
+        isCurrent: () => isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce),
+      });
+      if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
+        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
+        return;
+      }
+
+      const latestSessionTimestamp = getLatestWorkspaceInteractionTimestamp(bootstrapResult.sessions);
+      if (latestSessionTimestamp) {
+        trackWorkspaceInteraction(context.logicalWorkspaceId, latestSessionTimestamp);
+        markWorkspaceViewedAt(context.logicalWorkspaceId, latestSessionTimestamp);
+      } else {
+        markWorkspaceViewed(context.logicalWorkspaceId);
+      }
+      return;
+    }
+
     const directWorkspace = deps.rawWorkspaces.find(
       (workspace) => workspace.id === request.workspaceId,
     ) ?? null;

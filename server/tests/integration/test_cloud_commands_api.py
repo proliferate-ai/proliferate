@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -7,17 +8,25 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudWorkspaceStatus
+from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from tests.e2e.cloud.helpers.auth import create_user_and_login
+from tests.e2e.cloud.helpers.github import seed_linked_github_account
 from tests.e2e.cloud.helpers.shared import AuthSession
 
 
 async def _create_enrolled_target(
     client: AsyncClient,
+    db_session: AsyncSession,
     auth: AuthSession,
     *,
     suffix: str = "command",
 ) -> tuple[str, dict[str, str]]:
+    await seed_linked_github_account(
+        db_session,
+        user_id=auth.user_id,
+        access_token=f"gh-{suffix}-token",
+    )
     create = await client.post(
         "/v1/cloud/targets/enrollments",
         headers=auth.headers,
@@ -40,7 +49,34 @@ async def _create_enrolled_target(
     )
     assert worker_enroll.status_code == 200
     worker = worker_enroll.json()
-    return enrollment["target"]["id"], {"Authorization": f"Bearer {worker['workerToken']}"}
+    worker_headers = {"Authorization": f"Bearer {worker['workerToken']}"}
+    await _accept_initial_git_identity_command(client, worker_headers)
+    return enrollment["target"]["id"], worker_headers
+
+
+async def _accept_initial_git_identity_command(
+    client: AsyncClient,
+    worker_headers: dict[str, str],
+) -> None:
+    lease = await client.post(
+        "/v1/cloud/worker/commands/lease",
+        headers=worker_headers,
+        json={"supportedKinds": ["configure_git_identity"], "leaseTimeoutSeconds": 300},
+    )
+    assert lease.status_code == 200
+    command = lease.json()["command"]
+    if command is None:
+        return
+    result = await client.post(
+        f"/v1/cloud/worker/commands/{command['commandId']}/result",
+        headers=worker_headers,
+        json={
+            "leaseId": command["leaseId"],
+            "status": "accepted",
+            "result": {"provider": "github"},
+        },
+    )
+    assert result.status_code == 200
 
 
 async def _create_ready_cloud_workspace(
@@ -91,7 +127,7 @@ class TestCloudCommandsApi:
             db_session,
             email_prefix="cloud-commands",
         )
-        target_id, worker_headers = await _create_enrolled_target(client, auth)
+        target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
 
         command_body = {
             "idempotencyKey": "prompt-1",
@@ -188,7 +224,7 @@ class TestCloudCommandsApi:
             db_session,
             email_prefix="cloud-command-start-session",
         )
-        target_id, worker_headers = await _create_enrolled_target(client, auth)
+        target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
         cloud_workspace_id = await _create_ready_cloud_workspace(
             db_session,
             auth,
@@ -292,7 +328,7 @@ class TestCloudCommandsApi:
             db_session,
             email_prefix="cloud-command-materialize-workspace",
         )
-        target_id, worker_headers = await _create_enrolled_target(client, auth)
+        target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -597,7 +633,7 @@ class TestCloudCommandsApi:
             db_session,
             email_prefix="cloud-command-close-session",
         )
-        target_id, worker_headers = await _create_enrolled_target(client, auth)
+        target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
 
         missing_session = await client.post(
             "/v1/cloud/commands",
@@ -645,7 +681,7 @@ class TestCloudCommandsApi:
             db_session,
             email_prefix="cloud-command-lease",
         )
-        target_id, worker_headers = await _create_enrolled_target(client, auth)
+        target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
         created = await client.post(
             "/v1/cloud/commands",
             headers=auth.headers,
@@ -667,6 +703,19 @@ class TestCloudCommandsApi:
         )
         assert first.status_code == 200
         first_lease = first.json()["command"]["leaseId"]
+
+        immediate_recovery = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={"supportedKinds": ["cancel_turn"], "leaseTimeoutSeconds": 30},
+        )
+        assert immediate_recovery.status_code == 200
+        assert immediate_recovery.json()["command"] is None
+
+        leased_row = await db_session.get(CloudCommand, UUID(command_id))
+        assert leased_row is not None
+        leased_row.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        await db_session.commit()
 
         recovered = await client.post(
             "/v1/cloud/worker/commands/lease",
@@ -697,7 +746,7 @@ class TestCloudCommandsApi:
             db_session,
             email_prefix="cloud-command-delivered",
         )
-        target_id, worker_headers = await _create_enrolled_target(client, auth)
+        target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
         created = await client.post(
             "/v1/cloud/commands",
             headers=auth.headers,
@@ -757,11 +806,13 @@ class TestCloudCommandsApi:
         )
         first_target_id, _first_worker_headers = await _create_enrolled_target(
             client,
+            db_session,
             auth,
             suffix="first",
         )
         second_target_id, _second_worker_headers = await _create_enrolled_target(
             client,
+            db_session,
             auth,
             suffix="second",
         )
@@ -819,7 +870,7 @@ class TestCloudCommandsApi:
             db_session,
             email_prefix="cloud-command-kind",
         )
-        target_id, _worker_headers = await _create_enrolled_target(client, auth)
+        target_id, _worker_headers = await _create_enrolled_target(client, db_session, auth)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -845,7 +896,7 @@ class TestCloudCommandsApi:
             db_session,
             email_prefix="cloud-command-preconditions",
         )
-        target_id, _worker_headers = await _create_enrolled_target(client, auth)
+        target_id, _worker_headers = await _create_enrolled_target(client, db_session, auth)
 
         created = await client.post(
             "/v1/cloud/commands",

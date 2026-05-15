@@ -6,7 +6,10 @@ import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt
 import { resolveSessionMcpServersForLaunch } from "@/lib/workflows/sessions/session-mcp-launch";
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
-import { resolveRuntimeTargetForWorkspace } from "@/lib/access/anyharness/runtime-target";
+import {
+  resolveRuntimeTargetForWorkspace,
+  type RuntimeTarget,
+} from "@/lib/access/anyharness/runtime-target";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import { findCompatibleExistingSession } from "@/lib/domain/sessions/creation/compatible-session";
 import {
@@ -20,6 +23,7 @@ import {
 import { resolveSessionCreationModeId } from "@/lib/domain/sessions/creation/mode";
 import { captureTelemetryException, trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -146,6 +150,10 @@ const sessionStreamPruningDeps: SessionStreamPruningDeps = {
   isPendingSessionId,
 };
 
+function mcpTargetLocation(target: RuntimeTarget): "local" | "cloud" {
+  return target.location === "local" ? "local" : "cloud";
+}
+
 async function ensureRuntimeReadyForSessions(): Promise<string> {
   const state = useHarnessConnectionStore.getState();
   if (state.connectionState !== "healthy" || state.runtimeUrl.trim().length === 0) {
@@ -158,6 +166,13 @@ async function ensureRuntimeReadyForSessions(): Promise<string> {
   }
 
   return readyState.runtimeUrl;
+}
+
+async function resolveDesktopRuntimeUrlForWorkspace(workspaceId: string): Promise<string> {
+  if (parseTargetWorkspaceSyntheticId(workspaceId)) {
+    return useHarnessConnectionStore.getState().runtimeUrl;
+  }
+  return ensureRuntimeReadyForSessions();
 }
 
 export function useSessionCreationActions() {
@@ -355,7 +370,7 @@ export function useSessionCreationActions() {
 
     const createPromise = (async () => {
       const requestOptions = buildLatencyRequestOptions(options.latencyFlowId);
-      const runtimeUrl = await ensureRuntimeReadyForSessions();
+      const runtimeUrl = await resolveDesktopRuntimeUrlForWorkspace(workspaceId);
 
       const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
       const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId);
@@ -422,7 +437,7 @@ export function useSessionCreationActions() {
         .pluginsInCodingSessionsEnabled;
       const subagentsEnabled = useUserPreferencesStore.getState().subagentsEnabled;
       const mcpLaunch = await resolveSessionMcpServersForLaunch({
-        targetLocation: target.location,
+        targetLocation: mcpTargetLocation(target),
         workspacePath: targetWorkspace?.path ?? null,
         launchId: crypto.randomUUID(),
         policy: {

@@ -76,12 +76,21 @@ cat > "$SUPERVISOR_DIR/config.toml" <<EOF
 anyharness_binary = "$BIN_DIR/anyharness"
 worker_binary = "$BIN_DIR/proliferate-worker"
 worker_config = "$WORKER_DIR/config.toml"
-anyharness_args = ["serve"]
+anyharness_args = ["serve", "--runtime-home", "$PROLIFERATE_HOME/anyharness"]
 restart_delay_seconds = 5
 EOF
 chmod 600 "$SUPERVISOR_DIR/config.toml"
 
 if command -v systemctl >/dev/null 2>&1; then
+  if command -v loginctl >/dev/null 2>&1; then
+    current_user="${USER:-$(id -un)}"
+    linger_state="$(loginctl show-user "$current_user" -p Linger --value 2>/dev/null || true)"
+    if [ "$linger_state" != "yes" ] && ! loginctl enable-linger "$current_user" 2>/dev/null; then
+      echo "Warning: could not enable systemd lingering for $current_user." >&2
+      echo "The service started by this SSH session may stop after logout." >&2
+      echo "To make it persistent, run: sudo loginctl enable-linger $current_user" >&2
+    fi
+  fi
   systemd_dir="$HOME/.config/systemd/user"
   mkdir -p "$systemd_dir"
   cat > "$systemd_dir/$PROLIFERATE_SERVICE_NAME.service" <<EOF

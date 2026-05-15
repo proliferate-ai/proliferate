@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyharness_credential_discovery::{
@@ -10,11 +11,23 @@ use super::model::{AuthSpec, CredentialDiscoveryKind, CredentialState};
 /// then running provider-specific local discovery, then falling back to
 /// login-required or missing-env as appropriate.
 pub fn detect_credentials(auth: &AuthSpec, home_dir: &Path) -> CredentialState {
+    detect_credentials_with_env(auth, home_dir, &BTreeMap::new())
+}
+
+pub fn detect_credentials_with_env(
+    auth: &AuthSpec,
+    home_dir: &Path,
+    additional_env: &BTreeMap<String, String>,
+) -> CredentialState {
     if auth.env_vars.is_empty() && auth.discovery == CredentialDiscoveryKind::None {
         return CredentialState::Ready;
     }
 
-    if auth.env_vars.iter().any(|var| std::env::var(var).is_ok()) {
+    if auth
+        .env_vars
+        .iter()
+        .any(|var| additional_env.contains_key(var) || std::env::var(var).is_ok())
+    {
         return CredentialState::Ready;
     }
 

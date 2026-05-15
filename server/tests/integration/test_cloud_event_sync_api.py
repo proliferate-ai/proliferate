@@ -20,15 +20,22 @@ from proliferate.server.cloud.live.service import (
 )
 from proliferate.server.cloud.workspaces.service import get_cloud_workspace_detail
 from tests.e2e.cloud.helpers.auth import create_user_and_login
+from tests.e2e.cloud.helpers.github import seed_linked_github_account
 from tests.e2e.cloud.helpers.shared import AuthSession
 
 
 async def _create_enrolled_target(
     client: AsyncClient,
+    db_session: AsyncSession,
     auth: AuthSession,
     *,
     suffix: str = "events",
 ) -> tuple[str, dict[str, str]]:
+    await seed_linked_github_account(
+        db_session,
+        user_id=auth.user_id,
+        access_token=f"gh-{suffix}-token",
+    )
     create = await client.post(
         "/v1/cloud/targets/enrollments",
         headers=auth.headers,
@@ -51,7 +58,34 @@ async def _create_enrolled_target(
     )
     assert worker_enroll.status_code == 200
     worker = worker_enroll.json()
-    return enrollment["target"]["id"], {"Authorization": f"Bearer {worker['workerToken']}"}
+    worker_headers = {"Authorization": f"Bearer {worker['workerToken']}"}
+    await _accept_initial_git_identity_command(client, worker_headers)
+    return enrollment["target"]["id"], worker_headers
+
+
+async def _accept_initial_git_identity_command(
+    client: AsyncClient,
+    worker_headers: dict[str, str],
+) -> None:
+    lease = await client.post(
+        "/v1/cloud/worker/commands/lease",
+        headers=worker_headers,
+        json={"supportedKinds": ["configure_git_identity"], "leaseTimeoutSeconds": 300},
+    )
+    assert lease.status_code == 200
+    command = lease.json()["command"]
+    if command is None:
+        return
+    result = await client.post(
+        f"/v1/cloud/worker/commands/{command['commandId']}/result",
+        headers=worker_headers,
+        json={
+            "leaseId": command["leaseId"],
+            "status": "accepted",
+            "result": {"provider": "github"},
+        },
+    )
+    assert result.status_code == 200
 
 
 def _sse_event(frame: str) -> str:
@@ -98,7 +132,7 @@ class TestCloudEventSyncApi:
             db_session,
             email_prefix="cloud-event-sync",
         )
-        target_id, worker_headers = await _create_enrolled_target(client, auth)
+        target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
 
         batch = {
             "events": [
@@ -266,6 +300,7 @@ class TestCloudEventSyncApi:
         )
         target_id, worker_headers = await _create_enrolled_target(
             client,
+            db_session,
             auth,
             suffix="stream",
         )
@@ -358,6 +393,7 @@ class TestCloudEventSyncApi:
         )
         target_id, worker_headers = await _create_enrolled_target(
             client,
+            db_session,
             auth,
             suffix="workspace-stream",
         )

@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::time::Instant;
 
 use uuid::Uuid;
@@ -19,10 +20,11 @@ use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
 use crate::domains::agents::readiness::launch_options::{
     workspace_session_launch_options_with_dynamic_registry, ResolvedWorkspaceLaunchOptions,
 };
-use crate::domains::agents::readiness::resolver::resolve_agent;
+use crate::domains::agents::readiness::resolver::resolve_agent_with_env;
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::mobility::model::MobilityPromptAttachmentData;
 use crate::origin::OriginContext;
+use crate::workspaces::env::read_materialized_session_env;
 use crate::workspaces::store::WorkspaceStore;
 pub struct SessionService {
     session_store: SessionStore,
@@ -145,8 +147,10 @@ impl SessionService {
             "[workspace-latency] session.create.agent_descriptor_found"
         );
 
+        let workspace_env = read_materialized_session_env(Path::new(&workspace.path))
+            .map_err(CreateSessionError::Internal)?;
         let agent_resolution_started = Instant::now();
-        let resolved = resolve_agent(descriptor, &self.runtime_home);
+        let resolved = resolve_agent_with_env(descriptor, &self.runtime_home, &workspace_env);
         if resolved.status != ResolvedAgentStatus::Ready {
             let detail = resolved.agent_process.message.clone().or_else(|| {
                 resolved

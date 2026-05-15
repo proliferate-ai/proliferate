@@ -12,7 +12,7 @@ mod telemetry_file_logging;
 
 use commands::{
     anonymous_telemetry, config, diagnostics as diagnostics_commands, google_workspace_mcp,
-    keychain, process, runtime, shell, window_chrome, workspace_scratch,
+    keychain, process, runtime, shell, ssh_tunnel, window_chrome, workspace_scratch,
 };
 use quit_flow::QuitFlowState;
 use tauri::Manager;
@@ -202,6 +202,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(sc.clone())
         .manage(QuitFlowState::default())
+        .manage(ssh_tunnel::SshTunnelState::default())
         .invoke_handler(tauri::generate_handler![
             anonymous_telemetry::load_anonymous_telemetry_bootstrap,
             anonymous_telemetry::save_anonymous_telemetry_state,
@@ -232,6 +233,7 @@ pub fn run() {
             google_workspace_mcp::release_google_workspace_mcp_runtime_env,
             window_chrome::apply_macos_window_chrome,
             process::command_exists,
+            ssh_tunnel::ensure_ssh_anyharness_tunnel,
             keychain::list_configured_env_var_names,
             keychain::list_syncable_cloud_credentials,
             keychain::export_syncable_cloud_credential,

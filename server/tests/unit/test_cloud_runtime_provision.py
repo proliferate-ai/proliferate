@@ -654,6 +654,11 @@ class TestLaunchAndConnectRuntime:
         wait_kwargs: dict[str, object] = {}
         tracker = runtime_provision._StepTracker(workspace_id=uuid.uuid4())
         ctx = _make_provision_input(codex_enabled=True)
+        monkeypatch.setattr(
+            runtime_provision.settings,
+            "cloud_worker_base_url",
+            "https://worker-control.invalid",
+        )
         provider = SimpleNamespace(
             write_file=None,
             resolve_runtime_endpoint=None,
@@ -804,6 +809,7 @@ class TestLaunchAndConnectRuntime:
         assert wait_kwargs["required_successes"] == 1
         assert wait_kwargs["delay_seconds"] == 0.5
         worker_config = written_files["/home/user/.proliferate/worker/config.toml"]
+        assert 'cloud_base_url = "https://worker-control.invalid"' in worker_config
         assert 'anyharness_base_url = "http://127.0.0.1:8457"' in worker_config
         supervisor_config = written_files["/home/user/.proliferate/supervisor/config.toml"]
         assert 'anyharness_binary = "/home/user/anyharness"' in supervisor_config

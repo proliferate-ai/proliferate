@@ -95,7 +95,7 @@ async def _ensure_curl_available(
             workspace_id=workspace_id,
             label="ensure_curl_available",
             command=(
-                'sh -lc "command -v curl >/dev/null 2>&1 || '
+                'bash -lc "command -v curl >/dev/null 2>&1 || '
                 '(apt-get update && apt-get install -y curl ca-certificates)"'
             ),
             user="root",
@@ -678,12 +678,25 @@ def build_detached_supervisor_launch_command(runtime_context: SandboxRuntimeCont
         _pgrep_pattern_for_path(worker_binary_path(runtime_context)),
     ]
     kill_lines: list[str] = []
+    kill_lines.extend(
+        [
+            "current_pid=$$",
+            "parent_pid=$PPID",
+        ]
+    )
     for pattern in patterns:
         quoted_pattern = shlex.quote(pattern)
         kill_lines.extend(
             [
                 f"pids=$(pgrep -f {quoted_pattern} || true)",
-                'if [ -n "$pids" ]; then kill $pids || true; sleep 1; fi',
+                'if [ -n "$pids" ]; then',
+                "  for pid in $pids; do",
+                '    if [ "$pid" != "$current_pid" ] && [ "$pid" != "$parent_pid" ]; then',
+                '      kill "$pid" || true',
+                "    fi",
+                "  done",
+                "  sleep 1",
+                "fi",
             ]
         )
     script = "\n".join(
@@ -696,7 +709,7 @@ def build_detached_supervisor_launch_command(runtime_context: SandboxRuntimeCont
             ),
         ]
     )
-    return "sh -lc " + shlex.quote(script)
+    return "bash -lc " + shlex.quote(script)
 
 
 async def stage_worker_binary(

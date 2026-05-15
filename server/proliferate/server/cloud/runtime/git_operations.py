@@ -47,7 +47,7 @@ async def clone_repository(
         workspace_id=ctx.workspace_id,
         label="ensure_git_available",
         command=(
-            'sh -lc "command -v git >/dev/null 2>&1 || (apt-get update && apt-get install -y git)"'
+            'bash -lc "command -v git >/dev/null 2>&1 || (apt-get update && apt-get install -y git)"'
         ),
         user="root",
         timeout_seconds=240,
@@ -126,7 +126,7 @@ async def configure_git_identity(
         workspace_id=ctx.workspace_id,
         label="configure_git_identity",
         command=(
-            "sh -lc "
+            "bash -lc "
             + shlex.quote(
                 " && ".join(
                     [

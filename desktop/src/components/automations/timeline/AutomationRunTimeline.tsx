@@ -43,10 +43,26 @@ const AutomationRunTimelineRow = memo(function AutomationRunTimelineRow({
   const canOpenLocalWorkspace = run.anyharnessWorkspaceId
     ? openableLocalWorkspaceIds.has(run.anyharnessWorkspaceId)
     : false;
-  const canOpenCloudWorkspace = Boolean(run.cloudWorkspaceId && onOpenCloudWorkspace);
-  const canOpenWorkspace = canOpenCloudWorkspace || Boolean(canOpenLocalWorkspace && onOpenLocalWorkspace);
+  const canOpenTargetWorkspace = Boolean(
+    run.targetKindSnapshot === "ssh"
+    && run.targetIdSnapshot
+    && run.anyharnessWorkspaceId
+    && onOpenLocalWorkspace,
+  );
+  const canOpenCloudWorkspace = Boolean(
+    !canOpenTargetWorkspace
+    && run.cloudWorkspaceId
+    && onOpenCloudWorkspace,
+  );
+  const canOpenWorkspace = canOpenTargetWorkspace
+    || canOpenCloudWorkspace
+    || Boolean(canOpenLocalWorkspace && onOpenLocalWorkspace);
   const openWorkspace = () => {
     if (opening) {
+      return;
+    }
+    if (canOpenTargetWorkspace && onOpenLocalWorkspace) {
+      onOpenLocalWorkspace(run);
       return;
     }
     if (run.cloudWorkspaceId && onOpenCloudWorkspace) {

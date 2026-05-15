@@ -17,6 +17,9 @@ from proliferate.server.cloud.repo_config.api import router as repo_config_route
 from proliferate.server.cloud.repos.api import router as repos_router
 from proliferate.server.cloud.target_config.api import router as target_config_router
 from proliferate.server.cloud.target_config.api import worker_router as target_config_worker_router
+from proliferate.server.cloud.target_git_identity.api import (
+    worker_router as target_git_identity_worker_router,
+)
 from proliferate.server.cloud.targets.api import router as targets_router
 from proliferate.server.cloud.webhooks.api import router as webhooks_router
 from proliferate.server.cloud.worker.api import router as worker_router
@@ -43,4 +46,5 @@ router.include_router(events_router)
 router.include_router(live_router)
 router.include_router(backfill_router)
 router.include_router(target_config_worker_router)
+router.include_router(target_git_identity_worker_router)
 router.include_router(worker_router)

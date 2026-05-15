@@ -180,6 +180,7 @@ async def expire_command_if_not_terminal(
     error_code: str | None,
     error_message: str | None,
     now: datetime,
+    eligible_statuses: tuple[str, ...] | None = None,
 ) -> CloudCommandSnapshot | None:
     row = (
         await db.execute(
@@ -189,6 +190,8 @@ async def expire_command_if_not_terminal(
     if row is None:
         return None
     if _is_terminal_status(row.status):
+        return _snapshot(row)
+    if eligible_statuses is not None and row.status not in eligible_statuses:
         return _snapshot(row)
     row.status = CloudCommandStatus.expired.value
     row.expired_at = now

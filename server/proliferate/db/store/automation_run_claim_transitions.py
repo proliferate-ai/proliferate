@@ -175,6 +175,37 @@ async def attach_cloud_workspace_to_run(
     return await _run_self_committing(operation)
 
 
+async def attach_cloud_target_snapshot_to_run(
+    *,
+    run_id: UUID,
+    claim_id: UUID,
+    cloud_target_id: UUID,
+    cloud_target_kind: str,
+    now: datetime,
+    transition: ClaimTransitionRule,
+    claim_is_active: ClaimActivePredicate,
+) -> AutomationRunClaimValue | None:
+    async def operation(db: AsyncSession) -> AutomationRunClaimValue | None:
+        run = await _load_run_for_transition(
+            db,
+            run_id=run_id,
+            claim_id=claim_id,
+            now=now,
+            transition=transition,
+            execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+            executor_kind=AUTOMATION_EXECUTOR_KIND_CLOUD,
+            claim_is_active=claim_is_active,
+        )
+        if run is None:
+            return None
+        run.cloud_target_id_snapshot = cloud_target_id
+        run.cloud_target_kind_snapshot = cloud_target_kind
+        run.updated_at = now
+        return claim_value(run)
+
+    return await _run_self_committing(operation)
+
+
 async def attach_anyharness_workspace_to_run(
     db: AsyncSession | None = None,
     *,

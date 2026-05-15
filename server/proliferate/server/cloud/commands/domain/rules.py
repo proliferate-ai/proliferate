@@ -30,6 +30,8 @@ _MATERIALIZE_WORKTREE_FIELDS = {
     "origin",
     "creatorContext",
 }
+_CONFIGURE_GIT_IDENTITY_FIELDS = {"targetGitIdentityId", "configVersion"}
+_ENSURE_REPO_CHECKOUT_FIELDS = {"provider", "owner", "name", "path", "baseBranch"}
 _MAX_MATERIALIZE_WORKSPACE_DISPLAY_NAME_CHARS = 160
 
 
@@ -75,10 +77,14 @@ def validate_command_shape(
             f"Cloud command kind requires workspaceId: {kind}",
             status_code=400,
         )
-    if kind == CloudCommandKind.materialize_environment.value and (workspace_id or session_id):
+    if kind in {
+        CloudCommandKind.configure_git_identity.value,
+        CloudCommandKind.ensure_repo_checkout.value,
+        CloudCommandKind.materialize_environment.value,
+    } and (workspace_id or session_id):
         raise CloudApiError(
             "cloud_command_target_only",
-            "materialize_environment commands must be scoped only to a target.",
+            f"{kind} commands must be scoped only to a target.",
             status_code=400,
         )
     if kind == CloudCommandKind.materialize_workspace.value and (workspace_id or session_id):
@@ -112,6 +118,12 @@ def validate_command_shape(
 
 
 def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
+    if kind == CloudCommandKind.configure_git_identity.value:
+        _validate_configure_git_identity_payload(payload)
+        return
+    if kind == CloudCommandKind.ensure_repo_checkout.value:
+        _validate_ensure_repo_checkout_payload(payload)
+        return
     if kind != CloudCommandKind.materialize_workspace.value:
         return
     mode = _required_string(
@@ -164,6 +176,56 @@ def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
     )
 
 
+def _validate_configure_git_identity_payload(payload: dict[str, object]) -> None:
+    _reject_unknown_fields(
+        payload,
+        _CONFIGURE_GIT_IDENTITY_FIELDS,
+        code="cloud_command_configure_git_identity_payload_unknown",
+        message_prefix="configure_git_identity payload contains unsupported field(s): ",
+    )
+    _required_string(
+        payload,
+        "targetGitIdentityId",
+        code="cloud_command_configure_git_identity_id_required",
+        message="configure_git_identity payload must contain targetGitIdentityId.",
+    )
+    _required_int(
+        payload,
+        "configVersion",
+        code="cloud_command_configure_git_identity_version_required",
+        message="configure_git_identity payload must contain configVersion.",
+    )
+
+
+def _validate_ensure_repo_checkout_payload(payload: dict[str, object]) -> None:
+    _reject_unknown_fields(
+        payload,
+        _ENSURE_REPO_CHECKOUT_FIELDS,
+        code="cloud_command_ensure_repo_checkout_payload_unknown",
+        message_prefix="ensure_repo_checkout payload contains unsupported field(s): ",
+    )
+    provider = _required_string(
+        payload,
+        "provider",
+        code="cloud_command_ensure_repo_checkout_provider_required",
+        message="ensure_repo_checkout payload must contain provider.",
+    )
+    if provider != "github":
+        raise CloudApiError(
+            "cloud_command_ensure_repo_checkout_provider_unsupported",
+            "ensure_repo_checkout only supports github.",
+            status_code=400,
+        )
+    for field in ("owner", "name", "path"):
+        _required_string(
+            payload,
+            field,
+            code=f"cloud_command_ensure_repo_checkout_{field}_required",
+            message=f"ensure_repo_checkout payload must contain {field}.",
+        )
+    _optional_string(payload, "baseBranch")
+
+
 def _required_string(
     payload: dict[str, object],
     field: str,
@@ -177,13 +239,18 @@ def _required_string(
     return value.strip()
 
 
-def _reject_unknown_fields(payload: dict[str, object], allowed_fields: set[str]) -> None:
+def _reject_unknown_fields(
+    payload: dict[str, object],
+    allowed_fields: set[str],
+    *,
+    code: str = "cloud_command_materialize_workspace_payload_unknown",
+    message_prefix: str = "materialize_workspace payload contains unsupported field(s): ",
+) -> None:
     unknown_fields = sorted(set(payload) - allowed_fields)
     if unknown_fields:
         raise CloudApiError(
-            "cloud_command_materialize_workspace_payload_unknown",
-            "materialize_workspace payload contains unsupported field(s): "
-            + ", ".join(unknown_fields),
+            code,
+            message_prefix + ", ".join(unknown_fields),
             status_code=400,
         )
 
@@ -218,6 +285,19 @@ def _optional_object(payload: dict[str, object], field: str) -> None:
             f"materialize_workspace payload field must be an object: {field}",
             status_code=400,
         )
+
+
+def _required_int(
+    payload: dict[str, object],
+    field: str,
+    *,
+    code: str,
+    message: str,
+) -> int:
+    value = payload.get(field)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise CloudApiError(code, message, status_code=400)
+    return value
 
 
 def compact_command_json(value: dict[str, object] | None) -> str | None:

@@ -19,13 +19,19 @@ use crate::{
     config::WorkerConfig,
     error::WorkerError,
     identity::credentials::WorkerIdentity,
-    materialization::{materialize_plan, parse_materialize_environment_payload},
+    materialization::{
+        git_identity::{parse_configure_git_identity_payload, write_target_git_identity},
+        materialize_plan, parse_materialize_environment_payload,
+        repo_checkout::{ensure_repo_checkout, parse_ensure_repo_checkout_payload},
+    },
     store::{PendingCommandResult, WorkerStore},
     sync,
 };
 
 const EMPTY_LEASE_SLEEP: Duration = Duration::from_secs(2);
 const ERROR_LEASE_SLEEP: Duration = Duration::from_secs(5);
+const CONFIGURE_GIT_IDENTITY_KIND: &str = "configure_git_identity";
+const ENSURE_REPO_CHECKOUT_KIND: &str = "ensure_repo_checkout";
 const MATERIALIZE_ENVIRONMENT_KIND: &str = "materialize_environment";
 
 pub async fn run_loop(
@@ -48,7 +54,11 @@ pub async fn run_loop(
         .iter()
         .map(|kind| (*kind).to_string())
         .collect::<Vec<_>>();
-    let materialization_only_kinds = vec![MATERIALIZE_ENVIRONMENT_KIND.to_string()];
+    let materialization_only_kinds = vec![
+        CONFIGURE_GIT_IDENTITY_KIND.to_string(),
+        ENSURE_REPO_CHECKOUT_KIND.to_string(),
+        MATERIALIZE_ENVIRONMENT_KIND.to_string(),
+    ];
     loop {
         if let Err(error) = flush_pending_command_results(&cloud, &identity, &store).await {
             warn!(?error, "failed to flush pending command results");
@@ -64,7 +74,7 @@ pub async fn run_loop(
         };
         let lease = LeaseCommandRequest {
             supported_kinds,
-            lease_timeout_seconds: Some(30),
+            lease_timeout_seconds: Some(300),
         };
         match cloud.lease_command(&identity.worker_token, &lease).await {
             Ok(response) => {
@@ -115,6 +125,26 @@ async fn process_command(
         lease_expires_at = %command.lease_expires_at,
         "processing cloud command"
     );
+    if command.kind == CONFIGURE_GIT_IDENTITY_KIND {
+        return process_configure_git_identity_command(
+            cloud,
+            identity,
+            store,
+            materialization_root,
+            command,
+        )
+        .await;
+    }
+    if command.kind == ENSURE_REPO_CHECKOUT_KIND {
+        return process_ensure_repo_checkout_command(
+            cloud,
+            identity,
+            store,
+            materialization_root,
+            command,
+        )
+        .await;
+    }
     if command.kind == MATERIALIZE_ENVIRONMENT_KIND {
         return process_materialize_environment_command(
             cloud,
@@ -179,6 +209,160 @@ async fn process_command(
         }
     }
     let result = command_result(&command, &mapped, response);
+    report_command_result(cloud, identity, store, &command.command_id, &result).await
+}
+
+async fn process_configure_git_identity_command(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    store: &WorkerStore,
+    materialization_root: Option<&Path>,
+    command: CloudCommandEnvelope,
+) -> Result<(), WorkerError> {
+    let payload = match parse_configure_git_identity_payload(&command.payload) {
+        Ok(payload) => payload,
+        Err(error) => {
+            let result = CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: "rejected".to_string(),
+                error_code: Some("invalid_configure_git_identity_payload".to_string()),
+                error_message: Some(error.to_string()),
+                result: None,
+            };
+            report_command_result(cloud, identity, store, &command.command_id, &result).await?;
+            return Ok(());
+        }
+    };
+    let _ = cloud
+        .report_target_git_identity_status(
+            &identity.worker_token,
+            &payload.target_git_identity_id,
+            &crate::cloud_client::target_git_identity::TargetGitIdentityStatusRequest {
+                status: "materializing".to_string(),
+                command_id: command.command_id.clone(),
+                config_version: payload.config_version,
+                lease_id: command.lease_id.clone(),
+                error_code: None,
+                error_message: None,
+            },
+        )
+        .await;
+    let response = async {
+        let plan = cloud
+            .fetch_target_git_identity_materialization(
+                &identity.worker_token,
+                &payload.target_git_identity_id,
+                &command.command_id,
+                payload.config_version,
+                &command.lease_id,
+            )
+            .await?;
+        write_target_git_identity(materialization_root, payload.config_version, &plan)
+    }
+    .await;
+    let result = match response {
+        Ok(outcome) => {
+            cloud
+                .report_target_git_identity_status(
+                    &identity.worker_token,
+                    &payload.target_git_identity_id,
+                    &crate::cloud_client::target_git_identity::TargetGitIdentityStatusRequest {
+                        status: "applied".to_string(),
+                        command_id: command.command_id.clone(),
+                        config_version: payload.config_version,
+                        lease_id: command.lease_id.clone(),
+                        error_code: None,
+                        error_message: None,
+                    },
+                )
+                .await
+                .ok();
+            CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: "accepted".to_string(),
+                error_code: None,
+                error_message: None,
+                result: Some(serde_json::to_value(outcome)?),
+            }
+        }
+        Err(error) => {
+            let message = error.to_string();
+            let _ = cloud
+                .report_target_git_identity_status(
+                    &identity.worker_token,
+                    &payload.target_git_identity_id,
+                    &crate::cloud_client::target_git_identity::TargetGitIdentityStatusRequest {
+                        status: "failed".to_string(),
+                        command_id: command.command_id.clone(),
+                        config_version: payload.config_version,
+                        lease_id: command.lease_id.clone(),
+                        error_code: Some("target_git_identity_failed".to_string()),
+                        error_message: Some(message.clone()),
+                    },
+                )
+                .await;
+            CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: "failed_delivery".to_string(),
+                error_code: Some("target_git_identity_failed".to_string()),
+                error_message: Some(message),
+                result: None,
+            }
+        }
+    };
+    report_command_result(cloud, identity, store, &command.command_id, &result).await
+}
+
+async fn process_ensure_repo_checkout_command(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    store: &WorkerStore,
+    materialization_root: Option<&Path>,
+    command: CloudCommandEnvelope,
+) -> Result<(), WorkerError> {
+    let payload = match parse_ensure_repo_checkout_payload(&command.payload) {
+        Ok(payload) => payload,
+        Err(error) => {
+            let result = CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: "rejected".to_string(),
+                error_code: Some("invalid_ensure_repo_checkout_payload".to_string()),
+                error_message: Some(error.to_string()),
+                result: None,
+            };
+            report_command_result(cloud, identity, store, &command.command_id, &result).await?;
+            return Ok(());
+        }
+    };
+    let response = ensure_repo_checkout(materialization_root, &payload);
+    let result = match response {
+        Ok(outcome) => CommandResultRequest {
+            lease_id: command.lease_id.clone(),
+            status: "accepted".to_string(),
+            error_code: None,
+            error_message: None,
+            result: Some(serde_json::to_value(outcome)?),
+        },
+        Err(error) => {
+            let message = error.to_string();
+            let error_code = if message.contains("target_git_not_ready") {
+                "target_git_not_ready"
+            } else if message.contains("repo_access_denied") {
+                "repo_access_denied"
+            } else if message.contains("repo_mismatch") {
+                "repo_mismatch"
+            } else {
+                "repo_clone_failed"
+            };
+            CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: "failed_delivery".to_string(),
+                error_code: Some(error_code.to_string()),
+                error_message: Some(message),
+                result: None,
+            }
+        }
+    };
     report_command_result(cloud, identity, store, &command.command_id, &result).await
 }
 

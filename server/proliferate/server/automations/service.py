@@ -7,8 +7,11 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.automations import (
+    AUTOMATION_EXECUTION_TARGET_CLOUD,
+    AUTOMATION_EXECUTION_TARGET_LOCAL,
     AUTOMATION_RUN_LIST_DEFAULT_LIMIT,
 )
+from proliferate.constants.cloud import CloudTargetKind, CloudTargetStatus
 from proliferate.db.store.automations import (
     AutomationRunValue,
     AutomationValue,
@@ -23,6 +26,7 @@ from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
     bootstrap_cloud_repo_config,
 )
+from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.automations.domain.schedule import (
     next_future_occurrence,
 )
@@ -44,6 +48,7 @@ from proliferate.server.automations.errors import (
     AutomationPaused,
     AutomationRepoImmutable,
     AutomationRepoLimitExceeded,
+    AutomationServiceError,
 )
 from proliferate.server.automations.models import (
     CreateAutomationRequest,
@@ -54,6 +59,83 @@ from proliferate.server.billing.service import (
     repo_limit_for_billing_snapshot,
 )
 from proliferate.utils.time import utcnow
+
+AUTOMATION_TARGET_KINDS: frozenset[str] = frozenset(
+    {
+        CloudTargetKind.managed_cloud.value,
+        CloudTargetKind.ssh.value,
+    }
+)
+
+
+def _target_invalid(
+    message: str,
+    *,
+    code: str = "target_invalid",
+    status_code: int = 400,
+) -> AutomationServiceError:
+    return AutomationServiceError(code, message, status_code=status_code)
+
+
+async def _default_managed_cloud_target(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> targets_store.CloudTargetSnapshot | None:
+    targets = await targets_store.list_visible_targets(db, user_id=user_id)
+    candidates = [
+        target
+        for target in targets
+        if target.kind == CloudTargetKind.managed_cloud.value
+        and target.status == CloudTargetStatus.online.value
+        and target.archived_at is None
+    ]
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda target: (target.created_at, target.id))[0]
+
+
+def _validate_automation_target(
+    target: targets_store.CloudTargetSnapshot,
+) -> tuple[UUID, str]:
+    if target.archived_at is not None or target.status == CloudTargetStatus.archived.value:
+        raise _target_invalid("Target is archived.", code="target_archived")
+    if target.kind not in AUTOMATION_TARGET_KINDS:
+        raise _target_invalid("Target cannot run automations.", code="target_kind_unsupported")
+    if target.status != CloudTargetStatus.online.value:
+        raise _target_invalid("Target is not online.", code="target_offline")
+    return target.id, target.kind
+
+
+async def _resolve_target_selection(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    execution_target: str,
+    target_id: UUID | None,
+) -> tuple[UUID | None, str | None]:
+    if execution_target == AUTOMATION_EXECUTION_TARGET_LOCAL:
+        if target_id is not None:
+            raise _target_invalid("targetId must be omitted for local automations.")
+        return None, None
+    if execution_target != AUTOMATION_EXECUTION_TARGET_CLOUD:
+        return None, None
+    if target_id is None:
+        default_target = await _default_managed_cloud_target(db, user_id=user_id)
+        if default_target is None:
+            raise _target_invalid(
+                "Choose a cloud compute target before scheduling this automation.",
+                code="target_required",
+            )
+        return _validate_automation_target(default_target)
+    target = await targets_store.get_visible_target_by_id(
+        db,
+        target_id=target_id,
+        user_id=user_id,
+    )
+    if target is None:
+        raise _target_invalid("Target not found.", code="target_not_found", status_code=404)
+    return _validate_automation_target(target)
 
 
 async def _ensure_repo_config_id(
@@ -118,6 +200,12 @@ async def create_automation(
         now=now,
     )
     execution_target = normalize_execution_target(body.execution_target)
+    target_id, target_kind = await _resolve_target_selection(
+        db,
+        user_id=user_id,
+        execution_target=execution_target,
+        target_id=body.target_id,
+    )
     agent_kind = normalize_agent_kind(body.agent_kind)
     require_agent_kind(execution_target, agent_kind)
     value = await create_automation_for_user(
@@ -130,6 +218,8 @@ async def create_automation(
         schedule_timezone=schedule.timezone,
         schedule_summary=schedule.summary,
         execution_target=execution_target,
+        cloud_target_id=target_id,
+        cloud_target_kind=target_kind,
         agent_kind=agent_kind,
         model_id=normalize_optional_text(body.model_id, field_name="modelId"),
         mode_id=normalize_optional_text(body.mode_id, field_name="modeId"),
@@ -162,14 +252,36 @@ async def update_automation(
         updates["prompt"] = normalize_required_text(body.prompt, field_name="prompt")
     resolved_execution_target = existing.execution_target
     resolved_agent_kind = existing.agent_kind
+    resolved_target_id = existing.cloud_target_id
+    resolved_target_kind = existing.cloud_target_kind
     if "execution_target" in body.model_fields_set:
         if body.execution_target is None:
             raise AutomationInvalidField("executionTarget cannot be null.")
         resolved_execution_target = normalize_execution_target(body.execution_target)
         updates["execution_target"] = resolved_execution_target
+        if resolved_execution_target == AUTOMATION_EXECUTION_TARGET_LOCAL:
+            resolved_target_id = None
+            resolved_target_kind = None
     if "agent_kind" in body.model_fields_set:
         resolved_agent_kind = normalize_agent_kind(body.agent_kind)
         updates["agent_kind"] = resolved_agent_kind
+    if "target_id" in body.model_fields_set:
+        resolved_target_id, resolved_target_kind = await _resolve_target_selection(
+            db,
+            user_id=user_id,
+            execution_target=resolved_execution_target,
+            target_id=body.target_id,
+        )
+    elif "execution_target" in body.model_fields_set:
+        resolved_target_id, resolved_target_kind = await _resolve_target_selection(
+            db,
+            user_id=user_id,
+            execution_target=resolved_execution_target,
+            target_id=resolved_target_id,
+        )
+    if "target_id" in body.model_fields_set or "execution_target" in body.model_fields_set:
+        updates["cloud_target_id"] = resolved_target_id
+        updates["cloud_target_kind"] = resolved_target_kind
     if "model_id" in body.model_fields_set:
         updates["model_id"] = normalize_optional_text(body.model_id, field_name="modelId")
     if "mode_id" in body.model_fields_set:
@@ -260,6 +372,25 @@ async def run_automation_now(
     if not existing.enabled:
         raise AutomationPaused()
     require_agent_kind(existing.execution_target, existing.agent_kind)
+    if (
+        existing.execution_target == AUTOMATION_EXECUTION_TARGET_CLOUD
+        and existing.cloud_target_id is None
+    ):
+        target_id, target_kind = await _resolve_target_selection(
+            db,
+            user_id=user_id,
+            execution_target=existing.execution_target,
+            target_id=None,
+        )
+        existing = await update_automation_for_user(
+            db,
+            user_id=user_id,
+            automation_id=automation_id,
+            cloud_target_id=target_id,
+            cloud_target_kind=target_kind,
+        )
+        if existing is None:
+            raise AutomationNotFound()
     await _ensure_repo_config_id(
         db,
         user_id=user_id,

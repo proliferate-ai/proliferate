@@ -9,11 +9,12 @@ from datetime import datetime
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.automations import (
+    AUTOMATION_EXECUTION_TARGET_CLOUD,
     AUTOMATION_EXECUTION_TARGET_LOCAL,
     AUTOMATION_RUN_STATUS_QUEUED,
     AUTOMATION_RUN_TRIGGER_MANUAL,
@@ -43,6 +44,8 @@ class AutomationValue:
     schedule_timezone: str
     schedule_summary: str
     execution_target: str
+    cloud_target_id: UUID | None
+    cloud_target_kind: str | None
     agent_kind: str | None
     model_id: str | None
     mode_id: str | None
@@ -70,6 +73,8 @@ class AutomationRunValue:
     git_owner_snapshot: str
     git_repo_name_snapshot: str
     cloud_repo_config_id_snapshot: UUID
+    cloud_target_id_snapshot: UUID | None
+    cloud_target_kind_snapshot: str | None
     agent_kind_snapshot: str | None
     model_id_snapshot: str | None
     mode_id_snapshot: str | None
@@ -123,6 +128,8 @@ def _automation_value(record: Automation, repo_config: CloudRepoConfig) -> Autom
         schedule_timezone=record.schedule_timezone,
         schedule_summary=record.schedule_summary,
         execution_target=record.execution_target,
+        cloud_target_id=record.cloud_target_id,
+        cloud_target_kind=record.cloud_target_kind_snapshot,
         agent_kind=record.agent_kind,
         model_id=record.model_id,
         mode_id=record.mode_id,
@@ -151,6 +158,8 @@ def _run_value(record: AutomationRun) -> AutomationRunValue:
         git_owner_snapshot=record.git_owner_snapshot,
         git_repo_name_snapshot=record.git_repo_name_snapshot,
         cloud_repo_config_id_snapshot=record.cloud_repo_config_id_snapshot,
+        cloud_target_id_snapshot=record.cloud_target_id_snapshot,
+        cloud_target_kind_snapshot=record.cloud_target_kind_snapshot,
         agent_kind_snapshot=record.agent_kind_snapshot,
         model_id_snapshot=record.model_id_snapshot,
         mode_id_snapshot=record.mode_id_snapshot,
@@ -203,6 +212,8 @@ async def create_automation_for_user(
     schedule_timezone: str,
     schedule_summary: str,
     execution_target: str,
+    cloud_target_id: UUID | None,
+    cloud_target_kind: str | None,
     agent_kind: str | None,
     model_id: str | None,
     mode_id: str | None,
@@ -219,6 +230,8 @@ async def create_automation_for_user(
         schedule_timezone=schedule_timezone,
         schedule_summary=schedule_summary,
         execution_target=execution_target,
+        cloud_target_id=cloud_target_id,
+        cloud_target_kind_snapshot=cloud_target_kind,
         agent_kind=agent_kind,
         model_id=model_id,
         mode_id=mode_id,
@@ -275,6 +288,8 @@ async def update_automation_for_user(
     schedule_timezone: object = _UNSET,
     schedule_summary: object = _UNSET,
     execution_target: object = _UNSET,
+    cloud_target_id: object = _UNSET,
+    cloud_target_kind: object = _UNSET,
     agent_kind: object = _UNSET,
     model_id: object = _UNSET,
     mode_id: object = _UNSET,
@@ -305,6 +320,10 @@ async def update_automation_for_user(
         record.schedule_summary = schedule_summary  # type: ignore[assignment]
     if execution_target is not _UNSET:
         record.execution_target = execution_target  # type: ignore[assignment]
+    if cloud_target_id is not _UNSET:
+        record.cloud_target_id = cloud_target_id  # type: ignore[assignment]
+    if cloud_target_kind is not _UNSET:
+        record.cloud_target_kind_snapshot = cloud_target_kind  # type: ignore[assignment]
     if agent_kind is not _UNSET:
         record.agent_kind = agent_kind  # type: ignore[assignment]
     if model_id is not _UNSET:
@@ -357,6 +376,8 @@ async def create_manual_run_for_user(
         git_owner_snapshot=repo_config.git_owner,
         git_repo_name_snapshot=repo_config.git_repo_name,
         cloud_repo_config_id_snapshot=automation.cloud_repo_config_id,
+        cloud_target_id_snapshot=automation.cloud_target_id,
+        cloud_target_kind_snapshot=automation.cloud_target_kind_snapshot,
         agent_kind_snapshot=automation.agent_kind,
         model_id_snapshot=automation.model_id,
         mode_id_snapshot=automation.mode_id,
@@ -468,7 +489,11 @@ async def create_due_scheduled_runs_batch(
                     Automation.next_run_at <= now,
                     or_(
                         Automation.execution_target == AUTOMATION_EXECUTION_TARGET_LOCAL,
-                        CloudRepoConfig.configured.is_(True),
+                        and_(
+                            Automation.execution_target == AUTOMATION_EXECUTION_TARGET_CLOUD,
+                            CloudRepoConfig.configured.is_(True),
+                            Automation.cloud_target_id.is_not(None),
+                        ),
                     ),
                 )
                 .order_by(Automation.next_run_at.asc())
@@ -514,6 +539,8 @@ async def create_due_scheduled_runs_batch(
                     git_owner_snapshot=repo_config.git_owner,
                     git_repo_name_snapshot=repo_config.git_repo_name,
                     cloud_repo_config_id_snapshot=record.cloud_repo_config_id,
+                    cloud_target_id_snapshot=record.cloud_target_id,
+                    cloud_target_kind_snapshot=record.cloud_target_kind_snapshot,
                     agent_kind_snapshot=record.agent_kind,
                     model_id_snapshot=record.model_id,
                     mode_id_snapshot=record.mode_id,

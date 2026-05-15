@@ -62,7 +62,7 @@ pub fn write_git_materialization(
     Ok(true)
 }
 
-fn validate_git_config_value(field: &str, value: &str) -> Result<(), WorkerError> {
+pub(crate) fn validate_git_config_value(field: &str, value: &str) -> Result<(), WorkerError> {
     if value.chars().any(|ch| ch.is_control()) {
         return Err(materialization_error(format!(
             "git credential {field} contains control characters"

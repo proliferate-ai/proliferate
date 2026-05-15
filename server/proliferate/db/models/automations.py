@@ -24,6 +24,7 @@ class Automation(Base):
         ),
         Index("ix_automation_user_id", "user_id"),
         Index("ix_automation_cloud_repo_config_id", "cloud_repo_config_id"),
+        Index("ix_automation_cloud_target_id", "cloud_target_id"),
         Index(
             "ix_automation_scheduler_due",
             "next_run_at",
@@ -45,6 +46,11 @@ class Automation(Base):
     schedule_timezone: Mapped[str] = mapped_column(String(64))
     schedule_summary: Mapped[str] = mapped_column(String(255))
     execution_target: Mapped[str] = mapped_column(String(32))
+    cloud_target_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_targets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    cloud_target_kind_snapshot: Mapped[str | None] = mapped_column(String(32), nullable=True)
     agent_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
     model_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     mode_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -178,6 +184,7 @@ class AutomationRun(Base):
             postgresql_where=text("status = 'dispatching' AND claim_expires_at IS NOT NULL"),
         ),
         Index("ix_automation_run_cloud_workspace_id", "cloud_workspace_id"),
+        Index("ix_automation_run_cloud_target_id_snapshot", "cloud_target_id_snapshot"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -197,6 +204,11 @@ class AutomationRun(Base):
     cloud_repo_config_id_snapshot: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("cloud_repo_config.id", ondelete="RESTRICT"),
     )
+    cloud_target_id_snapshot: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_targets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    cloud_target_kind_snapshot: Mapped[str | None] = mapped_column(String(32), nullable=True)
     agent_kind_snapshot: Mapped[str | None] = mapped_column(String(32), nullable=True)
     model_id_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     mode_id_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)

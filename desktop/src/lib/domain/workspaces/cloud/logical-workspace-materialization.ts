@@ -1,5 +1,23 @@
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { targetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+
+export function logicalWorkspaceTargetMaterializationId(
+  workspace: Pick<LogicalWorkspace, "cloudWorkspace">,
+): string | null {
+  const directTarget = workspace.cloudWorkspace?.directTargetContext;
+  if (
+    directTarget?.targetKind !== "ssh"
+    || !directTarget.targetId
+    || !directTarget.anyharnessWorkspaceId
+  ) {
+    return null;
+  }
+  return targetWorkspaceSyntheticId(
+    directTarget.targetId,
+    directTarget.anyharnessWorkspaceId,
+  );
+}
 
 export function resolvePreferredLogicalWorkspaceMaterialization(
   localWorkspace: LogicalWorkspace["localWorkspace"],
@@ -8,11 +26,14 @@ export function resolvePreferredLogicalWorkspaceMaterialization(
   currentSelectionId: string | null,
   effectiveOwnerHint: "local" | "cloud" | null,
 ): { workspaceId: string | null; owner: "local" | "cloud" } {
-  const cloudId = cloudWorkspace
+  const directTargetId = cloudWorkspace
+    ? logicalWorkspaceTargetMaterializationId({ cloudWorkspace })
+    : null;
+  const cloudId = directTargetId ?? (cloudWorkspace
     ? cloudWorkspaceSyntheticId(cloudWorkspace.id)
     : mobilityWorkspace?.cloudWorkspaceId
       ? cloudWorkspaceSyntheticId(mobilityWorkspace.cloudWorkspaceId)
-      : null;
+      : null);
 
   if (effectiveOwnerHint === "local" && localWorkspace) {
     return { workspaceId: localWorkspace.id, owner: "local" };

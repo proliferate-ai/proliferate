@@ -25,6 +25,7 @@ COMMAND_WAIT_POLL_SECONDS = 1.0
 @dataclass(frozen=True)
 class AutomationCommandResult:
     command: commands_store.CloudCommandSnapshot
+    result: dict[str, object]
     body: dict[str, object]
 
 
@@ -36,6 +37,7 @@ async def enqueue_automation_command(
     claim: AutomationRunClaimValue,
     *,
     target_id: UUID,
+    organization_id: UUID | None = None,
     stage: str,
     kind: str,
     payload: dict[str, object],
@@ -57,7 +59,7 @@ async def enqueue_automation_command(
             idempotency_scope=idempotency_scope,
             idempotency_key=idempotency_key,
             target_id=target_id,
-            organization_id=None,
+            organization_id=organization_id,
             actor_user_id=claim.user_id,
             actor_kind=CloudCommandActorKind.automation.value,
             source=CloudCommandSource.automation.value,
@@ -72,6 +74,9 @@ async def enqueue_automation_command(
                     "automationId": str(claim.automation_id),
                     "automationRunId": str(claim.id),
                     "claimId": str(claim.claim_id),
+                    "targetOrganizationId": (
+                        str(organization_id) if organization_id is not None else None
+                    ),
                 }
             ),
         )
@@ -116,7 +121,12 @@ async def wait_for_command_result(
             CloudCommandStatus.accepted.value,
             CloudCommandStatus.accepted_but_queued.value,
         }:
-            return AutomationCommandResult(command=current, body=_result_body(current))
+            result = _result_json(current)
+            return AutomationCommandResult(
+                command=current,
+                result=result,
+                body=_body_from_result(result),
+            )
         if current.status in {
             CloudCommandStatus.rejected.value,
             CloudCommandStatus.failed_delivery.value,
@@ -135,15 +145,20 @@ async def wait_for_command_result(
         CloudCommandStatus.accepted.value,
         CloudCommandStatus.accepted_but_queued.value,
     }:
-        return AutomationCommandResult(command=expired, body=_result_body(expired))
+        result = _result_json(expired)
+        return AutomationCommandResult(
+            command=expired, result=result, body=_body_from_result(result)
+        )
     raise TimeoutError("Timed out waiting for cloud command completion.")
 
 
-def _result_body(command: commands_store.CloudCommandSnapshot) -> dict[str, object]:
+def _result_json(command: commands_store.CloudCommandSnapshot) -> dict[str, object]:
     if not command.result_json:
         return {}
     parsed = json.loads(command.result_json)
-    if not isinstance(parsed, dict):
-        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _body_from_result(parsed: dict[str, object]) -> dict[str, object]:
     body = parsed.get("body")
     return body if isinstance(body, dict) else {}

@@ -1345,6 +1345,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/worker/target-git-identities/{identity_id}/materialization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Worker Target Git Identity Materialization Endpoint */
+        get: operations["worker_target_git_identity_materialization_endpoint_v1_cloud_worker_target_git_identities__identity_id__materialization_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/target-git-identities/{identity_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Target Git Identity Status Endpoint */
+        post: operations["worker_target_git_identity_status_endpoint_v1_cloud_worker_target_git_identities__identity_id__status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/worker/enroll": {
         parameters: {
             query?: never;
@@ -2395,6 +2429,10 @@ export interface components {
              * @enum {string}
              */
             executionTarget: "cloud" | "local";
+            /** Targetid */
+            targetId: string | null;
+            /** Targetkind */
+            targetKind: string | null;
             /** Agentkind */
             agentKind: string | null;
             /** Modelid */
@@ -2437,6 +2475,10 @@ export interface components {
              * @enum {string}
              */
             executionTarget: "cloud" | "local";
+            /** Targetidsnapshot */
+            targetIdSnapshot: string | null;
+            /** Targetkindsnapshot */
+            targetKindSnapshot: string | null;
             /**
              * Status
              * @enum {string}
@@ -2617,6 +2659,10 @@ export interface components {
             errorCode?: string | null;
             /** Errormessage */
             errorMessage?: string | null;
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** CloudCredentialMutationResponse */
         CloudCredentialMutationResponse: {
@@ -3450,6 +3496,8 @@ export interface components {
              * @enum {string}
              */
             executionTarget: "cloud" | "local";
+            /** Targetid */
+            targetId?: string | null;
             /** Agentkind */
             agentKind?: string | null;
             /** Modelid */
@@ -4791,6 +4839,27 @@ export interface components {
             /** Bytesize */
             byteSize: number;
         };
+        /** TargetGitIdentityMaterializationPlan */
+        TargetGitIdentityMaterializationPlan: {
+            /** Targetgitidentityid */
+            targetGitIdentityId: string;
+            /** Targetid */
+            targetId: string;
+            /** Configversion */
+            configVersion: number;
+            /**
+             * Provider
+             * @default github
+             * @constant
+             */
+            provider: "github";
+            /** Accesstoken */
+            accessToken: string;
+            /** Username */
+            username?: string | null;
+            /** Email */
+            email?: string | null;
+        };
         /**
          * TokenRequest
          * @description POST body the desktop app sends to exchange an auth code for tokens.
@@ -4847,6 +4916,8 @@ export interface components {
             schedule?: components["schemas"]["AutomationScheduleRequest"] | null;
             /** Executiontarget */
             executionTarget?: ("cloud" | "local") | null;
+            /** Targetid */
+            targetId?: string | null;
             /** Agentkind */
             agentKind?: string | null;
             /** Modelid */
@@ -5369,6 +5440,36 @@ export interface components {
             /** Updated */
             updated: boolean;
         };
+        /** WorkerTargetGitIdentityStatusRequest */
+        WorkerTargetGitIdentityStatusRequest: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "materializing" | "applied" | "failed";
+            /**
+             * Commandid
+             * Format: uuid
+             */
+            commandId: string;
+            /** Configversion */
+            configVersion: number;
+            /** Leaseid */
+            leaseId: string;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+        };
+        /** WorkerTargetGitIdentityStatusResponse */
+        WorkerTargetGitIdentityStatusResponse: {
+            /** Targetgitidentityid */
+            targetGitIdentityId: string;
+            /** Status */
+            status: string;
+            /** Updated */
+            updated: boolean;
+        };
         /** WorkerUpdateStatusRequest */
         WorkerUpdateStatusRequest: {
             /** Status */
@@ -5436,6 +5537,18 @@ export interface components {
             /** Label */
             label?: string | null;
         };
+        /**
+         * WorkspaceDirectTargetContext
+         * @description Direct runtime materialization for non-managed cloud targets.
+         */
+        WorkspaceDirectTargetContext: {
+            /** Targetid */
+            targetId: string;
+            /** Targetkind */
+            targetKind: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+        };
         /** WorkspaceCredentialFreshness */
         WorkspaceCredentialFreshness: {
             /**
@@ -5499,6 +5612,7 @@ export interface components {
             repoFilesLastFailedPath?: string | null;
             origin?: components["schemas"]["OriginContext"] | null;
             creatorContext?: components["schemas"]["WorkspaceCreatorContext"] | null;
+            directTargetContext?: components["schemas"]["WorkspaceDirectTargetContext"] | null;
             /** Allowedagentkinds */
             allowedAgentKinds: string[];
             /** Readyagentkinds */
@@ -5583,6 +5697,7 @@ export interface components {
             repoFilesLastFailedPath?: string | null;
             origin?: components["schemas"]["OriginContext"] | null;
             creatorContext?: components["schemas"]["WorkspaceCreatorContext"] | null;
+            directTargetContext?: components["schemas"]["WorkspaceDirectTargetContext"] | null;
         };
     };
     responses: never;
@@ -8453,6 +8568,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerTargetConfigStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_target_git_identity_materialization_endpoint_v1_cloud_worker_target_git_identities__identity_id__materialization_get: {
+        parameters: {
+            query: {
+                command_id: string;
+                config_version: number;
+                lease_id: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                identity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetGitIdentityMaterializationPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_target_git_identity_status_endpoint_v1_cloud_worker_target_git_identities__identity_id__status_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                identity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerTargetGitIdentityStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerTargetGitIdentityStatusResponse"];
                 };
             };
             /** @description Validation Error */

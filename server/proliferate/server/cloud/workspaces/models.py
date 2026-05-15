@@ -123,6 +123,14 @@ class WorkspaceCreatorContext(BaseModel):
     label: str | None = None
 
 
+class WorkspaceDirectTargetContext(BaseModel):
+    """Direct runtime materialization for non-managed cloud targets."""
+
+    target_id: str = Field(serialization_alias="targetId")
+    target_kind: str = Field(serialization_alias="targetKind")
+    anyharness_workspace_id: str = Field(serialization_alias="anyharnessWorkspaceId")
+
+
 class WorkspaceSummary(BaseModel):
     id: str
     display_name: str | None = Field(serialization_alias="displayName")
@@ -151,6 +159,10 @@ class WorkspaceSummary(BaseModel):
     creator_context: WorkspaceCreatorContext | None = Field(
         default=None,
         serialization_alias="creatorContext",
+    )
+    direct_target_context: WorkspaceDirectTargetContext | None = Field(
+        default=None,
+        serialization_alias="directTargetContext",
     )
 
 
@@ -255,6 +267,7 @@ def workspace_summary_payload(
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
     creator_context: WorkspaceCreatorContext | None = None,
+    direct_target_context: WorkspaceDirectTargetContext | None = None,
 ) -> WorkspaceSummary:
     runtime_status = (
         runtime_environment.status
@@ -300,6 +313,7 @@ def workspace_summary_payload(
         repo_files_last_failed_path=workspace.repo_files_last_failed_path,
         origin=_origin_payload(workspace),
         creator_context=creator_context,
+        direct_target_context=direct_target_context,
     )
 
 
@@ -312,6 +326,7 @@ def workspace_detail_payload(
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
     creator_context: WorkspaceCreatorContext | None = None,
+    direct_target_context: WorkspaceDirectTargetContext | None = None,
 ) -> WorkspaceDetail:
     summary = workspace_summary_payload(
         workspace,
@@ -320,6 +335,7 @@ def workspace_detail_payload(
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
         creator_context=creator_context,
+        direct_target_context=direct_target_context,
     )
     return WorkspaceDetail(
         **summary.model_dump(),

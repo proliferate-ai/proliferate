@@ -526,6 +526,28 @@ async def update_workspace_status(
     await db.commit()
 
 
+async def attach_anyharness_workspace_id(
+    db: AsyncSession,
+    *,
+    workspace_id: UUID,
+    anyharness_workspace_id: str,
+    status: CloudWorkspaceStatus | WorkspaceStatus | str = CloudWorkspaceStatus.ready,
+    status_detail: str = "Ready",
+) -> CloudWorkspace | None:
+    workspace = (
+        await db.execute(select(CloudWorkspace).where(CloudWorkspace.id == workspace_id))
+    ).scalar_one_or_none()
+    if workspace is None:
+        return None
+    workspace.anyharness_workspace_id = anyharness_workspace_id
+    workspace.status = status.value if hasattr(status, "value") else str(status)
+    workspace.status_detail = status_detail
+    workspace.ready_at = workspace.ready_at or utcnow()
+    workspace.updated_at = utcnow()
+    await db.flush()
+    return workspace
+
+
 async def try_acquire_workspace_repo_apply_lock(
     db: AsyncSession,
     workspace_id: UUID,

@@ -81,7 +81,7 @@ def runtime_launcher_path(runtime_context: SandboxRuntimeContext) -> str:
 
 def build_detached_runtime_launch_command(runtime_context: SandboxRuntimeContext) -> str:
     """Legacy launcher used by pre-supervisor sandboxes during reconnect fallback."""
-    return "sh -lc " + shlex.quote(
+    return "bash -lc " + shlex.quote(
         f"nohup {shlex.quote(runtime_launcher_path(runtime_context))} "
         f"> {shlex.quote(runtime_log_path(runtime_context))} 2>&1 < /dev/null &"
     )

@@ -191,3 +191,63 @@ async def test_target_config_materialization_command_is_secret_safe(
         },
     )
     assert stale_status.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_target_git_identity_materialization_command_is_secret_safe(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth = await create_user_and_login(
+        client,
+        db_session,
+        email_prefix="target-git-identity",
+    )
+    await seed_linked_github_account(
+        db_session,
+        user_id=auth.user_id,
+        access_token="gh-target-secret-token",
+        account_email="target-git@example.com",
+    )
+    target_id, worker_headers = await _create_enrolled_target(client, auth.headers)
+
+    lease = await client.post(
+        "/v1/cloud/worker/commands/lease",
+        headers=worker_headers,
+        json={"supportedKinds": ["configure_git_identity"], "leaseTimeoutSeconds": 300},
+    )
+    assert lease.status_code == 200
+    command = lease.json()["command"]
+    assert command["kind"] == "configure_git_identity"
+    assert command["targetId"] == target_id
+    assert set(command["payload"]) == {"targetGitIdentityId", "configVersion"}
+    assert "gh-target-secret-token" not in str(command)
+
+    materialization = await client.get(
+        "/v1/cloud/worker/target-git-identities/"
+        f"{command['payload']['targetGitIdentityId']}/materialization",
+        headers=worker_headers,
+        params={
+            "command_id": command["commandId"],
+            "config_version": command["payload"]["configVersion"],
+            "lease_id": command["leaseId"],
+        },
+    )
+    assert materialization.status_code == 200
+    plan = materialization.json()
+    assert plan["accessToken"] == "gh-target-secret-token"
+    assert plan["email"] == "target-git@example.com"
+
+    status = await client.post(
+        "/v1/cloud/worker/target-git-identities/"
+        f"{command['payload']['targetGitIdentityId']}/status",
+        headers=worker_headers,
+        json={
+            "status": "applied",
+            "commandId": command["commandId"],
+            "configVersion": command["payload"]["configVersion"],
+            "leaseId": command["leaseId"],
+        },
+    )
+    assert status.status_code == 200
+    assert status.json()["status"] == "applied"

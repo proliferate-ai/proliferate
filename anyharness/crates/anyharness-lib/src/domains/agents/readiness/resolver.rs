@@ -1,12 +1,21 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::domains::agents::credentials::detect_credentials;
+use crate::domains::agents::credentials::{detect_credentials, detect_credentials_with_env};
 use crate::domains::agents::model::*;
 use crate::domains::agents::seed;
 use crate::integrations::agent_cli::executable::{find_in_path, is_valid_executable};
 
 pub fn resolve_agent(descriptor: &AgentDescriptor, runtime_home: &Path) -> ResolvedAgent {
+    resolve_agent_with_env(descriptor, runtime_home, &BTreeMap::new())
+}
+
+pub fn resolve_agent_with_env(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+    additional_env: &BTreeMap<String, String>,
+) -> ResolvedAgent {
     let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
 
     let native = descriptor
@@ -45,7 +54,11 @@ pub fn resolve_agent(descriptor: &AgentDescriptor, runtime_home: &Path) -> Resol
         agent_process.message = Some(message.clone());
     }
 
-    let credential_state = detect_credentials(&descriptor.auth, &home_dir);
+    let credential_state = if additional_env.is_empty() {
+        detect_credentials(&descriptor.auth, &home_dir)
+    } else {
+        detect_credentials_with_env(&descriptor.auth, &home_dir, additional_env)
+    };
 
     let status = compute_readiness(
         &native,
