@@ -19,7 +19,7 @@ export function PaneOptionsMenu({
   return (
     <PopoverButton
       trigger={(
-        <PaneIconButton label={label} tooltip={label}>
+        <PaneIconButton label={label}>
           <MoreHorizontal className="size-3.5" />
         </PaneIconButton>
       )}

@@ -7,9 +7,19 @@
 # count, update this file in the same PR.
 
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/billing/stripe.py 1 transitional integration depends on product domain types/logic
+API_STORE_IMPORT server/proliferate/server/cloud/live/api.py 1 transitional live API reads store types during cloud worker migration
 SERVICE_ORM_IMPORT server/proliferate/server/billing/service.py 2 transitional service imports ORM/auth model
+SERVICE_ORM_IMPORT server/proliferate/server/cloud/commands/service.py 1 transitional cloud command service imports ORM model during worker migration
+SERVICE_ORM_IMPORT server/proliferate/server/cloud/compute/service.py 1 transitional cloud compute service imports ORM model during worker migration
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/runtime/service.py 1 transitional service imports ORM/auth model
+SERVICE_ORM_IMPORT server/proliferate/server/cloud/target_config/service.py 1 transitional target config service imports ORM model during worker migration
+SERVICE_ORM_IMPORT server/proliferate/server/cloud/target_git_identity/service.py 1 transitional target git identity service imports ORM model during worker migration
+SERVICE_ORM_IMPORT server/proliferate/server/cloud/targets/service.py 1 transitional cloud targets service imports ORM model during worker migration
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/workspaces/service.py 2 transitional service imports ORM/auth model
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/live/service.py 1 transitional live service opens DB session during worker migration
+SERVICE_SQLALCHEMY_IMPORT server/proliferate/server/cloud/commands/service.py 1 transitional cloud command service builds SQLAlchemy query during worker migration
+DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/target_config/domain/policy.py 1 transitional target config policy imports product config during worker migration
+DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/targets/domain/policy.py 1 transitional target policy imports product config during worker migration
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_run_claim_transitions.py 1 transitional automation claim transitions own transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_run_claims.py 1 transitional store owns transaction commit

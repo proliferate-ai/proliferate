@@ -1,7 +1,6 @@
 import { WorkspaceBrowserPanel } from "@/components/workspace/browser/WorkspaceBrowserPanel";
 import { CloudWorkspaceSettingsPanel } from "@/components/cloud/workspace-settings/CloudWorkspaceSettingsPanel";
 import { FileEditorView } from "@/components/workspace/files/FileEditorView";
-import { WorkspaceFilesPanel } from "@/components/workspace/files/viewer/WorkspaceFilesPanel";
 import { GitPanel } from "@/components/workspace/git/GitPanel";
 import { ScratchPadPanel } from "@/components/workspace/scratch/ScratchPadPanel";
 import { RightPanelPlaceholder } from "@/components/workspace/shell/right-panel/RightPanelPlaceholder";
@@ -88,11 +87,6 @@ export function RightPanelContent({
                 key={workspaceUiKey ?? "no-workspace"}
                 workspaceKey={workspaceUiKey}
               />
-            </div>
-          )}
-          {activeTool === "files" && (
-            <div className="absolute inset-0">
-              <WorkspaceFilesPanel />
             </div>
           )}
           {activeTool === "settings" && (

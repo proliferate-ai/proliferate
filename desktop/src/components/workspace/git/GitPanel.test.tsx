@@ -116,6 +116,19 @@ describe("GitPanel", () => {
     expect(html).toContain("GitPanel.tsx");
   });
 
+  it("keeps the Changes header options before the file sidebar toggle", () => {
+    const html = renderToStaticMarkup(createElement(GitPanel));
+    const layoutIndex = html.indexOf("Use split diff");
+    const optionsIndex = html.indexOf("Git review options");
+    const sidebarIndex = html.indexOf("Show files");
+
+    expect(layoutIndex).toBeGreaterThanOrEqual(0);
+    expect(optionsIndex).toBeGreaterThanOrEqual(0);
+    expect(sidebarIndex).toBeGreaterThanOrEqual(0);
+    expect(layoutIndex).toBeLessThan(optionsIndex);
+    expect(optionsIndex).toBeLessThan(sidebarIndex);
+  });
+
   it("renders a compact empty state when there are no changes", () => {
     mockGitPanelState.mockReturnValue(createGitPanelState({
       sections: [],

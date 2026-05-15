@@ -71,20 +71,16 @@ vi.mock("@/components/workspace/browser/WorkspaceBrowserPanel", () => ({
   },
 }));
 
-vi.mock("@/components/workspace/files/viewer/WorkspaceFilesPanel", () => ({
-  WorkspaceFilesPanel: () => (
-    <div data-testid="files-panel">
-      <input data-testid="files-panel-input" />
-    </div>
-  ),
-}));
-
 vi.mock("@/components/workspace/git/GitPanel", () => ({
   GitPanel: () => <div data-testid="git-panel" />,
 }));
 
 vi.mock("@/components/workspace/scratch/ScratchPadPanel", () => ({
-  ScratchPadPanel: () => <div data-testid="scratch-panel" />,
+  ScratchPadPanel: () => (
+    <div data-testid="scratch-panel">
+      <input data-testid="scratch-panel-input" />
+    </div>
+  ),
 }));
 
 vi.mock("@/components/workspace/files/FileEditorView", () => ({
@@ -338,11 +334,14 @@ describe("RightPanel viewer routing", () => {
     expect(screen.getByTestId("file-editor-view").dataset.filePath).toBe("src/app.ts");
   });
 
-  it("does not render a separate Review tool", () => {
-    render(<RightPanelHarness isWorkspaceReady />);
+  it("renders only the durable Scratch and Changes tools", () => {
+    const { container } = render(<RightPanelHarness isWorkspaceReady />);
 
+    expect(screen.getByRole("tab", { name: "Scratch" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Changes" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Files" })).toBeNull();
     expect(screen.queryByRole("tab", { name: "Review" })).toBeNull();
+    expect(container.querySelector(".right-panel-tab-tooltip")).toBeNull();
   });
 
   it("routes restored legacy Review state to the Changes pane", async () => {
@@ -380,8 +379,7 @@ describe("RightPanel tab shortcuts", () => {
 
   it("does not intercept primary-number shell shortcuts from right-panel text inputs", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
-    fireEvent.click(screen.getByRole("tab", { name: "Files" }));
-    const input = screen.getByTestId("files-panel-input");
+    const input = screen.getByTestId("scratch-panel-input");
 
     input.focus();
     expect(document.activeElement).toBe(input);

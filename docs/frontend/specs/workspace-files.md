@@ -87,7 +87,7 @@ resource, not Zustand state and not an AnyHarness file resource.
 ## Right Panel Tools
 
 The durable Scratch tool id is `scratch`. New right-panel state defaults to
-Scratch first, followed by Files, Changes, and cloud Settings when available.
+Scratch first, followed by Changes and cloud Settings when available.
 Persisted selections should be normalized without opening the panel
 automatically.
 

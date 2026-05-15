@@ -64,4 +64,32 @@ describe("MarkdownRenderer", () => {
     expect(html).toContain("data-wide-markdown-block=\"true\"");
     expect(html).toContain("border-l-2 border-border");
   });
+
+  it("renders autolinked GitHub URLs as inline chips while preserving authored link text", () => {
+    const html = renderToStaticMarkup(
+      createElement(MarkdownRenderer, {
+        content: [
+          "https://github.com/proliferate-ai/proliferate",
+          "<https://github.com/proliferate-ai/proliferate/pull/43>",
+          "[https://github.com/proliferate-ai/proliferate/blob/main/desktop/src/App.tsx](https://github.com/proliferate-ai/proliferate/blob/main/desktop/src/App.tsx)",
+          "[see the PR](https://github.com/proliferate-ai/proliferate/pull/44)",
+          "[actions](https://github.com/proliferate-ai/proliferate/actions)",
+          "[external](https://example.com/docs)",
+        ].join(" "),
+      }),
+    );
+
+    expect(html.match(/data-github-link-chip="true"/g)).toHaveLength(3);
+    expect(html).toContain("data-github-link-kind=\"repo\"");
+    expect(html).toContain("data-github-link-kind=\"pull\"");
+    expect(html).toContain("data-github-link-kind=\"file\"");
+    expect(html).toContain("PR");
+    expect(html).toContain("proliferate-ai/proliferate#43");
+    expect(html).toContain("proliferate-ai/proliferate/desktop/src/App.tsx");
+    expect(html).toContain("text-link-foreground underline");
+    expect(html).toContain(">see the PR</a>");
+    expect(html).toContain(">actions</a>");
+    expect(html).toContain(">external</a>");
+    expect(html).not.toContain("proliferate-ai/proliferate#44</span>");
+  });
 });

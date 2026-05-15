@@ -1,9 +1,16 @@
-import { createElement, type HTMLAttributes } from "react";
+import {
+  createElement,
+  isValidElement,
+  type HTMLAttributes,
+  type ReactNode,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { HighlightedCodePanel } from "./HighlightedCodePanel";
 import { FilePathLink } from "./FilePathLink";
+import { GitHubLinkChip } from "./GitHubLinkChip";
 import { looksLikePath } from "@/lib/domain/files/path-detection";
+import { parseGitHubLink } from "@/lib/domain/links/github-link";
 
 type MdElementProps = HTMLAttributes<HTMLElement> & {
   node?: unknown;
@@ -95,12 +102,18 @@ export function MarkdownRenderer({
               href,
               ...rest
             } = props;
-            if (href && looksLikePath(href) && !dangerouslySetInnerHTML) {
-              return (
-                <FilePathLink rawPath={href}>
-                  {children}
-                </FilePathLink>
-              );
+            if (href && !dangerouslySetInnerHTML) {
+              const githubLink = parseGitHubLink(href);
+              if (githubLink && isAutolinkText(href, children)) {
+                return <GitHubLinkChip link={githubLink} />;
+              }
+              if (looksLikePath(href)) {
+                return (
+                  <FilePathLink rawPath={href}>
+                    {children}
+                  </FilePathLink>
+                );
+              }
             }
             const merged =
               `text-link-foreground underline decoration-current decoration-[0.5px] decoration-opacity-50 transition-colors hover:decoration-opacity-100${className ? ` ${className}` : ""}`;
@@ -206,4 +219,33 @@ export function MarkdownRenderer({
       </ReactMarkdown>
     </div>
   );
+}
+
+function isAutolinkText(href: string, children: ReactNode): boolean {
+  const text = markdownChildrenText(children);
+  if (!text) {
+    return false;
+  }
+  return normalizeLinkText(text) === normalizeLinkText(href);
+}
+
+function markdownChildrenText(children: ReactNode): string | null {
+  if (typeof children === "string" || typeof children === "number") {
+    return String(children);
+  }
+  if (children === null || children === undefined || typeof children === "boolean") {
+    return "";
+  }
+  if (Array.isArray(children)) {
+    const parts = children.map(markdownChildrenText);
+    return parts.every((part): part is string => part !== null) ? parts.join("") : null;
+  }
+  if (isValidElement<{ children?: ReactNode }>(children)) {
+    return markdownChildrenText(children.props.children);
+  }
+  return null;
+}
+
+function normalizeLinkText(value: string): string {
+  return value.trim().replace(/\/$/, "");
 }
