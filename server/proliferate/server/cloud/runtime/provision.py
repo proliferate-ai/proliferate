@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 import shlex
@@ -17,10 +18,11 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
     USAGE_SEGMENT_OPENED_BY_PROVISION,
 )
-from proliferate.constants.cloud import CloudWorkspaceStatus
+from proliferate.constants.cloud import CloudTargetStatus, CloudWorkspaceStatus
 from proliferate.constants.cloud import (
     WorkspaceStatus as LegacyWorkspaceStatus,
 )
+from proliferate.db import engine as db_engine
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
     open_usage_segment_for_sandbox,
@@ -32,6 +34,7 @@ from proliferate.db.store.cloud_runtime_environments import (
     reserve_and_attach_sandbox_for_environment,
     save_runtime_environment_state,
 )
+from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_workspaces import (
     bind_allocated_sandbox,
     finalize_workspace_provision_for_ids,
@@ -61,16 +64,16 @@ from proliferate.server.cloud.runtime.anyharness_api import (
     wait_for_runtime_health,
 )
 from proliferate.server.cloud.runtime.bootstrap import (
-    build_detached_worker_launch_command,
+    build_detached_supervisor_launch_command,
     build_runtime_env,
-    build_runtime_launch_script,
+    build_supervisor_config,
     build_worker_config,
-    check_binary_preinstalled,
     check_node_runtime,
-    check_worker_binary_preinstalled,
+    check_runtime_bundle_preinstalled,
     install_node_runtime,
-    stage_runtime_binary,
-    stage_worker_binary,
+    local_anyharness_base_url,
+    stage_runtime_bundle,
+    supervisor_config_path,
     worker_config_path,
 )
 from proliferate.server.cloud.runtime.credential_freshness import (
@@ -108,10 +111,8 @@ from proliferate.server.cloud.runtime.repo_config_apply import (
 )
 from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
-    build_detached_runtime_launch_command,
     collect_runtime_debug_report,
     run_sandbox_command_logged,
-    runtime_launcher_path,
 )
 from proliferate.server.cloud.runtime.target_registration import ensure_runtime_target_enrollment
 from proliferate.server.cloud.runtime.worktree_policy_sync import (
@@ -467,22 +468,22 @@ async def _prepare_runtime_template(
     connected: ConnectedSandbox,
 ) -> None:
     tracker.begin(ProvisionStep.check_preinstalled_runtime)
-    binary_preinstalled = await check_binary_preinstalled(
+    bundle_preinstalled = await check_runtime_bundle_preinstalled(
         provider,
         connected.sandbox,
         workspace_id=ctx.workspace_id,
         runtime_context=connected.runtime_context,
     )
-    tracker.complete(preinstalled=binary_preinstalled)
+    tracker.complete(preinstalled=bundle_preinstalled)
 
-    if binary_preinstalled:
+    if bundle_preinstalled:
         await _set_workspace_status(
             ctx.workspace_id,
             CloudWorkspaceStatus.materializing,
-            detail="Using prebuilt AnyHarness binary",
+            detail="Using prebuilt runtime bundle",
         )
         tracker.begin(ProvisionStep.stage_runtime_binary)
-        tracker.complete(skipped=True, reason="template_binary_present")
+        tracker.complete(skipped=True, reason="template_runtime_bundle_present")
 
         await _set_workspace_status(
             ctx.workspace_id,
@@ -496,16 +497,19 @@ async def _prepare_runtime_template(
     await _set_workspace_status(
         ctx.workspace_id,
         CloudWorkspaceStatus.materializing,
-        detail="Uploading AnyHarness binary",
+        detail="Uploading runtime bundle",
     )
     tracker.begin(ProvisionStep.stage_runtime_binary)
-    binary_path = await stage_runtime_binary(
+    binary_paths = await stage_runtime_bundle(
         provider,
         connected.sandbox,
         workspace_id=ctx.workspace_id,
         runtime_context=connected.runtime_context,
     )
-    tracker.complete(binary_path=str(binary_path), preinstalled=binary_preinstalled)
+    tracker.complete(
+        binary_paths={key: str(value) for key, value in binary_paths.items()},
+        preinstalled=bundle_preinstalled,
+    )
 
     await _set_workspace_status(
         ctx.workspace_id,
@@ -567,15 +571,15 @@ async def _prepare_runtime_template(
     #         tracker.complete(rust_version=installed_rust_version)
 
 
-async def _launch_worker_bridge(
+async def _launch_supervised_runtime_bundle(
     tracker: _StepTracker,
     ctx: CloudProvisionInput,
     provider: SandboxProvider,
     connected: ConnectedSandbox,
     *,
-    runtime_url: str,
+    runtime_env: dict[str, str],
     runtime_token: str,
-) -> None:
+) -> UUID:
     enrollment = await ensure_runtime_target_enrollment(
         runtime_environment_id=ctx.runtime_environment_id,
         user_id=ctx.user_id,
@@ -584,28 +588,19 @@ async def _launch_worker_bridge(
     if enrollment is None:
         raise RuntimeError("Cloud runtime environment disappeared before worker enrollment.")
 
-    tracker.begin(ProvisionStep.start_worker_process, target_id=str(enrollment.target_id))
-    if not await check_worker_binary_preinstalled(
-        provider,
-        connected.sandbox,
-        workspace_id=ctx.workspace_id,
-        runtime_context=connected.runtime_context,
-    ):
-        await stage_worker_binary(
-            provider,
-            connected.sandbox,
-            workspace_id=ctx.workspace_id,
-            runtime_context=connected.runtime_context,
-        )
+    tracker.begin(ProvisionStep.start_runtime_process, target_id=str(enrollment.target_id))
     config_path = worker_config_path(connected.runtime_context)
+    supervisor_path = supervisor_config_path(connected.runtime_context)
     await run_sandbox_command_logged(
         provider,
         connected.sandbox,
         workspace_id=ctx.workspace_id,
-        label="mkdir_worker_config_dir",
+        label="mkdir_runtime_bundle_config_dirs",
         command=(
             f"mkdir -p {shlex.quote(str(PurePosixPath(config_path).parent))} "
-            f"&& chmod 700 {shlex.quote(str(PurePosixPath(config_path).parent))}"
+            f"{shlex.quote(str(PurePosixPath(supervisor_path).parent))} "
+            f"&& chmod 700 {shlex.quote(str(PurePosixPath(config_path).parent))} "
+            f"{shlex.quote(str(PurePosixPath(supervisor_path).parent))}"
         ),
         runtime_context=connected.runtime_context,
         timeout_seconds=30,
@@ -616,17 +611,22 @@ async def _launch_worker_bridge(
         build_worker_config(
             cloud_base_url=_cloud_base_url(),
             enrollment_token=enrollment.enrollment_token,
-            anyharness_base_url=runtime_url,
+            anyharness_base_url=local_anyharness_base_url(provider),
             anyharness_bearer_token=runtime_token,
             runtime_context=connected.runtime_context,
         ),
+    )
+    await provider.write_file(
+        connected.sandbox,
+        supervisor_path,
+        build_supervisor_config(provider, connected.runtime_context, runtime_env),
     )
     await run_sandbox_command_logged(
         provider,
         connected.sandbox,
         workspace_id=ctx.workspace_id,
-        label="chmod_worker_config",
-        command=f"chmod 600 {shlex.quote(config_path)}",
+        label="chmod_runtime_bundle_configs",
+        command=f"chmod 600 {shlex.quote(config_path)} {shlex.quote(supervisor_path)}",
         runtime_context=connected.runtime_context,
         timeout_seconds=30,
     )
@@ -635,16 +635,55 @@ async def _launch_worker_bridge(
             provider,
             connected.sandbox,
             workspace_id=ctx.workspace_id,
-            label="launch_worker_nohup",
-            command=build_detached_worker_launch_command(connected.runtime_context),
+            label="launch_runtime_supervisor",
+            command=build_detached_supervisor_launch_command(connected.runtime_context),
             runtime_context=connected.runtime_context,
             cwd=connected.runtime_context.runtime_workdir,
             timeout_seconds=30,
             log_output_on_success=True,
         ),
-        "Proliferate worker launch failed",
+        "Cloud supervised runtime launch failed",
     )
     tracker.complete(target_id=str(enrollment.target_id))
+    return enrollment.target_id
+
+
+async def _wait_for_worker_target_online(
+    target_id: UUID,
+    *,
+    workspace_id: UUID,
+    total_attempts: int = 90,
+    delay_seconds: float = 0.5,
+) -> None:
+    last_status = "missing"
+    last_detail: str | None = None
+    last_anyharness_version: str | None = None
+    for _attempt in range(max(1, total_attempts)):
+        async with db_engine.async_session_factory() as db:
+            target = await targets_store.get_target_by_id(db, target_id)
+        if target is not None:
+            last_status = target.status
+            last_detail = target.status_record.status_detail if target.status_record else None
+            last_anyharness_version = (
+                target.current_versions.anyharness_version
+                if target.current_versions is not None
+                else None
+            )
+            if (
+                target.status == CloudTargetStatus.online.value
+                and target.status_record is not None
+                and target.status_record.worker_id is not None
+                and last_anyharness_version
+            ):
+                return
+        await asyncio.sleep(delay_seconds)
+
+    raise RuntimeError(
+        "Proliferate Worker did not report an online AnyHarness runtime "
+        f"for target {target_id}; last_status={last_status}; "
+        f"last_detail={last_detail or '<none>'}; "
+        f"last_anyharness_version={last_anyharness_version or '<none>'}."
+    )
 
 
 async def _launch_and_connect_runtime(
@@ -661,36 +700,14 @@ async def _launch_and_connect_runtime(
         repo_env_vars=ctx.repo_env_vars,
     )
 
-    tracker.begin(ProvisionStep.start_runtime_process)
-    await provider.write_file(
-        connected.sandbox,
-        runtime_launcher_path(connected.runtime_context),
-        build_runtime_launch_script(provider, connected.runtime_context, runtime_env),
-    )
-    await run_sandbox_command_logged(
+    target_id = await _launch_supervised_runtime_bundle(
+        tracker,
+        ctx,
         provider,
-        connected.sandbox,
-        workspace_id=ctx.workspace_id,
-        label="chmod_runtime_launcher",
-        command=f"chmod +x {runtime_launcher_path(connected.runtime_context)}",
-        runtime_context=connected.runtime_context,
-        timeout_seconds=30,
+        connected,
+        runtime_env=runtime_env,
+        runtime_token=runtime_token,
     )
-    assert_command_succeeded(
-        await run_sandbox_command_logged(
-            provider,
-            connected.sandbox,
-            workspace_id=ctx.workspace_id,
-            label="launch_runtime_nohup",
-            command=build_detached_runtime_launch_command(connected.runtime_context),
-            runtime_context=connected.runtime_context,
-            cwd=connected.runtime_context.runtime_workdir,
-            timeout_seconds=30,
-            log_output_on_success=True,
-        ),
-        "Cloud runtime launch failed",
-    )
-    tracker.complete()
 
     connected = ConnectedSandbox(
         handle=connected.handle,
@@ -730,6 +747,8 @@ async def _launch_and_connect_runtime(
             runtime_url=connected.endpoint.runtime_url,
             launcher_preview=debug_report.get("launcher"),
             log_preview=debug_report.get("log"),
+            supervisor_config_preview=debug_report.get("supervisor_config"),
+            supervisor_log_preview=debug_report.get("supervisor_log"),
             process_preview=debug_report.get("processes"),
             binary_preview=debug_report.get("binary"),
             workdir_preview=debug_report.get("workdir"),
@@ -741,14 +760,14 @@ async def _launch_and_connect_runtime(
         runtime_token,
         workspace_id=ctx.workspace_id,
     )
-    await _launch_worker_bridge(
-        tracker,
-        ctx,
-        provider,
-        connected,
-        runtime_url=connected.endpoint.runtime_url,
-        runtime_token=runtime_token,
+    await _set_workspace_status(
+        ctx.workspace_id,
+        CloudWorkspaceStatus.materializing,
+        detail="Waiting for Proliferate Worker enrollment",
     )
+    tracker.begin(ProvisionStep.start_worker_process, target_id=str(target_id))
+    await _wait_for_worker_target_online(target_id, workspace_id=ctx.workspace_id)
+    tracker.complete(target_id=str(target_id))
     await sync_cloud_worktree_policy_to_runtime(
         user_id=ctx.user_id,
         runtime_url=connected.endpoint.runtime_url,
@@ -799,14 +818,6 @@ async def _attach_workspace_to_running_runtime(
         connected.endpoint.runtime_url,
         runtime_token,
         workspace_id=ctx.workspace_id,
-    )
-    await _launch_worker_bridge(
-        tracker,
-        ctx,
-        provider,
-        connected,
-        runtime_url=connected.endpoint.runtime_url,
-        runtime_token=runtime_token,
     )
     await sync_cloud_worktree_policy_to_runtime(
         user_id=ctx.user_id,

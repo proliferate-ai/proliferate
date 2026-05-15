@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::{collections::BTreeMap, fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +11,8 @@ pub struct SupervisorConfig {
     pub worker_config: PathBuf,
     #[serde(default = "default_anyharness_args")]
     pub anyharness_args: Vec<String>,
+    #[serde(default)]
+    pub anyharness_env: BTreeMap<String, String>,
     #[serde(default = "default_restart_delay_seconds")]
     pub restart_delay_seconds: u64,
 }

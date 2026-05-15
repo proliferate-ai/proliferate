@@ -80,9 +80,33 @@ def runtime_launcher_path(runtime_context: SandboxRuntimeContext) -> str:
 
 
 def build_detached_runtime_launch_command(runtime_context: SandboxRuntimeContext) -> str:
+    """Legacy launcher used by pre-supervisor sandboxes during reconnect fallback."""
     return "sh -lc " + shlex.quote(
         f"nohup {shlex.quote(runtime_launcher_path(runtime_context))} "
         f"> {shlex.quote(runtime_log_path(runtime_context))} 2>&1 < /dev/null &"
+    )
+
+
+def _redacted_launcher_command(path: str) -> str:
+    return (
+        "awk 'BEGIN { IGNORECASE = 1 } "
+        "/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*"
+        "(TOKEN|KEY|SECRET|PASSWORD|AUTH|CREDENTIAL|COOKIE)[A-Za-z0-9_]*=/ "
+        "{ sub(/=.*/, \"=<redacted>\"); print; next } "
+        "{ print }' "
+        f"{path} || true"
+    )
+
+
+def _redacted_supervisor_config_command(path: str) -> str:
+    return (
+        "awk 'BEGIN { in_env = 0 } "
+        "/^\\[anyharness_env\\]/ { in_env = 1; print; next } "
+        "/^\\[/ { in_env = 0 } "
+        "in_env && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ "
+        "{ sub(/=.*/, \"= \\\"<redacted>\\\"\"); print; next } "
+        "{ print }' "
+        f"{path} || true"
     )
 
 
@@ -96,10 +120,19 @@ async def collect_runtime_debug_report(
     report: dict[str, str] = {}
     launcher_path = shlex.quote(runtime_launcher_path(runtime_context))
     log_path = shlex.quote(runtime_log_path(runtime_context))
+    supervisor_config_path = shlex.quote(
+        f"{runtime_context.home_dir}/.proliferate/supervisor/config.toml"
+    )
+    supervisor_log_path = shlex.quote(f"{runtime_context.home_dir}/proliferate-supervisor.log")
     commands = {
-        "launcher": f"sed -n '1,120p' {launcher_path} || true",
+        "launcher": _redacted_launcher_command(launcher_path),
         "log": f"tail -n 200 {log_path} || true",
-        "processes": "ps -ef | grep anyharness | grep -v grep || true",
+        "supervisor_config": _redacted_supervisor_config_command(supervisor_config_path),
+        "supervisor_log": f"tail -n 200 {supervisor_log_path} || true",
+        "processes": (
+            "ps -ef | grep -E 'anyharness|proliferate-worker|proliferate-supervisor' "
+            "| grep -v grep || true"
+        ),
         "binary": f"ls -l {shlex.quote(runtime_context.runtime_binary_path)} || true",
         "workdir": f"ls -la {shlex.quote(runtime_context.runtime_workdir)} || true",
     }

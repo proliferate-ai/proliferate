@@ -178,11 +178,11 @@ jobs:
         working-directory: .
 
       - name: Build self-hosted Linux runtime (x86_64)
-        run: cargo build --release --target x86_64-unknown-linux-musl -p anyharness
+        run: cargo build --release --target x86_64-unknown-linux-musl -p anyharness -p proliferate-worker -p proliferate-supervisor
         working-directory: .
 
       - name: Build self-hosted Linux runtime (aarch64)
-        run: cross build --release --target aarch64-unknown-linux-musl -p anyharness
+        run: cross build --release --target aarch64-unknown-linux-musl -p anyharness -p proliferate-worker -p proliferate-supervisor
         working-directory: .
 
       - name: Prepare release assets
@@ -190,9 +190,15 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts
           tar czf artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz \
-            -C target/x86_64-unknown-linux-musl/release anyharness
+            -C target/x86_64-unknown-linux-musl/release \
+            anyharness \
+            proliferate-worker \
+            proliferate-supervisor
           tar czf artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz \
-            -C target/aarch64-unknown-linux-musl/release anyharness
+            -C target/aarch64-unknown-linux-musl/release \
+            anyharness \
+            proliferate-worker \
+            proliferate-supervisor
           cp server/infra/self-hosted-aws/template.yaml \
             artifacts/proliferate-self-hosted-aws-template.yaml
           sha256sum artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz \

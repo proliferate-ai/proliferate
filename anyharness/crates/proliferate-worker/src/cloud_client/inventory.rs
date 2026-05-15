@@ -1,9 +1,13 @@
 use super::{InventoryPayload, InventoryRequest};
 
-pub fn report(payload: InventoryPayload) -> InventoryRequest {
+pub fn report(
+    payload: InventoryPayload,
+    status: impl Into<String>,
+    status_detail: Option<String>,
+) -> InventoryRequest {
     InventoryRequest {
         inventory: payload,
-        status: "online".to_string(),
-        status_detail: None,
+        status: status.into(),
+        status_detail,
     }
 }

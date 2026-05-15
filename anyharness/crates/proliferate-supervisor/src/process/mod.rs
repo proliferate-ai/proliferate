@@ -9,9 +9,14 @@ use crate::{config::SupervisorConfig, error::SupervisorError};
 
 pub async fn run(config: SupervisorConfig) -> Result<(), SupervisorError> {
     loop {
-        let mut anyharness = match child::spawn(
+        let anyharness_env = config
+            .anyharness_env
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()));
+        let mut anyharness = match child::spawn_with_env(
             config.anyharness_binary.to_string_lossy().as_ref(),
             &config.anyharness_args,
+            anyharness_env,
         ) {
             Ok(child) => child,
             Err(error) => {
@@ -30,12 +35,18 @@ pub async fn run(config: SupervisorConfig) -> Result<(), SupervisorError> {
             let mut worker = match child::spawn_with_env(
                 config.worker_binary.to_string_lossy().as_ref(),
                 &worker_args,
-                &[("PROLIFERATE_SUPERVISOR_VERSION", supervisor_version)],
+                [("PROLIFERATE_SUPERVISOR_VERSION", supervisor_version)],
             ) {
                 Ok(child) => child,
                 Err(error) => {
                     warn!(?error, "failed to start proliferate-worker");
-                    sleep(restart::backoff(config.restart_delay_seconds)).await;
+                    tokio::select! {
+                        result = anyharness.wait() => {
+                            warn!(?result, "anyharness exited while worker spawn was failing");
+                            break;
+                        }
+                        _ = sleep(restart::backoff(config.restart_delay_seconds)) => {}
+                    }
                     continue;
                 }
             };

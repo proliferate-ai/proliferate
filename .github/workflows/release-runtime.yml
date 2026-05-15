@@ -71,14 +71,20 @@ jobs:
         if: matrix.archive == 'tar.gz'
         run: |
           tar czf anyharness-${{ matrix.target }}.tar.gz \
-            -C target/${{ matrix.target }}/release anyharness
+            -C target/${{ matrix.target }}/release \
+            anyharness \
+            proliferate-worker \
+            proliferate-supervisor
 
       - name: Package (zip)
         if: matrix.archive == 'zip'
         shell: pwsh
         run: |
           Compress-Archive `
-            -Path "target/${{ matrix.target }}/release/anyharness.exe" `
+            -Path `
+              "target/${{ matrix.target }}/release/anyharness.exe", `
+              "target/${{ matrix.target }}/release/proliferate-worker.exe", `
+              "target/${{ matrix.target }}/release/proliferate-supervisor.exe" `
             -DestinationPath "anyharness-${{ matrix.target }}.zip"
 
       - name: Upload artifact

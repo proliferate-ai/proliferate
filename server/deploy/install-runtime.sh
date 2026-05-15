@@ -23,25 +23,37 @@ read_env_value() {
 }
 
 TARGET_PATH="$(read_env_value CLOUD_RUNTIME_SOURCE_BINARY_PATH)"
+WORKER_TARGET_PATH="$(read_env_value CLOUD_WORKER_SOURCE_BINARY_PATH)"
+SUPERVISOR_TARGET_PATH="$(read_env_value CLOUD_SUPERVISOR_SOURCE_BINARY_PATH)"
 RUNTIME_URL="$(read_env_value RUNTIME_BINARY_URL)"
 RUNTIME_SHA256="$(read_env_value RUNTIME_BINARY_SHA256)"
 RUNTIME_SHA256_URL="$(read_env_value RUNTIME_BINARY_SHA256_URL)"
 
-if [[ -z "$TARGET_PATH" ]]; then
+if [[ -z "$TARGET_PATH" && -z "$WORKER_TARGET_PATH" && -z "$SUPERVISOR_TARGET_PATH" ]]; then
   exit 0
 fi
 
-if [[ -x "$TARGET_PATH" && -z "$RUNTIME_URL" ]]; then
+needs_download=0
+for requested_path in "$TARGET_PATH" "$WORKER_TARGET_PATH" "$SUPERVISOR_TARGET_PATH"; do
+  if [[ -n "$requested_path" && ! -x "$requested_path" ]]; then
+    needs_download=1
+  fi
+done
+
+if [[ "$needs_download" == "0" && -z "$RUNTIME_URL" ]]; then
   exit 0
 fi
 
 if [[ -z "$RUNTIME_URL" ]]; then
-  echo "Missing runtime binary at $TARGET_PATH and RUNTIME_BINARY_URL is not set." >&2
+  echo "Missing one or more runtime bundle binaries and RUNTIME_BINARY_URL is not set." >&2
   exit 1
 fi
 
-TARGET_DIR="$(dirname "$TARGET_PATH")"
-mkdir -p "$TARGET_DIR"
+for requested_path in "$TARGET_PATH" "$WORKER_TARGET_PATH" "$SUPERVISOR_TARGET_PATH"; do
+  if [[ -n "$requested_path" ]]; then
+    mkdir -p "$(dirname "$requested_path")"
+  fi
+done
 
 temp_dir="$(mktemp -d)"
 trap 'rm -rf "$temp_dir"' EXIT
@@ -78,4 +90,20 @@ if [[ ! -f "$temp_dir/anyharness" ]]; then
   exit 1
 fi
 
-install -m 0755 "$temp_dir/anyharness" "$TARGET_PATH"
+install_binary_if_requested() {
+  local binary_name="$1"
+  local target_path="$2"
+
+  if [[ -z "$target_path" ]]; then
+    return 0
+  fi
+  if [[ ! -f "$temp_dir/$binary_name" ]]; then
+    echo "Downloaded runtime archive did not contain a $binary_name binary." >&2
+    exit 1
+  fi
+  install -m 0755 "$temp_dir/$binary_name" "$target_path"
+}
+
+install_binary_if_requested anyharness "$TARGET_PATH"
+install_binary_if_requested proliferate-worker "$WORKER_TARGET_PATH"
+install_binary_if_requested proliferate-supervisor "$SUPERVISOR_TARGET_PATH"

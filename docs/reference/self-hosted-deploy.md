@@ -67,12 +67,15 @@ Services:
 - `api`: Proliferate control plane
 
 If you want self-hosted cloud workspace provisioning, the control plane host
-also needs a Linux `anyharness` runtime binary on disk. The production Compose
-stack mounts `${PROLIFERATE_HOST_BIN_DIR:-/opt/proliferate/bin}` into the API
-container read-only so `CLOUD_RUNTIME_SOURCE_BINARY_PATH` can point at a host
-path like `/opt/proliferate/bin/anyharness-linux`. You can either place that
-binary there manually or set `RUNTIME_BINARY_URL` to a tarball that contains
-the binary and let `install-runtime.sh` fetch it during bootstrap and updates.
+also needs the Linux runtime bundle on disk: `anyharness`,
+`proliferate-worker`, and `proliferate-supervisor`. The production Compose stack
+mounts `${PROLIFERATE_HOST_BIN_DIR:-/opt/proliferate/bin}` into the API
+container read-only so `CLOUD_RUNTIME_SOURCE_BINARY_PATH`,
+`CLOUD_WORKER_SOURCE_BINARY_PATH`, and `CLOUD_SUPERVISOR_SOURCE_BINARY_PATH` can
+point at host paths such as `/opt/proliferate/bin/anyharness-linux`. You can
+either place those binaries there manually or set `RUNTIME_BINARY_URL` to a
+tarball that contains all three binaries and let `install-runtime.sh` fetch it
+during bootstrap and updates.
 
 Public traffic goes only to the control plane:
 

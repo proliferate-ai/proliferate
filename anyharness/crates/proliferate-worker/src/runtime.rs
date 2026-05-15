@@ -13,21 +13,28 @@ use crate::{
     sync, updates, versions,
 };
 
+struct RuntimeHealth {
+    status: &'static str,
+    status_detail: Option<String>,
+    anyharness_version: Option<String>,
+}
+
 pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     let store = WorkerStore::open(config.worker_db_path.clone())?;
     let cloud = CloudClient::new(&config)?;
     let identity = ensure_identity(&config, &store, &cloud).await?;
-    if let Some(base_url) = config.anyharness_base_url.clone() {
-        let client = AnyHarnessClient::new(base_url, config.anyharness_bearer_token.clone())?;
-        let healthy = anyharness_health::probe(&client).await;
-        info!(healthy, "anyharness health probe completed");
-    }
+    let health = runtime_health(&config).await;
+    info!(
+        healthy = health.status == "online",
+        status = health.status,
+        "anyharness health probe completed"
+    );
     info!(
         target_id = %identity.target_id,
         worker_id = %identity.worker_id,
         "proliferate worker started"
     );
-    if let Err(error) = upload_inventory(&cloud, &identity).await {
+    if let Err(error) = upload_inventory(&cloud, &identity, &health).await {
         warn!(?error, "worker inventory upload failed");
     }
     if let Err(error) = send_heartbeat(&config, &cloud, &identity).await {
@@ -105,8 +112,13 @@ async fn ensure_identity(
 async fn upload_inventory(
     cloud: &CloudClient,
     identity: &WorkerIdentity,
+    health: &RuntimeHealth,
 ) -> Result<(), WorkerError> {
-    let request = cloud_inventory::report(inventory::collect());
+    let request = cloud_inventory::report(
+        inventory::collect(),
+        health.status,
+        health.status_detail.clone(),
+    );
     cloud
         .upload_inventory(&identity.worker_token, &request)
         .await
@@ -117,10 +129,13 @@ async fn send_heartbeat(
     cloud: &CloudClient,
     identity: &WorkerIdentity,
 ) -> Result<(), WorkerError> {
-    let anyharness_version = anyharness_version(config).await;
+    let health = runtime_health(config).await;
+    let anyharness_version = health.anyharness_version.clone();
     let worker_version = versions::worker_version();
     let supervisor_version = versions::supervisor_version_or_configured(&config.supervisor_version);
-    let request = heartbeat::online(
+    let request = heartbeat::report(
+        health.status,
+        health.status_detail.clone(),
         worker_version.clone(),
         anyharness_version.clone(),
         supervisor_version.clone(),
@@ -146,8 +161,38 @@ async fn send_heartbeat(
     Ok(())
 }
 
+async fn runtime_health(config: &WorkerConfig) -> RuntimeHealth {
+    if config.anyharness_base_url.is_none() {
+        return RuntimeHealth {
+            status: "online",
+            status_detail: None,
+            anyharness_version: None,
+        };
+    }
+    match anyharness_version(config).await {
+        Some(version) => RuntimeHealth {
+            status: "online",
+            status_detail: None,
+            anyharness_version: Some(version),
+        },
+        None => RuntimeHealth {
+            status: "degraded",
+            status_detail: Some("AnyHarness health probe failed.".to_string()),
+            anyharness_version: None,
+        },
+    }
+}
+
 async fn anyharness_version(config: &WorkerConfig) -> Option<String> {
     let base_url = config.anyharness_base_url.clone()?;
     let client = AnyHarnessClient::new(base_url, config.anyharness_bearer_token.clone()).ok()?;
-    anyharness_health::version(&client).await
+    for attempt in 0..20 {
+        if let Some(version) = anyharness_health::version(&client).await {
+            return Some(version);
+        }
+        if attempt < 19 {
+            sleep(Duration::from_millis(500)).await;
+        }
+    }
+    None
 }

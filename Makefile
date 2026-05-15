@@ -442,12 +442,24 @@ test-server: server-db-ready
 	cd server && .venv/bin/python -m pytest tests/ -xvs
 
 cloud-runtime-build:
+	@if [ -n "$(CLOUD_RUNTIME_SOURCE_BINARY_PATH)" ] && \
+		[ -n "$(CLOUD_WORKER_SOURCE_BINARY_PATH)" ] && \
+		[ -n "$(CLOUD_SUPERVISOR_SOURCE_BINARY_PATH)" ]; then \
+		test -x "$(CLOUD_RUNTIME_SOURCE_BINARY_PATH)" || { echo "CLOUD_RUNTIME_SOURCE_BINARY_PATH is not executable: $(CLOUD_RUNTIME_SOURCE_BINARY_PATH)"; exit 1; }; \
+		test -x "$(CLOUD_WORKER_SOURCE_BINARY_PATH)" || { echo "CLOUD_WORKER_SOURCE_BINARY_PATH is not executable: $(CLOUD_WORKER_SOURCE_BINARY_PATH)"; exit 1; }; \
+		test -x "$(CLOUD_SUPERVISOR_SOURCE_BINARY_PATH)" || { echo "CLOUD_SUPERVISOR_SOURCE_BINARY_PATH is not executable: $(CLOUD_SUPERVISOR_SOURCE_BINARY_PATH)"; exit 1; }; \
+		echo "Using prebuilt cloud runtime bundle binaries."; \
+		exit 0; \
+	fi
 	@command -v cargo-zigbuild >/dev/null 2>&1 || { \
 		echo "cargo-zigbuild is required for cloud lifecycle tests on this machine."; \
-		echo "Install it with \`cargo install cargo-zigbuild\`, or set CLOUD_RUNTIME_SOURCE_BINARY_PATH to a prebuilt Linux AnyHarness binary."; \
+		echo "Install it with \`cargo install cargo-zigbuild\`, or set CLOUD_RUNTIME_SOURCE_BINARY_PATH, CLOUD_WORKER_SOURCE_BINARY_PATH, and CLOUD_SUPERVISOR_SOURCE_BINARY_PATH to prebuilt Linux binaries."; \
 		exit 1; \
 	}
-	$(CARGO) zigbuild --release --target x86_64-unknown-linux-musl -p anyharness
+	$(CARGO) zigbuild --release --target x86_64-unknown-linux-musl \
+		-p anyharness \
+		-p proliferate-worker \
+		-p proliferate-supervisor
 
 publish-cloud-template-env-local:
 	@test -f server/.env.local || { \
