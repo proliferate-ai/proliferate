@@ -75,6 +75,37 @@ describe("ReviewFeedbackSummaryView", () => {
     expect(screen.queryByText("Review feedback")).toBeNull();
   });
 
+  it("renders cancelled terminal reviewers without treating them as still reviewing", () => {
+    render(
+      <ReviewFeedbackSummaryView
+        assignments={[
+          assignment({
+            id: "security",
+            personaLabel: "Security reviewer",
+            pass: true,
+            reviewerSessionId: "reviewer-session-security",
+            sessionLinkId: "session-link-security",
+          }),
+          assignment({
+            id: "offline",
+            personaLabel: "Offline reviewer",
+            pass: false,
+            reviewerSessionId: null,
+            sessionLinkId: "session-link-offline",
+            status: "cancelled",
+          }),
+        ]}
+        reviewRunId="review-run"
+        target="PR"
+        onOpenCritique={vi.fn()}
+      />,
+    );
+
+    const receiptText = screen.getByTestId("review-terminal-receipt").textContent;
+    expect(receiptText).toContain("finished reviewing your PR: 1 cancelled, 1 approved.");
+    expect(receiptText).not.toContain("still reviewing");
+  });
+
   it("opens reviewer sessions from reviewer-name links", () => {
     const onOpenReviewerSession = vi.fn();
     render(

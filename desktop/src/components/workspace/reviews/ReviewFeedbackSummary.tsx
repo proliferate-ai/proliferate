@@ -222,12 +222,15 @@ function reviewTerminalSummary(assignments: ReviewAssignmentDetail[]): string | 
   const timedOutCount = assignments.filter((assignment) =>
     assignment.status === "timed_out"
   ).length;
+  const cancelledCount = assignments.filter((assignment) =>
+    assignment.status === "cancelled"
+  ).length;
   const failedCount = assignments.filter((assignment) =>
     assignment.status === "system_failed" || assignment.status === "retryable_failed"
   ).length;
   const pendingCount = Math.max(
     0,
-    reviewerCount - approvedCount - changesCount - timedOutCount - failedCount,
+    reviewerCount - approvedCount - changesCount - timedOutCount - cancelledCount - failedCount,
   );
 
   if (reviewerCount > 0 && approvedCount === reviewerCount) {
@@ -240,6 +243,7 @@ function reviewTerminalSummary(assignments: ReviewAssignmentDetail[]): string | 
       : null,
     failedCount > 0 ? `${failedCount} failed` : null,
     timedOutCount > 0 ? `${timedOutCount} timed out` : null,
+    cancelledCount > 0 ? `${cancelledCount} cancelled` : null,
     approvedCount > 0 ? `${approvedCount} approved` : null,
     pendingCount > 0 ? `${pendingCount} still reviewing` : null,
   ].filter((part): part is string => part !== null);

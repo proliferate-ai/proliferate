@@ -6,7 +6,6 @@ import {
   ArrowUp,
   Check,
   CircleAlert,
-  RefreshCw,
   Spinner,
 } from "@/components/ui/icons";
 import {
@@ -24,7 +23,7 @@ const PHASE_LABELS: Record<UpdatePreviewPhase, string> = {
 };
 
 const PHASE_ICONS: Record<UpdatePreviewPhase, ComponentType<{ className?: string }>> = {
-  checking: RefreshCw,
+  checking: Spinner,
   available: ArrowUp,
   downloading: Spinner,
   ready: Check,
@@ -117,7 +116,6 @@ function PreviewSection({
 function UpdateWorkspaceBanner({ state }: { state: UpdatePreviewState }) {
   const Icon = PHASE_ICONS[state.phase];
   const isBusy = state.phase === "checking" || state.phase === "downloading";
-  const iconClassName = `size-4 ${state.phase === "checking" ? "animate-spin" : ""}`;
   const primaryDisabled = isBusy;
 
   return (
@@ -126,7 +124,7 @@ function UpdateWorkspaceBanner({ state }: { state: UpdatePreviewState }) {
         <div
           className={`flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground/5 ${PHASE_ICON_CLASSNAMES[state.phase]}`}
         >
-          <Icon className={iconClassName} />
+          <Icon className="size-4" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
@@ -169,7 +167,6 @@ function UpdateWorkspaceBanner({ state }: { state: UpdatePreviewState }) {
 function UpdateSettingsStatusCard({ state }: { state: UpdatePreviewState }) {
   const Icon = PHASE_ICONS[state.phase];
   const isBusy = state.phase === "checking" || state.phase === "downloading";
-  const iconClassName = `size-5 ${state.phase === "checking" ? "animate-spin" : ""}`;
   const primaryDisabled = isBusy;
 
   return (
@@ -179,7 +176,7 @@ function UpdateSettingsStatusCard({ state }: { state: UpdatePreviewState }) {
           <div
             className={`flex size-10 shrink-0 items-center justify-center rounded-lg bg-foreground/5 ${PHASE_ICON_CLASSNAMES[state.phase]}`}
           >
-            <Icon className={iconClassName} />
+            <Icon className="size-5" />
           </div>
           <Badge tone={PHASE_BADGE_TONES[state.phase]}>
             {PHASE_LABELS[state.phase]}

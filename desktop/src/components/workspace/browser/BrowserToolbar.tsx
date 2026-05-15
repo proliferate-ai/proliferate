@@ -7,6 +7,7 @@ import {
   ExternalLink,
   Globe,
   RefreshCw,
+  Spinner,
 } from "@/components/ui/icons";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel-model";
@@ -47,7 +48,9 @@ export function BrowserToolbar({
               }
             }}
           >
-            <RefreshCw className={`size-3.5 ${activeStatus === "loading" ? "animate-spin" : ""}`} />
+            {activeStatus === "loading"
+              ? <Spinner className="size-3.5" />
+              : <RefreshCw className="size-3.5" />}
           </IconButton>
         </Tooltip>
         <div className="mx-0.5 h-4 w-px shrink-0 bg-sidebar-border" aria-hidden="true" />
