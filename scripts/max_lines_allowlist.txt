@@ -28,6 +28,7 @@ anyharness/crates/anyharness-lib/src/live/sessions/actor/interactions/handle.rs
 anyharness/crates/anyharness-lib/src/workspaces/service.rs
 anyharness/crates/anyharness-lib/src/workspaces/runtime.rs
 anyharness/crates/anyharness-lib/src/workspaces/store.rs
+anyharness/crates/proliferate-worker/src/commands/dispatcher.rs
 desktop/src/components/workspace/chat/input/ComposerModelConfigSelector.tsx
 desktop/src/components/workspace/shell/right-panel/RightPanel.test.tsx
 desktop/src/components/workspace/shell/right-panel/RightPanel.tsx
@@ -49,8 +50,11 @@ server/proliferate/db/store/billing.py
 server/proliferate/db/store/cloud_mobility.py
 server/proliferate/db/store/cloud_sync/events.py
 server/tests/unit/test_cloud_runtime_provision.py
+server/tests/integration/test_cloud_commands_api.py
 server/proliferate/server/billing/service.py
+server/proliferate/server/cloud/runtime/credential_freshness.py
 server/proliferate/db/store/cloud_workspaces.py
+server/proliferate/server/cloud/worker/service.py
 server/proliferate/server/cloud/runtime/bootstrap.py
 server/proliferate/server/cloud/runtime/provision.py
 server/proliferate/server/cloud/workspaces/service.py

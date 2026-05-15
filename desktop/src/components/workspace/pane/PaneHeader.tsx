@@ -29,14 +29,12 @@ export function PaneHeader({
 
 interface PaneIconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
-  tooltip?: string;
   active?: boolean;
   children: ReactNode;
 }
 
 export function PaneIconButton({
   label,
-  tooltip: _tooltip,
   active = false,
   className = "",
   children,

@@ -196,10 +196,44 @@ describe("FileEditorView", () => {
     expect(screen.queryByText("Save")).toBeNull();
     expect(container.querySelector("[data-file-source-view]")?.getAttribute("data-word-wrap"))
       .toBe("false");
+    expect(container.querySelector("[data-file-source-virtualized]")).toBeTruthy();
     expect(container.querySelector(".file-source-gutter-rail")).toBeTruthy();
     expect(container.querySelector(".file-source-scroll")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("File viewer options"));
     expect(screen.getByText("Enable word wrap")).toBeTruthy();
+  });
+
+  it("virtualizes large source files instead of mounting every line", () => {
+    const target = fileViewerTarget("package.json");
+    const targetKey = viewerTargetKey(target);
+    const lines = Array.from({ length: 200_000 }, (_, index) =>
+      index === 0 ? "unique first line" : `line ${index % 10}`
+    );
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: lines.join("\n"),
+        isText: true,
+        path: "package.json",
+        sizeBytes: 5000,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    const { container } = render(createElement(FileEditorView, {
+      filePath: "package.json",
+      targetKey,
+    }));
+
+    expect(screen.getByText("unique first line")).toBeTruthy();
+    expect(container.querySelector(".file-source-gutter-rail")).toBeTruthy();
+    expect(container.querySelectorAll("[data-source-line]").length).toBeLessThan(lines.length);
   });
 
   it("overlays the file browser without replacing the source view", () => {
