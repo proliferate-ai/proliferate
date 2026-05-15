@@ -17,6 +17,7 @@ use crate::domains::plans::service::{PlanDecisionError, PlanService};
 use crate::live::sessions::actor::command::{
     InteractionResolution, ResolveInteractionCommandError,
 };
+use crate::live::sessions::actor::interactions::plan_links::link_plan_to_pending_permission;
 use crate::live::sessions::handle::LiveSessionHandle;
 pub(in crate::live::sessions::actor) async fn handle_resolve_interaction(
     handle: &Arc<LiveSessionHandle>,
@@ -80,7 +81,7 @@ pub(in crate::live::sessions::actor) async fn handle_apply_plan_decision(
     expected_version: i64,
     decision: ProposedPlanDecisionState,
 ) -> Result<PlanRecord, PlanDecisionError> {
-    let (mut plan, native_resolution) = {
+    let (mut plan, mut native_resolution) = {
         let mut sink = event_sink.lock().await;
         let context = sink.plan_event_context();
         let (plan, envelopes) = plan_service.update_decision_with_context(
@@ -93,6 +94,16 @@ pub(in crate::live::sessions::actor) async fn handle_apply_plan_decision(
         let native_resolution = plan_decision_native_resolution(plan_service, &plan.id, &decision);
         (plan, native_resolution)
     };
+
+    if matches!(
+        decision,
+        ProposedPlanDecisionState::Approved | ProposedPlanDecisionState::Rejected
+    ) {
+        let relinked = link_plan_to_pending_permission(handle, plan_service, &plan).await;
+        if relinked || native_resolution.is_none() {
+            native_resolution = plan_decision_native_resolution(plan_service, &plan.id, &decision);
+        }
+    }
 
     if let Some((request_id, resolution)) = native_resolution {
         let resolution_result = handle_resolve_interaction(
@@ -148,19 +159,22 @@ pub(in crate::live::sessions::actor) fn plan_decision_native_resolution(
     let mappings: serde_json::Value = serde_json::from_str(&link.option_mappings_json).ok()?;
 
     match decision {
-        // Product approval means "accept this plan document", not "select the
-        // agent's native implementation option." Dismiss the parked native
-        // permission so the broker and pending-interaction state do not leak;
-        // implementation remains a separate explicit action.
+        // For native plan-exit interactions, product approval means the user
+        // accepted the plan and wants the same agent to leave plan mode.
         ProposedPlanDecisionState::Approved => {
-            Some((link.request_id, InteractionResolution::Dismissed))
+            let option_id = option_mapping(&mappings, "approve");
+            match option_id {
+                Some(option_id) => Some((
+                    link.request_id,
+                    InteractionResolution::Selected {
+                        option_id: option_id.to_string(),
+                    },
+                )),
+                None => Some((link.request_id, InteractionResolution::Dismissed)),
+            }
         }
         ProposedPlanDecisionState::Rejected => {
-            let option_id = mappings
-                .get("reject")
-                .and_then(serde_json::Value::as_str)
-                .map(str::trim)
-                .filter(|option_id| !option_id.is_empty());
+            let option_id = option_mapping(&mappings, "reject");
             match option_id {
                 Some(option_id) => Some((
                     link.request_id,
@@ -173,6 +187,14 @@ pub(in crate::live::sessions::actor) fn plan_decision_native_resolution(
         }
         _ => None,
     }
+}
+
+fn option_mapping<'a>(mappings: &'a serde_json::Value, key: &str) -> Option<&'a str> {
+    mappings
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|option_id| !option_id.is_empty())
 }
 
 pub(in crate::live::sessions::actor) fn broker_outcome_to_interaction_event(
@@ -264,5 +286,128 @@ pub(in crate::live::sessions::actor) fn map_resolve_interaction_error(
         ResolveInteractionError::NotMcpUrlElicitation => {
             ResolveInteractionCommandError::NotMcpUrlElicitation
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyharness_contract::v1::{ProposedPlanDecisionState, ProposedPlanNativeResolutionState};
+    use serde_json::json;
+
+    use super::*;
+    use crate::domains::plans::model::{NewPlan, PlanCreateOutcome};
+    use crate::domains::plans::service::{PlanEventContext, PlanService};
+    use crate::domains::plans::store::PlanStore;
+    use crate::persistence::Db;
+
+    fn plan_service_with_link(option_mappings: serde_json::Value) -> (PlanService, String) {
+        let db = Db::open_in_memory().expect("open db");
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO workspaces (
+                    id, kind, path, source_repo_root_path, created_at, updated_at
+                 ) VALUES ('workspace-1', 'local', '/tmp/workspace-1', '/tmp/workspace-1', 'now', 'now')",
+                [],
+            )?;
+            conn.execute(
+                "INSERT INTO sessions (
+                    id, workspace_id, agent_kind, status, created_at, updated_at
+                 ) VALUES ('session-1', 'workspace-1', 'claude', 'idle', 'now', 'now')",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("seed db");
+        let service = PlanService::new(PlanStore::new(db));
+        let created = service
+            .create_completed_plan(
+                NewPlan {
+                    workspace_id: "workspace-1".to_string(),
+                    session_id: "session-1".to_string(),
+                    title: "Plan".to_string(),
+                    body_markdown: "Do it.".to_string(),
+                    source_agent_kind: "claude".to_string(),
+                    source_kind: "claude_exit_plan_mode".to_string(),
+                    source_turn_id: Some("turn-1".to_string()),
+                    source_item_id: Some("tool-1".to_string()),
+                    source_tool_call_id: Some("tool-1".to_string()),
+                },
+                PlanEventContext {
+                    session_id: "session-1".to_string(),
+                    source_agent_kind: "claude".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    next_seq: 1,
+                },
+            )
+            .expect("create plan");
+        assert_eq!(created.outcome, PlanCreateOutcome::Created);
+        assert_eq!(
+            created.plan.native_resolution_state,
+            ProposedPlanNativeResolutionState::PendingLink,
+        );
+        service
+            .register_interaction_link(&created.plan, "request-1", "tool-1", option_mappings)
+            .expect("register link");
+        (service, created.plan.id)
+    }
+
+    #[test]
+    fn approved_native_plan_selects_approve_option() {
+        let (service, plan_id) = plan_service_with_link(json!({
+            "approve": "allow-once",
+            "reject": "reject-once",
+        }));
+
+        assert_eq!(
+            plan_decision_native_resolution(
+                &service,
+                &plan_id,
+                &ProposedPlanDecisionState::Approved,
+            ),
+            Some((
+                "request-1".to_string(),
+                InteractionResolution::Selected {
+                    option_id: "allow-once".to_string(),
+                },
+            )),
+        );
+    }
+
+    #[test]
+    fn rejected_native_plan_selects_reject_option() {
+        let (service, plan_id) = plan_service_with_link(json!({
+            "approve": "allow-once",
+            "reject": "reject-once",
+        }));
+
+        assert_eq!(
+            plan_decision_native_resolution(
+                &service,
+                &plan_id,
+                &ProposedPlanDecisionState::Rejected,
+            ),
+            Some((
+                "request-1".to_string(),
+                InteractionResolution::Selected {
+                    option_id: "reject-once".to_string(),
+                },
+            )),
+        );
+    }
+
+    #[test]
+    fn approved_native_plan_dismisses_when_no_approve_option_exists() {
+        let (service, plan_id) = plan_service_with_link(json!({
+            "reject": "reject-once",
+        }));
+
+        assert_eq!(
+            plan_decision_native_resolution(
+                &service,
+                &plan_id,
+                &ProposedPlanDecisionState::Approved,
+            ),
+            Some(("request-1".to_string(), InteractionResolution::Dismissed)),
+        );
     }
 }

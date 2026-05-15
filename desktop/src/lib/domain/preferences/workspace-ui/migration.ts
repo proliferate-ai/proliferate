@@ -60,6 +60,14 @@ export function migrateWorkspaceUiState(
     state.workspaceLastInteracted = {};
     didMigrate = true;
   }
+  if (!isStringRecord(state.sessionLastInteracted)) {
+    state.sessionLastInteracted = WORKSPACE_UI_DEFAULTS.sessionLastInteracted;
+    didMigrate = true;
+  }
+  if (!isStringRecord(state.sessionLastViewedAt)) {
+    state.sessionLastViewedAt = WORKSPACE_UI_DEFAULTS.sessionLastViewedAt;
+    didMigrate = true;
+  }
   if (previousMigrationVersion < WORKSPACE_UI_MIGRATION_VERSION) {
     state.migrationVersion = WORKSPACE_UI_MIGRATION_VERSION;
     didMigrate = true;

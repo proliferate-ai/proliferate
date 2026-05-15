@@ -9,6 +9,8 @@ type WorkspaceUiActivityActions = Pick<
   | "markSessionErrorViewed"
   | "clearViewedSessionErrors"
   | "updateWorkspaceLastInteracted"
+  | "updateSessionLastInteracted"
+  | "markSessionViewedAt"
 >;
 
 export function createWorkspaceUiActivityActions(
@@ -111,6 +113,34 @@ export function createWorkspaceUiActivityActions(
           ...get().workspaceLastInteracted,
           [workspaceId]: timestamp,
         },
+      });
+    },
+
+    updateSessionLastInteracted: (sessionId, timestamp) => {
+      const current = get().sessionLastInteracted[sessionId];
+      if (current && new Date(current).getTime() >= new Date(timestamp).getTime()) {
+        return;
+      }
+      set({
+        sessionLastInteracted: {
+          ...get().sessionLastInteracted,
+          [sessionId]: timestamp,
+        },
+      });
+    },
+
+    markSessionViewedAt: (sessionId, timestamp) => {
+      set((state) => {
+        const current = state.sessionLastViewedAt[sessionId];
+        if (current && new Date(current).getTime() >= new Date(timestamp).getTime()) {
+          return state;
+        }
+        return {
+          sessionLastViewedAt: {
+            ...state.sessionLastViewedAt,
+            [sessionId]: timestamp,
+          },
+        };
       });
     },
   };

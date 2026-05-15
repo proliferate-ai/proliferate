@@ -131,7 +131,7 @@ export function planBatchedStreamSideEffects(input: {
     ) {
       invalidateWorkspaceCollections = true;
     }
-    if (input.workspaceId && shouldTrackWorkspaceWorkActivity(event.type)) {
+    if (shouldTrackWorkspaceWorkActivity(event.type)) {
       lastActivityTimestamp = envelope.timestamp;
     }
     if (event.type === "turn_ended" || event.type === "error") {

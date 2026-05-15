@@ -227,7 +227,14 @@ export function resolveFallbackWorkspaceShellTab(args: {
     return remaining[0] ?? null;
   }
 
-  for (let index = anchorIndex; index >= 0; index -= 1) {
+  for (let index = anchorIndex + 1; index < args.tabs.length; index += 1) {
+    const candidate = args.tabs[index];
+    if (candidate && !closingKeys.has(getWorkspaceShellTabKey(candidate))) {
+      return candidate;
+    }
+  }
+
+  for (let index = anchorIndex - 1; index >= 0; index -= 1) {
     const candidate = args.tabs[index];
     if (candidate && !closingKeys.has(getWorkspaceShellTabKey(candidate))) {
       return candidate;

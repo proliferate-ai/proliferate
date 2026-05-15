@@ -85,7 +85,17 @@ describe("workspace shell tab ordering", () => {
     ]);
   });
 
-  it("chooses a nearby fallback after closing active tabs", () => {
+  it("chooses the tab to the right before falling back left after closing active tabs", () => {
+    const middle = tabs[1];
+
+    expect(resolveFallbackWorkspaceShellTab({
+      tabs,
+      activeTab: middle,
+      closingTabs: [middle],
+    })).toEqual({ kind: "viewer", target: fileViewerTarget("src/a.ts") });
+  });
+
+  it("falls back left when closing the last active tab", () => {
     const active = tabs[2];
 
     expect(resolveFallbackWorkspaceShellTab({

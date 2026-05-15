@@ -3,12 +3,14 @@ import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Check, ChevronDown } from "@/components/ui/icons";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
+import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
 
 export interface PlanHandoffModePickerProps {
   options: ConfiguredSessionControlValue[];
   value: string | undefined;
   disabled?: boolean;
+  showHelperText?: boolean;
   onChange: (value: string) => void;
 }
 
@@ -16,6 +18,7 @@ export function PlanHandoffModePicker({
   options,
   value,
   disabled = false,
+  showHelperText = true,
   onChange,
 }: PlanHandoffModePickerProps) {
   if (options.length === 0) {
@@ -29,20 +32,15 @@ export function PlanHandoffModePicker({
     <div className="flex min-w-0 flex-col gap-1.5">
       <PopoverButton
         trigger={(
-          <Button
+          <ComposerControlButton
             type="button"
-            variant="outline"
-            size="sm"
             disabled={disabled}
-            className="max-w-full justify-between rounded-lg px-2.5"
+            icon={<SessionControlIcon icon={selected?.icon} className="size-3.5 shrink-0 text-muted-foreground" />}
+            label={selectedLabel}
+            trailing={<ChevronDown className="size-3 shrink-0 text-muted-foreground" />}
+            className="max-w-full"
             aria-label={`Handoff mode: ${selectedLabel}`}
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <SessionControlIcon icon={selected?.icon} className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate">{selectedLabel}</span>
-            </span>
-            <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
-          </Button>
+          />
         )}
         align="start"
         side="top"
@@ -83,9 +81,11 @@ export function PlanHandoffModePicker({
           </ComposerPopoverSurface>
         )}
       </PopoverButton>
-      <span className="text-xs text-muted-foreground">
-        Applies to this handoff only.
-      </span>
+      {showHelperText && (
+        <span className="text-xs text-muted-foreground">
+          Applies to this handoff only.
+        </span>
+      )}
     </div>
   );
 }

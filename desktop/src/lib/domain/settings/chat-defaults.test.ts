@@ -91,14 +91,14 @@ describe("settings chat defaults", () => {
     const rows = buildSettingsChatDefaultRows({
       modelRegistries: [
         registry({
-          kind: "cursor",
-          defaultModelId: "cursor-default",
-          models: [model("cursor-default", "Cursor Default", true)],
+          kind: "custom",
+          defaultModelId: "custom-default",
+          models: [model("custom-default", "Custom Default", true)],
         }),
       ],
-      readyAgentKinds: new Set(["cursor"]),
+      readyAgentKinds: new Set(["custom"]),
       preferences: {
-        defaultChatAgentKind: "cursor",
+        defaultChatAgentKind: "custom",
         defaultChatModelIdByAgentKind: {},
         defaultSessionModeByAgentKind: {},
       },

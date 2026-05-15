@@ -240,7 +240,7 @@ describe("MainSidebar support mount boundary", () => {
     expect(supportDialogRender).not.toHaveBeenCalled();
     expect(screen.queryByTestId("support-dialog")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Support" }));
+    fireEvent.click(screen.getByRole("button", { name: /Support/ }));
 
     expect(supportDialogRender).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("support-dialog")).toBeTruthy();

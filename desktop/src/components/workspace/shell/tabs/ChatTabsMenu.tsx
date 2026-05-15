@@ -38,7 +38,7 @@ export function ChatTabsMenu({
   rows: HeaderChatMenuEntry[];
   childrenByParentSessionId: Map<string, HeaderSubagentChildRow[]>;
   renderIcon: (row: Pick<HeaderChatMenuEntry, "agentKind" | "viewState">) => ReactNode;
-  renderStatus: (row: Pick<HeaderChatMenuEntry, "viewState" | "isActive">) => ReactNode;
+  renderStatus: (row: Pick<HeaderChatMenuEntry, "viewState" | "isActive" | "hasUnreadActivity">) => ReactNode;
   onOpenSession: (sessionId: string) => void;
 }) {
   const activeAnchorRef = useRef<HTMLElement | null>(null);

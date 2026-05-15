@@ -52,6 +52,8 @@ async function readWorkspaceUiState(): Promise<{
       workspaceLastInteracted:
         (await readPersistedValue<Record<string, string>>("workspaceLastInteracted"))
         ?? WORKSPACE_UI_DEFAULTS.workspaceLastInteracted,
+      sessionLastInteracted: WORKSPACE_UI_DEFAULTS.sessionLastInteracted,
+      sessionLastViewedAt: WORKSPACE_UI_DEFAULTS.sessionLastViewedAt,
       collapsedRepoGroups: WORKSPACE_UI_DEFAULTS.collapsedRepoGroups,
       showArchived: WORKSPACE_UI_DEFAULTS.showArchived,
       threadsCollapsed: WORKSPACE_UI_DEFAULTS.threadsCollapsed,

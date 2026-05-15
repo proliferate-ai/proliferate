@@ -315,6 +315,9 @@ impl PlanService {
                         return Err(PlanDecisionTxError::StaleVersion);
                     }
                     if plan.decision_state != ProposedPlanDecisionState::Pending {
+                        if is_retryable_native_decision(&plan, &decision) {
+                            return Ok((plan, Vec::new()));
+                        }
                         return Err(PlanDecisionTxError::TerminalState);
                     }
                     let native_state = initial_native_state_for_decision(
@@ -501,7 +504,22 @@ fn initial_native_state_for_decision(
     live_session: bool,
 ) -> ProposedPlanNativeResolutionState {
     if *decision == ProposedPlanDecisionState::Approved {
-        return ProposedPlanNativeResolutionState::Finalized;
+        if has_link {
+            return if live_session {
+                ProposedPlanNativeResolutionState::PendingResolution
+            } else {
+                ProposedPlanNativeResolutionState::Failed
+            };
+        }
+        return if plan.source_tool_call_id.is_some() {
+            if live_session {
+                ProposedPlanNativeResolutionState::PendingLink
+            } else {
+                ProposedPlanNativeResolutionState::Failed
+            }
+        } else {
+            ProposedPlanNativeResolutionState::Finalized
+        };
     }
     if has_link {
         if live_session {
@@ -514,6 +532,16 @@ fn initial_native_state_for_decision(
     } else {
         ProposedPlanNativeResolutionState::Finalized
     }
+}
+
+fn is_retryable_native_decision(plan: &PlanRecord, decision: &ProposedPlanDecisionState) -> bool {
+    plan.source_tool_call_id.is_some()
+        && plan.decision_state == *decision
+        && matches!(
+            plan.native_resolution_state,
+            ProposedPlanNativeResolutionState::PendingLink
+                | ProposedPlanNativeResolutionState::Failed
+        )
 }
 
 pub fn decision_envelope(

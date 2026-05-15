@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildHeaderChatTabs,
   buildHeaderClosedChatTabs,
+  buildHeaderDisplayShellRows,
+  hasUnreadSessionActivity,
 } from "./workspace-header-tabs-view-model-derivation";
 import type {
   HeaderHierarchyChildRow,
@@ -69,6 +71,74 @@ describe("workspace header tab view model derivation", () => {
       workspaceId: "managed-workspace",
       parentSessionId: "parent",
     });
+  });
+
+  it("marks inactive tabs with unread session activity", () => {
+    const tabs = buildHeaderChatTabs({
+      groupedTabs: [{
+        sessionId: "session-1",
+        parentSessionId: null,
+        groupRootSessionId: "session-1",
+        isChild: false,
+      }],
+      rowsBySessionId: new Map(),
+      childrenByParentSessionId: new Map(),
+      resolvedSessionIds: new Set(["session-1"]),
+      knownSessions: new Map<string, KnownHeaderSession>([[
+        "session-1",
+        placeholder("session-1"),
+      ]]),
+      manualGroupByTopLevelSessionId: new Map(),
+      sessionLastInteracted: {
+        "session-1": "2026-04-04T00:00:20.000Z",
+      },
+      sessionLastViewedAt: {
+        "session-1": "2026-04-04T00:00:10.000Z",
+      },
+    });
+
+    expect(tabs[0]?.hasUnreadActivity).toBe(true);
+  });
+
+  it("clears unread activity on the highlighted chat tab", () => {
+    const tab = {
+      ...baseHeaderTab("session-1"),
+      hasUnreadActivity: true,
+    };
+
+    const rows = buildHeaderDisplayShellRows({
+      highlightedChatSessionId: "session-1",
+      shellRows: [{
+        kind: "chat",
+        row: {
+          kind: "tab",
+          tab,
+        },
+        shellKeys: ["chat:session-1"],
+      }],
+    });
+
+    expect(rows[0]?.kind).toBe("chat");
+    if (rows[0]?.kind !== "chat" || rows[0].row.kind !== "tab") {
+      throw new Error("expected chat tab row");
+    }
+    expect(rows[0].row.tab.isActive).toBe(true);
+    expect(rows[0].row.tab.hasUnreadActivity).toBe(false);
+  });
+});
+
+describe("hasUnreadSessionActivity", () => {
+  it("compares session activity against the session read timestamp", () => {
+    expect(hasUnreadSessionActivity({
+      sessionId: "session-1",
+      sessionLastInteracted: { "session-1": "2026-04-04T00:00:11.000Z" },
+      sessionLastViewedAt: { "session-1": "2026-04-04T00:00:10.000Z" },
+    })).toBe(true);
+    expect(hasUnreadSessionActivity({
+      sessionId: "session-1",
+      sessionLastInteracted: { "session-1": "2026-04-04T00:00:10.000Z" },
+      sessionLastViewedAt: { "session-1": "2026-04-04T00:00:10.000Z" },
+    })).toBe(false);
   });
 });
 
@@ -139,5 +209,30 @@ function closedChildRow(sessionId: string, parentSessionId: string): HeaderHiera
     statusLabel: "Working",
     wakeScheduled: false,
     isActive: false,
+  };
+}
+
+function baseHeaderTab(sessionId: string) {
+  return {
+    id: sessionId,
+    sessionId,
+    parentSessionId: null,
+    groupRootSessionId: sessionId,
+    isChild: false,
+    title: sessionId,
+    agentKind: "claude",
+    viewState: "idle" as const,
+    canFork: false,
+    isReviewAgentChild: false,
+    source: null,
+    sessionLinkId: null,
+    workspaceId: "workspace",
+    isActive: false,
+    hasUnreadActivity: false,
+    groupColor: null,
+    visualGroupId: null,
+    manualGroupId: null,
+    isHierarchyResolved: true,
+    delegatedIndicators: [],
   };
 }

@@ -68,14 +68,14 @@ describe("shortcut matching", () => {
     });
 
     expect(matchShortcutDef(
-      SHORTCUTS.goHome,
+      SHORTCUTS.nextTabAngle,
       {
-        key: "<",
-        code: "Comma",
+        key: ">",
+        code: "Period",
         metaKey: true,
         ctrlKey: false,
         shiftKey: true,
-        altKey: false,
+        altKey: true,
       } as KeyboardEvent,
     )).toEqual({});
   });

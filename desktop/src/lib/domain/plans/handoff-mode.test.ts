@@ -25,6 +25,7 @@ describe("plan handoff mode helpers", () => {
     expect(listPlanHandoffModeOptions("claude").map((option) => option.value)).toEqual([
       "default",
       "acceptEdits",
+      "auto",
       "dontAsk",
       "bypassPermissions",
     ]);

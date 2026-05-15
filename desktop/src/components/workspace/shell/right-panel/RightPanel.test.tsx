@@ -361,7 +361,7 @@ describe("RightPanel viewer routing", () => {
 });
 
 describe("RightPanel tab shortcuts", () => {
-  it("uses primary-number shortcuts after clicking non-focusable panel content", async () => {
+  it("does not intercept primary-number shell shortcuts after clicking panel content", async () => {
     const { container } = render(<RightPanelHarness isWorkspaceReady />);
     const root = container.querySelector("[data-right-panel-root='true']");
     if (!(root instanceof HTMLElement)) {
@@ -373,10 +373,12 @@ describe("RightPanel tab shortcuts", () => {
 
     fireEvent.keyDown(window, primaryDigitEvent(3));
 
-    await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
+    await Promise.resolve();
+
+    expect(screen.queryByTestId("git-panel")).toBeNull();
   });
 
-  it("uses primary-number shortcuts from right-panel text inputs", async () => {
+  it("does not intercept primary-number shell shortcuts from right-panel text inputs", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
     fireEvent.click(screen.getByRole("tab", { name: "Files" }));
     const input = screen.getByTestId("files-panel-input");
@@ -386,7 +388,9 @@ describe("RightPanel tab shortcuts", () => {
 
     fireEvent.keyDown(window, primaryDigitEvent(3));
 
-    await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
+    await Promise.resolve();
+
+    expect(screen.queryByTestId("git-panel")).toBeNull();
   });
 });
 

@@ -154,3 +154,32 @@ export function resolveUiFontScale(value: unknown): UiFontScale {
 export function resolveReadableCodeFontScale(value: unknown): ReadableCodeFontScale {
   return READABLE_CODE_FONT_SCALES[resolveAppearanceSizeId(value)];
 }
+
+export function stepAppearanceSizeId(
+  value: unknown,
+  delta: -1 | 1,
+): AppearanceSizeId {
+  const current = resolveAppearanceSizeId(value);
+  const index = APPEARANCE_SIZE_IDS.indexOf(current);
+  const nextIndex = Math.max(
+    0,
+    Math.min(APPEARANCE_SIZE_IDS.length - 1, index + delta),
+  );
+  return APPEARANCE_SIZE_IDS[nextIndex] ?? DEFAULT_APPEARANCE_SIZE_ID;
+}
+
+export function stepAppearanceFontSizes(
+  input: {
+    uiFontSizeId: unknown;
+    readableCodeFontSizeId: unknown;
+  },
+  delta: -1 | 1,
+): {
+  uiFontSizeId: UiFontSizeId;
+  readableCodeFontSizeId: ReadableCodeFontSizeId;
+} {
+  return {
+    uiFontSizeId: stepAppearanceSizeId(input.uiFontSizeId, delta),
+    readableCodeFontSizeId: stepAppearanceSizeId(input.readableCodeFontSizeId, delta),
+  };
+}

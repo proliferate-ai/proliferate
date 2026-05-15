@@ -44,12 +44,15 @@ export function buildTranscriptDisplayBlocks({
   childrenByParentId: Map<string, string[]>;
   isComplete: boolean;
 }): TurnDisplayBlock[] {
+  const visibleRootIds = rootIds.filter((itemId) =>
+    !isHiddenTranscriptPresentationItem(transcript.itemsById[itemId])
+  );
   const blocks: TurnDisplayBlock[] = [];
   let pendingActionIds: string[] = [];
   let pendingInlineActionIds: string[] = [];
   let pendingSubagentCreationIds: string[] = [];
   const trailingInlineActionIds = collectTrailingInlineActionIds(
-    rootIds,
+    visibleRootIds,
     transcript,
     childrenByParentId,
     isComplete,
@@ -94,7 +97,7 @@ export function buildTranscriptDisplayBlocks({
     pendingSubagentCreationIds = [];
   };
 
-  for (const itemId of rootIds) {
+  for (const itemId of visibleRootIds) {
     const item = transcript.itemsById[itemId];
     if (!item) continue;
 
@@ -139,6 +142,7 @@ export function buildTurnPresentation(
   const itemOrderIndex = new Map(turn.itemOrder.map((itemId, index) => [itemId, index]));
   const orderedItemIds = [...turn.itemOrder]
     .filter((itemId) => !isTransientTranscriptItem(transcript.itemsById[itemId]))
+    .filter((itemId) => !isHiddenTranscriptPresentationItem(transcript.itemsById[itemId]))
     .sort((leftId, rightId) =>
       compareItems(leftId, rightId, transcript, itemOrderIndex)
     );
@@ -196,6 +200,12 @@ export function buildTurnPresentation(
 
 export function isTransientTranscriptItem(item: TranscriptItem | undefined): boolean {
   return item?.kind === "thought" && item.isTransient === true;
+}
+
+export function isHiddenTranscriptPresentationItem(
+  item: TranscriptItem | undefined,
+): boolean {
+  return item?.kind === "tool_call" && item.semanticKind === "hook";
 }
 
 function shouldGroupToolChildren(item: TranscriptItem | undefined): boolean {

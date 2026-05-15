@@ -4,6 +4,8 @@ import {
   CHAT_LINE_HEIGHTS,
   READABLE_CODE_FONT_SCALES,
   resolveAppearanceSizeId,
+  stepAppearanceFontSizes,
+  stepAppearanceSizeId,
   UI_FONT_SCALES,
 } from "./appearance";
 
@@ -14,6 +16,23 @@ describe("appearance preferences", () => {
     expect(resolveAppearanceSizeId("xxlarge")).toBe("xxlarge");
     expect(resolveAppearanceSizeId("unknown")).toBe("default");
     expect(resolveAppearanceSizeId(undefined)).toBe("default");
+  });
+
+  it("steps appearance size ids within bounds", () => {
+    expect(stepAppearanceSizeId("default", 1)).toBe("large");
+    expect(stepAppearanceSizeId("default", -1)).toBe("small");
+    expect(stepAppearanceSizeId("xxlarge", 1)).toBe("xxlarge");
+    expect(stepAppearanceSizeId("xsmall", -1)).toBe("xsmall");
+  });
+
+  it("steps UI and readable code font sizes independently", () => {
+    expect(stepAppearanceFontSizes({
+      uiFontSizeId: "xxlarge",
+      readableCodeFontSizeId: "large",
+    }, 1)).toEqual({
+      uiFontSizeId: "xxlarge",
+      readableCodeFontSizeId: "xlarge",
+    });
   });
 
   it("uses exact Codex chat line-height presets", () => {

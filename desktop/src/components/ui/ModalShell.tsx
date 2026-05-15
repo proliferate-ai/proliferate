@@ -14,6 +14,7 @@ export interface ModalShellProps {
   children: ReactNode;
   sizeClassName?: string;
   bodyClassName?: string;
+  footerClassName?: string;
   overlayClassName?: string;
   panelClassName?: string;
   telemetryBlocked?: boolean;
@@ -30,6 +31,7 @@ export function ModalShell({
   children,
   sizeClassName = "max-w-md",
   bodyClassName = "px-5 pb-5 pt-4",
+  footerClassName = "flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3",
   overlayClassName = "bg-black/70 backdrop-blur-sm",
   panelClassName = "border-border bg-background shadow-lg",
   telemetryBlocked = false,
@@ -122,7 +124,7 @@ export function ModalShell({
           </div>
 
           {footer && (
-            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
+            <div className={footerClassName}>
               {footer}
             </div>
           )}

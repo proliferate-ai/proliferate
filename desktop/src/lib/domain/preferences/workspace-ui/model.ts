@@ -22,8 +22,9 @@ import { WORKSPACE_SIDEBAR_DEFAULT_WIDTH } from "@/lib/domain/preferences/worksp
  *     model, removing durable toolOrder and terminal active/order fields.
  * v9: drop transient projected chat session ids from persisted workspace UI
  *     state; materialized last-viewed session ids own restart restore.
+ * v10: add session-scoped activity/read timestamps for chat tab unread dots.
  */
-export const WORKSPACE_UI_MIGRATION_VERSION = 9;
+export const WORKSPACE_UI_MIGRATION_VERSION = 10;
 
 export interface PersistedWorkspaceUiState {
   migrationVersion?: number;
@@ -43,6 +44,8 @@ export interface PersistedWorkspaceUiState {
   lastViewedSessionByWorkspace: Record<string, string>;
   lastViewedSessionErrorAtBySession: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
+  sessionLastInteracted: Record<string, string>;
+  sessionLastViewedAt: Record<string, string>;
   dismissedSetupFailures: Record<string, boolean>;
   finishSuggestionDismissalsByWorkspaceId: Record<string, string>;
   visibleChatSessionIdsByWorkspace: Record<string, string[]>;
@@ -74,6 +77,8 @@ export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   lastViewedSessionByWorkspace: {},
   lastViewedSessionErrorAtBySession: {},
   workspaceLastInteracted: {},
+  sessionLastInteracted: {},
+  sessionLastViewedAt: {},
   dismissedSetupFailures: {},
   finishSuggestionDismissalsByWorkspaceId: {},
   visibleChatSessionIdsByWorkspace: {},

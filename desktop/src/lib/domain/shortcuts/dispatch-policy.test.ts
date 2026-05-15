@@ -95,6 +95,22 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(false);
   });
 
+  it("blocks automations shortcut in text-entry targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.goAutomations, {
+      key: "u",
+      code: "KeyU",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: false,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(false);
+  });
+
   it("allows left-sidebar toggle from text-entry and terminal focus targets", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
       key: "b",
@@ -240,6 +256,57 @@ describe("shortcut dispatch policy", () => {
         tagName: "TEXTAREA",
         isContentEditable: false,
       } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+  });
+
+  it("allows tab cycling angle aliases when text inputs mark them handled", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTabAngle, {
+      key: ">",
+      code: "Period",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: true,
+      defaultPrevented: true,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+  });
+
+  it("allows shell tab and close shortcuts through default-prevented right-panel targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.tabByIndex, {
+      key: "2",
+      code: "Digit2",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.workspaceByIndex, {
+      key: "2",
+      code: "Digit2",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.closeActiveTab, {
+      key: "w",
+      code: "KeyW",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: true,
+      target: null,
     } as KeyboardEvent)).toBe(true);
   });
 });
