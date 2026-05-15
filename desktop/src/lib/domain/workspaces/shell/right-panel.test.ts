@@ -21,8 +21,19 @@ import { fileViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 describe("right panel domain", () => {
   it("gates cloud settings to cloud workspaces", () => {
-    expect(availableRightPanelTools(false)).toEqual(["git"]);
-    expect(availableRightPanelTools(true)).toEqual(["git", "settings"]);
+    expect(availableRightPanelTools(false)).toEqual(["scratch", "files", "git"]);
+    expect(availableRightPanelTools(true)).toEqual(["scratch", "files", "git", "settings"]);
+  });
+
+  it("defaults to scratch for new right-panel state", () => {
+    const state = reconcileRightPanelWorkspaceState(undefined, { isCloudWorkspaceSelected: false });
+
+    expect(state.activeEntryKey).toBe("tool:scratch");
+    expect(state.headerOrder).toEqual([
+      "tool:scratch",
+      "tool:files",
+      "tool:git",
+    ]);
   });
 
   it("parses browser entry keys", () => {
@@ -43,7 +54,7 @@ describe("right panel domain", () => {
     });
   });
 
-  it("drops cloud settings and legacy Files entries for local workspaces", () => {
+  it("drops cloud settings for local workspaces and falls back to scratch", () => {
     const state = reconcileRightPanelWorkspaceState(
       {
         activeEntryKey: "tool:settings",
@@ -52,8 +63,12 @@ describe("right panel domain", () => {
       { isCloudWorkspaceSelected: false },
     );
 
-    expect(state.activeEntryKey).toBe("tool:git");
-    expect(state.headerOrder).toEqual(["tool:git"]);
+    expect(state.activeEntryKey).toBe("tool:scratch");
+    expect(state.headerOrder).toEqual([
+      "tool:files",
+      "tool:scratch",
+      "tool:git",
+    ]);
   });
 
   it("routes legacy Review tool state to Changes", () => {
@@ -66,7 +81,7 @@ describe("right panel domain", () => {
     );
 
     expect(state.activeEntryKey).toBe("tool:git");
-    expect(state.headerOrder).toEqual(["tool:git"]);
+    expect(state.headerOrder).toEqual(["tool:files", "tool:scratch", "tool:git"]);
   });
 
   it("keeps a terminal active when no live terminal list is available", () => {
@@ -82,6 +97,8 @@ describe("right panel domain", () => {
     expect(state.headerOrder).toEqual([
       "terminal:t1",
       "tool:git",
+      "tool:scratch",
+      "tool:files",
     ]);
   });
 
@@ -100,9 +117,11 @@ describe("right panel domain", () => {
     expect(state.headerOrder).toEqual([
       "tool:git",
       "terminal:t2",
+      "tool:scratch",
+      "tool:files",
       "terminal:t1",
     ]);
-    expect(state.activeEntryKey).toBe("tool:git");
+    expect(state.activeEntryKey).toBe("tool:scratch");
   });
 
   it("does not append setup terminals unless already in the header", () => {
@@ -117,7 +136,12 @@ describe("right panel domain", () => {
       },
     );
 
-    expect(state.headerOrder).toEqual(["tool:git", "terminal:run"]);
+    expect(state.headerOrder).toEqual([
+      "tool:git",
+      "tool:scratch",
+      "tool:files",
+      "terminal:run",
+    ]);
   });
 
   it("reconciles one mixed header order for tools, terminals, and browsers", () => {
@@ -139,6 +163,8 @@ describe("right panel domain", () => {
       "browser:b1",
       "terminal:t2",
       "tool:git",
+      "tool:files",
+      "tool:scratch",
       "terminal:t1",
     ]);
     expect(state.activeEntryKey).toBe("browser:b1");
@@ -158,6 +184,8 @@ describe("right panel domain", () => {
       "tool:git",
       "terminal:t1",
       "terminal:t3",
+      "tool:scratch",
+      "tool:files",
     ]);
     expect(state.activeEntryKey).toBe("terminal:t1");
   });
@@ -205,6 +233,8 @@ describe("right panel domain", () => {
       "terminal:t3",
       "terminal:t1",
       "terminal:t2",
+      "tool:scratch",
+      "tool:files",
       "tool:git",
     ]);
     expect(state.activeEntryKey).toBe("terminal:t1");
@@ -222,9 +252,11 @@ describe("right panel domain", () => {
     );
 
     expect(state.headerOrder).toEqual([
+      "tool:files",
       "terminal:t1",
       "terminal:t2",
       "tool:git",
+      "tool:scratch",
     ]);
   });
 
@@ -242,6 +274,8 @@ describe("right panel domain", () => {
     expect(state.headerOrder).toEqual([
       "tool:settings",
       "tool:git",
+      "tool:scratch",
+      "tool:files",
     ]);
     expect(state.activeEntryKey).toBe("tool:git");
   });
@@ -260,7 +294,12 @@ describe("right panel domain", () => {
       },
     );
 
-    expect(state.headerOrder).toEqual([targetKey, "tool:git"]);
+    expect(state.headerOrder).toEqual([
+      "tool:files",
+      targetKey,
+      "tool:scratch",
+      "tool:git",
+    ]);
     expect(state.activeEntryKey).toBe(targetKey);
   });
 

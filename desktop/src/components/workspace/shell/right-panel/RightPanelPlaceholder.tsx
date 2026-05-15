@@ -6,20 +6,28 @@ import {
 export function RightPanelPlaceholder({ activeEntryKey }: { activeEntryKey: RightPanelActiveEntryKey }) {
   const entry = parseRightPanelHeaderEntryKey(activeEntryKey);
   const kind = entry?.kind === "tool" ? entry.tool : entry?.kind ?? "git";
-  const title = kind === "terminal"
-    ? "Terminals are getting ready"
-    : kind === "browser"
-      ? "Browser is getting ready"
-      : kind === "settings"
-        ? "Cloud settings are getting ready"
-        : "Git view is getting ready";
-  const description = kind === "terminal"
-    ? "Terminals will connect once the workspace runtime is ready."
-    : kind === "browser"
-      ? "Browser tabs will appear once the workspace is ready."
-      : kind === "settings"
-        ? "Repo sync status and setup controls will appear once the cloud workspace finishes loading."
-        : "Changes and diffs will appear here as soon as the workspace finishes loading.";
+  const title = kind === "scratch"
+    ? "Scratch is getting ready"
+    : kind === "files"
+    ? "Files are getting ready"
+    : kind === "terminal"
+      ? "Terminals are getting ready"
+      : kind === "browser"
+        ? "Browser is getting ready"
+        : kind === "settings"
+          ? "Cloud settings are getting ready"
+          : "Git view is getting ready";
+  const description = kind === "scratch"
+    ? "Your workspace notes will appear here as soon as the workspace finishes loading."
+    : kind === "files"
+    ? "The file tree will appear here as soon as the workspace finishes loading."
+    : kind === "terminal"
+      ? "Terminals will connect once the workspace runtime is ready."
+      : kind === "browser"
+        ? "Browser tabs will appear once the workspace is ready."
+        : kind === "settings"
+          ? "Repo sync status and setup controls will appear once the cloud workspace finishes loading."
+          : "Changes and diffs will appear here as soon as the workspace finishes loading.";
 
   return (
     <div className="flex h-full items-center justify-center px-6 text-center">

@@ -12,7 +12,7 @@ mod telemetry_file_logging;
 
 use commands::{
     anonymous_telemetry, config, diagnostics as diagnostics_commands, google_workspace_mcp,
-    keychain, process, runtime, shell, window_chrome,
+    keychain, process, runtime, shell, window_chrome, workspace_scratch,
 };
 use quit_flow::QuitFlowState;
 use tauri::Manager;
@@ -213,6 +213,8 @@ pub fn run() {
             diagnostics_commands::save_diagnostic_json_to_absolute_path,
             runtime::get_runtime_info,
             runtime::restart_runtime,
+            workspace_scratch::read_workspace_scratch_pad,
+            workspace_scratch::write_workspace_scratch_pad,
             quit_flow::set_running_agent_count,
             shell::pick_folder,
             shell::copy_text,

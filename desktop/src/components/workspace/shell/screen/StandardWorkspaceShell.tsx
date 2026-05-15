@@ -67,6 +67,7 @@ export function StandardWorkspaceShell() {
     hasWorkspaceShell,
     hasLaunchIntentOnlyShell,
     isCloudWorkspaceSelected,
+    workspaceUiKey,
     selectedWorkspaceId,
     selectedWorkspace,
     selectedCloudWorkspace,
@@ -359,6 +360,7 @@ export function StandardWorkspaceShell() {
                       <div className="h-full" style={{ minWidth: 260 }}>
                         <RightPanel
                           workspaceId={selectedWorkspaceId}
+                          workspaceUiKey={workspaceUiKey}
                           isWorkspaceReady={hasRuntimeReadyWorkspace}
                           isOpen={rightPanelOpen}
                           shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}

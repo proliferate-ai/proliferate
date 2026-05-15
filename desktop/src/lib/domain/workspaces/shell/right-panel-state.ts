@@ -344,6 +344,12 @@ function resolveRightPanelActiveEntryKey(
 function resolveFallbackRightPanelActiveEntryKey(
   headerOrder: readonly RightPanelHeaderEntryKey[],
 ): RightPanelActiveEntryKey {
+  if (headerOrder.includes("tool:scratch")) {
+    return "tool:scratch";
+  }
+  if (headerOrder.includes("tool:files")) {
+    return "tool:files";
+  }
   return headerOrder[0] ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE.activeEntryKey;
 }
 

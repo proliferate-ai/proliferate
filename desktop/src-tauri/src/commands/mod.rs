@@ -7,3 +7,4 @@ pub mod process;
 pub mod runtime;
 pub mod shell;
 pub mod window_chrome;
+pub mod workspace_scratch;

@@ -71,12 +71,20 @@ vi.mock("@/components/workspace/browser/WorkspaceBrowserPanel", () => ({
   },
 }));
 
-vi.mock("@/components/workspace/git/GitPanel", () => ({
-  GitPanel: () => (
-    <div data-testid="git-panel">
-      <input data-testid="git-panel-input" />
+vi.mock("@/components/workspace/files/viewer/WorkspaceFilesPanel", () => ({
+  WorkspaceFilesPanel: () => (
+    <div data-testid="files-panel">
+      <input data-testid="files-panel-input" />
     </div>
   ),
+}));
+
+vi.mock("@/components/workspace/git/GitPanel", () => ({
+  GitPanel: () => <div data-testid="git-panel" />,
+}));
+
+vi.mock("@/components/workspace/scratch/ScratchPadPanel", () => ({
+  ScratchPadPanel: () => <div data-testid="scratch-panel" />,
 }));
 
 vi.mock("@/components/workspace/files/FileEditorView", () => ({
@@ -125,11 +133,11 @@ afterEach(() => {
 });
 
 describe("RightPanel terminal activation", () => {
-  it("creates one default terminal lazily without leaving the Changes panel", async () => {
+  it("creates one default terminal lazily without leaving the Scratch panel", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
 
     await waitFor(() => expect(terminalActionsMocks.createTab).toHaveBeenCalledTimes(1));
-    expect(screen.getByTestId("git-panel")).toBeTruthy();
+    expect(screen.getByTestId("scratch-panel")).toBeTruthy();
   });
 
   it("opens the new tab menu with Terminal focused from a right-panel request", async () => {
@@ -363,19 +371,20 @@ describe("RightPanel tab shortcuts", () => {
     fireEvent.pointerDown(root);
     expect(document.activeElement).toBe(root);
 
-    fireEvent.keyDown(window, primaryDigitEvent(1));
+    fireEvent.keyDown(window, primaryDigitEvent(3));
 
     await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
   });
 
   it("uses primary-number shortcuts from right-panel text inputs", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
-    const input = screen.getByTestId("git-panel-input");
+    fireEvent.click(screen.getByRole("tab", { name: "Files" }));
+    const input = screen.getByTestId("files-panel-input");
 
     input.focus();
     expect(document.activeElement).toBe(input);
 
-    fireEvent.keyDown(window, primaryDigitEvent(1));
+    fireEvent.keyDown(window, primaryDigitEvent(3));
 
     await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
   });
@@ -434,6 +443,7 @@ function RightPanelHarness({
   return (
     <RightPanel
       workspaceId={workspaceId}
+      workspaceUiKey={workspaceId}
       isWorkspaceReady={isWorkspaceReady}
       isOpen={isOpen}
       isCloudWorkspaceSelected
@@ -475,6 +485,7 @@ function RemountingRightPanelHarness({
   return (
     <RightPanel
       workspaceId="workspace-1"
+      workspaceUiKey="workspace-1"
       isWorkspaceReady
       isOpen
       isCloudWorkspaceSelected
