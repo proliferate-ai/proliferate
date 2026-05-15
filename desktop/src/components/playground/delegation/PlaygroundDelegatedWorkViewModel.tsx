@@ -13,26 +13,13 @@ import {
   type PlaygroundReviewComposerState,
 } from "@/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
 import { noop } from "@/components/playground/PlaygroundComposerActions";
-import {
-  PLAYGROUND_COWORK_ROWS,
-  PLAYGROUND_COWORK_SUMMARY,
-} from "@/components/playground/delegation/PlaygroundDelegatedWorkFixtures";
 
 export function buildPlaygroundDelegatedWorkViewModel(args: {
   reviewState?: PlaygroundReviewComposerState | null;
-  cowork?: boolean;
   subagentRows?: typeof PLAYGROUND_SUBAGENT_STRIP_ROWS;
 }): DelegatedWorkComposerViewModel {
   const reviewRun = args.reviewState
     ? buildPlaygroundReviewRun(args.reviewState)
-    : null;
-  const cowork = args.cowork
-    ? {
-      rows: PLAYGROUND_COWORK_ROWS,
-      summary: PLAYGROUND_COWORK_SUMMARY,
-      openWorkspace: noop,
-      openSession: noop,
-    }
     : null;
   const subagents = args.subagentRows
     ? {
@@ -53,14 +40,12 @@ export function buildPlaygroundDelegatedWorkViewModel(args: {
         : args.reviewState.summary.label,
       active: args.reviewState.summary.active,
     }
-    : cowork
-      ? { label: cowork.summary.detail ?? cowork.summary.label, active: cowork.summary.active }
-      : subagents
-        ? {
-          label: subagents.summary.detail ?? subagents.summary.label,
-          active: subagents.summary.active,
-        }
-        : { label: "No active work", active: false };
+    : subagents
+      ? {
+        label: subagents.summary.detail ?? subagents.summary.label,
+        active: subagents.summary.active,
+      }
+      : { label: "No active work", active: false };
   const visibleAgents: DelegatedAgentTriggerCandidate[] = [
     ...(args.reviewState?.rows.map((row) => ({
       identity: buildDelegatedAgentIdentity({
@@ -71,10 +56,6 @@ export function buildPlaygroundDelegatedWorkViewModel(args: {
       }),
       statusCategory: playgroundReviewStatusCategory(row.status),
     })) ?? []),
-    ...(cowork?.rows.flatMap((row) => row.sessions.map((session) => ({
-      identity: session.identity,
-      statusCategory: session.statusCategory,
-    }))) ?? []),
     ...(subagents?.rows.map((row) => ({
       identity: row.identity,
       statusCategory: row.statusCategory,
@@ -95,7 +76,6 @@ export function buildPlaygroundDelegatedWorkViewModel(args: {
       retryAssignment: noop,
       dismiss: noop,
     } : null,
-    cowork,
     subagents,
   };
 }

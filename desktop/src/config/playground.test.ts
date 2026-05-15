@@ -44,7 +44,6 @@ const DIFF_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
 ];
 
 const SUBAGENT_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
-  "agents-cowork-only",
   "subagents-composer-few",
   "subagents-composer-many",
   "subagents-review-starting-plan",
@@ -101,7 +100,6 @@ describe("playground scenarios", () => {
   it("includes delegated agents composer and wake scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(SUBAGENT_PLAYGROUND_SCENARIOS));
     expect(PLAYGROUND_SUBAGENT_STRIP_ROWS.length).toBeGreaterThan(6);
-    expect(isValidElement(renderDelegationSlot("agents-cowork-only"))).toBe(true);
     expect(isValidElement(renderDelegationSlot("subagents-composer-few"))).toBe(true);
     expect(isValidElement(renderDelegationSlot("subagents-composer-many"))).toBe(true);
     expect(isValidElement(renderDelegationSlot("subagents-review-starting-plan"))).toBe(true);

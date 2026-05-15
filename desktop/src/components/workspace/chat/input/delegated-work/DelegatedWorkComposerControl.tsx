@@ -3,7 +3,6 @@ import { Robot } from "@/components/ui/icons";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
 import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
-import { AgentsPopoverCoworkSection } from "./AgentsPopoverCoworkSection";
 import { AgentsPopoverReviewSection } from "./AgentsPopoverReviewSection";
 import { AgentsPopoverSubagentSection } from "./AgentsPopoverSubagentSection";
 
@@ -14,7 +13,6 @@ export function DelegatedWorkComposerControl({
 }) {
   const sectionCount = [
     viewModel.review,
-    viewModel.cowork,
     viewModel.subagents,
   ].filter(Boolean).length;
   const singleSection = sectionCount === 1;
@@ -51,13 +49,6 @@ export function DelegatedWorkComposerControl({
             {viewModel.review && (
               <AgentsPopoverReviewSection
                 review={viewModel.review}
-                detail={singleSectionDetail}
-                onClose={close}
-              />
-            )}
-            {viewModel.cowork && (
-              <AgentsPopoverCoworkSection
-                cowork={viewModel.cowork}
                 detail={singleSectionDetail}
                 onClose={close}
               />

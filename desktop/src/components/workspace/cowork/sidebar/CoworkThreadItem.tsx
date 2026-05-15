@@ -19,16 +19,7 @@ interface CoworkThreadItemProps {
   onToggleExpanded: () => void;
   onSelect: () => void;
   selectedWorkspaceId: string | null;
-  activeSessionId: string | null;
-  expandedWorkspaceIds: Set<string>;
-  onToggleWorkspaceExpanded: (ownershipId: string) => void;
   onOpenWorkspace: (workspaceId: string) => void;
-  onOpenSession: (input: {
-    workspaceId: string;
-    sessionId: string;
-    parentSessionId?: string | null;
-    sessionLinkId?: string | null;
-  }) => void;
 }
 
 export function CoworkThreadItem({
@@ -39,11 +30,7 @@ export function CoworkThreadItem({
   onToggleExpanded,
   onSelect,
   selectedWorkspaceId,
-  activeSessionId,
-  expandedWorkspaceIds,
-  onToggleWorkspaceExpanded,
   onOpenWorkspace,
-  onOpenSession,
 }: CoworkThreadItemProps) {
   const { workspaces, isLoading } = useCoworkManagedWorkspaces(
     thread.sessionId,
@@ -113,13 +100,8 @@ export function CoworkThreadItem({
         <CoworkManagedWorkspaceList
           workspaces={workspaces}
           isLoading={isLoading}
-          parentSessionId={thread.sessionId}
           selectedWorkspaceId={selectedWorkspaceId}
-          activeSessionId={activeSessionId}
-          expandedWorkspaces={expandedWorkspaceIds}
-          onToggleWorkspace={onToggleWorkspaceExpanded}
           onOpenWorkspace={onOpenWorkspace}
-          onOpenSession={onOpenSession}
         />
       )}
     </div>

@@ -63,14 +63,25 @@ describe("computeHeaderStripLayout", () => {
     expect(layout.positions).toEqual([0, 164, 216]);
   });
 
-  it("clamps tabs when pill rows leave little room", () => {
+  it("clamps tabs to the soft squish floor when pill rows leave little room", () => {
     const layout = computeHeaderStripLayout({
       containerWidth: 140,
       rows: [{ kind: "pill" }, { kind: "tab" }, { kind: "tab" }],
     });
 
-    expect(layout.widths).toEqual([TAB_GROUP_PILL_WIDTH, 48, 48]);
-    expect(layout.positions).toEqual([0, 52, 103]);
+    expect(layout.widths).toEqual([TAB_GROUP_PILL_WIDTH, CHROME_TAB_MIN_WIDTH, CHROME_TAB_MIN_WIDTH]);
+    expect(layout.positions).toEqual([0, 52, 139]);
+  });
+
+  it("overflows the container width when too many tabs would squish below the floor", () => {
+    const layout = computeHeaderStripLayout({
+      containerWidth: 200,
+      rows: Array.from({ length: 10 }, () => ({ kind: "tab" as const })),
+    });
+
+    expect(layout.widths.every((w) => w === CHROME_TAB_MIN_WIDTH)).toBe(true);
+    const last = layout.positions[layout.positions.length - 1] + layout.widths[layout.widths.length - 1];
+    expect(last).toBeGreaterThan(200);
   });
 
   it("honors narrower max widths for delegated-agent tabs", () => {

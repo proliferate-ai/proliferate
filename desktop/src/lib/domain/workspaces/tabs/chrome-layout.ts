@@ -1,4 +1,4 @@
-export const CHROME_TAB_MIN_WIDTH = 48;
+export const CHROME_TAB_MIN_WIDTH = 84;
 export const CHROME_TAB_COMPACT_WIDTH = 60;
 export const CHROME_TAB_SMALL_WIDTH = 84;
 export const CHROME_TAB_MAX_WIDTH = 160;

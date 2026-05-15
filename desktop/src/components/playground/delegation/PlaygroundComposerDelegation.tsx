@@ -21,14 +21,6 @@ export function renderDelegationSlot(scenario: ScenarioKey) {
   }
 
   switch (scenario) {
-    case "agents-cowork-only":
-      return (
-        <DelegatedWorkComposerPanel>
-          <DelegatedWorkComposerControl
-            viewModel={buildPlaygroundDelegatedWorkViewModel({ cowork: true })}
-          />
-        </DelegatedWorkComposerPanel>
-      );
     case "subagents-composer-single":
       return (
         <PlaygroundDelegatedWorkControl
@@ -62,7 +54,6 @@ function PlaygroundDelegationStack() {
       <DelegatedWorkComposerControl
         viewModel={buildPlaygroundDelegatedWorkViewModel({
           reviewState: PLAYGROUND_REVIEW_COMPOSER_STATES["subagents-reviewing-code"],
-          cowork: true,
           subagentRows: PLAYGROUND_SUBAGENT_STRIP_ROWS,
         })}
       />

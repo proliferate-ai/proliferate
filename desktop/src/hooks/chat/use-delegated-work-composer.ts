@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from "react";
 import type { ReviewAssignmentDetail, ReviewRunDetail } from "@anyharness/sdk";
 import { useScheduleSubagentWakeMutation } from "@anyharness/sdk-react";
-import { useCoworkComposerStrip } from "@/hooks/cowork/facade/use-cowork-composer-strip";
 import { useSubagentComposerStrip } from "@/hooks/chat/subagents/use-subagent-composer-strip";
 import { useActiveReviewRun } from "@/hooks/reviews/facade/use-active-review-run";
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
@@ -45,7 +44,6 @@ export interface DelegatedWorkComposerViewModel {
     retryAssignment: (reviewRunId: string, assignmentId: string) => void;
     dismiss: (reviewRunId: string) => void;
   } | null;
-  cowork: ReturnType<typeof useCoworkComposerStrip>;
   subagents: (ReturnType<typeof useSubagentComposerStrip> & {
     scheduleWake: (childSessionId: string) => void;
     isSchedulingWake: boolean;
@@ -55,7 +53,6 @@ export interface DelegatedWorkComposerViewModel {
 export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | null {
   const activeReviewRun = useActiveReviewRun();
   const reviewActions = useReviewActions();
-  const cowork = useCoworkComposerStrip();
   const subagents = useSubagentComposerStrip();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
@@ -163,43 +160,20 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
     };
   }, [activeSessionId, scheduleWakeMutation, showToast, subagents]);
 
-  const coworkModel = useMemo(() => {
-    if (!cowork) {
-      return null;
-    }
-    const rows = cowork.rows
-      .map((workspace) => ({
-        ...workspace,
-        sessions: workspace.sessions.filter((session) =>
-          shouldShowDelegatedWorkInComposer({ statusCategory: session.statusCategory })
-        ),
-      }))
-      .filter((workspace) => workspace.sessions.length > 0);
-    if (rows.length === 0) {
-      return null;
-    }
-    return {
-      ...cowork,
-      rows,
-    };
-  }, [cowork]);
-
   const summary = useMemo(() => deriveDelegatedWorkSummary([
     ...reviewSummaryCandidates(review),
-    ...coworkSummaryCandidates(coworkModel),
     ...subagentSummaryCandidates(subagentModel),
-  ]), [coworkModel, review, subagentModel]);
+  ]), [review, subagentModel]);
 
   const singleAgent = useMemo(() => {
     const agents = [
       ...reviewVisibleAgents(review, selectedWorkspaceId),
-      ...coworkVisibleAgents(coworkModel),
       ...subagentVisibleAgents(subagentModel),
     ];
     return selectSingleDelegatedAgentTriggerIdentity(agents);
-  }, [coworkModel, review, selectedWorkspaceId, subagentModel]);
+  }, [review, selectedWorkspaceId, subagentModel]);
 
-  if (!review && !coworkModel && !subagentModel) {
+  if (!review && !subagentModel) {
     return null;
   }
 
@@ -207,7 +181,6 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
     summary,
     singleAgent,
     review,
-    cowork: coworkModel,
     subagents: subagentModel,
   };
 }
@@ -247,19 +220,6 @@ function reviewSummaryCandidates(
   return [{ priority: "finished", label: "finished" }];
 }
 
-function coworkSummaryCandidates(
-  cowork: DelegatedWorkComposerViewModel["cowork"],
-): DelegatedWorkSummaryCandidate[] {
-  if (!cowork) return [];
-  const running = cowork.rows.flatMap((row) => row.sessions)
-    .filter((session) => session.statusLabel === "Working").length;
-  const failed = cowork.rows.flatMap((row) => row.sessions)
-    .filter((session) => session.statusLabel === "Failed").length;
-  if (failed > 0) return [{ priority: "failed", label: "failed", count: failed }];
-  if (running > 0) return [{ priority: "running", label: "running", count: running }];
-  return [{ priority: "finished", label: cowork.summary.label }];
-}
-
 function subagentSummaryCandidates(
   subagents: DelegatedWorkComposerViewModel["subagents"],
 ): DelegatedWorkSummaryCandidate[] {
@@ -280,29 +240,6 @@ function subagentVisibleAgents(
     identity: row.identity,
     statusCategory: row.statusCategory,
   })) ?? [];
-}
-
-function coworkVisibleAgents(
-  cowork: DelegatedWorkComposerViewModel["cowork"],
-): DelegatedAgentTriggerCandidate[] {
-  return cowork?.rows.flatMap((workspace) =>
-    workspace.sessions.map((session) => {
-      const identity = session.identity;
-      const resolvedIdentity = identity.openTarget
-        ? {
-          ...identity,
-          openTarget: {
-            ...identity.openTarget,
-            workspaceId: workspace.workspaceId,
-          },
-        }
-        : identity;
-      return {
-        identity: resolvedIdentity,
-        statusCategory: session.statusCategory,
-      };
-    })
-  ) ?? [];
 }
 
 function reviewVisibleAgents(

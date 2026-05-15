@@ -9,8 +9,8 @@ describe("SubagentCreationGroupBlock", () => {
   it("uses the standard collapsed action trigger treatment", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
-      "create-1": toolItem("create-1", "turn-1", 1, "mcp__subagents__create_subagent"),
-      "create-2": toolItem("create-2", "turn-1", 2, "mcp__subagents__create_subagent"),
+      "create-1": toolItem("create-1", "turn-1", 1, "subagent"),
+      "create-2": toolItem("create-2", "turn-1", 2, "subagent"),
     };
 
     const html = renderToStaticMarkup(

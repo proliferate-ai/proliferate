@@ -64,7 +64,6 @@ export type ScenarioKey =
   | "subagent-parent-send-card"
   | "end-turn-multi-file-diff"
   | "git-diff-panel"
-  | "agents-cowork-only"
   | "subagents-composer-single"
   | "subagents-composer-few"
   | "subagents-composer-many"
@@ -157,7 +156,6 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "subagent-parent-send-card": { label: "Parent send receipt" },
   "end-turn-multi-file-diff": { label: "End-turn diff" },
   "git-diff-panel": { label: "Git diff panel" },
-  "agents-cowork-only": { label: "Agents cowork only" },
   "subagents-composer-single": { label: "Agents single" },
   "subagents-composer-few": { label: "Agents subagents (3)" },
   "subagents-composer-many": { label: "Agents subagents (10)" },
