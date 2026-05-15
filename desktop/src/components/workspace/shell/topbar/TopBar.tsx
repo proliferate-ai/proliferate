@@ -163,7 +163,7 @@ export function TopBar({
                 variant="ghost"
                 size="icon"
                 onClick={startEditing}
-                className="shrink-0 text-muted-foreground hover:text-foreground h-5 w-5"
+                className="h-5 w-5 shrink-0 text-sidebar-muted-foreground hover:text-sidebar-foreground"
                 title="Rename branch"
                 aria-label="Rename branch"
               >
@@ -188,7 +188,7 @@ export function TopBar({
               spellCheck={false}
             />
             {renaming && (
-              <span className="text-[10px] text-muted-foreground shrink-0 ml-1">
+              <span className="ml-1 shrink-0 text-[10px] text-sidebar-muted-foreground">
                 Renaming…
               </span>
             )}
@@ -214,7 +214,7 @@ export function TopBar({
           onClick={onTogglePanel}
           aria-label={panelOpen ? "Hide side panel" : "Show side panel"}
           title={panelOpen ? "Hide side panel" : "Show side panel"}
-          className="h-6 px-2 text-xs rounded-lg font-[450]"
+          className="h-6 rounded-lg border-sidebar-border bg-surface-elevated-secondary px-2 text-xs font-[450] text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
         >
           {hasStats && (
             <>
@@ -222,7 +222,7 @@ export function TopBar({
               <span className="text-git-red">-{deletions}</span>
             </>
           )}
-          <SplitPanelRight className="size-3.5 text-muted-foreground ml-0.5" />
+          <SplitPanelRight className="ml-0.5 size-3.5" />
         </Button>
       </div>
     </div>

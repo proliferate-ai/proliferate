@@ -1315,13 +1315,13 @@
   --color-switch-background: var(--color-primary);
   --color-switch-foreground: #ffffff;
 
-  --color-composer-background: color-mix(in oklab, var(--color-surface-control) 90%, transparent);
-  --color-composer-border: color-mix(in oklab, var(--color-foreground) 10%, transparent);
-  --color-composer-control-foreground: var(--color-foreground-tertiary);
-  --color-composer-control-active-foreground: var(--color-foreground);
-  --color-composer-control-muted-foreground: var(--color-foreground-tertiary);
-  --color-composer-control-hover: var(--color-list-hover);
-  --color-composer-send-background: var(--color-primary);
+  --color-composer-background: rgba(255, 255, 255, 0.864);
+  --color-composer-border: rgba(0, 0, 0, 0.1);
+  --color-composer-control-foreground: rgba(13, 13, 13, 0.5);
+  --color-composer-control-active-foreground: #0d0d0d;
+  --color-composer-control-muted-foreground: rgba(13, 13, 13, 0.5);
+  --color-composer-control-hover: rgba(13, 13, 13, 0.055);
+  --color-composer-send-background: #0d0d0d;
   --color-composer-send-foreground: #ffffff;
   --color-composer-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.05);
   --color-composer-backdrop-filter: blur(16px);
