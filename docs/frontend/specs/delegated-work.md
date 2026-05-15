@@ -287,8 +287,12 @@ Needs attention
 
 Running
   API Surface Check              Running             Open
-  cowork: auth-workspace         2 sessions          Open workspace
 ```
+
+The composer Agents popover surfaces review and same-workspace subagent work
+only. Cowork managed workspaces and their coding sessions live in the cowork
+sidebar (`CoworkThreadsSection` → `CoworkManagedWorkspaceList`) and are not
+duplicated above the composer.
 
 Row rules:
 

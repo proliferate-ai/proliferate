@@ -126,6 +126,30 @@ describe("buildTurnPresentation", () => {
     ]);
   });
 
+  it("keeps native Agent calls with nested child work as normal item blocks", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      agent: {
+        ...toolItem("agent", "turn-1", 1, "subagent"),
+        nativeToolName: "Agent",
+      },
+      childRead: {
+        ...toolItem("childRead", "turn-1", 2, "file_read"),
+        parentToolCallId: "agent",
+      },
+      final: assistantItem("final", "turn-1", 3),
+    };
+    const turn = turnRecord(["agent", "childRead", "final"]);
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(presentation.childrenByParentId.get("agent")).toEqual(["childRead"]);
+    expect(presentation.displayBlocks).toEqual([
+      { kind: "item", itemId: "agent" },
+      { kind: "item", itemId: "final" },
+    ]);
+  });
+
   it("does not group creation receipts with subagent communication calls", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {

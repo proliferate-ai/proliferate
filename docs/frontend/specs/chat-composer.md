@@ -40,7 +40,7 @@ ChatView
     ├── attachedSlot
     │     ├── WorkspaceArrivalAttachedPanel (workspace arrival/setup/pending/cloud-status)
     │     ├── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
-    │     └── DelegatedWorkComposerControl  (one Agents trigger + popover for reviews, cowork, subagents)
+    │     └── DelegatedWorkComposerControl  (one Agents trigger + popover for reviews and subagents)
     ├── ChatInput
     │   └── ChatComposerSurface
     │       └── form: ComposerMentionEditor + ModelSelector + SessionConfigControls + ChatComposerActions
@@ -68,16 +68,18 @@ role first, not by component family. They always render in this order:
    questions, and MCP elicitation forms take precedence. If there is no blocking
    request, this slot may show `TodoTrackerPanel`.
 3. **`attachedSlot`** — ambient attached context and parallel work:
-   workspace/worktree/runtime panels plus review agents, cowork coding sessions,
-   and linked same-workspace subagents.
+   workspace/worktree/runtime panels plus review agents and linked
+   same-workspace subagents.
 
 Review status lives in `attachedSlot`, not in active state. The shared
 `DelegatedWorkComposerControl` owns the compact `Agents` summary-control +
-popover pattern for reviews, cowork, and subagents. The review section owns
-reviewer rows, critique links, stop, send-feedback, and review-revision actions.
-Review automation, cowork sessions, and linked subagents are parallel delegated
-work and must not make normal parent chat input unavailable by themselves. They
-should not displace blocking requests or todo state with a full card.
+popover pattern for reviews and subagents. The review section owns reviewer
+rows, critique links, stop, send-feedback, and review-revision actions. Review
+automation and linked subagents are parallel delegated work and must not make
+normal parent chat input unavailable by themselves. They should not displace
+blocking requests or todo state with a full card. Cowork managed workspaces
+are surfaced exclusively in the cowork sidebar — they are not duplicated in
+the composer Agents popover.
 
 Review runs have two composer-facing classes: blocking workflow runs
 (`reviewing`, `feedback_ready`, `parent_revising`, `waiting_for_revision`) and
@@ -95,12 +97,12 @@ work. Add it to `use-composer-dock-slots.tsx` — do not compute it inline in
 `ChatView` and do not introduce a parallel arbiter elsewhere.
 
 `attachedSlot` renders one shared `DelegatedWorkComposerPanel` containing one
-compact `Agents` control for review agents, cowork coding sessions, and linked
-same-workspace child sessions. The control opens a popover with sections in
-review, cowork, subagent order. Individual child chips should not be rendered
-directly above the composer. Attached delegated work is an indicator layer for
-adjacent work, not a blocking prompt panel. `outboundSlot` must render before
-`activeSlot`; both stack above attached context/parallel work when present.
+compact `Agents` control for review agents and linked same-workspace child
+sessions. The control opens a popover with sections in review, subagent order.
+Individual child chips should not be rendered directly above the composer.
+Attached delegated work is an indicator layer for adjacent work, not a blocking
+prompt panel. `outboundSlot` must render before `activeSlot`; both stack above
+attached context/parallel work when present.
 
 `DelegatedWorkComposerControl` uses delegated-work identity from the shared
 domain view model. The trigger stays the generic `Agents` control when there
@@ -296,7 +298,7 @@ Scenarios (selectable via `?s=<key>`):
 - delegated-work identity coverage must include: single active subagent trigger,
   multiple-agent generic trigger, failed/attention agent visible in the popover,
   completed-success agent hidden by default, and parent composer enabled while
-  review/subagent/cowork background work is running.
+  review/subagent background work is running.
 - `mobility-local-actionable`, `mobility-local-blocked`, `mobility-unpublished-branch`, `mobility-unpushed-commits`, `mobility-out-of-sync-branch`, `mobility-cloud-active`, `mobility-in-flight`, `mobility-failed` — composer footer row + mobility states
 
 The playground is **dev-only**. It is lazy-loaded via `React.lazy()` gated on `import.meta.env.DEV` in `App.tsx`, so neither the page nor its fixtures land in production bundles.
