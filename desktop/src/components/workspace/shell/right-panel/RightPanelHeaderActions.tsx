@@ -16,7 +16,7 @@ export function RightPanelHeaderActions({
         <IconButton
           size="xs"
           tone="sidebar"
-          className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger"
+          className="ui-icon-button workspace-shell-icon-button workspace-shell-toolbar-button glass-editor-panel-new-tab-menu-trigger"
           onClick={onOpenRepoSettings}
         >
           <Settings className="ui-icon" />
@@ -27,7 +27,7 @@ export function RightPanelHeaderActions({
         <IconButton
           size="xs"
           tone="sidebar"
-          className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger"
+          className="ui-icon-button workspace-shell-icon-button workspace-shell-toolbar-button glass-editor-panel-new-tab-menu-trigger"
           onClick={onTogglePanel}
         >
           <SplitPanel className="ui-icon" />

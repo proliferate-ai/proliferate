@@ -32,7 +32,7 @@ interface SettingsSidebarProps {
 }
 
 const SETTINGS_SIDEBAR_ROOT_CLASS =
-  "flex h-full w-64 shrink-0 select-none flex-col border-r border-sidebar-border bg-sidebar-background";
+  "flex h-full w-[300px] shrink-0 select-none flex-col border-r border-sidebar-border bg-sidebar-background";
 const SETTINGS_NAV_CLASS = "flex-1 overflow-y-auto px-2.5 pb-4";
 const SETTINGS_GROUPS_CLASS = "flex flex-col";
 const SETTINGS_GROUP_CLASS = "flex flex-col gap-0.5";
@@ -40,6 +40,8 @@ const SETTINGS_GROUP_SPACING_CLASS = "mt-4";
 const SETTINGS_GROUP_HEADING_CLASS =
   "px-2 pb-1 pt-1.5 text-[11px] font-medium leading-4 tracking-normal text-sidebar-muted-foreground";
 const SETTINGS_ROW_INACTIVE_CLASS =
+  "!text-sidebar-foreground hover:!text-sidebar-foreground";
+const SETTINGS_BACK_ROW_CLASS =
   "!text-sidebar-muted-foreground hover:!text-sidebar-foreground";
 const SETTINGS_ROW_ACTIVE_CLASS =
   "!font-medium !text-sidebar-foreground";
@@ -188,7 +190,7 @@ export function SettingsSidebar({
           icon={<ArrowLeft className="size-4" />}
           label={SETTINGS_COPY.back}
           onPress={onNavigateHome}
-          className={`w-fit ${SETTINGS_ROW_INACTIVE_CLASS}`}
+          className={`w-fit ${SETTINGS_BACK_ROW_CLASS}`}
         />
       </div>
 

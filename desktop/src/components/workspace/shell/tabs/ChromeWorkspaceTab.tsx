@@ -52,10 +52,6 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     const showTitle = !isMini && !isSmaller;
     const showBadge = !isSmall;
     const showCloseButton = !isMini || isActive;
-    const activeFill = "color-mix(in oklab, var(--color-foreground) 6%, var(--color-background))";
-    const selectedFill = "color-mix(in oklab, var(--color-foreground) 8%, var(--color-background))";
-    const inactiveFill = "color-mix(in oklab, var(--color-foreground) 2%, var(--color-background))";
-    const tabFill = isActive ? activeFill : isMultiSelected ? selectedFill : inactiveFill;
     const titleMask = "linear-gradient(90deg, #000 0%, #000 calc(100% - 20px), transparent)";
 
     return (
@@ -63,6 +59,8 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
         ref={ref}
         role="presentation"
         data-telemetry-mask="true"
+        data-active={isActive ? true : undefined}
+        data-multi-selected={isMultiSelected ? true : undefined}
         className={`workspace-shell-tab group/tab relative h-7 min-w-0 shrink-0 app-region-no-drag select-none ${className}`}
         style={{
           width,
@@ -72,14 +70,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
       >
         <span
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-0 rounded-lg border transition-[background-color,border-color,opacity] duration-150 ${
-            isActive
-              ? "border-border/70 opacity-100"
-              : isMultiSelected
-                ? "border-border/60 opacity-100 group-hover/tab:opacity-100"
-                : "border-border/15 opacity-100 group-hover/tab:border-border/35"
-          }`}
-          style={{ backgroundColor: tabFill }}
+          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 rounded-lg border transition-[background-color,border-color,opacity] duration-150"
         />
         <div
           className={`absolute inset-0 flex items-center overflow-hidden rounded-lg py-1 ${

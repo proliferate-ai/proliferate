@@ -2029,6 +2029,26 @@ body {
   --workspace-shell-tab-font-weight: 500;
   --workspace-shell-tab-icon-size: 0.875rem; /* 14px */
   --workspace-shell-tab-content-gap: 0.5rem;
+  --workspace-shell-tab-inactive-background: color-mix(
+    in oklab,
+    var(--color-foreground) 2%,
+    var(--color-background)
+  );
+  --workspace-shell-tab-inactive-border: color-mix(in oklab, var(--color-border) 15%, transparent);
+  --workspace-shell-tab-hover-background: var(--workspace-shell-tab-inactive-background);
+  --workspace-shell-tab-hover-border: color-mix(in oklab, var(--color-border) 35%, transparent);
+  --workspace-shell-tab-active-background: color-mix(
+    in oklab,
+    var(--color-foreground) 6%,
+    var(--color-background)
+  );
+  --workspace-shell-tab-active-border: color-mix(in oklab, var(--color-border) 70%, transparent);
+  --workspace-shell-tab-selected-background: color-mix(
+    in oklab,
+    var(--color-foreground) 8%,
+    var(--color-background)
+  );
+  --workspace-shell-tab-selected-border: color-mix(in oklab, var(--color-border) 60%, transparent);
   --workspace-shell-action-size: 1.75rem; /* 28px */
   --workspace-shell-action-font-size: var(--text-xs);
   --workspace-shell-action-line-height: var(--text-xs--line-height);
@@ -2043,6 +2063,14 @@ body {
 }
 
 :root[data-theme="mono"][data-mode="light"] {
+  --workspace-shell-tab-inactive-background: transparent;
+  --workspace-shell-tab-inactive-border: transparent;
+  --workspace-shell-tab-hover-background: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  --workspace-shell-tab-hover-border: transparent;
+  --workspace-shell-tab-active-background: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  --workspace-shell-tab-active-border: transparent;
+  --workspace-shell-tab-selected-background: color-mix(in oklab, var(--color-foreground) 7%, transparent);
+  --workspace-shell-tab-selected-border: transparent;
   --workspace-shell-action-border: var(--color-border);
   --workspace-shell-action-background: var(--color-surface-elevated-secondary);
   --workspace-shell-action-foreground: var(--color-foreground-secondary);
@@ -2052,6 +2080,26 @@ body {
 
 .workspace-shell-tab {
   height: var(--workspace-shell-tab-height);
+}
+
+.workspace-shell-tab__surface {
+  background-color: var(--workspace-shell-tab-inactive-background);
+  border-color: var(--workspace-shell-tab-inactive-border);
+}
+
+.workspace-shell-tab:hover .workspace-shell-tab__surface {
+  background-color: var(--workspace-shell-tab-hover-background);
+  border-color: var(--workspace-shell-tab-hover-border);
+}
+
+.workspace-shell-tab[data-multi-selected="true"] .workspace-shell-tab__surface {
+  background-color: var(--workspace-shell-tab-selected-background);
+  border-color: var(--workspace-shell-tab-selected-border);
+}
+
+.workspace-shell-tab[data-active="true"] .workspace-shell-tab__surface {
+  background-color: var(--workspace-shell-tab-active-background);
+  border-color: var(--workspace-shell-tab-active-border);
 }
 
 .workspace-shell-tab__button,
@@ -2109,6 +2157,11 @@ body {
   color: var(--workspace-shell-action-hover-foreground);
 }
 
+.workspace-shell-toolbar-button {
+  border-color: transparent;
+  background-color: transparent;
+}
+
 .workspace-shell-split-button-left {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
@@ -2154,9 +2207,10 @@ body {
     transparent
   );
   --right-panel-tab-text-primary: var(--color-sidebar-foreground);
-  --right-panel-tab-text-secondary: color-mix(in srgb, var(--color-sidebar-foreground) 72%, transparent);
+  --right-panel-tab-text-secondary: color-mix(in srgb, var(--color-sidebar-foreground) 65%, transparent);
   --right-panel-tab-text-tertiary: var(--color-sidebar-muted-foreground);
   --right-panel-tab-border: color-mix(in oklab, var(--color-sidebar-border) 80%, transparent);
+  --right-panel-tab-outer-border: var(--right-panel-tab-border);
   --right-panel-tab-focus: var(--color-sidebar-ring);
   --right-panel-tab-font-size: var(--workspace-shell-tab-font-size);
   --right-panel-tab-line-height: var(--workspace-shell-tab-line-height);
@@ -2179,8 +2233,17 @@ body {
   color: var(--right-panel-tab-text-secondary);
   font-size: var(--right-panel-tab-font-size);
   line-height: var(--right-panel-tab-line-height);
-  border-top: 1px solid var(--right-panel-tab-border);
-  border-bottom: 1px solid var(--right-panel-tab-border);
+  border-top: 1px solid var(--right-panel-tab-outer-border);
+  border-bottom: 1px solid var(--right-panel-tab-outer-border);
+}
+
+:root[data-theme="mono"][data-mode="light"] .right-panel-tab-system {
+  --right-panel-tab-surface: var(--color-surface);
+  --right-panel-tab-hover-bg: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  --right-panel-tab-active-bg: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  --right-panel-tab-text-secondary: color-mix(in oklab, var(--color-foreground) 65%, transparent);
+  --right-panel-tab-border: var(--color-border-light);
+  --right-panel-tab-outer-border: transparent;
 }
 
 .right-panel-tab-system .ui-tab-system-bar {
