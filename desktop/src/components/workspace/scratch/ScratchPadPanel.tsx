@@ -3,16 +3,17 @@ import {
   useEffect,
   useRef,
   useState,
-  type ChangeEvent,
-  type KeyboardEvent,
 } from "react";
-import { Textarea } from "@/components/ui/Textarea";
 import {
   Check,
   Copy,
   Plus,
   Trash,
 } from "@/components/ui/icons";
+import {
+  ScratchCodeMirrorEditor,
+  type ScratchCodeMirrorEditorHandle,
+} from "@/components/workspace/scratch/ScratchCodeMirrorEditor";
 import { PaneHeader } from "@/components/workspace/pane/PaneHeader";
 import {
   PaneOptionsMenu,
@@ -22,19 +23,18 @@ import {
 import { useWorkspaceScratchPad } from "@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad";
 import { useWorkspaceScratchPadMutations } from "@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { applyScratchMarkdownEnterAutoformat } from "@/lib/domain/workspaces/scratch/markdown-list-autoformat";
 
 const SAVE_DEBOUNCE_MS = 500;
-const SCRATCH_PLACEHOLDER = "- [ ] Capture follow-ups\n- [ ] Keep durable workspace notes here";
-const COMPLETED_TASK_PATTERN = /^\s*[-*]\s+\[[xX]\]\s+.*(?:\r?\n|$)/gm;
-const COMPLETED_TASK_DETECT_PATTERN = /^\s*[-*]\s+\[[xX]\]\s+/m;
+const SCRATCH_PLACEHOLDER = "☐ Capture follow-ups\n☐ Keep durable workspace notes here";
+const COMPLETED_TASK_PATTERN = /^\s*(?:[-*]\s+\[[xX]\]|☑)\s+.*(?:\r?\n|$)/gm;
+const COMPLETED_TASK_DETECT_PATTERN = /^\s*(?:[-*]\s+\[[xX]\]|☑)\s+/m;
 
 interface ScratchPadPanelProps {
   workspaceKey: string | null;
 }
 
 export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorRef = useRef<ScratchCodeMirrorEditorHandle | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const saveInFlightRef = useRef(false);
   const pendingSaveRef = useRef<string | null>(null);
@@ -148,72 +148,20 @@ export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
     void flushSave(latestDraftRef.current).catch(() => undefined);
   }, [flushSave]);
 
-  const handleChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
-    const next = event.currentTarget.value;
-    setDraft(next);
-    queueSave(next);
-  }, [queueSave]);
-
   const updateDraft = useCallback((next: string) => {
     setDraft(next);
     queueSave(next);
   }, [queueSave]);
 
   const handleInsertChecklistItem = useCallback(() => {
-    const textarea = textareaRef.current;
     const insertion = "- [ ] ";
-    if (!textarea) {
+    if (!editorRef.current?.insertChecklistItem()) {
       updateDraft(draft ? `${draft}\n${insertion}` : insertion);
-      return;
     }
-
-    const start = textarea.selectionStart ?? draft.length;
-    const end = textarea.selectionEnd ?? start;
-    const prefix = draft.slice(0, start);
-    const suffix = draft.slice(end);
-    const needsLeadingNewline = prefix.length > 0 && !prefix.endsWith("\n");
-    const next = `${prefix}${needsLeadingNewline ? "\n" : ""}${insertion}${suffix}`;
-    const caret = prefix.length + (needsLeadingNewline ? 1 : 0) + insertion.length;
-    updateDraft(next);
-    window.requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(caret, caret);
-    });
   }, [draft, updateDraft]);
 
   const handleClearCompleted = useCallback(() => {
     updateDraft(draft.replace(COMPLETED_TASK_PATTERN, ""));
-  }, [draft, updateDraft]);
-
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (
-      event.key !== "Enter"
-      || event.altKey
-      || event.ctrlKey
-      || event.metaKey
-      || event.shiftKey
-      || event.nativeEvent.isComposing
-    ) {
-      return;
-    }
-
-    const textarea = event.currentTarget;
-    const result = applyScratchMarkdownEnterAutoformat({
-      value: draft,
-      selectionStart: textarea.selectionStart ?? draft.length,
-      selectionEnd: textarea.selectionEnd ?? textarea.selectionStart ?? draft.length,
-    });
-
-    if (!result) {
-      return;
-    }
-
-    event.preventDefault();
-    updateDraft(result.value);
-    window.requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
-    });
   }, [draft, updateDraft]);
 
   const handleCopyContent = useCallback(async () => {
@@ -259,18 +207,14 @@ export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
         )}
       />
       <div className="min-h-0 flex-1 overflow-hidden">
-        <Textarea
-          ref={textareaRef}
-          variant="ghost"
+        <ScratchCodeMirrorEditor
+          ref={editorRef}
           value={draft}
           placeholder={loading ? "Loading scratch..." : SCRATCH_PLACEHOLDER}
           disabled={!hasWorkspace || loading}
-          wrap={wordWrap ? "soft" : "off"}
-          spellCheck
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
+          wordWrap={wordWrap}
+          onChange={updateDraft}
           onBlur={handleBlur}
-          className={`h-full overflow-auto px-4 py-3 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] text-foreground placeholder:text-sidebar-muted-foreground/65 disabled:cursor-not-allowed ${wordWrap ? "whitespace-pre-wrap" : "whitespace-pre"}`}
         />
       </div>
     </div>
