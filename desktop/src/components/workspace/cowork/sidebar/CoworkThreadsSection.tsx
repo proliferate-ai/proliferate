@@ -59,7 +59,7 @@ export function CoworkThreadsSection() {
 
   return (
     <div className="pb-2">
-      <div className="flex items-center justify-between gap-2 pl-2 pb-1 pt-3 text-base text-foreground/50 opacity-75">
+      <div className="flex items-center justify-between gap-2 pl-2 pb-1 pt-3 text-base text-sidebar-muted-foreground">
         <span>Threads</span>
         <div className="flex shrink-0 items-center gap-1">
           {threads.length > 0 && (
@@ -90,7 +90,7 @@ export function CoworkThreadsSection() {
         <div className="flex flex-col gap-px">
           {statusLoading || threadsLoading ? (
             <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
-              <BrailleSweepBadge className="text-base text-foreground" />
+              <BrailleSweepBadge className="text-base text-sidebar-foreground" />
               <p className="text-xs text-sidebar-muted-foreground">Loading threads</p>
             </div>
           ) : threads.length === 0 ? (

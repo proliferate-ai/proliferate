@@ -18,7 +18,7 @@ export function ComposerTextareaFrame({
     <div
       {...props}
       className={twMerge(
-        "mb-1 flex-grow select-text px-4",
+        "mb-1 flex-grow select-text px-3",
         topInset === "standard" ? "pt-3" : "",
         className,
       )}

@@ -73,7 +73,7 @@ export function RepoTrackedFilesCard({
                 type="button"
                 variant="outline"
                 size="md"
-                className="w-64 justify-between bg-background px-2.5 text-foreground shadow-none hover:bg-accent/50"
+                className="w-64 justify-between bg-surface-control px-2.5 text-foreground shadow-none hover:bg-list-hover"
               >
                 <span className="min-w-0 flex-1 truncate text-left">{triggerLabel}</span>
                 <ChevronUpDown className="size-3 shrink-0 text-muted-foreground" />

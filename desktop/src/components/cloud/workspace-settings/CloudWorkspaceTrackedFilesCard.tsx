@@ -14,7 +14,7 @@ export function CloudWorkspaceTrackedFilesCard({
   trackedFiles,
 }: CloudWorkspaceTrackedFilesCardProps) {
   return (
-    <SettingsCard className="divide-y-0 bg-sidebar/60">
+    <SettingsCard className="divide-y-0">
       <div className="space-y-2 p-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium text-foreground">Tracked files</p>
@@ -25,7 +25,7 @@ export function CloudWorkspaceTrackedFilesCard({
             {trackedFiles.map((file) => (
               <div
                 key={file.relativePath}
-                className="rounded-lg border border-border/60 bg-background/40 px-3 py-2"
+                className="rounded-lg border border-border/60 bg-surface-control px-3 py-2"
               >
                 <div className="truncate text-sm text-foreground">{file.relativePath}</div>
                 <div className="mt-1 text-xs text-muted-foreground">

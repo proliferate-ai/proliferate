@@ -21,7 +21,7 @@ interface ShortcutRowProps {
 
 function ShortcutBadge({ label }: { label: string }) {
   return (
-    <kbd className="inline-flex h-6 min-w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background px-2 font-mono text-[0.6875rem] font-medium leading-none text-foreground shadow-sm">
+    <kbd className="inline-flex h-6 min-w-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-control px-2 font-mono text-[0.6875rem] font-medium leading-none text-foreground shadow-sm">
       {label}
     </kbd>
   );
@@ -38,7 +38,7 @@ function ShortcutRow({ description, label }: ShortcutRowProps) {
 
 function ShortcutGroupHeader({ title }: { title: string }) {
   return (
-    <div className="rounded-t-lg bg-muted/60 px-3 py-2">
+    <div className="rounded-t-lg bg-surface-control px-3 py-2">
       <h3 className="text-sm font-medium text-foreground">{title}</h3>
     </div>
   );

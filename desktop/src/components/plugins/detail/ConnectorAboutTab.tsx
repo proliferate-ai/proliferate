@@ -16,7 +16,7 @@ export function ConnectorAboutTab({ entry }: { entry: ConnectorCatalogEntry }) {
     <div className="space-y-4">
       <p className="text-sm text-foreground/90">{entry.description}</p>
 
-      <dl className="overflow-hidden rounded-lg border border-border/50 bg-background text-xs divide-y divide-border/50">
+      <dl className="overflow-hidden rounded-lg border border-border/50 bg-surface-elevated-secondary text-xs divide-y divide-border/50">
         <div className="grid min-h-12 items-center gap-1 px-4 py-2 sm:grid-cols-[128px_minmax(0,1fr)]">
           <dt className="text-muted-foreground">Auth</dt>
           <dd className="text-foreground sm:text-right">{authLabel}</dd>

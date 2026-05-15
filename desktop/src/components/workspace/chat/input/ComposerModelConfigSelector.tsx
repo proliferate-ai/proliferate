@@ -398,7 +398,7 @@ function ComposerModelPickerContent({
     <div className="flex min-h-0 flex-1 flex-col space-y-1">
       <div className="space-y-1">
         <div className="px-1">
-          <div className="flex h-7 items-center rounded-lg border border-border bg-background px-2.5">
+          <div className="flex h-7 items-center rounded-lg border border-border bg-surface-control px-2.5">
             <Input
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}

@@ -40,7 +40,7 @@ export function CloudWorkspaceSettingsSummaryCard({
   onConfigureRepo,
 }: CloudWorkspaceSettingsSummaryCardProps) {
   return (
-    <SettingsCard className="divide-y-0 bg-sidebar/60">
+    <SettingsCard className="divide-y-0">
       <div className="space-y-3 p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">

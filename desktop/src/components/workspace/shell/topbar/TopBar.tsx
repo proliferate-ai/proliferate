@@ -139,7 +139,7 @@ export function TopBar({
             <Button
               variant="ghost"
               onClick={handleCopyBranch}
-              className="text-sm font-medium min-w-0 text-sidebar-foreground group flex items-center relative h-auto px-0 py-0 rounded-none hover:bg-transparent hover:text-foreground"
+              className="text-sm font-medium min-w-0 text-sidebar-foreground group flex items-center relative h-auto px-0 py-0 rounded-none hover:bg-transparent hover:text-sidebar-foreground"
               title="Click to copy"
               aria-label="Copy branch name"
             >

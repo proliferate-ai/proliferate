@@ -162,13 +162,13 @@ export function OrganizationPane() {
       />
 
       {statusMessage ? (
-        <div className="rounded-lg border border-border bg-card/50 px-3 py-2 text-sm text-muted-foreground">
+        <div className="rounded-lg border border-border bg-surface-elevated-secondary px-3 py-2 text-sm text-muted-foreground">
           {statusMessage}
         </div>
       ) : null}
 
       {unauthenticatedHandoff ? (
-        <div className="rounded-lg border border-border bg-card/50 px-3 py-2 text-sm text-muted-foreground">
+        <div className="rounded-lg border border-border bg-surface-elevated-secondary px-3 py-2 text-sm text-muted-foreground">
           Sign in, then reopen the invitation email link to accept it.
         </div>
       ) : null}

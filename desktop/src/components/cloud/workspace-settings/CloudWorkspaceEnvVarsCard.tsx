@@ -9,7 +9,7 @@ export function CloudWorkspaceEnvVarsCard({
   envVarKeys,
 }: CloudWorkspaceEnvVarsCardProps) {
   return (
-    <SettingsCard className="divide-y-0 bg-sidebar/60">
+    <SettingsCard className="divide-y-0">
       <div className="space-y-2 p-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium text-foreground">Repo env vars</p>

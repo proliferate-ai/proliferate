@@ -28,7 +28,7 @@ export function ConnectorToolsTab({
           {presentation.components.map((component) => (
             <li
               key={`${component.kind}:${component.label}`}
-              className="rounded-lg border border-border/50 bg-background px-3 py-2"
+              className="rounded-lg border border-border/50 bg-surface-control px-3 py-2"
             >
               <div className="flex items-center justify-between gap-3">
                 <span className="min-w-0 truncate text-sm text-foreground">
@@ -52,7 +52,7 @@ export function ConnectorToolsTab({
           Capabilities
         </div>
         {entry.capabilities.length > 0 ? (
-          <ul className="overflow-hidden rounded-lg border border-border/50 bg-background divide-y divide-border/50">
+          <ul className="overflow-hidden rounded-lg border border-border/50 bg-surface-elevated-secondary divide-y divide-border/50">
             {entry.capabilities.map((capability) => (
               <li
                 key={capability}
@@ -74,7 +74,7 @@ export function ConnectorToolsTab({
             ))}
           </ul>
         ) : (
-          <p className="rounded-lg border border-border/50 bg-background px-3 py-3 text-sm text-muted-foreground">
+          <p className="rounded-lg border border-border/50 bg-surface-elevated-secondary px-3 py-3 text-sm text-muted-foreground">
             No capability descriptions are curated yet.
           </p>
         )}
@@ -86,7 +86,7 @@ export function ConnectorToolsTab({
           Skills
         </div>
         {skills.length > 0 ? (
-          <ul className="overflow-hidden rounded-lg border border-border/50 bg-background divide-y divide-border/50">
+          <ul className="overflow-hidden rounded-lg border border-border/50 bg-surface-elevated-secondary divide-y divide-border/50">
             {skills.map((skill) => (
               <li
                 key={skill.id}
@@ -110,7 +110,7 @@ export function ConnectorToolsTab({
             ))}
           </ul>
         ) : (
-          <p className="rounded-lg border border-border/50 bg-background px-3 py-3 text-sm text-muted-foreground">
+          <p className="rounded-lg border border-border/50 bg-surface-elevated-secondary px-3 py-3 text-sm text-muted-foreground">
             This package contributes MCP capabilities only.
           </p>
         )}

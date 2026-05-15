@@ -7,7 +7,7 @@ type SelectProps = SelectHTMLAttributes<HTMLSelectElement>;
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   function Select({ className = "", children, ...props }, ref) {
     const base =
-      "block h-9 w-full appearance-none rounded-md border border-input bg-background px-3 pr-9 text-sm text-foreground shadow-none outline-none transition-colors hover:bg-accent/50 focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
+      "block h-9 w-full appearance-none rounded-md border border-input bg-surface-control px-3 pr-9 text-sm text-foreground shadow-none outline-none transition-colors hover:bg-list-hover focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
 
     return (
       <span className="relative block w-full">

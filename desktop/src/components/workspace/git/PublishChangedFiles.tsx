@@ -55,7 +55,7 @@ function PublishFileSection({
         {files.map((file) => (
           <div
             key={`${title}:${file.path}`}
-            className="flex items-center gap-3 border-b border-border/60 bg-background px-3 py-2 last:border-b-0"
+            className="flex items-center gap-3 border-b border-border/60 bg-surface-elevated-secondary px-3 py-2 last:border-b-0"
           >
             <span className="min-w-0 flex-1 truncate text-start text-xs text-foreground [direction:rtl]" title={file.path}>
               <span className="[direction:ltr] [unicode-bidi:plaintext]">{file.path}</span>

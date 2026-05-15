@@ -82,7 +82,7 @@ export function GitReviewTargetSelector({
     >
       {(close) => (
         <div className="flex flex-col gap-1">
-          <div className="flex h-7 items-center gap-1.5 rounded-lg bg-background/40 px-2 text-muted-foreground">
+          <div className="flex h-7 items-center gap-1.5 rounded-lg bg-surface-control px-2 text-muted-foreground">
             <Search className="size-3 shrink-0" />
             <Input
               value={search}

@@ -125,6 +125,20 @@
   --color-input-border: hsl(0 0% 100% / 0.2);
   --color-separator: hsl(25 8% 16%);
   --color-ring: hsl(20 6% 72%);
+  --color-border-light: hsl(0 0% 100% / 0.05);
+  --color-border-heavy: hsl(0 0% 100% / 0.14);
+
+  /* -- Surface roles -- */
+  --color-surface: var(--color-background);
+  --color-surface-under: var(--color-background);
+  --color-surface-control: var(--color-muted);
+  --color-surface-control-opaque: var(--color-card);
+  --color-surface-elevated: var(--color-card);
+  --color-surface-elevated-secondary: hsl(0 0% 100% / 0.03);
+  --color-surface-editor: var(--color-background);
+  --color-list-hover: var(--color-accent);
+  --color-foreground-secondary: var(--color-muted-foreground);
+  --color-foreground-tertiary: var(--color-faint);
 
   /* -- Highlight / Unread / Special -- */
   --color-highlight: hsl(5 19% 14%);
@@ -436,6 +450,18 @@
   --color-input-border: rgba(255, 255, 255, 0.15);
   --color-separator: #232323;
   --color-ring: rgba(131, 195, 255, 0.76);
+  --color-border-light: rgba(255, 255, 255, 0.05);
+  --color-border-heavy: rgba(255, 255, 255, 0.15);
+  --color-surface: #181818;
+  --color-surface-under: #141414;
+  --color-surface-control: rgba(43, 43, 43, 0.96);
+  --color-surface-control-opaque: #2b2b2b;
+  --color-surface-elevated: #232323;
+  --color-surface-elevated-secondary: rgba(255, 255, 255, 0.03);
+  --color-surface-editor: #282828;
+  --color-list-hover: rgba(255, 255, 255, 0.05);
+  --color-foreground-secondary: rgba(255, 255, 255, 0.7);
+  --color-foreground-tertiary: rgba(255, 255, 255, 0.5);
 
   /* -- Highlight / Unread / Special -- */
   --color-highlight: rgba(51, 156, 255, 0.12);
@@ -593,6 +619,18 @@
   --color-input-border: color-mix(in oklab, #ffffff 12%, transparent);
   --color-separator: color-mix(in oklab, #ffffff 4%, transparent);
   --color-ring: color-mix(in oklab, #339cff 70%, transparent);
+  --color-border-light: color-mix(in oklab, #ffffff 5%, transparent);
+  --color-border-heavy: color-mix(in oklab, #ffffff 12%, transparent);
+  --color-surface: #181818;
+  --color-surface-under: #141414;
+  --color-surface-control: color-mix(in oklab, #2b2b2b 96%, transparent);
+  --color-surface-control-opaque: #2b2b2b;
+  --color-surface-elevated: #212121;
+  --color-surface-elevated-secondary: color-mix(in oklab, #ffffff 3%, transparent);
+  --color-surface-editor: #282828;
+  --color-list-hover: color-mix(in oklab, #ffffff 5%, transparent);
+  --color-foreground-secondary: color-mix(in oklab, #ffffff 70%, transparent);
+  --color-foreground-tertiary: color-mix(in oklab, #ffffff 50%, transparent);
 
   --color-link: color-mix(in oklab, #339cff 12%, transparent);
   --color-link-foreground: #339cff;
@@ -698,6 +736,18 @@
   --color-input-border: rgba(255, 255, 255, 0.14);
   --color-separator: #162520;
   --color-ring: rgba(89, 229, 191, 0.7);
+  --color-border-light: rgba(255, 255, 255, 0.05);
+  --color-border-heavy: rgba(255, 255, 255, 0.14);
+  --color-surface: #0b1412;
+  --color-surface-under: #060d0b;
+  --color-surface-control: rgba(22, 37, 32, 0.96);
+  --color-surface-control-opaque: #162520;
+  --color-surface-elevated: #162520;
+  --color-surface-elevated-secondary: rgba(240, 245, 242, 0.03);
+  --color-surface-editor: #0f1b18;
+  --color-list-hover: rgba(255, 255, 255, 0.05);
+  --color-foreground-secondary: rgba(240, 245, 242, 0.7);
+  --color-foreground-tertiary: rgba(240, 245, 242, 0.5);
 
   /* -- Highlight / Unread / Special -- */
   --color-highlight: rgba(89, 229, 191, 0.1);
@@ -875,6 +925,18 @@
   --color-input-border: hsl(18 14% 7% / 0.1);
   --color-separator: hsl(44 8% 91%);
   --color-ring: hsl(39 8% 16%);
+  --color-border-light: hsl(18 14% 7% / 0.05);
+  --color-border-heavy: hsl(18 14% 7% / 0.12);
+  --color-surface: hsl(44 0% 100%);
+  --color-surface-under: hsl(44 10% 98%);
+  --color-surface-control: hsl(44 10% 96%);
+  --color-surface-control-opaque: hsl(44 10% 96%);
+  --color-surface-elevated: hsl(44 0% 100%);
+  --color-surface-elevated-secondary: hsl(18 14% 7% / 0.03);
+  --color-surface-editor: hsl(44 10% 97%);
+  --color-list-hover: hsl(18 14% 7% / 0.05);
+  --color-foreground-secondary: hsl(18 14% 7% / 0.7);
+  --color-foreground-tertiary: hsl(18 14% 7% / 0.5);
 
   --color-highlight: hsl(42 33% 97%);
   --color-highlight-foreground: hsl(14 13% 31%);
@@ -1005,8 +1067,8 @@
 
 
 /* ========================================================================
- * MONO LIGHT — cool neutral light palette
- * (Original preset shares this via the combined selector.)
+ * SHARED NEUTRAL LIGHT — base palette for mono/original before mono's
+ * Codex-aligned override below.
  * ======================================================================== */
 
 :root[data-theme="mono"][data-mode="light"],
@@ -1044,6 +1106,18 @@
   --color-input-border: rgba(13, 13, 13, 0.1);
   --color-separator: #f5f5f5;
   --color-ring: #0285ff;
+  --color-border-light: rgba(13, 13, 13, 0.05);
+  --color-border-heavy: rgba(13, 13, 13, 0.12);
+  --color-surface: #ffffff;
+  --color-surface-under: #f9f9f9;
+  --color-surface-control: rgba(237, 237, 237, 0.4);
+  --color-surface-control-opaque: #f4f4f4;
+  --color-surface-elevated: #ffffff;
+  --color-surface-elevated-secondary: rgba(13, 13, 13, 0.02);
+  --color-surface-editor: #f7f7f7;
+  --color-list-hover: rgba(13, 13, 13, 0.05);
+  --color-foreground-secondary: rgba(13, 13, 13, 0.7);
+  --color-foreground-tertiary: rgba(13, 13, 13, 0.5);
 
   --color-highlight: #dfefff;
   --color-highlight-foreground: #0d0d0d;
@@ -1163,38 +1237,50 @@
   --color-scrollbar-thumb-active: rgba(13, 13, 13, 0.16);
 
   --color-background: #ffffff;
-  --color-foreground: #0d0d0d;
+  --color-foreground: #1a1c1f;
   --color-overlay: #000000;
 
-  --color-primary: #0d0d0d;
+  --color-primary: #1a1c1f;
   --color-primary-foreground: #ffffff;
 
-  --color-secondary: rgba(13, 13, 13, 0.05);
-  --color-secondary-foreground: #0d0d0d;
+  --color-secondary: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  --color-secondary-foreground: var(--color-foreground);
 
-  --color-accent: rgba(13, 13, 13, 0.05);
-  --color-accent-foreground: #0d0d0d;
-  --color-muted: rgba(13, 13, 13, 0.025);
-  --color-muted-foreground: rgba(13, 13, 13, 0.7);
-  --color-faint: rgba(13, 13, 13, 0.5);
-  --color-helper: rgba(13, 13, 13, 0.7);
+  --color-accent: var(--color-list-hover);
+  --color-accent-foreground: var(--color-foreground);
+  --color-muted: var(--color-surface-elevated-secondary);
+  --color-muted-foreground: var(--color-foreground-secondary);
+  --color-faint: var(--color-foreground-tertiary);
+  --color-helper: var(--color-foreground-secondary);
 
-  --color-card: rgba(13, 13, 13, 0.035);
-  --color-card-foreground: #0d0d0d;
+  --color-card: var(--color-surface-elevated);
+  --color-card-foreground: var(--color-foreground);
 
-  --color-popover: #ffffff;
-  --color-popover-foreground: #0d0d0d;
-  --color-popover-accent: rgba(13, 13, 13, 0.05);
-  --color-popover-ring: rgba(13, 13, 13, 0.08);
+  --color-popover: var(--color-surface-control-opaque);
+  --color-popover-foreground: var(--color-foreground);
+  --color-popover-accent: var(--color-list-hover);
+  --color-popover-ring: var(--color-border);
 
-  --color-border: rgba(13, 13, 13, 0.08);
-  --color-input: rgba(13, 13, 13, 0.1);
-  --color-input-border: rgba(13, 13, 13, 0.08);
-  --color-separator: rgba(13, 13, 13, 0.05);
-  --color-ring: #0169cc;
+  --color-border: color-mix(in oklab, var(--color-foreground) 8%, transparent);
+  --color-input: var(--color-surface-control);
+  --color-input-border: var(--color-border);
+  --color-separator: var(--color-border-light);
+  --color-ring: #339cff;
+  --color-border-light: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  --color-border-heavy: color-mix(in oklab, var(--color-foreground) 12%, transparent);
+  --color-surface: #ffffff;
+  --color-surface-under: #f9f9f9;
+  --color-surface-control: color-mix(in oklab, #ededed 40%, transparent);
+  --color-surface-control-opaque: #f4f4f4;
+  --color-surface-elevated: #ffffff;
+  --color-surface-elevated-secondary: color-mix(in oklab, var(--color-foreground) 2%, transparent);
+  --color-surface-editor: #f7f7f7;
+  --color-list-hover: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  --color-foreground-secondary: color-mix(in oklab, var(--color-foreground) 70%, transparent);
+  --color-foreground-tertiary: color-mix(in oklab, var(--color-foreground) 50%, transparent);
 
-  --color-highlight: #deecf8;
-  --color-highlight-foreground: #0d0d0d;
+  --color-highlight: #e5f3ff;
+  --color-highlight-foreground: var(--color-foreground);
   --color-highlight-muted: #0169cc;
   --color-border-highlight: #0169cc;
   --color-unread: #0169cc;
@@ -1205,53 +1291,53 @@
   --color-success: #00a240;
   --color-success-foreground: #ffffff;
   --color-warning: #fff8e6;
-  --color-warning-foreground: #0d0d0d;
-  --color-warning-foreground-secondary: rgba(13, 13, 13, 0.5);
-  --color-warning-border: rgba(13, 13, 13, 0.08);
+  --color-warning-foreground: var(--color-foreground);
+  --color-warning-foreground-secondary: var(--color-foreground-tertiary);
+  --color-warning-border: var(--color-border);
   --color-info: #0169cc;
   --color-info-foreground: #ffffff;
   --color-positive: #00a240;
   --color-positive-muted: rgba(0, 162, 64, 0.1);
   --color-positive-foreground: #ffffff;
 
-  --color-link: #deecf8;
+  --color-link: #e5f3ff;
   --color-link-foreground: #0169cc;
   --color-link-elevated: #d8e8f7;
 
-  --color-tip: #deecf8;
-  --color-tip-border: rgba(13, 13, 13, 0.08);
+  --color-tip: #e5f3ff;
+  --color-tip-border: var(--color-border);
   --color-tip-secondary: #d8e8f7;
-  --color-tip-secondary-border: rgba(13, 13, 13, 0.08);
+  --color-tip-secondary-border: var(--color-border);
   --color-tip-muted: #0169cc;
-  --color-tip-foreground: #0d0d0d;
+  --color-tip-foreground: var(--color-foreground);
   --color-plan-border: #0169cc;
 
-  --color-switch-background: #0d0d0d;
+  --color-switch-background: var(--color-primary);
   --color-switch-foreground: #ffffff;
 
-  --color-composer-background: rgba(255, 255, 255, 0.864);
-  --color-composer-border: rgba(0, 0, 0, 0.1);
-  --color-composer-control-foreground: rgba(13, 13, 13, 0.5);
-  --color-composer-control-active-foreground: #0d0d0d;
-  --color-composer-control-muted-foreground: rgba(13, 13, 13, 0.5);
-  --color-composer-control-hover: rgba(13, 13, 13, 0.055);
-  --color-composer-send-background: #0d0d0d;
+  --color-composer-background: color-mix(in oklab, var(--color-surface-control) 90%, transparent);
+  --color-composer-border: color-mix(in oklab, var(--color-foreground) 10%, transparent);
+  --color-composer-control-foreground: var(--color-foreground-tertiary);
+  --color-composer-control-active-foreground: var(--color-foreground);
+  --color-composer-control-muted-foreground: var(--color-foreground-tertiary);
+  --color-composer-control-hover: var(--color-list-hover);
+  --color-composer-send-background: var(--color-primary);
   --color-composer-send-foreground: #ffffff;
   --color-composer-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.05);
   --color-composer-backdrop-filter: blur(16px);
 
-  --color-prose-border: rgba(13, 13, 13, 0.12);
+  --color-prose-border: var(--color-border-heavy);
 
-  --color-sidebar: #f5f5f5;
-  --color-sidebar-background: #f5f5f5;
-  --color-sidebar-foreground: #1a1c1f;
-  --color-sidebar-primary: #1a1c1f;
-  --color-sidebar-primary-foreground: #1a1c1f;
-  --color-sidebar-muted-foreground: color-mix(in oklab, #1a1c1f 50%, transparent);
-  --color-sidebar-accent: color-mix(in oklab, #1a1c1f 5%, transparent);
-  --color-sidebar-accent-foreground: #1a1c1f;
-  --color-sidebar-border: color-mix(in oklab, #1a1c1f 8%, transparent);
-  --color-sidebar-ring: #0169cc;
+  --color-sidebar: var(--color-surface-under);
+  --color-sidebar-background: var(--color-surface-under);
+  --color-sidebar-foreground: color-mix(in oklab, var(--color-foreground) 85%, transparent);
+  --color-sidebar-primary: var(--color-foreground);
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-muted-foreground: var(--color-foreground-tertiary);
+  --color-sidebar-accent: var(--color-list-hover);
+  --color-sidebar-accent-foreground: var(--color-foreground);
+  --color-sidebar-border: var(--color-border);
+  --color-sidebar-ring: var(--color-ring);
   --color-sidebar-blue: #0169cc;
 
   --color-status-backlog: rgba(13, 13, 13, 0.5);
@@ -1302,14 +1388,15 @@
   --git-removed-line-bg: color-mix(in oklab, #ba2623 15%, transparent);
   --git-removed-line-border: color-mix(in oklab, #ba2623 60%, transparent);
   --git-removed-line-highlight: color-mix(in oklab, #ba2623 15%, transparent);
-  --color-diff-main-surface: #ffffff;
-  --color-diff-surface: color-mix(in srgb, #ffffff 94%, #0d0d0d);
-  --color-diff-panel-surface: color-mix(in oklab, #0d0d0d 3%, transparent);
+  --color-diff-main-surface: var(--color-surface);
+  --color-diff-code-surface: var(--color-surface-editor);
+  --color-diff-surface: color-mix(in srgb, var(--color-surface) 94%, var(--color-foreground));
+  --color-diff-panel-surface: var(--color-surface-elevated-secondary);
   --color-diff-header-surface: var(--color-diff-surface);
   --color-diff-added: #00a240;
   --color-diff-deleted: #ba2623;
-  --diffs-fg: #0d0d0d;
-  --diffs-mixer: #0d0d0d;
+  --diffs-fg: var(--color-foreground);
+  --diffs-mixer: var(--color-foreground);
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
@@ -1955,6 +2042,14 @@ body {
   --workspace-shell-action-hover-foreground: var(--color-foreground);
 }
 
+:root[data-theme="mono"][data-mode="light"] {
+  --workspace-shell-action-border: var(--color-border);
+  --workspace-shell-action-background: var(--color-surface-elevated-secondary);
+  --workspace-shell-action-foreground: var(--color-foreground-secondary);
+  --workspace-shell-action-hover-background: var(--color-list-hover);
+  --workspace-shell-action-hover-foreground: var(--color-foreground);
+}
+
 .workspace-shell-tab {
   height: var(--workspace-shell-tab-height);
 }
@@ -2012,6 +2107,26 @@ body {
 .workspace-shell-icon-button[data-state="open"] {
   background-color: var(--workspace-shell-action-hover-background);
   color: var(--workspace-shell-action-hover-foreground);
+}
+
+.workspace-shell-split-button-left {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right-width: 0;
+}
+
+.workspace-shell-split-button-right {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.workspace-shell-split-button-right.workspace-shell-icon-button {
+  width: calc(var(--workspace-shell-action-size) - 0.25rem);
+  min-width: calc(var(--workspace-shell-action-size) - 0.25rem);
+}
+
+.workspace-shell-split-button-right.workspace-shell-action-button {
+  padding-inline: 0.375rem;
 }
 
 /* ---- Right panel tabs ---- */

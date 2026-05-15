@@ -28,13 +28,13 @@ export const CLOUD_SIDEBAR_STATUS_DEFINITIONS = {
     label: "cloud",
     tone: "ready",
     className:
-      "border-sidebar-border/65 bg-sidebar-accent/30 text-sidebar-muted-foreground/64",
+      "border-sidebar-border bg-sidebar-accent text-sidebar-muted-foreground",
   },
   archived: {
     label: "archived",
     tone: "pending",
     className:
-      "border-sidebar-border/65 bg-sidebar/70 text-sidebar-muted-foreground/72",
+      "border-sidebar-border bg-sidebar-accent text-sidebar-muted-foreground",
   },
   error: {
     label: "error",

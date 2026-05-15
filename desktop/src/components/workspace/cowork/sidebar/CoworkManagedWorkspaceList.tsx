@@ -29,7 +29,7 @@ function CoworkManagedWorkspaceBlock({
         <div className="flex w-full items-center gap-1.5 text-sm leading-4">
           <div className="flex w-4 shrink-0 items-center justify-center" aria-hidden="true" />
           <div className="flex min-w-0 flex-1 items-center gap-2 pl-4">
-            <span className="min-w-0 flex-1 truncate text-base leading-5 text-foreground">
+            <span className="min-w-0 flex-1 truncate text-base leading-5 text-sidebar-foreground">
               {workspaceLabel(workspace, index)}
             </span>
           </div>

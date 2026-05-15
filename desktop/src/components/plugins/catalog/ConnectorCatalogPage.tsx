@@ -49,7 +49,7 @@ export function ConnectorCatalogPage() {
             subtext="Fetching package availability and connection state."
           />
         ) : showLoadError ? (
-          <div className="rounded-lg border border-border bg-card/50 px-4 py-8 text-center">
+          <div className="rounded-lg border border-border bg-surface-elevated-secondary px-4 py-8 text-center">
             <div className="text-sm font-medium text-foreground">
               Couldn&apos;t load plugins
             </div>
@@ -67,7 +67,7 @@ export function ConnectorCatalogPage() {
             </div>
           </div>
         ) : state.searchEmpty ? (
-          <div className="rounded-lg border border-border bg-card/50 px-4 py-8 text-center">
+          <div className="rounded-lg border border-border bg-surface-elevated-secondary px-4 py-8 text-center">
             <div className="text-sm font-medium text-foreground">
               No plugins match "{state.searchQuery}"
             </div>
