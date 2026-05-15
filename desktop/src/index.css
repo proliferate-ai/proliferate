@@ -283,6 +283,12 @@
   --diffs-font-family: var(--font-mono);
   --diffs-font-size: 11px;
   --diffs-line-height: calc(var(--diffs-font-size, 11px) * 1.8);
+  --scratch-font-family: "Geist", var(--font-sans);
+  --scratch-code-font-family: var(--font-mono);
+  --scratch-font-size: var(--text-chat);
+  --scratch-line-height: var(--text-chat--line-height);
+  --scratch-list-marker-width: 1.35em;
+  --scratch-task-box-size: 0.82em;
   --readable-code-font-size: 0.6875rem;
   --readable-code-line-height: 1.625;
   --diffs-min-number-column-width: 4ch;
