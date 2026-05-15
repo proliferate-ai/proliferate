@@ -9,7 +9,7 @@ import { GitReviewFileTree } from "./GitReviewFileTree";
 import { Button } from "@/components/ui/Button";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { CheckCircleFilled, ChevronRight, GitBranchIcon, RefreshCw } from "@/components/ui/icons";
-import { AttachedPaneShell } from "@/components/workspace/pane/AttachedPaneShell";
+import { PaneSideOverlay } from "@/components/workspace/pane/PaneSideOverlay";
 import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
@@ -162,11 +162,11 @@ function GitPanelContent({
 
   return (
     <div className="flex h-full flex-col bg-sidebar-background text-sidebar-foreground">
-        <GitPanelHeader
-          changesFilter={changesFilter}
-          visibleChangedCount={visibleChangedCount}
-          isRuntimeReady={isRuntimeReady}
-          branchRefs={branchRefs}
+      <GitPanelHeader
+        changesFilter={changesFilter}
+        visibleChangedCount={visibleChangedCount}
+        isRuntimeReady={isRuntimeReady}
+        branchRefs={branchRefs}
         baseRef={baseRef}
         layout={layout}
         wrapLongLines={wrapLongLines}
@@ -181,22 +181,8 @@ function GitPanelContent({
         onRefresh={() => void refetch()}
       />
 
-      <AttachedPaneShell
-        side="right"
-        attachedOpen={canShowFileTree}
-        defaultAttachedWidth={184}
-        minAttachedWidth={152}
-        maxAttachedWidth={320}
-        resizeLabel="Resize file navigator"
-        attached={(
-          <GitReviewFileTree
-            sections={sections}
-            reviewEntries={reviewEntries}
-            onSelectFile={focusReviewFile}
-          />
-        )}
-      >
-        <AutoHideScrollArea className="min-h-0 min-w-0 flex-1" viewportClassName="px-2 py-2">
+      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+        <AutoHideScrollArea className="h-full min-h-0 min-w-0" viewportClassName="px-2 py-2">
           {isLoading && (
             <div className="space-y-2 px-2 py-4">
               <div className="h-3 w-32 animate-pulse rounded bg-sidebar-accent" />
@@ -260,7 +246,20 @@ function GitPanelContent({
             </div>
           )}
         </AutoHideScrollArea>
-      </AttachedPaneShell>
+        <PaneSideOverlay
+          open={canShowFileTree}
+          label="Changed files"
+          widthClassName="w-[min(320px,calc(100%-1rem))]"
+          dataAttribute="git-file-tree-overlay"
+          onClose={() => setFileTreeOpen(false)}
+        >
+          <GitReviewFileTree
+            sections={sections}
+            reviewEntries={reviewEntries}
+            onSelectFile={focusReviewFile}
+          />
+        </PaneSideOverlay>
+      </div>
     </div>
   );
 }

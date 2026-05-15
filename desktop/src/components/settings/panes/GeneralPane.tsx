@@ -7,7 +7,7 @@ import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHea
 import { Button } from "@/components/ui/Button";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { Switch } from "@/components/ui/Switch";
-import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
+import { OpenTargetIcon } from "@/components/ui/OpenTargetIcon";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useAvailableEditors } from "@/hooks/access/tauri/shell/use-available-editors";
 import { emitTurnEnd } from "@/lib/infra/events/turn-end-events";

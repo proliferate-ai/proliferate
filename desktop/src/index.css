@@ -309,6 +309,60 @@
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
 
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.file-reference-icon {
+  color: color-mix(in srgb, #339cff 64%, #003f7a 36%);
+}
+
+.file-source-view {
+  --file-source-surface: var(--color-background);
+  --file-source-gutter-surface: color-mix(in srgb, var(--color-background) 97%, var(--color-foreground));
+  --file-source-gutter-border: color-mix(in srgb, var(--color-foreground) 7%, transparent);
+  --file-source-row-hover: color-mix(in srgb, var(--color-foreground) 5%, transparent);
+  --file-source-line-number: color-mix(in srgb, var(--color-foreground) 34%, transparent);
+  --file-source-line-number-hover: color-mix(in srgb, var(--color-foreground) 58%, transparent);
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+}
+
+.file-source-view:hover {
+  scrollbar-color: var(--color-scrollbar-thumb-active) transparent;
+}
+
+.file-source-view [data-file] {
+  background: var(--file-source-surface);
+  color: var(--diffs-fg);
+}
+
+.file-source-line {
+  color: var(--diffs-fg);
+}
+
+.file-source-line:hover {
+  background: var(--file-source-row-hover);
+}
+
+.file-source-line-number {
+  background: var(--file-source-gutter-surface);
+  box-shadow: inset -1px 0 0 var(--file-source-gutter-border);
+  color: var(--file-source-line-number);
+}
+
+.file-source-line:hover .file-source-line-number {
+  color: var(--file-source-line-number-hover);
+}
+
+.file-source-line-content {
+  tab-size: 2;
+}
+
 
 /* ========================================================================
  * MONO PRESET — cool neutral dark palette
@@ -2111,16 +2165,6 @@ body {
   height: 100%;
   flex-shrink: 0;
   background-color: transparent;
-}
-
-.right-panel-tab-system .right-panel-tab-tooltip,
-.right-panel-tab-system .right-panel-terminal-tooltip,
-.right-panel-tab-system .right-panel-new-tab-tooltip {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  height: var(--tab-height);
-  min-width: 0;
 }
 
 .right-panel-tab-system .right-panel-header-entry-shell {

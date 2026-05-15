@@ -42,3 +42,11 @@ export function canPreviewAsMarkdown(path: string): boolean {
 
   return stem.startsWith("license-") || stem.startsWith("licence-");
 }
+
+export function canPreviewAsSvg(path: string): boolean {
+  return path.split(/[\\/]/).pop()?.toLowerCase().endsWith(".svg") ?? false;
+}
+
+export function canPreviewAsRichFile(path: string): boolean {
+  return canPreviewAsMarkdown(path) || canPreviewAsSvg(path);
+}

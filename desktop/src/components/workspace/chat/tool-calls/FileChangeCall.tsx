@@ -11,8 +11,7 @@ import {
   FilePlus,
   Minus,
 } from "@/components/ui/icons";
-import { useOpenInDefaultEditor } from "@/hooks/editor/workflows/use-open-in-default-editor";
-import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
+import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
 import { ToolActionRow } from "./ToolActionRow";
@@ -55,15 +54,15 @@ export function FileChangeCall({
   const hasDiff = !!patch;
   const [rowExpanded, setRowExpanded] = useState(defaultExpanded);
   const [diffExpanded, setDiffExpanded] = useState(true);
-  const { resolveAbsolute } = useWorkspacePath();
-  const { openInDefaultEditor } = useOpenInDefaultEditor();
   const actionLabel = getOperationLabel(operation, status);
   const displayPath = newWorkspacePath || workspacePath || newPath || path;
-  const absolutePath = resolveAbsolute(displayPath);
+  const fileReferenceActions = useFileReferenceActions({
+    rawPath: displayPath,
+    workspacePath: newWorkspacePath || workspacePath,
+  });
   const handleOpenFile = useCallback(() => {
-    if (!absolutePath) return;
-    void openInDefaultEditor(absolutePath);
-  }, [absolutePath, openInDefaultEditor]);
+    void fileReferenceActions.openPrimary();
+  }, [fileReferenceActions]);
   const label = buildLabel(
     actionLabel,
     operation,
@@ -89,7 +88,9 @@ export function FileChangeCall({
           deletions={nextDeletions}
           isExpanded={rowExpanded}
           onToggle={() => setRowExpanded((expanded) => !expanded)}
-          onOpenFile={absolutePath ? handleOpenFile : undefined}
+          onOpenFile={fileReferenceActions.canOpenInSidebar || fileReferenceActions.canOpenExternal
+            ? handleOpenFile
+            : undefined}
         />
         {rowExpanded && (
           <div className="mt-1.5 mb-1">
@@ -99,7 +100,9 @@ export function FileChangeCall({
               deletions={nextDeletions}
               isExpanded={diffExpanded}
               onToggleExpand={() => setDiffExpanded((expanded) => !expanded)}
-              onOpenFile={absolutePath ? handleOpenFile : undefined}
+              onOpenFile={fileReferenceActions.canOpenInSidebar || fileReferenceActions.canOpenExternal
+                ? handleOpenFile
+                : undefined}
             >
               <DiffViewer
                 patch={patch!}

@@ -487,12 +487,12 @@ export const RightPanel = memo(function RightPanel({
       const headerOrder = previous.headerOrder.filter((key) => key !== targetKey);
       const fallbackEntryKey = removedIndex > 0
         ? headerOrder[removedIndex - 1]
-        : headerOrder[removedIndex] ?? "tool:files";
+        : headerOrder[removedIndex] ?? "tool:git";
       return {
         ...previous,
         headerOrder,
         activeEntryKey: previous.activeEntryKey === targetKey
-          ? fallbackEntryKey ?? "tool:files"
+          ? fallbackEntryKey ?? "tool:git"
           : previous.activeEntryKey,
       };
     });

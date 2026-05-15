@@ -1,8 +1,6 @@
-import { useCallback } from "react";
 import { Button } from "@/components/ui/Button";
 import { ChevronRight } from "@/components/ui/icons";
-import { useOpenInDefaultEditor } from "@/hooks/editor/workflows/use-open-in-default-editor";
-import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
+import { FileReferenceBadge } from "@/components/workspace/file-references/FileReferenceBadge";
 
 const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
 
@@ -66,36 +64,13 @@ export function ActionFileLink({
   workspacePath: string | null;
   displayName: string;
 }) {
-  const { resolveAbsolute } = useWorkspacePath();
-  const { openInDefaultEditor } = useOpenInDefaultEditor();
-  const absolute = workspacePath ? resolveAbsolute(workspacePath) : null;
-  const handleOpen = useCallback(() => {
-    if (!absolute) return;
-    void openInDefaultEditor(absolute);
-  }, [absolute, openInDefaultEditor]);
-
-  if (!absolute) {
-    return (
-      <span title={pathLabel} className="min-w-0 truncate text-link-foreground">
-        {displayName}
-      </span>
-    );
-  }
-
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      data-chat-transcript-ignore
-      title={pathLabel}
-      className={`h-auto min-w-0 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-link-foreground hover:bg-transparent hover:underline focus-visible:ring-0 focus-visible:underline`}
-      onClick={(event) => {
-        event.stopPropagation();
-        handleOpen();
-      }}
-    >
-      <span className="min-w-0 truncate">{displayName}</span>
-    </Button>
+    <FileReferenceBadge
+      rawPath={pathLabel}
+      label={displayName}
+      workspacePath={workspacePath}
+      variant="inline"
+      className={`min-w-0 truncate ${CHAT_BUTTON_TEXT_CLASS} font-normal`}
+    />
   );
 }

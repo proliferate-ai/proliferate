@@ -1,9 +1,31 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createTranscriptState } from "@anyharness/sdk";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { toolItem } from "@/lib/domain/chat/transcript/transcript-presentation-test-fixtures";
 import { CollapsedActions, InlineToolActions } from "./CollapsedActions";
+
+vi.mock("@/hooks/workspaces/files/use-file-reference-actions", () => ({
+  useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
+    reference: {
+      rawPath,
+      path: rawPath,
+      line: null,
+      column: null,
+      absolutePath: `/repo/${rawPath}`,
+      workspacePath: rawPath,
+    },
+    openTargets: [],
+    canOpenInSidebar: true,
+    canOpenExternal: true,
+    copyPath: vi.fn(),
+    openInSidebar: vi.fn(),
+    openDefault: vi.fn(),
+    openPrimary: vi.fn(),
+    openWithTarget: vi.fn(),
+    reveal: vi.fn(),
+  }),
+}));
 
 describe("CollapsedActions", () => {
   it("does not cap the expanded ledger when it contains edits", () => {

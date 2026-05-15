@@ -4,6 +4,7 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -14,6 +15,7 @@ interface AutoHideScrollAreaProps {
   viewportClassName?: string;
   contentClassName?: string;
   allowHorizontal?: boolean;
+  overscrollBehavior?: CSSProperties["overscrollBehavior"];
   onViewportScroll?: (viewport: HTMLDivElement) => void;
 }
 
@@ -40,6 +42,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       viewportClassName = "",
       contentClassName = "",
       allowHorizontal = false,
+      overscrollBehavior = "none",
       onViewportScroll,
     },
     ref,
@@ -203,7 +206,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       <div className={`relative min-h-0 overflow-hidden ${className}`}>
         <div
           ref={viewportRef}
-          style={{ overscrollBehavior: "none" }}
+          style={{ overscrollBehavior }}
           className={`h-full w-full ${
             allowHorizontal
               ? "overflow-auto"

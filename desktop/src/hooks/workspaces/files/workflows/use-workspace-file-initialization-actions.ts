@@ -9,7 +9,6 @@ import type { WorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-
 import { deriveWorkspaceFileTabSeed } from "@/lib/domain/workspaces/tabs/shell-file-seed";
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
-import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -30,16 +29,6 @@ type PrefetchWorkspaceDirectoriesInput = WorkspaceFileConnectionContext & {
   isCurrent?: () => boolean;
 };
 
-function directoryPathDepth(dirPath: string): number {
-  return dirPath.split("/").filter(Boolean).length;
-}
-
-function getExpandedDirectoryPaths(treeStateKey: string): string[] {
-  return Object.keys(
-    useWorkspaceFileTreeUiStore.getState().expandedDirectoriesByTreeKey[treeStateKey] ?? {},
-  ).sort((a, b) => directoryPathDepth(a) - directoryPathDepth(b) || a.localeCompare(b));
-}
-
 function workspaceFileBufferConnectionFingerprint(input: WorkspaceFileConnectionContext): string {
   return JSON.stringify([
     input.materializedWorkspaceId,
@@ -56,11 +45,6 @@ export function useWorkspaceFileInitializationActions(fileContext: WorkspaceFile
   const prepareWorkspace = useWorkspaceViewerTabsStore((state) => state.prepareWorkspace);
   const resetFileBuffersForConnection = useWorkspaceFileBuffersStore(
     (state) => state.resetForConnection,
-  );
-  const expandDirectory = useWorkspaceFileTreeUiStore((state) => state.expandDirectory);
-  const collapseDirectory = useWorkspaceFileTreeUiStore((state) => state.collapseDirectory);
-  const removeExpandedDirectory = useWorkspaceFileTreeUiStore(
-    (state) => state.removeExpandedDirectory,
   );
 
   const assertWorkspaceRuntimeReady = useCallback((workspaceId: string): boolean => {
@@ -157,28 +141,9 @@ export function useWorkspaceFileInitializationActions(fileContext: WorkspaceFile
       authToken: accessContext.authToken,
       dirPath: "",
     });
-    for (const dirPath of getExpandedDirectoryPaths(accessContext.treeStateKey)) {
-      if (isCurrent && !isCurrent()) {
-        return;
-      }
-      try {
-        await prefetchWorkspaceDirectory({
-          materializedWorkspaceId: accessContext.materializedWorkspaceId,
-          anyharnessWorkspaceId: accessContext.anyharnessWorkspaceId,
-          runtimeUrl: accessContext.runtimeUrl,
-          authToken: accessContext.authToken,
-          dirPath,
-        });
-      } catch {
-        if (!isCurrent || isCurrent()) {
-          removeExpandedDirectory(accessContext.treeStateKey, dirPath);
-        }
-      }
-    }
   }, [
     assertWorkspaceRuntimeReady,
     prefetchWorkspaceDirectory,
-    removeExpandedDirectory,
     resolveCurrentAccessContext,
   ]);
 
@@ -191,50 +156,9 @@ export function useWorkspaceFileInitializationActions(fileContext: WorkspaceFile
     await prefetchWorkspaceDirectories(accessContext);
   }, [prefetchWorkspaceDirectories, prepareFileWorkspace, resolveCurrentAccessContext]);
 
-  const toggleDirectory = useCallback(async (dirPath: string) => {
-    if (
-      !fileContext.materializedWorkspaceId
-      || !fileContext.treeStateKey
-    ) {
-      return;
-    }
-    const isExpanded = Boolean(
-      useWorkspaceFileTreeUiStore.getState()
-        .expandedDirectoriesByTreeKey[fileContext.treeStateKey]?.[dirPath],
-    );
-    if (isExpanded) {
-      collapseDirectory(fileContext.treeStateKey, dirPath);
-      return;
-    }
-    expandDirectory(fileContext.treeStateKey, dirPath);
-    if (!assertWorkspaceRuntimeReady(fileContext.materializedWorkspaceId)) {
-      return;
-    }
-    const accessContext = await resolveCurrentAccessContext();
-    if (!accessContext) {
-      return;
-    }
-    await prefetchWorkspaceDirectory({
-      materializedWorkspaceId: accessContext.materializedWorkspaceId,
-      anyharnessWorkspaceId: accessContext.anyharnessWorkspaceId,
-      runtimeUrl: accessContext.runtimeUrl,
-      authToken: accessContext.authToken,
-      dirPath,
-    });
-  }, [
-    assertWorkspaceRuntimeReady,
-    collapseDirectory,
-    expandDirectory,
-    fileContext.materializedWorkspaceId,
-    fileContext.treeStateKey,
-    prefetchWorkspaceDirectory,
-    resolveCurrentAccessContext,
-  ]);
-
   return {
     initForWorkspace,
     prepareFileWorkspace,
     prefetchWorkspaceDirectories,
-    toggleDirectory,
   };
 }

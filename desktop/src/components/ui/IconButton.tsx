@@ -12,7 +12,7 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
   onClick?: MouseEventHandler<HTMLButtonElement>;
   className?: string;
-  title: string;
+  title?: string;
   tone?: IconButtonTone;
   size?: IconButtonSize;
   disabled?: boolean;
@@ -54,7 +54,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         ref={ref}
         type={type}
         onClick={onClick}
-        title={title}
+        title={title || undefined}
         aria-label={ariaLabel ?? title}
         disabled={disabled}
         className={`${base} ${sizeClasses[size]} ${toneClasses[tone]} ${className}`}

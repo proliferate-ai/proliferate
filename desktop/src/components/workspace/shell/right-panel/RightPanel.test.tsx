@@ -71,16 +71,12 @@ vi.mock("@/components/workspace/browser/WorkspaceBrowserPanel", () => ({
   },
 }));
 
-vi.mock("@/components/workspace/files/panel/WorkspaceFilesPanel", () => ({
-  WorkspaceFilesPanel: () => (
-    <div data-testid="files-panel">
-      <input data-testid="files-panel-input" />
+vi.mock("@/components/workspace/git/GitPanel", () => ({
+  GitPanel: () => (
+    <div data-testid="git-panel">
+      <input data-testid="git-panel-input" />
     </div>
   ),
-}));
-
-vi.mock("@/components/workspace/git/GitPanel", () => ({
-  GitPanel: () => <div data-testid="git-panel" />,
 }));
 
 vi.mock("@/components/workspace/files/FileEditorView", () => ({
@@ -129,11 +125,11 @@ afterEach(() => {
 });
 
 describe("RightPanel terminal activation", () => {
-  it("creates one default terminal lazily without leaving the Files panel", async () => {
+  it("creates one default terminal lazily without leaving the Changes panel", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
 
     await waitFor(() => expect(terminalActionsMocks.createTab).toHaveBeenCalledTimes(1));
-    expect(screen.getByTestId("files-panel")).toBeTruthy();
+    expect(screen.getByTestId("git-panel")).toBeTruthy();
   });
 
   it("opens the new tab menu with Terminal focused from a right-panel request", async () => {
@@ -367,19 +363,19 @@ describe("RightPanel tab shortcuts", () => {
     fireEvent.pointerDown(root);
     expect(document.activeElement).toBe(root);
 
-    fireEvent.keyDown(window, primaryDigitEvent(2));
+    fireEvent.keyDown(window, primaryDigitEvent(1));
 
     await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
   });
 
   it("uses primary-number shortcuts from right-panel text inputs", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
-    const input = screen.getByTestId("files-panel-input");
+    const input = screen.getByTestId("git-panel-input");
 
     input.focus();
     expect(document.activeElement).toBe(input);
 
-    fireEvent.keyDown(window, primaryDigitEvent(2));
+    fireEvent.keyDown(window, primaryDigitEvent(1));
 
     await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
   });

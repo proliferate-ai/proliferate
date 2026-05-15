@@ -62,6 +62,26 @@ export function GitReviewFileRow({
     enabled: isRuntimeReady && !collapsed && Boolean(currentDiff),
     ...(diffTimingOptions ?? {}),
   });
+  const diffErrorMessage = diffQuery.isError ? formatDiffErrorMessage(diffQuery.error) : null;
+  const additions = diffQuery.data?.additions ?? currentDiff?.additions ?? 0;
+  const deletions = diffQuery.data?.deletions ?? currentDiff?.deletions ?? 0;
+  const patch = diffQuery.data?.patch ?? null;
+  const emptyDiffMessage = formatEmptyDiffMessage({
+    binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
+    truncated: Boolean(diffQuery.data?.truncated && !patch),
+  });
+
+  if (
+    currentDiff
+    && isRuntimeReady
+    && !collapsed
+    && !patch
+    && !diffQuery.isLoading
+    && !diffErrorMessage
+    && !emptyDiffMessage
+  ) {
+    return null;
+  }
 
   return (
     <div
@@ -70,8 +90,8 @@ export function GitReviewFileRow({
     >
       <FileDiffCard
         filePath={file.displayPath}
-        additions={currentDiff?.additions ?? 0}
-        deletions={currentDiff?.deletions ?? 0}
+        additions={additions}
+        deletions={deletions}
         isExpanded={!collapsed}
         onToggleExpand={onToggleCollapsed}
         onOpenFile={() => void openFile(file.path)}
@@ -115,22 +135,60 @@ export function GitReviewFileRow({
           <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
             Loading diff
           </p>
-        ) : diffQuery.data?.patch ? (
-          <DiffViewer
-            patch={diffQuery.data.patch}
-            filePath={file.displayPath}
-            wrapLongLines={wrapLongLines}
-            layout={layout}
-            variant={layout === "unified" ? "chat" : "default"}
-            viewportClassName="max-h-[calc(var(--diffs-line-height)*24)]"
-            operationId={measurementOperationId ?? null}
-          />
-        ) : (
+        ) : diffErrorMessage ? (
           <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
-            {diffQuery.data?.binary || currentDiff.binary ? "Binary file changed" : "No diff available"}
+            Diff unavailable: {diffErrorMessage}
           </p>
-        )}
+        ) : patch ? (
+          <>
+            <DiffViewer
+              patch={patch}
+              filePath={file.displayPath}
+              wrapLongLines={wrapLongLines}
+              layout={layout}
+              variant={layout === "unified" ? "chat" : "default"}
+              viewportClassName="max-h-[calc(var(--diffs-line-height)*24)]"
+              operationId={measurementOperationId ?? null}
+              overscrollBehavior="auto"
+            />
+            {diffQuery.data?.truncated ? (
+              <p className="px-3 py-2 text-center text-xs text-sidebar-muted-foreground">
+                Diff truncated because it is too large
+              </p>
+            ) : null}
+          </>
+        ) : emptyDiffMessage ? (
+          <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
+            {emptyDiffMessage}
+          </p>
+        ) : null}
       </FileDiffCard>
     </div>
   );
+}
+
+function formatDiffErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+  return "Failed to load diff";
+}
+
+function formatEmptyDiffMessage({
+  binary,
+  truncated,
+}: {
+  binary: boolean;
+  truncated: boolean;
+}): string | null {
+  if (binary) {
+    return "Binary file changed";
+  }
+  if (truncated) {
+    return "Diff unavailable because it is too large";
+  }
+  return null;
 }

@@ -3,7 +3,6 @@ import { ChevronRight, CloudIcon, Folder, FolderFilled, GitBranchIcon, Plus, Set
 import { Tooltip } from "@/components/ui/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Button } from "@/components/ui/Button";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
 import { SHORTCUTS } from "@/config/shortcuts";
@@ -33,8 +32,7 @@ interface RepoGroupProps {
   onOpenSettings?: () => void;
 }
 
-const POPOVER_ROW =
-  "h-auto w-full justify-start gap-1.5 rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground hover:bg-popover-accent";
+const CREATE_WORKSPACE_SHORTCUT_CLASS = "shrink-0 text-muted-foreground/70";
 
 export function RepoGroup({
   name,
@@ -113,70 +111,59 @@ export function RepoGroup({
           >
             {(close) => (
               <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
+                <PopoverMenuItem
+                  icon={<Folder className="size-3.5 shrink-0" />}
+                  label="New local workspace"
+                  trailing={(
+                    <ShortcutBadge
+                      label={SHORTCUTS.newLocal.label}
+                      className={CREATE_WORKSPACE_SHORTCUT_CLASS}
+                    />
+                  )}
                   onClick={() => { close(); onNewLocalWorkspace?.(); }}
-                  className={POPOVER_ROW}
-                >
-                  <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span className="flex-1 truncate text-left">New local workspace</span>
-                  <ShortcutBadge
-                    label={SHORTCUTS.newLocal.label}
-                    className="shrink-0 text-muted-foreground/70"
-                  />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
+                />
+                <PopoverMenuItem
+                  icon={<GitBranchIcon className="size-3.5 shrink-0" />}
+                  label="New worktree"
+                  trailing={(
+                    <ShortcutBadge
+                      label={SHORTCUTS.newWorktree.label}
+                      className={CREATE_WORKSPACE_SHORTCUT_CLASS}
+                    />
+                  )}
                   onClick={() => { close(); onNewWorkspace?.(); }}
-                  className={POPOVER_ROW}
-                >
-                  <GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span className="flex-1 truncate text-left">New worktree</span>
-                  <ShortcutBadge
-                    label={SHORTCUTS.newWorktree.label}
-                    className="shrink-0 text-muted-foreground/70"
-                  />
-                </Button>
+                />
                 {onCloudWorkspaceAction && cloudWorkspaceLabel && (
                   cloudWorkspaceEnabled ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
+                    <PopoverMenuItem
+                      icon={<CloudIcon className="size-3.5 shrink-0" />}
+                      label={cloudWorkspaceLabel}
+                      trailing={(
+                        <ShortcutBadge
+                          label={getShortcutDisplayLabel(SHORTCUTS.newCloud)}
+                          className={CREATE_WORKSPACE_SHORTCUT_CLASS}
+                        />
+                      )}
                       onClick={() => { close(); onCloudWorkspaceAction(); }}
-                      className={POPOVER_ROW}
-                    >
-                      <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="flex-1 truncate text-left">{cloudWorkspaceLabel}</span>
-                      <ShortcutBadge
-                        label={getShortcutDisplayLabel(SHORTCUTS.newCloud)}
-                        className="shrink-0 text-muted-foreground/70"
-                      />
-                    </Button>
+                    />
                   ) : (
                     <Tooltip
                       content={cloudWorkspaceTooltip ?? "Cloud workspaces require a reachable control plane."}
                       className="block w-full"
                     >
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
+                      <PopoverMenuItem
                         aria-disabled="true"
                         onClick={(event) => { event.preventDefault(); }}
-                        className={`${POPOVER_ROW} cursor-not-allowed opacity-60`}
-                      >
-                        <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                        <span className="flex-1 truncate text-left">{cloudWorkspaceLabel}</span>
-                        <ShortcutBadge
-                          label={getShortcutDisplayLabel(SHORTCUTS.newCloud)}
-                          className="shrink-0 text-muted-foreground/70"
-                        />
-                      </Button>
+                        icon={<CloudIcon className="size-3.5 shrink-0" />}
+                        label={cloudWorkspaceLabel}
+                        trailing={(
+                          <ShortcutBadge
+                            label={getShortcutDisplayLabel(SHORTCUTS.newCloud)}
+                            className={CREATE_WORKSPACE_SHORTCUT_CLASS}
+                          />
+                        )}
+                        className="cursor-not-allowed opacity-60 hover:bg-transparent focus:bg-transparent"
+                      />
                     </Tooltip>
                   )
                 )}

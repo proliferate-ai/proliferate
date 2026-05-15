@@ -95,6 +95,13 @@ export function MarkdownRenderer({
               href,
               ...rest
             } = props;
+            if (href && looksLikePath(href) && !dangerouslySetInnerHTML) {
+              return (
+                <FilePathLink rawPath={href}>
+                  {children}
+                </FilePathLink>
+              );
+            }
             const merged =
               `text-link-foreground underline decoration-current decoration-[0.5px] decoration-opacity-50 transition-colors hover:decoration-opacity-100${className ? ` ${className}` : ""}`;
             if (dangerouslySetInnerHTML) {
@@ -177,9 +184,6 @@ export function MarkdownRenderer({
                   className="my-2"
                 />
               );
-            }
-            if (looksLikePath(codeString)) {
-              return <FilePathLink rawPath={codeString} />;
             }
             return (
               <code
