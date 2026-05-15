@@ -108,7 +108,7 @@ export function useMainScreenActions({
         requestRightPanelFocus();
         return;
       }
-      openRightPanelTool("git");
+      openRightPanelTool("scratch");
     }
   }, [
     openRightPanelTool,

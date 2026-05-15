@@ -734,6 +734,16 @@ export function StickyNote({ className, ...props }: IconProps) {
   );
 }
 
+export function ScratchPadIcon({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 9c1-1.5 2-1.5 3 0s2 1.5 3 0 2-1.5 3 0" />
+      <path d="M8 15c1-1.5 2-1.5 3 0s2 1.5 3 0" />
+    </svg>
+  );
+}
+
 export function Link2({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>

@@ -85,6 +85,7 @@ export interface MainScreenDataState {
   hasWorkspaceShell: boolean;
   hasLaunchIntentOnlyShell: boolean;
   isCloudWorkspaceSelected: boolean;
+  workspaceUiKey: string | null;
   selectedWorkspaceId: string | null;
   selectedWorkspace: Workspace | undefined;
   selectedCloudWorkspace: CloudWorkspaceSummary | undefined;
@@ -382,6 +383,7 @@ export function useMainScreenState(): MainScreenState {
       hasWorkspaceShell,
       hasLaunchIntentOnlyShell,
       isCloudWorkspaceSelected: selectedCloudWorkspaceId !== null,
+      workspaceUiKey,
       selectedWorkspaceId,
       selectedWorkspace,
       selectedCloudWorkspace,

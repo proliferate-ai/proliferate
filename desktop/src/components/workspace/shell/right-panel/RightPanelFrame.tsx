@@ -23,6 +23,7 @@ interface RightPanelFrameProps {
   rootRef: RefObject<HTMLDivElement | null>;
   onPointerDownCapture: PointerEventHandler<HTMLDivElement>;
   workspaceId: string | null;
+  workspaceUiKey: string | null;
   activeEntryKey: RightPanelActiveEntryKey;
   activeTool: RightPanelTool | null;
   activeBrowserId: string | null;
@@ -70,6 +71,7 @@ export function RightPanelFrame({
   rootRef,
   onPointerDownCapture,
   workspaceId,
+  workspaceUiKey,
   activeEntryKey,
   activeTool,
   activeBrowserId,
@@ -145,6 +147,7 @@ export function RightPanelFrame({
 
       <RightPanelContent
         workspaceId={workspaceId}
+        workspaceUiKey={workspaceUiKey}
         activeEntryKey={activeEntryKey}
         activeTool={activeTool}
         activeBrowserId={activeBrowserId}

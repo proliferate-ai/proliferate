@@ -1,8 +1,11 @@
 import type { ComponentType } from "react";
 import { Button } from "@/components/ui/Button";
+import { Tooltip } from "@/components/ui/Tooltip";
 import {
   CloudIcon,
   AppShellReviewIcon,
+  FileIcon,
+  ScratchPadIcon,
   type IconProps,
 } from "@/components/ui/icons";
 import type { RightPanelTool } from "@/lib/domain/workspaces/shell/right-panel-model";
@@ -23,6 +26,8 @@ interface ToolConfig {
 }
 
 const PANEL_TOOLS: Record<RightPanelTool, ToolConfig> = {
+  scratch: { label: "Scratch", icon: ScratchPadIcon },
+  files: { label: "Files", icon: FileIcon },
   git: { label: "Changes", icon: AppShellReviewIcon },
   settings: { label: "Cloud environment", icon: CloudIcon },
 };
@@ -38,36 +43,41 @@ export function ToolHeaderButton({
   const Icon = panelTool.icon;
 
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      role="tab"
-      aria-selected={isActive}
-      aria-controls={`tabpanel-workspace-right-panel-${tool}`}
-      tabIndex={isActive ? 0 : -1}
-      data-reorderable="true"
-      data-active={isActive ? true : undefined}
-      aria-grabbed={isDragging}
-      aria-label={panelTool.label}
-      onClick={() => {
-        if (shouldSuppressClick()) {
-          return;
-        }
-        onSelect();
-      }}
-      className={HEADER_TOOL_TAB_CLASS}
+    <Tooltip
+      content={panelTool.label}
+      className="right-panel-tab-tooltip"
     >
-      <span className="ui-tab-system-tab__content">
-        <Icon className="ui-tab-system-tab__icon" />
-        <span className="ui-tab-system-tab__label">
-          <span className="ui-tab-system-tab__label-primary">{panelTool.label}</span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        role="tab"
+        aria-selected={isActive}
+        aria-controls={`tabpanel-workspace-right-panel-${tool}`}
+        tabIndex={isActive ? 0 : -1}
+        data-reorderable="true"
+        data-active={isActive ? true : undefined}
+        aria-grabbed={isDragging}
+        aria-label={panelTool.label}
+        onClick={() => {
+          if (shouldSuppressClick()) {
+            return;
+          }
+          onSelect();
+        }}
+        className={HEADER_TOOL_TAB_CLASS}
+      >
+        <span className="ui-tab-system-tab__content">
+          <Icon className="ui-tab-system-tab__icon" />
+          <span className="ui-tab-system-tab__label">
+            <span className="ui-tab-system-tab__label-primary">{panelTool.label}</span>
+          </span>
+          <span
+            className="ui-tab-system-tab__dirty-indicator"
+            aria-hidden="true"
+          />
         </span>
-        <span
-          className="ui-tab-system-tab__dirty-indicator"
-          aria-hidden="true"
-        />
-      </span>
-    </Button>
+      </Button>
+    </Tooltip>
   );
 }

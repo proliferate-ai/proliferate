@@ -153,7 +153,7 @@ describe("useMainScreenActions right panel actions", () => {
     expect(spies.requestRightPanelFocus).not.toHaveBeenCalled();
   });
 
-  it("toggles a closed right panel to Changes when a singleton tool is active", () => {
+  it("toggles a closed right panel to scratch when a singleton tool is active", () => {
     const { result, spies } = renderActions({
       rightPanelState: {
         ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
@@ -168,7 +168,7 @@ describe("useMainScreenActions right panel actions", () => {
       DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
       lastCallArg(spies.setRightPanelState),
     );
-    expect(nextState.activeEntryKey).toBe("tool:git");
+    expect(nextState.activeEntryKey).toBe("tool:scratch");
     expect(spies.setRightPanelOpen).toHaveBeenCalledWith(true);
     expect(spies.requestRightPanelFocus).toHaveBeenCalledTimes(1);
   });

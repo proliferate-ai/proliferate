@@ -1,7 +1,9 @@
 import { WorkspaceBrowserPanel } from "@/components/workspace/browser/WorkspaceBrowserPanel";
 import { CloudWorkspaceSettingsPanel } from "@/components/cloud/workspace-settings/CloudWorkspaceSettingsPanel";
 import { FileEditorView } from "@/components/workspace/files/FileEditorView";
+import { WorkspaceFilesPanel } from "@/components/workspace/files/viewer/WorkspaceFilesPanel";
 import { GitPanel } from "@/components/workspace/git/GitPanel";
+import { ScratchPadPanel } from "@/components/workspace/scratch/ScratchPadPanel";
 import { RightPanelPlaceholder } from "@/components/workspace/shell/right-panel/RightPanelPlaceholder";
 import { TerminalPanel } from "@/components/workspace/terminals/TerminalPanel";
 import type { TerminalRecord } from "@anyharness/sdk";
@@ -17,6 +19,7 @@ import {
 
 interface RightPanelContentProps {
   workspaceId: string | null;
+  workspaceUiKey: string | null;
   activeEntryKey: RightPanelActiveEntryKey;
   activeTool: RightPanelTool | null;
   activeBrowserId: string | null;
@@ -44,6 +47,7 @@ interface RightPanelContentProps {
 
 export function RightPanelContent({
   workspaceId,
+  workspaceUiKey,
   activeEntryKey,
   activeTool,
   activeBrowserId,
@@ -78,6 +82,19 @@ export function RightPanelContent({
         <RightPanelPlaceholder activeEntryKey={activeEntryKey} />
       ) : (
         <>
+          {activeTool === "scratch" && (
+            <div className="absolute inset-0">
+              <ScratchPadPanel
+                key={workspaceUiKey ?? "no-workspace"}
+                workspaceKey={workspaceUiKey}
+              />
+            </div>
+          )}
+          {activeTool === "files" && (
+            <div className="absolute inset-0">
+              <WorkspaceFilesPanel />
+            </div>
+          )}
           {activeTool === "settings" && (
             <div className="absolute inset-0">
               <CloudWorkspaceSettingsPanel />

@@ -23,6 +23,12 @@ Changes is changed-file workflow:
 - review the latest completed turn as a transcript-backed file filter over
   current git diffs
 
+Scratch is local workspace notes:
+
+- store one plain Markdown scratch pad per workspace in Proliferate app data
+- keep scratch content out of the workspace repository
+- render as the default right-panel tool without forcing the panel open
+
 The durable right-panel tool id remains `git`; “Changes” is a display label.
 
 ## Viewer Targets
@@ -74,6 +80,22 @@ Zustand stores only local UI/editor state:
 
 Closing a viewer target deletes its mode/layout entries. File buffers are not a
 server read cache; they exist only for local editing and conflict metadata.
+
+Scratch content belongs to Tauri app-data access hooks. It is a local external
+resource, not Zustand state and not an AnyHarness file resource.
+
+## Right Panel Tools
+
+The durable Scratch tool id is `scratch`. New right-panel state defaults to
+Scratch first, followed by Files, Changes, and cloud Settings when available.
+Persisted selections should be normalized without opening the panel
+automatically.
+
+Workspace companion tools should use the shared pane primitives under
+`components/workspace/pane/**` for fixed-height headers, icon buttons, and
+options menus. Editable Scratch text uses the same source-view typography tokens
+as file and diff views. Shiki remains owned by shared Markdown/code renderers;
+the editable Scratch textarea is not syntax-highlighted.
 
 ## File Viewing
 

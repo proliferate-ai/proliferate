@@ -63,6 +63,7 @@ interface TerminalActivationRequest {
 
 interface RightPanelProps {
   workspaceId: string | null;
+  workspaceUiKey: string | null;
   isWorkspaceReady: boolean;
   isOpen: boolean;
   shouldKeepContentVisible?: boolean;
@@ -79,6 +80,7 @@ interface RightPanelProps {
 
 export const RightPanel = memo(function RightPanel({
   workspaceId,
+  workspaceUiKey,
   isWorkspaceReady,
   isOpen,
   shouldKeepContentVisible = false,
@@ -538,6 +540,7 @@ export const RightPanel = memo(function RightPanel({
       rootRef={rootRef}
       onPointerDownCapture={handleRootPointerDownCapture}
       workspaceId={workspaceId}
+      workspaceUiKey={workspaceUiKey}
       activeEntryKey={state.activeEntryKey}
       activeTool={activeTool}
       activeBrowserId={activeBrowserId}
