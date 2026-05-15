@@ -150,6 +150,7 @@ function ReviewTerminalReceipt({
         data-testid="review-terminal-receipt"
         className="max-w-[77%] text-right text-chat leading-[var(--text-chat--line-height)] text-muted-foreground"
       >
+        {/* Multiple reviewers can open different sessions, so each name owns its own target. */}
         {reviewerNameList(assignments, onOpenReviewerSession)}
         <span> finished reviewing {target === "PR" ? "your PR" : "your plan"}</span>
         {summary ? <span>: {summary}</span> : null}

@@ -138,7 +138,7 @@ export function CommandPaletteRoot({
           role="dialog"
           aria-modal="true"
           aria-label={label}
-          className="fixed left-1/2 top-[20vh] flex max-h-[calc(100vh-1rem)] w-[calc(100vw-16px)] max-w-[580px] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border/70 bg-popover/85 text-foreground shadow-floating-dark backdrop-blur-[16px]"
+          className="fixed left-1/2 top-[20vh] flex max-h-[calc(100vh-1rem)] w-[calc(100vw-16px)] max-w-[580px] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border/70 bg-popover/85 text-foreground shadow-floating backdrop-blur-[16px]"
           onKeyDown={onKeyDown}
         >
           <Command

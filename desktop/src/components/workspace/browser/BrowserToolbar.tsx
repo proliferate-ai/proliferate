@@ -63,7 +63,7 @@ export function BrowserToolbar({
             value={activeDraft}
             disabled={!activeTab}
             placeholder="Enter URL or localhost port"
-            className={`h-7 rounded-md border-sidebar-border bg-foreground/5 pl-7 pr-8 text-xs text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-sidebar-border ${
+            className={`h-7 rounded-md border-sidebar-border bg-sidebar-accent pl-7 pr-8 text-xs text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-sidebar-border ${
               urlError ? "border-destructive" : ""
             }`}
             spellCheck={false}
