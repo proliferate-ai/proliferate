@@ -8,6 +8,7 @@ import { renderMobilityOverlayPreview } from "@/components/playground/Playground
 import { renderActiveSlot } from "@/components/playground/composer-slots/PlaygroundActiveSlotFixtures";
 import { renderAttachedSlot } from "@/components/playground/composer-slots/PlaygroundAttachedSlotFixtures";
 import { renderOutboundSlot } from "@/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
+import { renderPlaygroundReviewTranscript } from "@/components/playground/transcript/PlaygroundReviewTranscript";
 import { renderComposerSurfaceForScenario } from "@/components/playground/PlaygroundComposerSurfaces";
 import { FILE_MENTION_SEARCH_RESULTS } from "@/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
 import {
@@ -178,6 +179,16 @@ describe("playground scenarios", () => {
 
   it("includes collapsed review feedback transcript message scenarios", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(REVIEW_TRANSCRIPT_SCENARIOS));
+
+    const completeHtml = renderToStaticMarkup(renderPlaygroundReviewTranscript("review-complete-message"));
+    expect(completeHtml).toContain("finished reviewing your plan");
+    expect(completeHtml).not.toContain("Open review feedback details");
+
+    const feedbackHtml = renderToStaticMarkup(renderPlaygroundReviewTranscript("review-feedback-message"));
+    expect(feedbackHtml).toContain("finished reviewing your PR");
+    expect(feedbackHtml).toContain("requested change");
+    expect(feedbackHtml).toContain("approved");
+    expect(feedbackHtml).not.toContain("Open review feedback details");
   });
 
   it("keeps queued rows single-line and hides edit on the active edit row", () => {

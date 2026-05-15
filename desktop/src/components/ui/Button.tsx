@@ -1,5 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { twMerge } from "tailwind-merge";
+import { Spinner } from "@/components/ui/icons";
 
 type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "destructive" | "inverted" | "unstyled";
 type ButtonSize = "sm" | "md" | "pill" | "icon" | "icon-sm" | "unstyled";
@@ -55,19 +56,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         className={twMerge(base, variantClasses[variant], sizeClasses[size], className)}
         {...props}
       >
-        {loading && (
-          <svg
-            className="size-3 animate-spin"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M21 12a9 9 0 1 1-6.22-8.56" />
-          </svg>
-        )}
+        {loading && <Spinner className="size-3" />}
         {children}
       </button>
     );

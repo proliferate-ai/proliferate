@@ -7,7 +7,7 @@ import {
   type CloudWorkspaceStatusScreenMode,
   type CloudWorkspaceStatusScreenModel,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
-import { CircleAlert, LoaderCircle } from "@/components/ui/icons";
+import { CircleAlert, Spinner } from "@/components/ui/icons";
 
 function SectionRow({
   label,
@@ -32,7 +32,7 @@ function shouldExpandByDefault(mode: CloudWorkspaceStatusScreenMode): boolean {
 
 function cloudStatusIcon(model: CloudWorkspaceStatusScreenModel) {
   if (model.mode === "pending") {
-    return <LoaderCircle className="size-3 animate-spin" />;
+    return <Spinner className="size-3" />;
   }
   return <CircleAlert className="size-3" />;
 }

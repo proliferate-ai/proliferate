@@ -1,9 +1,11 @@
 import type { ReviewAssignmentDetail } from "@anyharness/sdk";
 import { useSessionReviewsQuery } from "@anyharness/sdk-react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { FileText } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import type { ReviewFeedbackPromptReference } from "@/lib/domain/chat/subagents/provenance";
+import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
@@ -11,12 +13,14 @@ interface ReviewFeedbackSummaryProps {
   reference: ReviewFeedbackPromptReference;
   sessionId: string | null;
   state?: "queued" | "completed";
+  onOpenReviewerSession?: (sessionId: string) => void;
 }
 
 export function ReviewFeedbackSummary({
   reference,
   sessionId,
   state = "completed",
+  onOpenReviewerSession,
 }: ReviewFeedbackSummaryProps) {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const openCritique = useReviewUiStore((state) => state.openCritique);
@@ -43,6 +47,7 @@ export function ReviewFeedbackSummary({
       reviewRunId={reference.reviewRunId}
       state={state}
       target={target}
+      onOpenReviewerSession={onOpenReviewerSession}
       onOpenCritique={(assignment) => {
         openCritique({
           reviewRunId: reference.reviewRunId,
@@ -60,6 +65,7 @@ export function ReviewFeedbackSummaryView({
   reviewRunId,
   state = "completed",
   target,
+  onOpenReviewerSession,
   onOpenCritique,
 }: {
   assignments: ReviewAssignmentDetail[];
@@ -67,9 +73,21 @@ export function ReviewFeedbackSummaryView({
   reviewRunId: string;
   state?: "queued" | "completed";
   target: "plan" | "PR";
+  onOpenReviewerSession?: (sessionId: string) => void;
   onOpenCritique: (assignment: ReviewAssignmentDetail) => void;
 }) {
   const receipt = reviewFeedbackReceipt(assignments, target, state, referenceLabel);
+
+  if (state === "completed" && assignments.length > 0) {
+    return (
+      <ReviewTerminalReceipt
+        assignments={assignments}
+        target={target}
+        onOpenReviewerSession={onOpenReviewerSession}
+      />
+    );
+  }
+
   return (
     <div className="flex justify-end">
       <div
@@ -114,6 +132,142 @@ export function ReviewFeedbackSummaryView({
       </div>
     </div>
   );
+}
+
+function ReviewTerminalReceipt({
+  assignments,
+  target,
+  onOpenReviewerSession,
+}: {
+  assignments: ReviewAssignmentDetail[];
+  target: "plan" | "PR";
+  onOpenReviewerSession?: (sessionId: string) => void;
+}) {
+  const summary = reviewTerminalSummary(assignments);
+  return (
+    <div className="flex justify-end" data-telemetry-mask>
+      <p
+        data-testid="review-terminal-receipt"
+        className="max-w-[77%] text-right text-chat leading-[var(--text-chat--line-height)] text-muted-foreground"
+      >
+        {reviewerNameList(assignments, onOpenReviewerSession)}
+        <span> finished reviewing {target === "PR" ? "your PR" : "your plan"}</span>
+        {summary ? <span>: {summary}</span> : null}
+        <span>.</span>
+      </p>
+    </div>
+  );
+}
+
+function reviewerNameList(
+  assignments: ReviewAssignmentDetail[],
+  onOpenReviewerSession: ((sessionId: string) => void) | undefined,
+): ReactNode[] {
+  const names = assignments.map((assignment) => (
+    <ReviewerReceiptName
+      key={assignment.id}
+      assignment={assignment}
+      onOpenReviewerSession={onOpenReviewerSession}
+    />
+  ));
+
+  if (names.length <= 1) {
+    return names;
+  }
+
+  if (names.length === 2) {
+    return [names[0], <span key="separator-and"> and </span>, names[1]];
+  }
+
+  const result: ReactNode[] = [];
+  names.forEach((name, index) => {
+    if (index > 0) {
+      result.push(
+        <span key={`separator-${index}`}>
+          {index === names.length - 1 ? ", and " : ", "}
+        </span>,
+      );
+    }
+    result.push(name);
+  });
+  return result;
+}
+
+function ReviewerReceiptName({
+  assignment,
+  onOpenReviewerSession,
+}: {
+  assignment: ReviewAssignmentDetail;
+  onOpenReviewerSession?: (sessionId: string) => void;
+}) {
+  const identity = buildDelegatedAgentIdentity({
+    id: assignment.id,
+    title: assignment.personaLabel,
+    sessionId: assignment.reviewerSessionId,
+    sessionLinkId: assignment.sessionLinkId,
+  });
+  const label = identity.generatedName;
+  const className = `font-medium ${identity.textColorClassName}`;
+  const sessionId = assignment.reviewerSessionId?.trim() || null;
+
+  if (sessionId && onOpenReviewerSession) {
+    return (
+      <Button
+        type="button"
+        variant="unstyled"
+        size="unstyled"
+        data-chat-transcript-ignore
+        aria-label={`Open ${identity.displayName}`}
+        title={identity.displayName}
+        className={`inline h-auto p-0 align-baseline leading-[inherit] hover:underline focus-visible:underline ${className}`}
+        onClick={() => onOpenReviewerSession(sessionId)}
+      >
+        {label}
+      </Button>
+    );
+  }
+
+  return (
+    <span className={className} title={identity.displayName}>
+      {label}
+    </span>
+  );
+}
+
+function reviewTerminalSummary(assignments: ReviewAssignmentDetail[]): string | null {
+  const reviewerCount = assignments.length;
+  const approvedCount = assignments.filter((assignment) =>
+    assignment.status === "submitted" && assignment.pass
+  ).length;
+  const changesCount = assignments.filter((assignment) =>
+    assignment.status === "submitted" && !assignment.pass
+  ).length;
+  const timedOutCount = assignments.filter((assignment) =>
+    assignment.status === "timed_out"
+  ).length;
+  const failedCount = assignments.filter((assignment) =>
+    assignment.status === "system_failed" || assignment.status === "retryable_failed"
+  ).length;
+  const pendingCount = Math.max(
+    0,
+    reviewerCount - approvedCount - changesCount - timedOutCount - failedCount,
+  );
+
+  if (reviewerCount > 0 && approvedCount === reviewerCount) {
+    return null;
+  }
+
+  const parts = [
+    changesCount > 0
+      ? `${changesCount} requested ${changesCount === 1 ? "change" : "changes"}`
+      : null,
+    failedCount > 0 ? `${failedCount} failed` : null,
+    timedOutCount > 0 ? `${timedOutCount} timed out` : null,
+    approvedCount > 0 ? `${approvedCount} approved` : null,
+    pendingCount > 0 ? `${pendingCount} still reviewing` : null,
+  ].filter((part): part is string => part !== null);
+
+  return parts.join(", ") || null;
 }
 
 function ReviewFeedbackDetails({

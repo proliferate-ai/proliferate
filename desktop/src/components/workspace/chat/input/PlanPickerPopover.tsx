@@ -1,7 +1,7 @@
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { AddPlan, ClipboardList, LoaderCircle } from "@/components/ui/icons";
+import { AddPlan, ClipboardList, Spinner } from "@/components/ui/icons";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
 import { usePlanPicker } from "@/hooks/plans/ui/use-plan-picker";
@@ -95,7 +95,7 @@ export function PlanPickerContentBody({
       <div className="max-h-80 overflow-y-auto p-1">
         {picker.isLoading && (
           <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
+            <Spinner className="size-4" />
             Loading plans...
           </div>
         )}

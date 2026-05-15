@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/Button";
-import { Check, LoaderCircle } from "@/components/ui/icons";
+import { Check, Spinner } from "@/components/ui/icons";
 import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
 interface SidebarUpdatePillProps {
@@ -40,7 +40,7 @@ export function SidebarUpdatePill({
 
   const indicator =
     phase === "downloading"
-      ? <LoaderCircle className="size-3 animate-spin text-sidebar-muted-foreground" />
+      ? <Spinner className="size-3 text-sidebar-muted-foreground" />
       : phase === "ready"
         ? <Check className="size-3 text-info-foreground" />
         : null;

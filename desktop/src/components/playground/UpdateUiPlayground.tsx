@@ -6,9 +6,8 @@ import {
   ArrowUp,
   Check,
   CircleAlert,
-  LoaderCircle,
   RefreshCw,
-  type IconProps,
+  Spinner,
 } from "@/components/ui/icons";
 import {
   UPDATE_PREVIEW_STATES,
@@ -24,10 +23,10 @@ const PHASE_LABELS: Record<UpdatePreviewPhase, string> = {
   error: "Error",
 };
 
-const PHASE_ICONS: Record<UpdatePreviewPhase, ComponentType<IconProps>> = {
+const PHASE_ICONS: Record<UpdatePreviewPhase, ComponentType<{ className?: string }>> = {
   checking: RefreshCw,
   available: ArrowUp,
-  downloading: LoaderCircle,
+  downloading: Spinner,
   ready: Check,
   error: CircleAlert,
 };
@@ -118,6 +117,7 @@ function PreviewSection({
 function UpdateWorkspaceBanner({ state }: { state: UpdatePreviewState }) {
   const Icon = PHASE_ICONS[state.phase];
   const isBusy = state.phase === "checking" || state.phase === "downloading";
+  const iconClassName = `size-4 ${state.phase === "checking" ? "animate-spin" : ""}`;
   const primaryDisabled = isBusy;
 
   return (
@@ -126,7 +126,7 @@ function UpdateWorkspaceBanner({ state }: { state: UpdatePreviewState }) {
         <div
           className={`flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground/5 ${PHASE_ICON_CLASSNAMES[state.phase]}`}
         >
-          <Icon className={`size-4 ${isBusy ? "animate-spin" : ""}`} />
+          <Icon className={iconClassName} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
@@ -169,6 +169,7 @@ function UpdateWorkspaceBanner({ state }: { state: UpdatePreviewState }) {
 function UpdateSettingsStatusCard({ state }: { state: UpdatePreviewState }) {
   const Icon = PHASE_ICONS[state.phase];
   const isBusy = state.phase === "checking" || state.phase === "downloading";
+  const iconClassName = `size-5 ${state.phase === "checking" ? "animate-spin" : ""}`;
   const primaryDisabled = isBusy;
 
   return (
@@ -178,7 +179,7 @@ function UpdateSettingsStatusCard({ state }: { state: UpdatePreviewState }) {
           <div
             className={`flex size-10 shrink-0 items-center justify-center rounded-lg bg-foreground/5 ${PHASE_ICON_CLASSNAMES[state.phase]}`}
           >
-            <Icon className={`size-5 ${isBusy ? "animate-spin" : ""}`} />
+            <Icon className={iconClassName} />
           </div>
           <Badge tone={PHASE_BADGE_TONES[state.phase]}>
             {PHASE_LABELS[state.phase]}

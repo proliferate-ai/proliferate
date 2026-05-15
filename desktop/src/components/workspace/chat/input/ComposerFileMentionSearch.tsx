@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/ui/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
-import { LoaderCircle, Search } from "@/components/ui/icons";
+import { Search, Spinner } from "@/components/ui/icons";
 
 type FileSearchResult = SearchWorkspaceFilesResponse["results"][number];
 
@@ -46,7 +46,7 @@ export function ComposerFileMentionSearch({
     >
       <div className="flex h-8 items-center gap-2 border-b border-border/60 px-2.5 text-[0.5rem] text-muted-foreground">
         {isLoading ? (
-          <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
+          <Spinner className="size-3.5" />
         ) : (
           <Search className="size-3.5 shrink-0" />
         )}

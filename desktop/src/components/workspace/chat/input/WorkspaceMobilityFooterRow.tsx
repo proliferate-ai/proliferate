@@ -9,7 +9,7 @@ import {
   Folder,
   FolderOpen,
   GitBranch,
-  LoaderCircle,
+  Spinner,
 } from "@/components/ui/icons";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { WorkspaceMobilityLocationPopover } from "./WorkspaceMobilityLocationPopover";
@@ -43,7 +43,7 @@ export function WorkspaceMobilityFooterProgressStatus({
 }) {
   return (
     <div className="flex h-7 min-w-0 max-w-[34rem] shrink items-center gap-1.5 rounded-full bg-[var(--color-composer-control-hover)] px-2 text-sm text-foreground">
-      <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground" />
+      <Spinner className="size-3 text-muted-foreground" />
       <span className="min-w-0 truncate font-medium">{title}</span>
       <span className="h-3 w-px shrink-0 bg-border/80" aria-hidden="true" />
       <span className="min-w-0 truncate text-muted-foreground">{statusLabel}</span>

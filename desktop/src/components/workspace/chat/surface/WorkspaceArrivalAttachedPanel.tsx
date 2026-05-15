@@ -11,7 +11,7 @@ import { useCloudWorkspaceStatusScreenActions } from "@/hooks/cloud/workflows/us
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
-import { ArrowUpRight, LoaderCircle, X } from "@/components/ui/icons";
+import { ArrowUpRight, Spinner, X } from "@/components/ui/icons";
 import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/creation/arrival";
 import { useWorkspaceShellActions } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
 
@@ -83,7 +83,7 @@ export function WorkspaceArrivalAttachedPanelView({
         <SectionRow label="Setup">
           <div className="flex items-center gap-2 text-base">
             {isSetupRunning && (
-              <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground" />
+              <Spinner className="size-3 text-muted-foreground" />
             )}
             <span className={`shrink-0 whitespace-nowrap ${setupToneColor}`}>{viewModel.setupStatusLabel}</span>
             <span className="text-muted-foreground/40">·</span>
@@ -256,7 +256,7 @@ export function WorkspaceArrivalAttachedPanel() {
           <>
             <Badge className="shrink-0 rounded-full px-2 py-0.5 text-base">
               <span className="inline-flex items-center gap-1">
-                {isBusy && <LoaderCircle className="size-3 animate-spin" />}
+                {isBusy && <Spinner className="size-3" />}
                 <span>{panelState.badgeLabel}</span>
               </span>
             </Badge>

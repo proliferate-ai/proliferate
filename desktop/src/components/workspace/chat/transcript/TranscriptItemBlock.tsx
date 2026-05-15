@@ -114,10 +114,19 @@ export function TranscriptItemBlock({
         item.text,
       );
       if (reviewFeedbackReference) {
+        const canOpenReviewSession = (reviewerSessionId: string) =>
+          !!openSession && (canOpenSession?.(reviewerSessionId, "linked-child") ?? true);
         return (
           <ReviewFeedbackSummary
             reference={reviewFeedbackReference}
             sessionId={sessionId}
+            onOpenReviewerSession={openSession
+              ? (reviewerSessionId) => {
+                if (canOpenReviewSession(reviewerSessionId)) {
+                  openSession(reviewerSessionId, "linked-child");
+                }
+              }
+              : undefined}
           />
         );
       }
