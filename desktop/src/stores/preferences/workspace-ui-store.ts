@@ -48,10 +48,6 @@ export function markWorkspaceViewedAt(workspaceId: string, timestamp: string) {
   useWorkspaceUiStore.getState().markWorkspaceViewedAt(workspaceId, timestamp);
 }
 
-export function markSessionViewedAt(sessionId: string, timestamp: string) {
-  useWorkspaceUiStore.getState().markSessionViewedAt(sessionId, timestamp);
-}
-
 export function rememberLastViewedSession(workspaceId: string, sessionId: string) {
   useWorkspaceUiStore.getState().setLastViewedSessionForWorkspace(workspaceId, sessionId);
 }

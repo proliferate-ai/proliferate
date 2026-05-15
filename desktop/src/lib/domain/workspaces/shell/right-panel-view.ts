@@ -1,5 +1,4 @@
 import type { TerminalRecord } from "@anyharness/sdk";
-import { isApplePlatform } from "@/lib/domain/shortcuts/matching";
 import {
   browserIdsFromHeaderOrder,
   terminalIdsFromHeaderOrder,
@@ -41,26 +40,6 @@ export function rightPanelStateEqual(
   return left.activeEntryKey === right.activeEntryKey
     && arraysEqual(left.headerOrder, right.headerOrder)
     && browserTabsEqual(left.browserTabsById, right.browserTabsById);
-}
-
-export function resolvePrimaryDigitShortcutIndex(event: KeyboardEvent): number | null {
-  if (event.shiftKey || event.altKey) {
-    return null;
-  }
-
-  const isApple = isApplePlatform();
-  const hasPrimaryModifier = isApple
-    ? event.metaKey && !event.ctrlKey
-    : event.ctrlKey && !event.metaKey;
-  if (!hasPrimaryModifier) {
-    return null;
-  }
-
-  const keyDigit = /^[1-9]$/.test(event.key) ? Number.parseInt(event.key, 10) : null;
-  const codeMatch = /^Digit([1-9])$/.exec(event.code);
-  const codeDigit = codeMatch ? Number.parseInt(codeMatch[1]!, 10) : null;
-  const digit = keyDigit ?? codeDigit;
-  return digit ? digit - 1 : null;
 }
 
 function arraysEqual(left: readonly string[], right: readonly string[]): boolean {

@@ -138,10 +138,33 @@ pub(in crate::live::sessions::actor) async fn handle_apply_plan_decision(
                     .map(|error| format!("Failed to resolve native interaction: {error:?}"));
                 (next_native_state, error_message)
             }
-            PlanNativeResolution::Failed { error_message, .. } => (
-                ProposedPlanNativeResolutionState::Failed,
-                Some(error_message),
-            ),
+            PlanNativeResolution::FailAfterResolve {
+                request_id,
+                resolution,
+                error_message,
+            } => {
+                if let Err(error) = handle_resolve_interaction(
+                    handle,
+                    event_sink,
+                    interaction_broker,
+                    session_id,
+                    request_id.clone(),
+                    resolution,
+                )
+                .await
+                {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        request_id = %request_id,
+                        error = ?error,
+                        "failed to clear native interaction after proposed plan decision failed"
+                    );
+                }
+                (
+                    ProposedPlanNativeResolutionState::Failed,
+                    Some(error_message),
+                )
+            }
         };
         let mut sink = event_sink.lock().await;
         let context = sink.plan_event_context();
@@ -164,8 +187,9 @@ pub(in crate::live::sessions::actor) enum PlanNativeResolution {
         request_id: String,
         resolution: InteractionResolution,
     },
-    Failed {
+    FailAfterResolve {
         request_id: String,
+        resolution: InteractionResolution,
         error_message: String,
     },
 }
@@ -196,8 +220,9 @@ pub(in crate::live::sessions::actor) fn plan_decision_native_resolution(
                         option_id: option_id.to_string(),
                     },
                 }),
-                None => Some(PlanNativeResolution::Failed {
+                None => Some(PlanNativeResolution::FailAfterResolve {
                     request_id: link.request_id,
+                    resolution: InteractionResolution::Cancelled,
                     error_message: "Approved plan could not map to a native approval option."
                         .to_string(),
                 }),
@@ -326,16 +351,36 @@ pub(in crate::live::sessions::actor) fn map_resolve_interaction_error(
 
 #[cfg(test)]
 mod tests {
-    use anyharness_contract::v1::{ProposedPlanDecisionState, ProposedPlanNativeResolutionState};
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use agent_client_protocol as acp;
+    use anyharness_contract::v1::{
+        InteractionKind, PendingInteractionPayloadSummary, PendingInteractionSource,
+        PendingInteractionSummary, PermissionInteractionOption, PermissionInteractionOptionKind,
+        ProposedPlanDecisionState, ProposedPlanNativeResolutionState, SessionEventEnvelope,
+        SessionExecutionPhase,
+    };
     use serde_json::json;
+    use tokio::sync::{broadcast, mpsc, Mutex};
+    use tokio::time::timeout;
 
     use super::*;
+    use crate::acp::event_sink::SessionEventSink;
+    use crate::acp::permission_broker::{InteractionBroker, PermissionOutcome};
+    use crate::domains::plans::model::PlanRecord;
     use crate::domains::plans::model::{NewPlan, PlanCreateOutcome};
     use crate::domains::plans::service::{PlanEventContext, PlanService};
     use crate::domains::plans::store::PlanStore;
+    use crate::live::sessions::actor::command::SessionCommand;
+    use crate::live::sessions::handle::LiveSessionHandle;
     use crate::persistence::Db;
+    use crate::sessions::store::SessionStore;
 
-    fn plan_service_with_link(option_mappings: serde_json::Value) -> (PlanService, String) {
+    fn seed_plan_service_with_link(
+        option_mappings: serde_json::Value,
+    ) -> (Db, PlanService, PlanRecord) {
         let db = Db::open_in_memory().expect("open db");
         db.with_conn(|conn| {
             conn.execute(
@@ -353,7 +398,7 @@ mod tests {
             Ok(())
         })
         .expect("seed db");
-        let service = PlanService::new(PlanStore::new(db));
+        let service = PlanService::new(PlanStore::new(db.clone()));
         let created = service
             .create_completed_plan(
                 NewPlan {
@@ -383,7 +428,86 @@ mod tests {
         service
             .register_interaction_link(&created.plan, "request-1", "tool-1", option_mappings)
             .expect("register link");
-        (service, created.plan.id)
+        (db, service, created.plan)
+    }
+
+    fn plan_service_with_link(option_mappings: serde_json::Value) -> (PlanService, String) {
+        let (_db, service, plan) = seed_plan_service_with_link(option_mappings);
+        (service, plan.id)
+    }
+
+    fn pending_permission_summary() -> PendingInteractionSummary {
+        PendingInteractionSummary {
+            request_id: "request-1".to_string(),
+            kind: InteractionKind::Permission,
+            title: "Exit plan mode".to_string(),
+            description: None,
+            source: PendingInteractionSource {
+                tool_call_id: Some("tool-1".to_string()),
+                tool_kind: Some("exit_plan_mode".to_string()),
+                tool_status: None,
+                linked_plan_id: None,
+            },
+            payload: PendingInteractionPayloadSummary::Permission {
+                options: vec![PermissionInteractionOption {
+                    option_id: "reject-once".to_string(),
+                    label: "Reject".to_string(),
+                    kind: PermissionInteractionOptionKind::RejectOnce,
+                }],
+                context: None,
+            },
+        }
+    }
+
+    async fn live_plan_context(
+        option_mappings: serde_json::Value,
+    ) -> (
+        PlanService,
+        PlanRecord,
+        Arc<Mutex<SessionEventSink>>,
+        Arc<InteractionBroker>,
+        Arc<LiveSessionHandle>,
+        crate::acp::permission_broker::PendingPermissionWait,
+    ) {
+        let (db, service, plan) = seed_plan_service_with_link(option_mappings);
+        let session_store = SessionStore::new(db);
+        let last_event_seq = session_store
+            .next_event_seq("session-1")
+            .expect("next event seq")
+            - 1;
+        let (command_tx, _command_rx) = mpsc::channel::<SessionCommand>(4);
+        let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(16);
+        let handle = Arc::new(LiveSessionHandle::new(
+            "session-1",
+            command_tx,
+            event_tx.clone(),
+            Some("native-1".to_string()),
+            SessionExecutionPhase::Running,
+        ));
+        handle
+            .add_pending_interaction(pending_permission_summary())
+            .await;
+        let broker = Arc::new(InteractionBroker::new());
+        let wait = broker
+            .register_permission(
+                "session-1",
+                "request-1",
+                &[acp::PermissionOption::new(
+                    acp::PermissionOptionId::new("reject-once"),
+                    "Reject",
+                    acp::PermissionOptionKind::RejectOnce,
+                )],
+            )
+            .await;
+        let event_sink = Arc::new(Mutex::new(SessionEventSink::resume_from_seq(
+            "session-1".to_string(),
+            "claude".to_string(),
+            PathBuf::from("/tmp/workspace-1"),
+            last_event_seq,
+            event_tx,
+            session_store,
+        )));
+        (service, plan, event_sink, broker, handle, wait)
     }
 
     #[test]
@@ -442,11 +566,50 @@ mod tests {
                 &plan_id,
                 &ProposedPlanDecisionState::Approved,
             ),
-            Some(PlanNativeResolution::Failed {
+            Some(PlanNativeResolution::FailAfterResolve {
                 request_id: "request-1".to_string(),
+                resolution: InteractionResolution::Cancelled,
                 error_message: "Approved plan could not map to a native approval option."
                     .to_string(),
             }),
         );
+    }
+
+    #[tokio::test]
+    async fn approved_native_plan_failure_cancels_pending_permission() {
+        let (service, plan, event_sink, broker, handle, wait) = live_plan_context(json!({
+            "reject": "reject-once",
+        }))
+        .await;
+
+        let updated = handle_apply_plan_decision(
+            &handle,
+            &event_sink,
+            &broker,
+            &service,
+            "session-1",
+            &plan.id,
+            plan.decision_version,
+            ProposedPlanDecisionState::Approved,
+        )
+        .await
+        .expect("apply plan decision");
+
+        assert_eq!(updated.decision_state, ProposedPlanDecisionState::Approved);
+        assert_eq!(
+            updated.native_resolution_state,
+            ProposedPlanNativeResolutionState::Failed,
+        );
+        assert_eq!(
+            timeout(Duration::from_secs(1), wait.wait())
+                .await
+                .expect("permission wait should resolve"),
+            PermissionOutcome::Cancelled,
+        );
+        assert!(handle
+            .execution_snapshot()
+            .await
+            .pending_interactions
+            .is_empty());
     }
 }

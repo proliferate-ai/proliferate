@@ -65,7 +65,7 @@ export const SHORTCUTS = {
     nonMacLabel: "Ctrl+P",
     description: "Go to plugins",
     owner: "js",
-    match: { kind: "fixed", key: "p", meta: true, shift: false, alt: false },
+    match: { kind: "fixed-code", code: "KeyP", meta: true, shift: false, alt: false },
     allowInInputs: false,
   },
   goAutomations: {
@@ -74,7 +74,7 @@ export const SHORTCUTS = {
     nonMacLabel: "Ctrl+U",
     description: "Go to automations",
     owner: "js",
-    match: { kind: "fixed", key: "u", meta: true, shift: false, alt: false },
+    match: { kind: "fixed-code", code: "KeyU", meta: true, shift: false, alt: false },
     allowInInputs: false,
   },
   openSupport: {
@@ -83,7 +83,7 @@ export const SHORTCUTS = {
     nonMacLabel: "Ctrl+S",
     description: "Open support",
     owner: "js",
-    match: { kind: "fixed", key: "s", meta: true, shift: false, alt: false },
+    match: { kind: "fixed-code", code: "KeyS", meta: true, shift: false, alt: false },
     allowInInputs: false,
   },
   increaseTextSize: {
@@ -291,7 +291,7 @@ export const SHORTCUTS = {
     description: "Close other tabs",
     owner: "js",
     match: { kind: "fixed", key: "o", meta: true, shift: true, alt: false },
-    allowInInputs: true,
+    allowInInputs: false,
   },
   closeTabsToRight: {
     id: "workspace.close-tabs-to-right",

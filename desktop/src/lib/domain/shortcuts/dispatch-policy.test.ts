@@ -127,6 +127,22 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(false);
   });
 
+  it("blocks the close-other-tabs shift alias in text-entry targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.closeOtherTabsShiftAlias, {
+      key: "o",
+      code: "KeyO",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+      defaultPrevented: false,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(false);
+  });
+
   it("allows left-sidebar toggle from text-entry and terminal focus targets", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
       key: "b",
