@@ -43,6 +43,7 @@ export function TranscriptTurnRow({
   selectedWorkspaceId,
   sessionViewState,
   onOpenFileDiff,
+  onOpenTurnChanges,
   onOpenArtifact,
   onHandOffPlanToNewSession,
 }: {
@@ -57,6 +58,7 @@ export function TranscriptTurnRow({
   selectedWorkspaceId: string | null;
   sessionViewState: SessionViewState;
   onOpenFileDiff: (filePath: string) => void;
+  onOpenTurnChanges?: () => void;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
@@ -134,6 +136,7 @@ export function TranscriptTurnRow({
             turn={turn}
             transcript={transcript}
             onOpenFile={onOpenFileDiff}
+            onOpenReviewPane={onOpenTurnChanges}
           />
         )}
         <TurnAssistantActionRow

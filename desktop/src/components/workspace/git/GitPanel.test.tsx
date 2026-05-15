@@ -29,6 +29,14 @@ vi.mock("@/hooks/workspaces/files/use-workspace-file-actions", () => ({
   }),
 }));
 
+vi.mock("@/hooks/workspaces/files/derived/use-workspace-file-context", () => ({
+  useWorkspaceFileContext: () => ({
+    workspaceUiKey: "workspace-1",
+    materializedWorkspaceId: "workspace-1",
+    treeStateKey: "workspace-1",
+  }),
+}));
+
 vi.mock("@/hooks/workspaces/derived/use-git-panel-state", () => ({
   useGitPanelState: () => mockGitPanelState(),
 }));

@@ -13,9 +13,15 @@ interface TurnDiffPanelProps {
   turn: TurnRecord;
   transcript: TranscriptState;
   onOpenFile: (filePath: string) => void;
+  onOpenReviewPane?: () => void;
 }
 
-export function TurnDiffPanel({ turn, transcript, onOpenFile }: TurnDiffPanelProps) {
+export function TurnDiffPanel({
+  turn,
+  transcript,
+  onOpenFile,
+  onOpenReviewPane,
+}: TurnDiffPanelProps) {
   const filePatches = useMemo(
     () => collectTurnFilePatches(turn, transcript).filter((fp) => fp.patches.length > 0),
     [turn, transcript],
@@ -59,6 +65,9 @@ export function TurnDiffPanel({ turn, transcript, onOpenFile }: TurnDiffPanelPro
             isExpanded={isExpanded}
             onToggleExpand={() => toggleExpanded(fp.path)}
             onOpenFile={() => onOpenFile(fp.path)}
+            onOpenAction={onOpenReviewPane}
+            openActionLabel={onOpenReviewPane ? "Open changes review" : undefined}
+            openActionTitle={onOpenReviewPane ? "Open changes review" : undefined}
             embedded
           >
             {combinedPatch && (

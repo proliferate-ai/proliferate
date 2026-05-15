@@ -169,6 +169,9 @@ interface FileDiffCardProps {
   isExpanded: boolean;
   onToggleExpand?: () => void;
   onOpenFile?: () => void;
+  onOpenAction?: () => void;
+  openActionLabel?: string;
+  openActionTitle?: string;
   actions?: ReactNode;
   children?: ReactNode;
   embedded?: boolean;
@@ -183,6 +186,9 @@ export function FileDiffCard({
   isExpanded,
   onToggleExpand,
   onOpenFile,
+  onOpenAction,
+  openActionLabel,
+  openActionTitle,
   actions,
   children,
   embedded = false,
@@ -193,6 +199,7 @@ export function FileDiffCard({
     collapsible
     && !!onToggleExpand
     && (!!children || additions > 0 || deletions > 0);
+  const handleOpenAction = onOpenAction ?? onOpenFile;
   const showChildren = !!children && (!collapsible || isExpanded);
   const basename = extractBasename(filePath);
   const surfaceTextClass = surface === "sidebar" ? "text-sidebar-foreground" : "text-foreground";
@@ -285,7 +292,7 @@ export function FileDiffCard({
                   deletions={deletions}
                   className="leading-none"
                 />
-                {onOpenFile && (
+                {handleOpenAction && (
                   <div className="shrink-0 opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100">
                     <Button
                       type="button"
@@ -293,11 +300,11 @@ export function FileDiffCard({
                       size="icon-sm"
                       onClick={(event) => {
                         event.stopPropagation();
-                        onOpenFile();
+                        handleOpenAction();
                       }}
                       className={`size-5 rounded-lg border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
-                      aria-label={`Open ${filePath}`}
-                      title="Open file"
+                      aria-label={openActionLabel ?? `Open ${filePath}`}
+                      title={openActionTitle ?? "Open file"}
                     >
                       <ArrowUpRight className="size-3" />
                     </Button>

@@ -110,7 +110,7 @@ export function MessageList({
   }), [retryPrompt, dismissPrompt]);
   const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
   const latestTurn = latestTurnId ? transcript.turnsById[latestTurnId] ?? null : null;
-  const { openFileDiff } = useWorkspaceFileActions();
+  const { openFileDiff, openGitReviewPane } = useWorkspaceFileActions();
   const { openArtifact } = useOpenCoworkArtifact();
   const latestTurnHasAssistantRenderableContent = turnHasAssistantRenderableTranscriptContent(
     latestTurn,
@@ -348,6 +348,7 @@ export function MessageList({
         selectedWorkspaceId={selectedWorkspaceId}
         sessionViewState={sessionViewState}
         onOpenFileDiff={(filePath) => void openFileDiff(filePath)}
+        onOpenTurnChanges={() => openGitReviewPane({ mode: "last_turn" })}
         onOpenArtifact={openArtifact}
         onHandOffPlanToNewSession={onHandOffPlanToNewSession}
       />
@@ -360,6 +361,7 @@ export function MessageList({
     onHandOffPlanToNewSession,
     openArtifact,
     openFileDiff,
+    openGitReviewPane,
     optimisticPromptTrailingStatus,
     outboxStartedAtByPromptId,
     outboxActions,

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useStageGitPathsMutation,
   useUnstageGitPathsMutation,
@@ -12,6 +12,7 @@ import { CheckCircleFilled, ChevronRight, GitBranchIcon, RefreshCw } from "@/com
 import { AttachedPaneShell } from "@/components/workspace/pane/AttachedPaneShell";
 import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
 import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state";
 import {
   gitPanelEmptyDescription,
@@ -25,6 +26,7 @@ import {
   gitReviewEntryForFile,
   type GitReviewFileEntry,
 } from "@/lib/domain/workspaces/changes/git-review-entries";
+import { useGitPanelUiStore } from "@/stores/editor/git-panel-ui-store";
 
 export function GitPanel() {
   const diffReviewMeasurement = useDiffReviewMeasurement();
@@ -55,6 +57,12 @@ function GitPanelContent({
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<GitPanelReviewScope>>(new Set());
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
+  const fileContext = useWorkspaceFileContext();
+  const modeRequest = useGitPanelUiStore((state) =>
+    fileContext.materializedWorkspaceId
+      ? state.modeRequestsByWorkspace[fileContext.materializedWorkspaceId] ?? null
+      : null
+  );
   const { openFile } = useWorkspaceFileActions();
   const {
     activeWorkspaceId,
@@ -90,6 +98,15 @@ function GitPanelContent({
   );
   const allFilesCollapsed = reviewEntries.length > 0
     && reviewEntries.every((entry) => collapsedFiles.has(entry.key));
+
+  useEffect(() => {
+    if (!modeRequest) {
+      return;
+    }
+    setChangesFilter(modeRequest.mode);
+    setCollapsedSections(new Set());
+    setCollapsedFiles(new Set());
+  }, [modeRequest]);
 
   const handleToggleLayout = useCallback(() => {
     setLayout((value) => value === "split" ? "unified" : "split");
