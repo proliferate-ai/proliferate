@@ -1,5 +1,8 @@
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import { logicalWorkspaceCloudMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
+import {
+  logicalWorkspaceCloudMaterializationId,
+  logicalWorkspaceTargetMaterializationId,
+} from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 
 export function logicalWorkspaceMatchesId(
   workspace: LogicalWorkspace,
@@ -11,7 +14,8 @@ export function logicalWorkspaceMatchesId(
 
   return candidateId === workspace.id
     || candidateId === workspace.localWorkspace?.id
-    || candidateId === logicalWorkspaceCloudMaterializationId(workspace);
+    || candidateId === logicalWorkspaceCloudMaterializationId(workspace)
+    || candidateId === logicalWorkspaceTargetMaterializationId(workspace);
 }
 
 export function logicalWorkspaceRelatedIds(
@@ -30,6 +34,7 @@ export function logicalWorkspaceRelatedIds(
   pushId(workspace.id);
   pushId(workspace.localWorkspace?.id);
   pushId(logicalWorkspaceCloudMaterializationId(workspace));
+  pushId(logicalWorkspaceTargetMaterializationId(workspace));
   pushId(workspace.preferredMaterializationId);
   return ids;
 }

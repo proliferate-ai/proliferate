@@ -37,6 +37,8 @@ export interface AutomationRunRecord {
   triggerKind: "scheduled" | "manual";
   scheduledFor: string | null;
   executionTarget: AutomationExecutionTarget;
+  targetIdSnapshot: string | null;
+  targetKindSnapshot: string | null;
   status:
     | "queued"
     | "claimed"

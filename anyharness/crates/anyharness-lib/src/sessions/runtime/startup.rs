@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::domains::agents::model::{AgentKind, ResolvedAgent};
-use crate::domains::agents::readiness::resolver::resolve_agent;
+use crate::domains::agents::readiness::resolver::resolve_agent_with_env;
 use crate::domains::agents::registry::built_in_registry;
 use crate::live::sessions::actor::state::SessionStartupStrategy;
 use crate::live::sessions::handle::LiveSessionHandle;
@@ -350,8 +350,13 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.start_live_session.agent_descriptor_found"
         );
 
+        let workspace_path = PathBuf::from(&workspace.path);
+        let workspace_env = self
+            .workspace_runtime
+            .workspace_env(&workspace)
+            .map_err(StartSessionError::Internal)?;
         let agent_resolution_started = Instant::now();
-        let resolved_agent = resolve_agent(descriptor, &self.runtime_home);
+        let resolved_agent = resolve_agent_with_env(descriptor, &self.runtime_home, &workspace_env);
         tracing::info!(
             session_id = %record.id,
             agent_kind = %record.agent_kind,
@@ -365,11 +370,6 @@ impl SessionRuntime {
         let session_launch_env = build_session_launch_env(&resolved_agent);
         let session_store = self.session_service.store().clone();
         let attachment_storage = self.session_service.attachment_storage().clone();
-        let workspace_path = PathBuf::from(&workspace.path);
-        let workspace_env = self
-            .workspace_runtime
-            .workspace_env(&workspace)
-            .map_err(StartSessionError::Internal)?;
         let mcp_launch = assemble_session_mcp_launch(
             self.session_data_cipher.as_ref(),
             &self.session_extensions,

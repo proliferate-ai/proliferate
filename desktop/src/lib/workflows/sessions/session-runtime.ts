@@ -85,6 +85,10 @@ function buildConnection(target: RuntimeTarget): AnyHarnessWorkspaceSessionConne
   };
 }
 
+function mcpTargetLocation(target: RuntimeTarget): "local" | "cloud" {
+  return target.location === "local" ? "local" : "cloud";
+}
+
 async function measureSessionWorkflowStep<T>(
   operationId: MeasurementOperationId | null | undefined,
   step: MeasurementWorkflowStep,
@@ -284,7 +288,7 @@ export async function resumeSession(
       measurementOperationId,
       "session.resume.resolve_mcp",
       () => resolveSessionMcpServersForLaunch({
-        targetLocation: target.location,
+        targetLocation: mcpTargetLocation(target),
         workspacePath: workspace.path ?? null,
         launchId: `${sessionId}:${crypto.randomUUID()}`,
         policy: {

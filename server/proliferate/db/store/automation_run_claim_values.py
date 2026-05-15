@@ -21,6 +21,8 @@ class AutomationRunClaimValue:
     git_provider: str
     git_owner: str
     git_repo_name: str
+    cloud_target_id_snapshot: UUID | None
+    cloud_target_kind_snapshot: str | None
     agent_kind: str | None
     model_id: str | None
     mode_id: str | None
@@ -53,6 +55,8 @@ def claim_value(run: AutomationRun) -> AutomationRunClaimValue:
         git_provider=run.git_provider_snapshot,
         git_owner=run.git_owner_snapshot,
         git_repo_name=run.git_repo_name_snapshot,
+        cloud_target_id_snapshot=run.cloud_target_id_snapshot,
+        cloud_target_kind_snapshot=run.cloud_target_kind_snapshot,
         agent_kind=run.agent_kind_snapshot,
         model_id=run.model_id_snapshot,
         mode_id=run.mode_id_snapshot,

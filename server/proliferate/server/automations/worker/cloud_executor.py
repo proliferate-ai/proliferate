@@ -12,6 +12,12 @@ from proliferate.server.automations.domain.claim_lifecycle import (
     RECLAIMABLE_STATUSES,
     unconfigured_agent_failure,
 )
+from proliferate.server.automations.worker.cloud_execution.context import (
+    AutomationExecutionContext,
+)
+from proliferate.server.automations.worker.cloud_execution.pipeline import (
+    run_automation_pipeline,
+)
 from proliferate.server.automations.worker.cloud_executor_claims import (
     fail_claim,
     heartbeat_loop,
@@ -20,14 +26,6 @@ from proliferate.server.automations.worker.cloud_executor_config import (
     CloudExecutorConfig,
     build_cloud_executor_config,
     default_cloud_executor_config,
-)
-from proliferate.server.automations.worker.cloud_executor_session import (
-    create_or_load_session,
-    send_prompt,
-)
-from proliferate.server.automations.worker.cloud_executor_workspace import (
-    create_or_load_workspace,
-    provision_workspace_for_claim,
 )
 from proliferate.utils.time import utcnow
 
@@ -64,19 +62,11 @@ async def process_cloud_automation_run(
             await fail_claim(claim, code="agent_not_ready")
             return
 
-        current = await create_or_load_workspace(claim, config=config)
-        if current is None or stale_claim.is_set():
-            return
-
-        current = await provision_workspace_for_claim(current)
-        if current is None or stale_claim.is_set():
-            return
-
-        context = await create_or_load_session(current)
-        if context is None or stale_claim.is_set():
-            return
-
-        await send_prompt(context)
+        await run_automation_pipeline(
+            AutomationExecutionContext(claim=claim),
+            config=config,
+            stale_claim_event=stale_claim,
+        )
     except Exception:
         logger.exception("automation cloud executor run failed unexpectedly run_id=%s", claim.id)
         await fail_claim(claim, code="unexpected_executor_error")

@@ -17,7 +17,6 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SERVER_DIR = REPO_ROOT / "server"
 INSTALLER_PATH = REPO_ROOT / "install" / "proliferate-target-install.sh"
@@ -248,7 +247,8 @@ run_bounded systemctl --user stop {shell_quote(args.service_name)}.service 2>/de
 run_bounded systemctl --user disable {shell_quote(args.service_name)}.service 2>/dev/null || true
 rm -f "$HOME/.config/systemd/user/{args.service_name}.service"
 run_bounded systemctl --user daemon-reload 2>/dev/null || true
-run_bounded systemctl --user reset-failed {shell_quote(args.service_name)}.service 2>/dev/null || true
+run_bounded systemctl --user reset-failed \\
+  {shell_quote(args.service_name)}.service 2>/dev/null || true
 rm -rf {remote_path_expr(args.remote_home)}
 rm -rf {shell_quote(args.remote_home)}
 """
@@ -447,7 +447,12 @@ def wait_for_target(
     while time.monotonic() < deadline:
         last = request_json(url, token=token)
         versions = last.get("update", {}).get("currentVersions") or {}
-        if last.get("status") == "online" and versions.get("anyharnessVersion"):
+        if (
+            last.get("status") == "online"
+            and versions.get("anyharnessVersion")
+            and versions.get("workerVersion")
+            and versions.get("supervisorVersion")
+        ):
             return last
         time.sleep(2)
     raise SmokeError(

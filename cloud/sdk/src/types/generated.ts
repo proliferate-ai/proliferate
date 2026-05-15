@@ -86,6 +86,8 @@ export type CloudWorkspaceDetail = Omit<
 export type CloudOriginContext        = components["schemas"]["OriginContext"];
 export type CloudWorkspaceCreatorContext =
   components["schemas"]["WorkspaceCreatorContext"];
+export type CloudWorkspaceDirectTargetContext =
+  components["schemas"]["WorkspaceDirectTargetContext"];
 export type CloudConnectionInfo       = components["schemas"]["WorkspaceConnection"];
 export type CloudCredentialMutationResponse =
   components["schemas"]["CloudCredentialMutationResponse"];

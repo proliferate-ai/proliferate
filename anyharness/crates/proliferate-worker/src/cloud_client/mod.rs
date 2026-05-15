@@ -5,6 +5,7 @@ pub mod events;
 pub mod heartbeat;
 pub mod inventory;
 pub mod target_config;
+pub mod target_git_identity;
 pub mod updates;
 
 use std::time::Duration;

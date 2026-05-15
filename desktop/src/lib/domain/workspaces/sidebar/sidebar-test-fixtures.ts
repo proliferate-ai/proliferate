@@ -101,6 +101,7 @@ export function makeCloudWorkspace(args: {
   displayName?: string | null;
   origin?: SidebarCloudWorkspaceSummary["origin"];
   creatorContext?: SidebarCloudWorkspaceSummary["creatorContext"];
+  directTargetContext?: SidebarCloudWorkspaceSummary["directTargetContext"];
   status?: SidebarCloudWorkspaceSummary["status"];
   updatedAt?: string;
 }): SidebarCloudWorkspaceSummary {
@@ -111,6 +112,7 @@ export function makeCloudWorkspace(args: {
     displayName = null,
     origin = null,
     creatorContext = null,
+    directTargetContext = null,
     status = "ready",
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
@@ -120,6 +122,7 @@ export function makeCloudWorkspace(args: {
     displayName,
     origin,
     creatorContext,
+    directTargetContext,
     repo: {
       provider: "github",
       owner: "proliferate-ai",

@@ -87,7 +87,7 @@ impl MaterializeWorkspaceRequest {
                 creator_context,
                 ..
             } => compact_object(json!({
-                "path": path,
+                "path": expand_home(path),
                 "origin": origin,
                 "creatorContext": creator_context,
             })),
@@ -101,7 +101,7 @@ impl MaterializeWorkspaceRequest {
                 creator_context,
             } => compact_object(json!({
                 "repoRootId": repo_root_id,
-                "targetPath": target_path,
+                "targetPath": expand_home(target_path),
                 "newBranchName": new_branch_name,
                 "baseBranch": base_branch,
                 "setupScript": setup_script,
@@ -119,7 +119,7 @@ impl MaterializeWorkspaceRequest {
                 creator_context,
                 ..
             } => compact_object(json!({
-                "path": path,
+                "path": expand_home(path),
                 "origin": origin,
                 "creatorContext": creator_context,
             })),
@@ -129,7 +129,7 @@ impl MaterializeWorkspaceRequest {
                 creator_context,
                 ..
             } => compact_object(json!({
-                "path": target_path,
+                "path": expand_home(target_path),
                 "origin": origin,
                 "creatorContext": creator_context,
             })),
@@ -186,6 +186,20 @@ impl MaterializeWorkspaceRequest {
             None => true,
         }
     }
+}
+
+fn expand_home(path: &str) -> String {
+    if path == "~" {
+        return dirs::home_dir()
+            .map(|home| home.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string());
+    }
+    if let Some(rest) = path.strip_prefix("~/") {
+        return dirs::home_dir()
+            .map(|home| home.join(rest).to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string());
+    }
+    path.to_string()
 }
 
 impl AnyHarnessClient {
@@ -376,6 +390,23 @@ mod tests {
                 "creatorContext": { "kind": "human" }
             })
         );
+    }
+
+    #[test]
+    fn materialize_workspace_bodies_expand_home_paths_for_anyharness() {
+        let home = dirs::home_dir()
+            .expect("home dir")
+            .join("proliferate-workspaces")
+            .to_string_lossy()
+            .into_owned();
+        let request = MaterializeWorkspaceRequest::ExistingPath {
+            path: "~/proliferate-workspaces".to_string(),
+            display_name: None,
+            origin: None,
+            creator_context: None,
+        };
+
+        assert_eq!(request.anyharness_body(), json!({ "path": home }));
     }
 
     #[test]

@@ -1,13 +1,22 @@
 import { useState } from "react";
 import { useCloudTargetMutations } from "@/hooks/access/cloud/targets/use-cloud-target-mutations";
+import { setSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile";
 
 interface StartSshEnrollmentInput {
   displayName: string;
   defaultWorkspaceRoot?: string | null;
+  directAccess?: {
+    sshHost: string;
+    sshUser: string;
+    sshPort: number;
+    identityFile?: string | null;
+    remoteAnyHarnessPort: number;
+  } | null;
 }
 
 interface ComputeTargetEnrollmentResult {
   installCommand: string;
+  targetId: string;
 }
 
 export function useComputeTargetEnrollment() {
@@ -25,8 +34,18 @@ export function useComputeTargetEnrollment() {
         ownerScope: "personal",
         defaultWorkspaceRoot: input.defaultWorkspaceRoot ?? null,
       });
-      setResult(next);
-      return next;
+      if (input.directAccess) {
+        await setSshDirectTargetProfile({
+          targetId: next.target.id,
+          ...input.directAccess,
+        });
+      }
+      const result = {
+        installCommand: next.installCommand,
+        targetId: next.target.id,
+      };
+      setResult(result);
+      return result;
     },
   };
 }

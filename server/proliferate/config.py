@@ -101,6 +101,7 @@ class Settings(BaseSettings):
     stripe_checkout_cancel_url: str = ""
     stripe_customer_portal_return_url: str = ""
     sandbox_provider: str = "e2b"
+    cloud_worker_base_url: str = ""
     cloud_runtime_source_binary_path: str = ""
     cloud_worker_source_binary_path: str = ""
     cloud_supervisor_source_binary_path: str = ""

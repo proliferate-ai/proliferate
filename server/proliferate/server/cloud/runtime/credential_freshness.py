@@ -284,7 +284,7 @@ exit 1
             sandbox,
             workspace_id=workspace_id,
             label="stop_legacy_runtime_for_credential_refresh",
-            command="sh -lc " + shlex.quote(script),
+            command="bash -lc " + shlex.quote(script),
             runtime_context=runtime_context,
             timeout_seconds=15,
         ),

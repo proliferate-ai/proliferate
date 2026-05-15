@@ -23,6 +23,7 @@ use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;
 use crate::workspaces::creator_context::WorkspaceCreatorContext;
+use crate::workspaces::env::read_materialized_session_env;
 
 const BRANCH_PUBLISH_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -593,6 +594,7 @@ impl WorkspaceRuntime {
         if workspace.kind == "worktree" {
             env.insert("PROLIFERATE_WORKTREE_DIR".into(), workspace.path.clone());
         }
+        env.extend(read_materialized_session_env(Path::new(&workspace.path))?);
 
         Ok(env.into_iter().collect())
     }

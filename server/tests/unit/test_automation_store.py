@@ -8,13 +8,40 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from proliferate.constants.automations import AUTOMATION_EXECUTION_TARGET_CLOUD
 from proliferate.constants.automations import AUTOMATION_RUN_STATUS_QUEUED
 from proliferate.constants.automations import AUTOMATION_RUN_TRIGGER_SCHEDULED
+from proliferate.constants.cloud import CloudTargetKind
 from proliferate.db import engine as engine_module
+from proliferate.db.models.auth import User
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.store.automations import (
     AutomationScheduleAdvance,
     create_due_scheduled_runs_batch,
 )
+from proliferate.db.store.cloud_sync import targets as targets_store
+
+
+async def _create_managed_target(session, *, user_id: uuid.UUID):  # type: ignore[no-untyped-def]
+    session.add(
+        User(
+            id=user_id,
+            email=f"automation-store-{user_id}@example.com",
+            hashed_password="!",
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+        )
+    )
+    await session.flush()
+    return await targets_store.create_target(
+        session,
+        display_name="Managed cloud",
+        kind=CloudTargetKind.managed_cloud.value,
+        owner_scope="personal",
+        owner_user_id=user_id,
+        organization_id=None,
+        created_by_user_id=user_id,
+        default_workspace_root=None,
+    )
 
 
 @pytest.mark.asyncio
@@ -28,6 +55,8 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
 
     try:
         async with engine_module.async_session_factory() as session:
+            target = await _create_managed_target(session, user_id=user_id)
+            target_id = target.id
             good_repo = CloudRepoConfig(
                 user_id=user_id,
                 git_owner="proliferate-ai",
@@ -69,6 +98,8 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
                 schedule_timezone="UTC",
                 schedule_summary="Hourly at :00 in UTC",
                 execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+                cloud_target_id=target_id,
+                cloud_target_kind_snapshot=CloudTargetKind.managed_cloud.value,
                 agent_kind="codex",
                 model_id=None,
                 mode_id=None,
@@ -89,6 +120,8 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
                 schedule_timezone="UTC",
                 schedule_summary="Bad",
                 execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+                cloud_target_id=target_id,
+                cloud_target_kind_snapshot=CloudTargetKind.managed_cloud.value,
                 agent_kind="codex",
                 model_id=None,
                 mode_id=None,
@@ -163,6 +196,8 @@ async def test_due_scheduler_advances_after_duplicate_scheduled_slot(
 
     try:
         async with engine_module.async_session_factory() as session:
+            target = await _create_managed_target(session, user_id=user_id)
+            target_id = target.id
             repo = CloudRepoConfig(
                 user_id=user_id,
                 git_owner="proliferate-ai",
@@ -189,6 +224,8 @@ async def test_due_scheduler_advances_after_duplicate_scheduled_slot(
                 schedule_timezone="UTC",
                 schedule_summary="Hourly at :00 in UTC",
                 execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+                cloud_target_id=target_id,
+                cloud_target_kind_snapshot=CloudTargetKind.managed_cloud.value,
                 agent_kind="codex",
                 model_id=None,
                 mode_id=None,
@@ -215,6 +252,8 @@ async def test_due_scheduler_advances_after_duplicate_scheduled_slot(
                 git_owner_snapshot=repo.git_owner,
                 git_repo_name_snapshot=repo.git_repo_name,
                 cloud_repo_config_id_snapshot=repo.id,
+                cloud_target_id_snapshot=target_id,
+                cloud_target_kind_snapshot=CloudTargetKind.managed_cloud.value,
                 agent_kind_snapshot=automation.agent_kind,
                 model_id_snapshot=automation.model_id,
                 mode_id_snapshot=automation.mode_id,
@@ -273,5 +312,89 @@ async def test_due_scheduler_advances_after_duplicate_scheduled_slot(
         assert automation.last_scheduled_at is None
         assert len(runs) == 1
         assert runs[0].scheduled_for == now
+    finally:
+        engine_module.async_session_factory = original_factory
+
+
+@pytest.mark.asyncio
+async def test_due_scheduler_skips_cloud_automation_without_target_snapshot(
+    test_engine,  # type: ignore[no-untyped-def]
+) -> None:
+    original_factory = engine_module.async_session_factory
+    engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    now = datetime(2026, 4, 20, 12, 0, tzinfo=UTC)
+    user_id = uuid.uuid4()
+
+    try:
+        async with engine_module.async_session_factory() as session:
+            repo = CloudRepoConfig(
+                user_id=user_id,
+                git_owner="proliferate-ai",
+                git_repo_name="missing-target",
+                configured=True,
+                configured_at=now,
+                default_branch="main",
+                env_vars_ciphertext="",
+                env_vars_version=0,
+                setup_script="",
+                setup_script_version=0,
+                files_version=0,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(repo)
+            await session.flush()
+            automation = Automation(
+                user_id=user_id,
+                cloud_repo_config_id=repo.id,
+                title="Missing target",
+                prompt="Run once",
+                schedule_rrule="RRULE:FREQ=HOURLY;INTERVAL=1;BYMINUTE=0",
+                schedule_timezone="UTC",
+                schedule_summary="Hourly at :00 in UTC",
+                execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+                cloud_target_id=None,
+                cloud_target_kind_snapshot=None,
+                agent_kind="codex",
+                model_id=None,
+                mode_id=None,
+                reasoning_effort=None,
+                enabled=True,
+                paused_at=None,
+                next_run_at=now,
+                last_scheduled_at=None,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(automation)
+            await session.commit()
+            automation_id = automation.id
+
+        def _advance(fields, _now):  # type: ignore[no-untyped-def]
+            return AutomationScheduleAdvance(
+                scheduled_for=fields.next_run_at,
+                next_run_at=now + timedelta(hours=1),
+            )
+
+        async with engine_module.async_session_factory() as session, session.begin():
+            created = await create_due_scheduled_runs_batch(
+                session,
+                now=now,
+                limit=10,
+                schedule_advance_resolver=_advance,
+            )
+
+        async with engine_module.async_session_factory() as session:
+            automation = await session.get(Automation, automation_id)
+            run = (
+                await session.execute(
+                    select(AutomationRun).where(AutomationRun.automation_id == automation_id)
+                )
+            ).scalar_one_or_none()
+
+        assert created == 0
+        assert automation is not None
+        assert automation.next_run_at == now
+        assert run is None
     finally:
         engine_module.async_session_factory = original_factory

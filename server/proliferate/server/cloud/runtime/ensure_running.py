@@ -60,7 +60,7 @@ async def _ensure_launcher_defers_startup_retention(
     launcher = shlex.quote(runtime_launcher_path(runtime_context))
     sentinel = "# Managed by Proliferate: defer startup worktree retention"
     env_line = f"export {_ANYHARNESS_DEFER_STARTUP_RETENTION_ENV}=1"
-    command = "sh -lc " + shlex.quote(
+    command = "bash -lc " + shlex.quote(
         "\n".join(
             [
                 f"launcher={launcher}",

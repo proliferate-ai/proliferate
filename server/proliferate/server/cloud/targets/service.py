@@ -18,6 +18,7 @@ from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.live.service import publish_target_patch_after_commit
+from proliferate.server.cloud.target_git_identity.service import require_user_github_auth
 from proliferate.server.cloud.targets.domain.policy import require_target_admin_membership
 from proliferate.server.cloud.targets.domain.rules import (
     build_install_command,
@@ -76,6 +77,7 @@ async def create_target_enrollment(
             user_id=user.id,
         )
         require_target_admin_membership(membership)
+    await require_user_github_auth(db, user_id=user.id)
     target = await targets_store.create_target(
         db,
         display_name=display_name,

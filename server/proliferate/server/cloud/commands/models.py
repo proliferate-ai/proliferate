@@ -102,7 +102,11 @@ def command_response_payload(value: CloudCommandSnapshot) -> CloudCommandRespons
 
 
 def _parse_result_json(kind: str, value: str | None) -> dict[str, object] | None:
-    if kind != CloudCommandKind.materialize_workspace.value:
+    if kind not in {
+        CloudCommandKind.materialize_workspace.value,
+        CloudCommandKind.ensure_repo_checkout.value,
+        CloudCommandKind.configure_git_identity.value,
+    }:
         return None
     if value is None:
         return None

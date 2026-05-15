@@ -252,6 +252,8 @@ CLOUD_TARGET_HEARTBEAT_STALE_SECONDS: Final = 180
 
 class CloudCommandKind(StrEnum):
     start_session = "start_session"
+    configure_git_identity = "configure_git_identity"
+    ensure_repo_checkout = "ensure_repo_checkout"
     materialize_workspace = "materialize_workspace"
     materialize_environment = "materialize_environment"
     resume_session = "resume_session"
@@ -301,6 +303,8 @@ class CloudCommandSource(StrEnum):
 SUPPORTED_CLOUD_COMMAND_KINDS: tuple[str, ...] = tuple(kind.value for kind in CloudCommandKind)
 ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.start_session.value,
+    CloudCommandKind.configure_git_identity.value,
+    CloudCommandKind.ensure_repo_checkout.value,
     CloudCommandKind.materialize_workspace.value,
     CloudCommandKind.materialize_environment.value,
     CloudCommandKind.send_prompt.value,
@@ -312,6 +316,8 @@ ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
 )
 DEFAULT_CLOUD_WORKER_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.start_session.value,
+    CloudCommandKind.configure_git_identity.value,
+    CloudCommandKind.ensure_repo_checkout.value,
     CloudCommandKind.materialize_workspace.value,
     CloudCommandKind.materialize_environment.value,
     CloudCommandKind.send_prompt.value,

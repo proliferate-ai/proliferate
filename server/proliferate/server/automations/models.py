@@ -46,6 +46,7 @@ class CreateAutomationRequest(AutomationBaseModel):
     git_repo_name: str = Field(alias="gitRepoName")
     schedule: AutomationScheduleRequest
     execution_target: ExecutionTarget = Field(alias="executionTarget")
+    target_id: UUID | None = Field(default=None, alias="targetId")
     agent_kind: str | None = Field(default=None, alias="agentKind")
     model_id: str | None = Field(default=None, alias="modelId")
     mode_id: str | None = Field(default=None, alias="modeId")
@@ -59,6 +60,7 @@ class UpdateAutomationRequest(AutomationBaseModel):
     git_repo_name: str | None = Field(default=None, alias="gitRepoName")
     schedule: AutomationScheduleRequest | None = None
     execution_target: ExecutionTarget | None = Field(default=None, alias="executionTarget")
+    target_id: UUID | None = Field(default=None, alias="targetId")
     agent_kind: str | None = Field(default=None, alias="agentKind")
     model_id: str | None = Field(default=None, alias="modelId")
     mode_id: str | None = Field(default=None, alias="modeId")
@@ -80,6 +82,8 @@ class AutomationResponse(AutomationBaseModel):
     prompt: str
     schedule: AutomationScheduleResponse
     execution_target: ExecutionTarget = Field(alias="executionTarget")
+    target_id: str | None = Field(alias="targetId")
+    target_kind: str | None = Field(alias="targetKind")
     agent_kind: str | None = Field(alias="agentKind")
     model_id: str | None = Field(alias="modelId")
     mode_id: str | None = Field(alias="modeId")
@@ -101,6 +105,8 @@ class AutomationRunResponse(AutomationBaseModel):
     trigger_kind: RunTriggerKind = Field(alias="triggerKind")
     scheduled_for: str | None = Field(alias="scheduledFor")
     execution_target: ExecutionTarget = Field(alias="executionTarget")
+    target_id_snapshot: str | None = Field(alias="targetIdSnapshot")
+    target_kind_snapshot: str | None = Field(alias="targetKindSnapshot")
     status: RunStatus
     title_snapshot: str = Field(alias="titleSnapshot")
     agent_kind_snapshot: str | None = Field(alias="agentKindSnapshot")
@@ -199,6 +205,8 @@ def automation_payload(value: AutomationValue) -> AutomationResponse:
             next_run_at=_to_iso(value.next_run_at),
         ),
         execution_target=value.execution_target,  # type: ignore[arg-type]
+        target_id=str(value.cloud_target_id) if value.cloud_target_id else None,
+        target_kind=value.cloud_target_kind,
         agent_kind=value.agent_kind,
         model_id=value.model_id,
         mode_id=value.mode_id,
@@ -218,6 +226,10 @@ def automation_run_payload(value: AutomationRunValue) -> AutomationRunResponse:
         trigger_kind=value.trigger_kind,  # type: ignore[arg-type]
         scheduled_for=_to_iso(value.scheduled_for),
         execution_target=value.execution_target,  # type: ignore[arg-type]
+        target_id_snapshot=(
+            str(value.cloud_target_id_snapshot) if value.cloud_target_id_snapshot else None
+        ),
+        target_kind_snapshot=value.cloud_target_kind_snapshot,
         status=value.status,  # type: ignore[arg-type]
         title_snapshot=value.title_snapshot,
         agent_kind_snapshot=value.agent_kind_snapshot,

@@ -120,7 +120,7 @@ def normalize_supported_command_kinds(supported_kinds: list[str]) -> tuple[str, 
 def clamp_command_lease_seconds(value: int | None) -> int:
     if value is None:
         return CLOUD_COMMAND_DEFAULT_LEASE_SECONDS
-    return max(0, min(value, CLOUD_COMMAND_MAX_LEASE_SECONDS))
+    return max(1, min(value, CLOUD_COMMAND_MAX_LEASE_SECONDS))
 
 
 def validate_delivery_status(status: str) -> str:

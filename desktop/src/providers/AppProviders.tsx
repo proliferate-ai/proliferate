@@ -17,6 +17,7 @@ import {
 } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
   logicalWorkspaceCloudMaterializationId,
+  logicalWorkspaceTargetMaterializationId,
   resolveLogicalWorkspaceMaterializationId,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
@@ -70,9 +71,14 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
       const logicalWorkspace = findLogicalWorkspace(logicalWorkspaces, workspaceId);
       if (logicalWorkspace) {
         const explicitCloudMaterializationId = logicalWorkspaceCloudMaterializationId(logicalWorkspace);
+        const explicitTargetMaterializationId = logicalWorkspaceTargetMaterializationId(logicalWorkspace);
         const explicitLocalMaterializationId = logicalWorkspace.localWorkspace?.id ?? null;
         const materializationId = (
-          workspaceId === explicitCloudMaterializationId
+          (
+            workspaceId === explicitCloudMaterializationId
+            && !explicitTargetMaterializationId
+          )
+          || workspaceId === explicitTargetMaterializationId
           || workspaceId === explicitLocalMaterializationId
         )
           ? workspaceId
@@ -100,6 +106,13 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
             authToken: connectionInfo.accessToken,
             anyharnessWorkspaceId: connectionInfo.anyharnessWorkspaceId ?? "",
           }));
+        }
+
+        if (
+          explicitTargetMaterializationId
+          && materializationId === explicitTargetMaterializationId
+        ) {
+          return resolveWorkspaceConnection(runtimeUrl, explicitTargetMaterializationId);
         }
 
         if (

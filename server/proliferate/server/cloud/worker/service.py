@@ -25,6 +25,7 @@ from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import inventory as inventory_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
+from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.events.models import (
     WorkerEventBatchRequest,
@@ -37,6 +38,7 @@ from proliferate.server.cloud.live.service import (
     publish_target_patch_after_commit,
 )
 from proliferate.server.cloud.observability import log_worker_update_status
+from proliferate.server.cloud.target_git_identity.service import materialize_target_git_identity
 from proliferate.server.cloud.worker.domain.rules import (
     clamp_command_lease_seconds,
     compact_json,
@@ -115,6 +117,43 @@ async def _publish_current_target_patch(db: AsyncSession, *, target_id: UUID) ->
     target = await targets_store.get_target_by_id(db, target_id)
     if target is not None:
         await publish_target_patch_after_commit(db, target)
+
+
+async def _enqueue_initial_git_identity(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    worker_id: UUID,
+    created_by_user_id: UUID,
+) -> None:
+    user = await get_user_with_oauth_accounts_by_id(db, created_by_user_id)
+    if user is None:
+        await inventory_store.upsert_target_status(
+            db,
+            target_id=target_id,
+            worker_id=worker_id,
+            status_value=CloudTargetStatus.online.value,
+            status_detail=(
+                "Worker enrolled; Git bootstrap failed because the creator was not found."
+            ),
+        )
+        return
+    try:
+        await materialize_target_git_identity(
+            db,
+            target_id=target_id,
+            user=user,
+            source="automation",
+            idempotency_key="worker-enrollment",
+        )
+    except CloudApiError as exc:
+        await inventory_store.upsert_target_status(
+            db,
+            target_id=target_id,
+            worker_id=worker_id,
+            status_value=CloudTargetStatus.online.value,
+            status_detail=f"Worker enrolled; Git bootstrap failed: {exc.code}.",
+        )
 
 
 def _parse_json_dict(value: str | None) -> dict[str, object] | None:
@@ -249,6 +288,12 @@ async def enroll_worker(
             worker_id=worker.id,
             payload=body.inventory,
         )
+    await _enqueue_initial_git_identity(
+        db,
+        target_id=worker.target_id,
+        worker_id=worker.id,
+        created_by_user_id=enrollment.created_by_user_id,
+    )
     await _publish_current_target_patch(db, target_id=worker.target_id)
     return WorkerEnrollResponse(
         target_id=str(worker.target_id),
