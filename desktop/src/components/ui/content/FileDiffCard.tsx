@@ -199,6 +199,9 @@ export function FileDiffCard({
   const surfaceActionClass = surface === "sidebar"
     ? "text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-sidebar-ring"
     : "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-border";
+  const cardClass = surface === "sidebar"
+    ? "codex-review-diff-card rounded-lg ring-[0.5px] ring-sidebar-border/70"
+    : embedded ? "" : "rounded-lg";
   const cardStyle = {
     "--codex-diffs-surface":
       "var(--codex-diffs-surface-override, var(--color-diff-surface))",
@@ -221,9 +224,7 @@ export function FileDiffCard({
       <div
         data-diff-surface={surface}
         style={cardStyle}
-        className={`group/file-diff flex flex-col overflow-clip bg-[var(--codex-diffs-surface)] ${
-          embedded ? "" : "rounded-lg"
-        }`}
+        className={`group/file-diff flex flex-col overflow-clip bg-[var(--codex-diffs-surface)] ${cardClass}`}
       >
         <div
           role={canExpand ? "button" : undefined}
@@ -242,11 +243,11 @@ export function FileDiffCard({
                 }
               : undefined
           }
-          className={`select-none bg-[var(--codex-diffs-surface)] ${canExpand ? "cursor-pointer" : ""}`}
+          className={`z-10 select-none bg-[var(--codex-diffs-surface)] ${surface === "sidebar" ? "sticky top-0" : ""} ${canExpand ? "cursor-pointer" : ""}`}
         >
-          <div className="bg-[var(--codex-diffs-header-surface)]">
-            <div className="group @container/diff-header relative flex items-center gap-2 pt-1.5 pr-1 pb-1.5 pl-3 text-chat leading-[var(--text-chat--line-height)]">
-              <div className={`flex min-w-0 items-center gap-2 pb-0.5 ${surfaceTextClass}`}>
+          <div className="bg-[var(--codex-diffs-header-surface)] px-2 py-[2px]">
+            <div className="group @container/diff-header relative flex items-center gap-2 rounded-[6px] px-1 py-0.5 text-chat leading-[var(--text-chat--line-height)] hover:bg-[var(--codex-diffs-separator-surface)]">
+              <div className={`flex min-w-0 flex-1 items-center gap-2 ${surfaceTextClass}`}>
                 {onOpenFile ? (
                   <Button
                     type="button"
@@ -271,12 +272,19 @@ export function FileDiffCard({
                     {pathContent}
                   </span>
                 )}
-                <span className="ml-auto shrink-0">
-                  <FileChangeStats additions={additions} deletions={deletions} />
-                </span>
               </div>
 
-              <div className="ms-auto mr-1 flex items-center gap-1">
+              <div className="ms-auto flex shrink-0 items-center gap-1">
+                {actions && (
+                  <div className="flex items-center opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100">
+                    {actions}
+                  </div>
+                )}
+                <FileChangeStats
+                  additions={additions}
+                  deletions={deletions}
+                  className="leading-none"
+                />
                 {onOpenFile && (
                   <div className="shrink-0 opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100">
                     <Button
@@ -287,17 +295,12 @@ export function FileDiffCard({
                         event.stopPropagation();
                         onOpenFile();
                       }}
-                      className={`size-5 rounded-full border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
+                      className={`size-5 rounded-lg border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
                       aria-label={`Open ${filePath}`}
                       title="Open file"
                     >
                       <ArrowUpRight className="size-3" />
                     </Button>
-                  </div>
-                )}
-                {actions && (
-                  <div className="flex items-center opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100">
-                    {actions}
                   </div>
                 )}
                 {canExpand && (
@@ -309,7 +312,7 @@ export function FileDiffCard({
                       e.stopPropagation();
                       onToggleExpand();
                     }}
-                    className={`size-5 shrink-0 rounded-full border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
+                    className={`size-5 shrink-0 rounded-lg border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
                     aria-label="Toggle file diff"
                   >
                     <ChevronDown

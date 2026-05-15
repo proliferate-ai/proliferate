@@ -100,6 +100,7 @@ function ChatGutterCell({ line }: { line: DiffLine }) {
 
   return (
     <div
+      data-gutter=""
       data-line-type={lineType}
       data-column-number={lineNumber ?? undefined}
       data-line-index={getChatLineIndex(line)}
@@ -125,6 +126,7 @@ function ChatContentCell({
 
   return (
     <div
+      data-content=""
       data-line={lineNumber ?? undefined}
       data-alt-line={altLineNumber}
       data-line-type={lineType}
@@ -150,6 +152,7 @@ function ChatCollapsedRow({
   return (
     <button
       type="button"
+      data-content=""
       data-separator="simple"
       onClick={onExpand}
       aria-label={`Show ${section.lineCount} unmodified lines`}
@@ -249,6 +252,7 @@ export function ChatDiffViewer({
               ) : (
                 <Fragment key={row.key}>
                   <div
+                    data-gutter=""
                     data-separator="simple"
                     className="diff-gutter-cell sticky left-0 z-10 min-h-[var(--diffs-line-height)] bg-[var(--diffs-bg)]"
                   />
