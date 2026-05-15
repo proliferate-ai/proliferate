@@ -56,5 +56,8 @@ server/proliferate/server/cloud/runtime/credential_freshness.py
 server/proliferate/db/store/cloud_workspaces.py
 server/proliferate/server/cloud/worker/service.py
 server/proliferate/server/cloud/runtime/bootstrap.py
+server/proliferate/server/cloud/runtime/credential_freshness.py
+server/proliferate/server/cloud/worker/service.py
 server/proliferate/server/cloud/runtime/provision.py
 server/proliferate/server/cloud/workspaces/service.py
+server/tests/integration/test_cloud_commands_api.py
