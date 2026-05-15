@@ -42,6 +42,45 @@ vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
   }),
 }));
 
+vi.mock("@/components/workspace/scratch/ScratchCodeMirrorEditor", async () => {
+  const React = await import("react");
+  const ScratchCodeMirrorEditor = React.forwardRef(({
+    value,
+    placeholder,
+    disabled,
+    onChange,
+    onBlur,
+  }: {
+    value: string;
+    placeholder: string;
+    disabled: boolean;
+    onChange: (value: string) => void;
+    onBlur: () => void;
+  }, ref) => {
+    React.useImperativeHandle(ref, () => ({
+      insertChecklistItem: () => {
+        onChange(value ? `${value}\n- [ ] ` : "- [ ] ");
+        return true;
+      },
+    }), [onChange, value]);
+
+    return (
+      <textarea
+        aria-label="Scratch"
+        disabled={disabled}
+        placeholder={placeholder}
+        value={value}
+        onBlur={onBlur}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
+    );
+  });
+
+  return {
+    ScratchCodeMirrorEditor,
+  };
+});
+
 beforeEach(() => {
   scratchQueryMocks.record = {
     content: "",
@@ -205,48 +244,18 @@ describe("ScratchPadPanel", () => {
     expect(editor.value).toContain("- [ ] ");
   });
 
-  it("continues Markdown lists on Enter and saves the autoformatted draft", async () => {
-    vi.useFakeTimers();
+  it("clears completed literal checklist items from the options menu", async () => {
     scratchQueryMocks.record = {
-      content: "- [x] done",
+      content: "☐ open\n☑ done\n",
       updatedAtMs: 1,
     };
     render(<ScratchPadPanel workspaceKey="workspace-1" />);
 
     const editor = screen.getByPlaceholderText(/Capture follow-ups/) as HTMLTextAreaElement;
-    editor.setSelectionRange(editor.value.length, editor.value.length);
+    fireEvent.click(screen.getByRole("button", { name: "Scratch options" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear completed" }));
 
-    fireEvent.keyDown(editor, { key: "Enter" });
-
-    expect(editor.value).toBe("- [x] done\n- [ ] ");
-    expect(editor.selectionStart).toBe(editor.value.length);
-    expect(editor.selectionEnd).toBe(editor.value.length);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(500);
-    });
-
-    expect(scratchQueryMocks.writeScratchPad).toHaveBeenCalledWith(
-      "- [x] done\n- [ ] ",
-      "workspace-1",
-    );
-  });
-
-  it("removes empty Markdown list markers on Enter", () => {
-    scratchQueryMocks.record = {
-      content: "- first\n- ",
-      updatedAtMs: 1,
-    };
-    render(<ScratchPadPanel workspaceKey="workspace-1" />);
-
-    const editor = screen.getByPlaceholderText(/Capture follow-ups/) as HTMLTextAreaElement;
-    editor.setSelectionRange(editor.value.length, editor.value.length);
-
-    fireEvent.keyDown(editor, { key: "Enter" });
-
-    expect(editor.value).toBe("- first\n");
-    expect(editor.selectionStart).toBe(editor.value.length);
-    expect(editor.selectionEnd).toBe(editor.value.length);
+    expect(editor.value).toBe("☐ open\n");
   });
 
   it("copies scratch content through the shell access boundary", async () => {
