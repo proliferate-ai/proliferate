@@ -4,6 +4,7 @@ import {
   Check,
   ChevronDown,
   ClipboardList,
+  Clock,
   FilePen,
   GitBranchIcon,
   type IconProps,
@@ -32,6 +33,11 @@ const GIT_REVIEW_BASE_OPTIONS: {
     id: "branch",
     label: "Branch",
     icon: GitBranchIcon,
+  },
+  {
+    id: "last_turn",
+    label: "Last turn",
+    icon: Clock,
   },
 ];
 

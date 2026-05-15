@@ -1,17 +1,21 @@
-import type { GitPanelFile } from "@/lib/domain/workspaces/changes/git-panel-diff";
+export interface ChangedFileTreeFile {
+  key: string;
+  path: string;
+  displayPath: string;
+}
 
-export type ChangedFileTreeNode =
+export type ChangedFileTreeNode<TFile extends ChangedFileTreeFile = ChangedFileTreeFile> =
   | {
     kind: "directory";
     name: string;
     path: string;
-    children: ChangedFileTreeNode[];
+    children: ChangedFileTreeNode<TFile>[];
   }
   | {
     kind: "file";
     name: string;
     path: string;
-    file: GitPanelFile;
+    file: TFile;
   };
 
 interface MutableDirectoryNode {
@@ -27,10 +31,12 @@ type MutableTreeNode =
     kind: "file";
     name: string;
     path: string;
-    file: GitPanelFile;
+    file: ChangedFileTreeFile;
   };
 
-export function buildChangedFileTree(files: readonly GitPanelFile[]): ChangedFileTreeNode[] {
+export function buildChangedFileTree<TFile extends ChangedFileTreeFile>(
+  files: readonly TFile[],
+): ChangedFileTreeNode<TFile>[] {
   const root: MutableDirectoryNode = {
     kind: "directory",
     name: "",
@@ -71,7 +77,7 @@ export function buildChangedFileTree(files: readonly GitPanelFile[]): ChangedFil
     });
   }
 
-  return materializeChildren(root.childrenByName);
+  return materializeChildren(root.childrenByName) as ChangedFileTreeNode<TFile>[];
 }
 
 function materializeChildren(

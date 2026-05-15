@@ -419,6 +419,7 @@ export type {
   GitBranchDiffFilesResponse,
   GitDiffOptions,
   ListBranchDiffFilesOptions,
+  ListBaseWorktreeDiffFilesOptions,
   GitBranchRef,
   RenameBranchRequest,
   RenameBranchResponse,

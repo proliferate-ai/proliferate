@@ -11,8 +11,9 @@ import {
 } from "@/lib/domain/workspaces/changes/changed-file-tree";
 import type {
   GitPanelFile,
+  GitPanelReviewFile,
   GitPanelSection,
-  GitPanelSectionScope,
+  GitPanelReviewScope,
 } from "@/lib/domain/workspaces/changes/git-panel-diff";
 import type { GitReviewFileEntry } from "@/lib/domain/workspaces/changes/git-review-entries";
 
@@ -83,8 +84,8 @@ function toPaneFileTreeNode({
   sectionScope,
   entryByScopeAndPath,
 }: {
-  node: ChangedFileTreeNode;
-  sectionScope: GitPanelSectionScope;
+  node: ChangedFileTreeNode<GitPanelReviewFile>;
+  sectionScope: GitPanelReviewScope;
   entryByScopeAndPath: Map<string, GitReviewFileEntry>;
 }): PaneFileTreeNode<GitReviewFileEntry> {
   if (node.kind === "directory") {
@@ -120,14 +121,18 @@ function toPaneFileTreeNode({
   };
 }
 
-function GitReviewFileMeta({ file }: { file: GitPanelFile }) {
-  const status = fileStatusMeta(file.status);
+function GitReviewFileMeta({ file }: { file: GitPanelReviewFile }) {
+  const currentDiff = file.currentDiff;
+  if (!currentDiff) {
+    return <PaneFileTreeBadge className="bg-sidebar-accent text-sidebar-muted-foreground">-</PaneFileTreeBadge>;
+  }
+  const status = fileStatusMeta(currentDiff.status);
   return (
     <span className="inline-flex shrink-0 items-center gap-1">
-      {(file.additions > 0 || file.deletions > 0) && (
+      {(currentDiff.additions > 0 || currentDiff.deletions > 0) && (
         <span className="inline-flex items-center gap-1 tabular-nums tracking-tight">
-          {file.additions > 0 && <span className="text-git-green">+{file.additions}</span>}
-          {file.deletions > 0 && <span className="text-git-red">-{file.deletions}</span>}
+          {currentDiff.additions > 0 && <span className="text-git-green">+{currentDiff.additions}</span>}
+          {currentDiff.deletions > 0 && <span className="text-git-red">-{currentDiff.deletions}</span>}
         </span>
       )}
       <PaneFileTreeBadge className={status.className}>
@@ -165,13 +170,13 @@ function filterSections(
       files: section.files.filter((file) =>
         file.displayPath.toLowerCase().includes(query)
         || file.path.toLowerCase().includes(query)
-        || file.status.toLowerCase().includes(query)
+        || file.currentDiff?.status.toLowerCase().includes(query)
       ),
     }))
     .filter((section) => section.files.length > 0);
 }
 
-function nodeStats(node: ChangedFileTreeNode): TreeStats {
+function nodeStats(node: ChangedFileTreeNode<GitPanelReviewFile>): TreeStats {
   if (node.kind === "file") {
     return filesStats([node.file]);
   }
@@ -185,10 +190,10 @@ function nodeStats(node: ChangedFileTreeNode): TreeStats {
   }, { additions: 0, deletions: 0, files: 0 });
 }
 
-function filesStats(files: readonly GitPanelFile[]): TreeStats {
+function filesStats(files: readonly GitPanelReviewFile[]): TreeStats {
   return files.reduce<TreeStats>((stats, file) => ({
-    additions: stats.additions + file.additions,
-    deletions: stats.deletions + file.deletions,
+    additions: stats.additions + (file.currentDiff?.additions ?? 0),
+    deletions: stats.deletions + (file.currentDiff?.deletions ?? 0),
     files: stats.files + 1,
   }), { additions: 0, deletions: 0, files: 0 });
 }

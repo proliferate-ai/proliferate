@@ -1,14 +1,14 @@
 import type {
-  GitPanelFile,
   GitPanelSection,
-  GitPanelSectionScope,
+  GitPanelReviewFile,
+  GitPanelReviewScope,
 } from "@/lib/domain/workspaces/changes/git-panel-diff";
 
 export interface GitReviewFileEntry {
   key: string;
   id: string;
-  sectionScope: GitPanelSectionScope;
-  file: GitPanelFile;
+  sectionScope: GitPanelReviewScope;
+  file: GitPanelReviewFile;
 }
 
 export function buildGitReviewFileEntries(
@@ -20,8 +20,8 @@ export function buildGitReviewFileEntries(
 }
 
 export function gitReviewEntryForFile(
-  sectionScope: GitPanelSectionScope,
-  file: GitPanelFile,
+  sectionScope: GitPanelReviewScope,
+  file: GitPanelReviewFile,
 ): GitReviewFileEntry {
   const key = `file:${sectionScope}:${file.key}`;
   return {

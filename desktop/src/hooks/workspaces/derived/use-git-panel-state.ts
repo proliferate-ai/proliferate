@@ -1,6 +1,7 @@
 import type { GitChangedFile, GitDiffFile } from "@anyharness/sdk";
 import {
   type AnyHarnessQueryTimingOptions,
+  useGitBaseWorktreeDiffFilesQuery,
   useGitBranchDiffFilesQuery,
   useGitBranchesQuery,
   useGitStatusQuery,
@@ -22,6 +23,8 @@ import {
 import { resolveGitPanelWorkspaceContext } from "@/lib/domain/workspaces/changes/git-panel-workspace-context";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+import { collectLatestCompletedTurnTouchedFiles } from "@/lib/domain/chat/transcript/last-turn-file-changes";
 
 const EMPTY_STATUS_FILES: GitChangedFile[] = [];
 const EMPTY_BRANCH_FILES: GitDiffFile[] = [];
@@ -42,6 +45,10 @@ export function useGitPanelState(
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
+  );
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
+  const activeTranscript = useSessionTranscriptStore((state) =>
+    activeSessionId ? state.entriesById[activeSessionId]?.transcript ?? null : null
   );
   const activeWorkspaceId = selectedWorkspaceId;
   const runtimeBlockWorkspaceId = gitPanelRuntimeBlockWorkspaceId(
@@ -90,6 +97,19 @@ export function useGitPanelState(
     enabled: isRuntimeReady && !hotPaintPending && mode === "branch",
     ...(options?.branchDiffFilesTimingOptions ?? {}),
   });
+  const lastTurnTouched = useMemo(
+    () => collectLatestCompletedTurnTouchedFiles(activeTranscript),
+    [activeTranscript],
+  );
+  const baseWorktreeFilesQuery = useGitBaseWorktreeDiffFilesQuery({
+    workspaceId: activeWorkspaceId,
+    baseRef: activeBaseRef,
+    enabled: isRuntimeReady
+      && !hotPaintPending
+      && mode === "last_turn"
+      && lastTurnTouched.files.length > 0,
+    ...(options?.branchDiffFilesTimingOptions ?? {}),
+  });
   const branchesQuery = useGitBranchesQuery({
     workspaceId: activeWorkspaceId,
     enabled: isRuntimeReady && !hotPaintPending,
@@ -97,26 +117,43 @@ export function useGitPanelState(
 
   const statusFiles = gitStatusQuery.data?.files ?? EMPTY_STATUS_FILES;
   const branchFiles = branchFilesQuery.data?.files ?? EMPTY_BRANCH_FILES;
+  const baseWorktreeFiles = baseWorktreeFilesQuery.data?.files ?? EMPTY_BRANCH_FILES;
   const files = useMemo(
-    () => buildGitPanelFiles({ mode, statusFiles, branchFiles }),
-    [branchFiles, mode, statusFiles],
+    () => buildGitPanelFiles({
+      mode,
+      statusFiles,
+      branchFiles,
+      lastTurnFiles: lastTurnTouched.files,
+      baseWorktreeFiles,
+    }),
+    [baseWorktreeFiles, branchFiles, lastTurnTouched.files, mode, statusFiles],
   );
   const sections = useMemo(
-    () => buildGitPanelSections({ mode, statusFiles, branchFiles }),
-    [branchFiles, mode, statusFiles],
+    () => buildGitPanelSections({
+      mode,
+      statusFiles,
+      branchFiles,
+      lastTurnFiles: lastTurnTouched.files,
+      baseWorktreeFiles,
+    }),
+    [baseWorktreeFiles, branchFiles, lastTurnTouched.files, mode, statusFiles],
   );
   const branchRefs = branchesQuery.data ?? [];
 
-  const totalChangedCount = mode === "branch"
-    ? files.length
+  const totalChangedCount = mode === "branch" || mode === "last_turn"
+    ? sections.reduce((count, section) => count + section.files.length, 0)
     : countVisibleStatusFiles(statusFiles);
   const activeFilterLabel = gitPanelModeLabel(mode);
   const loading = mode === "branch"
     ? branchFilesQuery.isLoading
-    : gitStatusQuery.isLoading;
+    : mode === "last_turn" && lastTurnTouched.files.length > 0
+      ? baseWorktreeFilesQuery.isLoading
+      : gitStatusQuery.isLoading;
   const error = mode === "branch"
     ? branchFilesQuery.error ?? gitStatusQuery.error
-    : gitStatusQuery.error;
+    : mode === "last_turn"
+      ? baseWorktreeFilesQuery.error ?? gitStatusQuery.error
+      : gitStatusQuery.error;
   const errorMessage = error instanceof Error ? error.message : null;
 
   return {
@@ -127,10 +164,11 @@ export function useGitPanelState(
     files,
     sections,
     totalChangedCount,
-    visibleChangedCount: mode === "working_tree_composite"
+    visibleChangedCount: mode === "working_tree_composite" || mode === "last_turn"
       ? sections.reduce((count, section) => count + section.files.length, 0)
       : files.length,
     activeFilterLabel,
+    lastTurn: lastTurnTouched.turn,
     isRuntimeReady,
     runtimeBlockedReason,
     isLoading: loading,
@@ -140,6 +178,9 @@ export function useGitPanelState(
       await branchesQuery.refetch();
       if (mode === "branch") {
         await branchFilesQuery.refetch();
+      }
+      if (mode === "last_turn" && lastTurnTouched.files.length > 0) {
+        await baseWorktreeFilesQuery.refetch();
       }
     },
   };

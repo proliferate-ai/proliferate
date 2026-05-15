@@ -13,7 +13,7 @@ import { PopoverButton } from "@/components/ui/PopoverButton";
 import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 
-export type FileBrowserScopeFilter = "all" | GitPanelMode;
+export type FileBrowserScopeFilter = "all" | Exclude<GitPanelMode, "last_turn">;
 
 interface FileBrowserToolbarProps {
   search: string;

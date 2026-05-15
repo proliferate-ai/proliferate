@@ -99,11 +99,21 @@ Scopes are explicit:
 - `staged`: `git diff --cached -- <path>`.
 - `branch`: committed branch changes from
   `git diff --find-renames --find-copies <merge-base> HEAD -- <path> [oldPath]`.
+- `base_worktree`: selected base merge-base to current workspace state. It is
+  intended for right-sidebar review surfaces that need committed, staged,
+  index-only, unstaged, deleted, renamed, and untracked changes in one current
+  comparison.
 
 `branch_diff_files(...)` lists committed files for the branch comparison using
 matching `--name-status -z` and `--numstat -z` commands. Rename/copy rows keep
 both `oldPath` and `path`; per-file branch diffs should pass both paths so git
 can preserve rename/copy detection.
+
+`base_worktree_diff_files(...)` lists current workspace changes relative to the
+selected base merge-base. It combines git status with diff/name-status/numstat
+comparisons so index-only staged changes are not lost, and it handles untracked
+files with add-file diffs against `/dev/null` instead of relying on plain
+`git diff <base>`.
 
 Branch base refs are intentionally concrete branch refs only. The resolver
 accepts local heads and remote-tracking refs, validates them to commit OIDs, and

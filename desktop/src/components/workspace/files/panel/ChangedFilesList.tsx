@@ -113,7 +113,7 @@ function ChangedFileTreeNodeRow({
   openFile,
   openFileDiff,
 }: {
-  node: ChangedFileTreeNode;
+  node: ChangedFileTreeNode<GitPanelFile>;
   level: number;
   sectionScope: GitPanelSectionScope;
   baseRef: string | null;

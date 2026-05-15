@@ -37,3 +37,7 @@ export interface GitDiffOptions {
 export interface ListBranchDiffFilesOptions {
   baseRef?: string | null;
 }
+
+export interface ListBaseWorktreeDiffFilesOptions {
+  baseRef?: string | null;
+}

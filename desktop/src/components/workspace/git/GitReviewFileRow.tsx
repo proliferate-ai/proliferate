@@ -9,8 +9,8 @@ import { Minus, Plus } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import type {
-  GitPanelFile,
-  GitPanelSectionScope,
+  GitPanelReviewFile,
+  GitPanelReviewScope,
 } from "@/lib/domain/workspaces/changes/git-panel-diff";
 
 type StagePath = (path: string) => Promise<unknown>;
@@ -35,8 +35,8 @@ export function GitReviewFileRow({
 }: {
   id: string;
   workspaceId: string | null;
-  sectionScope: GitPanelSectionScope;
-  file: GitPanelFile;
+  sectionScope: GitPanelReviewScope;
+  file: GitPanelReviewFile;
   baseRef: string | null;
   layout: "unified" | "split";
   wrapLongLines: boolean;
@@ -49,15 +49,17 @@ export function GitReviewFileRow({
   diffTimingOptions?: AnyHarnessQueryTimingOptions;
   measurementOperationId?: MeasurementOperationId | null;
 }) {
+  const currentDiff = file.currentDiff;
   const isBranchMode = sectionScope === "branch";
+  const isLastTurnMode = sectionScope === "last_turn";
   const shouldUnstage = sectionScope === "staged";
   const diffQuery = useGitDiffQuery({
     workspaceId,
     path: file.path,
-    scope: sectionScope,
-    baseRef: isBranchMode ? baseRef : null,
-    oldPath: isBranchMode ? file.oldPath : null,
-    enabled: isRuntimeReady && !collapsed,
+    scope: isLastTurnMode ? "base_worktree" : sectionScope,
+    baseRef: isBranchMode || isLastTurnMode ? baseRef : null,
+    oldPath: isBranchMode || isLastTurnMode ? file.oldPath : null,
+    enabled: isRuntimeReady && !collapsed && Boolean(currentDiff),
     ...(diffTimingOptions ?? {}),
   });
 
@@ -68,13 +70,13 @@ export function GitReviewFileRow({
     >
       <FileDiffCard
         filePath={file.displayPath}
-        additions={file.additions}
-        deletions={file.deletions}
+        additions={currentDiff?.additions ?? 0}
+        deletions={currentDiff?.deletions ?? 0}
         isExpanded={!collapsed}
         onToggleExpand={onToggleCollapsed}
         onOpenFile={() => void openFile(file.path)}
         surface="sidebar"
-        actions={!isBranchMode && (
+        actions={!isBranchMode && !isLastTurnMode && (
           <Tooltip content={shouldUnstage ? "Unstage file" : "Stage file"}>
             <Button
               type="button"
@@ -105,7 +107,11 @@ export function GitReviewFileRow({
           </Tooltip>
         )}
       >
-        {diffQuery.isLoading ? (
+        {!currentDiff ? (
+          <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
+            No current diff against base
+          </p>
+        ) : diffQuery.isLoading ? (
           <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
             Loading diff
           </p>
@@ -121,7 +127,7 @@ export function GitReviewFileRow({
           />
         ) : (
           <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
-            {diffQuery.data?.binary || file.binary ? "Binary file changed" : "No diff available"}
+            {diffQuery.data?.binary || currentDiff.binary ? "Binary file changed" : "No diff available"}
           </p>
         )}
       </FileDiffCard>

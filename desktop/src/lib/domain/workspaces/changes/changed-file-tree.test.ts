@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { GitPanelFile } from "@/lib/domain/workspaces/changes/git-panel-diff";
+import type {
+  GitPanelFile,
+  GitPanelReviewFile,
+} from "@/lib/domain/workspaces/changes/git-panel-diff";
 import { buildChangedFileTree } from "@/lib/domain/workspaces/changes/changed-file-tree";
 
-function changedFile(path: string): GitPanelFile {
-  return {
+function changedFile(path: string): GitPanelReviewFile {
+  const currentDiff: GitPanelFile = {
     key: `:${path}:modified`,
     path,
     oldPath: null,
@@ -13,6 +16,13 @@ function changedFile(path: string): GitPanelFile {
     additions: 1,
     deletions: 0,
     binary: false,
+  };
+  return {
+    key: currentDiff.key,
+    path,
+    oldPath: null,
+    displayPath: path,
+    currentDiff,
   };
 }
 

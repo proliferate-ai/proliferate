@@ -8,16 +8,17 @@ import { GitReviewFileRow } from "./GitReviewFileRow";
 import { GitReviewFileTree } from "./GitReviewFileTree";
 import { Button } from "@/components/ui/Button";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
-import { ChevronRight } from "@/components/ui/icons";
+import { CheckCircleFilled, ChevronRight, GitBranchIcon, RefreshCw } from "@/components/ui/icons";
 import { AttachedPaneShell } from "@/components/workspace/pane/AttachedPaneShell";
 import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state";
 import {
+  gitPanelEmptyDescription,
   gitPanelEmptyMessage,
   type GitPanelMode,
+  type GitPanelReviewScope,
   type GitPanelSection,
-  type GitPanelSectionScope,
 } from "@/lib/domain/workspaces/changes/git-panel-diff";
 import {
   buildGitReviewFileEntries,
@@ -52,7 +53,7 @@ function GitPanelContent({
   const [layout, setLayout] = useState<"unified" | "split">("unified");
   const [wrapLongLines, setWrapLongLines] = useState(true);
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
-  const [collapsedSections, setCollapsedSections] = useState<Set<GitPanelSectionScope>>(new Set());
+  const [collapsedSections, setCollapsedSections] = useState<Set<GitPanelReviewScope>>(new Set());
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
   const { openFile } = useWorkspaceFileActions();
   const {
@@ -109,7 +110,7 @@ function GitPanelContent({
     });
   }, [reviewEntries]);
 
-  const toggleSectionCollapsed = useCallback((scope: GitPanelSectionScope) => {
+  const toggleSectionCollapsed = useCallback((scope: GitPanelReviewScope) => {
     setCollapsedSections((current) => toggleSetValue(current, scope));
   }, []);
 
@@ -195,9 +196,11 @@ function GitPanelContent({
             </p>
           )}
           {!isLoading && !errorMessage && !runtimeBlockedReason && sections.length === 0 && (
-            <p className="px-2 py-4 text-center text-xs text-sidebar-muted-foreground">
-              {gitPanelEmptyMessage(changesFilter)}
-            </p>
+            <GitReviewEmptyState
+              mode={changesFilter}
+              baseRef={baseRef}
+              onRefresh={() => void refetch()}
+            />
           )}
 
           {!isLoading && !errorMessage && !runtimeBlockedReason && sections.length > 0 && (
@@ -241,6 +244,43 @@ function GitPanelContent({
           )}
         </AutoHideScrollArea>
       </AttachedPaneShell>
+    </div>
+  );
+}
+
+function GitReviewEmptyState({
+  mode,
+  baseRef,
+  onRefresh,
+}: {
+  mode: GitPanelMode;
+  baseRef: string | null;
+  onRefresh: () => void;
+}) {
+  const Icon = mode === "branch" ? GitBranchIcon : CheckCircleFilled;
+  return (
+    <div className="flex min-h-[260px] items-center justify-center px-4 py-8">
+      <div className="flex max-w-[280px] flex-col items-center text-center">
+        <div className="mb-3 flex size-9 items-center justify-center rounded-lg border border-sidebar-border/70 bg-foreground/5 text-sidebar-muted-foreground">
+          <Icon className="size-4" />
+        </div>
+        <p className="text-sm font-medium text-sidebar-foreground">
+          {gitPanelEmptyMessage(mode)}
+        </p>
+        <p className="mt-1 text-pretty text-xs leading-5 text-sidebar-muted-foreground">
+          {gitPanelEmptyDescription(mode, baseRef)}
+        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onRefresh}
+          className="mt-4 h-7 gap-1.5 rounded-md border border-sidebar-border/70 px-2.5 text-xs text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+        >
+          <RefreshCw className="size-3" />
+          Refresh
+        </Button>
+      </div>
     </div>
   );
 }

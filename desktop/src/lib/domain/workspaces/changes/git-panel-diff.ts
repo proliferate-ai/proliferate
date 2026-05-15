@@ -3,9 +3,11 @@ import type {
   GitDiffFile,
   RepoRoot,
 } from "@anyharness/sdk";
+import type { LastTurnTouchedFile } from "@/lib/domain/chat/transcript/last-turn-file-changes";
 
-export type GitPanelMode = "working_tree_composite" | "unstaged" | "staged" | "branch";
+export type GitPanelMode = "working_tree_composite" | "unstaged" | "staged" | "branch" | "last_turn";
 export type GitPanelSectionScope = "unstaged" | "staged" | "branch";
+export type GitPanelReviewScope = GitPanelSectionScope | "last_turn";
 
 export interface GitPanelFile {
   key: string;
@@ -20,15 +22,26 @@ export interface GitPanelFile {
 }
 
 export interface GitPanelSection {
-  scope: GitPanelSectionScope;
+  scope: GitPanelReviewScope;
   label: string;
-  files: GitPanelFile[];
+  files: GitPanelReviewFile[];
+}
+
+export interface GitPanelReviewFile {
+  key: string;
+  path: string;
+  oldPath: string | null;
+  displayPath: string;
+  currentDiff: GitPanelFile | null;
+  touched?: LastTurnTouchedFile;
 }
 
 export interface BuildGitPanelFilesInput {
   mode: GitPanelMode;
   statusFiles: readonly GitChangedFile[];
   branchFiles: readonly GitDiffFile[];
+  lastTurnFiles?: readonly LastTurnTouchedFile[];
+  baseWorktreeFiles?: readonly GitDiffFile[];
 }
 
 export interface ResolveGitPanelBaseRefInput {
@@ -42,17 +55,31 @@ export const GIT_PANEL_MODE_OPTIONS: { id: GitPanelMode; label: string }[] = [
   { id: "unstaged", label: "Unstaged" },
   { id: "staged", label: "Staged" },
   { id: "branch", label: "This branch" },
+  { id: "last_turn", label: "Last turn" },
 ];
 
 export function buildGitPanelFiles({
   mode,
   statusFiles,
   branchFiles,
+  lastTurnFiles,
+  baseWorktreeFiles,
 }: BuildGitPanelFilesInput): GitPanelFile[] {
   if (mode === "branch") {
     return branchFiles
       .filter((file) => isVisibleGitPath(file.path))
       .map((file) => toPanelFile(file, null));
+  }
+  if (mode === "last_turn") {
+    const currentByPath = new Map(
+      (baseWorktreeFiles ?? [])
+        .filter((file) => isVisibleGitPath(file.path))
+        .map((file) => [file.path, toPanelFile(file, null)]),
+    );
+    return (lastTurnFiles ?? [])
+      .filter((file) => isVisibleGitPath(file.path))
+      .map((file) => currentByPath.get(file.path))
+      .filter((file): file is GitPanelFile => Boolean(file));
   }
 
   const includedStates = mode === "staged"
@@ -71,20 +98,34 @@ export function buildGitPanelSections(input: BuildGitPanelFilesInput): GitPanelS
       {
         scope: "unstaged" as const,
         label: "Unstaged",
-        files: buildGitPanelFiles({ ...input, mode: "unstaged" }),
+        files: buildGitPanelFiles({ ...input, mode: "unstaged" }).map(toReviewFile),
       },
       {
         scope: "staged" as const,
         label: "Staged",
-        files: buildGitPanelFiles({ ...input, mode: "staged" }),
+        files: buildGitPanelFiles({ ...input, mode: "staged" }).map(toReviewFile),
       },
     ].filter((section) => section.files.length > 0);
+  }
+  if (input.mode === "last_turn") {
+    const currentByPath = new Map(
+      (input.baseWorktreeFiles ?? [])
+        .filter((file) => isVisibleGitPath(file.path))
+        .map((file) => [file.path, toPanelFile(file, null)]),
+    );
+    return [{
+      scope: "last_turn" as const,
+      label: "Last turn",
+      files: (input.lastTurnFiles ?? [])
+        .filter((file) => isVisibleGitPath(file.path))
+        .map((file) => toReviewFileFromTouchedFile(file, currentByPath.get(file.path) ?? null)),
+    }];
   }
   const scope: GitPanelSectionScope = input.mode;
   return [{
     scope,
     label: gitPanelModeLabel(input.mode),
-    files: buildGitPanelFiles(input),
+    files: buildGitPanelFiles(input).map(toReviewFile),
   }];
 }
 
@@ -117,7 +158,29 @@ export function gitPanelEmptyMessage(mode: GitPanelMode): string {
   if (mode === "branch") {
     return "No branch changes";
   }
+  if (mode === "last_turn") {
+    return "No file changes in last turn";
+  }
   return "No unstaged changes";
+}
+
+export function gitPanelEmptyDescription(
+  mode: GitPanelMode,
+  baseRef: string | null | undefined,
+): string {
+  if (mode === "working_tree_composite") {
+    return "No unstaged or staged changes in this workspace.";
+  }
+  if (mode === "staged") {
+    return "Stage files to collect them here before committing.";
+  }
+  if (mode === "branch") {
+    return `No committed changes relative to ${baseRef?.trim() || "the selected base"}.`;
+  }
+  if (mode === "last_turn") {
+    return "The latest completed turn did not report top-level file edits.";
+  }
+  return "Edit files in the workspace and they will appear here.";
 }
 
 export function gitPanelRuntimeBlockWorkspaceId(
@@ -154,6 +217,30 @@ function toPanelFile(
     additions: file.additions,
     deletions: file.deletions,
     binary: file.binary,
+  };
+}
+
+export function toReviewFile(file: GitPanelFile): GitPanelReviewFile {
+  return {
+    key: file.key,
+    path: file.path,
+    oldPath: file.oldPath,
+    displayPath: file.displayPath,
+    currentDiff: file,
+  };
+}
+
+function toReviewFileFromTouchedFile(
+  file: LastTurnTouchedFile,
+  currentDiff: GitPanelFile | null,
+): GitPanelReviewFile {
+  return {
+    key: currentDiff?.key ?? `last-turn:${file.key}`,
+    path: currentDiff?.path ?? file.path,
+    oldPath: currentDiff?.oldPath ?? file.oldPath,
+    displayPath: currentDiff?.displayPath ?? file.displayPath,
+    currentDiff,
+    touched: file,
   };
 }
 

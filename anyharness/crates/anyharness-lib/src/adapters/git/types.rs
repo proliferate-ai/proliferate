@@ -32,6 +32,7 @@ pub enum GitDiffScope {
     Unstaged,
     Staged,
     Branch,
+    BaseWorktree,
 }
 
 #[derive(Debug, Clone)]

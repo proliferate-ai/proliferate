@@ -3,7 +3,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::diff::{branch_diff_files, diff_for_path_with_scope};
+use super::diff::{base_worktree_diff_files, branch_diff_files, diff_for_path_with_scope};
 use super::types::{GitDiffError, GitDiffScope, GitFileStatus};
 use uuid::Uuid;
 
@@ -165,4 +165,65 @@ fn branch_renamed_file_diff_uses_old_path_to_preserve_rename_patch() {
     let patch = diff.patch.as_deref().unwrap_or_default();
     assert!(patch.contains("rename from old.txt"), "{patch}");
     assert!(patch.contains("rename to new.txt"), "{patch}");
+}
+
+#[test]
+fn base_worktree_scope_lists_and_diffs_untracked_file() {
+    let repo = init_repo();
+    commit_file(repo.path(), "tracked.txt", "one\n", "initial");
+    fs::write(repo.path().join("created.txt"), "created\nfile\n").expect("write file");
+
+    let files = base_worktree_diff_files(repo.path(), Some("main")).expect("files");
+    let created = files
+        .files
+        .iter()
+        .find(|file| file.path == "created.txt")
+        .expect("created file");
+    assert_eq!(created.status, GitFileStatus::Untracked);
+    assert_eq!(created.additions, 2);
+
+    let diff = diff_for_path_with_scope(
+        repo.path(),
+        "created.txt",
+        GitDiffScope::BaseWorktree,
+        Some("main"),
+        None,
+    )
+    .expect("diff");
+
+    let patch = diff.patch.as_deref().unwrap_or_default();
+    assert!(patch.contains("created.txt"), "{patch}");
+    assert!(patch.contains("+created"), "{patch}");
+    assert_eq!(diff.additions, 2);
+}
+
+#[test]
+fn base_worktree_scope_uses_cached_diff_for_index_only_change() {
+    let repo = init_repo();
+    commit_file(repo.path(), "tracked.txt", "one\n", "initial");
+    fs::write(repo.path().join("tracked.txt"), "one\nstaged\n").expect("write file");
+    run_git_cmd(repo.path(), ["add", "tracked.txt"]);
+    fs::write(repo.path().join("tracked.txt"), "one\n").expect("restore worktree only");
+
+    let files = base_worktree_diff_files(repo.path(), Some("main")).expect("files");
+    let tracked = files
+        .files
+        .iter()
+        .find(|file| file.path == "tracked.txt")
+        .expect("tracked file");
+    assert_eq!(tracked.status, GitFileStatus::Modified);
+    assert_eq!(tracked.additions, 1);
+
+    let diff = diff_for_path_with_scope(
+        repo.path(),
+        "tracked.txt",
+        GitDiffScope::BaseWorktree,
+        Some("main"),
+        None,
+    )
+    .expect("diff");
+
+    let patch = diff.patch.as_deref().unwrap_or_default();
+    assert!(patch.contains("+staged"), "{patch}");
+    assert_eq!(diff.additions, 1);
 }

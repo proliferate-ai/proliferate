@@ -192,6 +192,13 @@ impl GitService {
         diff::branch_diff_files(workspace_path, base_ref)
     }
 
+    pub fn base_worktree_diff_files(
+        workspace_path: &Path,
+        base_ref: Option<&str>,
+    ) -> Result<GitBranchDiffFilesResult, GitDiffError> {
+        diff::base_worktree_diff_files(workspace_path, base_ref)
+    }
+
     pub fn list_branches(workspace_path: &Path) -> anyhow::Result<Vec<GitBranch>> {
         let repo_root = run_git_ok(workspace_path, &["rev-parse", "--show-toplevel"])?
             .trim()

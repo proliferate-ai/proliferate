@@ -10,7 +10,10 @@ import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-wo
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaceFilesRefresh } from "@/hooks/workspaces/files/workflows/use-workspace-files-refresh";
 import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state";
-import { gitPanelEmptyMessage } from "@/lib/domain/workspaces/changes/git-panel-diff";
+import {
+  gitPanelEmptyMessage,
+  type GitPanelSectionScope,
+} from "@/lib/domain/workspaces/changes/git-panel-diff";
 
 interface WorkspaceFilesPanelProps {
   showHeader?: boolean;
@@ -38,13 +41,23 @@ export function WorkspaceFilesPanel({ showHeader = true }: WorkspaceFilesPanelPr
     const normalizedSearch = search.trim().toLowerCase();
     return changesState.sections
       .map((section) => ({
-        ...section,
+        scope: section.scope,
+        label: section.label,
         files: normalizedSearch
           ? section.files.filter((file) =>
               file.displayPath.toLowerCase().includes(normalizedSearch)
               || file.path.toLowerCase().includes(normalizedSearch)
               || (file.oldPath?.toLowerCase().includes(normalizedSearch) ?? false))
           : section.files,
+      }))
+      .filter((section): section is {
+        scope: GitPanelSectionScope;
+        label: string;
+        files: typeof section.files;
+      } => section.scope !== "last_turn")
+      .map((section) => ({
+        ...section,
+        files: section.files.flatMap((file) => file.currentDiff ? [file.currentDiff] : []),
       }))
       .filter((section) => section.files.length > 0);
   }, [changesState.sections, search]);
