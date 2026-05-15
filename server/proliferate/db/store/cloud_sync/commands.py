@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -9,7 +10,7 @@ from uuid import UUID
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.cloud import CloudCommandStatus
+from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
 from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.utils.time import utcnow
 
@@ -182,9 +183,7 @@ async def expire_command_if_not_terminal(
 ) -> CloudCommandSnapshot | None:
     row = (
         await db.execute(
-            select(CloudCommand)
-            .where(CloudCommand.id == command_id)
-            .with_for_update()
+            select(CloudCommand).where(CloudCommand.id == command_id).with_for_update()
         )
     ).scalar_one_or_none()
     if row is None:
@@ -332,21 +331,76 @@ async def record_command_result(
         CloudCommandStatus.delivered.value,
     }:
         return None
-    row.status = status
-    row.error_code = error_code
-    row.error_message = error_message
+    effective_status = status
+    effective_error_code = error_code
+    effective_error_message = error_message
+    materialized_workspace_id = _materialized_workspace_id(
+        kind=row.kind,
+        status=status,
+        result_json=result_json,
+    )
+    if (
+        row.kind == CloudCommandKind.materialize_workspace.value
+        and status
+        in {
+            CloudCommandStatus.accepted.value,
+            CloudCommandStatus.accepted_but_queued.value,
+        }
+        and materialized_workspace_id is None
+    ):
+        effective_status = CloudCommandStatus.rejected.value
+        effective_error_code = "invalid_materialize_workspace_result"
+        effective_error_message = "materialize_workspace result is missing required stable fields."
+    row.status = effective_status
+    row.error_code = effective_error_code
+    row.error_message = effective_error_message
     row.result_json = result_json
+    if materialized_workspace_id is not None:
+        row.workspace_id = materialized_workspace_id
     row.updated_at = now
-    if status in {
+    if effective_status in {
         CloudCommandStatus.accepted.value,
         CloudCommandStatus.accepted_but_queued.value,
     }:
         row.accepted_at = now
         row.rejected_at = None
-    elif status in {CloudCommandStatus.rejected.value, CloudCommandStatus.failed_delivery.value}:
+    elif effective_status in {
+        CloudCommandStatus.rejected.value,
+        CloudCommandStatus.failed_delivery.value,
+    }:
         row.rejected_at = now
     await db.flush()
     return _snapshot(row)
+
+
+def _materialized_workspace_id(
+    *,
+    kind: str,
+    status: str,
+    result_json: str | None,
+) -> str | None:
+    if kind != CloudCommandKind.materialize_workspace.value or status not in {
+        CloudCommandStatus.accepted.value,
+        CloudCommandStatus.accepted_but_queued.value,
+    }:
+        return None
+    try:
+        result = json.loads(result_json or "{}")
+    except ValueError:
+        return None
+    if not isinstance(result, dict):
+        return None
+    mode = result.get("mode")
+    if mode not in {"existing_path", "worktree"}:
+        return None
+    for field in ("repoRootId", "path", "kind"):
+        value = result.get(field)
+        if not isinstance(value, str) or not value.strip():
+            return None
+    workspace_id = result.get("anyharnessWorkspaceId")
+    if not isinstance(workspace_id, str) or not workspace_id.strip():
+        return None
+    return workspace_id.strip()
 
 
 def _is_terminal_status(status: str) -> bool:

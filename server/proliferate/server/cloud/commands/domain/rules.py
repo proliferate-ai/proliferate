@@ -13,6 +13,25 @@ from proliferate.constants.cloud import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 
+_MATERIALIZE_EXISTING_PATH_FIELDS = {
+    "mode",
+    "path",
+    "displayName",
+    "origin",
+    "creatorContext",
+}
+_MATERIALIZE_WORKTREE_FIELDS = {
+    "mode",
+    "repoRootId",
+    "targetPath",
+    "newBranchName",
+    "baseBranch",
+    "setupScript",
+    "origin",
+    "creatorContext",
+}
+_MAX_MATERIALIZE_WORKSPACE_DISPLAY_NAME_CHARS = 160
+
 
 def validate_active_command_kind(kind: str) -> str:
     if kind not in ACTIVE_CLOUD_COMMAND_KINDS:
@@ -43,10 +62,14 @@ def validate_command_shape(
     session_id: str | None,
     preconditions: dict[str, object] | None,
 ) -> None:
-    if kind in {
-        CloudCommandKind.start_session.value,
-        CloudCommandKind.sync_existing_workspace.value,
-    } and not workspace_id:
+    if (
+        kind
+        in {
+            CloudCommandKind.start_session.value,
+            CloudCommandKind.sync_existing_workspace.value,
+        }
+        and not workspace_id
+    ):
         raise CloudApiError(
             "cloud_command_workspace_required",
             f"Cloud command kind requires workspaceId: {kind}",
@@ -58,13 +81,23 @@ def validate_command_shape(
             "materialize_environment commands must be scoped only to a target.",
             status_code=400,
         )
-    if kind in {
-        CloudCommandKind.send_prompt.value,
-        CloudCommandKind.resolve_interaction.value,
-        CloudCommandKind.update_session_config.value,
-        CloudCommandKind.cancel_turn.value,
-        CloudCommandKind.close_session.value,
-    } and not session_id:
+    if kind == CloudCommandKind.materialize_workspace.value and (workspace_id or session_id):
+        raise CloudApiError(
+            "cloud_command_target_only",
+            "materialize_workspace commands must be scoped only to a target.",
+            status_code=400,
+        )
+    if (
+        kind
+        in {
+            CloudCommandKind.send_prompt.value,
+            CloudCommandKind.resolve_interaction.value,
+            CloudCommandKind.update_session_config.value,
+            CloudCommandKind.cancel_turn.value,
+            CloudCommandKind.close_session.value,
+        }
+        and not session_id
+    ):
         raise CloudApiError(
             "cloud_command_session_required",
             f"Cloud command kind requires sessionId: {kind}",
@@ -74,6 +107,115 @@ def validate_command_shape(
         raise CloudApiError(
             "cloud_command_preconditions_unsupported",
             "Cloud command preconditions are not supported in phase 3.",
+            status_code=400,
+        )
+
+
+def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
+    if kind != CloudCommandKind.materialize_workspace.value:
+        return
+    mode = _required_string(
+        payload,
+        "mode",
+        code="cloud_command_materialize_workspace_mode_required",
+        message="materialize_workspace payload must contain mode.",
+    )
+    if mode == "existing_path":
+        _reject_unknown_fields(payload, _MATERIALIZE_EXISTING_PATH_FIELDS)
+        _required_string(
+            payload,
+            "path",
+            code="cloud_command_materialize_workspace_path_required",
+            message="existing_path workspace materialization requires path.",
+        )
+        _optional_string(payload, "displayName")
+        _optional_object(payload, "origin")
+        _optional_object(payload, "creatorContext")
+        return
+    if mode == "worktree":
+        _reject_unknown_fields(payload, _MATERIALIZE_WORKTREE_FIELDS)
+        _required_string(
+            payload,
+            "repoRootId",
+            code="cloud_command_materialize_workspace_repo_root_required",
+            message="worktree workspace materialization requires repoRootId.",
+        )
+        _required_string(
+            payload,
+            "targetPath",
+            code="cloud_command_materialize_workspace_target_path_required",
+            message="worktree workspace materialization requires targetPath.",
+        )
+        _required_string(
+            payload,
+            "newBranchName",
+            code="cloud_command_materialize_workspace_branch_required",
+            message="worktree workspace materialization requires newBranchName.",
+        )
+        _optional_string(payload, "baseBranch")
+        _optional_string(payload, "setupScript")
+        _optional_object(payload, "origin")
+        _optional_object(payload, "creatorContext")
+        return
+    raise CloudApiError(
+        "cloud_command_materialize_workspace_mode_invalid",
+        "materialize_workspace mode must be existing_path or worktree.",
+        status_code=400,
+    )
+
+
+def _required_string(
+    payload: dict[str, object],
+    field: str,
+    *,
+    code: str,
+    message: str,
+) -> str:
+    value = payload.get(field)
+    if not isinstance(value, str) or not value.strip():
+        raise CloudApiError(code, message, status_code=400)
+    return value.strip()
+
+
+def _reject_unknown_fields(payload: dict[str, object], allowed_fields: set[str]) -> None:
+    unknown_fields = sorted(set(payload) - allowed_fields)
+    if unknown_fields:
+        raise CloudApiError(
+            "cloud_command_materialize_workspace_payload_unknown",
+            "materialize_workspace payload contains unsupported field(s): "
+            + ", ".join(unknown_fields),
+            status_code=400,
+        )
+
+
+def _optional_string(payload: dict[str, object], field: str) -> None:
+    if field not in payload or payload[field] is None:
+        return
+    if not isinstance(payload[field], str):
+        raise CloudApiError(
+            "cloud_command_materialize_workspace_payload_invalid",
+            f"materialize_workspace payload field must be a string: {field}",
+            status_code=400,
+        )
+    if (
+        field == "displayName"
+        and len(payload[field].strip()) > _MAX_MATERIALIZE_WORKSPACE_DISPLAY_NAME_CHARS
+    ):
+        raise CloudApiError(
+            "cloud_command_materialize_workspace_payload_invalid",
+            "materialize_workspace displayName cannot exceed "
+            f"{_MAX_MATERIALIZE_WORKSPACE_DISPLAY_NAME_CHARS} characters.",
+            status_code=400,
+        )
+
+
+def _optional_object(payload: dict[str, object], field: str) -> None:
+    if field not in payload or payload[field] is None:
+        return
+    if not isinstance(payload[field], dict):
+        raise CloudApiError(
+            "cloud_command_materialize_workspace_payload_invalid",
+            f"materialize_workspace payload field must be an object: {field}",
             status_code=400,
         )
 

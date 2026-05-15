@@ -21,6 +21,7 @@ from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.domain.rules import (
     compact_command_json,
     validate_active_command_kind,
+    validate_command_payload,
     validate_command_shape,
     validate_command_source,
 )
@@ -59,6 +60,13 @@ async def _resolve_command_workspace(
 ) -> tuple[str | None, dict[str, object], str | None]:
     if kind != CloudCommandKind.start_session.value:
         return body.workspace_id, body.payload, None
+    if not body.workspace_id:
+        workspace_id = _direct_start_session_workspace_id(body.payload)
+        if workspace_id is None:
+            return None, body.payload, None
+        payload = dict(body.payload)
+        payload["workspaceId"] = workspace_id
+        return workspace_id, payload, None
     try:
         cloud_workspace_id = UUID(body.workspace_id or "")
     except ValueError as exc:
@@ -103,6 +111,13 @@ async def _resolve_command_workspace(
     return workspace.anyharness_workspace_id, payload, str(workspace.id)
 
 
+def _direct_start_session_workspace_id(payload: dict[str, object]) -> str | None:
+    value = payload.get("workspaceId")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
+
+
 async def enqueue_command(
     db: AsyncSession,
     *,
@@ -130,10 +145,11 @@ async def enqueue_command(
     source = validate_command_source(body.source)
     validate_command_shape(
         kind=kind,
-        workspace_id=body.workspace_id,
+        workspace_id=body.workspace_id or _direct_start_session_workspace_id(body.payload),
         session_id=body.session_id,
         preconditions=body.preconditions,
     )
+    validate_command_payload(kind=kind, payload=body.payload)
     resolved_workspace_id, payload, cloud_workspace_id = await _resolve_command_workspace(
         db,
         user=user,

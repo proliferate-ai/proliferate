@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+from proliferate.constants.cloud import CloudCommandKind
 from proliferate.db.store.cloud_sync.commands import CloudCommandSnapshot
 
 
@@ -24,6 +27,34 @@ class CreateCloudCommandRequest(BaseModel):
     observed_event_seq: int | None = Field(default=None, alias="observedEventSeq")
     preconditions: dict[str, object] | None = None
     source: str | None = None
+
+
+class MaterializeWorkspaceExistingPathPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["existing_path"]
+    path: str = Field(min_length=1)
+    display_name: str | None = Field(default=None, alias="displayName")
+    origin: dict[str, object] | None = None
+    creator_context: dict[str, object] | None = Field(default=None, alias="creatorContext")
+
+
+class MaterializeWorkspaceWorktreePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["worktree"]
+    repo_root_id: str = Field(alias="repoRootId", min_length=1)
+    target_path: str = Field(alias="targetPath", min_length=1)
+    new_branch_name: str = Field(alias="newBranchName", min_length=1)
+    base_branch: str | None = Field(default=None, alias="baseBranch")
+    setup_script: str | None = Field(default=None, alias="setupScript")
+    origin: dict[str, object] | None = None
+    creator_context: dict[str, object] | None = Field(default=None, alias="creatorContext")
+
+
+MaterializeWorkspacePayload = (
+    MaterializeWorkspaceExistingPathPayload | MaterializeWorkspaceWorktreePayload
+)
 
 
 class CloudCommandResponse(BaseModel):
@@ -44,6 +75,7 @@ class CloudCommandResponse(BaseModel):
     rejected_at: str | None = Field(default=None, serialization_alias="rejectedAt")
     error_code: str | None = Field(default=None, serialization_alias="errorCode")
     error_message: str | None = Field(default=None, serialization_alias="errorMessage")
+    result: dict[str, object] | None = None
 
 
 def command_response_payload(value: CloudCommandSnapshot) -> CloudCommandResponse:
@@ -65,4 +97,17 @@ def command_response_payload(value: CloudCommandSnapshot) -> CloudCommandRespons
         rejected_at=_to_iso(value.rejected_at),
         error_code=value.error_code,
         error_message=value.error_message,
+        result=_parse_result_json(value.kind, value.result_json),
     )
+
+
+def _parse_result_json(kind: str, value: str | None) -> dict[str, object] | None:
+    if kind != CloudCommandKind.materialize_workspace.value:
+        return None
+    if value is None:
+        return None
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if isinstance(parsed, dict) else None

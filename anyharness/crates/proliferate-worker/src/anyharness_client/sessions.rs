@@ -256,7 +256,7 @@ fn normalized_control_unavailable_response(control_id: &str) -> AnyHarnessComman
     }
 }
 
-async fn parse_anyharness_response(
+pub(crate) async fn parse_anyharness_response(
     response: reqwest::Response,
 ) -> Result<AnyHarnessCommandResponse, WorkerError> {
     let status = response.status();

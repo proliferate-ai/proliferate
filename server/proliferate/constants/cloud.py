@@ -252,6 +252,7 @@ CLOUD_TARGET_HEARTBEAT_STALE_SECONDS: Final = 180
 
 class CloudCommandKind(StrEnum):
     start_session = "start_session"
+    materialize_workspace = "materialize_workspace"
     materialize_environment = "materialize_environment"
     resume_session = "resume_session"
     send_prompt = "send_prompt"
@@ -300,6 +301,7 @@ class CloudCommandSource(StrEnum):
 SUPPORTED_CLOUD_COMMAND_KINDS: tuple[str, ...] = tuple(kind.value for kind in CloudCommandKind)
 ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.start_session.value,
+    CloudCommandKind.materialize_workspace.value,
     CloudCommandKind.materialize_environment.value,
     CloudCommandKind.send_prompt.value,
     CloudCommandKind.resolve_interaction.value,
@@ -310,6 +312,7 @@ ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
 )
 DEFAULT_CLOUD_WORKER_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.start_session.value,
+    CloudCommandKind.materialize_workspace.value,
     CloudCommandKind.materialize_environment.value,
     CloudCommandKind.send_prompt.value,
     CloudCommandKind.resolve_interaction.value,
