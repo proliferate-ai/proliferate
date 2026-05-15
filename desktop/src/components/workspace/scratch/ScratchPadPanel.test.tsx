@@ -205,6 +205,50 @@ describe("ScratchPadPanel", () => {
     expect(editor.value).toContain("- [ ] ");
   });
 
+  it("continues Markdown lists on Enter and saves the autoformatted draft", async () => {
+    vi.useFakeTimers();
+    scratchQueryMocks.record = {
+      content: "- [x] done",
+      updatedAtMs: 1,
+    };
+    render(<ScratchPadPanel workspaceKey="workspace-1" />);
+
+    const editor = screen.getByPlaceholderText(/Capture follow-ups/) as HTMLTextAreaElement;
+    editor.setSelectionRange(editor.value.length, editor.value.length);
+
+    fireEvent.keyDown(editor, { key: "Enter" });
+
+    expect(editor.value).toBe("- [x] done\n- [ ] ");
+    expect(editor.selectionStart).toBe(editor.value.length);
+    expect(editor.selectionEnd).toBe(editor.value.length);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    expect(scratchQueryMocks.writeScratchPad).toHaveBeenCalledWith(
+      "- [x] done\n- [ ] ",
+      "workspace-1",
+    );
+  });
+
+  it("removes empty Markdown list markers on Enter", () => {
+    scratchQueryMocks.record = {
+      content: "- first\n- ",
+      updatedAtMs: 1,
+    };
+    render(<ScratchPadPanel workspaceKey="workspace-1" />);
+
+    const editor = screen.getByPlaceholderText(/Capture follow-ups/) as HTMLTextAreaElement;
+    editor.setSelectionRange(editor.value.length, editor.value.length);
+
+    fireEvent.keyDown(editor, { key: "Enter" });
+
+    expect(editor.value).toBe("- first\n");
+    expect(editor.selectionStart).toBe(editor.value.length);
+    expect(editor.selectionEnd).toBe(editor.value.length);
+  });
+
   it("copies scratch content through the shell access boundary", async () => {
     scratchQueryMocks.record = {
       content: "durable note",
