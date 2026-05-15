@@ -203,7 +203,12 @@ const scratchHighlightStyle = HighlightStyle.define([
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strong, fontWeight: "600" },
   { tag: tags.link, color: "var(--color-foreground)", textDecoration: "underline" },
-  { tag: tags.monospace, color: "var(--color-muted-foreground)" },
+  {
+    tag: tags.monospace,
+    color: "var(--color-muted-foreground)",
+    fontFamily: "var(--scratch-code-font-family)",
+    fontSize: "0.93em",
+  },
 ]);
 
 const scratchEditorTheme = EditorView.theme({
@@ -211,9 +216,9 @@ const scratchEditorTheme = EditorView.theme({
     height: "100%",
     color: "var(--color-foreground)",
     backgroundColor: "transparent",
-    fontFamily: "var(--diffs-font-family)",
-    fontSize: "var(--diffs-font-size)",
-    lineHeight: "var(--diffs-line-height)",
+    fontFamily: "var(--scratch-font-family)",
+    fontSize: "var(--scratch-font-size)",
+    lineHeight: "var(--scratch-line-height)",
   },
   ".cm-scroller": {
     height: "100%",
@@ -222,7 +227,7 @@ const scratchEditorTheme = EditorView.theme({
   },
   ".cm-content": {
     minHeight: "100%",
-    padding: "0.75rem 1rem",
+    padding: "0.9rem 1.05rem",
     caretColor: "var(--color-foreground)",
   },
   ".cm-line": {
@@ -233,6 +238,9 @@ const scratchEditorTheme = EditorView.theme({
   },
   ".cm-cursor": {
     borderLeftColor: "var(--color-foreground)",
+    borderLeftWidth: "1px",
+    minHeight: "1.1em",
+    marginTop: "0.2em",
   },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
     backgroundColor: "color-mix(in oklab, var(--color-foreground) 18%, transparent)",
@@ -242,26 +250,26 @@ const scratchEditorTheme = EditorView.theme({
   },
   ".scratch-list-marker": {
     display: "inline-flex",
-    width: "1.6ch",
+    width: "var(--scratch-list-marker-width)",
     justifyContent: "center",
     color: "var(--color-sidebar-muted-foreground)",
   },
   ".scratch-task-checkbox": {
     display: "inline-flex",
-    width: "1.85ch",
+    width: "var(--scratch-list-marker-width)",
     height: "1em",
-    margin: "0 0.18ch 0 0",
+    margin: "0 0.1em 0 0",
     alignItems: "center",
     justifyContent: "center",
     boxSizing: "border-box",
     lineHeight: "1",
     position: "relative",
-    top: "0.1em",
+    top: "0.06em",
   },
   ".scratch-task-box": {
     display: "inline-flex",
-    width: "0.78em",
-    height: "0.78em",
+    width: "var(--scratch-task-box-size)",
+    height: "var(--scratch-task-box-size)",
     alignItems: "center",
     justifyContent: "center",
     boxSizing: "border-box",
