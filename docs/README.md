@@ -85,7 +85,22 @@ start of the task, not after implementation has already started.
     and launch-time model resolution boundaries
 - `docs/architecture/cloud-worker-control-plane.md`
   - reference architecture for target workers, Cloud-mediated session control,
-    command delivery, event ingestion, and projections
+    command delivery, event ingestion, and snapshots
+- `docs/architecture/cloud-worker-implementation-phases.md`
+  - concrete implementation phases, file paths, ownership boundaries, and
+    acceptance criteria for the Cloud Worker migration
+- `docs/architecture/cloud-worker-pr-stack-review-guide.md`
+  - synthesized reviewer map for the worker/control-plane PR stack
+- `docs/architecture/cloud-worker-runtime-bundle-supervisor-spec.md`
+  - concrete implementation spec for supervised runtime bundle packaging,
+    SSH installation, managed cloud boot, version reporting, and smoke tests
+- `docs/architecture/cloud-worker-workspace-command-spec.md`
+  - concrete implementation spec for the `materialize_workspace`
+    CloudCommand that creates/resolves target-side AnyHarness workspaces and
+    worktrees
+- `docs/architecture/cloud-worker-automation-migration-spec.md`
+  - concrete implementation spec for migrating automations to a target-agnostic
+    staged CloudCommand pipeline
 - `docs/architecture/plugins-and-skills.md`
   - reference architecture for plugin packages, skill bundles, plugin-owned
     MCP servers, the plugins UI, and the session bundle boundary
