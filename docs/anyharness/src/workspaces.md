@@ -94,6 +94,8 @@ It:
 6. otherwise creates or returns a `kind=local` workspace for that repo root
 
 This is the main registration path when a client points AnyHarness at a repo.
+It is also the endpoint used by `proliferate-worker` for
+`materialize_workspace(mode=existing_path)`.
 
 ### Create Workspace
 
@@ -111,10 +113,17 @@ local-vs-worktree logic without the early return for an existing record.
 2. runs `git worktree add -b ...`
 3. resolves git context for the new path
 4. inserts a new durable worktree workspace record
-5. optionally runs a setup script inside the new worktree
+5. schedules setup script execution for the new worktree when requested
 
-The returned result includes both the new workspace and optional setup-script
-execution output.
+The HTTP worktree creation response returns the new workspace identity. Setup
+script execution is asynchronous in the current API surface; callers should not
+expect synchronous setup-script output in the creation response.
+
+`proliferate-worker` uses this endpoint for
+`materialize_workspace(mode=worktree)`. If worktree creation returns a
+non-success response that could represent a compatible existing worktree, the
+worker may recover by calling `/v1/workspaces/resolve` for the requested target
+path and accepting only matching worktree identity.
 
 ### Workspace Environment
 

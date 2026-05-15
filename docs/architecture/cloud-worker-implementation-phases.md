@@ -1,6 +1,7 @@
 # Cloud Worker Implementation Phases
 
-Status: implementation plan for the Cloud Worker migration.
+Status: implementation plan plus current implementation snapshot, verified
+against `main` on 2026-05-15.
 
 This document turns `docs/architecture/cloud-worker-control-plane.md` into
 direct implementation phases with concrete file paths and ownership rules.
@@ -32,6 +33,76 @@ The migration must remove production Cloud runtime control that directly calls
 AnyHarness from the server. Server code may still provision compute, manage
 policy, enqueue commands, ingest events, publish live patches, and store
 snapshots.
+
+## Current Main Snapshot
+
+The original phase list below is still useful as the implementation map, but
+the stack has moved beyond several "to build" statements. Current `main`
+state for the AnyHarness / Proliferate Worker / supervisor path:
+
+Implemented:
+
+- `cloud/sdk` and `cloud/sdk-react` exist; generated OpenAPI output is tracked.
+- Compute targets, SSH enrollment, worker heartbeat, target inventory, and
+  direct SSH access metadata exist.
+- `proliferate-supervisor` exists and is the target service entrypoint for SSH
+  installs.
+- Managed cloud bootstrap stages AnyHarness, Proliferate Worker, and
+  Proliferate Supervisor, then launches the supervisor for fresh supervised
+  runtimes.
+- Worker command leasing/result reporting exists over `cloud_commands` using
+  inline lease fields, not a separate lease table.
+- Active worker command kinds are:
+
+```text
+configure_git_identity
+ensure_repo_checkout
+materialize_workspace
+materialize_environment
+start_session
+send_prompt
+resolve_interaction
+update_session_config
+cancel_turn
+close_session
+sync_existing_workspace
+```
+
+- Automation execution is staged through
+  `server/proliferate/server/automations/worker/cloud_execution/`:
+
+```text
+resolve_target_stage
+ensure_git_identity_stage
+materialize_workspace_stage
+materialize_environment_stage
+start_session_stage
+apply_session_config_stage
+dispatch_prompt_stage
+```
+
+- Worker event sync polls AnyHarness session events by sequence and uploads
+  batches directly to Cloud ingest. There is not yet a durable local event
+  outbox table.
+- Cloud event ingest stores bounded semantic rows, applies payload policy, and
+  updates session/message/request/config state from events.
+- A main-branch SSH automation smoke has verified command dispatch through
+  `configure_git_identity`, `ensure_repo_checkout`, workspace materialization,
+  environment materialization, session start, and prompt dispatch.
+
+Important remaining gaps:
+
+- Fresh target agent install/readiness is not automated in the worker
+  automation smoke path. A target can be online but fail `start_session` with
+  `InstallRequired` until the requested agent is installed through AnyHarness.
+- Worker command-kind/min-version gating is not implemented.
+- Supervisor update flow can stage/verify update requests, but no daemon path
+  downloads, swaps binaries, restarts into a desired version, or rolls back.
+- Some managed-cloud reconnect/credential-refresh paths still contain legacy
+  direct launch fallbacks for old sandboxes.
+- The worker sync path does not yet persist a separate event outbox before
+  upload; command result retry state exists locally, event replay relies on
+  AnyHarness event history and Cloud ingest cursors.
 
 ## Non-Negotiable Boundaries
 
@@ -250,6 +321,15 @@ server/proliferate/db/store/cloud_mobility.py             keep; mobility/handoff
 ```
 
 ## Phase 0: Contract Freeze And Direct-Path Audit
+
+The phase sections below preserve the original implementation plan and file
+ownership map. When a lower section describes future-looking pieces that differ
+from `main`, the "Current Main Snapshot" above and the focused current specs
+take precedence:
+
+- `docs/architecture/cloud-worker-runtime-bundle-supervisor-spec.md`
+- `docs/architecture/cloud-worker-workspace-command-spec.md`
+- `docs/architecture/cloud-worker-automation-migration-spec.md`
 
 ### Goal
 
@@ -919,9 +999,11 @@ Tables:
 
 ```text
 cloud_commands
-cloud_command_leases
 cloud_sessions
 ```
+
+Current `main` stores lease fields inline on `cloud_commands`; there is no
+separate `cloud_command_leases` table.
 
 Constraints:
 
@@ -1057,6 +1139,10 @@ Responsibility split:
 ### AnyHarness Contract Additions
 
 Add optional command metadata to existing requests:
+
+Current `main` has not added these fields. Worker dispatch uses existing
+AnyHarness request bodies, and Cloud command ids/preconditions remain
+Cloud/worker concerns.
 
 ```text
 PromptSessionRequest.command_metadata
