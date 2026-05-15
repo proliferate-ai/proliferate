@@ -28,6 +28,7 @@ export function SubagentWakeBadge({
     "max-w-[77%] text-right text-chat leading-[var(--text-chat--line-height)] text-muted-foreground";
   const content = (
     <>
+      {/* The outer receipt owns opening; keep the name static to avoid nested buttons. */}
       <DelegatedAgentReceiptName
         id={sessionLinkId ?? childSessionId ?? title}
         title={title}

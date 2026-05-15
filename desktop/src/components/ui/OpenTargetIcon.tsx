@@ -11,6 +11,7 @@ export function AppIconWrapper({ children }: { children: ReactNode }) {
   return (
     <div className="relative size-3.5 rounded">
       {children}
+      {/* Theme mode is stored on data-mode; Tailwind's dark: selector is not used here. */}
       <div
         className="pointer-events-none absolute inset-0 rounded border border-border mix-blend-darken [html[data-mode=dark]_&]:mix-blend-lighten"
       />
