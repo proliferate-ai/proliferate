@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { FileText } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
+import { DelegatedAgentReceiptName } from "@/components/workspace/chat/transcript/DelegatedAgentReceiptName";
 import type { ReviewFeedbackPromptReference } from "@/lib/domain/chat/subagents/provenance";
-import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
@@ -200,37 +200,14 @@ function ReviewerReceiptName({
   assignment: ReviewAssignmentDetail;
   onOpenReviewerSession?: (sessionId: string) => void;
 }) {
-  const identity = buildDelegatedAgentIdentity({
-    id: assignment.id,
-    title: assignment.personaLabel,
-    sessionId: assignment.reviewerSessionId,
-    sessionLinkId: assignment.sessionLinkId,
-  });
-  const label = identity.generatedName;
-  const className = `font-medium ${identity.textColorClassName}`;
-  const sessionId = assignment.reviewerSessionId?.trim() || null;
-
-  if (sessionId && onOpenReviewerSession) {
-    return (
-      <Button
-        type="button"
-        variant="unstyled"
-        size="unstyled"
-        data-chat-transcript-ignore
-        aria-label={`Open ${identity.displayName}`}
-        title={identity.displayName}
-        className={`inline h-auto p-0 align-baseline leading-[inherit] hover:underline focus-visible:underline ${className}`}
-        onClick={() => onOpenReviewerSession(sessionId)}
-      >
-        {label}
-      </Button>
-    );
-  }
-
   return (
-    <span className={className} title={identity.displayName}>
-      {label}
-    </span>
+    <DelegatedAgentReceiptName
+      id={assignment.id}
+      title={assignment.personaLabel}
+      sessionId={assignment.reviewerSessionId}
+      sessionLinkId={assignment.sessionLinkId}
+      onOpenSession={onOpenReviewerSession}
+    />
   );
 }
 

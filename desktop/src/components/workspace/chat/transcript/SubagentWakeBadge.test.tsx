@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SubagentWakeBadge } from "./SubagentWakeBadge";
 
 describe("SubagentWakeBadge", () => {
@@ -9,7 +9,7 @@ describe("SubagentWakeBadge", () => {
     cleanup();
   });
 
-  it("keeps the wake receipt at chat text size when rendered as a button", () => {
+  it("renders wake receipts as sentence-style transcript text", () => {
     const { container } = render(
       <SubagentWakeBadge
         label="explore-dotfiles"
@@ -19,26 +19,31 @@ describe("SubagentWakeBadge", () => {
       />,
     );
 
-    const chip = container.querySelector("button");
-    expect(chip?.className).toContain("text-[length:var(--text-chat)]");
+    const receipt = container.querySelector("p");
+    expect(receipt?.className).toContain("text-chat");
+    expect(receipt?.className).toContain("text-muted-foreground");
+    expect(receipt?.textContent).toContain("finished a turn.");
   });
 
-  it("does not render a visible Open suffix for clickable wake receipts", () => {
+  it("renders the delegated identity as the only clickable target", () => {
+    const onOpenChild = vi.fn();
     const { container } = render(
       <SubagentWakeBadge
         label="explore-dotfiles"
         childSessionId="child-session"
         sessionLinkId="session-link"
-        onOpenChild={() => {}}
+        onOpenChild={onOpenChild}
       />,
     );
 
-    const chip = container.querySelector("button");
-    expect(chip?.textContent).toContain("finished a turn");
-    expect(chip?.textContent).not.toContain("Open");
+    const openButton = screen.getByRole("button", { name: /Open .*explore-dotfiles/ });
+    expect(openButton.textContent).not.toContain("finished a turn");
+    fireEvent.click(openButton);
+    expect(onOpenChild).toHaveBeenCalledWith("child-session");
+    expect(container.querySelectorAll("button")).toHaveLength(1);
   });
 
-  it("renders clickable wake receipts directly without a hover-card wrapper", () => {
+  it("renders receipts without a chip shell", () => {
     const { container } = render(
       <SubagentWakeBadge
         label="explore-dotfiles"
@@ -48,7 +53,9 @@ describe("SubagentWakeBadge", () => {
       />,
     );
 
-    expect(container.firstElementChild?.tagName).toBe("BUTTON");
-    expect(container.querySelector("button")?.className).toContain("max-w-[77%]");
+    expect(container.firstElementChild?.tagName).toBe("P");
+    expect(container.firstElementChild?.className).toContain("max-w-[77%]");
+    expect(container.firstElementChild?.className).not.toContain("rounded-2xl");
+    expect(container.firstElementChild?.className).not.toContain("bg-foreground/5");
   });
 });
