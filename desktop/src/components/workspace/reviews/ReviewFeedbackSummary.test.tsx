@@ -180,6 +180,35 @@ describe("ReviewFeedbackSummaryView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open UX reviewer critique" }));
     expect(onOpenCritique).toHaveBeenCalledTimes(1);
   });
+
+  it("shows cancelled queued reviewers as cancelled instead of reviewing", () => {
+    render(
+      <ReviewFeedbackSummaryView
+        assignments={[
+          assignment({
+            id: "security",
+            personaLabel: "Security reviewer",
+            pass: true,
+          }),
+          assignment({
+            id: "offline",
+            personaLabel: "Offline reviewer",
+            pass: false,
+            status: "cancelled",
+          }),
+        ]}
+        reviewRunId="review-run"
+        state="queued"
+        target="PR"
+        onOpenCritique={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("2 reviewers · 1 cancelled · 1 approved · PR")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open review feedback details" }));
+    expect(screen.getByText("Cancelled")).toBeTruthy();
+    expect(screen.queryByText("Reviewing")).toBeNull();
+  });
 });
 
 function assignment(

@@ -367,7 +367,11 @@ function reviewFeedbackReceipt(
     || assignment.status === "timed_out"
     || assignment.status === "retryable_failed"
   ).length;
-  const pendingCount = Math.max(0, reviewerCount - approvedCount - changesCount - failedCount);
+  const cancelledCount = assignments.filter((assignment) => assignment.status === "cancelled").length;
+  const pendingCount = Math.max(
+    0,
+    reviewerCount - approvedCount - changesCount - failedCount - cancelledCount,
+  );
   const reviewerLabel = `${reviewerCount} ${reviewerCount === 1 ? "reviewer" : "reviewers"}`;
 
   if (approvedCount === reviewerCount) {
@@ -380,6 +384,7 @@ function reviewFeedbackReceipt(
   const detailParts = [
     changesCount > 0 ? `${changesCount} requested ${changesCount === 1 ? "change" : "changes"}` : null,
     failedCount > 0 ? `${failedCount} failed` : null,
+    cancelledCount > 0 ? `${cancelledCount} cancelled` : null,
     pendingCount > 0 ? `${pendingCount} reviewing` : null,
     approvedCount > 0 ? `${approvedCount} approved` : null,
   ].filter((part): part is string => part !== null);
@@ -407,6 +412,9 @@ function reviewAssignmentVerdict(assignment: ReviewAssignmentDetail): {
   }
   if (assignment.status === "retryable_failed") {
     return { label: "Needs retry", tone: "changes" };
+  }
+  if (assignment.status === "cancelled") {
+    return { label: "Cancelled", tone: "pending" };
   }
   return { label: "Reviewing", tone: "pending" };
 }
