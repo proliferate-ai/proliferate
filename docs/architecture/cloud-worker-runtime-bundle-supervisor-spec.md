@@ -1,8 +1,9 @@
 # Cloud Worker Runtime Bundle And Supervisor Spec
 
-Status: concrete follow-up PR spec.
+Status: current implementation spec, verified against `main` on 2026-05-15.
 
-Scope: PR A in the Cloud Worker migration sequence.
+Scope: supervised target runtime bundle for SSH, managed cloud, and future
+cloud-addressable targets.
 
 This spec defines the implementation work required to make every
 cloud-addressable target boot the same supervised runtime bundle:
@@ -18,13 +19,44 @@ The target may be a managed cloud sandbox, an SSH machine, or a future
 self-hosted/VPC target. The process shape must be the same even when the
 onboarding flow differs.
 
-This spec intentionally does not cover the next two PRs:
+The original PR-A framing in this file is historical. The runtime bundle,
+worker, and supervisor pieces now exist on `main`; this document describes the
+current shape and the remaining hardening work.
 
-- adding missing command kinds such as workspace/worktree materialization
-- migrating automations fully to target-agnostic CloudCommand orchestration
+## Current Main State
 
-Those PRs should assume the runtime bundle and process lifecycle in this file
-are already correct.
+`main` currently has the target runtime split intended by this spec:
+
+```text
+proliferate-supervisor
+  -> anyharness
+  -> proliferate-worker
+```
+
+Implemented pieces:
+
+- `anyharness/crates/proliferate-worker/**`
+- `anyharness/crates/proliferate-supervisor/**`
+- release builds for all three target binaries:
+  `anyharness`, `proliferate-worker`, `proliferate-supervisor`
+- SSH installer installs all three binaries and creates a user systemd service
+  whose `ExecStart` invokes `proliferate-supervisor`
+- worker enrollment, heartbeat, inventory, command leasing, command result
+  reporting, event upload, and update-status endpoints
+- managed cloud bootstrap writes worker and supervisor config and launches the
+  supervisor for new supervised runtimes
+- legacy managed-cloud relaunch fallbacks remain only for older sandboxes that
+  do not have supervisor config
+- worker heartbeat reports AnyHarness, worker, and supervisor versions
+- worker update reconciliation stages a supervisor update request; supervisor
+  supports verify/stage primitives, not a full production binary swap flow
+
+Important current follow-up:
+
+- Agent process installation/readiness is separate from supervisor bootstrap.
+  A fresh target can have AnyHarness/worker/supervisor running but still reject
+  `start_session` with `InstallRequired` until the requested agent is installed
+  through AnyHarness, for example `POST /v1/agents/{kind}/install`.
 
 ## Goal
 
@@ -36,7 +68,7 @@ exist on that machine, who starts them, who restarts them, how versions are
 reported, and how can we prove the target is alive?
 ```
 
-By the end of this PR:
+Current target state:
 
 - runtime artifacts contain `anyharness`, `proliferate-worker`, and
   `proliferate-supervisor`
@@ -51,17 +83,20 @@ By the end of this PR:
 
 ## Non-Goals
 
-Do not add or change automation execution semantics in this PR.
+Do not add or change automation execution semantics in this runtime-bundle
+layer.
 
-Do not add missing CloudCommand kinds such as `materialize_workspace` in this
-PR.
+Do not add CloudCommand behavior such as `materialize_workspace` in this
+runtime-bundle layer.
 
-Do not delete all direct server-to-AnyHarness runtime calls in this PR. Direct
-execution mutation removal belongs to the automation migration PR. This PR may
-move managed cloud process launch away from direct detached process scripts.
+Do not delete all direct server-to-AnyHarness runtime calls in this layer.
+Direct execution mutation removal belongs to the automation migration. Runtime
+bundle work may move managed cloud process launch away from direct detached
+process scripts.
 
-Do not build a full update rollout product in this PR. The PR should make
-component version reporting and supervisor update hooks structurally correct.
+Do not treat the current supervisor update hooks as a full update rollout
+product. This layer should make component version reporting and supervisor
+update hooks structurally correct.
 The production rollout policy can remain basic.
 
 ## Invariants
@@ -85,9 +120,9 @@ the supervisor restarts it.
 The supervisor should not own Cloud command semantics, session semantics,
 credential policy, or transcript/event interpretation.
 
-## Current State On Stack Tip
+## Current State On Main
 
-The stack already includes these pieces:
+`main` includes these pieces:
 
 - `anyharness/crates/proliferate-worker/**`
 - `anyharness/crates/proliferate-supervisor/**`
@@ -95,39 +130,30 @@ The stack already includes these pieces:
   update status endpoints
 - SSH installer that downloads/copies all three binaries and creates a
   supervisor systemd user service
-- managed cloud bootstrap that can stage `anyharness` and `proliferate-worker`
-  and launch them directly
+- managed cloud bootstrap that stages/verifies all three binaries and launches
+  `proliferate-supervisor` for supervised runtimes
 
-The main gap is managed cloud process ownership:
+The remaining managed-cloud process ownership caveat is legacy fallback:
 
 ```text
-current managed cloud shape:
-  server writes AnyHarness launch script
-  server starts AnyHarness with nohup
-  server writes worker config
-  server starts worker with nohup
-
-target managed cloud shape:
+current new managed cloud shape:
   server writes worker config
   server writes supervisor config
   server starts supervisor with nohup or template entrypoint
   supervisor starts AnyHarness and worker
+
+legacy reconnect fallback:
+  old sandboxes without supervisor config may still use the old AnyHarness
+  launcher until they are replaced or migrated
 ```
 
-SSH is closer to target state than managed cloud. It still needs test hardening
-and possibly bundle download cleanup.
+SSH is in the target state. It still needs product hardening around automatic
+agent installation/readiness before user-facing automations depend on a target.
 
 ## Branching
 
-Implement this PR on top of the current worker stack tip, not on the first SDK
-branch:
-
-```text
-base: origin/proliferate/cloud-worker-phase8-hardening
-branch: proliferate/cloud-worker-runtime-supervisor
-```
-
-If the stack tip changes, rebase this PR onto the latest tip before opening.
+Historical branch guidance has been removed from the active spec. New changes
+to this area should branch from current `main`.
 
 ## File Ownership Map
 
@@ -280,12 +306,14 @@ $PROLIFERATE_HOME/
     proliferate-supervisor.log
 ```
 
-The first PR does not have to migrate every log path if that creates churn, but
-the spec target should be represented in helper names and tests.
+The implementation does not currently normalize every log path to this target
+layout. Helper names and tests should still describe the runtime bundle rather
+than only the AnyHarness process.
 
 ## Supervisor Config
 
-The config should be sufficient to start both child processes:
+The config is sufficient to start both child processes. Managed cloud and SSH
+use the same supervisor schema, but not identical AnyHarness auth/bind args:
 
 ```toml
 anyharness_binary = "/home/user/.proliferate/bin/anyharness"
@@ -302,12 +330,14 @@ anyharness_args = [
 restart_delay_seconds = 5
 ```
 
-For SSH, binding AnyHarness to `127.0.0.1` is preferred. The worker talks to
+For SSH, binding AnyHarness to `127.0.0.1` is preferred and the current
+installer leaves bearer auth disabled by default. The worker talks to
 AnyHarness locally. Direct remote access should be explicit, not the default.
 
 For managed cloud, the runtime endpoint behavior depends on E2B/provider
 networking. If a provider endpoint requires `0.0.0.0`, the config may use that
-for managed cloud, but the reason must live in the bootstrap helper and tests.
+for managed cloud. Managed cloud currently writes bearer auth and provider bind
+args in bootstrap config.
 
 ## Worker Config
 
@@ -345,13 +375,13 @@ Target flow:
    preparation.
 9. Cloud waits for worker enrollment/heartbeat and target online.
 10. Cloud stores runtime_environment.target_id.
-11. Provisioning continues with workspace preparation until PR C moves that
-    work behind commands.
+11. Provisioning hands command-backed workspace/session work to the worker
+    automation path.
 ```
 
-This PR may keep the existing direct workspace preparation calls after
-supervisor boot. The automation migration PR will remove execution mutation
-calls.
+Legacy managed-cloud reconnect paths may still keep direct workspace
+preparation calls after supervisor boot. New automation execution mutations
+should be command-backed through the worker.
 
 ## SSH Boot Flow
 
@@ -392,10 +422,10 @@ update_generation
 update_channel
 ```
 
-This PR should ensure every process can produce real version values and that
-managed cloud and SSH both report them.
+Every process should produce real version values and managed cloud and SSH both
+report them through worker heartbeat.
 
-Minimum update flow for this PR:
+Current minimum update flow:
 
 ```text
 1. Worker heartbeat receives desired versions.
@@ -690,19 +720,24 @@ worktree)` commands can use.
 
 ## Completion Checklist
 
-Before opening the PR:
+Current `main` status:
 
-- [ ] all three binaries build locally for the target Linux release profile
-- [ ] SSH installer still works against a clean target
-- [ ] managed cloud starts supervisor instead of direct detached AnyHarness and
-      worker processes
-- [ ] Cloud target online is driven by worker heartbeat/enrollment
-- [ ] runtime environment stores `target_id`
-- [ ] template build/smoke checks all three binaries
-- [ ] docs mention supervised runtime bundle, not only AnyHarness binary
-- [ ] `rg "launch_worker_nohup|launch_runtime_nohup|build_detached_worker_launch_command"` has
-      no managed cloud production process-launch usage left, or each remaining
-      hit is a backwards-compatible helper marked for deletion
+- [x] all three binaries build locally for the target Linux release profile
+- [x] SSH installer works against a clean target
+- [x] managed cloud starts supervisor for supervised runtimes instead of
+      independently launching AnyHarness and worker
+- [x] Cloud target online is driven by worker heartbeat/enrollment
+- [x] runtime environment stores `target_id`
+- [x] template build/smoke checks all three binaries
+- [x] docs mention supervised runtime bundle, not only AnyHarness binary
+- [x] legacy managed-cloud direct launch hits are fallback/provisioning code,
+      not the target process model for new supervised runtimes
+
+Remaining follow-ups:
+
+- [ ] automate agent process install/readiness for targets before `start_session`
+- [ ] finish the production update swap/restart flow after supervisor staging
+- [ ] retire legacy managed-cloud launch fallback after old sandboxes age out
 
 ## Review Questions
 

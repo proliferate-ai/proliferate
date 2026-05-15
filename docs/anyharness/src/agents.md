@@ -188,6 +188,23 @@ Important install cases:
   `agents/<kind>/.install.lock` so desktop, CLI, and seed hydration do not
   write the same agent at the same time
 
+Public HTTP routes include:
+
+- `GET /v1/agents`
+- `GET /v1/agents/launch-options`
+- `GET /v1/agents/reconcile`
+- `POST /v1/agents/reconcile`
+- `GET /v1/agents/{kind}`
+- `POST /v1/agents/{kind}/install`
+- `POST /v1/agents/{kind}/login/start`
+- `GET /v1/agents/{kind}/model-registry`
+- `POST /v1/agents/{kind}/model-registry/refresh`
+
+Cloud target enrollment, Git bootstrap, and workspace materialization do not
+install agents. A fresh cloud/SSH target may report worker and AnyHarness
+online while `start_session` still fails with an install/readiness error until
+the requested agent is installed through this API.
+
 ### ACP Registry Flow
 
 `integrations/agent_cli/acp_registry.rs`

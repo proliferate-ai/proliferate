@@ -1,6 +1,7 @@
 # Cloud Worker PR Stack Review Guide
 
 Status: synthesized reviewer guide for the Cloud worker/control-plane PR stack.
+Current implementation notes were verified against `main` on 2026-05-15.
 
 Purpose: give reviewers a single map for understanding the PRs that implement
 the Cloud-mediated worker model. This document is intentionally not the source
@@ -12,6 +13,42 @@ Use this guide when reviewing:
 - broad worker/control-plane baseline PR #207
 - implementation stack PRs #212, #214, #216, #217, #218, #219, #221, #222,
   and #223
+
+Current `main` has since folded in additional follow-up work beyond the PR list
+above:
+
+- supervised target runtime bundle for SSH and managed cloud
+- active worker commands for Git bootstrap, repo checkout, workspace
+  materialization, environment materialization, session control, and sync
+- staged automation execution through
+  `server/proliferate/server/automations/worker/cloud_execution/`
+- target Git identity materialization without raw tokens in command payloads
+- SSH automation smoke coverage through command dispatch
+
+Current active worker command kinds:
+
+```text
+configure_git_identity
+ensure_repo_checkout
+materialize_workspace
+materialize_environment
+start_session
+send_prompt
+resolve_interaction
+update_session_config
+cancel_turn
+close_session
+sync_existing_workspace
+```
+
+Current storage differs from the early broad baseline:
+
+- command lease fields live inline on `cloud_commands`
+- there is no separate `cloud_command_leases` table
+- worker event sync does not yet have a durable local event outbox table
+- the user-facing product rows are sessions/messages/requests/config/targets,
+  with projection as an implementation term rather than a standalone product
+  object
 
 ## Core Mental Model
 
@@ -187,11 +224,12 @@ Core tables:
 - `cloud_targets`
 - `cloud_workers`
 - `cloud_commands`
-- `cloud_command_leases`
 - `cloud_session_events`
-- `cloud_event_ingest_cursors`
-- `cloud_projection_snapshots`
-- `cloud_artifact_refs`
+- `cloud_event_ingest_state`
+- `cloud_synced_workspaces`
+- `cloud_sessions`
+- `cloud_transcript_items`
+- `cloud_pending_interactions`
 
 ### Review Checklist
 
@@ -1124,4 +1162,3 @@ create future drift:
 - What exact production pub/sub backend will replace or back the current
   process-local live fanout?
 - What is the signed update artifact/trust-root plan after supervisor staging?
-

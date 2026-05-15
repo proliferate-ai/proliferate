@@ -232,8 +232,8 @@ Current tools:
 before choosing non-default `agentKind`, `modelId`, or `modeId` values. It
 reports current parent-derived defaults, launchable agents/models, subagent
 limits, and live parent mode options when AnyHarness has observed them. Mode ids
-remain launch hints in this PR; agent/model choices are validated against the
-launch catalog.
+remain launch hints; agent/model choices are validated against the launch
+catalog.
 
 `read_subagent_events` is deliberately bounded. It accepts `sinceSeq` plus a
 limit capped at 100, strips streaming deltas, and removes raw tool input/output
@@ -390,12 +390,21 @@ The runtime layer:
 
 Cancel and close follow the same pattern.
 
-### Permission Resolution
+### Interaction Resolution
 
-Permission resolution also goes through `SessionRuntime`.
+Interaction resolution also goes through `SessionRuntime`.
 
-It does not persist permissions itself. It finds the live session handle and
-delegates to ACP’s permission broker via the live runtime.
+It does not persist interaction decisions itself. It finds the live session
+handle and delegates to the live runtime. Current interaction kinds include:
+
+- permission decisions
+- requested user input
+- MCP elicitation responses
+
+The public resolution path is
+`POST /v1/sessions/{session_id}/interactions/{interaction_id}/resolve`.
+`proliferate-worker` uses the same route for Cloud-mediated web/mobile/Slack
+approval and input commands.
 
 ## Configuring Flow
 

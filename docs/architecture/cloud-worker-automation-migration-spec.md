@@ -1,10 +1,10 @@
 # Cloud Worker Automation Migration Spec
 
-Status: concrete follow-up PR spec.
+Status: current implementation spec, verified against `main` on 2026-05-15.
 
-Scope: PR C in the Cloud Worker migration sequence.
+Scope: command-backed automation execution through Proliferate Worker.
 
-This spec defines the migration that makes automations run against any
+This spec describes the current automation execution path that runs against any
 registered target through CloudCommands.
 
 It depends on:
@@ -21,8 +21,11 @@ Automation execution should become a target-agnostic command pipeline:
 ```text
 automation run
   -> resolve target_id
-  -> materialize_workspace command
-  -> materialize_environment command if needed
+  -> configure_git_identity command
+  -> ensure_repo_checkout command
+  -> materialize_workspace existing_path command for repo root
+  -> materialize_workspace worktree command for the run workspace
+  -> materialize_environment command
   -> start_session command
   -> update_session_config command if needed
   -> send_prompt command
@@ -40,13 +43,60 @@ future desktop_dispatch / self_hosted / vpc targets
 The executor should not know how to call E2B or SSH directly for execution
 mutations. It should resolve a target and enqueue commands for that target.
 
+## Current Main State
+
+`main` implements the staged automation pipeline under:
+
+```text
+server/proliferate/server/automations/worker/cloud_execution/
+```
+
+The ordered stage calls are:
+
+```text
+resolve_target_stage
+ensure_git_identity_stage
+materialize_workspace_stage
+materialize_environment_stage
+start_session_stage
+apply_session_config_stage
+dispatch_prompt_stage
+```
+
+Stage responsibilities on `main`:
+
+- target stage resolves/snapshots the registered target and checks online
+  readiness.
+- Git identity stage enqueues `configure_git_identity` using target-scoped
+  encrypted Git material. Raw GitHub tokens are not placed in command payloads.
+- workspace stage creates/loads the CloudWorkspace, enqueues
+  `ensure_repo_checkout`, resolves the repo root with
+  `materialize_workspace(mode=existing_path)`, creates the automation worktree
+  with `materialize_workspace(mode=worktree)`, and attaches AnyHarness ids to
+  the run.
+- environment stage enqueues `materialize_environment` for env vars, tracked
+  files, MCP config, skills, agent credential files, and manifests.
+- session stage enqueues `start_session` and optional `update_session_config`.
+- prompt stage enqueues `send_prompt` and marks the run `dispatched` after the
+  command is accepted or accepted-but-queued.
+
+Current caveats:
+
+- Worker compatibility/min-version gating is not implemented; there are no
+  pre-launch deployed old workers, so failures are currently command-level
+  instead of immediate "target worker too old" errors.
+- Fresh targets still need the requested agent installed/readied before
+  `start_session`; Git checkout and workspace materialization do not install
+  Claude/Codex/Gemini/OpenCode.
+- Cloud projections/session visibility are event-ingest driven. The automation
+  executor records run ids and command status, not assistant transcript rows.
+
 ## Non-Goals
 
-Do not implement the supervised runtime bundle in this PR.
+Do not implement target bootstrap or supervisor behavior here. That belongs to
+`docs/architecture/cloud-worker-runtime-bundle-supervisor-spec.md`.
 
-Do not add `materialize_workspace` in this PR.
-
-Do not build the final Web/Mobile automation UX in this PR.
+Do not build the final Web/Mobile automation UX in this migration layer.
 
 Do not redesign automation scheduling.
 
@@ -147,11 +197,12 @@ failed
 cancelled
 ```
 
-For PR C, interpret them as:
+Current command-backed interpretation:
 
 ```text
 creating_workspace
-  materialize_workspace command in progress
+  configure_git_identity, ensure_repo_checkout, or materialize_workspace command
+  in progress
 
 provisioning_workspace
   materialize_environment command in progress
@@ -444,7 +495,7 @@ server/proliferate/server/automations/worker/
         fail_current_claim()
 ```
 
-Do not keep substantial new logic in the older flat files if this PR rewrites
+Do not keep substantial new logic in the older flat files if this migration rewrites
 the executor. Existing files can become shims temporarily only inside the same
 PR while moving tests; do not leave duplicate production paths.
 
@@ -501,6 +552,7 @@ Each stage should return a new context with additional fields populated.
 ```python
 async def run_automation_pipeline(ctx: AutomationExecutionContext) -> None:
     ctx = await resolve_target_stage(ctx)
+    ctx = await ensure_git_identity_stage(ctx)
     ctx = await materialize_workspace_stage(ctx)
     ctx = await materialize_environment_stage(ctx)
     ctx = await start_session_stage(ctx)
@@ -613,6 +665,34 @@ TargetExecutionContext
 This stage is the only automation stage allowed to choose or provision a
 target.
 
+### Git Identity Stage
+
+File:
+
+```text
+server/proliferate/server/automations/worker/cloud_execution/stages/git_identity.py
+```
+
+Responsibilities:
+
+- resolve the target creator/user GitHub OAuth account and Git identity used
+  for v1 target Git access
+- create or load the target Git identity record
+- enqueue `configure_git_identity`
+- wait for result
+- fail explicitly if the user has no GitHub auth or Cloud cannot materialize
+  the target Git identity
+
+The command payload contains only the target Git identity id and config
+version. It must never contain the raw GitHub OAuth token. The worker fetches
+encrypted material through a worker-authenticated Cloud endpoint.
+
+Command stage key:
+
+```text
+configure-git-identity:{config_version}
+```
+
 ### Workspace Stage
 
 File:
@@ -624,8 +704,13 @@ server/proliferate/server/automations/worker/cloud_execution/stages/workspace.py
 Responsibilities:
 
 - create/load `CloudWorkspace` record for the run
-- enqueue `materialize_workspace`
-- wait for result
+- enqueue `ensure_repo_checkout`
+- wait for repo checkout result
+- enqueue `materialize_workspace(mode=existing_path)` to resolve the repo root
+- wait for repo-root workspace result
+- enqueue `materialize_workspace(mode=worktree)` to create/resolve the run
+  worktree
+- wait for worktree result
 - attach `anyharness_workspace_id` and cloud workspace id to the run
 - attach `anyharness_repo_root_id` if the worker returns one and the schema has
   a place for it; otherwise record it in command result metadata until a later
@@ -635,10 +720,26 @@ Responsibilities:
 Command stage key:
 
 ```text
-materialize-workspace
+ensure-repo-checkout
+materialize-workspace:repo-root
+materialize-workspace:worktree
 ```
 
-Expected payload:
+Expected `ensure_repo_checkout` payload:
+
+```json
+{
+  "repo": {
+    "provider": "github",
+    "owner": "proliferate-ai",
+    "name": "proliferate"
+  },
+  "checkoutPath": "/home/ubuntu/proliferate-workspaces/proliferate-ai/proliferate",
+  "baseBranch": "main"
+}
+```
+
+Expected worktree `materialize_workspace` payload:
 
 ```json
 {
@@ -659,9 +760,9 @@ Expected payload:
 }
 ```
 
-If repo root id is unknown for a fresh target, PR C may need a pre-step that
-uses `existing_path` to register the cloned repo root before creating a
-worktree. Keep this explicit rather than hiding it in the worker.
+Fresh targets use `ensure_repo_checkout` followed by
+`materialize_workspace(mode=existing_path)` to get the repo root id before
+creating the worktree. Keep this explicit rather than hiding it in the worker.
 
 Workspace path policy:
 
@@ -861,7 +962,10 @@ automation_run:{run_id}:target:{target_id}
 Stage keys:
 
 ```text
-materialize-workspace
+configure-git-identity:{config_version}
+ensure-repo-checkout
+materialize-workspace:repo-root
+materialize-workspace:worktree
 materialize-environment:{config_version}
 start-session
 update-reasoning-effort
@@ -942,9 +1046,9 @@ Do not treat `delivered` as success. It only means the worker saw the command.
 
 ## Typed Payload And Result Shapes
 
-PR C should avoid new `dict[str, object]` spread across stages. It is fine for
-the store to persist JSON, but stage code should use small Pydantic/dataclass
-payload builders before serializing.
+Stage code should avoid new `dict[str, object]` spread across stages. It is
+fine for the store to persist JSON, but stage code should use small
+Pydantic/dataclass payload builders before serializing.
 
 Suggested files:
 
@@ -955,6 +1059,10 @@ server/proliferate/server/automations/worker/cloud_execution/command_models.py
 Suggested types:
 
 ```text
+ConfigureGitIdentityPayload
+ConfigureGitIdentityResult
+EnsureRepoCheckoutPayload
+EnsureRepoCheckoutResult
 MaterializeWorkspacePayload
 MaterializeWorkspaceResult
 MaterializeEnvironmentPayload
@@ -986,7 +1094,8 @@ Result parsing must be strict:
 
 ## Cloud Workspace And Session Projections
 
-PR C should not poll AnyHarness directly to find transcript/session state.
+The automation executor should not poll AnyHarness directly to find
+transcript/session state.
 
 After `start_session` and `send_prompt`, visibility comes from the existing
 Cloud sync path:
@@ -1105,7 +1214,7 @@ Manual trigger:
 
 ```text
 uses automation target by default
-may accept target override if implemented in this PR
+may accept target override if implemented
 snapshot override onto run
 ```
 
@@ -1165,28 +1274,31 @@ error copy/code
 
 ## Implementation Order
 
-Implement PR C in this order to keep reviewable:
+The implementation on `main` has already completed the core migration order:
 
-1. Add DB columns and dataclass/Pydantic fields.
-2. Add service validation for automation target selection.
-3. Snapshot target fields when creating manual and scheduled runs.
-4. Add `cloud_execution/context.py`, `commands.py`, and typed command models.
-5. Move target resolution into `cloud_execution/stages/target.py`.
-6. Move workspace/environment/session/prompt logic into explicit stages.
-7. Replace `process_cloud_automation_run` with a call to
-   `run_automation_pipeline`.
-8. Remove direct AnyHarness mutation imports from automation worker code.
-9. Add unit tests for target selection, snapshotting, command order, and
-   idempotency.
-10. Run manual SSH smoke.
+1. DB columns and dataclass/Pydantic fields were added for target snapshots.
+2. Automation target selection is validated through the automation service.
+3. Manual and scheduled runs snapshot target fields.
+4. `cloud_execution/context.py`, `commands.py`, and typed command models exist.
+5. Target resolution lives in `cloud_execution/stages/target.py`.
+6. Git identity, workspace, environment, session, and prompt logic live in
+   explicit stages.
+7. `cloud_executor.py` calls `run_automation_pipeline`.
+8. Direct AnyHarness mutation imports are removed from automation execution.
+9. Unit coverage exists for the staged pieces.
 
-Do not begin by deleting old files. First introduce the staged shape, migrate
-call sites, then delete or turn old modules into thin import shims in the same
-PR.
+Remaining implementation hardening:
+
+1. Make fresh-target agent install/readiness part of the repeatable smoke path.
+2. Add worker command-kind/min-version gating before enqueue.
+3. Keep managed-cloud legacy direct launch fallbacks isolated to provisioning
+   and reconnect compatibility.
+4. Expand smoke scripts so SSH and managed cloud automations are both tested
+   from `main` without manual setup.
 
 ## Acceptance Criteria
 
-The PR is done only when all of these are true:
+The migration is considered healthy only when all of these are true:
 
 - A cloud automation can target an enrolled SSH target by target id.
 - A cloud automation can target the managed-cloud path after the target is
@@ -1198,12 +1310,14 @@ The PR is done only when all of these are true:
 - Every CloudCommand created by the executor has stable idempotency scope/key.
 - A reviewer can understand the full execution order from `pipeline.py` without
   opening worker loop code.
+- A fresh SSH smoke either installs/readies the requested agent automatically
+  or fails before `start_session` with a clear agent-readiness error.
 
 ## Direct AnyHarness Call Removal
 
 Automation execution must not call direct AnyHarness mutation helpers.
 
-Disallowed in automation execution code after this PR:
+Disallowed in automation execution code:
 
 ```text
 create_runtime_session
@@ -1281,7 +1395,9 @@ Suggested cases:
 - target stage loads selected SSH target
 - target stage loads selected managed cloud target
 - target stage rejects archived/offline target where policy requires online
-- workspace stage enqueues `materialize_workspace`
+- Git identity stage enqueues `configure_git_identity`
+- workspace stage enqueues `ensure_repo_checkout`
+- workspace stage enqueues `materialize_workspace` for repo root and worktree
 - environment stage enqueues `materialize_environment`
 - session stage enqueues `start_session`
 - prompt stage enqueues `send_prompt`
@@ -1340,7 +1456,10 @@ Automation command pipeline smoke:
 3. automation targeting SSH target
 4. manual automation trigger
 5. CloudCommands appear:
-     materialize_workspace
+     configure_git_identity
+     ensure_repo_checkout
+     materialize_workspace existing_path
+     materialize_workspace worktree
      materialize_environment
      start_session
      update_session_config if configured
@@ -1405,7 +1524,7 @@ mutation adapters.
 
 ### Manual Local Smoke
 
-Expected manual loop after PR A and PR B:
+Expected manual loop:
 
 ```text
 1. make dev PROFILE=worker
@@ -1429,17 +1548,22 @@ execution, event upload, and Cloud projections are connected.
 
 ## Completion Checklist
 
-- [ ] automations can store selected cloud target id
-- [ ] automation runs snapshot selected cloud target id/kind
-- [ ] cloud executor is organized as a stage pipeline
-- [ ] workspace stage uses `materialize_workspace`
-- [ ] environment stage uses `materialize_environment`
-- [ ] session/prompt stages use existing command kinds
-- [ ] managed cloud automations use target id after provisioning/enrollment
-- [ ] SSH automations use the same command path
-- [ ] automation execution code has no direct AnyHarness mutation calls
-- [ ] event sync, not direct executor polling, updates Cloud session/message
+- [x] automations can store selected cloud target id
+- [x] automation runs snapshot selected cloud target id/kind
+- [x] cloud executor is organized as a stage pipeline
+- [x] Git identity stage uses `configure_git_identity`
+- [x] workspace stage uses `ensure_repo_checkout`
+- [x] workspace stage uses `materialize_workspace`
+- [x] environment stage uses `materialize_environment`
+- [x] session/prompt stages use existing command kinds
+- [x] managed cloud automations use target id after provisioning/enrollment
+- [x] SSH automations use the same command path
+- [x] automation execution code has no direct AnyHarness mutation calls
+- [x] event sync, not direct executor polling, updates Cloud session/message
       visibility
+- [ ] fresh-target automation smoke installs/readies requested agent before
+      `start_session`
+- [ ] Cloud rejects enqueue for command kinds unsupported by the target worker
 
 ## Review Questions
 

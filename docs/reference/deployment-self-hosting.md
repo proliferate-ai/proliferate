@@ -166,14 +166,17 @@ POSTGRES_PASSWORD=
 JWT_SECRET=
 CLOUD_SECRET_KEY=
 
-# ── Cloud workspace runtime ──────────────────────────────
-# The control plane uploads an AnyHarness binary into each
-# cloud sandbox (both E2B and Daytona). The host needs this
-# binary available locally.
+# ── Cloud workspace runtime bundle ───────────────────────
+# The control plane uploads AnyHarness, Proliferate Worker,
+# and Proliferate Supervisor binaries into each cloud sandbox
+# (both E2B and Daytona). The host needs these binaries
+# available locally.
 #
-# Option 1: place the binary manually at the path below.
-# Option 2: set RUNTIME_BINARY_URL and let bootstrap fetch it.
+# Option 1: place the binaries manually at the paths below.
+# Option 2: set RUNTIME_BINARY_URL and let bootstrap fetch release assets.
 CLOUD_RUNTIME_SOURCE_BINARY_PATH=/opt/proliferate/bin/anyharness-linux
+CLOUD_WORKER_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-worker-linux
+CLOUD_SUPERVISOR_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-supervisor-linux
 PROLIFERATE_HOST_BIN_DIR=/opt/proliferate/bin
 RUNTIME_BINARY_URL=https://github.com/proliferate-ai/proliferate/releases/download/server-v0.1.0/anyharness-x86_64-unknown-linux-musl.tar.gz
 RUNTIME_BINARY_SHA256_URL=https://github.com/proliferate-ai/proliferate/releases/download/server-v0.1.0/self-hosted-assets.SHA256SUMS

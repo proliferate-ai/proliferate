@@ -101,24 +101,31 @@ Cloud workspace runtimes are still provider-hosted. The control plane returns a
    - `GITHUB_OAUTH_CLIENT_SECRET`
    - `SANDBOX_PROVIDER`
    - `E2B_API_KEY` or `DAYTONA_API_KEY`
-   - `CLOUD_RUNTIME_SOURCE_BINARY_PATH` if you want cloud workspaces
+   - `CLOUD_RUNTIME_SOURCE_BINARY_PATH`,
+     `CLOUD_WORKER_SOURCE_BINARY_PATH`, and
+     `CLOUD_SUPERVISOR_SOURCE_BINARY_PATH` if you want cloud workspaces
    - for advanced auth-flow, sandbox template, timeout, or runtime-path
      overrides, add the extra env vars manually from
      [docs/reference/env-secrets-matrix.md](/Users/pablo/proliferate/docs/reference/env-secrets-matrix.md)
 5. Leave `POSTGRES_PASSWORD`, `JWT_SECRET`, and `CLOUD_SECRET_KEY` blank if you want
    `bootstrap.sh` to generate and persist them in `server/deploy/.env.generated`
    on first startup.
-6. Either place a Linux `anyharness` binary on the host at
-   `${PROLIFERATE_HOST_BIN_DIR:-/opt/proliferate/bin}/anyharness-linux` and set:
+6. Either place Linux `anyharness`, `proliferate-worker`, and
+   `proliferate-supervisor` binaries on the host under
+   `${PROLIFERATE_HOST_BIN_DIR:-/opt/proliferate/bin}` and set:
 
 ```text
 CLOUD_RUNTIME_SOURCE_BINARY_PATH=/opt/proliferate/bin/anyharness-linux
+CLOUD_WORKER_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-worker-linux
+CLOUD_SUPERVISOR_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-supervisor-linux
 ```
 
 Or set:
 
 ```text
 CLOUD_RUNTIME_SOURCE_BINARY_PATH=/opt/proliferate/bin/anyharness-linux
+CLOUD_WORKER_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-worker-linux
+CLOUD_SUPERVISOR_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-supervisor-linux
 RUNTIME_BINARY_URL=https://github.com/proliferate-ai/proliferate/releases/download/server-vX.Y.Z/anyharness-x86_64-unknown-linux-musl.tar.gz
 RUNTIME_BINARY_SHA256_URL=https://github.com/proliferate-ai/proliferate/releases/download/server-vX.Y.Z/self-hosted-assets.SHA256SUMS
 ```

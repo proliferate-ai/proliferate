@@ -1,11 +1,16 @@
 # Cloud Worker Workspace Command Spec
 
-Status: concrete follow-up PR spec.
+Status: current implementation spec, verified against `main` on 2026-05-15.
 
-Scope: PR B in the Cloud Worker migration sequence.
+Scope: target-side Git checkout, workspace registration, and worktree creation
+commands used by Proliferate Worker.
 
-This spec defines the missing CloudCommand primitive for target-side workspace
-creation and worktree creation.
+This spec defines the CloudCommand primitives that let Cloud prepare a target
+for a session without directly calling AnyHarness:
+
+- `configure_git_identity`
+- `ensure_repo_checkout`
+- `materialize_workspace`
 
 It assumes the supervised runtime bundle from
 `docs/architecture/cloud-worker-runtime-bundle-supervisor-spec.md` exists:
@@ -16,14 +21,84 @@ proliferate-supervisor
   -> proliferate-worker
 ```
 
+The original PR-B framing in this file is historical. These command kinds now
+exist on `main`; this document describes the current behavior and remaining
+hardening work.
+
+## Current Main State
+
+`main` currently supports these worker command kinds:
+
+```text
+configure_git_identity
+ensure_repo_checkout
+materialize_workspace
+materialize_environment
+start_session
+send_prompt
+resolve_interaction
+update_session_config
+cancel_turn
+close_session
+sync_existing_workspace
+```
+
+The workspace-preparation path used by automations is:
+
+```text
+configure_git_identity
+  -> worker fetches encrypted target Git identity material through a
+     worker-authenticated Cloud endpoint
+  -> worker writes target-scoped Git credential/config under Proliferate-owned
+     target storage
+
+ensure_repo_checkout
+  -> worker verifies Git identity is configured
+  -> worker clones or fetches the target repo root path
+
+materialize_workspace(mode=existing_path)
+  -> worker calls AnyHarness /v1/workspaces/resolve for the repo root
+  -> worker returns anyharnessWorkspaceId and repoRootId
+
+materialize_workspace(mode=worktree)
+  -> worker calls AnyHarness /v1/workspaces/worktrees
+  -> if creation reports a compatible existing worktree, worker resolves it
+     through AnyHarness and returns the existing workspace id
+
+materialize_environment
+  -> worker fetches the target config materialization plan through Cloud
+  -> worker applies env vars, tracked files, MCP config, skills, agent
+     credential files, and manifests to the final workspace path
+```
+
+Current caveats:
+
+- Cloud command leasing uses inline fields on `cloud_commands`; there is no
+  separate lease table.
+- Worker command polling returns immediately from the server and sleeps briefly
+  on empty responses. It is polling, not server-side long-poll blocking.
+- The worker sync loop tails AnyHarness events by polling
+  `/v1/sessions/{id}/events?after_seq=...` and uploads batches directly. There
+  is no durable local event outbox table yet.
+- Command preconditions and worker min-version gating are not implemented yet.
+- Fresh SSH targets still need the requested agent installed before
+  `start_session`; Git/workspace materialization alone does not install Claude,
+  Codex, Gemini, or other agent binaries.
+
 ## Goal
 
 Cloud must be able to ask any registered target to create or resolve the
 AnyHarness workspace needed before a session can start.
 
-The command sequence after this PR should be:
+The command sequence is:
 
 ```text
+configure_git_identity
+  -> configures target Git credentials without raw tokens in command payloads
+
+ensure_repo_checkout
+  -> ensures the repo root exists and is fetchable on the target
+
 materialize_workspace
   -> returns anyharnessWorkspaceId, repoRootId, path, branch
 
@@ -34,7 +109,7 @@ send_prompt / update_session_config / resolve_interaction / cancel_turn
   -> normal live session control
 ```
 
-This PR answers one question:
+This command family answers one question:
 
 ```text
 How does Cloud create the target-side AnyHarness workspace/worktree without
@@ -43,23 +118,28 @@ directly calling AnyHarness from the server?
 
 ## Non-Goals
 
-Do not migrate automations in this PR.
+Do not put automation-specific business logic in the worker. Automations use
+these commands from the server-side staged pipeline.
 
-Do not add session MCP bundle launch semantics in this PR.
+Do not add session MCP bundle launch semantics to `materialize_workspace`.
 
 Do not move model/mode/reasoning/session config into this command.
 
 Do not make this command responsible for all target environment files. Target
 environment materialization remains separate.
 
-Do not remove server direct AnyHarness calls in this PR except where they are
-trivially unused. Full deletion belongs to the automation migration PR.
+Do not make `materialize_workspace` install agent binaries or resolve provider
+readiness. Agent installation/readiness is an AnyHarness agent-catalog concern
+and is orchestrated separately.
 
-## Current Command Coverage
+## Command Coverage
 
-Already present on the worker stack:
+Present on the worker stack:
 
 ```text
+configure_git_identity
+ensure_repo_checkout
+materialize_workspace
 start_session
 materialize_environment
 send_prompt
@@ -70,8 +150,9 @@ close_session
 sync_existing_workspace
 ```
 
-These cover live session control and target config application. They do not
-create the target-side AnyHarness workspace/worktree.
+These cover target Git bootstrap, repo checkout, workspace/worktree
+materialization, target config application, live session control, and existing
+workspace sync.
 
 `materialize_environment` currently applies configuration files to a filesystem
 root:
@@ -86,11 +167,11 @@ skill refs
 target-config manifest
 ```
 
-It does not call:
+It intentionally does not call:
 
 ```text
-POST /v1/workspaces
 POST /v1/workspaces/worktrees
+POST /v1/workspaces/resolve
 ```
 
 It therefore does not produce:
@@ -101,9 +182,12 @@ repoRootId
 workspace path registered in AnyHarness SQLite
 ```
 
-## Command Name
+Those ids are produced by `materialize_workspace`, after
+`ensure_repo_checkout` has made sure the repo root exists on the target.
 
-Add one active command kind:
+## Workspace Command Name
+
+The active workspace command kind is:
 
 ```text
 materialize_workspace
@@ -145,13 +229,23 @@ server/proliferate/constants/cloud.py
 anyharness/crates/proliferate-worker/src/cloud_client/commands.rs
 ```
 
-Add:
+Current active command kinds include:
 
-```python
-CloudCommandKind.materialize_workspace = "materialize_workspace"
+```text
+configure_git_identity
+ensure_repo_checkout
+materialize_workspace
+materialize_environment
+start_session
+send_prompt
+resolve_interaction
+update_session_config
+cancel_turn
+close_session
+sync_existing_workspace
 ```
 
-Add to:
+Each active kind must be present in:
 
 ```text
 ACTIVE_CLOUD_COMMAND_KINDS
@@ -202,7 +296,7 @@ creatorContext
 Worker behavior:
 
 ```text
-POST /v1/workspaces
+POST /v1/workspaces/resolve
 {
   "path": payload.path,
   "origin": payload.origin,
@@ -210,12 +304,8 @@ POST /v1/workspaces
 }
 ```
 
-If `displayName` is present, either:
-
-- call the existing AnyHarness display-name endpoint if available, or
-- defer display-name support and return the natural AnyHarness display name
-
-Do not invent a worker-side display-name store.
+If `displayName` is present, the worker applies it through AnyHarness after the
+workspace is resolved. Do not invent a worker-side display-name store.
 
 ### Worktree Mode
 
@@ -273,8 +363,14 @@ POST /v1/workspaces/worktrees
 }
 ```
 
-For this PR, `setupScript` may be passed through to AnyHarness if the endpoint
-already supports it. Do not add worker-side setup-script execution.
+`setupScript` may be passed through to AnyHarness if the endpoint supports it.
+Do not add worker-side setup-script execution.
+
+If AnyHarness reports that the requested worktree already exists or returns a
+non-success response that could correspond to an existing compatible worktree,
+the worker may recover by resolving `targetPath` through
+`/v1/workspaces/resolve`. Recovery must only accept a workspace whose repo root
+and branch/path match the command request.
 
 ## Result Schema
 
@@ -402,18 +498,18 @@ Changes:
 
 ### AnyHarness Workspace Client
 
-New file:
+File:
 
 ```text
 anyharness/crates/proliferate-worker/src/anyharness_client/workspaces.rs
 ```
 
-Changes:
+Current behavior:
 
-- add `AnyHarnessClient::create_workspace`
-- add `AnyHarnessClient::create_worktree_workspace`
-- parse response into a typed Rust struct, not loose `serde_json::Value`
-  where practical
+- `existing_path` calls AnyHarness workspace resolve, not create.
+- `worktree` calls AnyHarness worktree creation.
+- optional display names are applied after workspace materialization.
+- command results extract stable workspace fields from AnyHarness responses.
 
 Expected structs:
 
@@ -454,13 +550,12 @@ File:
 anyharness/crates/proliferate-worker/src/commands/mapping.rs
 ```
 
-Changes:
+Current behavior:
 
-- add `AnyHarnessCommand::MaterializeWorkspace`
-- parse a typed `MaterializeWorkspacePayload`
-- reject invalid mode or missing fields with stable error codes
-- map `existing_path` to AnyHarness create-workspace request
-- map `worktree` to AnyHarness create-worktree request
+- parses a typed `MaterializeWorkspacePayload`
+- rejects invalid mode or missing fields with stable error codes
+- maps `existing_path` to AnyHarness resolve-workspace request
+- maps `worktree` to AnyHarness create-worktree request
 
 Suggested worker-side enum:
 
@@ -504,13 +599,14 @@ File:
 anyharness/crates/proliferate-worker/src/commands/dispatcher.rs
 ```
 
-Changes:
+Current behavior:
 
-- advertise `materialize_workspace`
-- dispatch it only when AnyHarness is healthy
-- call the new AnyHarness workspace client method
-- report stable result fields
-- register the new workspace for sync if the command succeeds
+- advertises `materialize_workspace`
+- dispatches it only when AnyHarness is healthy
+- calls the AnyHarness workspace client
+- reports stable result fields
+- leaves session event sync registration to later session commands because
+  `materialize_workspace` is workspace-scoped, not session-scoped
 
 Registration detail:
 
@@ -519,16 +615,16 @@ store.upsert_sync_session(...) is session-scoped and should not be reused for
 workspace-only commands unless the store already has a workspace sync table.
 ```
 
-If no workspace-sync store exists yet, PR B should not invent a large sync
-store. Return the workspace id in command result and let PR C decide how to
-wire automation run state to Cloud workspace/session rows.
+Do not invent a workspace-sync store inside this command. Return the workspace
+id in the command result and let the server-side automation stage attach it to
+the run and Cloud workspace rows.
 
 ## AnyHarness API Dependency
 
-This PR should use existing AnyHarness APIs:
+This command uses existing AnyHarness APIs:
 
 ```text
-POST /v1/workspaces
+POST /v1/workspaces/resolve
 POST /v1/workspaces/worktrees
 ```
 
@@ -549,11 +645,17 @@ WorkspaceCreatorContext
 OriginContext
 ```
 
-## Command Sequencing After PR B
+## Command Sequencing
 
 Existing path session:
 
 ```text
+CloudCommand configure_git_identity
+  -> worker configures target Git credentials if stale/missing
+
+CloudCommand ensure_repo_checkout
+  -> worker clones/fetches repo root path
+
 CloudCommand materialize_workspace(mode=existing_path)
   -> worker returns anyharnessWorkspaceId
 
@@ -564,6 +666,15 @@ CloudCommand start_session(workspaceId=anyharnessWorkspaceId)
 Automation worktree session:
 
 ```text
+CloudCommand configure_git_identity
+  -> worker configures target Git credentials if stale/missing
+
+CloudCommand ensure_repo_checkout
+  -> worker clones/fetches repo root path
+
+CloudCommand materialize_workspace(mode=existing_path)
+  -> worker resolves the repo root and returns repoRootId
+
 CloudCommand materialize_workspace(mode=worktree)
   -> worker returns anyharnessWorkspaceId
 
@@ -577,9 +688,9 @@ CloudCommand send_prompt
   -> worker sends automation prompt
 ```
 
-PR C may choose to reorder `materialize_environment` before or after
-`materialize_workspace` if the target config plan already contains a final path.
-The preferred order is workspace first, environment second.
+Automation execution uses workspace first, environment second. If a later
+target-config design needs to apply files before workspace creation, that
+should be modeled explicitly rather than hidden inside the worker.
 
 ## Tests
 
@@ -623,7 +734,9 @@ Add tests:
 
 ### Integration/Smoke
 
-No full automation smoke is required in this PR.
+The original PR-level spec did not require a full automation smoke. The current
+mainline acceptance path should include a full automation smoke because the
+workspace command is now part of the automation pipeline.
 
 Minimal existing-path smoke:
 
@@ -655,7 +768,7 @@ Minimal worktree smoke:
      branch/newBranchName
 ```
 
-The worktree smoke is the important handoff to PR C. Automations should be
+The worktree smoke is the important automation handoff. Automations should be
 able to take the returned workspace id/path and attach them to
 `automation_run.cloud_workspace_id` and
 `automation_run.anyharness_workspace_id` without any direct Cloud ->
@@ -664,20 +777,47 @@ AnyHarness workspace call.
 If this is too expensive for CI, keep it as a local smoke command and cover
 server/worker mapping in unit tests.
 
+Full SSH automation smoke:
+
+```text
+1. run local Cloud profile, for example runtime on API port 8040
+2. enroll an SSH target through the installer
+3. ensure target Git identity is configured through configure_git_identity
+4. trigger automation targeting that SSH target
+5. verify command order:
+     configure_git_identity
+     ensure_repo_checkout
+     materialize_workspace existing_path
+     materialize_workspace worktree
+     materialize_environment
+     start_session
+     send_prompt
+6. verify run reaches dispatched and AnyHarness has a session id
+```
+
+Current manual caveat: the requested agent must be installed/readied on a fresh
+SSH target before `start_session`, or the run can fail with `InstallRequired`.
+
 ## Completion Checklist
 
-- [ ] `materialize_workspace` is an active CloudCommand kind
-- [ ] worker advertises `materialize_workspace`
-- [ ] server validates payload shape
-- [ ] worker strictly parses payload shape
-- [ ] worker calls AnyHarness workspace and worktree APIs
-- [ ] command result exposes stable workspace fields
-- [ ] worktree command returns enough path/branch/repo-root data for automation
+- [x] `configure_git_identity` is an active CloudCommand kind
+- [x] `ensure_repo_checkout` is an active CloudCommand kind
+- [x] `materialize_workspace` is an active CloudCommand kind
+- [x] worker advertises `materialize_workspace`
+- [x] server validates payload shape
+- [x] worker parses payload shape
+- [x] worker calls AnyHarness resolve-workspace and worktree APIs
+- [x] command result exposes stable workspace fields
+- [x] worktree command returns enough path/branch/repo-root data for automation
       run attachment
-- [ ] no MCP/session bundle logic is added to this command
-- [ ] no automation migration occurs in this PR
-- [ ] docs explain the difference between `materialize_workspace` and
+- [x] no MCP/session bundle logic is added to this command
+- [x] automation migration consumes the command through the staged pipeline
+- [x] docs explain the difference between `materialize_workspace` and
       `materialize_environment`
+- [ ] command-kind/min-version gating rejects unsupported old workers before
+      enqueue
+- [ ] repeatable automation smoke installs/readies requested agents on fresh
+      targets before `start_session`
 
 ## Review Questions
 
@@ -687,7 +827,7 @@ Reviewers should be able to answer:
 2. Which command applies env/credentials/MCP/skills files?
 3. Does `start_session` require an existing AnyHarness workspace id?
 4. Can an SSH target and managed cloud target use the same command?
-5. Does the command result give PR C enough data to attach automation runs to
+5. Does the command result give automations enough data to attach runs to
    the workspace?
 6. For automation worktrees, which path and branch did Cloud request, and which
    workspace id did AnyHarness return?

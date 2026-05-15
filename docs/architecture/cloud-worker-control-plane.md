@@ -2,7 +2,8 @@
 
 Status: implementation spec for Cloud-mediated session control, Proliferate
 Worker, target enrollment, command delivery, event ingestion, snapshots,
-compute lifecycle, and cloud sync.
+compute lifecycle, and cloud sync. Current implementation notes were verified
+against `main` on 2026-05-15.
 
 Scope:
 
@@ -59,6 +60,33 @@ AnyHarness remains the execution source of truth. Cloud stores command history,
 normalized events, snapshots/read models, policy, audit, billing, target state,
 and artifact references. Cloud does not become a second AnyHarness runtime
 database.
+
+## Current Main Implementation Notes
+
+The architecture below is the target model. Current `main` implements the
+worker spine with a few pragmatic differences that reviewers should keep in
+mind:
+
+- active worker command kinds are `configure_git_identity`,
+  `ensure_repo_checkout`, `materialize_workspace`,
+  `materialize_environment`, `start_session`, `send_prompt`,
+  `resolve_interaction`, `update_session_config`, `cancel_turn`,
+  `close_session`, and `sync_existing_workspace`.
+- command leases are stored inline on `cloud_commands`; there is no separate
+  lease table.
+- worker command polling currently returns immediately from the server and the
+  worker sleeps on empty responses. It is not server-held long polling yet.
+- command `preconditions` are not accepted by the current Cloud command
+  validator.
+- the worker sends ordinary AnyHarness request bodies. There is not yet an
+  AnyHarness `command_metadata` envelope.
+- event sync polls
+  `GET /v1/sessions/{session_id}/events?after_seq=...` and uploads batches
+  directly. The worker has local command-result retry state, but no durable
+  event outbox table.
+- event ingest currently enforces caps by rejecting oversized batches and
+  truncating retained payloads through payload policy; it does not yet emit all
+  degraded/compacted marker variants described as future target behavior.
 
 ## Non-Goals For V1
 
@@ -451,20 +479,23 @@ error_message nullable
 V1 command kinds:
 
 ```text
+configure_git_identity
+ensure_repo_checkout
+materialize_workspace
+materialize_environment
 start_session
-resume_session
 send_prompt
 resolve_interaction
 update_session_config
 cancel_turn
-cancel_session
-stop_workspace
-hibernate_workspace
-resume_workspace
-prune_workspace
-extend_workspace_ttl
+close_session
 sync_existing_workspace
 ```
+
+Additional lifecycle commands such as `stop_workspace`,
+`hibernate_workspace`, `resume_workspace`, `prune_workspace`, and
+`extend_workspace_ttl` remain target architecture, not active worker command
+kinds on current `main`.
 
 Command status:
 
@@ -876,6 +907,12 @@ cloud_artifact_refs:
 The worker is a separate binary crate. Do not put worker code inside
 `anyharness-lib`; the worker talks to AnyHarness over the local HTTP/SSE API.
 
+The tree below is the intended ownership shape. Current `main` has the core
+modules but not every target submodule: event sync uses polling in `sync/tailer`
+rather than a local SSE stream tailer plus durable event outbox, command
+preconditions are not implemented, and some inventory/readiness logic is still
+coarser than the final split.
+
 ```text
 anyharness/crates/proliferate-worker/
   Cargo.toml
@@ -1020,12 +1057,12 @@ runtime main
 Loop defaults:
 
 ```text
-heartbeat interval: 15 seconds when active, 60 seconds when idle
+heartbeat interval: implementation-configured; current worker config default is 30 seconds
 inventory interval: 5 minutes or when hash changes
-command long-poll timeout: 25 seconds
-event batch flush: 100 ms or 100 events or 512 KB, whichever comes first
-outbox retry: exponential backoff with jitter
-lease timeout: 60 seconds for normal commands, shorter for stale-safe commands
+command poll: server returns immediately; worker sleeps briefly on empty responses
+lease timeout: current worker requests a 300 second lease
+event upload: worker polls AnyHarness events by seq and uploads batches directly
+event outbox retry: not implemented as a separate durable local event outbox yet
 ```
 
 ## AnyHarness Contract Additions
@@ -1033,6 +1070,12 @@ lease timeout: 60 seconds for normal commands, shorter for stale-safe commands
 Prefer using existing AnyHarness endpoints where they already express the
 operation. Add contract fields only where worker/cloud correctness requires
 canonical command identity, actor metadata, or target inventory.
+
+Current `main` uses existing AnyHarness HTTP contracts for worker dispatch:
+workspace resolve/worktree creation, session create/prompt/config/interaction
+resolution/cancel/close, and session event listing. The `commands.rs`
+metadata/precondition contract below remains target architecture and is not
+accepted by current AnyHarness request bodies.
 
 New/extended contract files:
 
@@ -1306,7 +1349,7 @@ Desktop dispatch should be opt-in per machine and preferably per workspace.
    target is cloud-sync addressable
    command kind is allowed
    idempotency key is unique or returns existing command
-   preconditions are well formed
+   preconditions are absent until the precondition contract is implemented
 
 4. commands.store inserts queued command.
 
@@ -1319,7 +1362,7 @@ Desktop dispatch should be opt-in per machine and preferably per workspace.
    lease_expires_at = now + timeout
 
 8. Worker dispatcher maps Cloud command to AnyHarness request:
-   POST /v1/sessions/{S}/prompt with command_metadata.
+   POST /v1/sessions/{S}/prompt.
 
 9. AnyHarness accepts/rejects/queues and emits canonical events.
 
@@ -1340,6 +1383,11 @@ from AnyHarness events.
 ## Event Upload And Backfill Flow
 
 Backfill is required when enabling sync for an existing workspace/session.
+
+Current implementation note: worker event sync polls AnyHarness session events
+by sequence and uploads batches directly to Cloud. The explicit local event
+outbox steps below describe the target reliability model; they are not a
+separate table in current `main`.
 
 ```text
 1. Cloud enqueues sync_existing_workspace command or worker observes sync flag.
