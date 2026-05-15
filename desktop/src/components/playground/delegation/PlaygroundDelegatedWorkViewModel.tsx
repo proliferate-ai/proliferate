@@ -1,5 +1,12 @@
 import type { ReviewRunDetail } from "@anyharness/sdk";
 import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
+import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+import type { DelegatedWorkStatusCategory } from "@/lib/domain/delegated-work/model";
+import {
+  delegatedWorkStatusCategoryFromLabel,
+  selectSingleDelegatedAgentTriggerIdentity,
+  type DelegatedAgentTriggerCandidate,
+} from "@/lib/domain/delegated-work/presentation";
 import {
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
   type PlaygroundReviewComposerRow,
@@ -54,9 +61,29 @@ export function buildPlaygroundDelegatedWorkViewModel(args: {
           active: subagents.summary.active,
         }
         : { label: "No active work", active: false };
+  const visibleAgents: DelegatedAgentTriggerCandidate[] = [
+    ...(args.reviewState?.rows.map((row) => ({
+      identity: buildDelegatedAgentIdentity({
+        id: row.id,
+        title: row.label,
+        sessionId: `reviewer-session-${row.id}`,
+        sessionLinkId: `reviewer-link-${row.id}`,
+      }),
+      statusCategory: playgroundReviewStatusCategory(row.status),
+    })) ?? []),
+    ...(cowork?.rows.flatMap((row) => row.sessions.map((session) => ({
+      identity: session.identity,
+      statusCategory: session.statusCategory,
+    }))) ?? []),
+    ...(subagents?.rows.map((row) => ({
+      identity: row.identity,
+      statusCategory: row.statusCategory,
+    })) ?? []),
+  ];
 
   return {
     summary,
+    singleAgent: selectSingleDelegatedAgentTriggerIdentity(visibleAgents),
     review: reviewRun ? {
       run: reviewRun,
       startingReview: null,
@@ -71,6 +98,15 @@ export function buildPlaygroundDelegatedWorkViewModel(args: {
     cowork,
     subagents,
   };
+}
+
+function playgroundReviewStatusCategory(
+  status: PlaygroundReviewComposerRow["status"],
+): DelegatedWorkStatusCategory {
+  if (status === "Failed") {
+    return "failed";
+  }
+  return delegatedWorkStatusCategoryFromLabel({ statusLabel: status });
 }
 
 function buildPlaygroundReviewRun(state: PlaygroundReviewComposerState): ReviewRunDetail {

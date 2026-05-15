@@ -2,7 +2,7 @@ import type {
   CoworkComposerStripSummary,
   CoworkComposerWorkspaceRow,
 } from "@/hooks/cowork/facade/use-cowork-composer-strip";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagents/subagent-braille-color";
+import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
 
 export const PLAYGROUND_COWORK_ROWS: CoworkComposerWorkspaceRow[] = [
   {
@@ -18,12 +18,19 @@ export const PLAYGROUND_COWORK_ROWS: CoworkComposerWorkspaceRow[] = [
         codingSessionId: "coding-session-composer-layout",
         parentSessionId: "playground-root-session",
         label: "composer layout cleanup",
+        identity: buildDelegatedAgentIdentity({
+          id: "coding-link-composer-layout",
+          title: "composer layout cleanup",
+          workspaceId: "workspace-frontend-polish",
+          sessionId: "coding-session-composer-layout",
+          sessionLinkId: "coding-link-composer-layout",
+        }),
         agentKind: "codex",
         statusLabel: "Working",
+        statusCategory: "running",
         meta: "Codex · gpt-5.4 · implementation",
         latestCompletionLabel: null,
         wakeScheduled: false,
-        color: resolveSubagentColor("coding-link-composer-layout"),
         active: true,
       },
       {
@@ -31,12 +38,19 @@ export const PLAYGROUND_COWORK_ROWS: CoworkComposerWorkspaceRow[] = [
         codingSessionId: "coding-session-visual-regression",
         parentSessionId: "playground-root-session",
         label: "visual regression pass",
+        identity: buildDelegatedAgentIdentity({
+          id: "coding-link-visual-regression",
+          title: "visual regression pass",
+          workspaceId: "workspace-frontend-polish",
+          sessionId: "coding-session-visual-regression",
+          sessionLinkId: "coding-link-visual-regression",
+        }),
         agentKind: "claude",
         statusLabel: "Idle",
+        statusCategory: "wake_scheduled",
         meta: "Claude · sonnet · verification",
         latestCompletionLabel: "Turn completed",
         wakeScheduled: true,
-        color: resolveSubagentColor("coding-link-visual-regression"),
         active: false,
       },
     ],

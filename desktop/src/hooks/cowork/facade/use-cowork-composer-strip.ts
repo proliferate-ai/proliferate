@@ -5,7 +5,14 @@ import type {
 } from "@anyharness/sdk";
 import { useActiveSessionId } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagents/subagent-braille-color";
+import type {
+  DelegatedAgentIdentity,
+  DelegatedWorkStatusCategory,
+} from "@/lib/domain/delegated-work/model";
+import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+import {
+  delegatedWorkStatusCategoryFromLabel,
+} from "@/lib/domain/delegated-work/presentation";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useCoworkManagedWorkspaces } from "@/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
 import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-status";
@@ -17,12 +24,13 @@ export interface CoworkComposerSessionRow {
   codingSessionId: string;
   parentSessionId: string;
   label: string;
+  identity: DelegatedAgentIdentity;
   agentKind: string;
   statusLabel: string;
+  statusCategory: DelegatedWorkStatusCategory;
   meta: string | null;
   latestCompletionLabel: string | null;
   wakeScheduled: boolean;
-  color: string;
   active: boolean;
 }
 
@@ -134,19 +142,30 @@ function buildSessionRow(
   parentSessionId: string,
   activeCodingSessionId: string | null,
 ): CoworkComposerSessionRow {
+  const label = sessionLabel(session, index);
+  const statusLabel = sessionStatusLabel(session);
   return {
     sessionLinkId: session.sessionLinkId,
     codingSessionId: session.codingSessionId,
     parentSessionId,
-    label: sessionLabel(session, index),
+    label,
+    identity: buildDelegatedAgentIdentity({
+      id: session.sessionLinkId,
+      title: label,
+      sessionId: session.codingSessionId,
+      sessionLinkId: session.sessionLinkId,
+    }),
     agentKind: session.agentKind,
-    statusLabel: sessionStatusLabel(session),
+    statusLabel,
+    statusCategory: delegatedWorkStatusCategoryFromLabel({
+      statusLabel,
+      wakeScheduled: session.wakeScheduled,
+    }),
     meta: formatSessionMeta(session),
     latestCompletionLabel: session.latestCompletion
       ? `Turn ${completionOutcomeLabel(session.latestCompletion.outcome)}`
       : null,
     wakeScheduled: session.wakeScheduled,
-    color: resolveSubagentColor(session.sessionLinkId),
     active: activeCodingSessionId === session.codingSessionId,
   };
 }

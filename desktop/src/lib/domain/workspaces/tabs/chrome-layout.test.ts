@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHROME_DELEGATED_TAB_MAX_WIDTH,
   CHROME_TAB_MAX_WIDTH,
   CHROME_TAB_MIN_WIDTH,
+  CHROME_TAB_SMALL_WIDTH,
   TAB_GROUP_PILL_WIDTH,
   computeChromeTabPositions,
   computeChromeTabWidths,
@@ -69,5 +71,24 @@ describe("computeHeaderStripLayout", () => {
 
     expect(layout.widths).toEqual([TAB_GROUP_PILL_WIDTH, 48, 48]);
     expect(layout.positions).toEqual([0, 52, 103]);
+  });
+
+  it("honors narrower max widths for delegated-agent tabs", () => {
+    expect(CHROME_DELEGATED_TAB_MAX_WIDTH).toBe(CHROME_TAB_SMALL_WIDTH);
+
+    const layout = computeHeaderStripLayout({
+      containerWidth: 600,
+      rows: [
+        { kind: "tab" },
+        { kind: "tab", maxWidth: CHROME_DELEGATED_TAB_MAX_WIDTH },
+        { kind: "tab", maxWidth: CHROME_DELEGATED_TAB_MAX_WIDTH },
+      ],
+    });
+
+    expect(layout.widths).toEqual([
+      CHROME_TAB_MAX_WIDTH,
+      CHROME_DELEGATED_TAB_MAX_WIDTH,
+      CHROME_DELEGATED_TAB_MAX_WIDTH,
+    ]);
   });
 });

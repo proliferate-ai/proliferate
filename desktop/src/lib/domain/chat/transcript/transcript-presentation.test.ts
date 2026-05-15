@@ -107,6 +107,52 @@ describe("buildTurnPresentation", () => {
     ]);
   });
 
+  it("groups adjacent subagent creation receipts", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      create1: subagentCreationItem("create1", 1),
+      create2: subagentCreationItem("create2", 2),
+      final: assistantItem("final", "turn-1", 3),
+    };
+    const turn = turnRecord(["create1", "create2", "final"]);
+
+    expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
+      {
+        kind: "subagent_creations",
+        blockId: "create1-create2",
+        itemIds: ["create1", "create2"],
+      },
+      { kind: "item", itemId: "final" },
+    ]);
+  });
+
+  it("does not group creation receipts with subagent communication calls", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      create1: subagentCreationItem("create1", 1),
+      send: {
+        ...toolItem("send", "turn-1", 2, "subagent"),
+        nativeToolName: "mcp__subagents__send_subagent_message",
+      },
+      create2: subagentCreationItem("create2", 3),
+    };
+    const turn = turnRecord(["create1", "send", "create2"]);
+
+    expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
+      {
+        kind: "subagent_creations",
+        blockId: "create1-create1",
+        itemIds: ["create1"],
+      },
+      { kind: "item", itemId: "send" },
+      {
+        kind: "subagent_creations",
+        blockId: "create2-create2",
+        itemIds: ["create2"],
+      },
+    ]);
+  });
+
   it("does not apply completed-history collapse inside scoped subagent work", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
@@ -581,3 +627,19 @@ describe("buildTurnPresentation", () => {
     )).toBe("Explored 1 file, running 2 commands");
   });
 });
+
+function subagentCreationItem(itemId: string, startedSeq: number): ToolCallItem {
+  return {
+    ...toolItem(itemId, "turn-1", startedSeq, "subagent"),
+    title: "Create subagent",
+    nativeToolName: "mcp__subagents__create_subagent",
+    rawInput: {
+      label: `Subagent ${itemId}`,
+      prompt: `Prompt for ${itemId}`,
+    },
+    rawOutput: {
+      sessionLinkId: `link-${itemId}`,
+      childSessionId: `child-${itemId}`,
+    },
+  };
+}

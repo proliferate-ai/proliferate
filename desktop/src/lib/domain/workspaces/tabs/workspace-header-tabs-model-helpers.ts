@@ -21,6 +21,7 @@ export interface HeaderHierarchyChildRow {
   title: string;
   agentKind: string;
   source: "subagent" | "review" | "cowork";
+  reviewKind?: string | null;
   meta: string | null;
   statusLabel: string;
   wakeScheduled: boolean;

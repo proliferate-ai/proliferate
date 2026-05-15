@@ -284,14 +284,22 @@ function blockBelongsToCompletedHistory(
   block: TurnDisplayBlock,
   completedHistoryRootIds: ReadonlySet<string>,
 ): boolean {
-  if (block.kind === "collapsed_actions" || block.kind === "inline_tools") {
+  if (
+    block.kind === "collapsed_actions"
+    || block.kind === "inline_tools"
+    || block.kind === "subagent_creations"
+  ) {
     return block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
   }
   return completedHistoryRootIds.has(block.itemId);
 }
 
 function getTurnDisplayBlockKey(block: TurnDisplayBlock): string {
-  if (block.kind === "collapsed_actions" || block.kind === "inline_tools") {
+  if (
+    block.kind === "collapsed_actions"
+    || block.kind === "inline_tools"
+    || block.kind === "subagent_creations"
+  ) {
     return block.blockId;
   }
   return block.itemId;

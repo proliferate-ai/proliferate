@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/Button";
+import { Robot } from "@/components/ui/icons";
 import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
 import { PopoverSection } from "./PopoverSection";
 
@@ -48,8 +49,11 @@ export function AgentsPopoverCoworkSection({
                   onClose();
                 }}
               >
-                <span className="min-w-0 truncate text-xs text-muted-foreground">
-                  {session.label}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <Robot className={`size-3 shrink-0 ${session.identity.textColorClassName}`} />
+                  <span className="min-w-0 truncate text-xs text-muted-foreground">
+                    {session.identity.displayName}
+                  </span>
                 </span>
                 <span className="shrink-0 text-xs text-muted-foreground">
                   {session.statusLabel}

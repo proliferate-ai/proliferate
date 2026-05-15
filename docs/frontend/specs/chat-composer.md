@@ -75,9 +75,9 @@ Review status lives in `attachedSlot`, not in active state. The shared
 `DelegatedWorkComposerControl` owns the compact `Agents` summary-control +
 popover pattern for reviews, cowork, and subagents. The review section owns
 reviewer rows, critique links, stop, send-feedback, and review-revision actions.
-Review automation can still make the composer unavailable through chat
-availability state, but it should not displace blocking requests or todo state
-with a full card.
+Review automation, cowork sessions, and linked subagents are parallel delegated
+work and must not make normal parent chat input unavailable by themselves. They
+should not displace blocking requests or todo state with a full card.
 
 Review runs have two composer-facing classes: blocking workflow runs
 (`reviewing`, `feedback_ready`, `parent_revising`, `waiting_for_revision`) and
@@ -85,7 +85,9 @@ terminal result notices (`passed`, `stopped`, `system_failed`). The composer may
 show one blocking workflow or the latest terminal notice, but dismissing a
 terminal notice must not reveal older terminal runs underneath it. Starting a
 new review is blocked by workflow runs and optimistic starting state, not by a
-finished result notice.
+finished result notice. This review-start gate is separate from chat input
+availability; `parent_revising` keeps review controls visible but leaves parent
+chat input enabled.
 
 If you need to introduce another dock-region inhabitant, classify it by state
 role first: outbound work, active agent state, or attached context/parallel
@@ -99,6 +101,16 @@ review, cowork, subagent order. Individual child chips should not be rendered
 directly above the composer. Attached delegated work is an indicator layer for
 adjacent work, not a blocking prompt panel. `outboundSlot` must render before
 `activeSlot`; both stack above attached context/parallel work when present.
+
+`DelegatedWorkComposerControl` uses delegated-work identity from the shared
+domain view model. The trigger stays the generic `Agents` control when there
+are zero or multiple visible delegated items. When exactly one visible item
+needs attention or is active, the trigger may use that item's colored robot and
+canonical generated display identity.
+
+The popover hides completed-success/no-action items by default. Failed,
+needs-attention, feedback-ready, and waiting-for-revision items remain visible
+until the user acts or dismisses them.
 
 Dock panes share one width and one neutral tray treatment. Hierarchy comes from
 state order, copy, and control weight, not from different colors or a width
@@ -164,6 +176,10 @@ echoes it back as a `plan_reference` content part.
 
 - The composer plan picker uses `PopoverButton` + `ComposerPopoverSurface`, the
   same popover primitives as the workspace location control.
+- When the add popover launches review-agent configuration from the settings
+  icon, keep the add popover visible. The review setup panel is a continuation
+  of the add-action path, not a replacement for the `Add file` / `Add plan` /
+  review-agent menu.
 - The picker list is summary-backed, so its search filters title, agent, source
   kind, and decision status. It does not claim body search unless the runtime
   exposes body snippets or a dedicated search endpoint.
@@ -274,8 +290,13 @@ Scenarios (selectable via `?s=<key>`):
 - `cloud-first-runtime`, `cloud-provisioning`, `cloud-applying-files`, `cloud-blocked`, `cloud-error`, `cloud-reconnecting`, `cloud-reconnect-error` — cloud workspace/runtime composer states
 - `claude-plan-short`, `claude-plan-long` — ProposedPlanCard in transcript
 - `review-feedback-message`, `review-complete-message` — collapsed transcript receipts for review feedback and completed reviews
+- `tool-subagent-creation-single`, `tool-subagent-creations`, `subagent-parent-send-card`, `subagent-wake-card` — delegated-work transcript receipt coverage for single creation, grouped creation, parent-send provenance, and wake/completion receipts
 - `subagents-composer-few`, `subagents-composer-many`, `subagents-queued-wake`, `subagents-queued-wake-with-approval`, `subagents-coding-review-with-approval` — delegated-work strip, queued wake prompt, coding/review agent, and approval stack coverage
 - `subagents-review-starting-plan`, `subagents-review-starting-code`, `subagents-reviewing-plan`, `subagents-reviewing-code`, `subagents-review-feedback-ready`, `subagents-review-complete` — review-agent composer lifecycle coverage
+- delegated-work identity coverage must include: single active subagent trigger,
+  multiple-agent generic trigger, failed/attention agent visible in the popover,
+  completed-success agent hidden by default, and parent composer enabled while
+  review/subagent/cowork background work is running.
 - `mobility-local-actionable`, `mobility-local-blocked`, `mobility-unpublished-branch`, `mobility-unpushed-commits`, `mobility-out-of-sync-branch`, `mobility-cloud-active`, `mobility-in-flight`, `mobility-failed` — composer footer row + mobility states
 
 The playground is **dev-only**. It is lazy-loaded via `React.lazy()` gated on `import.meta.env.DEV` in `App.tsx`, so neither the page nor its fixtures land in production bundles.

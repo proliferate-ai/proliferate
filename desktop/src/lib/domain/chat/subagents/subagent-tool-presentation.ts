@@ -62,11 +62,13 @@ export function formatSubagentHeaderVerb({
 }
 
 export function isSubagentProvisioningAction(item: ToolNameOwner): boolean {
+  return isSubagentCreationAction(item);
+}
+
+export function isSubagentCreationAction(item: ToolNameOwner): boolean {
   switch (normalizeToolName(item.nativeToolName)) {
     case "agent":
     case "mcp__subagents__create_subagent":
-    case "mcp__subagents__send_subagent_message":
-    case "mcp__subagents__schedule_subagent_wake":
       return true;
     default:
       return false;

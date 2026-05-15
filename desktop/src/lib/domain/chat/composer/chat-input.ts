@@ -12,10 +12,11 @@ interface ChatInputAvailabilityArgs {
   configuredLaunchDisabledReason: string | null;
   pendingWorkspaceEntry: ChatInputPendingWorkspaceEntry | null;
   mobility: ChatInputMobilityState | null;
-  hasBusyReview: boolean;
+  pendingInteractionKind?: ChatInputPendingInteractionKind | null;
 }
 
 export type ChatSelectedWorkspaceKind = "cloud" | "local";
+export type ChatInputPendingInteractionKind = "permission" | "user_input" | "mcp_elicitation";
 
 export interface ChatInputPendingWorkspaceEntry {
   source: "local-created" | "worktree-created" | "cloud-created" | "cowork-created";
@@ -81,7 +82,7 @@ export function resolveChatInputAvailability({
   configuredLaunchDisabledReason,
   pendingWorkspaceEntry,
   mobility,
-  hasBusyReview,
+  pendingInteractionKind = null,
 }: ChatInputAvailabilityArgs): ChatInputAvailabilityState {
   const selectedWorkspaceKind = isCloudWorkspaceSelected ? "cloud" : "local";
 
@@ -109,15 +110,6 @@ export function resolveChatInputAvailability({
       disabledReason: mobility.statusDescription ?? "Workspace mobility is in progress.",
       areRuntimeControlsDisabled: true,
       selectedWorkspaceKind: mobility.selectedEffectiveOwner === "cloud" ? "cloud" : "local",
-    };
-  }
-
-  if (hasBusyReview) {
-    return {
-      isDisabled: true,
-      disabledReason: "Review automation is running.",
-      areRuntimeControlsDisabled: true,
-      selectedWorkspaceKind,
     };
   }
 
@@ -182,12 +174,32 @@ export function resolveChatInputAvailability({
     };
   }
 
+  if (pendingInteractionKind) {
+    return {
+      isDisabled: true,
+      disabledReason: pendingInteractionDisabledReason(pendingInteractionKind),
+      areRuntimeControlsDisabled: false,
+      selectedWorkspaceKind,
+    };
+  }
+
   return {
     isDisabled: false,
     disabledReason: null,
     areRuntimeControlsDisabled: false,
     selectedWorkspaceKind,
   };
+}
+
+function pendingInteractionDisabledReason(kind: ChatInputPendingInteractionKind): string {
+  switch (kind) {
+    case "permission":
+      return "Resolve the pending approval before sending another message.";
+    case "user_input":
+      return "Answer the pending request before sending another message.";
+    case "mcp_elicitation":
+      return "Complete the pending MCP form before sending another message.";
+  }
 }
 
 export function resolveCurrentModeLabel(

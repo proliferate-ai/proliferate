@@ -94,7 +94,11 @@ export function collectToolCallIdsWithProposedPlanForBlocks(
 ): Set<string> {
   const toolCallIds = new Set<string>();
   for (const block of displayBlocks) {
-    if (block.kind === "collapsed_actions" || block.kind === "inline_tools") {
+    if (
+      block.kind === "collapsed_actions"
+      || block.kind === "inline_tools"
+      || block.kind === "subagent_creations"
+    ) {
       for (const itemId of block.itemIds) {
         collectToolCallIdsWithProposedPlanFromItem(
           itemId,
@@ -197,7 +201,7 @@ function blockContainsActiveToolWork(
     return false;
   }
 
-  if (block.kind === "collapsed_actions") {
+  if (block.kind === "collapsed_actions" || block.kind === "subagent_creations") {
     return block.itemIds.some((itemId) => isActiveToolItem(transcript.itemsById[itemId]));
   }
   if (block.kind === "inline_tools") {
@@ -217,7 +221,11 @@ export function blockBelongsToCompletedHistory(
   block: TurnDisplayBlock,
   completedHistoryRootIds: ReadonlySet<string>,
 ): boolean {
-  if (block.kind === "collapsed_actions" || block.kind === "inline_tools") {
+  if (
+    block.kind === "collapsed_actions"
+    || block.kind === "inline_tools"
+    || block.kind === "subagent_creations"
+  ) {
     return block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
   }
   return completedHistoryRootIds.has(block.itemId);

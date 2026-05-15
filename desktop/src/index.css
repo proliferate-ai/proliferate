@@ -207,6 +207,16 @@
   --color-status-canceled: hsl(23 5% 63%);
   --color-status-canceled-hover: hsl(20 6% 72%);
 
+  /* -- Delegated work identity -- */
+  --color-delegated-agent-1: hsl(213 94% 68%);
+  --color-delegated-agent-2: hsl(292 100% 78%);
+  --color-delegated-agent-3: hsl(0 91% 71%);
+  --color-delegated-agent-4: hsl(50 100% 75%);
+  --color-delegated-agent-5: hsl(265 88% 78%);
+  --color-delegated-agent-6: hsl(188 85% 59%);
+  --color-delegated-agent-7: hsl(24 95% 72%);
+  --color-delegated-agent-8: hsl(199 89% 68%);
+
   /* -- Todo -- */
   --color-todo-in-progress: hsl(213 94% 68%);
   --color-todo-completed: hsl(142 69% 58%);
@@ -856,6 +866,15 @@
   --color-status-done-hover: hsl(23 17% 57%);
   --color-status-canceled: hsl(37 5% 63%);
   --color-status-canceled-hover: hsl(36 4% 54%);
+
+  --color-delegated-agent-1: hsl(221 83% 53%);
+  --color-delegated-agent-2: hsl(292 100% 46%);
+  --color-delegated-agent-3: hsl(0 72% 51%);
+  --color-delegated-agent-4: hsl(36 95% 42%);
+  --color-delegated-agent-5: hsl(265 80% 55%);
+  --color-delegated-agent-6: hsl(192 90% 36%);
+  --color-delegated-agent-7: hsl(25 95% 46%);
+  --color-delegated-agent-8: hsl(199 89% 42%);
 
   --color-todo-in-progress: hsl(221 83% 53%);
   --color-todo-completed: hsl(142 76% 36%);

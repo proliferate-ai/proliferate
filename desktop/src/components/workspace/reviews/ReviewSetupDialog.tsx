@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
-import { Plus } from "@/components/ui/icons";
+import { X } from "@/components/ui/icons";
 import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
 import type { ReviewSetupAnchorRect } from "@/stores/reviews/review-ui-store";
 import { ReviewSetupLoopControls } from "./ReviewSetupLoopControls";
@@ -145,10 +145,24 @@ export function ReviewSetupDialog({
             className="flex min-h-0 flex-col"
             style={{ maxHeight: popoverLayout.maxHeight }}
           >
+            <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-3">
+              <div className="min-w-0 truncate text-sm font-medium text-foreground">
+                {title}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={isSubmitting}
+                aria-label="Close review setup"
+                onClick={onClose}
+                className="size-7"
+              >
+                <X className="size-3.5" />
+              </Button>
+            </div>
             <ReviewSetupLoopControls
               draft={draft}
-              reviewerCount={reviewerCount}
-              estimatedSessions={estimatedSessions}
               onDraftChange={onDraftChange}
             />
 
@@ -158,7 +172,7 @@ export function ReviewSetupDialog({
               </div>
             )}
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2 pt-1">
               <ReviewSetupReviewerList
                 draft={draft}
                 modelGroups={modelGroups}
@@ -167,21 +181,17 @@ export function ReviewSetupDialog({
                 onDraftChange={onDraftChange}
                 onRemoveReviewer={handleRemoveReviewer}
                 onManagePersonalities={onManagePersonalities}
+                canAddReviewer={canAddReviewer}
+                isSubmitting={isSubmitting}
+                onAddReviewer={handleAddReviewer}
               />
             </div>
 
+            <div className="shrink-0 px-3 pb-2 text-xs text-muted-foreground">
+              Runs up to {estimatedSessions} session{estimatedSessions === 1 ? "" : "s"} across {reviewerCount} reviewer{reviewerCount === 1 ? "" : "s"}.
+            </div>
+
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border/60 px-3 py-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={!canAddReviewer || isSubmitting}
-                onClick={handleAddReviewer}
-                className="h-8 px-2"
-              >
-                <Plus className="size-3.5" />
-                Add
-              </Button>
               <span className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Checkbox
                   checked={saveAsDefault}

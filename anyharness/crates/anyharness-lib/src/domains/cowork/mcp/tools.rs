@@ -298,13 +298,9 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkWorkspaceId": { "type": "string" },
+                    "coworkWorkspaceId": { "type": "string", "description": "Preferred stable cowork workspace target. Provide either coworkWorkspaceId or deprecated workspaceId." },
                     "workspaceId": { "type": "string", "description": "Deprecated legacy target." }
-                },
-                "anyOf": [
-                    { "required": ["coworkWorkspaceId"] },
-                    { "required": ["workspaceId"] }
-                ]
+                }
             }),
         ),
         tool_definition(
@@ -313,7 +309,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkWorkspaceId": { "type": "string" },
+                    "coworkWorkspaceId": { "type": "string", "description": "Preferred stable cowork workspace target. Provide either coworkWorkspaceId or deprecated workspaceId." },
                     "workspaceId": { "type": "string", "description": "Deprecated legacy target." },
                     "prompt": { "type": "string" },
                     "label": { "type": "string" },
@@ -331,11 +327,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
                     "modeId": { "type": "string", "description": "Deprecated alias for initialConfig.modeId." },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
-                "required": ["prompt"],
-                "anyOf": [
-                    { "required": ["coworkWorkspaceId"] },
-                    { "required": ["workspaceId"] }
-                ]
+                "required": ["prompt"]
             }),
         ),
         tool_definition(
@@ -344,16 +336,12 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" },
+                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
                     "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
                     "prompt": { "type": "string" },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
-                "required": ["prompt"],
-                "anyOf": [
-                    { "required": ["coworkAgentId"] },
-                    { "required": ["codingSessionId"] }
-                ]
+                "required": ["prompt"]
             }),
         ),
         tool_definition(
@@ -362,13 +350,9 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" },
+                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
                     "codingSessionId": { "type": "string", "description": "Deprecated legacy target." }
-                },
-                "anyOf": [
-                    { "required": ["coworkAgentId"] },
-                    { "required": ["codingSessionId"] }
-                ]
+                }
             }),
         ),
         tool_definition(
@@ -377,13 +361,9 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" },
+                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
                     "codingSessionId": { "type": "string", "description": "Deprecated legacy target." }
-                },
-                "anyOf": [
-                    { "required": ["coworkAgentId"] },
-                    { "required": ["codingSessionId"] }
-                ]
+                }
             }),
         ),
         tool_definition(
@@ -392,15 +372,11 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" },
+                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
                     "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
                     "sinceSeq": { "type": "integer" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
-                },
-                "anyOf": [
-                    { "required": ["coworkAgentId"] },
-                    { "required": ["codingSessionId"] }
-                ]
+                }
             }),
         ),
         tool_definition(
@@ -409,14 +385,10 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" },
+                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
                     "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 10 }
-                },
-                "anyOf": [
-                    { "required": ["coworkAgentId"] },
-                    { "required": ["codingSessionId"] }
-                ]
+                }
             }),
         ),
         tool_definition(
@@ -425,16 +397,12 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" },
+                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
                     "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
                     "query": { "type": "string" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 25 }
                 },
-                "required": ["query"],
-                "anyOf": [
-                    { "required": ["coworkAgentId"] },
-                    { "required": ["codingSessionId"] }
-                ]
+                "required": ["query"]
             }),
         ),
         tool_definition(
@@ -443,13 +411,9 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" },
+                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
                     "codingSessionId": { "type": "string", "description": "Deprecated legacy target." }
-                },
-                "anyOf": [
-                    { "required": ["coworkAgentId"] },
-                    { "required": ["codingSessionId"] }
-                ]
+                }
             }),
         ),
         tool_definition(

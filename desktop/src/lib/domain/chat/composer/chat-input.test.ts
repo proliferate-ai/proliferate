@@ -34,7 +34,6 @@ describe("resolveChatInputAvailability", () => {
       configuredLaunchDisabledReason: null,
       pendingWorkspaceEntry: null,
       mobility: null,
-      hasBusyReview: false,
     })).toEqual({
       isDisabled: false,
       disabledReason: null,
@@ -58,7 +57,6 @@ describe("resolveChatInputAvailability", () => {
       configuredLaunchDisabledReason: null,
       pendingWorkspaceEntry: null,
       mobility: null,
-      hasBusyReview: false,
     })).toEqual({
       isDisabled: false,
       disabledReason: null,
@@ -85,7 +83,6 @@ describe("resolveChatInputAvailability", () => {
         stage: "awaiting-cloud-ready",
       },
       mobility: null,
-      hasBusyReview: false,
     })).toEqual({
       isDisabled: false,
       disabledReason: null,
@@ -113,7 +110,6 @@ describe("resolveChatInputAvailability", () => {
         statusDescription: "Moving workspace.",
         selectedEffectiveOwner: "cloud",
       },
-      hasBusyReview: false,
     })).toEqual({
       isDisabled: true,
       disabledReason: "Moving workspace.",
@@ -122,7 +118,7 @@ describe("resolveChatInputAvailability", () => {
     });
   });
 
-  it("lets active review automation override normal availability", () => {
+  it("keeps parent input enabled while review automation runs in the background", () => {
     expect(resolveChatInputAvailability({
       selectedWorkspaceId: "workspace-1",
       isCloudWorkspaceSelected: false,
@@ -137,12 +133,54 @@ describe("resolveChatInputAvailability", () => {
       configuredLaunchDisabledReason: null,
       pendingWorkspaceEntry: null,
       mobility: null,
-      hasBusyReview: true,
     })).toEqual({
-      isDisabled: true,
-      disabledReason: "Review automation is running.",
-      areRuntimeControlsDisabled: true,
+      isDisabled: false,
+      disabledReason: null,
+      areRuntimeControlsDisabled: false,
       selectedWorkspaceKind: "local",
+    });
+  });
+
+  it("keeps pending approval, user-input, and MCP elicitation as chat blockers", () => {
+    const base = {
+      selectedWorkspaceId: "workspace-1",
+      isCloudWorkspaceSelected: false,
+      connectionState: "healthy",
+      selectedCloudWorkspaceStatus: null,
+      selectedCloudWorkspaceActionBlockReason: null,
+      selectedCloudRuntimePhase: null,
+      selectedCloudRuntimeActionBlockReason: null,
+      activeSessionId: "session-1",
+      isConfiguredLaunchLoading: false,
+      hasReadyConfiguredLaunch: true,
+      configuredLaunchDisabledReason: null,
+      pendingWorkspaceEntry: null,
+      mobility: null,
+    } as const;
+
+    expect(resolveChatInputAvailability({
+      ...base,
+      pendingInteractionKind: "permission",
+    })).toMatchObject({
+      isDisabled: true,
+      disabledReason: "Resolve the pending approval before sending another message.",
+      areRuntimeControlsDisabled: false,
+    });
+    expect(resolveChatInputAvailability({
+      ...base,
+      pendingInteractionKind: "user_input",
+    })).toMatchObject({
+      isDisabled: true,
+      disabledReason: "Answer the pending request before sending another message.",
+      areRuntimeControlsDisabled: false,
+    });
+    expect(resolveChatInputAvailability({
+      ...base,
+      pendingInteractionKind: "mcp_elicitation",
+    })).toMatchObject({
+      isDisabled: true,
+      disabledReason: "Complete the pending MCP form before sending another message.",
+      areRuntimeControlsDisabled: false,
     });
   });
 });

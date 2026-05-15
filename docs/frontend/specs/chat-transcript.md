@@ -66,6 +66,49 @@ mcp__proliferate_skills__get_skill_resource
 Do not render successful skills MCP results as raw JSON in the normal transcript
 path.
 
+## Delegated-Work Receipts
+
+Subagent creation, parent/child communication, and wake/completion receipts are
+durable transcript events. They must render as delegated-work product events,
+not as raw MCP mechanics.
+
+Creation grouping belongs in the transcript presentation layer:
+
+```text
+desktop/src/lib/domain/chat/transcript/transcript-presentation.ts
+  buildTranscriptDisplayBlocks
+```
+
+Rules:
+
+- Group only adjacent subagent creation receipts from the same assistant/tool
+  call cluster.
+- Do not group creation with send, wake, status, read, search, close, or
+  generic tool calls.
+- A single collapsed creation label is `Created subagent`.
+- Multiple adjacent creation receipts collapse as `Created N subagents`.
+- Collapsed creation labels use the same muted, backgroundless collapsed-action
+  trigger treatment as normal transcript tool summaries such as
+  `Explored 1 listing`.
+- Expanded rows use
+  `Created subagent GeneratedName (title ID) with prompt "..."`.
+- Expanded creation rows stay on one truncating line. The row uses one text
+  treatment except for the generated identity, which keeps the colored robot
+  affordance and opens the child session when a valid target exists.
+- Hovering the generated identity shows the delegated-agent card. When a valid
+  child target exists, that card is clickable and opens the same child session.
+
+Communication receipts:
+
+- Parent messages rendered inside a child session show
+  `Sent by parent - {parent chat title}`.
+- Wake/completion receipts rendered in the parent transcript use one line:
+  `GeneratedName (title ID) finished a turn`.
+- Wake receipts source labels from prompt provenance plus
+  `linkCompletionsByCompletionId`.
+- When a valid child target exists, the whole wake/completion receipt chip and
+  not a separate visible action or hover card, opens the child session.
+
 ## Layout Invariants
 
 Some layout dimensions are load-bearing. They are tuned together so specific

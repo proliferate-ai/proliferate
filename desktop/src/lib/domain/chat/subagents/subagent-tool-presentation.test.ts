@@ -27,8 +27,11 @@ describe("subagent tool presentation", () => {
 
   it("keeps status, close, read, and search actions out of provisioning ledgers", () => {
     expect(isSubagentProvisioningAction({
-      nativeToolName: "mcp__subagents__send_subagent_message",
+      nativeToolName: "mcp__subagents__create_subagent",
     })).toBe(true);
+    expect(isSubagentProvisioningAction({
+      nativeToolName: "mcp__subagents__send_subagent_message",
+    })).toBe(false);
     expect(isSubagentProvisioningAction({
       nativeToolName: "mcp__subagents__get_subagent_status",
     })).toBe(false);

@@ -29,6 +29,14 @@ export function renderDelegationSlot(scenario: ScenarioKey) {
           />
         </DelegatedWorkComposerPanel>
       );
+    case "subagents-composer-single":
+      return (
+        <PlaygroundDelegatedWorkControl
+          subagentRows={PLAYGROUND_SUBAGENT_STRIP_ROWS
+            .filter((row) => row.statusLabel === "Working")
+            .slice(0, 1)}
+        />
+      );
     case "subagents-composer-few":
       return (
         <PlaygroundDelegatedWorkControl
