@@ -1,9 +1,8 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/Button";
+import { FilePathContextMenuContent } from "@/components/ui/FilePathContextMenuContent";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Copy, ExternalLink } from "@/components/ui/icons";
 import { useFilePathNativeContextMenu } from "@/hooks/editor/ui/use-file-path-native-context-menu";
 import { useOpenInDefaultEditor } from "@/hooks/editor/workflows/use-open-in-default-editor";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
@@ -20,7 +19,7 @@ interface ToolFileChipProps {
  *
  * Behavior matches `FilePathLink`:
  *  - Click → open in user's configured external editor.
- *  - Right-click (context menu) → `Open file` / `Copy path`.
+ *  - Right-click (context menu) → open/copy/reveal path actions.
  *
  * Visual is intentionally a chip (border + background + file icon) so tool
  * results stay scannable; markdown prose uses the flat `FilePathLink` instead.
@@ -31,9 +30,19 @@ export function ToolFileChip({
   workspacePath,
 }: ToolFileChipProps) {
   const { resolveAbsolute } = useWorkspacePath();
-  const { openInDefaultEditor, copyPath } = useOpenInDefaultEditor();
+  const {
+    openInDefaultEditor,
+    openTarget,
+    revealInFinder,
+    copyPath,
+    targets,
+  } = useOpenInDefaultEditor();
 
   const absolute = workspacePath ? resolveAbsolute(workspacePath) : null;
+  const openTargets = useMemo(
+    () => targets.filter((target) => target.id !== "finder" && target.id !== "copy-path"),
+    [targets],
+  );
 
   const handleOpen = useCallback(() => {
     if (!absolute) return;
@@ -43,10 +52,21 @@ export function ToolFileChip({
   const handleCopy = useCallback(() => {
     void copyPath(absolute ?? workspacePath ?? pathLabel);
   }, [absolute, workspacePath, pathLabel, copyPath]);
+  const handleOpenTarget = useCallback((targetId: string) => {
+    if (!absolute) return;
+    void openTarget(targetId, absolute);
+  }, [absolute, openTarget]);
+  const handleRevealInFinder = useCallback(() => {
+    if (!absolute) return;
+    void revealInFinder(absolute);
+  }, [absolute, revealInFinder]);
   const { onContextMenuCapture } = useFilePathNativeContextMenu({
     canOpen: !!absolute,
+    targets: openTargets,
     onOpen: handleOpen,
+    onOpenTarget: handleOpenTarget,
     onCopy: handleCopy,
+    onRevealInFinder: handleRevealInFinder,
   });
 
   const chipClass =
@@ -98,27 +118,16 @@ export function ToolFileChip({
       className="w-52 rounded-lg border border-border bg-popover p-1 shadow-floating"
     >
       {(close) => (
-        <div className="flex flex-col gap-px">
-          <PopoverMenuItem
-            data-chat-transcript-ignore
-            icon={<ExternalLink className="size-3.5 shrink-0" />}
-            label="Open file"
-            disabled={!absolute}
-            onClick={() => {
-              handleOpen();
-              close();
-            }}
-          />
-          <PopoverMenuItem
-            data-chat-transcript-ignore
-            icon={<Copy className="size-3.5 shrink-0" />}
-            label="Copy path"
-            onClick={() => {
-              handleCopy();
-              close();
-            }}
-          />
-        </div>
+        <FilePathContextMenuContent
+          canOpen={!!absolute}
+          targets={openTargets}
+          close={close}
+          onOpenDefault={handleOpen}
+          onOpenTarget={handleOpenTarget}
+          onCopyPath={handleCopy}
+          onRevealInFinder={handleRevealInFinder}
+          ignoreChatTranscript
+        />
       )}
     </PopoverButton>
   );

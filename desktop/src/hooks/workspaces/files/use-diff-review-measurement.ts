@@ -66,7 +66,7 @@ export function useDiffReviewMeasurement(): DiffReviewMeasurement {
     setSampleScopeHash(null);
     const nextOperationId = startMeasurementOperation({
       kind: "diff_review_sample",
-      surfaces: ["all-changes-frame", "diff-viewer"],
+      surfaces: ["changes-pane", "diff-viewer"],
       sampleKey: "diff_review",
       idleTimeoutMs: DIFF_REVIEW_IDLE_TIMEOUT_MS,
       maxDurationMs: DIFF_REVIEW_MAX_DURATION_MS,

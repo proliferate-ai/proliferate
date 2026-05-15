@@ -1,6 +1,8 @@
 import type { GitChangedFile, GitDiffFile } from "@anyharness/sdk";
 import {
+  type AnyHarnessQueryTimingOptions,
   useGitBranchDiffFilesQuery,
+  useGitBranchesQuery,
   useGitStatusQuery,
 } from "@anyharness/sdk-react";
 import { useMemo } from "react";
@@ -23,10 +25,20 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 
 const EMPTY_STATUS_FILES: GitChangedFile[] = [];
 const EMPTY_BRANCH_FILES: GitDiffFile[] = [];
+const DEFAULT_REVIEW_BASE_REF = "origin/main";
+
+interface GitPanelStateOptions {
+  baseRefOverride?: string | null;
+  statusTimingOptions?: AnyHarnessQueryTimingOptions;
+  branchDiffFilesTimingOptions?: AnyHarnessQueryTimingOptions;
+}
 
 // Owns read-only Git panel state for changed-file surfaces. Git mutations stay
 // in the component/action hooks that own the user intent.
-export function useGitPanelState(mode: GitPanelMode) {
+export function useGitPanelState(
+  mode: GitPanelMode,
+  options?: GitPanelStateOptions,
+) {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
@@ -60,6 +72,7 @@ export function useGitPanelState(mode: GitPanelMode) {
   const gitStatusQuery = useGitStatusQuery({
     workspaceId: activeWorkspaceId,
     enabled: isRuntimeReady && !hotPaintPending,
+    ...(options?.statusTimingOptions ?? {}),
   });
 
   const baseRef = resolveGitPanelBaseRef({
@@ -67,11 +80,19 @@ export function useGitPanelState(mode: GitPanelMode) {
     repoRootDefaultBranch: repoRootDefaultBranch(workspaceContext.repoRoot),
     suggestedBaseBranch: gitStatusQuery.data?.suggestedBaseBranch ?? null,
   });
+  const activeBaseRef = normalizeRefOverride(options?.baseRefOverride)
+    ?? baseRef
+    ?? DEFAULT_REVIEW_BASE_REF;
 
   const branchFilesQuery = useGitBranchDiffFilesQuery({
     workspaceId: activeWorkspaceId,
-    baseRef,
+    baseRef: activeBaseRef,
     enabled: isRuntimeReady && !hotPaintPending && mode === "branch",
+    ...(options?.branchDiffFilesTimingOptions ?? {}),
+  });
+  const branchesQuery = useGitBranchesQuery({
+    workspaceId: activeWorkspaceId,
+    enabled: isRuntimeReady && !hotPaintPending,
   });
 
   const statusFiles = gitStatusQuery.data?.files ?? EMPTY_STATUS_FILES;
@@ -84,6 +105,7 @@ export function useGitPanelState(mode: GitPanelMode) {
     () => buildGitPanelSections({ mode, statusFiles, branchFiles }),
     [branchFiles, mode, statusFiles],
   );
+  const branchRefs = branchesQuery.data ?? [];
 
   const totalChangedCount = mode === "branch"
     ? files.length
@@ -99,7 +121,9 @@ export function useGitPanelState(mode: GitPanelMode) {
 
   return {
     activeWorkspaceId,
-    baseRef,
+    baseRef: activeBaseRef,
+    detectedBaseRef: baseRef,
+    branchRefs,
     files,
     sections,
     totalChangedCount,
@@ -113,9 +137,15 @@ export function useGitPanelState(mode: GitPanelMode) {
     errorMessage,
     refetch: async () => {
       await gitStatusQuery.refetch();
+      await branchesQuery.refetch();
       if (mode === "branch") {
         await branchFilesQuery.refetch();
       }
     },
   };
+}
+
+function normalizeRefOverride(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }

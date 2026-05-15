@@ -2,7 +2,6 @@ import {
   memo,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type Dispatch,
@@ -48,10 +47,8 @@ import {
 } from "@/lib/infra/right-panel-new-tab-menu";
 import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
 import {
-  allChangesViewerTarget,
   viewerTargetEditablePath,
   viewerTargetKey,
-  type ViewerTarget,
   type ViewerTargetKey,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
@@ -103,8 +100,6 @@ export const RightPanel = memo(function RightPanel({
   const unreadByTerminal = useTerminalStore((store) => store.unreadByTerminal);
   const showToast = useToastStore((store) => store.show);
   const openViewerTargets = useWorkspaceViewerTabsStore((store) => store.openTargets);
-  const activeViewerTargetKey = useWorkspaceViewerTabsStore((store) => store.activeTargetKey);
-  const openViewerTarget = useWorkspaceViewerTabsStore((store) => store.openTarget);
   const closeViewerTarget = useWorkspaceViewerTabsStore((store) => store.closeTarget);
   const reorderViewerTargets = useWorkspaceViewerTabsStore((store) => store.reorderOpenTargets);
   const setActiveViewerTarget = useWorkspaceViewerTabsStore((store) => store.setActiveTarget);
@@ -146,16 +141,6 @@ export const RightPanel = memo(function RightPanel({
   const terminalActivationRequestToken = terminalActivationRequest?.workspaceId === workspaceId
     ? terminalActivationRequest.token
     : 0;
-  const activeAllChangesTarget = useMemo(
-    () => {
-      const target = resolveActiveAllChangesTarget(openViewerTargets, activeViewerTargetKey);
-      if (target || activeTool !== "allChanges") {
-        return target;
-      }
-      return defaultAllChangesViewerTarget();
-    },
-    [activeTool, activeViewerTargetKey, openViewerTargets],
-  );
   const updateState = useRightPanelStateUpdater({
     isCloudWorkspaceSelected,
     liveViewerTargets: openViewerTargets,
@@ -343,16 +328,9 @@ export const RightPanel = memo(function RightPanel({
 
   const activateTool = useCallback(
     (tool: RightPanelTool) => {
-      if (tool === "allChanges") {
-        const target = activeAllChangesTarget ?? allChangesViewerTarget({
-          scope: "working_tree_composite",
-        });
-        const targetKey = openViewerTarget(target);
-        setActiveViewerTarget(targetKey);
-      }
       updateState((previous) => ({ ...previous, activeEntryKey: rightPanelToolHeaderKey(tool) }));
     },
-    [activeAllChangesTarget, openViewerTarget, setActiveViewerTarget, updateState],
+    [updateState],
   );
 
   const selectBrowser = useCallback((browserId: string) => {
@@ -565,7 +543,6 @@ export const RightPanel = memo(function RightPanel({
       activeBrowserId={activeBrowserId}
       activeTerminalId={activeTerminalId}
       activeViewerTarget={activeViewerTarget}
-      activeAllChangesTarget={activeAllChangesTarget}
       entries={headerEntries}
       unreadByTerminal={unreadByTerminal}
       buffersByPath={buffersByPath}
@@ -604,28 +581,3 @@ export const RightPanel = memo(function RightPanel({
     />
   );
 });
-
-function resolveActiveAllChangesTarget(
-  targets: readonly ViewerTarget[],
-  activeTargetKey: ViewerTargetKey | null,
-): Extract<ViewerTarget, { kind: "allChanges" }> | null {
-  if (activeTargetKey) {
-    const activeTarget = targets.find((target) => viewerTargetKey(target) === activeTargetKey);
-    if (activeTarget?.kind === "allChanges") {
-      return activeTarget;
-    }
-  }
-
-  const allChangesTargets = targets
-    .filter((target): target is Extract<ViewerTarget, { kind: "allChanges" }> =>
-      target.kind === "allChanges"
-    );
-  return allChangesTargets[allChangesTargets.length - 1] ?? null;
-}
-
-function defaultAllChangesViewerTarget(): Extract<ViewerTarget, { kind: "allChanges" }> {
-  return allChangesViewerTarget({ scope: "working_tree_composite" }) as Extract<
-    ViewerTarget,
-    { kind: "allChanges" }
-  >;
-}

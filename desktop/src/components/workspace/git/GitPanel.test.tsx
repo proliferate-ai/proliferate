@@ -4,6 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import { GitPanel } from "./GitPanel";
 
 vi.mock("@anyharness/sdk-react", () => ({
+  useAnyHarnessRuntimeContext: () => ({
+    runtimeUrl: null,
+  }),
   useGitDiffQuery: () => ({
     data: null,
     isLoading: false,
@@ -28,6 +31,7 @@ vi.mock("@/hooks/workspaces/derived/use-git-panel-state", () => ({
   useGitPanelState: () => ({
     activeWorkspaceId: "workspace-1",
     baseRef: "main",
+    branchRefs: [],
     sections: [{
       scope: "unstaged",
       label: "Unstaged",
@@ -55,13 +59,16 @@ vi.mock("@/hooks/workspaces/derived/use-git-panel-state", () => ({
 }));
 
 describe("GitPanel", () => {
-  it("renders changed files as clickable right-sidebar rows", () => {
+  it("renders changed files as right-sidebar diff review cards", () => {
     const html = renderToStaticMarkup(createElement(GitPanel));
 
     expect(html).toContain("1 unstaged file");
-    expect(html).toContain("hover:bg-sidebar-accent");
-    expect(html).toContain("Open GitPanel.tsx diff");
-    expect(html).toContain("Open GitPanel.tsx file");
+    expect(html).toContain("Target");
+    expect(html).toContain("Working tree");
+    expect(html).toContain("Git review options");
+    expect(html).toContain("Show files");
+    expect(html).toContain("data-diff-surface=\"sidebar\"");
+    expect(html).toContain("No diff available");
     expect(html).toContain("GitPanel.tsx");
   });
 });

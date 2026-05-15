@@ -95,7 +95,7 @@ describe("useDiffReviewMeasurement", () => {
     expect(observedQueryOptions).toEqual([false]);
   });
 
-  it("does not keep a long-mounted all changes sample open indefinitely", () => {
+  it("does not keep a long-mounted changes sample open indefinitely", () => {
     vi.useFakeTimers();
     vi.stubEnv("VITE_PROLIFERATE_DEBUG_ANYHARNESS_TIMING", "1");
 

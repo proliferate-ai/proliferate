@@ -38,9 +38,7 @@ export function migrateLegacyRightPanelWorkspaceState(args: {
   const activeTerminalId = typeof rawState.activeTerminalId === "string"
     ? rawState.activeTerminalId
     : null;
-  const activeTool = isRightPanelTool(rawState.activeTool) || rawState.activeTool === "terminal"
-    ? rawState.activeTool
-    : null;
+  const activeTool = resolveLegacyActiveTool(rawState.activeTool);
   const legacyToolOrder = headerOrder.length > 0
     ? toolOrder
     : completeAvailableToolOrder(toolOrder, args.isCloudWorkspaceSelected);
@@ -92,6 +90,16 @@ function resolveLegacyActiveEntryKey(input: {
     return rightPanelToolHeaderKey(input.activeTool);
   }
   return undefined;
+}
+
+function resolveLegacyActiveTool(value: unknown): RightPanelTool | "terminal" | null {
+  if (value === "allChanges") {
+    return "git";
+  }
+  if (isRightPanelTool(value) || value === "terminal") {
+    return value;
+  }
+  return null;
 }
 
 function uniqueLegacyHeaderEntries(value: readonly unknown[]): RightPanelHeaderEntryKey[] {

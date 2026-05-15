@@ -27,7 +27,6 @@ interface ToolConfig {
 const PANEL_TOOLS: Record<RightPanelTool, ToolConfig> = {
   files: { label: "Files", icon: FileIcon },
   git: { label: "Changes", icon: AppShellReviewIcon },
-  allChanges: { label: "Review", icon: AppShellReviewIcon },
   settings: { label: "Cloud environment", icon: CloudIcon },
 };
 

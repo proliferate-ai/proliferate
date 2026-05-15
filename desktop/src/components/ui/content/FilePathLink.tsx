@@ -1,8 +1,7 @@
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
+import { FilePathContextMenuContent } from "@/components/ui/FilePathContextMenuContent";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Copy, ExternalLink } from "@/components/ui/icons";
 import { useFilePathNativeContextMenu } from "@/hooks/editor/ui/use-file-path-native-context-menu";
 import { useOpenInDefaultEditor } from "@/hooks/editor/workflows/use-open-in-default-editor";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
@@ -23,18 +22,27 @@ interface FilePathLinkProps {
  *
  * Behavior (matches the rest of the app's "open in editor" flow):
  *  - One-finger click → open in user's configured default editor.
- *  - Two-finger click (context menu) → popover with `Open file` and
- *    `Copy path`.
+ *  - Two-finger click (context menu) → open/copy/reveal path actions.
  *
  * Style: Codex-style local file/doc link in `text-link-foreground`, no pill,
  * no border, underline on hover only.
  */
 export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
   const { resolveAbsolute } = useWorkspacePath();
-  const { openInDefaultEditor, copyPath } = useOpenInDefaultEditor();
+  const {
+    openInDefaultEditor,
+    openTarget,
+    revealInFinder,
+    copyPath,
+    targets,
+  } = useOpenInDefaultEditor();
 
   const { path: rawPathWithoutSuffix } = splitPathLineSuffix(rawPath);
   const absolute = resolveAbsolute(rawPathWithoutSuffix);
+  const openTargets = useMemo(
+    () => targets.filter((target) => target.id !== "finder" && target.id !== "copy-path"),
+    [targets],
+  );
 
   const handleOpen = useCallback(() => {
     if (!absolute) return;
@@ -44,10 +52,21 @@ export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
   const handleCopy = useCallback(() => {
     void copyPath(absolute ?? rawPath);
   }, [absolute, rawPath, copyPath]);
+  const handleOpenTarget = useCallback((targetId: string) => {
+    if (!absolute) return;
+    void openTarget(targetId, absolute);
+  }, [absolute, openTarget]);
+  const handleRevealInFinder = useCallback(() => {
+    if (!absolute) return;
+    void revealInFinder(absolute);
+  }, [absolute, revealInFinder]);
   const { onContextMenuCapture } = useFilePathNativeContextMenu({
     canOpen: !!absolute,
+    targets: openTargets,
     onOpen: handleOpen,
+    onOpenTarget: handleOpenTarget,
     onCopy: handleCopy,
+    onRevealInFinder: handleRevealInFinder,
   });
 
   const trigger = (
@@ -72,25 +91,15 @@ export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
       className={`w-52 ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
-        <div className="flex flex-col gap-px">
-          <PopoverMenuItem
-            icon={<ExternalLink className="size-3.5 shrink-0" />}
-            label="Open file"
-            disabled={!absolute}
-            onClick={() => {
-              handleOpen();
-              close();
-            }}
-          />
-          <PopoverMenuItem
-            icon={<Copy className="size-3.5 shrink-0" />}
-            label="Copy path"
-            onClick={() => {
-              handleCopy();
-              close();
-            }}
-          />
-        </div>
+        <FilePathContextMenuContent
+          canOpen={!!absolute}
+          targets={openTargets}
+          close={close}
+          onOpenDefault={handleOpen}
+          onOpenTarget={handleOpenTarget}
+          onCopyPath={handleCopy}
+          onRevealInFinder={handleRevealInFinder}
+        />
       )}
     </PopoverButton>
   );

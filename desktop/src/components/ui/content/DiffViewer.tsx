@@ -39,6 +39,7 @@ export function DiffViewer({
           tokens={tokens}
           className={className}
           viewportClassName={viewportClassName}
+          wrapLongLines={wrapLongLines}
         />
       </DebugProfiler>
     );
