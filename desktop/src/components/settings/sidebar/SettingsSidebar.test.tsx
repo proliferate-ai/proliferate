@@ -1,11 +1,12 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SupportMessageContext } from "@/lib/access/cloud/support";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
+import { requestSupportDialog } from "@/lib/infra/support/support-dialog-request";
 
 const supportDialogRender = vi.hoisted(() => vi.fn());
 
@@ -80,5 +81,18 @@ describe("SettingsSidebar support mount boundary", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("support-dialog")).toBeNull();
     });
+  });
+
+  it("opens SupportDialog from the global support request", () => {
+    renderSettingsSidebar();
+
+    expect(screen.queryByTestId("support-dialog")).toBeNull();
+
+    act(() => {
+      requestSupportDialog();
+    });
+
+    expect(supportDialogRender).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("support-dialog")).toBeTruthy();
   });
 });

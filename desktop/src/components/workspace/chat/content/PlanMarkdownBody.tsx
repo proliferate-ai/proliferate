@@ -33,7 +33,7 @@ const PROPOSED_PLAN_MARKDOWN_CLASSNAME = [
   "[&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-wide [&_h2]:text-muted-foreground",
   "[&_h3]:mb-2 [&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:uppercase [&_h3]:tracking-wide [&_h3]:text-muted-foreground",
   "[&_p]:my-1.5 [&_p]:text-chat [&_p]:leading-[var(--text-chat--line-height)]",
-  "[&_ol]:mb-4 [&_ol]:mt-1 [&_ol]:grid [&_ol]:list-decimal [&_ol]:grid-cols-1 [&_ol]:gap-x-5 [&_ol]:gap-y-0 [&_ol]:pl-5 md:[&_ol]:grid-cols-2",
+  "[&_ol]:mb-4 [&_ol]:mt-1 [&_ol]:list-decimal [&_ol]:pl-5",
   "[&_ul]:mb-4 [&_ul]:mt-1 [&_ul]:list-disc [&_ul]:pl-5",
   "[&_li]:mb-0.5 [&_li]:text-chat [&_li]:leading-[var(--text-chat--line-height)] [&_li::marker]:text-muted-foreground",
 ].join(" ");

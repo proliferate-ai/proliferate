@@ -233,6 +233,7 @@ function baseHeaderTab(sessionId: string) {
     visualGroupId: null,
     manualGroupId: null,
     isHierarchyResolved: true,
+    delegatedAgent: null,
     delegatedIndicators: [],
   };
 }

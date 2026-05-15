@@ -259,7 +259,7 @@ function resolveDecisionStatus(
     case "approved": {
       return {
         label: "approved",
-        className: `${baseClassName} bg-success text-success-foreground`,
+        className: `${baseClassName} bg-foreground/10 text-foreground`,
         dotClassName: "size-1.5 rounded-full bg-current",
       };
     }

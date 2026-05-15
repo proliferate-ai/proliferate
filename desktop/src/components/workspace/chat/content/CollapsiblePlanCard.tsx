@@ -41,6 +41,15 @@ export function CollapsiblePlanCard({
   const hasContent = content.length > 0;
   const renderedContent = stripDuplicatePlanHeading(content, title);
   const compact = density === "compact";
+  const shellClassName = compact
+    ? "relative overflow-clip rounded-md border border-border/70 bg-card/85 text-left shadow-sm"
+    : "relative overflow-clip rounded-lg bg-foreground/5 text-left";
+  const headerClassName = compact
+    ? "relative flex items-center justify-between gap-3 border-b border-border/40 px-2.5 py-1.5"
+    : "relative flex items-center justify-between gap-3 px-4 py-3";
+  const titleClassName = compact
+    ? "truncate text-sm font-semibold leading-tight text-foreground"
+    : "truncate text-base font-semibold leading-tight text-foreground";
 
   const handleCopy = () => {
     if (!content) return;
@@ -51,13 +60,10 @@ export function CollapsiblePlanCard({
   };
 
   return (
-    <div
-      data-telemetry-mask
-      className={`relative overflow-clip border border-border/70 bg-card/85 text-left shadow-sm ${compact ? "rounded-md" : "rounded-lg"}`}
-    >
-      <div className={`relative flex items-center justify-between gap-3 border-b border-border/40 ${compact ? "px-2.5 py-1.5" : "px-4 py-3"}`}>
+    <div data-telemetry-mask className={shellClassName}>
+      <div className={headerClassName}>
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="truncate text-lg font-semibold leading-tight text-foreground">
+          <span className={titleClassName}>
             {title.trim() || "Plan"}
           </span>
           {subtitle}

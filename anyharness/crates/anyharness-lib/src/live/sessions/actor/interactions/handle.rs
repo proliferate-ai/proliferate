@@ -105,32 +105,44 @@ pub(in crate::live::sessions::actor) async fn handle_apply_plan_decision(
         }
     }
 
-    if let Some((request_id, resolution)) = native_resolution {
-        let resolution_result = handle_resolve_interaction(
-            handle,
-            event_sink,
-            interaction_broker,
-            session_id,
-            request_id.clone(),
-            resolution,
-        )
-        .await;
-        let next_native_state = if resolution_result.is_ok() {
-            ProposedPlanNativeResolutionState::Finalized
-        } else {
-            if let Err(error) = &resolution_result {
-                tracing::warn!(
-                    session_id = %session_id,
-                    request_id = %request_id,
-                    error = ?error,
-                    "failed to resolve native interaction for proposed plan decision"
-                );
+    if let Some(native_resolution) = native_resolution {
+        let (next_native_state, error_message) = match native_resolution {
+            PlanNativeResolution::Resolve {
+                request_id,
+                resolution,
+            } => {
+                let resolution_result = handle_resolve_interaction(
+                    handle,
+                    event_sink,
+                    interaction_broker,
+                    session_id,
+                    request_id.clone(),
+                    resolution,
+                )
+                .await;
+                let next_native_state = if resolution_result.is_ok() {
+                    ProposedPlanNativeResolutionState::Finalized
+                } else {
+                    if let Err(error) = &resolution_result {
+                        tracing::warn!(
+                            session_id = %session_id,
+                            request_id = %request_id,
+                            error = ?error,
+                            "failed to resolve native interaction for proposed plan decision"
+                        );
+                    }
+                    ProposedPlanNativeResolutionState::Failed
+                };
+                let error_message = resolution_result
+                    .err()
+                    .map(|error| format!("Failed to resolve native interaction: {error:?}"));
+                (next_native_state, error_message)
             }
-            ProposedPlanNativeResolutionState::Failed
+            PlanNativeResolution::Failed { error_message, .. } => (
+                ProposedPlanNativeResolutionState::Failed,
+                Some(error_message),
+            ),
         };
-        let error_message = resolution_result
-            .err()
-            .map(|error| format!("Failed to resolve native interaction: {error:?}"));
         let mut sink = event_sink.lock().await;
         let context = sink.plan_event_context();
         let (updated, envelopes) = plan_service.update_native_resolution_with_context(
@@ -146,43 +158,66 @@ pub(in crate::live::sessions::actor) async fn handle_apply_plan_decision(
     Ok(plan)
 }
 
+#[derive(Debug, PartialEq)]
+pub(in crate::live::sessions::actor) enum PlanNativeResolution {
+    Resolve {
+        request_id: String,
+        resolution: InteractionResolution,
+    },
+    Failed {
+        request_id: String,
+        error_message: String,
+    },
+}
+
 pub(in crate::live::sessions::actor) fn plan_decision_native_resolution(
     plan_service: &PlanService,
     plan_id: &str,
     decision: &ProposedPlanDecisionState,
-) -> Option<(String, InteractionResolution)> {
+) -> Option<PlanNativeResolution> {
     let link = plan_service
         .store()
         .find_link_by_plan(plan_id)
         .ok()
         .flatten()?;
-    let mappings: serde_json::Value = serde_json::from_str(&link.option_mappings_json).ok()?;
+    let mappings: Option<serde_json::Value> = serde_json::from_str(&link.option_mappings_json).ok();
 
     match decision {
         // For native plan-exit interactions, product approval means the user
         // accepted the plan and wants the same agent to leave plan mode.
         ProposedPlanDecisionState::Approved => {
-            let option_id = option_mapping(&mappings, "approve");
+            let option_id = mappings
+                .as_ref()
+                .and_then(|mappings| option_mapping(mappings, "approve"));
             match option_id {
-                Some(option_id) => Some((
-                    link.request_id,
-                    InteractionResolution::Selected {
+                Some(option_id) => Some(PlanNativeResolution::Resolve {
+                    request_id: link.request_id,
+                    resolution: InteractionResolution::Selected {
                         option_id: option_id.to_string(),
                     },
-                )),
-                None => Some((link.request_id, InteractionResolution::Dismissed)),
+                }),
+                None => Some(PlanNativeResolution::Failed {
+                    request_id: link.request_id,
+                    error_message: "Approved plan could not map to a native approval option."
+                        .to_string(),
+                }),
             }
         }
         ProposedPlanDecisionState::Rejected => {
-            let option_id = option_mapping(&mappings, "reject");
+            let option_id = mappings
+                .as_ref()
+                .and_then(|mappings| option_mapping(mappings, "reject"));
             match option_id {
-                Some(option_id) => Some((
-                    link.request_id,
-                    InteractionResolution::Selected {
+                Some(option_id) => Some(PlanNativeResolution::Resolve {
+                    request_id: link.request_id,
+                    resolution: InteractionResolution::Selected {
                         option_id: option_id.to_string(),
                     },
-                )),
-                None => Some((link.request_id, InteractionResolution::Dismissed)),
+                }),
+                None => Some(PlanNativeResolution::Resolve {
+                    request_id: link.request_id,
+                    resolution: InteractionResolution::Dismissed,
+                }),
             }
         }
         _ => None,
@@ -364,12 +399,12 @@ mod tests {
                 &plan_id,
                 &ProposedPlanDecisionState::Approved,
             ),
-            Some((
-                "request-1".to_string(),
-                InteractionResolution::Selected {
+            Some(PlanNativeResolution::Resolve {
+                request_id: "request-1".to_string(),
+                resolution: InteractionResolution::Selected {
                     option_id: "allow-once".to_string(),
                 },
-            )),
+            }),
         );
     }
 
@@ -386,17 +421,17 @@ mod tests {
                 &plan_id,
                 &ProposedPlanDecisionState::Rejected,
             ),
-            Some((
-                "request-1".to_string(),
-                InteractionResolution::Selected {
+            Some(PlanNativeResolution::Resolve {
+                request_id: "request-1".to_string(),
+                resolution: InteractionResolution::Selected {
                     option_id: "reject-once".to_string(),
                 },
-            )),
+            }),
         );
     }
 
     #[test]
-    fn approved_native_plan_dismisses_when_no_approve_option_exists() {
+    fn approved_native_plan_fails_when_no_approve_mapping_exists() {
         let (service, plan_id) = plan_service_with_link(json!({
             "reject": "reject-once",
         }));
@@ -407,7 +442,11 @@ mod tests {
                 &plan_id,
                 &ProposedPlanDecisionState::Approved,
             ),
-            Some(("request-1".to_string(), InteractionResolution::Dismissed)),
+            Some(PlanNativeResolution::Failed {
+                request_id: "request-1".to_string(),
+                error_message: "Approved plan could not map to a native approval option."
+                    .to_string(),
+            }),
         );
     }
 }

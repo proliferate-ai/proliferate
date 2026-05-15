@@ -111,6 +111,22 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(false);
   });
 
+  it("blocks support shortcut in text-entry targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.openSupport, {
+      key: "s",
+      code: "KeyS",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: false,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(false);
+  });
+
   it("allows left-sidebar toggle from text-entry and terminal focus targets", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
       key: "b",

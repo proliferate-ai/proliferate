@@ -84,7 +84,7 @@ export const SHORTCUTS = {
     description: "Open support",
     owner: "js",
     match: { kind: "fixed", key: "s", meta: true, shift: false, alt: false },
-    allowInInputs: true,
+    allowInInputs: false,
   },
   increaseTextSize: {
     id: "app.increase-text-size",

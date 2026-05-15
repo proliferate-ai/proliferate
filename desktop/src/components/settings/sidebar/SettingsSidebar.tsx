@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { ArrowLeft } from "@/components/ui/icons";
 import { SidebarNavRow } from "@/components/ui/SidebarNavRow";
@@ -10,6 +10,7 @@ import {
   type SettingsNavItem,
 } from "@/components/settings/settings-navigation";
 import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
+import { subscribeSupportDialogRequest } from "@/lib/infra/support/support-dialog-request";
 import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
 interface SettingsSidebarProps {
@@ -102,6 +103,7 @@ export function SettingsSidebar({
   const location = useLocation();
   const [supportOpen, setSupportOpen] = useState(false);
   const appVersion = useAppVersion().data?.trim();
+  useEffect(() => subscribeSupportDialogRequest(() => setSupportOpen(true)), []);
 
   function handleItemClick(item: SettingsNavItem) {
     if (item.kind === "action") {
