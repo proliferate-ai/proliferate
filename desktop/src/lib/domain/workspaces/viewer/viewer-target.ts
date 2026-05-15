@@ -7,7 +7,7 @@ import {
 
 export type FileViewerMode = "edit" | "rendered" | "diff";
 export type DiffViewerLayout = "unified" | "split";
-export type FileDiffViewerScope = Exclude<GitDiffScope, "working_tree">;
+export type FileDiffViewerScope = Exclude<GitDiffScope, "working_tree" | "base_worktree">;
 export type AllChangesViewerScope = FileDiffViewerScope | "working_tree_composite";
 
 export type ViewerTarget =

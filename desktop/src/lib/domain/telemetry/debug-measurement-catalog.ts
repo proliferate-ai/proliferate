@@ -67,7 +67,7 @@ export type MeasurementSurface =
   | "stop-button"
   | "header-tab"
   | "sidebar-workspace-row"
-  | "all-changes-frame"
+  | "changes-pane"
   | "diff-viewer";
 
 export type MeasurementSampleKey =

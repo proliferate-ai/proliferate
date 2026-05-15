@@ -68,7 +68,8 @@ export type AnyHarnessTimingCategory =
   | "file.stat"
   | "git.status"
   | "git.diff"
-  | "git.branch_diff_files";
+  | "git.branch_diff_files"
+  | "git.base_worktree_diff_files";
 
 export interface AnyHarnessTimingScope {
   runtimeUrlHash?: string;

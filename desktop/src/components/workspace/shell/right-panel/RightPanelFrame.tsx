@@ -28,7 +28,6 @@ interface RightPanelFrameProps {
   activeBrowserId: string | null;
   activeTerminalId: string | null;
   activeViewerTarget: ViewerTarget | null;
-  activeAllChangesTarget: Extract<ViewerTarget, { kind: "allChanges" }> | null;
   entries: readonly RightPanelHeaderEntry[];
   unreadByTerminal: Record<string, boolean>;
   buffersByPath: Record<string, WorkspaceFileBuffer>;
@@ -76,7 +75,6 @@ export function RightPanelFrame({
   activeBrowserId,
   activeTerminalId,
   activeViewerTarget,
-  activeAllChangesTarget,
   entries,
   unreadByTerminal,
   buffersByPath,
@@ -152,7 +150,6 @@ export function RightPanelFrame({
         activeBrowserId={activeBrowserId}
         activeTerminalId={activeTerminalId}
         activeViewerTarget={activeViewerTarget}
-        activeAllChangesTarget={activeAllChangesTarget}
         browserTabs={browserTabs}
         orderedTerminals={orderedTerminals}
         shouldRenderContent={shouldRenderContent}

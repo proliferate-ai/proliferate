@@ -1,6 +1,5 @@
 import { WorkspaceBrowserPanel } from "@/components/workspace/browser/WorkspaceBrowserPanel";
 import { CloudWorkspaceSettingsPanel } from "@/components/cloud/workspace-settings/CloudWorkspaceSettingsPanel";
-import { AllChangesFrame } from "@/components/workspace/changes/AllChangesFrame";
 import { FileEditorView } from "@/components/workspace/files/FileEditorView";
 import { WorkspaceFilesPanel } from "@/components/workspace/files/panel/WorkspaceFilesPanel";
 import { GitPanel } from "@/components/workspace/git/GitPanel";
@@ -24,7 +23,6 @@ interface RightPanelContentProps {
   activeBrowserId: string | null;
   activeTerminalId: string | null;
   activeViewerTarget: ViewerTarget | null;
-  activeAllChangesTarget: Extract<ViewerTarget, { kind: "allChanges" }> | null;
   browserTabs: readonly RightPanelBrowserTab[];
   orderedTerminals: readonly TerminalRecord[];
   shouldRenderContent: boolean;
@@ -52,7 +50,6 @@ export function RightPanelContent({
   activeBrowserId,
   activeTerminalId,
   activeViewerTarget,
-  activeAllChangesTarget,
   browserTabs,
   orderedTerminals,
   shouldRenderContent,
@@ -97,11 +94,6 @@ export function RightPanelContent({
               <GitPanel />
             </div>
           )}
-          {activeTool === "allChanges" && activeAllChangesTarget && (
-            <div className="absolute inset-0">
-              <AllChangesFrame target={activeAllChangesTarget} />
-            </div>
-          )}
           {activeViewerTarget && (
             <div className="absolute inset-0">
               {activeViewerTarget.kind === "file" ? (
@@ -116,7 +108,7 @@ export function RightPanelContent({
                   diffTarget={activeViewerTarget}
                 />
               ) : (
-                <AllChangesFrame target={activeViewerTarget} />
+                <GitPanel />
               )}
             </div>
           )}

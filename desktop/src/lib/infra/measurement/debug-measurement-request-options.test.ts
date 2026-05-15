@@ -36,7 +36,7 @@ describe("debug measurement request options", () => {
     vi.spyOn(console, "debug").mockImplementation(() => undefined);
     const operationId = startMeasurementOperation({
       kind: "diff_review_sample",
-      surfaces: ["all-changes-frame", "diff-viewer"],
+      surfaces: ["changes-pane", "diff-viewer"],
       sampleKey: "diff_review",
       idleTimeoutMs: 1_000,
       maxDurationMs: 6_000,

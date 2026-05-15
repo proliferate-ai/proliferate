@@ -5,7 +5,7 @@ import {
   type ViewerTargetKey,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 
-export type RightPanelTool = "files" | "git" | "allChanges" | "settings";
+export type RightPanelTool = "files" | "git" | "settings";
 export type RightPanelHeaderEntryKey =
   | `tool:${RightPanelTool}`
   | `terminal:${string}`
@@ -46,7 +46,6 @@ export const RIGHT_PANEL_BROWSER_TAB_LIMIT = 5;
 export const DEFAULT_RIGHT_PANEL_TOOL_ORDER: RightPanelTool[] = [
   "files",
   "git",
-  "allChanges",
   "settings",
 ];
 export const DEFAULT_RIGHT_PANEL_HEADER_ORDER: RightPanelHeaderEntryKey[] =

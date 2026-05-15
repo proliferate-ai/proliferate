@@ -6,6 +6,7 @@ import type {
   GitDiffOptions,
   GitDiffResponse,
   GitStatusSnapshot,
+  ListBaseWorktreeDiffFilesOptions,
   ListBranchDiffFilesOptions,
   PushRequest,
   PushResponse,
@@ -21,6 +22,10 @@ type GitDiffClientOptions = GitDiffOptions & {
 };
 
 type ListBranchDiffFilesClientOptions = ListBranchDiffFilesOptions & {
+  request?: AnyHarnessRequestOptions;
+};
+
+type ListBaseWorktreeDiffFilesClientOptions = ListBaseWorktreeDiffFilesOptions & {
   request?: AnyHarnessRequestOptions;
 };
 
@@ -47,7 +52,7 @@ export class GitClient {
     if (scope && scope !== "working_tree") {
       params.push(["scope", scope]);
     }
-    if (scope === "branch") {
+    if (scope === "branch" || scope === "base_worktree") {
       const baseRef = options.baseRef?.trim();
       const oldPath = options.oldPath?.trim();
       if (baseRef) {
@@ -77,6 +82,22 @@ export class GitClient {
     return this.transport.get<GitBranchDiffFilesResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/diff/branch-files${query ? `?${query}` : ""}`,
       withTimingCategory(options.request, "git.branch_diff_files"),
+    );
+  }
+
+  async listBaseWorktreeDiffFiles(
+    workspaceId: string,
+    options: ListBaseWorktreeDiffFilesClientOptions = {},
+  ): Promise<GitBranchDiffFilesResponse> {
+    const params: Array<[string, string]> = [];
+    const baseRef = options.baseRef?.trim();
+    if (baseRef) {
+      params.push(["baseRef", baseRef]);
+    }
+    const query = encodeQueryParams(params);
+    return this.transport.get<GitBranchDiffFilesResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/diff/base-worktree-files${query ? `?${query}` : ""}`,
+      withTimingCategory(options.request, "git.base_worktree_diff_files"),
     );
   }
 

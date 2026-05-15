@@ -305,6 +305,18 @@ export function anyHarnessGitBranchDiffFilesKey(
   ] as const;
 }
 
+export function anyHarnessGitBaseWorktreeDiffFilesKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+  baseRef: string | null | undefined = null,
+) {
+  return [
+    ...anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+    "base-worktree-files",
+    normalizeNullableGitArg(baseRef),
+  ] as const;
+}
+
 function normalizeGitDiffScope(scope: string | null | undefined) {
   return scope?.trim() || "working_tree";
 }

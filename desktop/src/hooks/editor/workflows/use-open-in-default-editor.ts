@@ -26,8 +26,14 @@ function loadFileTargets(): Promise<OpenTarget[]> {
 interface UseOpenInDefaultEditorResult {
   /** Open a path in the user's preferred external editor. */
   openInDefaultEditor: (absolutePath: string) => Promise<void>;
+  /** Open a path in a specific shell target. */
+  openTarget: (targetId: string, absolutePath: string) => Promise<void>;
+  /** Reveal a path in Finder. */
+  revealInFinder: (absolutePath: string) => Promise<void>;
   /** Copy a path string to the clipboard. */
   copyPath: (path: string) => Promise<void>;
+  /** Available non-Proliferate shell targets for this path kind. */
+  targets: OpenTarget[];
   /** Whether the editor target list has loaded. */
   ready: boolean;
 }
@@ -75,9 +81,22 @@ export function useOpenInDefaultEditor(): UseOpenInDefaultEditorResult {
     await copyPathToClipboard(path);
   }, []);
 
+  const openTarget = useCallback(async (targetId: string, absolutePath: string) => {
+    const { path } = splitPathLineSuffix(absolutePath);
+    await execOpenTarget(targetId, path).catch(() => {});
+  }, []);
+
+  const revealInFinder = useCallback(async (absolutePath: string) => {
+    const { path } = splitPathLineSuffix(absolutePath);
+    await execOpenTarget("finder", path).catch(() => {});
+  }, []);
+
   return {
     openInDefaultEditor,
+    openTarget,
+    revealInFinder,
     copyPath,
+    targets: targets ?? [],
     ready: targets !== null,
   };
 }

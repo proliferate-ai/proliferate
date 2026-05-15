@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnyHarnessRuntime } from "../context/AnyHarnessRuntime.js";
 import { AnyHarnessWorkspace } from "../context/AnyHarnessWorkspace.js";
 import {
+  useGitBaseWorktreeDiffFilesQuery,
   useGitBranchDiffFilesQuery,
   useGitDiffQuery,
 } from "./git.js";
@@ -14,6 +15,7 @@ import {
 const mocks = vi.hoisted(() => ({
   getDiff: vi.fn(),
   listBranchDiffFiles: vi.fn(),
+  listBaseWorktreeDiffFiles: vi.fn(),
 }));
 
 vi.mock("../lib/client-cache.js", () => ({
@@ -21,6 +23,7 @@ vi.mock("../lib/client-cache.js", () => ({
     git: {
       getDiff: mocks.getDiff,
       listBranchDiffFiles: mocks.listBranchDiffFiles,
+      listBaseWorktreeDiffFiles: mocks.listBaseWorktreeDiffFiles,
     },
   }),
 }));
@@ -30,6 +33,7 @@ describe("sdk-react git timing hooks", () => {
     cleanup();
     mocks.getDiff.mockReset();
     mocks.listBranchDiffFiles.mockReset();
+    mocks.listBaseWorktreeDiffFiles.mockReset();
     vi.restoreAllMocks();
   });
 
@@ -117,6 +121,48 @@ describe("sdk-react git timing hooks", () => {
     expect(JSON.stringify(queryKeys)).not.toContain("x-trace");
     expect(onCacheDecision).toHaveBeenCalledWith({
       category: "git.branch_diff_files",
+      decision: "miss",
+      source: "react_query",
+    });
+  });
+
+  it("passes base worktree diff file request options and reports cache decisions", async () => {
+    mocks.listBaseWorktreeDiffFiles.mockResolvedValue({
+      baseRef: "origin/private",
+      resolvedBaseOid: "base",
+      mergeBaseOid: "merge",
+      headOid: "head",
+      files: [],
+    });
+    const onCacheDecision = vi.fn();
+    const queryClient = createQueryClient();
+
+    const { result } = renderHook(() => useGitBaseWorktreeDiffFilesQuery({
+      baseRef: "origin/private",
+      requestOptions: {
+        measurementOperationId: "mop_base_worktree",
+        headers: { "x-trace": "trace-3" },
+      },
+      onCacheDecision,
+    }), { wrapper: createWrapper(queryClient, "http://runtime-base-worktree.test") });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mocks.listBaseWorktreeDiffFiles).toHaveBeenCalledWith(
+      "anyharness-workspace-1",
+      expect.objectContaining({
+        request: expect.objectContaining({
+          measurementOperationId: "mop_base_worktree",
+          headers: { "x-trace": "trace-3" },
+          signal: expect.any(AbortSignal),
+        }),
+      }),
+    );
+    const queryKeys = queryClient.getQueryCache().getAll().map((query) => query.queryKey);
+    expect(JSON.stringify(queryKeys)).not.toContain("mop_base_worktree");
+    expect(JSON.stringify(queryKeys)).not.toContain("x-trace");
+    expect(onCacheDecision).toHaveBeenCalledWith({
+      category: "git.base_worktree_diff_files",
       decision: "miss",
       source: "react_query",
     });

@@ -89,12 +89,6 @@ vi.mock("@/components/workspace/files/FileEditorView", () => ({
   ),
 }));
 
-vi.mock("@/components/workspace/changes/AllChangesFrame", () => ({
-  AllChangesFrame: ({ target }: { target: { scope?: string | null } }) => (
-    <div data-testid="all-changes-frame" data-scope={target.scope ?? ""} />
-  ),
-}));
-
 vi.mock("@/components/workspace/terminals/TerminalPanel", () => ({
   TerminalPanel: ({
     activeTerminalId,
@@ -340,31 +334,25 @@ describe("RightPanel viewer routing", () => {
     expect(screen.getByTestId("file-editor-view").dataset.filePath).toBe("src/app.ts");
   });
 
-  it("activates the Review tool with a canonical all-changes target", async () => {
+  it("does not render a separate Review tool", () => {
     render(<RightPanelHarness isWorkspaceReady />);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Review" }));
-
-    await waitFor(() => expect(screen.getByTestId("all-changes-frame")).toBeTruthy());
-    expect(useWorkspaceViewerTabsStore.getState().openTargets).toEqual([
-      expect.objectContaining({ kind: "allChanges", scope: "working_tree_composite" }),
-    ]);
+    expect(screen.getByRole("tab", { name: "Changes" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Review" })).toBeNull();
   });
 
-  it("renders Review with a default target when restored without viewer store state", () => {
+  it("routes restored legacy Review state to the Changes pane", async () => {
     render(
       <RightPanelHarness
         isWorkspaceReady
         initialState={{
           ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
           activeEntryKey: "tool:allChanges",
-        }}
+        } as never}
       />,
     );
 
-    expect(screen.getByTestId("all-changes-frame").dataset.scope).toBe(
-      "working_tree_composite",
-    );
+    await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
   });
 });
 

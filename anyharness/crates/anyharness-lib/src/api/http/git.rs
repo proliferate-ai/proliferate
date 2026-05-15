@@ -207,8 +207,8 @@ pub struct BranchDiffFilesQuery {
         ("workspace_id" = String, Path, description = "Workspace ID"),
         ("path" = String, Query, description = "File path relative to repo root"),
         ("scope" = Option<ContractGitDiffScope>, Query, description = "Diff scope. Defaults to working_tree."),
-        ("baseRef" = Option<String>, Query, description = "Branch base ref. Only valid for scope=branch."),
-        ("oldPath" = Option<String>, Query, description = "Old path for branch rename/copy rows. Only valid for scope=branch."),
+        ("baseRef" = Option<String>, Query, description = "Base ref. Valid for scope=branch or scope=base_worktree."),
+        ("oldPath" = Option<String>, Query, description = "Old path for rename/copy rows. Valid for scope=branch or scope=base_worktree."),
     ),
     responses(
         (status = 200, description = "File diff", body = GitDiffResponse),
@@ -276,6 +276,41 @@ pub async fn list_git_branch_diff_files(
         "git branch diff files",
         move |_, ws_path| {
             GitService::branch_diff_files(&ws_path, base_ref.as_deref())
+                .map(git_branch_diff_files_to_contract)
+                .map_err(git_diff_error_to_api)
+        },
+    )
+    .await?;
+
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/workspaces/{workspace_id}/git/diff/base-worktree-files",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace ID"),
+        ("baseRef" = Option<String>, Query, description = "Base ref. Defaults to runtime default branch resolution."),
+    ),
+    responses(
+        (status = 200, description = "Base-to-worktree diff file list", body = GitBranchDiffFilesResponse),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "git"
+)]
+pub async fn list_git_base_worktree_diff_files(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+    Query(query): Query<BranchDiffFilesQuery>,
+) -> Result<Json<GitBranchDiffFilesResponse>, ApiError> {
+    let base_ref = normalize_query_string(query.base_ref);
+    let response = run_git_task(
+        &state,
+        workspace_id,
+        GitTaskAccess::Read,
+        "git base worktree diff files",
+        move |_, ws_path| {
+            GitService::base_worktree_diff_files(&ws_path, base_ref.as_deref())
                 .map(git_branch_diff_files_to_contract)
                 .map_err(git_diff_error_to_api)
         },
@@ -679,6 +714,7 @@ fn git_diff_scope_to_internal(scope: ContractGitDiffScope) -> InternalGitDiffSco
         ContractGitDiffScope::Unstaged => InternalGitDiffScope::Unstaged,
         ContractGitDiffScope::Staged => InternalGitDiffScope::Staged,
         ContractGitDiffScope::Branch => InternalGitDiffScope::Branch,
+        ContractGitDiffScope::BaseWorktree => InternalGitDiffScope::BaseWorktree,
     }
 }
 
@@ -688,6 +724,7 @@ fn git_diff_scope_to_contract(scope: InternalGitDiffScope) -> ContractGitDiffSco
         InternalGitDiffScope::Unstaged => ContractGitDiffScope::Unstaged,
         InternalGitDiffScope::Staged => ContractGitDiffScope::Staged,
         InternalGitDiffScope::Branch => ContractGitDiffScope::Branch,
+        InternalGitDiffScope::BaseWorktree => ContractGitDiffScope::BaseWorktree,
     }
 }
 

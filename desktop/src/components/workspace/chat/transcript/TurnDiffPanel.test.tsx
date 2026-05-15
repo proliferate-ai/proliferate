@@ -24,4 +24,18 @@ describe("TurnDiffPanel", () => {
     expect(html).toContain("README.md");
     expect(html).toContain("GitPanel.tsx");
   });
+
+  it("labels the file card action as a changes review entry point", () => {
+    const turn = PLAYGROUND_END_TURN_DIFF_TRANSCRIPT.turnsById["turn-end-diff"];
+    const html = renderToStaticMarkup(
+      createElement(TurnDiffPanel, {
+        turn,
+        transcript: PLAYGROUND_END_TURN_DIFF_TRANSCRIPT,
+        onOpenFile: () => {},
+        onOpenReviewPane: () => {},
+      }),
+    );
+
+    expect(html).toContain("Open changes review");
+  });
 });

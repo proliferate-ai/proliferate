@@ -326,12 +326,17 @@ function resolveValidTerminalIds(
 }
 
 function resolveRightPanelActiveEntryKey(
-  input: RightPanelActiveEntryKey | undefined,
+  input: RightPanelActiveEntryKey | "tool:allChanges" | undefined,
   headerOrder: readonly RightPanelHeaderEntryKey[],
 ): RightPanelActiveEntryKey {
-  const parsed = parseRightPanelHeaderEntryKey(input);
-  if (parsed && headerOrder.includes(input!)) {
-    return input!;
+  if (input === "tool:allChanges" && headerOrder.includes("tool:git")) {
+    return "tool:git";
+  }
+  if (input && input !== "tool:allChanges") {
+    const parsed = parseRightPanelHeaderEntryKey(input);
+    if (parsed && headerOrder.includes(input)) {
+      return input;
+    }
   }
   return resolveFallbackRightPanelActiveEntryKey(headerOrder);
 }

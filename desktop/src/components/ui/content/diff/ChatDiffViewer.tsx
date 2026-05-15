@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { Fragment, useMemo, useState, type CSSProperties } from "react";
 import { DiffLineContent } from "@/components/ui/content/diff/DiffLineContent";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import type {
@@ -100,10 +100,11 @@ function ChatGutterCell({ line }: { line: DiffLine }) {
 
   return (
     <div
+      data-gutter=""
       data-line-type={lineType}
       data-column-number={lineNumber ?? undefined}
       data-line-index={getChatLineIndex(line)}
-      className="diff-gutter-cell box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] items-center justify-end px-2 text-right tabular-nums"
+      className="diff-gutter-cell sticky left-0 z-10 box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] items-start justify-end bg-[var(--diffs-bg)] px-2 pt-[calc((var(--diffs-line-height)-1em)/2)] text-right tabular-nums"
     >
       <span data-line-number-content="">{lineNumber ?? ""}</span>
     </div>
@@ -113,9 +114,11 @@ function ChatGutterCell({ line }: { line: DiffLine }) {
 function ChatContentCell({
   line,
   tokens,
+  wrapLongLines,
 }: {
   line: DiffLine;
   tokens: HighlightedToken[][] | null;
+  wrapLongLines: boolean;
 }) {
   const lineType = getChatLineType(line);
   const lineNumber = getChatLineNumber(line);
@@ -123,11 +126,16 @@ function ChatContentCell({
 
   return (
     <div
+      data-content=""
       data-line={lineNumber ?? undefined}
       data-alt-line={altLineNumber}
       data-line-type={lineType}
       data-line-index={getChatLineIndex(line)}
-      className="diff-content-cell relative flex min-h-[var(--diffs-line-height)] min-w-max items-center pr-3 pl-2 whitespace-pre"
+      className={`diff-content-cell relative flex min-h-[var(--diffs-line-height)] items-center pr-3 pl-2 ${
+        wrapLongLines
+          ? "min-w-0 whitespace-pre-wrap break-words"
+          : "min-w-max whitespace-pre"
+      }`}
     >
       <DiffLineContent line={line} tokens={tokens} />
     </div>
@@ -144,12 +152,19 @@ function ChatCollapsedRow({
   return (
     <button
       type="button"
+      data-content=""
       data-separator="simple"
       onClick={onExpand}
       aria-label={`Show ${section.lineCount} unmodified lines`}
       title={`${section.lineCount} unmodified lines`}
-      className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center border-0 bg-transparent p-0 text-left font-[inherit] text-[inherit] leading-[inherit]"
-    />
+      className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center gap-2 border-0 bg-transparent px-2 py-0 text-left font-[inherit] text-[inherit] leading-[inherit] text-muted-foreground/70 hover:text-muted-foreground"
+    >
+      <span className="h-px min-w-4 flex-1 bg-border/60" />
+      <span className="shrink-0 text-[10px] leading-none">
+        Show {section.lineCount} unchanged line{section.lineCount === 1 ? "" : "s"}
+      </span>
+      <span className="h-px min-w-4 flex-1 bg-border/60" />
+    </button>
   );
 }
 
@@ -158,11 +173,13 @@ export function ChatDiffViewer({
   tokens,
   className,
   viewportClassName,
+  wrapLongLines,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
   className?: string;
   viewportClassName?: string;
+  wrapLongLines: boolean;
 }) {
   const resolvedMode = useResolvedMode();
   const [expandedCollapsedKeys, setExpandedCollapsedKeys] = useState<Set<string>>(
@@ -172,7 +189,6 @@ export function ChatDiffViewer({
     () => getChatRows(parsed, expandedCollapsedKeys),
     [parsed, expandedCollapsedKeys],
   );
-  const rowSpan = Math.max(rows.length, 1);
   const lineNumberDigits = getChatLineNumberDigits(rows);
   const codeStyle = useMemo(
     () => ({
@@ -209,52 +225,44 @@ export function ChatDiffViewer({
           data-interactive-line-numbers=""
           tabIndex={0}
           style={CHAT_DIFF_PRE_STYLE}
-          className="m-0 w-full min-w-max bg-[var(--codex-diffs-surface)] p-0 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] text-[color:var(--diffs-fg)]"
+          className={`m-0 w-full bg-[var(--codex-diffs-surface)] p-0 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] text-[color:var(--diffs-fg)] ${
+            wrapLongLines ? "min-w-0" : "min-w-max"
+          }`}
         >
           <code
             data-code=""
             data-unified=""
             style={codeStyle}
-            className="grid grid-cols-[var(--diffs-column-number-width)_minmax(max-content,1fr)]"
+            className={`grid ${
+              wrapLongLines
+                ? "grid-cols-[var(--diffs-column-number-width)_minmax(0,1fr)]"
+                : "grid-cols-[var(--diffs-column-number-width)_minmax(max-content,1fr)]"
+            }`}
           >
-            <div
-              data-gutter=""
-              style={{ gridRow: `span ${rowSpan}` }}
-              className="sticky left-0 z-10 grid auto-rows-[var(--diffs-line-height)] bg-[var(--diffs-bg)]"
-            >
-              {rows.map((row) =>
-                row.kind === "line" ? (
-                  <ChatGutterCell key={`g-${row.key}`} line={row.line} />
-                ) : (
-                  <div
-                    key={`g-${row.key}`}
-                    data-separator="simple"
-                    className="diff-gutter-cell min-h-[var(--diffs-line-height)]"
-                  />
-                ),
-              )}
-            </div>
-            <div
-              data-content=""
-              style={{ gridRow: `span ${rowSpan}` }}
-              className="grid auto-rows-[var(--diffs-line-height)]"
-            >
-              {rows.map((row) =>
-                row.kind === "line" ? (
+            {rows.map((row) =>
+              row.kind === "line" ? (
+                <Fragment key={row.key}>
+                  <ChatGutterCell line={row.line} />
                   <ChatContentCell
-                    key={`c-${row.key}`}
                     line={row.line}
                     tokens={tokens}
+                    wrapLongLines={wrapLongLines}
                   />
-                ) : (
+                </Fragment>
+              ) : (
+                <Fragment key={row.key}>
+                  <div
+                    data-gutter=""
+                    data-separator="simple"
+                    className="diff-gutter-cell sticky left-0 z-10 min-h-[var(--diffs-line-height)] bg-[var(--diffs-bg)]"
+                  />
                   <ChatCollapsedRow
-                    key={`c-${row.key}`}
                     section={row.section}
                     onExpand={() => expandCollapsedRow(row.key)}
                   />
-                ),
-              )}
-            </div>
+                </Fragment>
+              )
+            )}
           </code>
         </pre>
       </div>

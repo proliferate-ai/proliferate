@@ -18,6 +18,8 @@ Changes is changed-file workflow:
 - summarize unstaged, staged, and branch changes
 - open per-file diff viewer targets
 - open an all-changes review target
+- review the latest completed turn as a transcript-backed file filter over
+  current git diffs
 
 The durable right-panel tool id remains `git`; “Changes” is a display label.
 
@@ -40,6 +42,12 @@ keys are read as file viewer targets and written back as `viewer:*`.
 `working_tree_composite` is UI-only. It is never passed to git diff queries.
 It renders separate unstaged and staged sections, and rows open `fileDiff`
 targets with the concrete section scope.
+
+`last_turn` is also UI-only. It belongs to the right-sidebar Changes pane and
+filters current git diffs to files reported by top-level `file_change` transcript
+parts in the active session's latest completed turn. It uses the runtime
+`base_worktree` diff scope internally, but `base_worktree` is not a center
+viewer target scope.
 
 ## State Ownership
 
@@ -83,3 +91,8 @@ in hooks. Component renderers live under `components/ui/content/diff/**`.
 Split/unified layout is per viewer target. All-changes rows include section
 scope in their viewed-state key so a partially staged file can be viewed
 separately in the staged and unstaged sections.
+
+The right-sidebar Last turn mode keeps transcript-derived touched-file metadata
+separate from current git diff metadata. If a touched file has no current diff
+against the selected base, the row remains visible but suppresses current
+status/stat badges and renders a no-current-diff message.

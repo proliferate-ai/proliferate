@@ -3688,7 +3688,7 @@
           {
             "name": "baseRef",
             "in": "query",
-            "description": "Branch base ref. Only valid for scope=branch.",
+            "description": "Base ref. Valid for scope=branch or scope=base_worktree.",
             "required": false,
             "schema": {
               "type": "string"
@@ -3697,7 +3697,7 @@
           {
             "name": "oldPath",
             "in": "query",
-            "description": "Old path for branch rename/copy rows. Only valid for scope=branch.",
+            "description": "Old path for rename/copy rows. Valid for scope=branch or scope=base_worktree.",
             "required": false,
             "schema": {
               "type": "string"
@@ -3711,6 +3711,56 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GitDiffResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/diff/base-worktree-files": {
+      "get": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "list_git_base_worktree_diff_files",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "baseRef",
+            "in": "query",
+            "description": "Base ref. Defaults to runtime default branch resolution.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Base-to-worktree diff file list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitBranchDiffFilesResponse"
                 }
               }
             }
@@ -8261,7 +8311,8 @@
           "working_tree",
           "unstaged",
           "staged",
-          "branch"
+          "branch",
+          "base_worktree"
         ]
       },
       "GitFileStatus": {

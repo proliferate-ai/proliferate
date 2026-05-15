@@ -1092,6 +1092,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/git/diff/base-worktree-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_git_base_worktree_diff_files"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/git/diff/branch-files": {
         parameters: {
             query?: never;
@@ -2275,7 +2291,7 @@ export interface components {
             truncated: boolean;
         };
         /** @enum {string} */
-        GitDiffScope: "working_tree" | "unstaged" | "staged" | "branch";
+        GitDiffScope: "working_tree" | "unstaged" | "staged" | "branch" | "base_worktree";
         /** @enum {string} */
         GitFileStatus: "modified" | "added" | "deleted" | "renamed" | "copied" | "untracked" | "conflicted";
         /** @enum {string} */
@@ -6839,9 +6855,9 @@ export interface operations {
                 path: string;
                 /** @description Diff scope. Defaults to working_tree. */
                 scope?: components["schemas"]["GitDiffScope"];
-                /** @description Branch base ref. Only valid for scope=branch. */
+                /** @description Base ref. Valid for scope=branch or scope=base_worktree. */
                 baseRef?: string;
-                /** @description Old path for branch rename/copy rows. Only valid for scope=branch. */
+                /** @description Old path for rename/copy rows. Valid for scope=branch or scope=base_worktree. */
                 oldPath?: string;
             };
             header?: never;
@@ -6860,6 +6876,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GitDiffResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_git_base_worktree_diff_files: {
+        parameters: {
+            query?: {
+                /** @description Base ref. Defaults to runtime default branch resolution. */
+                baseRef?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Base-to-worktree diff file list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitBranchDiffFilesResponse"];
                 };
             };
             /** @description Workspace not found */

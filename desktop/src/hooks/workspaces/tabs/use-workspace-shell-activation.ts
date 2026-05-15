@@ -317,7 +317,7 @@ function openViewerTargetInRightPanel({
   target: ViewerTarget;
 }): void {
   const activeEntryKey = target.kind === "allChanges"
-    ? rightPanelToolHeaderKey("allChanges")
+    ? rightPanelToolHeaderKey("git")
     : rightPanelViewerHeaderKey(target);
   const store = useWorkspaceUiStore.getState();
 

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CommitRequest,
   GitDiffOptions,
+  ListBaseWorktreeDiffFilesOptions,
   ListBranchDiffFilesOptions,
   PushRequest,
 } from "@anyharness/sdk";
@@ -18,6 +19,7 @@ import {
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessGitBranchesKey,
+  anyHarnessGitBaseWorktreeDiffFilesKey,
   anyHarnessGitBranchDiffFilesKey,
   anyHarnessGitDiffKey,
   anyHarnessGitDiffScopeKey,
@@ -46,6 +48,11 @@ type TimedGitDiffQueryOptions = {
 type TimedBranchDiffFilesQueryOptions =
   & WorkspaceQueryOptions
   & ListBranchDiffFilesOptions
+  & AnyHarnessQueryTimingOptions;
+
+type TimedBaseWorktreeDiffFilesQueryOptions =
+  & WorkspaceQueryOptions
+  & ListBaseWorktreeDiffFilesOptions
   & AnyHarnessQueryTimingOptions;
 
 function useWorkspaceRuntimeUrl() {
@@ -163,6 +170,37 @@ export function useGitBranchDiffFilesQuery(
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.git.listBranchDiffFiles(resolved.connection.anyharnessWorkspaceId, {
+        baseRef: options?.baseRef,
+        request: requestOptionsWithSignal(options?.requestOptions, signal),
+      });
+    },
+  });
+}
+
+export function useGitBaseWorktreeDiffFilesQuery(
+  options?: TimedBaseWorktreeDiffFilesQueryOptions,
+) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+  const enabled = (options?.enabled ?? true) && !!workspaceId;
+  const queryKey = anyHarnessGitBaseWorktreeDiffFilesKey(runtimeUrl, workspaceId, options?.baseRef);
+  useReportAnyHarnessCacheDecision({
+    category: "git.base_worktree_diff_files",
+    enabled,
+    queryKey,
+    onCacheDecision: options?.onCacheDecision,
+  });
+
+  return useQuery({
+    queryKey,
+    enabled,
+    refetchInterval: options?.refetchInterval,
+    refetchIntervalInBackground: options?.refetchIntervalInBackground,
+    queryFn: async ({ signal }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.git.listBaseWorktreeDiffFiles(resolved.connection.anyharnessWorkspaceId, {
         baseRef: options?.baseRef,
         request: requestOptionsWithSignal(options?.requestOptions, signal),
       });

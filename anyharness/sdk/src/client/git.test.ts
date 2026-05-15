@@ -110,6 +110,27 @@ describe("GitClient diff URLs", () => {
     ]);
   });
 
+  it("encodes scoped base worktree diff arguments", async () => {
+    const calls: string[] = [];
+    const transport = {
+      get: async (path: string) => {
+        calls.push(path);
+        return diffResponse;
+      },
+    } as unknown as AnyHarnessTransport;
+    const client = new GitClient(transport);
+
+    await client.getDiff("workspace/1", "new file.ts", {
+      scope: "base_worktree",
+      baseRef: "origin/main",
+      oldPath: "old file.ts",
+    });
+
+    expect(calls).toEqual([
+      "/v1/workspaces/workspace%2F1/git/diff?path=new%20file.ts&scope=base_worktree&baseRef=origin%2Fmain&oldPath=old%20file.ts",
+    ]);
+  });
+
   it("encodes branch file list base refs", async () => {
     const calls: string[] = [];
     const transport = {
@@ -152,5 +173,22 @@ describe("GitClient diff URLs", () => {
     expect(calls[0]).not.toContain("measurementOperationId");
     expect(calls[0]).not.toContain("mop_test");
     expect(calls[0]).not.toContain("x-trace");
+  });
+
+  it("encodes base worktree file list base refs", async () => {
+    const calls: string[] = [];
+    const transport = {
+      get: async (path: string) => {
+        calls.push(path);
+        return branchFilesResponse;
+      },
+    } as unknown as AnyHarnessTransport;
+    const client = new GitClient(transport);
+
+    await client.listBaseWorktreeDiffFiles("workspace/1", { baseRef: "origin/main" });
+
+    expect(calls).toEqual([
+      "/v1/workspaces/workspace%2F1/git/diff/base-worktree-files?baseRef=origin%2Fmain",
+    ]);
   });
 });
