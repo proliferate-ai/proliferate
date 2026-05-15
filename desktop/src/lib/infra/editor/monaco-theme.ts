@@ -102,27 +102,69 @@ type MonacoThemeData = typeof proliferateDarkTheme;
 export const proliferateLightTheme: MonacoThemeData = {
   base: "vs",
   inherit: true,
-  rules: [],
+  rules: [
+    { token: "comment", foreground: "777777", fontStyle: "italic" },
+    { token: "keyword", foreground: "D53538" },
+    { token: "keyword.control", foreground: "D53538" },
+    { token: "storage", foreground: "751ED9" },
+    { token: "storage.type", foreground: "751ED9" },
+    { token: "string", foreground: "008809" },
+    { token: "string.key.json", foreground: "BD5800" },
+    { token: "number", foreground: "BD5800" },
+    { token: "constant", foreground: "BD5800" },
+    { token: "type", foreground: "751ED9" },
+    { token: "type.identifier", foreground: "751ED9" },
+    { token: "entity.name.type", foreground: "751ED9" },
+    { token: "entity.name.function", foreground: "751ED9" },
+    { token: "variable", foreground: "1A1C1F" },
+    { token: "variable.predefined", foreground: "BD5800" },
+    { token: "delimiter", foreground: "666666" },
+    { token: "delimiter.bracket", foreground: "666666" },
+    { token: "operator", foreground: "0071EA" },
+    { token: "tag", foreground: "D53538" },
+    { token: "attribute.name", foreground: "751ED9" },
+    { token: "attribute.value", foreground: "008809" },
+    { token: "metatag", foreground: "D53538" },
+  ],
   colors: {
-    // Line numbers — warm gray, not green
-    "editorLineNumber.foreground": "#A09890",
-    "editorLineNumber.activeForeground": "#6B6560",
+    "editor.background": "#ffffff",
+    "editor.foreground": "#1a1c1f",
 
-    // Subtle line highlight
-    "editor.lineHighlightBackground": "#00000006",
+    "editor.lineHighlightBackground": "#1a1c1f08",
     "editor.lineHighlightBorder": "#00000000",
 
-    // Gutter matches editor bg
+    "editor.selectionBackground": "#d7e9ff",
+    "editor.inactiveSelectionBackground": "#e5f3ff",
+    "editor.selectionHighlightBackground": "#e5f3ff80",
+
+    "editor.findMatchBackground": "#ffd24066",
+    "editor.findMatchHighlightBackground": "#ffd24033",
+
+    "editorCursor.foreground": "#1a1c1f",
+
+    "editorLineNumber.foreground": "#8a8f96",
+    "editorLineNumber.activeForeground": "#1a1c1f",
+
     "editorGutter.background": "#ffffff",
 
-    // Indentation guides
-    "editorIndentGuide.background": "#00000008",
-    "editorIndentGuide.activeBackground": "#00000014",
+    "editorIndentGuide.background": "#1a1c1f0d",
+    "editorIndentGuide.activeBackground": "#1a1c1f1f",
 
-    // Scrollbar
+    "editorBracketMatch.background": "#339cff20",
+    "editorBracketMatch.border": "#339cff66",
+
     "scrollbarSlider.background": "#00000010",
     "scrollbarSlider.hoverBackground": "#00000018",
     "scrollbarSlider.activeBackground": "#00000024",
+
+    "editorWidget.background": "#ffffff",
+    "editorWidget.border": "#1a1c1f14",
+    "editorSuggestWidget.background": "#ffffff",
+    "editorSuggestWidget.border": "#1a1c1f14",
+    "editorSuggestWidget.selectedBackground": "#1a1c1f0d",
+    "editorSuggestWidget.highlightForeground": "#0169cc",
+
+    "minimapSlider.background": "#00000010",
   },
 };
 

@@ -12,7 +12,7 @@ export function AppIconWrapper({ children }: { children: ReactNode }) {
     <div className="relative size-3.5 rounded">
       {children}
       <div
-        className="pointer-events-none absolute inset-0 rounded border border-border mix-blend-darken dark:mix-blend-lighten"
+        className="pointer-events-none absolute inset-0 rounded border border-border mix-blend-darken [html[data-mode=dark]_&]:mix-blend-lighten"
       />
     </div>
   );
