@@ -250,6 +250,342 @@ class TestCloudCommandsApi:
         assert arbitrary_workspace.status_code == 404
         assert arbitrary_workspace.json()["detail"]["code"] == "cloud_command_workspace_not_found"
 
+        first_result = await client.post(
+            f"/v1/cloud/worker/commands/{command_id}/result",
+            headers=worker_headers,
+            json={"leaseId": leased_command["leaseId"], "status": "accepted"},
+        )
+        assert first_result.status_code == 200
+
+        direct_materialized_workspace = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "start-session-materialized-workspace",
+                "targetId": target_id,
+                "kind": "start_session",
+                "payload": {"workspaceId": "anyharness-workspace-1", "agentKind": "codex"},
+            },
+        )
+        assert direct_materialized_workspace.status_code == 200
+        direct_command_id = direct_materialized_workspace.json()["commandId"]
+
+        direct_lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={"supportedKinds": ["start_session"], "leaseTimeoutSeconds": 30},
+        )
+        assert direct_lease.status_code == 200
+        direct_command = direct_lease.json()["command"]
+        assert direct_command["commandId"] == direct_command_id
+        assert direct_command["workspaceId"] == "anyharness-workspace-1"
+        assert direct_command["payload"]["workspaceId"] == "anyharness-workspace-1"
+
+    @pytest.mark.asyncio
+    async def test_materialize_workspace_command_is_target_scoped(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-materialize-workspace",
+        )
+        target_id, worker_headers = await _create_enrolled_target(client, auth)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "materialize-worktree-1",
+                "targetId": target_id,
+                "kind": "materialize_workspace",
+                "payload": {
+                    "mode": "worktree",
+                    "repoRootId": "repo-root-1",
+                    "targetPath": "/workspace/feature",
+                    "newBranchName": "proliferate/cloud-workspace",
+                    "baseBranch": "main",
+                },
+                "source": "automation",
+            },
+        )
+        assert created.status_code == 200
+        command_id = created.json()["commandId"]
+        assert created.json()["workspaceId"] is None
+        assert created.json()["sessionId"] is None
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["materialize_workspace"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert lease.status_code == 200
+        command = lease.json()["command"]
+        assert command["commandId"] == command_id
+        assert command["workspaceId"] is None
+        assert command["sessionId"] is None
+        assert command["payload"]["repoRootId"] == "repo-root-1"
+
+        accepted = await client.post(
+            f"/v1/cloud/worker/commands/{command_id}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": command["leaseId"],
+                "status": "accepted",
+                "result": {
+                    "mode": "worktree",
+                    "anyharnessWorkspaceId": "workspace-1",
+                    "repoRootId": "repo-root-1",
+                    "path": "/workspace/feature",
+                    "kind": "worktree",
+                    "currentBranch": "proliferate/cloud-workspace",
+                    "originalBranch": "main",
+                },
+            },
+        )
+        assert accepted.status_code == 200
+
+        status = await client.get(
+            f"/v1/cloud/commands/{command_id}",
+            headers=auth.headers,
+        )
+        assert status.status_code == 200
+        assert status.json()["workspaceId"] == "workspace-1"
+        assert status.json()["result"]["anyharnessWorkspaceId"] == "workspace-1"
+
+        malformed = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "materialize-malformed-result",
+                "targetId": target_id,
+                "kind": "materialize_workspace",
+                "payload": {"mode": "existing_path", "path": "/workspace/proliferate"},
+            },
+        )
+        assert malformed.status_code == 200
+        malformed_id = malformed.json()["commandId"]
+        malformed_lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["materialize_workspace"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert malformed_lease.status_code == 200
+        malformed_command = malformed_lease.json()["command"]
+        assert malformed_command["commandId"] == malformed_id
+
+        malformed_result = await client.post(
+            f"/v1/cloud/worker/commands/{malformed_id}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": malformed_command["leaseId"],
+                "status": "accepted",
+                "result": {
+                    "mode": "existing_path",
+                    "repoRootId": "repo-root-1",
+                    "path": "/workspace/proliferate",
+                    "kind": "local",
+                },
+            },
+        )
+        assert malformed_result.status_code == 200
+        assert malformed_result.json()["status"] == "rejected"
+
+        malformed_status = await client.get(
+            f"/v1/cloud/commands/{malformed_id}",
+            headers=auth.headers,
+        )
+        assert malformed_status.status_code == 200
+        assert malformed_status.json()["status"] == "rejected"
+        assert malformed_status.json()["errorCode"] == "invalid_materialize_workspace_result"
+        assert malformed_status.json()["workspaceId"] is None
+
+        existing_path = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "materialize-existing-path-1",
+                "targetId": target_id,
+                "kind": "materialize_workspace",
+                "payload": {
+                    "mode": "existing_path",
+                    "path": "/workspace/proliferate",
+                    "displayName": "Proliferate",
+                },
+            },
+        )
+        assert existing_path.status_code == 200
+
+        session_scoped = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "materialize-session-scoped",
+                "targetId": target_id,
+                "sessionId": "session-1",
+                "kind": "materialize_workspace",
+                "payload": {"mode": "existing_path", "path": "/workspace/proliferate"},
+            },
+        )
+        assert session_scoped.status_code == 400
+        assert session_scoped.json()["detail"]["code"] == "cloud_command_target_only"
+
+        workspace_scoped = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "materialize-workspace-scoped",
+                "targetId": target_id,
+                "workspaceId": "workspace-1",
+                "kind": "materialize_workspace",
+                "payload": {"mode": "existing_path", "path": "/workspace/proliferate"},
+            },
+        )
+        assert workspace_scoped.status_code == 400
+        assert workspace_scoped.json()["detail"]["code"] == "cloud_command_target_only"
+
+        missing_path = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "materialize-missing-path",
+                "targetId": target_id,
+                "kind": "materialize_workspace",
+                "payload": {"mode": "existing_path"},
+            },
+        )
+        assert missing_path.status_code == 400
+        assert (
+            missing_path.json()["detail"]["code"]
+            == "cloud_command_materialize_workspace_path_required"
+        )
+
+        missing_worktree_branch = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "materialize-missing-branch",
+                "targetId": target_id,
+                "kind": "materialize_workspace",
+                "payload": {
+                    "mode": "worktree",
+                    "repoRootId": "repo-root-1",
+                    "targetPath": "/workspace/feature",
+                },
+            },
+        )
+        assert missing_worktree_branch.status_code == 400
+        assert (
+            missing_worktree_branch.json()["detail"]["code"]
+            == "cloud_command_materialize_workspace_branch_required"
+        )
+
+        missing_repo_root = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "materialize-missing-repo-root",
+                "targetId": target_id,
+                "kind": "materialize_workspace",
+                "payload": {
+                    "mode": "worktree",
+                    "targetPath": "/workspace/feature",
+                    "newBranchName": "feature",
+                },
+            },
+        )
+        assert missing_repo_root.status_code == 400
+        assert (
+            missing_repo_root.json()["detail"]["code"]
+            == "cloud_command_materialize_workspace_repo_root_required"
+        )
+
+        missing_target_path = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "materialize-missing-target-path",
+                "targetId": target_id,
+                "kind": "materialize_workspace",
+                "payload": {
+                    "mode": "worktree",
+                    "repoRootId": "repo-root-1",
+                    "newBranchName": "feature",
+                },
+            },
+        )
+        assert missing_target_path.status_code == 400
+        assert (
+            missing_target_path.json()["detail"]["code"]
+            == "cloud_command_materialize_workspace_target_path_required"
+        )
+
+        unknown_mode = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "materialize-unknown-mode",
+                "targetId": target_id,
+                "kind": "materialize_workspace",
+                "payload": {"mode": "archive", "path": "/workspace/proliferate"},
+            },
+        )
+        assert unknown_mode.status_code == 400
+        assert (
+            unknown_mode.json()["detail"]["code"]
+            == "cloud_command_materialize_workspace_mode_invalid"
+        )
+
+        unknown_field = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "materialize-unknown-field",
+                "targetId": target_id,
+                "kind": "materialize_workspace",
+                "payload": {
+                    "mode": "existing_path",
+                    "path": "/workspace/proliferate",
+                    "unexpected": True,
+                },
+            },
+        )
+        assert unknown_field.status_code == 400
+        assert (
+            unknown_field.json()["detail"]["code"]
+            == "cloud_command_materialize_workspace_payload_unknown"
+        )
+
+        invalid_optional_type = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "materialize-invalid-optional",
+                "targetId": target_id,
+                "kind": "materialize_workspace",
+                "payload": {
+                    "mode": "worktree",
+                    "repoRootId": "repo-root-1",
+                    "targetPath": "/workspace/feature",
+                    "newBranchName": "feature",
+                    "baseBranch": 42,
+                },
+            },
+        )
+        assert invalid_optional_type.status_code == 400
+        assert (
+            invalid_optional_type.json()["detail"]["code"]
+            == "cloud_command_materialize_workspace_payload_invalid"
+        )
+
     @pytest.mark.asyncio
     async def test_close_session_command_requires_session(
         self,

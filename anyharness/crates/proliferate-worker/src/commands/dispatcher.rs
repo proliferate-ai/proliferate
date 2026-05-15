@@ -382,6 +382,9 @@ async fn dispatch_anyharness(
 ) -> Result<AnyHarnessCommandResponse, WorkerError> {
     match command {
         AnyHarnessCommand::StartSession { body } => anyharness.start_session(body).await,
+        AnyHarnessCommand::MaterializeWorkspace { request } => {
+            anyharness.materialize_workspace(request).await
+        }
         AnyHarnessCommand::SendPrompt { session_id, body } => {
             anyharness.send_prompt(session_id, body).await
         }
@@ -419,15 +422,21 @@ fn command_result(
     response: Result<AnyHarnessCommandResponse, WorkerError>,
 ) -> CommandResultRequest {
     match response {
-        Ok(response) if response.is_success() => CommandResultRequest {
-            lease_id: command.lease_id.clone(),
-            status: accepted_status(mapped, &response).to_string(),
-            error_code: None,
-            error_message: None,
-            result: Some(json!({
-                "anyharnessStatusCode": response.status.as_u16(),
-                "body": response.body,
-            })),
+        Ok(response) if response.is_success() => match success_result(mapped, &response) {
+            Ok(result) => CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: accepted_status(mapped, &response).to_string(),
+                error_code: None,
+                error_message: None,
+                result: Some(result),
+            },
+            Err(error) => CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: "rejected".to_string(),
+                error_code: Some(error.code),
+                error_message: Some(error.message),
+                result: Some(error.result),
+            },
         },
         Ok(response) => {
             let status_code = response.status.as_u16();
@@ -463,6 +472,48 @@ fn command_result(
     }
 }
 
+struct SuccessResultError {
+    code: String,
+    message: String,
+    result: Value,
+}
+
+fn success_result(
+    command: &AnyHarnessCommand,
+    response: &AnyHarnessCommandResponse,
+) -> Result<Value, SuccessResultError> {
+    match command {
+        AnyHarnessCommand::MaterializeWorkspace { request } => {
+            match request.materialized_result(&response.body) {
+                Ok(result) => {
+                    let mut value = serde_json::to_value(result).unwrap_or_else(|_| json!({}));
+                    if let Value::Object(object) = &mut value {
+                        object.insert(
+                            "anyharnessStatusCode".to_string(),
+                            Value::from(response.status.as_u16()),
+                        );
+                        object.insert("body".to_string(), response.body.clone());
+                    }
+                    Ok(value)
+                }
+                Err(message) => Err(SuccessResultError {
+                    code: "invalid_anyharness_workspace_response".to_string(),
+                    message: message.clone(),
+                    result: json!({
+                        "anyharnessStatusCode": response.status.as_u16(),
+                        "resultExtractionError": message,
+                        "body": response.body.clone(),
+                    }),
+                }),
+            }
+        }
+        _ => Ok(json!({
+            "anyharnessStatusCode": response.status.as_u16(),
+            "body": response.body.clone(),
+        })),
+    }
+}
+
 fn accepted_status(
     command: &AnyHarnessCommand,
     response: &AnyHarnessCommandResponse,
@@ -495,6 +546,7 @@ fn register_session_for_sync(
             .get("id")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned),
+        AnyHarnessCommand::MaterializeWorkspace { .. } => None,
         AnyHarnessCommand::SendPrompt { session_id, .. }
         | AnyHarnessCommand::ResolveInteraction { session_id, .. }
         | AnyHarnessCommand::UpdateSessionConfig { session_id, .. }
@@ -510,4 +562,75 @@ fn register_session_for_sync(
         .as_deref()
         .or_else(|| response.body.get("workspaceId").and_then(Value::as_str));
     store.upsert_sync_session(&session_id, workspace_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use reqwest::StatusCode;
+    use serde_json::json;
+
+    use crate::{
+        anyharness_client::{
+            sessions::AnyHarnessCommandResponse, workspaces::MaterializeWorkspaceRequest,
+        },
+        cloud_client::commands::CloudCommandEnvelope,
+        commands::mapping::AnyHarnessCommand,
+    };
+
+    use super::command_result;
+
+    #[test]
+    fn materialize_workspace_result_extraction_failure_rejects_command() {
+        let command = test_command();
+        let mapped = AnyHarnessCommand::MaterializeWorkspace {
+            request: MaterializeWorkspaceRequest::ExistingPath {
+                path: "/workspace/proliferate".to_string(),
+                display_name: None,
+                origin: None,
+                creator_context: None,
+            },
+        };
+        let result = command_result(
+            &command,
+            &mapped,
+            Ok(AnyHarnessCommandResponse {
+                status: StatusCode::OK,
+                body: json!({
+                    "workspace": {
+                        "path": "/workspace/proliferate",
+                        "kind": "local"
+                    }
+                }),
+            }),
+        );
+        assert_eq!(result.status, "rejected");
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some("invalid_anyharness_workspace_response")
+        );
+        assert_eq!(
+            result
+                .result
+                .as_ref()
+                .and_then(|value| value.get("resultExtractionError"))
+                .and_then(serde_json::Value::as_str),
+            Some("AnyHarness response must contain id.")
+        );
+    }
+
+    fn test_command() -> CloudCommandEnvelope {
+        CloudCommandEnvelope {
+            command_id: "command-1".to_string(),
+            idempotency_key: "key-1".to_string(),
+            target_id: "target-1".to_string(),
+            workspace_id: None,
+            session_id: None,
+            kind: "materialize_workspace".to_string(),
+            payload: json!({}),
+            observed_event_seq: None,
+            preconditions: None,
+            lease_id: "lease-1".to_string(),
+            lease_expires_at: "2026-05-14T00:00:00Z".to_string(),
+        }
+    }
 }

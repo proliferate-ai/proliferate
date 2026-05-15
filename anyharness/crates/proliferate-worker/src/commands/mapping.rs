@@ -1,11 +1,17 @@
 use serde_json::{json, Map, Value};
 
-use crate::cloud_client::commands::CloudCommandEnvelope;
+use crate::{
+    anyharness_client::workspaces::MaterializeWorkspaceRequest,
+    cloud_client::commands::CloudCommandEnvelope,
+};
 
 #[derive(Debug)]
 pub enum AnyHarnessCommand {
     StartSession {
         body: Value,
+    },
+    MaterializeWorkspace {
+        request: MaterializeWorkspaceRequest,
     },
     SendPrompt {
         session_id: String,
@@ -54,6 +60,9 @@ pub fn map_cloud_command(
     match command.kind.as_str() {
         "start_session" => Ok(AnyHarnessCommand::StartSession {
             body: start_session_body(command)?,
+        }),
+        "materialize_workspace" => Ok(AnyHarnessCommand::MaterializeWorkspace {
+            request: materialize_workspace_request(&command.payload)?,
         }),
         "send_prompt" => Ok(AnyHarnessCommand::SendPrompt {
             session_id: require_session_id(command)?,
@@ -128,6 +137,46 @@ fn start_session_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMa
     body.entry("origin".to_string())
         .or_insert_with(|| json!({ "kind": "system", "entrypoint": "cloud" }));
     Ok(Value::Object(body))
+}
+
+fn materialize_workspace_request(
+    payload: &Value,
+) -> Result<MaterializeWorkspaceRequest, CommandMappingError> {
+    let request: MaterializeWorkspaceRequest =
+        serde_json::from_value(payload.clone()).map_err(|error| {
+            CommandMappingError::new(
+                "invalid_materialize_workspace_payload",
+                format!("materialize_workspace payload is invalid: {error}"),
+            )
+        })?;
+    match &request {
+        MaterializeWorkspaceRequest::ExistingPath { path, .. } => {
+            require_non_empty(path, "path", "invalid_materialize_workspace_payload")?;
+        }
+        MaterializeWorkspaceRequest::Worktree {
+            repo_root_id,
+            target_path,
+            new_branch_name,
+            ..
+        } => {
+            require_non_empty(
+                repo_root_id,
+                "repoRootId",
+                "invalid_materialize_workspace_payload",
+            )?;
+            require_non_empty(
+                target_path,
+                "targetPath",
+                "invalid_materialize_workspace_payload",
+            )?;
+            require_non_empty(
+                new_branch_name,
+                "newBranchName",
+                "invalid_materialize_workspace_payload",
+            )?;
+        }
+    }
+    Ok(request)
 }
 
 fn require_session_id(command: &CloudCommandEnvelope) -> Result<String, CommandMappingError> {
@@ -241,4 +290,110 @@ fn string_field(object: &Map<String, Value>, primary: &str, fallback: &str) -> O
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn require_non_empty(
+    value: &str,
+    field: &str,
+    code: &'static str,
+) -> Result<(), CommandMappingError> {
+    if value.trim().is_empty() {
+        return Err(CommandMappingError::new(
+            code,
+            format!("materialize_workspace payload must contain non-empty {field}."),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use crate::cloud_client::commands::CloudCommandEnvelope;
+
+    use super::{map_cloud_command, AnyHarnessCommand};
+
+    #[test]
+    fn maps_existing_path_workspace_materialization() {
+        let command = test_command(json!({
+            "mode": "existing_path",
+            "path": "/workspace/proliferate",
+            "displayName": "Proliferate",
+            "origin": { "kind": "api", "entrypoint": "cloud" },
+            "creatorContext": { "kind": "human", "label": "Pablo" }
+        }));
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::MaterializeWorkspace { request } = mapped else {
+            panic!("expected materialize workspace");
+        };
+        assert_eq!(request.mode(), "existing_path");
+        let result = request
+            .materialized_result(&json!({
+                "repoRoot": { "id": "repo-root-1" },
+                "workspace": {
+                    "id": "workspace-1",
+                    "repoRootId": "repo-root-1",
+                    "path": "/workspace/proliferate",
+                    "kind": "local",
+                    "displayName": "Proliferate"
+                }
+            }))
+            .expect("result");
+        assert_eq!(result.display_name.as_deref(), Some("Proliferate"));
+    }
+
+    #[test]
+    fn maps_worktree_workspace_materialization() {
+        let command = test_command(json!({
+            "mode": "worktree",
+            "repoRootId": "repo-root-1",
+            "targetPath": "/workspace/feature",
+            "newBranchName": "feature",
+            "baseBranch": "main",
+            "setupScript": "pnpm install"
+        }));
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::MaterializeWorkspace { request } = mapped else {
+            panic!("expected materialize workspace");
+        };
+        assert_eq!(request.mode(), "worktree");
+        let result = request
+            .materialized_result(&json!({
+                "workspace": {
+                    "id": "workspace-2",
+                    "path": "/workspace/feature",
+                    "kind": "worktree"
+                }
+            }))
+            .expect("result");
+        assert_eq!(result.repo_root_id, "repo-root-1");
+    }
+
+    #[test]
+    fn rejects_invalid_workspace_materialization_payload() {
+        let command = test_command(json!({
+            "mode": "worktree",
+            "repoRootId": "repo-root-1",
+            "targetPath": "/workspace/feature"
+        }));
+        let error = map_cloud_command(&command).expect_err("error");
+        assert_eq!(error.code, "invalid_materialize_workspace_payload");
+    }
+
+    fn test_command(payload: serde_json::Value) -> CloudCommandEnvelope {
+        CloudCommandEnvelope {
+            command_id: "command-1".to_string(),
+            idempotency_key: "key-1".to_string(),
+            target_id: "target-1".to_string(),
+            workspace_id: None,
+            session_id: None,
+            kind: "materialize_workspace".to_string(),
+            payload,
+            observed_event_seq: None,
+            preconditions: None,
+            lease_id: "lease-1".to_string(),
+            lease_expires_at: "2026-05-14T00:00:00Z".to_string(),
+        }
+    }
 }
