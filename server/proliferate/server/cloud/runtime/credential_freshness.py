@@ -7,6 +7,7 @@ import re
 import shlex
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import PurePosixPath
 from uuid import UUID
 
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
@@ -33,8 +34,11 @@ from proliferate.server.cloud.runtime.anyharness_api import (
     wait_for_runtime_health,
 )
 from proliferate.server.cloud.runtime.bootstrap import (
+    build_detached_supervisor_launch_command,
     build_runtime_env,
     build_runtime_launch_script,
+    build_supervisor_config,
+    supervisor_config_path,
 )
 from proliferate.server.cloud.runtime.credentials import (
     ProvisionCredentials,
@@ -225,7 +229,26 @@ async def _runtime_has_live_sessions(
     return False
 
 
-async def _stop_runtime_process(
+async def _supervisor_config_exists(
+    provider: SandboxProvider,
+    sandbox: object,
+    *,
+    workspace_id: UUID,
+    runtime_context: SandboxRuntimeContext,
+) -> bool:
+    result = await run_sandbox_command_logged(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        label="check_supervisor_config_for_credential_refresh",
+        command=f"test -f {shlex.quote(supervisor_config_path(runtime_context))}",
+        runtime_context=runtime_context,
+        timeout_seconds=15,
+    )
+    return result_exit_code(result) == 0
+
+
+async def _stop_legacy_runtime_process(
     provider: SandboxProvider,
     sandbox: object,
     *,
@@ -260,12 +283,12 @@ exit 1
             provider,
             sandbox,
             workspace_id=workspace_id,
-            label="stop_runtime_for_credential_refresh",
+            label="stop_legacy_runtime_for_credential_refresh",
             command="sh -lc " + shlex.quote(script),
             runtime_context=runtime_context,
             timeout_seconds=15,
         ),
-        "Cloud runtime stop failed",
+        "Cloud legacy runtime stop failed",
     )
 
 
@@ -353,35 +376,105 @@ async def _relaunch_runtime_with_credentials(
         anyharness_data_key=anyharness_data_key,
         repo_env_vars=repo_env_vars,
     )
+    use_supervisor = await _supervisor_config_exists(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        runtime_context=runtime_context,
+    )
+    if not use_supervisor:
+        await provider.write_file(
+            sandbox,
+            runtime_launcher_path(runtime_context),
+            build_runtime_launch_script(provider, runtime_context, runtime_env),
+        )
+        assert_command_succeeded(
+            await run_sandbox_command_logged(
+                provider,
+                sandbox,
+                workspace_id=workspace_id,
+                label="chmod_legacy_runtime_launcher_for_credential_refresh",
+                command=f"chmod +x {runtime_launcher_path(runtime_context)}",
+                runtime_context=runtime_context,
+                timeout_seconds=30,
+            ),
+            "Cloud legacy runtime launcher update failed",
+        )
+        await _stop_legacy_runtime_process(
+            provider,
+            sandbox,
+            workspace_id=workspace_id,
+            runtime_context=runtime_context,
+        )
+        start_result = await run_sandbox_command_logged(
+            provider,
+            sandbox,
+            workspace_id=workspace_id,
+            label="relaunch_legacy_runtime_for_credential_refresh",
+            command=build_detached_runtime_launch_command(runtime_context),
+            runtime_context=runtime_context,
+            cwd=runtime_context.runtime_workdir,
+            timeout_seconds=30,
+            log_output_on_success=True,
+        )
+        if result_exit_code(start_result) != 0:
+            stderr = result_stderr(start_result) or result_stdout(start_result)
+            raise CloudRuntimeReconnectError(
+                f"Cloud runtime relaunch failed: {stderr.strip()[:200]}"
+            )
+        await wait_for_runtime_health(
+            runtime_url,
+            workspace_id=workspace_id,
+            required_successes=1,
+            total_attempts=30,
+            delay_seconds=0.5,
+        )
+        await verify_runtime_auth_enforced(runtime_url, access_token, workspace_id=workspace_id)
+        await _reconcile_runtime_agents(
+            runtime_url,
+            access_token,
+            workspace_id=workspace_id,
+            credentials=credentials,
+        )
+        return
+
+    config_path = supervisor_config_path(runtime_context)
+    config_dir = str(PurePosixPath(config_path).parent)
+    assert_command_succeeded(
+        await run_sandbox_command_logged(
+            provider,
+            sandbox,
+            workspace_id=workspace_id,
+            label="mkdir_supervisor_config_for_credential_refresh",
+            command=f"mkdir -p {shlex.quote(config_dir)} && chmod 700 {shlex.quote(config_dir)}",
+            runtime_context=runtime_context,
+            timeout_seconds=30,
+        ),
+        "Cloud supervisor config directory setup failed",
+    )
     await provider.write_file(
         sandbox,
-        runtime_launcher_path(runtime_context),
-        build_runtime_launch_script(provider, runtime_context, runtime_env),
+        config_path,
+        build_supervisor_config(provider, runtime_context, runtime_env),
     )
     assert_command_succeeded(
         await run_sandbox_command_logged(
             provider,
             sandbox,
             workspace_id=workspace_id,
-            label="chmod_runtime_launcher_for_credential_refresh",
-            command=f"chmod +x {runtime_launcher_path(runtime_context)}",
+            label="chmod_supervisor_config_for_credential_refresh",
+            command=f"chmod 600 {shlex.quote(config_path)}",
             runtime_context=runtime_context,
             timeout_seconds=30,
         ),
-        "Cloud runtime launcher update failed",
-    )
-    await _stop_runtime_process(
-        provider,
-        sandbox,
-        workspace_id=workspace_id,
-        runtime_context=runtime_context,
+        "Cloud supervisor config update failed",
     )
     start_result = await run_sandbox_command_logged(
         provider,
         sandbox,
         workspace_id=workspace_id,
-        label="relaunch_runtime_for_credential_refresh",
-        command=build_detached_runtime_launch_command(runtime_context),
+        label="relaunch_supervisor_for_credential_refresh",
+        command=build_detached_supervisor_launch_command(runtime_context),
         runtime_context=runtime_context,
         cwd=runtime_context.runtime_workdir,
         timeout_seconds=30,

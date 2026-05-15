@@ -129,13 +129,15 @@ jobs:
           mkdir -p "$HOME/.codex"
           printf '%s' "$CODEX_AUTH_JSON_BASE64" | base64 --decode > "$HOME/.codex/auth.json"
 
-      - name: Build Linux AnyHarness binary
+      - name: Build Linux runtime bundle
         run: make cloud-runtime-build
 
       - name: Run cloud lifecycle suite
         env:
           RUN_CLOUD_E2E: "1"
           CLOUD_RUNTIME_SOURCE_BINARY_PATH: ${{ github.workspace }}/target/x86_64-unknown-linux-musl/release/anyharness
+          CLOUD_WORKER_SOURCE_BINARY_PATH: ${{ github.workspace }}/target/x86_64-unknown-linux-musl/release/proliferate-worker
+          CLOUD_SUPERVISOR_SOURCE_BINARY_PATH: ${{ github.workspace }}/target/x86_64-unknown-linux-musl/release/proliferate-supervisor
         run: make test-cloud-${{ matrix.provider }}
 
   cloud-runtime:
@@ -206,7 +208,7 @@ jobs:
           mkdir -p "$HOME/.codex"
           printf '%s' "$CODEX_AUTH_JSON_BASE64" | base64 --decode > "$HOME/.codex/auth.json"
 
-      - name: Build Linux AnyHarness binary
+      - name: Build Linux runtime bundle
         run: make cloud-runtime-build
 
       - name: Prepare database
@@ -219,6 +221,8 @@ jobs:
           SANDBOX_PROVIDER: ${{ matrix.provider }}
           CLOUD_BILLING_MODE: off
           CLOUD_RUNTIME_SOURCE_BINARY_PATH: ${{ github.workspace }}/target/x86_64-unknown-linux-musl/release/anyharness
+          CLOUD_WORKER_SOURCE_BINARY_PATH: ${{ github.workspace }}/target/x86_64-unknown-linux-musl/release/proliferate-worker
+          CLOUD_SUPERVISOR_SOURCE_BINARY_PATH: ${{ github.workspace }}/target/x86_64-unknown-linux-musl/release/proliferate-supervisor
         run: |
           uv run uvicorn proliferate.main:app --host 127.0.0.1 --port 8000 >"$RUNNER_TEMP/cloud-server.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/cloud-server.pid"

@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
-#[command(name = "proliferate-supervisor")]
+#[command(name = "proliferate-supervisor", version)]
 struct Args {
     #[arg(long)]
     config: Option<PathBuf>,

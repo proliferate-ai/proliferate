@@ -389,6 +389,12 @@
   description: Path to the Linux Proliferate Worker binary uploaded into cloud sandboxes
   tags: [self-hosted, production]
 
+- name: CLOUD_SUPERVISOR_SOURCE_BINARY_PATH
+  secret: false
+  default: ""
+  description: Path to the Linux Proliferate Supervisor binary uploaded into cloud sandboxes
+  tags: [self-hosted, production]
+
 - name: CLOUD_RUNTIME_SENTRY_DSN
   secret: true
   default: ""
@@ -750,7 +756,7 @@
 - name: RUNTIME_BINARY_URL
   secret: false
   default: ""
-  description: Tarball URL for AnyHarness binary download
+  description: Tarball URL for runtime bundle download; archives should contain anyharness, proliferate-worker, and proliferate-supervisor
   tags: [self-hosted]
 
 - name: RUNTIME_BINARY_SHA256_URL

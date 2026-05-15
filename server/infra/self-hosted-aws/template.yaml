@@ -1000,6 +1000,8 @@ Resources:
                   DAYTONA_SERVER_URL=${DaytonaServerUrl}
                   DAYTONA_TARGET=${DaytonaTarget}
                   CLOUD_RUNTIME_SOURCE_BINARY_PATH=/opt/proliferate/bin/anyharness-linux
+                  CLOUD_WORKER_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-worker-linux
+                  CLOUD_SUPERVISOR_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-supervisor-linux
                   RUNTIME_BINARY_URL=${ResolvedRuntimeBinaryUrl}
                   RUNTIME_BINARY_SHA256_URL=${ResolvedRuntimeBinaryChecksumUrl}
                 - ResolvedStaticSiteAddress: !If

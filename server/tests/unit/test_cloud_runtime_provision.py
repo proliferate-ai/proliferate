@@ -324,25 +324,25 @@ class TestPrepareRuntimeTemplate:
         async def _set_workspace_status(_workspace_id, _status, detail: str) -> None:
             statuses.append(detail)
 
-        async def _check_binary_preinstalled(*args, **kwargs) -> bool:
-            calls.append("check_binary")
+        async def _check_runtime_bundle_preinstalled(*args, **kwargs) -> bool:
+            calls.append("check_bundle")
             return True
 
         async def _check_node_runtime(*args, **kwargs) -> str:
             calls.append("check_node")
             return "22.15.0"
 
-        async def _stage_runtime_binary(*args, **kwargs) -> Path:
+        async def _stage_runtime_bundle(*args, **kwargs) -> dict[str, Path]:
             calls.append("stage_binary")
-            return Path("/tmp/anyharness")
+            return {"anyharness": Path("/tmp/anyharness")}
 
         monkeypatch.setattr(runtime_provision, "_set_workspace_status", _set_workspace_status)
         monkeypatch.setattr(
             runtime_provision,
-            "check_binary_preinstalled",
-            _check_binary_preinstalled,
+            "check_runtime_bundle_preinstalled",
+            _check_runtime_bundle_preinstalled,
         )
-        monkeypatch.setattr(runtime_provision, "stage_runtime_binary", _stage_runtime_binary)
+        monkeypatch.setattr(runtime_provision, "stage_runtime_bundle", _stage_runtime_bundle)
         monkeypatch.setattr(runtime_provision, "check_node_runtime", _check_node_runtime)
 
         tracker = runtime_provision._StepTracker(workspace_id=uuid.uuid4())
@@ -360,9 +360,9 @@ class TestPrepareRuntimeTemplate:
 
         await runtime_provision._prepare_runtime_template(tracker, ctx, provider, connected)
 
-        assert calls == ["check_binary"]
+        assert calls == ["check_bundle"]
         assert statuses == [
-            "Using prebuilt AnyHarness binary",
+            "Using prebuilt runtime bundle",
             "Using prebuilt Node.js runtime",
         ]
         step_0 = runtime_provision.ProvisionStep.check_preinstalled_runtime
@@ -380,25 +380,25 @@ class TestPrepareRuntimeTemplate:
         async def _noop_status(*args, **kwargs) -> None:
             return None
 
-        async def _check_binary_preinstalled(*args, **kwargs) -> bool:
-            calls.append("check_binary")
+        async def _check_runtime_bundle_preinstalled(*args, **kwargs) -> bool:
+            calls.append("check_bundle")
             return False
 
         async def _check_node_runtime(*args, **kwargs) -> str:
             calls.append("check_node")
             return "22.15.0"
 
-        async def _stage_runtime_binary(*args, **kwargs) -> Path:
+        async def _stage_runtime_bundle(*args, **kwargs) -> dict[str, Path]:
             calls.append("stage_binary")
-            return Path("/tmp/anyharness")
+            return {"anyharness": Path("/tmp/anyharness")}
 
         monkeypatch.setattr(runtime_provision, "_set_workspace_status", _noop_status)
         monkeypatch.setattr(
             runtime_provision,
-            "check_binary_preinstalled",
-            _check_binary_preinstalled,
+            "check_runtime_bundle_preinstalled",
+            _check_runtime_bundle_preinstalled,
         )
-        monkeypatch.setattr(runtime_provision, "stage_runtime_binary", _stage_runtime_binary)
+        monkeypatch.setattr(runtime_provision, "stage_runtime_bundle", _stage_runtime_bundle)
         monkeypatch.setattr(runtime_provision, "check_node_runtime", _check_node_runtime)
 
         tracker = runtime_provision._StepTracker(workspace_id=uuid.uuid4())
@@ -416,7 +416,7 @@ class TestPrepareRuntimeTemplate:
 
         await runtime_provision._prepare_runtime_template(tracker, ctx, provider, connected)
 
-        assert calls == ["check_binary", "stage_binary", "check_node"]
+        assert calls == ["check_bundle", "stage_binary", "check_node"]
 
 
 class TestCheckBinaryPreinstalled:
@@ -604,13 +604,41 @@ class TestBuildRuntimeLaunchScript:
         assert "--disable-cors" not in script
 
 
-class TestBuildDetachedRuntimeLaunchCommand:
-    def test_launch_command_does_not_sleep_before_health_probe(self) -> None:
-        command = runtime_provision.build_detached_runtime_launch_command(
-            SimpleNamespace(home_dir="/home/user")
+class TestBuildSupervisorConfig:
+    def test_supervisor_config_contains_runtime_worker_and_env(self) -> None:
+        config = runtime_bootstrap.build_supervisor_config(
+            SimpleNamespace(runtime_port=8457, runtime_endpoint_handles_cors=False),
+            SimpleNamespace(
+                home_dir="/home/user",
+                runtime_binary_path="/home/user/anyharness",
+                base_env={"HOME": "/home/user"},
+            ),
+            {"ANYHARNESS_BEARER_TOKEN": "token", "ANTHROPIC_API_KEY": "key"},
         )
 
-        expected = "nohup /home/user/start-anyharness.sh"
+        assert 'anyharness_binary = "/home/user/anyharness"' in config
+        assert 'worker_binary = "/home/user/.proliferate/bin/proliferate-worker"' in config
+        assert 'worker_config = "/home/user/.proliferate/worker/config.toml"' in config
+        assert (
+            'anyharness_args = ["serve", "--require-bearer-auth", "--host", '
+            '"0.0.0.0", "--port", "8457"]'
+        ) in config
+        assert "[anyharness_env]" in config
+        assert 'ANTHROPIC_API_KEY = "key"' in config
+        assert 'ANYHARNESS_BEARER_TOKEN = "token"' in config
+        assert 'HOME = "/home/user"' in config
+
+
+class TestBuildDetachedSupervisorLaunchCommand:
+    def test_launch_command_does_not_sleep_before_health_probe(self) -> None:
+        command = runtime_bootstrap.build_detached_supervisor_launch_command(
+            SimpleNamespace(home_dir="/home/user", runtime_binary_path="/home/user/anyharness")
+        )
+
+        expected = (
+            "nohup /home/user/.proliferate/bin/proliferate-supervisor "
+            "--config /home/user/.proliferate/supervisor/config.toml run"
+        )
         assert expected in command
         assert "sleep 2" not in command
 
@@ -622,6 +650,7 @@ class TestLaunchAndConnectRuntime:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         calls: list[str] = []
+        written_files: dict[str, str] = {}
         wait_kwargs: dict[str, object] = {}
         tracker = runtime_provision._StepTracker(workspace_id=uuid.uuid4())
         ctx = _make_provision_input(codex_enabled=True)
@@ -643,8 +672,9 @@ class TestLaunchAndConnectRuntime:
             ),
         )
 
-        async def _write_file(*_args, **_kwargs) -> None:
+        async def _write_file(_sandbox, path: str, content: str | bytes) -> None:
             calls.append("write_file")
+            written_files[path] = content.decode() if isinstance(content, bytes) else content
 
         async def _run_sandbox_command_logged(*_args, **kwargs):
             calls.append(str(kwargs["label"]))
@@ -660,6 +690,11 @@ class TestLaunchAndConnectRuntime:
 
         async def _verify_runtime_auth_enforced(*_args, **_kwargs) -> None:
             calls.append("verify_runtime_auth_enforced")
+
+        async def _wait_for_worker_target_online(target_id, **_kwargs) -> None:
+            calls.append("wait_for_worker_target_online")
+            assert target_id == enrollment_target_id
+            assert _kwargs["workspace_id"] == ctx.workspace_id
 
         async def _reconcile_remote_agents(*_args, **_kwargs) -> list[str]:
             calls.append("reconcile_remote_agents")
@@ -690,6 +725,12 @@ class TestLaunchAndConnectRuntime:
             assert _kwargs["await_deferred_startup_cleanup"] is False
             return 20
 
+        enrollment_target_id = uuid.uuid4()
+
+        async def _ensure_runtime_target_enrollment(*_args, **_kwargs):
+            calls.append("ensure_runtime_target_enrollment")
+            return SimpleNamespace(target_id=enrollment_target_id, enrollment_token="enroll-token")
+
         provider.write_file = _write_file
         provider.resolve_runtime_endpoint = _resolve_runtime_endpoint
 
@@ -705,6 +746,11 @@ class TestLaunchAndConnectRuntime:
             runtime_provision,
             "verify_runtime_auth_enforced",
             _verify_runtime_auth_enforced,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "_wait_for_worker_target_online",
+            _wait_for_worker_target_online,
         )
         monkeypatch.setattr(runtime_provision, "reconcile_remote_agents", _reconcile_remote_agents)
         monkeypatch.setattr(
@@ -725,6 +771,11 @@ class TestLaunchAndConnectRuntime:
             "sync_cloud_worktree_policy_to_runtime",
             _sync_cloud_worktree_policy_to_runtime,
         )
+        monkeypatch.setattr(
+            runtime_provision,
+            "ensure_runtime_target_enrollment",
+            _ensure_runtime_target_enrollment,
+        )
 
         await runtime_provision._launch_and_connect_runtime(
             tracker,
@@ -734,12 +785,16 @@ class TestLaunchAndConnectRuntime:
         )
 
         assert calls == [
+            "ensure_runtime_target_enrollment",
+            "mkdir_runtime_bundle_config_dirs",
             "write_file",
-            "chmod_runtime_launcher",
-            "launch_runtime_nohup",
+            "write_file",
+            "chmod_runtime_bundle_configs",
+            "launch_runtime_supervisor",
             "resolve_runtime_endpoint",
             "wait_for_runtime_health",
             "verify_runtime_auth_enforced",
+            "wait_for_worker_target_online",
             "sync_cloud_worktree_policy_to_runtime",
             "reconcile_remote_agents",
             "resolve_remote_workspace",
@@ -748,6 +803,11 @@ class TestLaunchAndConnectRuntime:
         ]
         assert wait_kwargs["required_successes"] == 1
         assert wait_kwargs["delay_seconds"] == 0.5
+        worker_config = written_files["/home/user/.proliferate/worker/config.toml"]
+        assert 'anyharness_base_url = "http://127.0.0.1:8457"' in worker_config
+        supervisor_config = written_files["/home/user/.proliferate/supervisor/config.toml"]
+        assert 'anyharness_binary = "/home/user/anyharness"' in supervisor_config
+        assert 'ANYHARNESS_BEARER_TOKEN = "' in supervisor_config
 
 
 class TestProvisionWorkspaceGitSetup:

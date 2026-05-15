@@ -6,7 +6,7 @@ import hashlib
 import json
 import shlex
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 from uuid import UUID
@@ -136,53 +136,56 @@ def build_runtime_launch_script(
     )
 
 
-def resolve_local_runtime_binary_path() -> Path:
+def _resolve_local_component_binary_path(
+    *,
+    binary_name: str,
+    source_binary_path: str,
+    source_env_name: str,
+) -> Path:
     candidates: list[Path] = []
-    source_binary_path = settings.cloud_runtime_source_binary_path
     if source_binary_path:
         candidates.append(Path(source_binary_path).expanduser())
     repo_root = Path(__file__).resolve().parents[5]
     candidates.extend(
         [
-            repo_root / "target" / "x86_64-unknown-linux-musl" / "release" / "anyharness",
-            repo_root / "target" / "x86_64-unknown-linux-gnu" / "release" / "anyharness",
+            repo_root / "target" / "x86_64-unknown-linux-musl" / "release" / binary_name,
+            repo_root / "target" / "x86_64-unknown-linux-gnu" / "release" / binary_name,
         ]
     )
     if sys.platform.startswith("linux"):
-        candidates.append(repo_root / "target" / "release" / "anyharness")
+        candidates.append(repo_root / "target" / "release" / binary_name)
     for candidate in candidates:
         if candidate.is_file():
             return candidate
     raise RuntimeError(
-        "AnyHarness Linux runtime binary was not found for cloud provisioning. "
-        "Build target/x86_64-unknown-linux-musl/release/anyharness "
-        "(or target/x86_64-unknown-linux-gnu/release/anyharness) or set "
-        "CLOUD_RUNTIME_SOURCE_BINARY_PATH."
+        f"{binary_name} Linux binary was not found for cloud provisioning. "
+        f"Build target/x86_64-unknown-linux-musl/release/{binary_name} "
+        f"(or target/x86_64-unknown-linux-gnu/release/{binary_name}) or set "
+        f"{source_env_name}."
+    )
+
+
+def resolve_local_runtime_binary_path() -> Path:
+    return _resolve_local_component_binary_path(
+        binary_name="anyharness",
+        source_binary_path=settings.cloud_runtime_source_binary_path,
+        source_env_name="CLOUD_RUNTIME_SOURCE_BINARY_PATH",
     )
 
 
 def resolve_local_worker_binary_path() -> Path:
-    candidates: list[Path] = []
-    source_binary_path = settings.cloud_worker_source_binary_path
-    if source_binary_path:
-        candidates.append(Path(source_binary_path).expanduser())
-    repo_root = Path(__file__).resolve().parents[5]
-    candidates.extend(
-        [
-            repo_root / "target" / "x86_64-unknown-linux-musl" / "release" / "proliferate-worker",
-            repo_root / "target" / "x86_64-unknown-linux-gnu" / "release" / "proliferate-worker",
-        ]
+    return _resolve_local_component_binary_path(
+        binary_name="proliferate-worker",
+        source_binary_path=settings.cloud_worker_source_binary_path,
+        source_env_name="CLOUD_WORKER_SOURCE_BINARY_PATH",
     )
-    if sys.platform.startswith("linux"):
-        candidates.append(repo_root / "target" / "release" / "proliferate-worker")
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    raise RuntimeError(
-        "Proliferate Worker Linux binary was not found for cloud provisioning. "
-        "Build target/x86_64-unknown-linux-musl/release/proliferate-worker "
-        "(or target/x86_64-unknown-linux-gnu/release/proliferate-worker) or set "
-        "CLOUD_WORKER_SOURCE_BINARY_PATH."
+
+
+def resolve_local_supervisor_binary_path() -> Path:
+    return _resolve_local_component_binary_path(
+        binary_name="proliferate-supervisor",
+        source_binary_path=settings.cloud_supervisor_source_binary_path,
+        source_env_name="CLOUD_SUPERVISOR_SOURCE_BINARY_PATH",
     )
 
 
@@ -200,19 +203,22 @@ def is_supported_claude_node_version(version: str) -> bool:
     )
 
 
-async def check_binary_preinstalled(
+async def _check_component_binary_preinstalled(
     provider: SandboxProvider,
     sandbox: Any,
     *,
     workspace_id: UUID,
     runtime_context: SandboxRuntimeContext,
+    remote_path: str,
+    local_resolver: Callable[[], Path],
+    label_prefix: str,
 ) -> bool:
     check_result = await run_sandbox_command_logged(
         provider,
         sandbox,
         workspace_id=workspace_id,
-        label="check_runtime_binary",
-        command=f"test -x {shlex.quote(runtime_context.runtime_binary_path)}",
+        label=f"check_{label_prefix}_binary",
+        command=f"test -x {shlex.quote(remote_path)}",
         runtime_context=runtime_context,
         timeout_seconds=30,
     )
@@ -220,7 +226,7 @@ async def check_binary_preinstalled(
         return False
 
     try:
-        local_binary_path = resolve_local_runtime_binary_path()
+        local_binary_path = local_resolver()
     except RuntimeError:
         return True
 
@@ -229,11 +235,11 @@ async def check_binary_preinstalled(
         provider,
         sandbox,
         workspace_id=workspace_id,
-        label="check_runtime_binary_sha256",
+        label=f"check_{label_prefix}_binary_sha256",
         command=(
             "bash -lc "
             + shlex.quote(
-                f"sha256sum {shlex.quote(runtime_context.runtime_binary_path)} | cut -d' ' -f1"
+                f"sha256sum {shlex.quote(remote_path)} | cut -d' ' -f1"
             )
         ),
         runtime_context=runtime_context,
@@ -245,6 +251,24 @@ async def check_binary_preinstalled(
 
     remote_binary_hash = result_stdout(hash_result).strip()
     return remote_binary_hash == local_binary_hash
+
+
+async def check_binary_preinstalled(
+    provider: SandboxProvider,
+    sandbox: Any,
+    *,
+    workspace_id: UUID,
+    runtime_context: SandboxRuntimeContext,
+) -> bool:
+    return await _check_component_binary_preinstalled(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        runtime_context=runtime_context,
+        remote_path=runtime_context.runtime_binary_path,
+        local_resolver=resolve_local_runtime_binary_path,
+        label_prefix="runtime",
+    )
 
 
 async def install_node_runtime(
@@ -481,6 +505,10 @@ async def stage_runtime_binary(
     return binary_path
 
 
+def local_anyharness_base_url(provider: SandboxProvider) -> str:
+    return f"http://127.0.0.1:{provider.runtime_port}"
+
+
 def worker_binary_path(runtime_context: SandboxRuntimeContext) -> str:
     return f"{runtime_context.home_dir}/.proliferate/bin/proliferate-worker"
 
@@ -489,8 +517,20 @@ def worker_config_path(runtime_context: SandboxRuntimeContext) -> str:
     return f"{runtime_context.home_dir}/.proliferate/worker/config.toml"
 
 
-def worker_log_path(runtime_context: SandboxRuntimeContext) -> str:
-    return f"{runtime_context.home_dir}/proliferate-worker.log"
+def supervisor_binary_path(runtime_context: SandboxRuntimeContext) -> str:
+    return f"{runtime_context.home_dir}/.proliferate/bin/proliferate-supervisor"
+
+
+def supervisor_config_path(runtime_context: SandboxRuntimeContext) -> str:
+    return f"{runtime_context.home_dir}/.proliferate/supervisor/config.toml"
+
+
+def supervisor_update_request_dir(runtime_context: SandboxRuntimeContext) -> str:
+    return f"{runtime_context.home_dir}/.proliferate/supervisor/updates"
+
+
+def supervisor_log_path(runtime_context: SandboxRuntimeContext) -> str:
+    return f"{runtime_context.home_dir}/proliferate-supervisor.log"
 
 
 async def check_worker_binary_preinstalled(
@@ -500,43 +540,64 @@ async def check_worker_binary_preinstalled(
     workspace_id: UUID,
     runtime_context: SandboxRuntimeContext,
 ) -> bool:
-    remote_path = worker_binary_path(runtime_context)
-    check_result = await run_sandbox_command_logged(
+    return await _check_component_binary_preinstalled(
         provider,
         sandbox,
         workspace_id=workspace_id,
-        label="check_worker_binary",
-        command=f"test -x {shlex.quote(remote_path)}",
         runtime_context=runtime_context,
-        timeout_seconds=30,
+        remote_path=worker_binary_path(runtime_context),
+        local_resolver=resolve_local_worker_binary_path,
+        label_prefix="worker",
     )
-    if result_exit_code(check_result) != 0:
-        return False
 
-    try:
-        local_binary_path = resolve_local_worker_binary_path()
-    except RuntimeError:
-        return True
 
-    local_binary_hash = _sha256_file(local_binary_path)
-    hash_result = await run_sandbox_command_logged(
+async def check_supervisor_binary_preinstalled(
+    provider: SandboxProvider,
+    sandbox: Any,
+    *,
+    workspace_id: UUID,
+    runtime_context: SandboxRuntimeContext,
+) -> bool:
+    return await _check_component_binary_preinstalled(
         provider,
         sandbox,
         workspace_id=workspace_id,
-        label="check_worker_binary_sha256",
-        command=(
-            "bash -lc "
-            + shlex.quote(f"sha256sum {shlex.quote(remote_path)} | cut -d' ' -f1")
-        ),
         runtime_context=runtime_context,
-        timeout_seconds=30,
-        log_output_on_success=True,
+        remote_path=supervisor_binary_path(runtime_context),
+        local_resolver=resolve_local_supervisor_binary_path,
+        label_prefix="supervisor",
     )
-    if result_exit_code(hash_result) != 0:
-        return False
 
-    remote_binary_hash = result_stdout(hash_result).strip()
-    return remote_binary_hash == local_binary_hash
+
+async def check_runtime_bundle_preinstalled(
+    provider: SandboxProvider,
+    sandbox: Any,
+    *,
+    workspace_id: UUID,
+    runtime_context: SandboxRuntimeContext,
+) -> bool:
+    return all(
+        [
+            await check_binary_preinstalled(
+                provider,
+                sandbox,
+                workspace_id=workspace_id,
+                runtime_context=runtime_context,
+            ),
+            await check_worker_binary_preinstalled(
+                provider,
+                sandbox,
+                workspace_id=workspace_id,
+                runtime_context=runtime_context,
+            ),
+            await check_supervisor_binary_preinstalled(
+                provider,
+                sandbox,
+                workspace_id=workspace_id,
+                runtime_context=runtime_context,
+            ),
+        ]
+    )
 
 
 def build_worker_config(
@@ -554,6 +615,7 @@ def build_worker_config(
         "anyharness_base_url": anyharness_base_url,
         "anyharness_bearer_token": anyharness_bearer_token,
         "worker_db_path": f"{worker_dir}/worker.sqlite3",
+        "supervisor_update_request_dir": supervisor_update_request_dir(runtime_context),
         "heartbeat_interval_seconds": 30,
     }
     lines = []
@@ -565,22 +627,76 @@ def build_worker_config(
     return "\n".join(lines) + "\n"
 
 
-def build_detached_worker_launch_command(runtime_context: SandboxRuntimeContext) -> str:
-    config_path = shlex.quote(worker_config_path(runtime_context))
-    binary_path = shlex.quote(worker_binary_path(runtime_context))
-    log_path = shlex.quote(worker_log_path(runtime_context))
-    worker_process_binary = worker_binary_path(runtime_context).replace(
-        "proliferate-worker",
-        "[p]roliferate-worker",
+def _serve_args(provider: SandboxProvider) -> list[str]:
+    args = ["serve", "--require-bearer-auth"]
+    if provider.runtime_endpoint_handles_cors:
+        args.append("--disable-cors")
+    args.extend(["--host", "0.0.0.0", "--port", str(provider.runtime_port)])
+    return args
+
+
+def build_supervisor_config(
+    provider: SandboxProvider,
+    runtime_context: SandboxRuntimeContext,
+    runtime_env: Mapping[str, str],
+) -> str:
+    anyharness_env = {**runtime_context.base_env, **runtime_env}
+    values = {
+        "anyharness_binary": runtime_context.runtime_binary_path,
+        "worker_binary": worker_binary_path(runtime_context),
+        "worker_config": worker_config_path(runtime_context),
+        "anyharness_args": _serve_args(provider),
+        "restart_delay_seconds": 5,
+    }
+    lines = []
+    for key, value in values.items():
+        if isinstance(value, int):
+            lines.append(f"{key} = {value}")
+        else:
+            lines.append(f"{key} = {json.dumps(value)}")
+    if anyharness_env:
+        lines.append("")
+        lines.append("[anyharness_env]")
+        for key, value in sorted(anyharness_env.items()):
+            lines.append(f"{key} = {json.dumps(value)}")
+    return "\n".join(lines) + "\n"
+
+
+def _pgrep_pattern_for_path(path: str) -> str:
+    if path.startswith("/"):
+        return "[/]" + path[1:]
+    return path
+
+
+def build_detached_supervisor_launch_command(runtime_context: SandboxRuntimeContext) -> str:
+    supervisor_binary = supervisor_binary_path(runtime_context)
+    config_path = supervisor_config_path(runtime_context)
+    log_path = supervisor_log_path(runtime_context)
+    patterns = [
+        f"{_pgrep_pattern_for_path(supervisor_binary)} --config {config_path} run",
+        _pgrep_pattern_for_path(runtime_context.runtime_binary_path),
+        _pgrep_pattern_for_path(worker_binary_path(runtime_context)),
+    ]
+    kill_lines: list[str] = []
+    for pattern in patterns:
+        quoted_pattern = shlex.quote(pattern)
+        kill_lines.extend(
+            [
+                f"pids=$(pgrep -f {quoted_pattern} || true)",
+                'if [ -n "$pids" ]; then kill $pids || true; sleep 1; fi',
+            ]
+        )
+    script = "\n".join(
+        [
+            "set -eu",
+            *kill_lines,
+            (
+                f"nohup {shlex.quote(supervisor_binary)} --config {shlex.quote(config_path)} run "
+                f"> {shlex.quote(log_path)} 2>&1 < /dev/null &"
+            ),
+        ]
     )
-    process_pattern = shlex.quote(
-        f"{worker_process_binary} --config {worker_config_path(runtime_context)}"
-    )
-    return "sh -lc " + shlex.quote(
-        f"pids=$(pgrep -f {process_pattern} || true); "
-        'if [ -n "$pids" ]; then kill $pids || true; sleep 1; fi; '
-        f"nohup {binary_path} --config {config_path} > {log_path} 2>&1 < /dev/null & "
-    )
+    return "sh -lc " + shlex.quote(script)
 
 
 async def stage_worker_binary(
@@ -616,6 +732,73 @@ async def stage_worker_binary(
         timeout_seconds=30,
     )
     return binary_path
+
+
+async def stage_supervisor_binary(
+    provider: SandboxProvider,
+    sandbox: Any,
+    *,
+    workspace_id: UUID,
+    runtime_context: SandboxRuntimeContext,
+) -> Path:
+    binary_path = resolve_local_supervisor_binary_path()
+    remote_path = supervisor_binary_path(runtime_context)
+    await run_sandbox_command_logged(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        label="mkdir_supervisor_binary_dir",
+        command=f"mkdir -p {shlex.quote(str(PurePosixPath(remote_path).parent))}",
+        runtime_context=runtime_context,
+        timeout_seconds=30,
+    )
+    await provider.write_file(
+        sandbox,
+        remote_path,
+        binary_path.read_bytes(),
+    )
+    await run_sandbox_command_logged(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        label="chmod_supervisor_binary",
+        command=f"chmod +x {shlex.quote(remote_path)}",
+        runtime_context=runtime_context,
+        timeout_seconds=30,
+    )
+    return binary_path
+
+
+async def stage_runtime_bundle(
+    provider: SandboxProvider,
+    sandbox: Any,
+    *,
+    workspace_id: UUID,
+    runtime_context: SandboxRuntimeContext,
+) -> dict[str, Path]:
+    runtime = await stage_runtime_binary(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        runtime_context=runtime_context,
+    )
+    worker = await stage_worker_binary(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        runtime_context=runtime_context,
+    )
+    supervisor = await stage_supervisor_binary(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        runtime_context=runtime_context,
+    )
+    return {
+        "anyharness": runtime,
+        "worker": worker,
+        "supervisor": supervisor,
+    }
 
 
 async def check_node_runtime(

@@ -23,6 +23,10 @@ from proliferate.server.cloud.runtime.anyharness_api import (
     verify_runtime_auth_enforced,
     wait_for_runtime_health,
 )
+from proliferate.server.cloud.runtime.bootstrap import (
+    build_detached_supervisor_launch_command,
+    supervisor_config_path,
+)
 from proliferate.server.cloud.runtime.domain.reconnect_policy import (
     SandboxReconnectAction,
     endpoint_health_wait_config,
@@ -107,12 +111,36 @@ async def _relaunch_runtime(
     runtime_context: SandboxRuntimeContext,
     workspace_id: UUID,
 ) -> None:
+    supervisor_config_check = await run_sandbox_command_logged(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        label="check_runtime_supervisor_config",
+        command=f"test -f {shlex.quote(supervisor_config_path(runtime_context))}",
+        runtime_context=runtime_context,
+        cwd=runtime_context.runtime_workdir,
+        timeout_seconds=15,
+        log_output_on_success=True,
+    )
+    if result_exit_code(supervisor_config_check) == 0:
+        label = "relaunch_runtime_supervisor"
+        command = build_detached_supervisor_launch_command(runtime_context)
+    else:
+        await _ensure_launcher_defers_startup_retention(
+            provider,
+            sandbox,
+            runtime_context,
+            workspace_id,
+        )
+        label = "relaunch_runtime_nohup_legacy"
+        command = build_detached_runtime_launch_command(runtime_context)
+
     start_result = await run_sandbox_command_logged(
         provider,
         sandbox,
         workspace_id=workspace_id,
-        label="relaunch_runtime_nohup",
-        command=build_detached_runtime_launch_command(runtime_context),
+        label=label,
+        command=command,
         runtime_context=runtime_context,
         cwd=runtime_context.runtime_workdir,
         timeout_seconds=30,
@@ -243,12 +271,6 @@ async def ensure_workspace_runtime_ready(
     # sandbox. We do this after both the cached URL and the fresh provider URL
     # failed health checks.
     runtime_context = await provider.resolve_runtime_context(sandbox)
-    await _ensure_launcher_defers_startup_retention(
-        provider,
-        sandbox,
-        runtime_context,
-        workspace.id,
-    )
     await _relaunch_runtime(provider, sandbox, runtime_context, workspace.id)
     restart_probe = restart_health_wait_config(
         sandbox_record.provider,
@@ -348,12 +370,6 @@ async def ensure_environment_runtime_ready(
         raise CloudRuntimeReconnectError("Cloud runtime is unavailable in the existing sandbox.")
 
     runtime_context = await provider.resolve_runtime_context(sandbox)
-    await _ensure_launcher_defers_startup_retention(
-        provider,
-        sandbox,
-        runtime_context,
-        workspace_id,
-    )
     await _relaunch_runtime(provider, sandbox, runtime_context, workspace_id)
     restart_probe = restart_health_wait_config(
         sandbox_record.provider,

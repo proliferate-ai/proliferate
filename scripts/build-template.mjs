@@ -17,6 +17,20 @@ const DEFAULT_BINARY_PATH = path.join(
   "release",
   "anyharness"
 );
+const DEFAULT_WORKER_BINARY_PATH = path.join(
+  REPO_ROOT,
+  "target",
+  DEFAULT_BUILD_TARGET,
+  "release",
+  "proliferate-worker"
+);
+const DEFAULT_SUPERVISOR_BINARY_PATH = path.join(
+  REPO_ROOT,
+  "target",
+  DEFAULT_BUILD_TARGET,
+  "release",
+  "proliferate-supervisor"
+);
 // Keep this aligned with the cloud-supported agent set in server/proliferate/constants/cloud.py.
 const TEMPLATE_AGENT_KINDS = ["claude", "codex"];
 
@@ -24,7 +38,7 @@ function printUsage() {
   console.log(`Build a runtime-ready E2B dev template for local Proliferate development.
 
 Usage:
-  node scripts/build-template.mjs [--alias <name>] [--name <template-family>] [--tag <tag>] [--publish] [--binary <path>] [--rebuild-runtime]
+  node scripts/build-template.mjs [--alias <name>] [--name <template-family>] [--tag <tag>] [--publish] [--binary <path>] [--worker-binary <path>] [--supervisor-binary <path>] [--rebuild-runtime]
 
 Options:
   --alias <name>         Override the local template alias.
@@ -35,7 +49,10 @@ Options:
   --publish              Publish the template family after a successful build.
                          Requires E2B_TEAM_ID and the E2B CLI on PATH.
   --binary <path>        Use an existing Linux AnyHarness binary.
-  --rebuild-runtime      Rebuild the Linux AnyHarness binary before template build.
+  --worker-binary <path> Use an existing Linux Proliferate Worker binary.
+  --supervisor-binary <path>
+                         Use an existing Linux Proliferate Supervisor binary.
+  --rebuild-runtime      Rebuild the Linux runtime bundle before template build.
   --help                 Show this help text.
 
 Examples:
@@ -43,7 +60,7 @@ Examples:
   node scripts/build-template.mjs --rebuild-runtime
   node scripts/build-template.mjs --alias proliferate-runtime-dev-pablo
   node scripts/build-template.mjs --name team-slug/proliferate-runtime-cloud --tag sha-1234567 --publish
-  node scripts/build-template.mjs --binary target/x86_64-unknown-linux-musl/release/anyharness
+  node scripts/build-template.mjs --binary target/x86_64-unknown-linux-musl/release/anyharness --worker-binary target/x86_64-unknown-linux-musl/release/proliferate-worker --supervisor-binary target/x86_64-unknown-linux-musl/release/proliferate-supervisor
 `);
 }
 
@@ -51,6 +68,8 @@ function parseArgs(argv) {
   let alias;
   let name;
   let binary;
+  let workerBinary;
+  let supervisorBinary;
   const tags = [];
   let publish = false;
   let rebuildRuntime = false;
@@ -78,6 +97,14 @@ function parseArgs(argv) {
         binary = argv[i + 1];
         i += 1;
         break;
+      case "--worker-binary":
+        workerBinary = argv[i + 1];
+        i += 1;
+        break;
+      case "--supervisor-binary":
+        supervisorBinary = argv[i + 1];
+        i += 1;
+        break;
       case "--rebuild-runtime":
         rebuildRuntime = true;
         break;
@@ -96,11 +123,14 @@ function parseArgs(argv) {
   if (rebuildRuntime && binary) {
     throw new Error("Use either --binary or --rebuild-runtime, not both.");
   }
+  if (rebuildRuntime && (workerBinary || supervisorBinary)) {
+    throw new Error("Use either explicit bundle binaries or --rebuild-runtime, not both.");
+  }
   if (publish && !name) {
     throw new Error("--publish requires --name so the shared template family is explicit.");
   }
 
-  return { alias, name, binary, tags, publish, rebuildRuntime, help };
+  return { alias, name, binary, workerBinary, supervisorBinary, tags, publish, rebuildRuntime, help };
 }
 
 function sanitizeUsername(value) {
@@ -147,25 +177,24 @@ function normalizeTemplateFamily(input) {
   };
 }
 
-function candidateBinaryPaths() {
+function candidateBinaryPaths({ binaryName, envNames, defaultPath }) {
   const envOverride =
-    process.env.CLOUD_RUNTIME_SOURCE_BINARY_PATH ||
-    process.env.E2B_RUNTIME_SOURCE_BINARY_PATH;
+    envNames.map((name) => process.env[name]).find(Boolean) || "";
   const candidates = [];
   if (envOverride) {
     candidates.push(path.resolve(envOverride));
   }
   candidates.push(
-    DEFAULT_BINARY_PATH,
-    path.join(REPO_ROOT, "target", "x86_64-unknown-linux-gnu", "release", "anyharness")
+    defaultPath,
+    path.join(REPO_ROOT, "target", "x86_64-unknown-linux-gnu", "release", binaryName)
   );
   if (process.platform === "linux") {
-    candidates.push(path.join(REPO_ROOT, "target", "release", "anyharness"));
+    candidates.push(path.join(REPO_ROOT, "target", "release", binaryName));
   }
   return candidates;
 }
 
-function resolveBinaryPath(explicitBinaryPath) {
+function resolveBinaryPath({ explicitBinaryPath, binaryName, displayName, envNames, defaultPath }) {
   if (explicitBinaryPath) {
     const resolved = path.resolve(explicitBinaryPath);
     if (!fs.existsSync(resolved)) {
@@ -174,7 +203,8 @@ function resolveBinaryPath(explicitBinaryPath) {
     return resolved;
   }
 
-  for (const candidate of candidateBinaryPaths()) {
+  const candidates = candidateBinaryPaths({ binaryName, envNames, defaultPath });
+  for (const candidate of candidates) {
     if (fs.existsSync(candidate)) {
       return candidate;
     }
@@ -182,16 +212,16 @@ function resolveBinaryPath(explicitBinaryPath) {
 
   throw new Error(
     [
-      "AnyHarness Linux runtime binary was not found.",
-      `Expected one of: ${candidateBinaryPaths().join(", ")}`,
-      "Build it first with `cargo zigbuild --release --target x86_64-unknown-linux-musl -p anyharness`",
+      `${displayName} Linux binary was not found.`,
+      `Expected one of: ${candidates.join(", ")}`,
+      `Build it first with \`make cloud-runtime-build\` or \`cargo zigbuild --release --target x86_64-unknown-linux-musl -p ${binaryName}\``,
       "or rerun this script with --rebuild-runtime.",
     ].join(" ")
   );
 }
 
-function rebuildRuntimeBinary() {
-  console.log("Rebuilding AnyHarness Linux runtime artifact...");
+function rebuildRuntimeBundle() {
+  console.log("Rebuilding Linux runtime bundle artifacts...");
   const result = spawnSync(
     "cargo",
     [
@@ -201,6 +231,10 @@ function rebuildRuntimeBinary() {
       DEFAULT_BUILD_TARGET,
       "-p",
       "anyharness",
+      "-p",
+      "proliferate-worker",
+      "-p",
+      "proliferate-supervisor",
     ],
     {
       cwd: REPO_ROOT,
@@ -215,15 +249,27 @@ function rebuildRuntimeBinary() {
   if (result.status !== 0) {
     throw new Error(`cargo zigbuild failed with exit code ${result.status}`);
   }
-  if (!fs.existsSync(DEFAULT_BINARY_PATH)) {
-    throw new Error(`Expected rebuilt binary at ${DEFAULT_BINARY_PATH}`);
+  for (const expectedPath of [
+    DEFAULT_BINARY_PATH,
+    DEFAULT_WORKER_BINARY_PATH,
+    DEFAULT_SUPERVISOR_BINARY_PATH,
+  ]) {
+    if (!fs.existsSync(expectedPath)) {
+      throw new Error(`Expected rebuilt binary at ${expectedPath}`);
+    }
   }
-  return DEFAULT_BINARY_PATH;
+  return {
+    anyharness: DEFAULT_BINARY_PATH,
+    worker: DEFAULT_WORKER_BINARY_PATH,
+    supervisor: DEFAULT_SUPERVISOR_BINARY_PATH,
+  };
 }
 
-function prepareTemplateContext(binaryPath) {
+function prepareTemplateContext(bundlePaths) {
   const contextDir = fs.mkdtempSync(path.join(os.tmpdir(), "proliferate-e2b-template-"));
-  fs.copyFileSync(binaryPath, path.join(contextDir, "anyharness"));
+  fs.copyFileSync(bundlePaths.anyharness, path.join(contextDir, "anyharness"));
+  fs.copyFileSync(bundlePaths.worker, path.join(contextDir, "proliferate-worker"));
+  fs.copyFileSync(bundlePaths.supervisor, path.join(contextDir, "proliferate-supervisor"));
   return contextDir;
 }
 
@@ -278,9 +324,26 @@ function buildTemplateDefinition() {
       { user: "root" }
     )
     .copy("anyharness", "/home/user/anyharness", { mode: 0o755 })
+    .makeDir("/home/user/.proliferate/bin", { mode: 0o755, user: "user" })
+    .copy("proliferate-worker", "/home/user/.proliferate/bin/proliferate-worker", {
+      mode: 0o755,
+    })
+    .copy("proliferate-supervisor", "/home/user/.proliferate/bin/proliferate-supervisor", {
+      mode: 0o755,
+    })
     .makeDir("/home/user/workspace", { mode: 0o755, user: "user" })
     .setUser("user")
-    .runCmd("node --version && npm --version && cargo --version && git --version");
+    .runCmd(
+      [
+        "node --version",
+        "npm --version",
+        "cargo --version",
+        "git --version",
+        "/home/user/anyharness --version",
+        "/home/user/.proliferate/bin/proliferate-worker --version",
+        "/home/user/.proliferate/bin/proliferate-supervisor --version",
+      ].join(" && ")
+    );
 
   template = template.runCmd(buildAgentInstallCommand(TEMPLATE_AGENT_KINDS));
 
@@ -397,18 +460,45 @@ async function main() {
   const templateName = normalizedName?.bareName || defaultAlias();
   const buildTags = [...new Set([normalizedName?.inlineTag, ...parsed.tags].filter(Boolean))];
   const teamId = process.env.E2B_TEAM_ID || "";
-  const binaryPath = parsed.rebuildRuntime
-    ? rebuildRuntimeBinary()
-    : resolveBinaryPath(parsed.binary);
-  const binaryStats = fs.statSync(binaryPath);
+  const bundlePaths = parsed.rebuildRuntime
+    ? rebuildRuntimeBundle()
+    : {
+        anyharness: resolveBinaryPath({
+          explicitBinaryPath: parsed.binary,
+          binaryName: "anyharness",
+          displayName: "AnyHarness",
+          envNames: ["CLOUD_RUNTIME_SOURCE_BINARY_PATH", "E2B_RUNTIME_SOURCE_BINARY_PATH"],
+          defaultPath: DEFAULT_BINARY_PATH,
+        }),
+        worker: resolveBinaryPath({
+          explicitBinaryPath: parsed.workerBinary,
+          binaryName: "proliferate-worker",
+          displayName: "Proliferate Worker",
+          envNames: ["CLOUD_WORKER_SOURCE_BINARY_PATH"],
+          defaultPath: DEFAULT_WORKER_BINARY_PATH,
+        }),
+        supervisor: resolveBinaryPath({
+          explicitBinaryPath: parsed.supervisorBinary,
+          binaryName: "proliferate-supervisor",
+          displayName: "Proliferate Supervisor",
+          envNames: ["CLOUD_SUPERVISOR_SOURCE_BINARY_PATH"],
+          defaultPath: DEFAULT_SUPERVISOR_BINARY_PATH,
+        }),
+      };
+  const binaryStats = Object.fromEntries(
+    Object.entries(bundlePaths).map(([name, binaryPath]) => [name, fs.statSync(binaryPath)])
+  );
 
   console.log("=== Proliferate E2B Dev Template Builder ===");
   console.log(`Template name: ${templateName}`);
   if (buildTags.length > 0) {
     console.log(`Tags: ${buildTags.join(", ")}`);
   }
-  console.log(`Binary: ${binaryPath}`);
-  console.log(`Binary size: ${(binaryStats.size / 1024 / 1024).toFixed(1)} MB`);
+  for (const [name, binaryPath] of Object.entries(bundlePaths)) {
+    console.log(
+      `${name} binary: ${binaryPath} (${(binaryStats[name].size / 1024 / 1024).toFixed(1)} MB)`
+    );
+  }
   console.log(
     `Template resources: ${DEV_TEMPLATE_CPU_COUNT} CPU / ${DEV_TEMPLATE_MEMORY_MB} MB`
   );
@@ -418,7 +508,7 @@ async function main() {
   console.log("");
   console.log("Building template...");
 
-  const contextDir = prepareTemplateContext(binaryPath);
+  const contextDir = prepareTemplateContext(bundlePaths);
   try {
     const previousCwd = process.cwd();
     process.chdir(contextDir);

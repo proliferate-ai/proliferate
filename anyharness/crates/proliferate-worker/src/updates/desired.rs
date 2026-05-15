@@ -36,6 +36,17 @@ pub async fn reconcile(
     observability::update_requested(&stale);
     match supervisor::stage_update_request(config, &stale) {
         Ok(staged) => {
+            let detail = if staged.wrote_request {
+                format!(
+                    "Supervisor update request staged at {}.",
+                    staged.path.display()
+                )
+            } else {
+                format!(
+                    "Supervisor update request already staged at {}.",
+                    staged.path.display()
+                )
+            };
             info!(
                 component = staged.component.as_deref(),
                 version = staged.version.as_deref(),
@@ -43,6 +54,20 @@ pub async fn reconcile(
                 wrote_request = staged.wrote_request,
                 "supervisor update request staged"
             );
+            if let Err(error) = cloud
+                .report_update_status(
+                    &identity.worker_token,
+                    &status::staged(
+                        stale.update_generation,
+                        staged.component,
+                        staged.version,
+                        detail,
+                    ),
+                )
+                .await
+            {
+                warn!(?error, "failed to report supervisor update request status");
+            }
             Ok(())
         }
         Err(error) => {

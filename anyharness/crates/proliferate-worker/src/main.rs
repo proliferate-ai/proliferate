@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use clap::Parser;
 
 #[derive(Debug, Parser)]
-#[command(name = "proliferate-worker")]
+#[command(name = "proliferate-worker", version)]
 struct Args {
     #[arg(long)]
     config: Option<PathBuf>,

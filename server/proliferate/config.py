@@ -103,6 +103,7 @@ class Settings(BaseSettings):
     sandbox_provider: str = "e2b"
     cloud_runtime_source_binary_path: str = ""
     cloud_worker_source_binary_path: str = ""
+    cloud_supervisor_source_binary_path: str = ""
     cloud_runtime_sentry_dsn: str = ""
     cloud_runtime_sentry_environment: str = ""
     cloud_runtime_sentry_release: str = ""

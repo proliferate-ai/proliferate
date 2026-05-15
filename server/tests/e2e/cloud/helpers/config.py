@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from proliferate.config import settings
-from proliferate.server.cloud.runtime.bootstrap import resolve_local_runtime_binary_path
+from proliferate.server.cloud.runtime.bootstrap import (
+    resolve_local_runtime_binary_path,
+    resolve_local_supervisor_binary_path,
+    resolve_local_worker_binary_path,
+)
 from tests.e2e.cloud.helpers.shared import (
     CloudE2ETestError,
     CloudTestConfig,
@@ -35,26 +39,44 @@ def ensure_cloud_runtime_binary_ready() -> Path:
         path = Path(explicit_binary_path).expanduser()
         if not path.is_file():
             raise CloudE2ETestError(f"CLOUD_RUNTIME_SOURCE_BINARY_PATH does not exist: {path}")
+        _assert_explicit_bundle_paths_exist()
+        resolve_local_worker_binary_path()
+        resolve_local_supervisor_binary_path()
         _CLOUD_RUNTIME_BINARY_READY = True
         return path
 
     build_command = build_linux_runtime_command()
     if build_command is None:
         raise CloudE2ETestError(
-            "Unable to build the AnyHarness Linux runtime binary for cloud tests. "
-            "Install cargo-zigbuild or set CLOUD_RUNTIME_SOURCE_BINARY_PATH."
+            "Unable to build the Linux runtime bundle for cloud tests. "
+            "Install cargo-zigbuild or set CLOUD_RUNTIME_SOURCE_BINARY_PATH, "
+            "CLOUD_WORKER_SOURCE_BINARY_PATH, and CLOUD_SUPERVISOR_SOURCE_BINARY_PATH."
         )
 
     try:
         subprocess.run(build_command, cwd=REPO_ROOT, check=True)
     except subprocess.CalledProcessError as exc:
         raise CloudE2ETestError(
-            f"Failed to build the AnyHarness Linux runtime binary: exit code {exc.returncode}"
+            f"Failed to build the Linux runtime bundle: exit code {exc.returncode}"
         ) from exc
 
     path = resolve_local_runtime_binary_path()
+    resolve_local_worker_binary_path()
+    resolve_local_supervisor_binary_path()
     _CLOUD_RUNTIME_BINARY_READY = True
     return path
+
+
+def _assert_explicit_bundle_paths_exist() -> None:
+    for env_name, raw_path in (
+        ("CLOUD_WORKER_SOURCE_BINARY_PATH", settings.cloud_worker_source_binary_path.strip()),
+        (
+            "CLOUD_SUPERVISOR_SOURCE_BINARY_PATH",
+            settings.cloud_supervisor_source_binary_path.strip(),
+        ),
+    ):
+        if raw_path and not Path(raw_path).expanduser().is_file():
+            raise CloudE2ETestError(f"{env_name} does not exist: {Path(raw_path).expanduser()}")
 
 
 def build_linux_runtime_command() -> list[str] | None:
@@ -67,6 +89,10 @@ def build_linux_runtime_command() -> list[str] | None:
             "x86_64-unknown-linux-musl",
             "-p",
             "anyharness",
+            "-p",
+            "proliferate-worker",
+            "-p",
+            "proliferate-supervisor",
         ]
     if sys.platform.startswith("linux") and shutil.which("cargo"):
         return [
@@ -77,6 +103,10 @@ def build_linux_runtime_command() -> list[str] | None:
             "x86_64-unknown-linux-musl",
             "-p",
             "anyharness",
+            "-p",
+            "proliferate-worker",
+            "-p",
+            "proliferate-supervisor",
         ]
     return None
 
