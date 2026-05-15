@@ -8,7 +8,7 @@ import {
   WindsurfIcon,
   ZedIcon,
 } from "@/components/ui/app-icons";
-import type { OpenTargetIconId } from "@/lib/access/tauri/shell";
+import type { OpenTargetIconId } from "@/lib/domain/open-targets/model";
 
 export interface OpenTargetIconDefinition {
   component: ComponentType<{ className?: string }>;

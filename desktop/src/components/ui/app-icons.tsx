@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { OPEN_TARGET_ICON_ASSET_PATHS } from "@/config/open-target-icon-assets";
 import { FileIcon, type IconProps } from "@/components/ui/icons";
 
 export function MailAppIcon({ className, ...props }: IconProps) {
@@ -25,12 +26,7 @@ export function MailAppIcon({ className, ...props }: IconProps) {
 }
 
 export const APP_ICON_ASSETS: Record<string, string> = {
-  finder: "/app-icons/finder.png",
-  cursor: "/app-icons/cursor.png",
-  vscode: "/app-icons/vscode.png",
-  windsurf: "/app-icons/windsurf.png",
-  zed: "/app-icons/zed.png",
-  terminal: "/app-icons/terminal.webp",
+  ...OPEN_TARGET_ICON_ASSET_PATHS,
   ghostty: "/app-icons/ghostty.png",
 };
 

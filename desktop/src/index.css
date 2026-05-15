@@ -329,11 +329,27 @@
   --file-source-row-hover: color-mix(in srgb, var(--color-foreground) 5%, transparent);
   --file-source-line-number: color-mix(in srgb, var(--color-foreground) 34%, transparent);
   --file-source-line-number-hover: color-mix(in srgb, var(--color-foreground) 58%, transparent);
+}
+
+.file-source-scroll {
   scrollbar-color: var(--color-scrollbar-thumb) transparent;
 }
 
-.file-source-view:hover {
+.file-source-view:hover .file-source-scroll {
   scrollbar-color: var(--color-scrollbar-thumb-active) transparent;
+}
+
+.file-source-gutter-rail {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  z-index: 5;
+  width: var(--file-source-line-number-gutter-width);
+  pointer-events: none;
+  background: var(--file-source-gutter-surface);
+  box-shadow:
+    inset 1px 0 0 var(--file-source-gutter-border),
+    inset -1px 0 0 var(--file-source-gutter-border);
 }
 
 .file-source-view [data-file] {
@@ -350,8 +366,6 @@
 }
 
 .file-source-line-number {
-  background: var(--file-source-gutter-surface);
-  box-shadow: inset -1px 0 0 var(--file-source-gutter-border);
   color: var(--file-source-line-number);
 }
 

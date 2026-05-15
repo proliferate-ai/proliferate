@@ -3,10 +3,10 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from "react";
-import { ChevronRight, Copy, ExternalLink } from "@/components/ui/icons";
+import { ChevronRight, ExternalLink } from "@/components/ui/icons";
 import { OpenTargetIcon } from "@/components/ui/OpenTargetIcon";
 import { POPOVER_SURFACE_CLASS } from "@/components/ui/PopoverButton";
-import type { OpenTarget } from "@/lib/access/tauri/shell";
+import type { OpenTarget } from "@/lib/domain/open-targets/model";
 
 export type FilePathContextMenuTarget = Pick<OpenTarget, "id" | "label" | "iconId" | "kind">;
 
@@ -89,7 +89,6 @@ export function FilePathContextMenuContent({
       <div className="my-1 h-px bg-border/70" />
       <FilePathContextMenuItem
         {...transcriptProps}
-        icon={<Copy className="size-3.5 shrink-0" />}
         label="Copy path"
         onClick={() => {
           onCopyPath();
@@ -98,7 +97,6 @@ export function FilePathContextMenuContent({
       />
       <FilePathContextMenuItem
         {...transcriptProps}
-        icon={<OpenTargetIcon iconId="finder" className="size-3.5 shrink-0" variant="menu" />}
         label="Reveal in Finder"
         disabled={!canOpen}
         onClick={() => {

@@ -41,7 +41,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     rawPath: filePath,
     workspacePath: filePath,
   });
-  const [wordWrap, setWordWrap] = useState(true);
+  const [wordWrap, setWordWrap] = useState(false);
   const parentPath = useMemo(() => parentDirectoryPath(filePath), [filePath]);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [browserPath, setBrowserPath] = useState(parentPath);

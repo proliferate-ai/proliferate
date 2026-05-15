@@ -12,6 +12,7 @@ import {
   FileReferenceMenuContent,
 } from "@/components/workspace/file-references/FileReferenceMenu";
 import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
+import { useFileReferenceNativeContextMenu } from "@/hooks/workspaces/files/ui/use-file-reference-native-context-menu";
 
 type FileReferenceBadgeVariant = "inline" | "chip";
 
@@ -35,6 +36,7 @@ export function FileReferenceBadge({
   className = "",
 }: FileReferenceBadgeProps) {
   const actions = useFileReferenceActions({ rawPath, workspacePath });
+  const { onContextMenuCapture } = useFileReferenceNativeContextMenu(actions);
   const resolvedBasename = basename ?? extractBasename(actions.reference.workspacePath ?? actions.reference.path);
   const iconPath = actions.reference.workspacePath ?? actions.reference.path;
   const displayLabel = label ?? (variant === "chip" ? resolvedBasename : rawPath);
@@ -61,6 +63,7 @@ export function FileReferenceBadge({
       data-chat-transcript-ignore
       data-file-reference-badge={variant}
       onClick={handleClick}
+      onContextMenuCapture={onContextMenuCapture}
       className={resolveBadgeClassName(variant, className)}
     >
       <span className={iconShellClassName}>

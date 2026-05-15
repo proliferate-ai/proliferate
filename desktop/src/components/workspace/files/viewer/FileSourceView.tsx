@@ -19,39 +19,43 @@ export function FileSourceView({
     [code],
   );
   const lines = highlightedLines ?? fallbackLines;
-  const lineNumberWidth = `${Math.max(2, String(lines.length).length)}ch`;
+  const lineNumberDigitWidth = `${Math.max(2, String(lines.length).length)}ch`;
+  const lineNumberGutterWidth = `calc(${lineNumberDigitWidth} + 1rem)`;
 
   return (
     <div
-      className="file-source-view h-full min-h-0 min-w-0 overflow-auto bg-background text-foreground"
+      className="file-source-view relative h-full min-h-0 min-w-0 overflow-hidden bg-background text-foreground"
       data-file-source-view
       data-word-wrap={wordWrap ? "true" : "false"}
+      style={{
+        "--file-source-line-number-gutter-width": lineNumberGutterWidth,
+      } as CSSProperties}
     >
-      <pre
-        data-file
-        data-overflow="scroll"
-        tabIndex={0}
-        className="m-0 min-h-full min-w-full p-0 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] outline-none"
-        style={{
-          "--file-source-line-number-width": lineNumberWidth,
-        } as CSSProperties}
-      >
-        <code
-          data-code
-          className={`block min-h-full py-2 ${
-            wordWrap ? "w-full min-w-0" : "w-max min-w-full"
-          }`}
+      <div className="file-source-gutter-rail" aria-hidden="true" />
+      <div className="file-source-scroll h-full min-h-0 min-w-0 overflow-auto">
+        <pre
+          data-file
+          data-overflow="scroll"
+          tabIndex={0}
+          className="m-0 min-h-full min-w-full p-0 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] outline-none"
         >
-          {lines.map((line, index) => (
-            <SourceLine
-              key={index}
-              lineNumber={index + 1}
-              tokens={line}
-              wordWrap={wordWrap}
-            />
-          ))}
-        </code>
-      </pre>
+          <code
+            data-code
+            className={`block min-h-full py-2 ${
+              wordWrap ? "w-full min-w-0" : "w-max min-w-full"
+            }`}
+          >
+            {lines.map((line, index) => (
+              <SourceLine
+                key={index}
+                lineNumber={index + 1}
+                tokens={line}
+                wordWrap={wordWrap}
+              />
+            ))}
+          </code>
+        </pre>
+      </div>
     </div>
   );
 }
@@ -69,8 +73,8 @@ function SourceLine({
     <span
       className={`file-source-line grid min-h-[var(--diffs-line-height)] ${
         wordWrap
-          ? "grid-cols-[var(--file-source-line-number-width)_minmax(0,1fr)]"
-          : "grid-cols-[var(--file-source-line-number-width)_max-content]"
+          ? "grid-cols-[var(--file-source-line-number-gutter-width)_minmax(0,1fr)]"
+          : "grid-cols-[var(--file-source-line-number-gutter-width)_max-content]"
       }`}
       data-source-line
     >

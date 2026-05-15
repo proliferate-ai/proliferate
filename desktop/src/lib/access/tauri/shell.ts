@@ -1,39 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
 import { homeDir as tauriHomeDir } from "@tauri-apps/api/path";
+import type {
+  EditorInfo,
+  OpenTarget,
+  PathKind,
+} from "@/lib/domain/open-targets/model";
 
-// ---------------------------------------------------------------------------
-// Types returned by Rust
-// ---------------------------------------------------------------------------
-
-export type EditorIconId =
-  | "cursor"
-  | "vscode"
-  | "windsurf"
-  | "zed"
-  | "sublime";
-
-export interface EditorInfo {
-  id: string;
-  label: string;
-  shortcut: string | null;
-  iconId: EditorIconId;
-}
-
-// ---------------------------------------------------------------------------
-// Normalized UI-facing model
-// ---------------------------------------------------------------------------
-
-export type OpenTargetKind = "editor" | "finder" | "terminal" | "copy";
-export type OpenTargetIconId = EditorIconId | "finder" | "terminal";
-export type PathKind = "directory" | "file";
-
-export interface OpenTarget {
-  id: string;
-  label: string;
-  kind: OpenTargetKind;
-  shortcut?: string;
-  iconId?: OpenTargetIconId;
-}
+export type {
+  EditorIconId,
+  EditorInfo,
+  OpenTarget,
+  OpenTargetIconId,
+  OpenTargetKind,
+  PathKind,
+} from "@/lib/domain/open-targets/model";
 
 // ---------------------------------------------------------------------------
 // Low-level wrappers (1:1 with Rust commands)

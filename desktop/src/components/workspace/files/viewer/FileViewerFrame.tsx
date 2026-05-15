@@ -3,11 +3,12 @@ import type {
   Ref,
 } from "react";
 import {
-  Check,
   ChevronRight,
   Copy,
   ExternalLink,
+  FileText,
   FolderOpen,
+  WrapText,
 } from "@/components/ui/icons";
 import {
   PaneHeader,
@@ -171,7 +172,7 @@ function FileViewerOptionsMenu({
       {(close) => (
         <div className="flex flex-col gap-px">
           <PaneOptionsMenuItem
-            icon={<Copy className="size-3.5 shrink-0" />}
+            icon={<Copy />}
             label="Copy content"
             disabled={!canCopyContent}
             onClick={() => {
@@ -180,7 +181,7 @@ function FileViewerOptionsMenu({
             }}
           />
           <PaneOptionsMenuItem
-            icon={<Copy className="size-3.5 shrink-0" />}
+            icon={<Copy />}
             label="Copy path"
             onClick={() => {
               onCopyPath();
@@ -189,7 +190,7 @@ function FileViewerOptionsMenu({
           />
           <PaneOptionsMenuSeparator />
           <PaneOptionsMenuItem
-            icon={<Check className={`size-3.5 shrink-0 ${wordWrap ? "" : "opacity-0"}`} />}
+            icon={<WrapText />}
             label={wordWrap ? "Disable word wrap" : "Enable word wrap"}
             onClick={() => {
               onToggleWordWrap();
@@ -198,7 +199,7 @@ function FileViewerOptionsMenu({
           />
           {canRenderRichPreview && (
             <PaneOptionsMenuItem
-              icon={<Check className={`size-3.5 shrink-0 ${richPreviewEnabled ? "" : "opacity-0"}`} />}
+              icon={<FileText />}
               label={richPreviewEnabled ? "Disable rich preview" : "Enable rich preview"}
               onClick={() => {
                 onToggleRichPreview();

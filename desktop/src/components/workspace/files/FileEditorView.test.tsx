@@ -181,7 +181,7 @@ describe("FileEditorView", () => {
       isLoading: false,
     });
 
-    render(createElement(FileEditorView, {
+    const { container } = render(createElement(FileEditorView, {
       filePath: "package.json",
       targetKey,
     }));
@@ -194,6 +194,12 @@ describe("FileEditorView", () => {
     expect(screen.getByText("{\"ok\":true}")).toBeTruthy();
     expect(screen.queryByText("editor")).toBeNull();
     expect(screen.queryByText("Save")).toBeNull();
+    expect(container.querySelector("[data-file-source-view]")?.getAttribute("data-word-wrap"))
+      .toBe("false");
+    expect(container.querySelector(".file-source-gutter-rail")).toBeTruthy();
+    expect(container.querySelector(".file-source-scroll")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("File viewer options"));
+    expect(screen.getByText("Enable word wrap")).toBeTruthy();
   });
 
   it("overlays the file browser without replacing the source view", () => {
