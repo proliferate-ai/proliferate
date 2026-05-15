@@ -60,7 +60,6 @@ function GitPanelContent({
     baseRef,
     branchRefs = [],
     sections,
-    totalChangedCount,
     visibleChangedCount,
     isRuntimeReady,
     runtimeBlockedReason,
@@ -74,7 +73,6 @@ function GitPanelContent({
   });
   const stageMutation = useStageGitPathsMutation({ workspaceId: activeWorkspaceId });
   const unstageMutation = useUnstageGitPathsMutation({ workspaceId: activeWorkspaceId });
-  const isBranchMode = changesFilter === "branch";
   const canShowFileTree = fileTreeOpen
     && !isLoading
     && !errorMessage
@@ -146,13 +144,11 @@ function GitPanelContent({
 
   return (
     <div className="flex h-full flex-col bg-sidebar-background text-sidebar-foreground">
-      <GitPanelHeader
-        changesFilter={changesFilter}
-        totalChangedCount={totalChangedCount}
-        visibleChangedCount={visibleChangedCount}
-        isBranchMode={isBranchMode}
-        isRuntimeReady={isRuntimeReady}
-        branchRefs={branchRefs}
+        <GitPanelHeader
+          changesFilter={changesFilter}
+          visibleChangedCount={visibleChangedCount}
+          isRuntimeReady={isRuntimeReady}
+          branchRefs={branchRefs}
         baseRef={baseRef}
         layout={layout}
         wrapLongLines={wrapLongLines}

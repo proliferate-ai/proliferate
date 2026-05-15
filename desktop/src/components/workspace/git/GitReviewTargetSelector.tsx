@@ -54,10 +54,9 @@ export function GitReviewTargetSelector({
         variant="ghost"
         size="sm"
         disabled
-        className="h-6 max-w-[9.5rem] cursor-default gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-[10px] leading-[18px] text-sidebar-muted-foreground opacity-100 disabled:opacity-100"
+        className="h-6 min-w-0 max-w-[8rem] flex-[1_1_7.25rem] cursor-default gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-[10px] leading-[18px] text-sidebar-muted-foreground opacity-100 disabled:opacity-100"
       >
         <TargetIcon className="size-3 shrink-0 opacity-75" />
-        <span className="shrink-0 opacity-70">Target</span>
         <span className="min-w-0 truncate text-sidebar-foreground">{localTarget.label}</span>
       </Button>
     );
@@ -71,10 +70,9 @@ export function GitReviewTargetSelector({
           variant="ghost"
           size="sm"
           disabled={!isRuntimeReady}
-          className="h-6 max-w-[9.5rem] gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-[10px] leading-[18px] text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground"
+          className="h-6 min-w-0 max-w-[8rem] flex-[1_1_7.25rem] gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-[10px] leading-[18px] text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground"
         >
           <GitBranchIcon className="size-3 shrink-0 opacity-75" />
-          <span className="shrink-0 opacity-70">Target</span>
           <span className="min-w-0 truncate text-sidebar-foreground">{activeRef}</span>
           <ChevronDown className="size-2.5 shrink-0 opacity-70" />
         </Button>

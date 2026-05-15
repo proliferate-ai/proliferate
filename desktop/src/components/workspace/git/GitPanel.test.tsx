@@ -62,8 +62,8 @@ describe("GitPanel", () => {
   it("renders changed files as right-sidebar diff review cards", () => {
     const html = renderToStaticMarkup(createElement(GitPanel));
 
-    expect(html).toContain("1 unstaged file");
-    expect(html).toContain("Target");
+    expect(html).toContain("Unstaged");
+    expect(html).toContain(">1<");
     expect(html).toContain("Working tree");
     expect(html).toContain("Git review options");
     expect(html).toContain("Show files");
