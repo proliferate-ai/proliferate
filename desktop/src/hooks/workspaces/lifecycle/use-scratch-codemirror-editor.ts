@@ -247,29 +247,31 @@ const scratchEditorTheme = EditorView.theme({
     color: "var(--color-sidebar-muted-foreground)",
   },
   ".scratch-task-checkbox": {
-    appearance: "none",
-    width: "0.86em",
-    height: "0.86em",
-    margin: "0 0.6ch 0 0.18ch",
-    border: "1px solid var(--color-sidebar-muted-foreground)",
-    borderRadius: "0.2em",
+    display: "inline-flex",
+    width: "0.98em",
+    height: "0.98em",
+    margin: "0 0.65ch 0 0.16ch",
+    alignItems: "center",
+    justifyContent: "center",
+    boxSizing: "border-box",
+    border: "1px solid color-mix(in oklab, var(--color-sidebar-muted-foreground) 72%, transparent)",
+    borderRadius: "0.24em",
     background: "transparent",
-    verticalAlign: "-0.08em",
+    color: "transparent",
+    verticalAlign: "-0.14em",
   },
-  ".scratch-task-checkbox:checked": {
-    background: "var(--color-foreground)",
-    borderColor: "var(--color-foreground)",
+  ".scratch-task-checkbox[data-checked=\"true\"]": {
+    borderColor: "color-mix(in oklab, var(--color-foreground) 68%, transparent)",
+    background: "color-mix(in oklab, var(--color-foreground) 8%, transparent)",
+    color: "var(--color-foreground)",
   },
-  ".scratch-task-checkbox:checked::after": {
-    content: "\"\"",
-    display: "block",
-    width: "0.32em",
-    height: "0.56em",
-    marginLeft: "0.24em",
-    marginTop: "0.06em",
-    border: "solid var(--color-background)",
-    borderWidth: "0 0.11em 0.11em 0",
-    transform: "rotate(45deg)",
+  ".scratch-task-check": {
+    width: "0.48em",
+    height: "0.28em",
+    marginTop: "-0.08em",
+    border: "solid currentColor",
+    borderWidth: "0 0 0.12em 0.12em",
+    transform: "rotate(-45deg)",
   },
 });
 
@@ -357,23 +359,31 @@ class ScratchTaskWidget extends WidgetType {
   }
 
   toDOM(view: EditorView) {
-    const checkbox = document.createElement("input");
+    const checkbox = document.createElement("span");
     checkbox.className = "scratch-task-checkbox";
-    checkbox.type = "checkbox";
-    checkbox.checked = this.options.checked;
+    checkbox.dataset.checked = String(this.options.checked);
+    checkbox.role = "checkbox";
+    checkbox.tabIndex = 0;
+    checkbox.setAttribute("aria-checked", String(this.options.checked));
     checkbox.setAttribute("aria-label", this.options.checked ? "Mark task incomplete" : "Mark task complete");
+    if (this.options.checked) {
+      const check = document.createElement("span");
+      check.className = "scratch-task-check";
+      checkbox.appendChild(check);
+    }
     checkbox.addEventListener("mousedown", (event) => {
       event.preventDefault();
     });
     checkbox.addEventListener("click", (event) => {
       event.preventDefault();
-      view.dispatch({
-        changes: {
-          from: this.options.checkboxPosition,
-          to: this.options.checkboxPosition + 1,
-          insert: this.options.checked ? " " : "x",
-        },
-      });
+      toggleTaskCheckbox(view, this.options);
+    });
+    checkbox.addEventListener("keydown", (event) => {
+      if (event.key !== " " && event.key !== "Enter") {
+        return;
+      }
+      event.preventDefault();
+      toggleTaskCheckbox(view, this.options);
     });
     return checkbox;
   }
@@ -381,4 +391,20 @@ class ScratchTaskWidget extends WidgetType {
   ignoreEvent() {
     return false;
   }
+}
+
+function toggleTaskCheckbox(
+  view: EditorView,
+  options: {
+    checked: boolean;
+    checkboxPosition: number;
+  },
+) {
+  view.dispatch({
+    changes: {
+      from: options.checkboxPosition,
+      to: options.checkboxPosition + 1,
+      insert: options.checked ? " " : "x",
+    },
+  });
 }
