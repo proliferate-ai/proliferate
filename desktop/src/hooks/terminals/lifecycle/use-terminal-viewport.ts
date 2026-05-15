@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
 import { useTerminalStreamController } from "@/hooks/terminals/lifecycle/use-terminal-stream-controller";
 import { getTerminalTheme, onThemeChange } from "@/config/theme";
+import { resolveReadableCodeFontScale } from "@/lib/domain/preferences/appearance";
 import {
   sendInput,
   sendResize,
@@ -12,6 +13,7 @@ import {
   type TerminalStreamIdentity,
 } from "@/lib/infra/terminals/terminal-stream-registry";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 interface UseTerminalViewportInput {
   terminal: TerminalRecord;
@@ -36,6 +38,9 @@ export function useTerminalViewport({
   const [hasBeenVisible, setHasBeenVisible] = useState(visible);
   const streamIdentityRef = useRef<TerminalStreamIdentity | null>(null);
   const unsubscribeReplayRef = useRef<(() => void) | null>(null);
+  const readableCodeFontSizeId = useUserPreferencesStore((state) => state.readableCodeFontSizeId);
+  const terminalFontSize = resolveReadableCodeFontScale(readableCodeFontSizeId).monacoFontSize;
+  const terminalFontSizeRef = useRef(terminalFontSize);
   const connectionVersion = useTerminalStore(
     (state) => state.connectionVersionByTerminal[terminal.id] ?? 0,
   );
@@ -47,6 +52,18 @@ export function useTerminalViewport({
       setHasBeenVisible(true);
     }
   }, [visible]);
+
+  useEffect(() => {
+    terminalFontSizeRef.current = terminalFontSize;
+    const term = xtermRef.current;
+    if (!term) {
+      return;
+    }
+    term.options.fontSize = terminalFontSize;
+    requestAnimationFrame(() => {
+      fitAddonRef.current?.fit();
+    });
+  }, [terminalFontSize]);
 
   useEffect(() => {
     if (!hasBeenVisible) return;
@@ -72,7 +89,7 @@ export function useTerminalViewport({
       try {
         term = new Terminal({
           cursorBlink: true,
-          fontSize: 9,
+          fontSize: terminalFontSizeRef.current,
           fontFamily: "'Geist Mono', 'SF Mono', Menlo, Monaco, 'Courier New', monospace",
           theme: getTerminalTheme(),
           allowTransparency: true,

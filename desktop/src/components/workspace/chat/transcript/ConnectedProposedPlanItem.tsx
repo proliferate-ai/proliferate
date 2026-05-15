@@ -43,6 +43,7 @@ export function ConnectedProposedPlanItem({
           nativeResolutionState={decision?.nativeResolutionState ?? null}
           decisionVersion={decision?.decisionVersion ?? null}
           errorMessage={decision?.errorMessage ?? null}
+          nativeContinuation={Boolean(item.plan.sourceToolCallId)}
           onApprove={
             decision
               ? () => approvePlan(item.plan.planId, decision.decisionVersion)

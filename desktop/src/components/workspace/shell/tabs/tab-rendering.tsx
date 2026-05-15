@@ -100,13 +100,29 @@ export function getChatTabLabel(
 }
 
 export function renderChatTabStatusBadge(
-  _tab: Pick<HeaderChatTabEntry | HeaderChatMenuEntry, "viewState">,
+  tab: Pick<HeaderChatTabEntry | HeaderChatMenuEntry, "viewState" | "hasUnreadActivity">,
 ): ReactNode {
+  if (
+    tab.hasUnreadActivity
+    && tab.viewState !== "needs_input"
+    && tab.viewState !== "working"
+    && tab.viewState !== "errored"
+  ) {
+    return (
+      <span
+        aria-hidden="true"
+        className="size-1.5 shrink-0 rounded-full bg-info"
+      />
+    );
+  }
   return undefined;
 }
 
 export function renderChatMenuStatus(
-  _tab: Pick<HeaderChatMenuEntry, "viewState" | "isActive">,
+  tab: Pick<HeaderChatMenuEntry, "viewState" | "isActive" | "hasUnreadActivity">,
 ): ReactNode {
+  if (!tab.isActive) {
+    return renderChatTabStatusBadge(tab);
+  }
   return undefined;
 }

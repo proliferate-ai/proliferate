@@ -11,7 +11,10 @@ import {
   planBatchedStreamSideEffects,
   type ReconciledStreamConfigIntent,
 } from "@/lib/domain/sessions/stream/stream-side-effect-plan";
-import { trackWorkspaceInteraction } from "@/stores/preferences/workspace-ui-store";
+import {
+  trackSessionInteraction,
+  trackWorkspaceInteraction,
+} from "@/stores/preferences/workspace-ui-store";
 import {
   notifyTurnEnd,
   notifyUserFacingTurnEnd,
@@ -34,6 +37,11 @@ const STREAM_WORKSPACE_ACTIVITY_WRITE_INTERVAL_MS = 1_000;
 const streamWorkspaceInteractionThrottle = createLatestTimestampThrottle({
   intervalMs: STREAM_WORKSPACE_ACTIVITY_WRITE_INTERVAL_MS,
   write: trackWorkspaceInteraction,
+});
+
+const streamSessionInteractionThrottle = createLatestTimestampThrottle({
+  intervalMs: STREAM_WORKSPACE_ACTIVITY_WRITE_INTERVAL_MS,
+  write: trackSessionInteraction,
 });
 
 export function applyBatchedStreamSideEffects(input: {
@@ -132,6 +140,9 @@ export function applyBatchedStreamSideEffects(input: {
     trackWorkspaceInteractionFromStream(input.workspaceId, plan.lastActivityTimestamp);
     input.acknowledgeWorkspaceActivity?.(input.workspaceId, plan.lastActivityTimestamp);
   }
+  if (plan.lastActivityTimestamp) {
+    trackSessionInteractionFromStream(input.sessionId, plan.lastActivityTimestamp);
+  }
   if (plan.invalidateSessionSubagents) {
     input.sessionStreamCache.invalidateSessionSubagents({
       runtimeUrl: input.runtimeUrl,
@@ -184,6 +195,11 @@ function trackWorkspaceInteractionFromStream(workspaceId: string, timestamp: str
   streamWorkspaceInteractionThrottle.record(workspaceId, timestamp);
 }
 
+function trackSessionInteractionFromStream(sessionId: string, timestamp: string) {
+  streamSessionInteractionThrottle.record(sessionId, timestamp);
+}
+
 export function resetStreamWorkspaceActivityForTests() {
   streamWorkspaceInteractionThrottle.reset();
+  streamSessionInteractionThrottle.reset();
 }

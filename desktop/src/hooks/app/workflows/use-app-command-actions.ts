@@ -10,6 +10,7 @@ import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry
 import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import { APP_ROUTES } from "@/config/app-routes";
+import { requestSupportDialog } from "@/lib/infra/support/support-dialog-request";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import {
   buildConfiguredCloudRepoKeys,
@@ -39,6 +40,9 @@ export interface AppCommandAction {
 export interface AppCommandActions {
   openSettings: AppCommandAction;
   goHome: AppCommandAction;
+  goPlugins: AppCommandAction;
+  goAutomations: AppCommandAction;
+  openSupport: AppCommandAction;
   addRepository: AppCommandAction;
   newLocalWorkspace: AppCommandAction;
   newWorktreeWorkspace: AppCommandAction;
@@ -116,6 +120,15 @@ export function useAppCommandActions(): AppCommandActions {
   const goHome = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.home);
   }, [goToTopLevelRoute]);
+  const goPlugins = useCallback(() => {
+    goToTopLevelRoute(APP_ROUTES.plugins);
+  }, [goToTopLevelRoute]);
+  const goAutomations = useCallback(() => {
+    goToTopLevelRoute(APP_ROUTES.automations);
+  }, [goToTopLevelRoute]);
+  const openSupport = useCallback(() => {
+    requestSupportDialog();
+  }, []);
 
   const addRepositoryDisabledReason = isAddingRepo
     ? "Action already in progress."
@@ -245,6 +258,18 @@ export function useAppCommandActions(): AppCommandActions {
       execute: goHome,
       disabledReason: null,
     },
+    goPlugins: {
+      execute: goPlugins,
+      disabledReason: null,
+    },
+    goAutomations: {
+      execute: goAutomations,
+      disabledReason: null,
+    },
+    openSupport: {
+      execute: openSupport,
+      disabledReason: null,
+    },
     addRepository: {
       execute: addRepository,
       disabledReason: addRepositoryDisabledReason,
@@ -271,6 +296,9 @@ export function useAppCommandActions(): AppCommandActions {
     newWorktreeDisabledReason,
     newWorktreeWorkspace,
     goHome,
+    goPlugins,
+    goAutomations,
+    openSupport,
     openSettings,
   ]);
 }

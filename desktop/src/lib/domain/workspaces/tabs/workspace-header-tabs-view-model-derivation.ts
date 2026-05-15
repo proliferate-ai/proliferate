@@ -41,6 +41,8 @@ export function buildHeaderChatTabs(args: {
   resolvedSessionIds: ReadonlySet<string>;
   knownSessions: ReadonlyMap<string, KnownHeaderSession>;
   manualGroupByTopLevelSessionId: ReadonlyMap<string, DisplayManualChatGroup>;
+  sessionLastInteracted?: Readonly<Record<string, string>>;
+  sessionLastViewedAt?: Readonly<Record<string, string>>;
 }): HeaderChatTabEntry[] {
   return args.groupedTabs
     .map((grouped) => {
@@ -74,6 +76,11 @@ export function buildHeaderChatTabs(args: {
         sessionLinkId: hierarchyChild?.sessionLinkId ?? null,
         workspaceId: hierarchyChild?.workspaceId ?? null,
         isActive: false as boolean,
+        hasUnreadActivity: hasUnreadSessionActivity({
+          sessionId: grouped.sessionId,
+          sessionLastInteracted: args.sessionLastInteracted,
+          sessionLastViewedAt: args.sessionLastViewedAt,
+        }),
         groupColor,
         visualGroupId: manualGroup?.id ?? (isSubagentGrouped ? grouped.groupRootSessionId : null),
         manualGroupId: manualGroup?.id ?? null,
@@ -119,6 +126,8 @@ export function buildHeaderClosedChatTabs(args: {
   knownSessions: Iterable<KnownHeaderSession>;
   visibleChatSessionIds: readonly string[];
   recentlyHiddenIds: readonly string[];
+  sessionLastInteracted?: Readonly<Record<string, string>>;
+  sessionLastViewedAt?: Readonly<Record<string, string>>;
 }): HeaderChatMenuEntry[] {
   const knownById = new Map<string, KnownHeaderSession>();
   for (const known of args.knownSessions) {
@@ -143,6 +152,11 @@ export function buildHeaderClosedChatTabs(args: {
         title: hierarchyChild.title,
         agentKind: hierarchyChild.agentKind,
         viewState: getLinkedChildViewState(hierarchyChild),
+        hasUnreadActivity: hasUnreadSessionActivity({
+          sessionId: id,
+          sessionLastInteracted: args.sessionLastInteracted,
+          sessionLastViewedAt: args.sessionLastViewedAt,
+        }),
         isActive: id === args.highlightedChatSessionId,
         isVisible: false,
       });
@@ -157,6 +171,11 @@ export function buildHeaderClosedChatTabs(args: {
       title: getKnownSessionTitle(known),
       agentKind: getKnownSessionAgentKind(known),
       viewState: getKnownSessionViewState(known),
+      hasUnreadActivity: hasUnreadSessionActivity({
+        sessionId: id,
+        sessionLastInteracted: args.sessionLastInteracted,
+        sessionLastViewedAt: args.sessionLastViewedAt,
+      }),
       isActive: id === args.highlightedChatSessionId,
       isVisible: false,
     });
@@ -179,8 +198,29 @@ export function buildHeaderDisplayShellRows(args: {
         tab: {
           ...shellRow.row.tab,
           isActive: shellRow.row.tab.sessionId === args.highlightedChatSessionId,
+          hasUnreadActivity: shellRow.row.tab.sessionId === args.highlightedChatSessionId
+            ? false
+            : shellRow.row.tab.hasUnreadActivity,
         },
       },
     };
   });
+}
+
+export function hasUnreadSessionActivity({
+  sessionId,
+  sessionLastInteracted,
+  sessionLastViewedAt,
+}: {
+  sessionId: string;
+  sessionLastInteracted?: Readonly<Record<string, string>>;
+  sessionLastViewedAt?: Readonly<Record<string, string>>;
+}): boolean {
+  const lastInteracted = sessionLastInteracted?.[sessionId];
+  if (!lastInteracted) {
+    return false;
+  }
+  const lastViewed = sessionLastViewedAt?.[sessionId];
+  return !lastViewed
+    || new Date(lastInteracted).getTime() > new Date(lastViewed).getTime();
 }

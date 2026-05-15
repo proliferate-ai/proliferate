@@ -53,6 +53,36 @@ describe("workspace ui tab persistence", () => {
       .toBe("2026-04-04T00:00:30.000Z");
   });
 
+  it("tracks session activity and viewed timestamps monotonically", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      sessionLastInteracted: {
+        s1: "2026-04-04T00:00:10.000Z",
+      },
+      sessionLastViewedAt: {
+        s1: "2026-04-04T00:00:05.000Z",
+      },
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.updateSessionLastInteracted("s1", "2026-04-04T00:00:09.000Z");
+    expect(useWorkspaceUiStore.getState().sessionLastInteracted.s1)
+      .toBe("2026-04-04T00:00:10.000Z");
+
+    store.updateSessionLastInteracted("s1", "2026-04-04T00:00:11.000Z");
+    expect(useWorkspaceUiStore.getState().sessionLastInteracted.s1)
+      .toBe("2026-04-04T00:00:11.000Z");
+
+    store.markSessionViewedAt("s1", "2026-04-04T00:00:04.000Z");
+    expect(useWorkspaceUiStore.getState().sessionLastViewedAt.s1)
+      .toBe("2026-04-04T00:00:05.000Z");
+
+    store.markSessionViewedAt("s1", "2026-04-04T00:00:12.000Z");
+    expect(useWorkspaceUiStore.getState().sessionLastViewedAt.s1)
+      .toBe("2026-04-04T00:00:12.000Z");
+  });
+
   it("stores archived workspace visibility", () => {
     useWorkspaceUiStore.setState({
       ...WORKSPACE_UI_DEFAULTS,

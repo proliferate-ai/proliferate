@@ -45,7 +45,6 @@ import {
   rightPanelNewTabMenuDefaultFromEvent,
   type RightPanelNewTabMenuDefault,
 } from "@/lib/infra/right-panel-new-tab-menu";
-import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
 import {
   viewerTargetEditablePath,
   viewerTargetKey,
@@ -357,31 +356,10 @@ export const RightPanel = memo(function RightPanel({
     }));
   }, [openViewerTargets, setActiveViewerTarget, updateState]);
 
-  const activateHeaderEntry = useCallback(
-    (entry: RightPanelHeaderEntry) => {
-      if (entry.kind === "tool") {
-        activateTool(entry.tool);
-        return;
-      }
-      if (entry.kind === "terminal") {
-        selectTerminal(entry.terminalId);
-        return;
-      }
-      if (entry.kind === "viewer") {
-        selectViewer(entry.key);
-        return;
-      }
-      selectBrowser(entry.tab.id);
-    },
-    [activateTool, selectBrowser, selectTerminal, selectViewer],
-  );
-
   const handleRootPointerDownCapture = useRightPanelRootFocus({
     rootRef,
     isOpen,
     focusRequestToken,
-    headerEntries,
-    onActivateHeaderEntry: activateHeaderEntry,
   });
 
   const handleCloseTerminal = useCallback(

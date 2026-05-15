@@ -35,3 +35,25 @@ export function resolveSidebarShortcutDigitTarget(
   const index = digit === 9 ? targetIds.length - 1 : digit - 1;
   return targetIds[index] ?? null;
 }
+
+export function resolveAdjacentSidebarShortcutTarget(
+  targetIds: readonly string[],
+  currentTargetId: string | null | undefined,
+  delta: -1 | 1,
+): string | null {
+  if (targetIds.length === 0) {
+    return null;
+  }
+
+  const currentIndex = currentTargetId
+    ? targetIds.indexOf(currentTargetId)
+    : -1;
+  if (currentIndex < 0) {
+    return delta < 0
+      ? targetIds[targetIds.length - 1] ?? null
+      : targetIds[0] ?? null;
+  }
+
+  const nextIndex = (currentIndex + delta + targetIds.length) % targetIds.length;
+  return targetIds[nextIndex] ?? null;
+}

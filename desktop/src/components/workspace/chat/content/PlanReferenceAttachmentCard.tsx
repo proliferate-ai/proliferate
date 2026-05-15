@@ -90,6 +90,8 @@ function PlanReferenceTranscriptCard({ plan }: { plan: PromptDisplayPlanPart }) 
       collapseLabel="Collapse attached plan"
       expandLabel="Expand attached plan"
       initialExpanded={false}
+      density="compact"
+      collapsedPreview={false}
     />
   );
 }

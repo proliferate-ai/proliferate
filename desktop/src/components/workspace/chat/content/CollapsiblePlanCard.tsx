@@ -13,6 +13,9 @@ interface CollapsiblePlanCardProps {
   collapseLabel: string;
   expandLabel: string;
   initialExpanded?: boolean;
+  density?: "default" | "compact";
+  collapsedPreview?: boolean;
+  markdownPresentation?: "default" | "proposal";
 }
 
 const COLLAPSED_MAX_HEIGHT = "min(20rem,45vh)";
@@ -29,10 +32,15 @@ export function CollapsiblePlanCard({
   collapseLabel,
   expandLabel,
   initialExpanded = true,
+  density = "default",
+  collapsedPreview = true,
+  markdownPresentation = "default",
 }: CollapsiblePlanCardProps) {
   const [expanded, setExpanded] = useState(initialExpanded);
   const [copied, setCopied] = useState(false);
   const hasContent = content.length > 0;
+  const renderedContent = stripDuplicatePlanHeading(content, title);
+  const compact = density === "compact";
 
   const handleCopy = () => {
     if (!content) return;
@@ -45,11 +53,11 @@ export function CollapsiblePlanCard({
   return (
     <div
       data-telemetry-mask
-      className="relative overflow-clip rounded-lg bg-foreground/5 text-left"
+      className={`relative overflow-clip border border-border/70 bg-card/85 text-left shadow-sm ${compact ? "rounded-md" : "rounded-lg"}`}
     >
-      <div className="relative flex items-center justify-between gap-2 px-3 py-2">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-base font-semibold leading-tight text-foreground">
+      <div className={`relative flex items-center justify-between gap-3 border-b border-border/40 ${compact ? "px-2.5 py-1.5" : "px-4 py-3"}`}>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="truncate text-lg font-semibold leading-tight text-foreground">
             {title.trim() || "Plan"}
           </span>
           {subtitle}
@@ -63,7 +71,7 @@ export function CollapsiblePlanCard({
               data-chat-transcript-ignore
               onClick={handleCopy}
               aria-label={copyLabel}
-              className="size-6 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="size-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             </Button>
@@ -74,7 +82,7 @@ export function CollapsiblePlanCard({
               data-chat-transcript-ignore
               onClick={() => setExpanded((value) => !value)}
               aria-label={expanded ? collapseLabel : expandLabel}
-              className="size-6 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="size-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <ChevronDown
                 className={`size-3.5 transition-transform ${expanded ? "" : "-rotate-90"}`}
@@ -88,20 +96,20 @@ export function CollapsiblePlanCard({
           {emptyContent}
         </div>
       ) : expanded ? (
-        <div className="px-4 py-3">
-          <PlanMarkdownBody content={content} />
+        <div className={compact ? "px-3 py-2" : "px-4 py-3"}>
+          <PlanMarkdownBody content={renderedContent} presentation={markdownPresentation} />
         </div>
-      ) : (
+      ) : !collapsedPreview ? null : (
         <div className="relative">
           <div
-            className="overflow-hidden px-4 py-3"
+            className={compact ? "overflow-hidden px-3 py-2" : "overflow-hidden px-4 py-3"}
             style={{
               maxHeight: COLLAPSED_MAX_HEIGHT,
               maskImage: COLLAPSED_FADE,
               WebkitMaskImage: COLLAPSED_FADE,
             }}
           >
-            <PlanMarkdownBody content={content} />
+            <PlanMarkdownBody content={renderedContent} presentation={markdownPresentation} />
           </div>
           <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
             <Button
@@ -120,4 +128,31 @@ export function CollapsiblePlanCard({
       {footer}
     </div>
   );
+}
+
+function stripDuplicatePlanHeading(content: string, title: string): string {
+  const lines = content.split(/\r?\n/);
+  const firstContentIndex = lines.findIndex((line) => line.trim().length > 0);
+  if (firstContentIndex < 0) {
+    return content;
+  }
+
+  const firstLine = lines[firstContentIndex]?.trim() ?? "";
+  const heading = /^(?:#{1,3}\s+)(.+?)(?:\s+#*)?$/.exec(firstLine)?.[1]?.trim();
+  if (!heading) {
+    return content;
+  }
+
+  if (normalizeHeading(heading) !== normalizeHeading(title.trim() || "Plan")) {
+    return content;
+  }
+
+  return [
+    ...lines.slice(0, firstContentIndex),
+    ...lines.slice(firstContentIndex + 1),
+  ].join("\n").replace(/^\s*\n/, "");
+}
+
+function normalizeHeading(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }

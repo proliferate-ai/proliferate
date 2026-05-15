@@ -1,6 +1,7 @@
 /* @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SupportMessageContext } from "@/lib/access/cloud/support";
@@ -30,25 +31,35 @@ afterEach(() => {
 });
 
 function renderSettingsSidebar() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
   return render(
-    <MemoryRouter initialEntries={["/settings?section=general"]}>
-      <SettingsSidebar
-        activeSection="general"
-        onNavigateHome={vi.fn()}
-        onSelectSection={vi.fn()}
-        onCheckForUpdates={vi.fn()}
-        onDownloadUpdate={vi.fn()}
-        onOpenRestartPrompt={vi.fn()}
-        updateActionState={{
-          availableVersion: null,
-          downloadProgress: null,
-          isChecking: false,
-          hasAvailableUpdate: false,
-          phase: "idle",
-          updatesSupported: true,
-        }}
-      />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={["/settings?section=general"]}>
+        <SettingsSidebar
+          activeSection="general"
+          onNavigateHome={vi.fn()}
+          onSelectSection={vi.fn()}
+          onCheckForUpdates={vi.fn()}
+          onDownloadUpdate={vi.fn()}
+          onOpenRestartPrompt={vi.fn()}
+          updateActionState={{
+            availableVersion: null,
+            downloadProgress: null,
+            isChecking: false,
+            hasAvailableUpdate: false,
+            phase: "idle",
+            updatesSupported: true,
+          }}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

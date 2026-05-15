@@ -93,6 +93,19 @@ impl LiveSessionHandle {
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
+    pub async fn link_pending_interaction_to_plan(&self, request_id: &str, plan_id: &str) {
+        let mut execution = self.execution.write().await;
+        let Some(pending) = execution
+            .pending_interactions
+            .iter_mut()
+            .find(|pending| pending.request_id == request_id)
+        else {
+            return;
+        };
+        pending.source.linked_plan_id = Some(plan_id.to_string());
+        execution.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
     pub async fn remove_pending_interaction(&self, request_id: &str) {
         let mut execution = self.execution.write().await;
         execution

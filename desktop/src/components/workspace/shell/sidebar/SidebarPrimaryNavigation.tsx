@@ -42,18 +42,21 @@ export function SidebarPrimaryNavigation({
           active={pluginsActive}
           icon={<Grid className="size-4" />}
           label="Plugins"
+          shortcutLabel={SHORTCUTS.goPlugins.label}
           onPress={onGoPlugins}
         />
         <SidebarNavRow
           active={automationsActive}
           icon={<Calendar className="size-4" />}
           label="Automations"
+          shortcutLabel={SHORTCUTS.goAutomations.label}
           onPress={onGoAutomations}
         />
         <SidebarNavRow
           active={supportActive}
           icon={<CircleQuestion className="size-4" />}
           label="Support"
+          shortcutLabel={SHORTCUTS.openSupport.label}
           onPress={onOpenSupport}
         />
       </div>

@@ -16,6 +16,7 @@ export interface HeaderChatTabEntry extends GroupedChatTab {
   sessionLinkId: string | null;
   workspaceId: string | null;
   isActive: boolean;
+  hasUnreadActivity: boolean;
   groupColor: string | null;
   visualGroupId: string | null;
   manualGroupId: ManualChatGroupId | null;
@@ -28,6 +29,7 @@ export interface HeaderChatMenuEntry {
   title: string;
   agentKind: string;
   viewState: SessionViewState;
+  hasUnreadActivity: boolean;
   isActive: boolean;
   isVisible: boolean;
 }

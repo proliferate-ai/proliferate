@@ -118,6 +118,8 @@ export function useWorkspaceHeaderTabsViewModel() {
   const hiddenByWorkspace = useWorkspaceUiStore((s) => s.recentlyHiddenChatSessionIdsByWorkspace);
   const collapsedGroupsByWorkspace = useWorkspaceUiStore((s) => s.collapsedChatGroupsByWorkspace);
   const manualGroupsByWorkspace = useWorkspaceUiStore((s) => s.manualChatGroupsByWorkspace);
+  const sessionLastInteracted = useWorkspaceUiStore((s) => s.sessionLastInteracted);
+  const sessionLastViewedAt = useWorkspaceUiStore((s) => s.sessionLastViewedAt);
 
   const workspaceSessionsQuery = useWorkspaceSessionsQuery({
     workspaceId: selectedWorkspaceId,
@@ -301,6 +303,8 @@ export function useWorkspaceHeaderTabsViewModel() {
       resolvedSessionIds: hierarchy.resolvedSessionIds,
       knownSessions,
       manualGroupByTopLevelSessionId,
+      sessionLastInteracted,
+      sessionLastViewedAt,
     })),
     [
       groupedTabs,
@@ -309,6 +313,8 @@ export function useWorkspaceHeaderTabsViewModel() {
       hierarchy.resolvedSessionIds,
       knownSessions,
       manualGroupByTopLevelSessionId,
+      sessionLastInteracted,
+      sessionLastViewedAt,
     ],
   );
 
@@ -411,12 +417,16 @@ export function useWorkspaceHeaderTabsViewModel() {
       knownSessions: knownSessions.values(),
       recentlyHiddenIds,
       visibleChatSessionIds,
+      sessionLastInteracted,
+      sessionLastViewedAt,
     })),
     [
       highlightedChatSessionId,
       hierarchyChildren.rowsBySessionId,
       knownSessions,
       recentlyHiddenIds,
+      sessionLastInteracted,
+      sessionLastViewedAt,
       visibleChatSessionIds,
     ],
   );

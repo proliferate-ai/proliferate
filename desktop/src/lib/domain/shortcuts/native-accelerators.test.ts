@@ -7,7 +7,7 @@ describe("getShortcutNativeAccelerator", () => {
     expect(getShortcutNativeAccelerator(SHORTCUTS.closeActiveTab)).toBe("CmdOrCtrl+W");
     expect(getShortcutNativeAccelerator(SHORTCUTS.openSettings)).toBe("CmdOrCtrl+Comma");
     expect(getShortcutNativeAccelerator(SHORTCUTS.renameSession)).toBe("CmdOrCtrl+R");
-    expect(getShortcutNativeAccelerator(SHORTCUTS.closeOtherTabs)).toBe("CmdOrCtrl+Shift+O");
+    expect(getShortcutNativeAccelerator(SHORTCUTS.closeOtherTabs)).toBe("CmdOrCtrl+Alt+O");
     expect(getShortcutNativeAccelerator(SHORTCUTS.closeTabsToRight)).toBe("CmdOrCtrl+Shift+R");
   });
 
@@ -17,7 +17,7 @@ describe("getShortcutNativeAccelerator", () => {
 
   it("does not invent accelerators for shortcut ranges or platform-specific matches", () => {
     expect(getShortcutNativeAccelerator(SHORTCUTS.tabByIndex)).toBeNull();
-    expect(getShortcutNativeAccelerator(SHORTCUTS.goHome)).toBeNull();
+    expect(getShortcutNativeAccelerator(SHORTCUTS.increaseTextSize)).toBeNull();
     expect(getShortcutNativeAccelerator(SHORTCUTS.newCloud)).toBeNull();
   });
 });

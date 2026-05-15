@@ -2,7 +2,14 @@ import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-han
 import type { AppCommandActions } from "@/hooks/app/workflows/use-app-command-actions";
 import { useSidebarShortcutTargets } from "@/hooks/workspaces/derived/use-sidebar-shortcut-targets";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
-import { resolveSidebarShortcutDigitTarget } from "@/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
+import {
+  resolveAdjacentSidebarShortcutTarget,
+  resolveSidebarShortcutDigitTarget,
+} from "@/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { stepAppearanceFontSizes } from "@/lib/domain/preferences/appearance";
 import {
   runRedoCommand,
   runSelectAllCommand,
@@ -13,6 +20,10 @@ import {
 // workflow actions passed by the caller.
 export function useAppShortcuts(actions: AppCommandActions): void {
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
   const { selectWorkspaceFromSurface } = useWorkspaceNavigationWorkflow();
 
   useShortcutHandler("app.open-settings", () => {
@@ -21,6 +32,26 @@ export function useAppShortcuts(actions: AppCommandActions): void {
 
   useShortcutHandler("app.go-home", () => {
     actions.goHome.execute("shortcut");
+  });
+
+  useShortcutHandler("app.go-plugins", () => {
+    actions.goPlugins.execute("shortcut");
+  });
+
+  useShortcutHandler("app.go-automations", () => {
+    actions.goAutomations.execute("shortcut");
+  });
+
+  useShortcutHandler("app.open-support", () => {
+    actions.openSupport.execute("shortcut");
+  });
+
+  useShortcutHandler("app.increase-text-size", () => {
+    stepTextSizePreference(1);
+  });
+
+  useShortcutHandler("app.decrease-text-size", () => {
+    stepTextSizePreference(-1);
   });
 
   useShortcutHandler("app.select-all", () => {
@@ -46,6 +77,33 @@ export function useAppShortcuts(actions: AppCommandActions): void {
     }
   });
 
+  useShortcutHandler("workspace.previous-workspace", () => {
+    const targetId = resolveAdjacentSidebarShortcutTarget(
+      sidebarShortcutTargetIds,
+      selectedLogicalWorkspaceId ?? selectedWorkspaceId,
+      -1,
+    );
+    if (targetId) {
+      selectWorkspaceFromSurface(targetId, "shortcut");
+    }
+  });
+
+  useShortcutHandler("workspace.next-workspace", () => {
+    const targetId = resolveAdjacentSidebarShortcutTarget(
+      sidebarShortcutTargetIds,
+      selectedLogicalWorkspaceId ?? selectedWorkspaceId,
+      1,
+    );
+    if (targetId) {
+      selectWorkspaceFromSurface(targetId, "shortcut");
+    }
+  });
+
+  useShortcutHandler("workspace.toggle-cowork-threads", () => {
+    const store = useWorkspaceUiStore.getState();
+    store.setThreadsCollapsed(!store.threadsCollapsed);
+  });
+
   useShortcutHandler("workspace.new-local", () => {
     actions.newLocalWorkspace.execute("shortcut");
   });
@@ -61,4 +119,12 @@ export function useAppShortcuts(actions: AppCommandActions): void {
   useShortcutHandler("workspace.add-repository", () => {
     actions.addRepository.execute("shortcut");
   });
+}
+
+function stepTextSizePreference(delta: -1 | 1): void {
+  const preferences = useUserPreferencesStore.getState();
+  preferences.setMultiple(stepAppearanceFontSizes({
+    uiFontSizeId: preferences.uiFontSizeId,
+    readableCodeFontSizeId: preferences.readableCodeFontSizeId,
+  }, delta));
 }

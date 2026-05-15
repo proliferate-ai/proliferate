@@ -31,6 +31,7 @@ interface ProposedPlanCardProps {
   nativeResolutionState?: ProposedPlanNativeResolutionState | null;
   decisionVersion?: number | null;
   errorMessage?: string | null;
+  nativeContinuation?: boolean;
   onApprove?: () => void;
   onReject?: () => void;
   onImplementHere?: () => void;
@@ -51,6 +52,7 @@ export function ProposedPlanCard({
   nativeResolutionState = null,
   decisionVersion = null,
   errorMessage = null,
+  nativeContinuation = false,
   onApprove,
   onReject,
   onImplementHere,
@@ -62,6 +64,12 @@ export function ProposedPlanCard({
   isImplementingHere = false,
   isStartingReview = false,
 }: ProposedPlanCardProps) {
+  const canRetryNativeApproval =
+    nativeContinuation
+    && decisionState === "approved"
+    && nativeResolutionState === "pending_link"
+    && decisionVersion !== null
+    && onApprove;
   const canDecide =
     decisionState === "pending"
     && decisionVersion !== null
@@ -71,109 +79,122 @@ export function ProposedPlanCard({
     (!!onReview || !!onConfigureReview)
     && (decisionState === null || decisionState === "pending" || decisionState === "approved");
   const hasFooterActions = !!decisionState || !!onHandOffToNewSession || canReview;
+  const status = decisionState
+    ? resolveDecisionStatus(
+      decisionState,
+      nativeResolutionState,
+      errorMessage,
+      nativeContinuation,
+    )
+    : null;
+  const showImplementHere =
+    decisionState === "approved"
+    && !!onImplementHere
+    && (!nativeContinuation || nativeResolutionState === "failed");
+  const approveLabel = nativeContinuation ? "Approve and continue" : "Approve plan";
 
   return (
     <CollapsiblePlanCard
       title={title?.trim() || "Plan"}
       content={content}
-      subtitle={decisionState ? (
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {formatDecisionState(decisionState, nativeResolutionState, errorMessage)}
+      subtitle={status ? (
+        <span className={status.className}>
+          <span className={status.dotClassName} />
+          {status.label}
         </span>
       ) : undefined}
       emptyContent={isStreaming ? "Preparing plan..." : "No plan content"}
       copyLabel="Copy plan"
       collapseLabel="Collapse plan summary"
       expandLabel="Expand plan summary"
+      markdownPresentation="proposal"
       footer={hasFooterActions ? (
         <div
           data-chat-transcript-ignore
-          className="flex flex-wrap items-center gap-2 border-t border-border/40 px-3 py-2"
+          className="flex flex-wrap items-center gap-2 border-t border-border/40 px-3.5 py-2.5"
         >
-          {canDecide && decisionState && (
-            <>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={onReject}
-                loading={isRejecting}
-                disabled={isApproving}
-                className="rounded-xl px-2.5 text-sm"
-              >
-                <X className="size-3.5" />
-                Reject
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={onApprove}
-                loading={isApproving}
-                disabled={isRejecting}
-                className="rounded-xl px-2.5 text-sm"
-              >
-                <Check className="size-3.5" />
-                Approve
-              </Button>
-            </>
+          {canReview && onConfigureReview && (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              onClick={(event) => onConfigureReview(
+                rectToReviewAnchor(event.currentTarget.getBoundingClientRect()),
+              )}
+              title="Configure review agents."
+              aria-label="Configure review agents"
+              className="size-8 rounded-md text-muted-foreground"
+            >
+              <Settings className="size-3.5" />
+            </Button>
           )}
-          {decisionState === "approved" && onImplementHere && (
+          {canDecide && decisionState && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onReject}
+              loading={isRejecting}
+              disabled={isApproving}
+              className="rounded-md px-2.5 text-sm"
+            >
+              <X className="size-3.5" />
+              Reject
+            </Button>
+          )}
+          <span className="min-w-2 flex-1" />
+          {canReview && onReview && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onReview}
+              loading={isStartingReview}
+              title="Start review agents for this plan."
+              className="rounded-md px-2.5 text-sm"
+            >
+              <Shield className="size-3.5" />
+              Review
+            </Button>
+          )}
+          {onHandOffToNewSession && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onHandOffToNewSession}
+              title="Start a new session with this plan attached."
+              className="rounded-md px-2.5 text-sm"
+            >
+              <ArrowRight className="size-3.5" />
+              Start in new session
+            </Button>
+          )}
+          {showImplementHere && (
             <Button
               type="button"
               variant="primary"
               size="sm"
               onClick={onImplementHere}
               loading={isImplementingHere}
-              className="rounded-xl px-2.5 text-sm"
+              className="rounded-md px-2.5 text-sm"
             >
               <FileText className="size-3.5" />
-              Carry out & exit plan mode
+              {nativeContinuation ? "Carry out here instead" : "Carry out here"}
             </Button>
           )}
-          {canReview && (
-            <span className="flex items-center gap-1">
-              {onReview && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={onReview}
-                  loading={isStartingReview}
-                  title="Starts review agents for this plan."
-                  className="rounded-xl px-2.5 text-sm"
-                >
-                  <Shield className="size-3.5" />
-                  Review plan
-                </Button>
-              )}
-              {onConfigureReview && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={(event) => onConfigureReview(
-                    rectToReviewAnchor(event.currentTarget.getBoundingClientRect()),
-                  )}
-                  title="Configure review agents."
-                  className="rounded-xl px-2 text-sm"
-                >
-                  <Settings className="size-3.5" />
-                </Button>
-              )}
-            </span>
-          )}
-          {onHandOffToNewSession && (
+          {(canDecide || canRetryNativeApproval) && decisionState && (
             <Button
               type="button"
-              variant="secondary"
+              variant="primary"
               size="sm"
-              onClick={onHandOffToNewSession}
-              title="Starts a new session without approving or rejecting this plan."
-              className="rounded-xl px-2.5 text-sm"
+              onClick={onApprove}
+              loading={isApproving}
+              disabled={isRejecting}
+              className="rounded-md px-2.5 text-sm"
             >
-              <ArrowRight className="size-3.5" />
-              Hand off to new session
+              <Check className="size-3.5" />
+              {canRetryNativeApproval ? "Continue agent" : approveLabel}
             </Button>
           )}
         </div>
@@ -193,29 +214,76 @@ function rectToReviewAnchor(rect: DOMRect): ReviewSetupAnchorRect {
   };
 }
 
-function formatDecisionState(
+interface DecisionStatus {
+  label: string;
+  className: string;
+  dotClassName: string;
+}
+
+function resolveDecisionStatus(
   decisionState: ProposedPlanDecisionState,
   nativeResolutionState: ProposedPlanNativeResolutionState | null,
   errorMessage: string | null,
-): string {
+  nativeContinuation: boolean,
+): DecisionStatus {
+  const baseClassName =
+    "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-sm font-medium leading-none";
+
   if (nativeResolutionState === "failed") {
-    return errorMessage?.trim() || "agent resolution failed";
+    return {
+      label: errorMessage?.trim() || "agent resolution failed",
+      className: `${baseClassName} bg-destructive text-destructive-foreground`,
+      dotClassName: "size-1.5 rounded-full bg-current",
+    };
   }
   if (nativeResolutionState === "pending_link") {
-    return "waiting for agent";
+    return {
+      label: nativeContinuation && decisionState === "approved"
+        ? "waiting to continue"
+        : nativeContinuation
+          ? "awaiting approval"
+          : "awaiting decision",
+      className: `${baseClassName} bg-warning text-warning-foreground`,
+      dotClassName: "size-1.5 rounded-full bg-current",
+    };
   }
   if (nativeResolutionState === "pending_resolution") {
-    return "resolving";
+    return {
+      label: nativeContinuation ? "continuing" : "resolving",
+      className: `${baseClassName} bg-warning text-warning-foreground`,
+      dotClassName: "size-1.5 rounded-full bg-current",
+    };
   }
+
   switch (decisionState) {
-    case "approved":
-      return "approved";
-    case "rejected":
-      return "rejected";
-    case "superseded":
-      return "superseded";
+    case "approved": {
+      return {
+        label: "approved",
+        className: `${baseClassName} bg-success text-success-foreground`,
+        dotClassName: "size-1.5 rounded-full bg-current",
+      };
+    }
+    case "rejected": {
+      return {
+        label: "rejected",
+        className: `${baseClassName} bg-muted text-muted-foreground`,
+        dotClassName: "size-1.5 rounded-full bg-current",
+      };
+    }
+    case "superseded": {
+      return {
+        label: "superseded",
+        className: `${baseClassName} bg-muted text-muted-foreground`,
+        dotClassName: "size-1.5 rounded-full bg-current",
+      };
+    }
     case "pending":
-    default:
-      return "pending";
+    default: {
+      return {
+        label: "pending",
+        className: `${baseClassName} bg-warning text-warning-foreground`,
+        dotClassName: "size-1.5 rounded-full bg-current",
+      };
+    }
   }
 }

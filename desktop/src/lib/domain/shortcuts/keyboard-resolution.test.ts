@@ -41,7 +41,7 @@ describe("resolveKeyboardShortcut", () => {
     });
   });
 
-  it("opens the command palette with command-k on mac", () => {
+  it("opens top-level app shortcuts on mac", () => {
     vi.stubGlobal("navigator", {
       platform: "MacIntel",
       userAgent: "Mac OS X",
@@ -67,7 +67,37 @@ describe("resolveKeyboardShortcut", () => {
       ctrlKey: false,
       shiftKey: false,
       altKey: false,
-    } as KeyboardEvent)).toBeNull();
+    } as KeyboardEvent)).toEqual({
+      id: "app.go-plugins",
+      shortcut: expect.objectContaining({ id: "app.go-plugins" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "u",
+      code: "KeyU",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "app.go-automations",
+      shortcut: expect.objectContaining({ id: "app.go-automations" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "a",
+      code: "KeyA",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "app.select-all",
+      shortcut: expect.objectContaining({ id: "app.select-all" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
   });
 
   it("keeps command-comma settings distinct from command-shift-comma home on mac", () => {
@@ -90,6 +120,15 @@ describe("resolveKeyboardShortcut", () => {
     });
 
     expect(resolveKeyboardShortcut({
+      key: "h",
+      code: "KeyH",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toBeNull();
+
+    expect(resolveKeyboardShortcut({
       key: "<",
       code: "Comma",
       metaKey: true,
@@ -100,6 +139,52 @@ describe("resolveKeyboardShortcut", () => {
       id: "app.go-home",
       shortcut: expect.objectContaining({ id: "app.go-home" }),
       trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+  });
+
+  it("resolves command-option workspace and tab shortcuts on mac", () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "ArrowDown",
+      code: "ArrowDown",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.next-workspace",
+      shortcut: expect.objectContaining({ id: "workspace.next-workspace" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: ">",
+      code: "Period",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.next-tab",
+      shortcut: expect.objectContaining({ id: "workspace.next-tab" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "1",
+      code: "Digit1",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.by-index",
+      shortcut: expect.objectContaining({ id: "workspace.by-index" }),
+      trigger: expect.objectContaining({ source: "keyboard", digit: 1 }),
     });
   });
 

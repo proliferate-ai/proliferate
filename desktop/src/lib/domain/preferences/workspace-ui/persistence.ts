@@ -40,6 +40,8 @@ export function selectPersistedWorkspaceUiState(
     ),
     lastViewedSessionErrorAtBySession: state.lastViewedSessionErrorAtBySession,
     workspaceLastInteracted: state.workspaceLastInteracted,
+    sessionLastInteracted: state.sessionLastInteracted,
+    sessionLastViewedAt: state.sessionLastViewedAt,
     dismissedSetupFailures: state.dismissedSetupFailures,
     finishSuggestionDismissalsByWorkspaceId: state.finishSuggestionDismissalsByWorkspaceId,
     visibleChatSessionIdsByWorkspace: sanitizeSessionIdArrayRecord(
@@ -81,6 +83,8 @@ export function getChangedWorkspaceUiStateKeys(
     "lastViewedSessionByWorkspace",
     "lastViewedSessionErrorAtBySession",
     "workspaceLastInteracted",
+    "sessionLastInteracted",
+    "sessionLastViewedAt",
     "dismissedSetupFailures",
     "finishSuggestionDismissalsByWorkspaceId",
     "visibleChatSessionIdsByWorkspace",

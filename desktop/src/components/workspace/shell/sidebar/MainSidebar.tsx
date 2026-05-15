@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { SupportDialog } from "@/components/support/SupportDialog";
@@ -35,6 +35,7 @@ import {
   buildCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
+import { subscribeSupportDialogRequest } from "@/lib/infra/support/support-dialog-request";
 
 export const MainSidebar = memo(function MainSidebar() {
   useDebugRenderCount("workspace-sidebar");
@@ -51,6 +52,7 @@ export const MainSidebar = memo(function MainSidebar() {
     isPending: isCloudRepoConfigsPending,
   } = useCloudRepoConfigs(cloudActive);
   const [supportOpen, setSupportOpen] = useState(false);
+  useEffect(() => subscribeSupportDialogRequest(() => setSupportOpen(true)), []);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const {
     showArchived,

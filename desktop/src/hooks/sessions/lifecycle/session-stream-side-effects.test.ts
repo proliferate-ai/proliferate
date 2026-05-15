@@ -20,12 +20,14 @@ import type { SessionRelationship } from "@/lib/domain/sessions/directory/relati
 const mocks = vi.hoisted(() => ({
   effectOrder: [] as string[],
   trackWorkspaceInteraction: vi.fn(),
+  trackSessionInteraction: vi.fn(),
   notifyTurnEnd: vi.fn(),
   notifyUserFacingTurnEnd: vi.fn(),
   clearPendingConfigRollbackCheck: vi.fn(),
 }));
 
 vi.mock("@/stores/preferences/workspace-ui-store", () => ({
+  trackSessionInteraction: mocks.trackSessionInteraction,
   trackWorkspaceInteraction: mocks.trackWorkspaceInteraction,
 }));
 
@@ -45,6 +47,9 @@ describe("applyBatchedStreamSideEffects", () => {
     vi.clearAllMocks();
     mocks.trackWorkspaceInteraction.mockImplementation((workspaceId: string, timestamp: string) => {
       mocks.effectOrder.push(`activity:${workspaceId}:${timestamp}`);
+    });
+    mocks.trackSessionInteraction.mockImplementation((sessionId: string, timestamp: string) => {
+      mocks.effectOrder.push(`session-activity:${sessionId}:${timestamp}`);
     });
     mocks.notifyTurnEnd.mockImplementation((sessionId: string, eventType: string) => {
       mocks.effectOrder.push(`notify:${sessionId}:${eventType}`);
@@ -76,6 +81,7 @@ describe("applyBatchedStreamSideEffects", () => {
 
     expect(mocks.effectOrder).toEqual([
       "activity:workspace-1:2026-04-04T00:00:03Z",
+      "session-activity:session-1:2026-04-04T00:00:03Z",
       "clear-summary",
       "notify:session-1:turn_ended",
       "clear-rollback:session-1",
@@ -94,6 +100,10 @@ describe("applyBatchedStreamSideEffects", () => {
 
     expect(mocks.trackWorkspaceInteraction).toHaveBeenCalledWith(
       "workspace-1",
+      "2026-04-04T00:00:02Z",
+    );
+    expect(mocks.trackSessionInteraction).toHaveBeenCalledWith(
+      "session-1",
       "2026-04-04T00:00:02Z",
     );
   });
@@ -133,6 +143,7 @@ describe("applyBatchedStreamSideEffects", () => {
     expect(mocks.effectOrder).toEqual([
       "activity:workspace-1:2026-04-04T00:00:02Z",
       "ack:workspace-1:2026-04-04T00:00:02Z",
+      "session-activity:session-1:2026-04-04T00:00:02Z",
       "clear-rollback:session-1",
     ]);
   });

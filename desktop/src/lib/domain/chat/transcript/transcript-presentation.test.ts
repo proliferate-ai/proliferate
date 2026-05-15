@@ -289,6 +289,43 @@ describe("buildTurnPresentation", () => {
     ]);
   });
 
+  it("hides hook tool calls from transcript presentation", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      user: userItem("user", "turn-1", 1),
+      hook: toolItem("hook", "turn-1", 2, "hook"),
+      read: toolItem("read", "turn-1", 3, "file_read"),
+      assistant: assistantItem("assistant", "turn-1", 4),
+    };
+    const turn = turnRecord(["user", "hook", "read", "assistant"]);
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(presentation.rootIds).toEqual(["user", "read", "assistant"]);
+    expect(presentation.displayBlocks).toEqual([
+      { kind: "item", itemId: "user" },
+      { kind: "collapsed_actions", blockId: "read-read", itemIds: ["read"] },
+      { kind: "item", itemId: "assistant" },
+    ]);
+  });
+
+  it("hides hook tool calls from scoped display blocks", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      hook: toolItem("hook", "turn-1", 1, "hook"),
+      read: toolItem("read", "turn-1", 2, "file_read"),
+    };
+
+    expect(buildTranscriptDisplayBlocks({
+      rootIds: ["hook", "read"],
+      transcript,
+      childrenByParentId: new Map(),
+      isComplete: false,
+    })).toEqual([
+      { kind: "collapsed_actions", blockId: "read-read", itemIds: ["read"] },
+    ]);
+  });
+
   it("keeps transient tool calls visible for active work history", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {

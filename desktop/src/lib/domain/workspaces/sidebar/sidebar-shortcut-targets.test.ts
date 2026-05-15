@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SIDEBAR_REPO_GROUP_ITEM_LIMIT } from "@/lib/domain/workspaces/sidebar/sidebar-model";
 import {
+  resolveAdjacentSidebarShortcutTarget,
   resolveSidebarShortcutDigitTarget,
   visibleSidebarShortcutTargetIds,
 } from "@/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
@@ -231,6 +232,24 @@ describe("visibleSidebarShortcutTargetIds", () => {
     });
 
     expect(readTargets(visualGroups)).toEqual(readTargets(baseGroups));
+  });
+});
+
+describe("resolveAdjacentSidebarShortcutTarget", () => {
+  it("cycles through visible workspace shortcut targets", () => {
+    const targetIds = ["a", "b", "c"];
+
+    expect(resolveAdjacentSidebarShortcutTarget(targetIds, "a", 1)).toBe("b");
+    expect(resolveAdjacentSidebarShortcutTarget(targetIds, "a", -1)).toBe("c");
+    expect(resolveAdjacentSidebarShortcutTarget(targetIds, "c", 1)).toBe("a");
+  });
+
+  it("falls back to the first or last target when the current target is unknown", () => {
+    const targetIds = ["a", "b", "c"];
+
+    expect(resolveAdjacentSidebarShortcutTarget(targetIds, null, 1)).toBe("a");
+    expect(resolveAdjacentSidebarShortcutTarget(targetIds, "missing", -1)).toBe("c");
+    expect(resolveAdjacentSidebarShortcutTarget([], "a", 1)).toBeNull();
   });
 });
 
