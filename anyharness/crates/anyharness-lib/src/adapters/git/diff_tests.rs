@@ -94,6 +94,68 @@ fn working_tree_scope_falls_back_to_staged_patch_and_stats() {
 }
 
 #[test]
+fn unstaged_scope_synthesizes_patch_for_untracked_text_file() {
+    let repo = init_repo();
+    commit_file(repo.path(), "tracked.txt", "one\n", "initial");
+    fs::write(repo.path().join("new.txt"), "hello\nworld\n").expect("write file");
+
+    let diff = diff_for_path_with_scope(repo.path(), "new.txt", GitDiffScope::Unstaged, None, None)
+        .expect("diff");
+
+    let patch = diff.patch.as_deref().unwrap_or_default();
+    assert_eq!(diff.scope, GitDiffScope::Unstaged);
+    assert!(!diff.binary);
+    assert_eq!(diff.additions, 2);
+    assert_eq!(diff.deletions, 0);
+    assert!(patch.contains("new file mode"), "{patch}");
+    assert!(patch.contains("+++ b/new.txt"), "{patch}");
+    assert!(patch.contains("+hello"), "{patch}");
+    assert!(patch.contains("+world"), "{patch}");
+}
+
+#[test]
+fn working_tree_scope_uses_untracked_text_file_patch() {
+    let repo = init_repo();
+    commit_file(repo.path(), "tracked.txt", "one\n", "initial");
+    fs::write(repo.path().join("new.txt"), "hello\n").expect("write file");
+
+    let diff = diff_for_path_with_scope(
+        repo.path(),
+        "new.txt",
+        GitDiffScope::WorkingTree,
+        None,
+        None,
+    )
+    .expect("diff");
+
+    assert_eq!(diff.scope, GitDiffScope::WorkingTree);
+    assert!(diff.patch.as_deref().unwrap_or_default().contains("+hello"));
+    assert_eq!(diff.additions, 1);
+    assert_eq!(diff.deletions, 0);
+}
+
+#[test]
+fn unstaged_scope_marks_untracked_binary_file_without_text_patch() {
+    let repo = init_repo();
+    commit_file(repo.path(), "tracked.txt", "one\n", "initial");
+    fs::write(repo.path().join("binary.bin"), [0, 1, 2, 3]).expect("write file");
+
+    let diff = diff_for_path_with_scope(
+        repo.path(),
+        "binary.bin",
+        GitDiffScope::Unstaged,
+        None,
+        None,
+    )
+    .expect("diff");
+
+    assert!(diff.binary);
+    assert!(diff.patch.is_none());
+    assert_eq!(diff.additions, 0);
+    assert_eq!(diff.deletions, 0);
+}
+
+#[test]
 fn branch_base_ref_rejects_revision_syntax() {
     let repo = init_repo();
     commit_file(repo.path(), "tracked.txt", "one\n", "initial");

@@ -308,7 +308,6 @@ describe("workspace UI state migration", () => {
       w1: {
         activeEntryKey: "tool:git",
         headerOrder: [
-          "tool:files",
           "tool:git",
           "tool:settings",
           "terminal:t1",
@@ -348,7 +347,6 @@ describe("workspace UI state migration", () => {
       headerOrder: [
         "tool:git",
         "terminal:terminal-b",
-        "tool:files",
         "terminal:terminal-a",
         "tool:settings",
       ],
@@ -387,7 +385,6 @@ describe("workspace UI state migration", () => {
       headerOrder: [
         "terminal:t1",
         "tool:git",
-        "tool:files",
         "tool:settings",
       ],
       browserTabsById: {},

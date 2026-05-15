@@ -73,7 +73,7 @@ describe("workspace ui tab persistence", () => {
     const store = useWorkspaceUiStore.getState();
     store.setRightPanelForWorkspace("w1", {
       activeEntryKey: "terminal:t1",
-      headerOrder: ["tool:files", "tool:git", "terminal:t1"],
+      headerOrder: ["tool:git", "terminal:t1"],
       browserTabsById: {},
     });
     store.setRightPanelWidthForWorkspace("w1", 900);

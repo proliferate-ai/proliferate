@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import type { DiffLine, ParsedPatch } from "@/lib/domain/files/diff-parser";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
@@ -55,11 +56,13 @@ export function SplitDiffViewer({
   tokens,
   className,
   viewportClassName,
+  overscrollBehavior,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
   className?: string;
   viewportClassName?: string;
+  overscrollBehavior?: CSSProperties["overscrollBehavior"];
 }) {
   const rows: SplitDiffRow[] = [];
   parsed.hunks.forEach((hunk, hunkIndex) => {
@@ -88,6 +91,7 @@ export function SplitDiffViewer({
       className={`font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] ${className ?? ""}`}
       viewportClassName={viewportClassName}
       allowHorizontal={false}
+      overscrollBehavior={overscrollBehavior}
     >
       <div className="grid min-w-0 grid-cols-2">
         {rows.map((row) =>

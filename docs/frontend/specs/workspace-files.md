@@ -5,13 +5,15 @@ all-changes review surfaces.
 
 ## Product Boundary
 
-Files is filesystem navigation:
+Files is filesystem navigation from file-viewing surfaces:
 
-- browse directories
-- search files
-- create files and folders
-- rename and delete files and folders from the file tree context menu
-- open file viewer targets
+- open file viewer targets from chat links, command-palette results, git rows,
+  and the file viewer browser overlay
+- browse or search files from the overlay attached to file/diff viewing
+  surfaces
+
+Files is not a standalone durable right-panel tool. The old Files pane/tab must
+not be rendered in the shared right-panel header.
 
 Changes is changed-file workflow:
 

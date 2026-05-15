@@ -32,6 +32,7 @@ export function PaneFileTree<TData = unknown>({
   sections,
   searchValue,
   searchPlaceholder = "Filter files",
+  searchAutoFocus = false,
   emptyMessage = "No files",
   onSearchChange,
   onSelectNode,
@@ -41,6 +42,7 @@ export function PaneFileTree<TData = unknown>({
   sections: readonly PaneFileTreeSection<TData>[];
   searchValue?: string;
   searchPlaceholder?: string;
+  searchAutoFocus?: boolean;
   emptyMessage?: string;
   onSearchChange?: (value: string) => void;
   onSelectNode?: (node: PaneFileTreeNode<TData>) => void;
@@ -60,6 +62,7 @@ export function PaneFileTree<TData = unknown>({
               value={searchValue ?? ""}
               onChange={(event) => onSearchChange?.(event.target.value)}
               placeholder={searchPlaceholder}
+              autoFocus={searchAutoFocus}
               className="h-full border-0 bg-transparent px-0 text-xs text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-0"
             />
           </div>

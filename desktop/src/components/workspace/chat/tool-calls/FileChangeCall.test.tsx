@@ -1,7 +1,29 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FileChangeCall } from "./FileChangeCall";
+
+vi.mock("@/hooks/workspaces/files/use-file-reference-actions", () => ({
+  useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
+    reference: {
+      rawPath,
+      path: rawPath,
+      line: null,
+      column: null,
+      absolutePath: `/repo/${rawPath}`,
+      workspacePath: rawPath,
+    },
+    openTargets: [],
+    canOpenInSidebar: true,
+    canOpenExternal: true,
+    copyPath: vi.fn(),
+    openInSidebar: vi.fn(),
+    openDefault: vi.fn(),
+    openPrimary: vi.fn(),
+    openWithTarget: vi.fn(),
+    reveal: vi.fn(),
+  }),
+}));
 
 describe("FileChangeCall", () => {
   it("renders expanded edit diffs as file cards without an aggregate files-changed header", () => {

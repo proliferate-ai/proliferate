@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
+import { IconButton } from "@/components/ui/IconButton";
 import { Settings } from "@/components/ui/icons";
-import { SidebarActionButton } from "./SidebarActionButton";
 
 export function SidebarFooter() {
   const navigate = useNavigate();
@@ -8,14 +8,15 @@ export function SidebarFooter() {
   return (
     <div className="shrink-0">
       <div className="flex items-center justify-end gap-1 border-t !border-sidebar-border/75 px-3 py-2 shrink-0">
-        <SidebarActionButton
-          title="Settings"
+        <IconButton
+          tone="sidebar"
+          size="sm"
           onClick={() => navigate("/settings")}
-          alwaysVisible
-          className="size-7 rounded-md"
+          className="size-7 rounded-md border border-transparent"
         >
           <Settings className="h-4 w-4" />
-        </SidebarActionButton>
+          <span className="sr-only">Settings</span>
+        </IconButton>
       </div>
     </div>
   );

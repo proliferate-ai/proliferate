@@ -68,12 +68,13 @@ describe("viewer target keys", () => {
 });
 
 describe("default file viewer mode", () => {
-  it("renders markdown by default and edits other text files", () => {
+  it("renders rich previews by default and uses source for other text files", () => {
     expect(defaultFileViewerMode("README.md")).toBe("rendered");
     expect(defaultFileViewerMode("docs/page.mdx")).toBe("rendered");
+    expect(defaultFileViewerMode("assets/icon.svg")).toBe("rendered");
     expect(defaultFileViewerMode("LICENSE")).toBe("rendered");
     expect(defaultFileViewerMode("CHANGELOG")).toBe("rendered");
-    expect(defaultFileViewerMode("package.json")).toBe("edit");
+    expect(defaultFileViewerMode("package.json")).toBe("source");
   });
 });
 

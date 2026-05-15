@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   copyPath as copyPathToClipboard,
   listOpenTargets,
@@ -15,6 +15,7 @@ import { splitPathLineSuffix } from "@/lib/domain/files/path-detection";
  * the result is stable for the session.
  */
 let cachedTargetsPromise: Promise<OpenTarget[]> | null = null;
+const EMPTY_OPEN_TARGETS: OpenTarget[] = [];
 
 function loadFileTargets(): Promise<OpenTarget[]> {
   if (!cachedTargetsPromise) {
@@ -34,6 +35,8 @@ interface UseOpenInDefaultEditorResult {
   copyPath: (path: string) => Promise<void>;
   /** Available non-Proliferate shell targets for this path kind. */
   targets: OpenTarget[];
+  /** Resolved target used by "open in default" for display and primary action. */
+  defaultTarget: OpenTarget | null;
   /** Whether the editor target list has loaded. */
   ready: boolean;
 }
@@ -55,6 +58,11 @@ export function useOpenInDefaultEditor(): UseOpenInDefaultEditorResult {
   const defaultOpenInTargetId = useUserPreferencesStore(
     (state) => state.defaultOpenInTargetId,
   );
+  const availableTargets = targets ?? EMPTY_OPEN_TARGETS;
+  const defaultTarget = useMemo(
+    () => resolvePreferredOpenTarget(openableTargets(availableTargets), { defaultOpenInTargetId }),
+    [availableTargets, defaultOpenInTargetId],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -69,7 +77,7 @@ export function useOpenInDefaultEditor(): UseOpenInDefaultEditorResult {
   const openInDefaultEditor = useCallback(
     async (absolutePath: string) => {
       const list = targets ?? (await loadFileTargets());
-      const preferred = resolvePreferredOpenTarget(list, { defaultOpenInTargetId });
+      const preferred = resolvePreferredOpenTarget(openableTargets(list), { defaultOpenInTargetId });
       if (!preferred) return;
       const { path } = splitPathLineSuffix(absolutePath);
       await execOpenTarget(preferred.id, path).catch(() => {});
@@ -96,7 +104,12 @@ export function useOpenInDefaultEditor(): UseOpenInDefaultEditorResult {
     openTarget,
     revealInFinder,
     copyPath,
-    targets: targets ?? [],
+    targets: availableTargets,
+    defaultTarget,
     ready: targets !== null,
   };
+}
+
+function openableTargets(targets: readonly OpenTarget[]): OpenTarget[] {
+  return targets.filter((target) => target.kind !== "copy");
 }

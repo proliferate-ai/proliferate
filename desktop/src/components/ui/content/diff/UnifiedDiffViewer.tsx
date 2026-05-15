@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { DiffLineContent } from "@/components/ui/content/diff/DiffLineContent";
 import type {
@@ -154,6 +154,7 @@ export function UnifiedDiffViewer({
   viewportClassName,
   wrapLongLines,
   variant,
+  overscrollBehavior,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
@@ -161,6 +162,7 @@ export function UnifiedDiffViewer({
   viewportClassName?: string;
   wrapLongLines: boolean;
   variant: "default" | "chat";
+  overscrollBehavior?: CSSProperties["overscrollBehavior"];
 }) {
   return (
     <AutoHideScrollArea
@@ -168,6 +170,7 @@ export function UnifiedDiffViewer({
       viewportClassName={viewportClassName}
       contentClassName={wrapLongLines ? "" : "min-w-max"}
       allowHorizontal={!wrapLongLines}
+      overscrollBehavior={overscrollBehavior}
     >
       {parsed.hunks.map((hunk, index) => (
         <HunkView

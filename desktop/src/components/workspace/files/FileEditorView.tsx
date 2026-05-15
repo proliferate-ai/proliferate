@@ -2,36 +2,25 @@ import {
   useEffect,
   useMemo,
   useState,
+  type ReactNode,
 } from "react";
-import { FileEditorContent } from "./FileEditorContent";
+import { FileViewerContent } from "./FileViewerContent";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
-import {
-  useGitBranchDiffFilesQuery,
-  useGitStatusQuery,
-  useReadWorkspaceFileQuery,
-} from "@anyharness/sdk-react";
+import { useReadWorkspaceFileQuery } from "@anyharness/sdk-react";
 import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
 import { FileViewerFrame } from "@/components/workspace/files/viewer/FileViewerFrame";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { WorkspaceFileBrowserOverlay } from "@/components/workspace/files/viewer/WorkspaceFileBrowserOverlay";
+import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
-import { useFileEditorCommands } from "@/hooks/workspaces/files/ui/use-file-editor-commands";
-import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
-import { canPreviewAsMarkdown } from "@/lib/domain/files/document-preview";
-import { resolveReadableCodeFontScale } from "@/lib/domain/preferences/appearance";
-import {
-  buildDiffScopeOptions,
-  diffScopeFromIncludedState,
-  resolveActiveDiffOption,
-  type FileDiffTarget,
-} from "@/lib/domain/workspaces/viewer/file-diff-options";
+import { useWorkspaceFileTargetActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-target-actions";
+import { canPreviewAsRichFile } from "@/lib/domain/files/document-preview";
+import type { FileDiffTarget } from "@/lib/domain/workspaces/viewer/file-diff-options";
 import {
   defaultFileViewerMode,
-  type FileDiffViewerScope,
+  normalizeFileViewerMode,
   type ViewerTargetKey,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
-import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 interface FileEditorViewProps {
   filePath: string;
@@ -40,108 +29,115 @@ interface FileEditorViewProps {
 }
 
 export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorViewProps) {
-  const buffer = useWorkspaceFileBuffersStore((s) => s.buffersByPath[filePath]);
-  const ensureBufferFromRead = useWorkspaceFileBuffersStore((s) => s.ensureBufferFromRead);
-  const updateBuffer = useWorkspaceFileBuffersStore((s) => s.updateBuffer);
   const fileContext = useWorkspaceFileContext();
   const materializedWorkspaceId = fileContext.materializedWorkspaceId;
-  const mode = useWorkspaceViewerTabsStore(
+  const rawMode = useWorkspaceViewerTabsStore(
     (s) => s.modeByTargetKey[targetKey] ?? defaultFileViewerMode(filePath),
   );
   const setTargetMode = useWorkspaceViewerTabsStore((s) => s.setTargetMode);
   const diffLayout = useWorkspaceViewerTabsStore((s) => s.layoutByTargetKey[targetKey] ?? "unified");
-  const setTargetLayout = useWorkspaceViewerTabsStore((s) => s.setTargetLayout);
-  const { saveFile, reloadFile } = useWorkspaceFileActions(fileContext);
-  const statusQuery = useGitStatusQuery({
-    workspaceId: materializedWorkspaceId,
+  const { openFile } = useWorkspaceFileTargetActions(fileContext);
+  const fileActions = useFileReferenceActions({
+    rawPath: filePath,
+    workspacePath: filePath,
   });
-  const branchBaseRef = diffTarget?.scope === "branch" && diffTarget.baseRef
-    ? diffTarget.baseRef
-    : statusQuery.data?.suggestedBaseBranch ?? null;
-  const branchFilesQuery = useGitBranchDiffFilesQuery({
-    workspaceId: materializedWorkspaceId,
-    baseRef: branchBaseRef,
-    enabled: Boolean(statusQuery.data?.currentBranch),
-  });
-  const [selectedDiffScope, setSelectedDiffScope] = useState<FileDiffViewerScope | null>(
-    () => diffTarget?.scope ?? null,
-  );
-
-  const resolvedMode = useResolvedMode();
-  const readableCodeFontSizeId = useUserPreferencesStore((s) => s.readableCodeFontSizeId);
-  const readableCodeScale = resolveReadableCodeFontScale(readableCodeFontSizeId);
-  const statusFile = statusQuery.data?.files.find((file) => file.path === filePath) ?? null;
-  const autoDiffScope = statusFile ? diffScopeFromIncludedState(statusFile.includedState) : null;
-  const diffScopeOptions = useMemo(() => buildDiffScopeOptions({
-    filePath,
-    statusFile,
-    branchDiff: branchFilesQuery.data,
-    explicitTarget: diffTarget,
-  }), [branchFilesQuery.data, diffTarget, filePath, statusFile]);
-  const activeDiffOption = resolveActiveDiffOption(
-    diffScopeOptions,
-    selectedDiffScope,
-    diffTarget?.scope ?? autoDiffScope,
-  );
-  const activeDiffTarget = activeDiffOption?.target ?? null;
-  const effectiveMode = mode === "diff" && !activeDiffTarget
-    ? defaultFileViewerMode(filePath)
-    : mode;
-  const canShowMarkdownPreview = canPreviewAsMarkdown(filePath);
-  const requiresFileRead = effectiveMode !== "diff";
+  const [wordWrap, setWordWrap] = useState(false);
+  const parentPath = useMemo(() => parentDirectoryPath(filePath), [filePath]);
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [browserPath, setBrowserPath] = useState(parentPath);
+  const activeDiffTarget = diffTarget ?? null;
+  const effectiveMode = activeDiffTarget
+    ? "diff"
+    : rawMode === "diff"
+      ? defaultFileViewerMode(filePath)
+      : rawMode;
+  const normalizedEffectiveMode = normalizeFileViewerMode(effectiveMode);
+  const canShowRichPreview = canPreviewAsRichFile(filePath);
+  const requiresFileRead = !activeDiffTarget;
   const readQuery = useReadWorkspaceFileQuery({
     workspaceId: materializedWorkspaceId,
     path: filePath,
     enabled: requiresFileRead,
   });
-  const {
-    viewerRootRef,
-    viewerContentRef,
-    handleBeforeMount,
-    handleEditorMount,
-    handleContentPointerDownCapture,
-  } = useFileEditorCommands({
-    effectiveMode,
-    targetKey,
-    filePath,
-    isDirty: buffer?.isDirty ?? false,
-    onSaveFile: saveFile,
-  });
 
   useEffect(() => {
-    setSelectedDiffScope(diffTarget?.scope ?? null);
-  }, [diffTarget?.scope, targetKey]);
-
-  useEffect(() => {
-    if (requiresFileRead && readQuery.data) {
-      ensureBufferFromRead(filePath, readQuery.data);
+    if (!browserOpen) {
+      setBrowserPath(parentPath);
     }
-  }, [ensureBufferFromRead, filePath, readQuery.data, requiresFileRead]);
+  }, [browserOpen, parentPath]);
 
   const read = readQuery.data;
+  const copyContent = () => {
+    void navigator.clipboard.writeText(read?.content ?? "");
+  };
+  const copyPath = () => {
+    void fileActions.copyPath();
+  };
+  const openExternal = () => {
+    void fileActions.openDefault();
+  };
+  const toggleRichPreview = () => {
+    setTargetMode(
+      targetKey,
+      normalizedEffectiveMode === "rendered" ? "source" : "rendered",
+    );
+  };
+  const browsePath = (path: string) => {
+    setBrowserPath(path);
+    setBrowserOpen(true);
+  };
+  const toggleBrowser = () => {
+    setBrowserOpen((open) => {
+      if (!open) {
+        setBrowserPath(parentPath);
+      }
+      return !open;
+    });
+  };
+  const closeBrowser = () => {
+    setBrowserOpen(false);
+  };
+  const openBrowserFile = (path: string) => {
+    setBrowserOpen(false);
+    void openFile(path);
+  };
+  const renderPaneContent = (content: ReactNode) => (
+    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {content}
+      </div>
+      <WorkspaceFileBrowserOverlay
+        open={browserOpen}
+        workspaceId={materializedWorkspaceId}
+        selectedPath={filePath}
+        pathPrefix={browserPath}
+        onPathPrefixChange={setBrowserPath}
+        onOpenFile={openBrowserFile}
+        onClose={closeBrowser}
+      />
+    </div>
+  );
 
   if (requiresFileRead && readQuery.error) {
     return (
       <FileViewerFrame
-        rootRef={viewerRootRef}
         filePath={filePath}
-        mode={effectiveMode}
-        canRenderMarkdown={canShowMarkdownPreview}
-        canRenderDiff={Boolean(activeDiffTarget)}
-        diffScopeOptions={diffScopeOptions}
-        activeDiffScope={activeDiffOption?.scope ?? null}
-        diffLayout={diffLayout}
-        dirty={false}
-        saveState="error"
-        onModeChange={(nextMode) => setTargetMode(targetKey, nextMode)}
-        onDiffScopeChange={setSelectedDiffScope}
-        onToggleDiffLayout={() =>
-          setTargetLayout(targetKey, diffLayout === "split" ? "unified" : "split")}
-        onCopyPath={() => void navigator.clipboard.writeText(filePath)}
-        onReload={() => void reloadFile(filePath)}
-        onSave={() => void saveFile(filePath)}
+        canRenderRichPreview={canShowRichPreview}
+        wordWrap={wordWrap}
+        richPreviewEnabled={normalizedEffectiveMode === "rendered"}
+        canCopyContent={false}
+        onToggleWordWrap={() => setWordWrap((value) => !value)}
+        onToggleRichPreview={toggleRichPreview}
+        onCopyContent={copyContent}
+        onCopyPath={copyPath}
+        onOpenExternal={openExternal}
+        browserOpen={browserOpen}
+        onToggleBrowser={toggleBrowser}
+        onBrowsePath={browsePath}
       >
-        <CenterMessage message={`Error: ${readQuery.error instanceof Error ? readQuery.error.message : "Failed to load file"}`} />
+        {renderPaneContent(
+          <CenterMessage message={`Error: ${readQuery.error instanceof Error ? readQuery.error.message : "Failed to load file"}`} />,
+        )}
       </FileViewerFrame>
     );
   }
@@ -149,70 +145,63 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
   if (requiresFileRead && (readQuery.isLoading || !read)) {
     return (
       <FileViewerFrame
-        rootRef={viewerRootRef}
         filePath={filePath}
-        mode={effectiveMode}
-        canRenderMarkdown={canShowMarkdownPreview}
-        canRenderDiff={Boolean(activeDiffTarget)}
-        diffScopeOptions={diffScopeOptions}
-        activeDiffScope={activeDiffOption?.scope ?? null}
-        diffLayout={diffLayout}
-        dirty={false}
-        saveState="idle"
-        onModeChange={(nextMode) => setTargetMode(targetKey, nextMode)}
-        onDiffScopeChange={setSelectedDiffScope}
-        onToggleDiffLayout={() =>
-          setTargetLayout(targetKey, diffLayout === "split" ? "unified" : "split")}
-        onCopyPath={() => void navigator.clipboard.writeText(filePath)}
-        onReload={() => void reloadFile(filePath)}
-        onSave={() => void saveFile(filePath)}
+        canRenderRichPreview={canShowRichPreview}
+        wordWrap={wordWrap}
+        richPreviewEnabled={normalizedEffectiveMode === "rendered"}
+        canCopyContent={false}
+        onToggleWordWrap={() => setWordWrap((value) => !value)}
+        onToggleRichPreview={toggleRichPreview}
+        onCopyContent={copyContent}
+        onCopyPath={copyPath}
+        onOpenExternal={openExternal}
+        browserOpen={browserOpen}
+        onToggleBrowser={toggleBrowser}
+        onBrowsePath={browsePath}
       >
-        <div className="flex items-center justify-center h-full">
-          <LoadingState message="Loading file" subtext={filePath.split("/").pop()} />
-        </div>
+        {renderPaneContent(
+          <div className="flex h-full items-center justify-center">
+            <LoadingState message="Loading file" subtext={filePath.split("/").pop()} />
+          </div>,
+        )}
       </FileViewerFrame>
     );
   }
 
   return (
     <FileViewerFrame
-      rootRef={viewerRootRef}
       filePath={filePath}
-      mode={effectiveMode}
-      canRenderMarkdown={canShowMarkdownPreview}
-      canRenderDiff={Boolean(activeDiffTarget)}
-      diffScopeOptions={diffScopeOptions}
-      activeDiffScope={activeDiffOption?.scope ?? null}
-      diffLayout={diffLayout}
-      dirty={buffer?.isDirty ?? false}
-      saveState={buffer?.saveState ?? "idle"}
-      onModeChange={(nextMode) => setTargetMode(targetKey, nextMode)}
-      onDiffScopeChange={setSelectedDiffScope}
-      onToggleDiffLayout={() =>
-        setTargetLayout(targetKey, diffLayout === "split" ? "unified" : "split")}
-      onCopyPath={() => void navigator.clipboard.writeText(filePath)}
-      onReload={() => void reloadFile(filePath)}
-      onSave={() => void saveFile(filePath)}
+      canRenderRichPreview={canShowRichPreview}
+      wordWrap={wordWrap}
+      richPreviewEnabled={normalizedEffectiveMode === "rendered"}
+      canCopyContent={Boolean(read?.isText && !read.tooLarge)}
+      onToggleWordWrap={() => setWordWrap((value) => !value)}
+      onToggleRichPreview={toggleRichPreview}
+      onCopyContent={copyContent}
+      onCopyPath={copyPath}
+      onOpenExternal={openExternal}
+      browserOpen={browserOpen}
+      onToggleBrowser={toggleBrowser}
+      onBrowsePath={browsePath}
     >
-      <FileEditorContent
-        filePath={filePath}
-        workspaceId={materializedWorkspaceId}
-        effectiveMode={effectiveMode}
-        read={read}
-        buffer={buffer}
-        activeDiffTarget={activeDiffTarget}
-        diffLayout={diffLayout}
-        canShowMarkdownPreview={canShowMarkdownPreview}
-        resolvedMode={resolvedMode}
-        monacoFontSize={readableCodeScale.monacoFontSize}
-        monacoLineHeight={readableCodeScale.monacoLineHeight}
-        viewerContentRef={viewerContentRef}
-        onContentPointerDownCapture={handleContentPointerDownCapture}
-        onUpdateBuffer={updateBuffer}
-        onReloadFile={reloadFile}
-        onBeforeMount={handleBeforeMount}
-        onEditorMount={handleEditorMount}
-      />
+      {renderPaneContent(
+        <FileViewerContent
+          filePath={filePath}
+          workspaceId={materializedWorkspaceId}
+          effectiveMode={normalizedEffectiveMode}
+          read={read}
+          activeDiffTarget={activeDiffTarget}
+          diffLayout={diffLayout}
+          canShowRichPreview={canShowRichPreview}
+          wordWrap={wordWrap}
+        />,
+      )}
     </FileViewerFrame>
   );
+}
+
+function parentDirectoryPath(path: string): string {
+  const parts = path.split("/").filter(Boolean);
+  parts.pop();
+  return parts.join("/");
 }

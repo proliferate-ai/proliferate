@@ -1,7 +1,6 @@
 import { WorkspaceBrowserPanel } from "@/components/workspace/browser/WorkspaceBrowserPanel";
 import { CloudWorkspaceSettingsPanel } from "@/components/cloud/workspace-settings/CloudWorkspaceSettingsPanel";
 import { FileEditorView } from "@/components/workspace/files/FileEditorView";
-import { WorkspaceFilesPanel } from "@/components/workspace/files/panel/WorkspaceFilesPanel";
 import { GitPanel } from "@/components/workspace/git/GitPanel";
 import { RightPanelPlaceholder } from "@/components/workspace/shell/right-panel/RightPanelPlaceholder";
 import { TerminalPanel } from "@/components/workspace/terminals/TerminalPanel";
@@ -79,11 +78,6 @@ export function RightPanelContent({
         <RightPanelPlaceholder activeEntryKey={activeEntryKey} />
       ) : (
         <>
-          {activeTool === "files" && (
-            <div className="absolute inset-0">
-              <WorkspaceFilesPanel showHeader={false} />
-            </div>
-          )}
           {activeTool === "settings" && (
             <div className="absolute inset-0">
               <CloudWorkspaceSettingsPanel />

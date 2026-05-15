@@ -19,7 +19,7 @@ export function PaneOptionsMenu({
   return (
     <PopoverButton
       trigger={(
-        <PaneIconButton label={label} tooltip="Options">
+        <PaneIconButton label={label}>
           <MoreHorizontal className="size-3.5" />
         </PaneIconButton>
       )}
@@ -32,14 +32,16 @@ export function PaneOptionsMenu({
 }
 
 interface PaneOptionsMenuItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  icon: ReactNode;
+  icon?: ReactNode;
   label: string;
+  reserveIconSlot?: boolean;
   trailing?: ReactNode;
 }
 
 export function PaneOptionsMenuItem({
   icon,
   label,
+  reserveIconSlot = Boolean(icon),
   trailing,
   className = "",
   type = "button",
@@ -56,9 +58,11 @@ export function PaneOptionsMenuItem({
       )}
       {...props}
     >
-      <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground">
-        {icon}
-      </span>
+      {reserveIconSlot && (
+        <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground [&>svg]:size-3.5 [&>svg]:shrink-0">
+          {icon}
+        </span>
+      )}
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
       {trailing && (
         <span className="shrink-0 text-muted-foreground">{trailing}</span>

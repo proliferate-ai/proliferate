@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { ChatDiffViewer } from "@/components/ui/content/diff/ChatDiffViewer";
 import { SplitDiffViewer } from "@/components/ui/content/diff/SplitDiffViewer";
@@ -14,6 +15,7 @@ interface DiffViewerProps {
   variant?: "default" | "chat";
   layout?: "unified" | "split";
   operationId?: MeasurementOperationId | null;
+  overscrollBehavior?: CSSProperties["overscrollBehavior"];
 }
 
 const ROOT_CLASS =
@@ -28,6 +30,7 @@ export function DiffViewer({
   variant = "default",
   layout = "unified",
   operationId,
+  overscrollBehavior,
 }: DiffViewerProps) {
   const { parsed, tokens } = useDiffHighlight(patch, filePath, operationId);
 
@@ -40,6 +43,7 @@ export function DiffViewer({
           className={className}
           viewportClassName={viewportClassName}
           wrapLongLines={wrapLongLines}
+          overscrollBehavior={overscrollBehavior}
         />
       </DebugProfiler>
     );
@@ -55,6 +59,7 @@ export function DiffViewer({
           tokens={tokens}
           className={rootClass}
           viewportClassName={viewportClassName}
+          overscrollBehavior={overscrollBehavior}
         />
       </DebugProfiler>
     );
@@ -69,6 +74,7 @@ export function DiffViewer({
         viewportClassName={viewportClassName}
         wrapLongLines={wrapLongLines}
         variant={variant}
+        overscrollBehavior={overscrollBehavior}
       />
     </DebugProfiler>
   );

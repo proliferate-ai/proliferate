@@ -38,4 +38,28 @@ describe("TurnDiffPanel", () => {
 
     expect(html).toContain("Open changes review");
   });
+
+  it("does not render chat diff cards for blank file patches", () => {
+    const transcript = structuredClone(PLAYGROUND_END_TURN_DIFF_TRANSCRIPT);
+    const readmeItem = transcript.itemsById["tool-end-diff-readme"] as {
+      contentParts: Array<{ patch?: string }>;
+    };
+    const gitItem = transcript.itemsById["tool-end-diff-git"] as {
+      contentParts: Array<{ patch?: string }>;
+    };
+    const readmePart = readmeItem.contentParts[0];
+    const gitPart = gitItem.contentParts[0];
+    readmePart.patch = "\n";
+    gitPart.patch = "   ";
+
+    const html = renderToStaticMarkup(
+      createElement(TurnDiffPanel, {
+        turn: transcript.turnsById["turn-end-diff"],
+        transcript,
+        onOpenFile: () => {},
+      }),
+    );
+
+    expect(html).toBe("");
+  });
 });

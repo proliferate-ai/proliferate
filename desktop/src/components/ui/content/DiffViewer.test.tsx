@@ -63,4 +63,26 @@ describe("DiffViewer chat variant", () => {
     expect(html).toContain("whitespace-pre");
     expect(html).not.toContain("overflow-clip");
   });
+
+  it("can allow nested diff scroll views to chain wheel scrolling", () => {
+    const chatHtml = renderToStaticMarkup(
+      createElement(DiffViewer, {
+        patch: PATCH,
+        filePath: "src/example.ts",
+        variant: "chat",
+        overscrollBehavior: "auto",
+      }),
+    );
+    const splitHtml = renderToStaticMarkup(
+      createElement(DiffViewer, {
+        patch: PATCH,
+        filePath: "src/example.ts",
+        layout: "split",
+        overscrollBehavior: "auto",
+      }),
+    );
+
+    expect(chatHtml).toContain("overscroll-behavior:auto");
+    expect(splitHtml).toContain("overscroll-behavior:auto");
+  });
 });

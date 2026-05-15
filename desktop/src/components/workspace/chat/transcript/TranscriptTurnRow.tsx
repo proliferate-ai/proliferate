@@ -42,7 +42,7 @@ export function TranscriptTurnRow({
   outboxStartedAtByPromptId,
   selectedWorkspaceId,
   sessionViewState,
-  onOpenFileDiff,
+  onOpenFile,
   onOpenTurnChanges,
   onOpenArtifact,
   onHandOffPlanToNewSession,
@@ -57,7 +57,7 @@ export function TranscriptTurnRow({
   outboxStartedAtByPromptId: ReadonlyMap<string, string>;
   selectedWorkspaceId: string | null;
   sessionViewState: SessionViewState;
-  onOpenFileDiff: (filePath: string) => void;
+  onOpenFile: (filePath: string) => void;
   onOpenTurnChanges?: () => void;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
@@ -135,7 +135,7 @@ export function TranscriptTurnRow({
           <TurnDiffPanel
             turn={turn}
             transcript={transcript}
-            onOpenFile={onOpenFileDiff}
+            onOpenFile={onOpenFile}
             onOpenReviewPane={onOpenTurnChanges}
           />
         )}

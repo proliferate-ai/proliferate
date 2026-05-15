@@ -60,7 +60,7 @@ function targetMode(target: ViewerTarget): FileViewerMode {
   if (target.kind === "fileDiff") {
     return "diff";
   }
-  return isFileViewerTarget(target) ? defaultFileViewerMode(target.path) : "edit";
+  return isFileViewerTarget(target) ? defaultFileViewerMode(target.path) : "source";
 }
 
 export const useWorkspaceViewerTabsStore = create<WorkspaceViewerTabsState>((set, get) => ({

@@ -30,11 +30,7 @@ export function GitReviewOptionsMenu({
         <div className="flex flex-col gap-px">
           <PaneOptionsMenuItem
             label={allFilesCollapsed ? "Expand all diffs" : "Collapse all diffs"}
-            icon={allFilesCollapsed ? (
-              <ExpandAll className="size-3" />
-            ) : (
-              <CollapseAll className="size-3" />
-            )}
+            icon={allFilesCollapsed ? <ExpandAll /> : <CollapseAll />}
             onClick={() => {
               onToggleAllFiles();
               close();
@@ -42,7 +38,7 @@ export function GitReviewOptionsMenu({
           />
           <PaneOptionsMenuItem
             label={wrapLongLines ? "Turn word wrap off" : "Turn word wrap on"}
-            icon={<WrapText className="size-3" />}
+            icon={<WrapText />}
             onClick={() => {
               onToggleWrap();
               close();
@@ -51,7 +47,7 @@ export function GitReviewOptionsMenu({
           <PaneOptionsMenuItem
             label="Refresh"
             disabled={!isRuntimeReady}
-            icon={<RefreshCw className="size-3" />}
+            icon={<RefreshCw />}
             onClick={() => {
               onRefresh();
               close();

@@ -1,6 +1,5 @@
 import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
-import { Tooltip } from "@/components/ui/Tooltip";
 import { AppShellTerminalIcon } from "@/components/ui/icons";
 import { TerminalHeaderIcon } from "@/components/workspace/shell/right-panel/TerminalHeaderIcon";
 
@@ -51,40 +50,38 @@ export function TerminalHeaderButton({
   }
 
   return (
-    <Tooltip content={displayTitle} className="right-panel-terminal-tooltip">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-label={displayTitle}
-        role="tab"
-        aria-selected={isActive}
-        aria-controls={`tabpanel-editor-panel-group-terminal-${terminalId}`}
-        tabIndex={isActive ? 0 : -1}
-        data-reorderable="true"
-        aria-grabbed={isDragging}
-        data-active={isActive ? true : undefined}
-        data-dragging={isDragging ? true : undefined}
-        onClick={() => {
-          if (shouldSuppressClick()) {
-            return;
-          }
-          onSelect();
-        }}
-        className={HEADER_TERMINAL_TAB_CLASS}
-      >
-        <span className="ui-tab-system-tab__content">
-          <AppShellTerminalIcon className="ui-tab-system-tab__icon" />
-          <span className="ui-tab-system-tab__label">
-            <span className="ui-tab-system-tab__label-primary">{displayTitle}</span>
-          </span>
-          <span
-            className="ui-tab-system-tab__dirty-indicator"
-            data-dirty={unread ? true : undefined}
-            aria-hidden="true"
-          />
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      aria-label={displayTitle}
+      role="tab"
+      aria-selected={isActive}
+      aria-controls={`tabpanel-editor-panel-group-terminal-${terminalId}`}
+      tabIndex={isActive ? 0 : -1}
+      data-reorderable="true"
+      aria-grabbed={isDragging}
+      data-active={isActive ? true : undefined}
+      data-dragging={isDragging ? true : undefined}
+      onClick={() => {
+        if (shouldSuppressClick()) {
+          return;
+        }
+        onSelect();
+      }}
+      className={HEADER_TERMINAL_TAB_CLASS}
+    >
+      <span className="ui-tab-system-tab__content">
+        <AppShellTerminalIcon className="ui-tab-system-tab__icon" />
+        <span className="ui-tab-system-tab__label">
+          <span className="ui-tab-system-tab__label-primary">{displayTitle}</span>
         </span>
-      </Button>
-    </Tooltip>
+        <span
+          className="ui-tab-system-tab__dirty-indicator"
+          data-dirty={unread ? true : undefined}
+          aria-hidden="true"
+        />
+      </span>
+    </Button>
   );
 }

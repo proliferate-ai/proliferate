@@ -1,7 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/ui/Button";
-import { Tooltip } from "@/components/ui/Tooltip";
 
 export const PANE_ICON_BUTTON_CLASS =
   "size-6 rounded-md text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground";
@@ -37,14 +36,14 @@ interface PaneIconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function PaneIconButton({
   label,
-  tooltip,
+  tooltip: _tooltip,
   active = false,
   className = "",
   children,
   type = "button",
   ...props
 }: PaneIconButtonProps) {
-  const button = (
+  return (
     <Button
       type={type}
       variant="ghost"
@@ -60,6 +59,4 @@ export function PaneIconButton({
       {children}
     </Button>
   );
-
-  return tooltip ? <Tooltip content={tooltip}>{button}</Tooltip> : button;
 }

@@ -5,7 +5,7 @@ import {
   type ViewerTargetKey,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 
-export type RightPanelTool = "files" | "git" | "settings";
+export type RightPanelTool = "git" | "settings";
 export type RightPanelHeaderEntryKey =
   | `tool:${RightPanelTool}`
   | `terminal:${string}`
@@ -44,7 +44,6 @@ export const RIGHT_PANEL_MAX_WIDTH = 700;
 export const RIGHT_PANEL_BROWSER_TAB_LIMIT = 5;
 
 export const DEFAULT_RIGHT_PANEL_TOOL_ORDER: RightPanelTool[] = [
-  "files",
   "git",
   "settings",
 ];
@@ -55,7 +54,7 @@ export const DEFAULT_RIGHT_PANEL_DURABLE_STATE: RightPanelDurableState = {
   width: RIGHT_PANEL_DEFAULT_WIDTH,
 };
 export const DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE: RightPanelMaterializedState = {
-  activeEntryKey: "tool:files",
+  activeEntryKey: "tool:git",
   headerOrder: DEFAULT_RIGHT_PANEL_HEADER_ORDER,
   browserTabsById: {},
 };

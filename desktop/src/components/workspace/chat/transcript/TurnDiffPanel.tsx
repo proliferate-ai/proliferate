@@ -23,7 +23,12 @@ export function TurnDiffPanel({
   onOpenReviewPane,
 }: TurnDiffPanelProps) {
   const filePatches = useMemo(
-    () => collectTurnFilePatches(turn, transcript).filter((fp) => fp.patches.length > 0),
+    () => collectTurnFilePatches(turn, transcript)
+      .map((fp) => ({
+        ...fp,
+        patches: fp.patches.filter((patch) => patch.trim().length > 0),
+      }))
+      .filter((fp) => fp.patches.length > 0),
     [turn, transcript],
   );
   const hasPatches = filePatches.length > 0;

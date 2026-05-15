@@ -4,15 +4,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GitPanel } from "./GitPanel";
 
 const mockGitPanelState = vi.hoisted(() => vi.fn());
+const gitDiffQuery = vi.hoisted(() => ({
+  state: {
+    data: null as unknown,
+    error: null as unknown,
+    isError: false,
+    isLoading: false,
+  },
+}));
 
 vi.mock("@anyharness/sdk-react", () => ({
   useAnyHarnessRuntimeContext: () => ({
     runtimeUrl: null,
   }),
-  useGitDiffQuery: () => ({
-    data: null,
-    isLoading: false,
-  }),
+  useGitDiffQuery: () => gitDiffQuery.state,
   useStageGitPathsMutation: () => ({
     mutateAsync: vi.fn(),
   }),
@@ -80,6 +85,22 @@ function createGitPanelState(overrides = {}) {
 describe("GitPanel", () => {
   beforeEach(() => {
     mockGitPanelState.mockReturnValue(createGitPanelState());
+    gitDiffQuery.state = {
+      data: {
+        patch: [
+          "@@ -1,2 +1,2 @@",
+          "-old line",
+          "+new line",
+        ].join("\n"),
+        additions: 1,
+        deletions: 1,
+        binary: false,
+        truncated: false,
+      },
+      error: null,
+      isError: false,
+      isLoading: false,
+    };
   });
 
   it("renders changed files as right-sidebar diff review cards", () => {
@@ -91,7 +112,7 @@ describe("GitPanel", () => {
     expect(html).toContain("Git review options");
     expect(html).toContain("Show files");
     expect(html).toContain("data-diff-surface=\"sidebar\"");
-    expect(html).toContain("No diff available");
+    expect(html).not.toContain("No diff available");
     expect(html).toContain("GitPanel.tsx");
   });
 
@@ -131,5 +152,40 @@ describe("GitPanel", () => {
     expect(html).toContain("README.md");
     expect(html).toContain("No current diff against base");
     expect(html).not.toContain("Stage README.md");
+  });
+
+  it("skips loaded changed-file rows that have no renderable diff", () => {
+    gitDiffQuery.state = {
+      data: {
+        patch: null,
+        additions: 0,
+        deletions: 0,
+        binary: false,
+        truncated: false,
+      },
+      error: null,
+      isError: false,
+      isLoading: false,
+    };
+
+    const html = renderToStaticMarkup(createElement(GitPanel));
+
+    expect(html).toContain("Unstaged");
+    expect(html).not.toContain("No diff available");
+    expect(html).not.toContain("data-diff-surface=\"sidebar\"");
+    expect(html).not.toContain("GitPanel.tsx");
+  });
+
+  it("renders diff load errors explicitly", () => {
+    gitDiffQuery.state = {
+      data: null,
+      error: new Error("pathspec did not match any files"),
+      isError: true,
+      isLoading: false,
+    };
+
+    const html = renderToStaticMarkup(createElement(GitPanel));
+
+    expect(html).toContain("Diff unavailable: pathspec did not match any files");
   });
 });

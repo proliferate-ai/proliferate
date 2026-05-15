@@ -174,12 +174,14 @@ export function ChatDiffViewer({
   className,
   viewportClassName,
   wrapLongLines,
+  overscrollBehavior = "none",
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
   className?: string;
   viewportClassName?: string;
   wrapLongLines: boolean;
+  overscrollBehavior?: CSSProperties["overscrollBehavior"];
 }) {
   const resolvedMode = useResolvedMode();
   const [expandedCollapsedKeys, setExpandedCollapsedKeys] = useState<Set<string>>(
@@ -209,7 +211,7 @@ export function ChatDiffViewer({
   return (
     <div className={className ?? ""}>
       <div
-        style={{ overscrollBehavior: "none" }}
+        style={{ overscrollBehavior }}
         className={`relative [contain:content] composer-diff-simple-line overflow-x-auto overflow-y-auto ${
           viewportClassName ?? ""
         }`}

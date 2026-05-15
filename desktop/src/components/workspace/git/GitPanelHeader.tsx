@@ -64,6 +64,12 @@ export function GitPanelHeader({
       )}
       right={(
         <>
+          <PaneIconButton
+            label={layout === "split" ? "Use unified diff" : "Use split diff"}
+            onClick={onToggleLayout}
+          >
+            <SplitPanel className="size-3.5" />
+          </PaneIconButton>
           <GitReviewOptionsMenu
             allFilesCollapsed={allFilesCollapsed}
             wrapLongLines={wrapLongLines}
@@ -73,15 +79,7 @@ export function GitPanelHeader({
             onRefresh={onRefresh}
           />
           <PaneIconButton
-            label={layout === "split" ? "Use unified diff" : "Use split diff"}
-            tooltip={layout === "split" ? "Unified diff" : "Split diff"}
-            onClick={onToggleLayout}
-          >
-            <SplitPanel className="size-3.5" />
-          </PaneIconButton>
-          <PaneIconButton
             label={fileTreeOpen ? "Hide files" : "Show files"}
-            tooltip={fileTreeOpen ? "Hide files" : "Show files"}
             aria-pressed={fileTreeOpen}
             active={fileTreeOpen}
             onClick={onToggleFileTree}

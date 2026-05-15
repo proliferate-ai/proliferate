@@ -235,10 +235,87 @@ fn load_simple_diff(
     numstat_args.push(file_path.to_string());
     let numstat = run_git_checked(repo_root, &numstat_args)?;
 
-    Ok(LoadedDiff {
+    let loaded = LoadedDiff {
         patch: normalize_patch(patch.stdout),
         stats: parse_numstat_summary(&numstat.stdout),
-    })
+    };
+
+    if loaded.patch.is_none() && diff_prefix.len() == 1 && diff_prefix[0] == "diff" {
+        if let Some(untracked) = load_untracked_file_diff(repo_root, file_path)? {
+            return Ok(untracked);
+        }
+    }
+
+    Ok(loaded)
+}
+
+fn load_untracked_file_diff(
+    repo_root: &Path,
+    file_path: &str,
+) -> Result<Option<LoadedDiff>, GitDiffError> {
+    if !is_exact_untracked_path(repo_root, file_path)?
+        || !is_regular_file_inside_repo(repo_root, file_path)
+    {
+        return Ok(None);
+    }
+
+    let numstat_args = vec![
+        "diff".to_string(),
+        "--no-index".to_string(),
+        "--numstat".to_string(),
+        "--".to_string(),
+        "/dev/null".to_string(),
+        file_path.to_string(),
+    ];
+    let numstat = run_git_no_index_diff(repo_root, &numstat_args, "git diff --no-index failed")?;
+    let stats = parse_numstat_summary(&numstat.stdout);
+
+    if stats.binary {
+        return Ok(Some(LoadedDiff { patch: None, stats }));
+    }
+
+    let patch_args = vec![
+        "diff".to_string(),
+        "--no-index".to_string(),
+        "--".to_string(),
+        "/dev/null".to_string(),
+        file_path.to_string(),
+    ];
+    let patch = run_git_no_index_diff(repo_root, &patch_args, "git diff --no-index failed")?;
+
+    Ok(Some(LoadedDiff {
+        patch: normalize_patch(patch.stdout),
+        stats,
+    }))
+}
+
+fn is_exact_untracked_path(repo_root: &Path, file_path: &str) -> Result<bool, GitDiffError> {
+    let args = vec![
+        "ls-files".to_string(),
+        "--others".to_string(),
+        "--exclude-standard".to_string(),
+        "--".to_string(),
+        file_path.to_string(),
+    ];
+    let output = run_git_command_checked(repo_root, &args, "git ls-files failed")?;
+    Ok(output.stdout.lines().any(|path| path == file_path))
+}
+
+fn is_regular_file_inside_repo(repo_root: &Path, file_path: &str) -> bool {
+    let Ok(repo_root) = repo_root.canonicalize() else {
+        return false;
+    };
+    let candidate = repo_root.join(file_path);
+    let Ok(metadata) = std::fs::symlink_metadata(&candidate) else {
+        return false;
+    };
+    if !metadata.file_type().is_file() {
+        return false;
+    }
+    let Ok(candidate) = candidate.canonicalize() else {
+        return false;
+    };
+    candidate.starts_with(repo_root)
 }
 
 fn load_branch_path_diff(
@@ -555,13 +632,37 @@ fn normalize_patch(patch: String) -> Option<String> {
 }
 
 fn run_git_checked(repo_root: &Path, args: &[String]) -> Result<GitOutput, GitDiffError> {
+    run_git_command_checked(repo_root, args, "git diff failed")
+}
+
+fn run_git_command_checked(
+    repo_root: &Path,
+    args: &[String],
+    fallback: &str,
+) -> Result<GitOutput, GitDiffError> {
     let refs = args.iter().map(String::as_str).collect::<Vec<_>>();
     let output = run_git(repo_root, &refs)?;
     if output.success {
         Ok(output)
     } else {
         Err(GitDiffError::GitFailed {
-            message: git_command_message(&output.stderr, "git diff failed"),
+            message: git_command_message(&output.stderr, fallback),
+        })
+    }
+}
+
+fn run_git_no_index_diff(
+    repo_root: &Path,
+    args: &[String],
+    fallback: &str,
+) -> Result<GitOutput, GitDiffError> {
+    let refs = args.iter().map(String::as_str).collect::<Vec<_>>();
+    let output = run_git(repo_root, &refs)?;
+    if output.success || !output.stdout.trim().is_empty() {
+        Ok(output)
+    } else {
+        Err(GitDiffError::GitFailed {
+            message: git_command_message(&output.stderr, fallback),
         })
     }
 }

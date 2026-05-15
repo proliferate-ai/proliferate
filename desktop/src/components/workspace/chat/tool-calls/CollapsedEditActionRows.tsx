@@ -7,13 +7,12 @@ import { DiffViewer } from "@/components/ui/content/DiffViewer";
 import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
 import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
 import { ChevronRight } from "@/components/ui/icons";
-import { useOpenInDefaultEditor } from "@/hooks/editor/workflows/use-open-in-default-editor";
+import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
 import {
   basename,
   formatEditVerb,
 } from "@/lib/domain/chat/tools/collapsed-action-labels";
-import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 import { ActionFileLink } from "./CollapsedActionRowPrimitives";
 import { GenericActionRow } from "./CollapsedGenericActionRow";
 
@@ -56,14 +55,14 @@ function EditActionRow({
   const additions = part.additions ?? 0;
   const deletions = part.deletions ?? 0;
   const hasDetails = !!part.patch || !!part.preview;
-  const { resolveAbsolute } = useWorkspacePath();
-  const { openInDefaultEditor } = useOpenInDefaultEditor();
   const workspacePath = part.newWorkspacePath ?? part.workspacePath ?? null;
-  const absolute = workspacePath ? resolveAbsolute(workspacePath) : null;
+  const fileReferenceActions = useFileReferenceActions({
+    rawPath: pathLabel,
+    workspacePath,
+  });
   const handleOpen = useCallback(() => {
-    if (!absolute) return;
-    void openInDefaultEditor(absolute);
-  }, [absolute, openInDefaultEditor]);
+    void fileReferenceActions.openPrimary();
+  }, [fileReferenceActions]);
 
   return (
     <div>
@@ -117,7 +116,9 @@ function EditActionRow({
               deletions={deletions}
               isExpanded={diffExpanded}
               onToggleExpand={() => setDiffExpanded((value) => !value)}
-              onOpenFile={absolute ? handleOpen : undefined}
+              onOpenFile={fileReferenceActions.canOpenInSidebar || fileReferenceActions.canOpenExternal
+                ? handleOpen
+                : undefined}
             >
               <DiffViewer
                 patch={part.patch}

@@ -2,7 +2,6 @@ import { useCallback, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { IconButton } from "@/components/ui/IconButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Tooltip } from "@/components/ui/Tooltip";
 import {
   AppShellBrowserIcon,
   AppShellPlusIcon,
@@ -30,44 +29,38 @@ export function RightPanelNewTabMenu({
   onCreateBrowser,
 }: RightPanelNewTabMenuProps) {
   return (
-    <Tooltip
-      content="Open new tab menu"
-      className="right-panel-new-tab-tooltip"
-      singleLine
+    <PopoverButton
+      align="end"
+      externalOpen={open}
+      onOpenChange={onOpenChange}
+      trigger={
+        <IconButton
+          size="xs"
+          tone="sidebar"
+          className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger"
+        >
+          <AppShellPlusIcon className="ui-icon" />
+          <span className="sr-only">Open new tab menu</span>
+        </IconButton>
+      }
+      className="w-40 rounded-md border border-border bg-popover p-1 shadow-floating"
     >
-      <PopoverButton
-        align="end"
-        externalOpen={open}
-        onOpenChange={onOpenChange}
-        trigger={
-          <IconButton
-            size="xs"
-            tone="sidebar"
-            title="Open new tab menu"
-            className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger"
-          >
-            <AppShellPlusIcon className="ui-icon" />
-          </IconButton>
-        }
-        className="w-40 rounded-md border border-border bg-popover p-1 shadow-floating"
-      >
-        {(close) => (
-          <NewTabMenuContent
-            defaultKind={defaultKind}
-            isWorkspaceReady={isWorkspaceReady}
-            canCreateBrowserTab={canCreateBrowserTab}
-            onCreateTerminal={() => {
-              close();
-              onCreateTerminal();
-            }}
-            onCreateBrowser={() => {
-              close();
-              onCreateBrowser();
-            }}
-          />
-        )}
-      </PopoverButton>
-    </Tooltip>
+      {(close) => (
+        <NewTabMenuContent
+          defaultKind={defaultKind}
+          isWorkspaceReady={isWorkspaceReady}
+          canCreateBrowserTab={canCreateBrowserTab}
+          onCreateTerminal={() => {
+            close();
+            onCreateTerminal();
+          }}
+          onCreateBrowser={() => {
+            close();
+            onCreateBrowser();
+          }}
+        />
+      )}
+    </PopoverButton>
   );
 }
 

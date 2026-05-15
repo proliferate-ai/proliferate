@@ -2,251 +2,213 @@ import type {
   ReactNode,
   Ref,
 } from "react";
-import { Button } from "@/components/ui/Button";
-import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import {
-  Check,
-  ChevronDown,
+  ChevronRight,
   Copy,
-  FilePen,
+  ExternalLink,
   FileText,
-  GitBranch,
-  RefreshCw,
-  SplitPanel,
+  FolderOpen,
+  WrapText,
 } from "@/components/ui/icons";
-import { PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Tooltip } from "@/components/ui/Tooltip";
-import type { DiffScopeOption } from "@/lib/domain/workspaces/viewer/file-diff-options";
-import type {
-  FileDiffViewerScope,
-  FileViewerMode,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
+import {
+  PaneHeader,
+  PaneIconButton,
+} from "@/components/workspace/pane/PaneHeader";
+import {
+  PaneOptionsMenu,
+  PaneOptionsMenuItem,
+  PaneOptionsMenuSeparator,
+} from "@/components/workspace/pane/PaneOptionsMenu";
+import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 
 export function FileViewerFrame({
   rootRef,
   filePath,
-  mode,
-  canRenderMarkdown: markdown,
-  canRenderDiff,
-  diffScopeOptions,
-  activeDiffScope,
-  diffLayout,
-  dirty,
-  saveState,
-  onModeChange,
-  onDiffScopeChange,
-  onToggleDiffLayout,
+  canRenderRichPreview,
+  wordWrap,
+  richPreviewEnabled,
+  canCopyContent,
+  onToggleWordWrap,
+  onToggleRichPreview,
+  onCopyContent,
   onCopyPath,
-  onReload,
-  onSave,
+  onOpenExternal,
+  browserOpen,
+  onToggleBrowser,
+  onBrowsePath,
   children,
 }: {
   rootRef?: Ref<HTMLDivElement>;
   filePath: string;
-  mode: FileViewerMode;
-  canRenderMarkdown: boolean;
-  canRenderDiff: boolean;
-  diffScopeOptions: readonly DiffScopeOption[];
-  activeDiffScope: FileDiffViewerScope | null;
-  diffLayout: "unified" | "split";
-  dirty: boolean;
-  saveState: string;
-  onModeChange: (mode: FileViewerMode) => void;
-  onDiffScopeChange: (scope: FileDiffViewerScope) => void;
-  onToggleDiffLayout: () => void;
+  canRenderRichPreview: boolean;
+  wordWrap: boolean;
+  richPreviewEnabled: boolean;
+  canCopyContent: boolean;
+  onToggleWordWrap: () => void;
+  onToggleRichPreview: () => void;
+  onCopyContent: () => void;
   onCopyPath: () => void;
-  onReload: () => void;
-  onSave: () => void;
+  onOpenExternal: () => void;
+  browserOpen: boolean;
+  onToggleBrowser: () => void;
+  onBrowsePath: (path: string) => void;
   children: ReactNode;
 }) {
-  const basename = filePath.split("/").pop() ?? filePath;
-  const parentPath = filePath.split("/").slice(0, -1).join("/");
   return (
-    <div ref={rootRef} tabIndex={-1} className="flex h-full min-w-0 flex-col overflow-hidden outline-none">
-      <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-sidebar-border bg-sidebar-background px-2 text-sidebar-foreground">
-        <FileTreeEntryIcon name={basename} path={filePath} kind="file" className="size-3 shrink-0" />
-        <div className="min-w-0 flex-1" title={filePath}>
-          <div className="truncate text-sm font-[450] leading-4 text-sidebar-foreground [direction:ltr] [unicode-bidi:plaintext]">
-            {basename}
-          </div>
-          {parentPath && (
-            <div className="truncate text-xs leading-3 text-sidebar-muted-foreground [direction:ltr] [unicode-bidi:plaintext]">
-              {parentPath}
-            </div>
-          )}
-        </div>
-        {dirty && <span className="size-1.5 shrink-0 rounded-full bg-sidebar-foreground/50" />}
-        {(markdown || canRenderDiff) && (
-          <div className="flex shrink-0 items-center gap-1 border-l border-sidebar-border pl-1.5">
-            {canRenderDiff && (
-              <FileViewerModeButton
-                active={mode === "diff"}
-                label="Diff"
-                onClick={() => onModeChange("diff")}
-              >
-                <GitBranch className="size-3" />
-              </FileViewerModeButton>
-            )}
-            {markdown && (
-              <FileViewerModeButton
-                active={mode === "rendered"}
-                label="Preview"
-                onClick={() => onModeChange("rendered")}
-              >
-                <FileText className="size-3" />
-              </FileViewerModeButton>
-            )}
-            <FileViewerModeButton
-              active={mode === "edit"}
-              label="Edit"
-              onClick={() => onModeChange("edit")}
-            >
-              <FilePen className="size-3" />
-            </FileViewerModeButton>
-          </div>
-        )}
-        {canRenderDiff && mode === "diff" && diffScopeOptions.length > 1 && activeDiffScope && (
-          <DiffScopePicker
-            options={diffScopeOptions}
-            activeScope={activeDiffScope}
-            onScopeChange={onDiffScopeChange}
+    <div ref={rootRef} tabIndex={-1} className="flex h-full min-w-0 flex-col overflow-hidden bg-background outline-none">
+      <PaneHeader
+        left={<FileBreadcrumbs filePath={filePath} onBrowsePath={onBrowsePath} />}
+        right={(
+          <>
+          <FileViewerOptionsMenu
+            canRenderRichPreview={canRenderRichPreview}
+            richPreviewEnabled={richPreviewEnabled}
+            wordWrap={wordWrap}
+            canCopyContent={canCopyContent}
+            onToggleWordWrap={onToggleWordWrap}
+            onToggleRichPreview={onToggleRichPreview}
+            onCopyContent={onCopyContent}
+            onCopyPath={onCopyPath}
           />
-        )}
-        {canRenderDiff && mode === "diff" && (
-          <Tooltip content={diffLayout === "split" ? "Unified diff" : "Split diff"}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={onToggleDiffLayout}
-              aria-label="Toggle diff layout"
-              className="size-6 text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-            >
-              <SplitPanel className="size-3" />
-            </Button>
-          </Tooltip>
-        )}
-        <Tooltip content="Copy path">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={onCopyPath}
-            aria-label="Copy file path"
-            className="size-6 text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          <PaneIconButton
+            label="Open in default editor"
+            onClick={onOpenExternal}
           >
-            <Copy className="size-3" />
-          </Button>
-        </Tooltip>
-        <Tooltip content="Reload">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={onReload}
-            aria-label="Reload file"
-            className="size-6 text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            <ExternalLink className="size-3.5" />
+          </PaneIconButton>
+          <PaneIconButton
+            label={browserOpen ? "Hide files" : "Show files"}
+            active={browserOpen}
+            onClick={onToggleBrowser}
           >
-            <RefreshCw className="size-3" />
-          </Button>
-        </Tooltip>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={onSave}
-          disabled={mode !== "edit" || !dirty || saveState === "saving"}
-          loading={saveState === "saving"}
-          className="h-6 border-sidebar-border bg-sidebar-accent px-2 text-xs text-sidebar-foreground hover:bg-sidebar-accent"
-        >
-          Save
-        </Button>
-      </div>
+            <FolderOpen className="size-3.5" />
+          </PaneIconButton>
+          </>
+        )}
+      />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
     </div>
   );
 }
 
-function FileViewerModeButton({
-  active,
-  label,
-  onClick,
-  children,
+function FileBreadcrumbs({
+  filePath,
+  onBrowsePath,
 }: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-  children: ReactNode;
+  filePath: string;
+  onBrowsePath: (path: string) => void;
 }) {
+  const { workspacePath } = useWorkspacePath();
+  const workspaceName = workspacePath
+    ? workspacePath.split("/").filter(Boolean).pop()
+    : null;
+  const parts = filePath.split("/").filter(Boolean);
+  const crumbs = workspaceName ? [workspaceName, ...parts] : parts;
+  const workspaceOffset = workspaceName ? 1 : 0;
+
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`h-6 gap-1 rounded-md px-1.5 text-xs ${active
-        ? "bg-sidebar-accent text-sidebar-foreground"
-        : "text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
+    <nav
+      aria-label="File path"
+      className="hide-scrollbar flex min-w-0 flex-1 items-center overflow-x-auto px-2"
     >
-      {children}
-      <span>{label}</span>
-    </Button>
+      <ol className="flex min-w-0 items-center gap-1 text-xs text-sidebar-muted-foreground">
+        {crumbs.map((part, index) => {
+          const isLast = index === crumbs.length - 1;
+          const isWorkspaceCrumb = workspaceName && index === 0;
+          const browsable = !isLast;
+          const browsePath = isWorkspaceCrumb
+            ? ""
+            : parts.slice(0, Math.max(0, index - workspaceOffset + 1)).join("/");
+          return (
+            <li key={`${part}-${index}`} className="flex min-w-0 items-center gap-1">
+              {index > 0 && <ChevronRight className="size-3.5 shrink-0 text-sidebar-muted-foreground/55" />}
+              {browsable ? (
+                <button
+                  type="button"
+                  onClick={() => onBrowsePath(browsePath)}
+                  className="whitespace-nowrap rounded px-0.5 text-sidebar-muted-foreground hover:text-sidebar-foreground"
+                >
+                  {part}
+                </button>
+              ) : (
+                <span
+                  className="whitespace-nowrap font-medium text-sidebar-foreground"
+                >
+                  {part}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
-function DiffScopePicker({
-  options,
-  activeScope,
-  onScopeChange,
+function FileViewerOptionsMenu({
+  canRenderRichPreview,
+  richPreviewEnabled,
+  wordWrap,
+  canCopyContent,
+  onToggleWordWrap,
+  onToggleRichPreview,
+  onCopyContent,
+  onCopyPath,
 }: {
-  options: readonly DiffScopeOption[];
-  activeScope: FileDiffViewerScope;
-  onScopeChange: (scope: FileDiffViewerScope) => void;
+  canRenderRichPreview: boolean;
+  richPreviewEnabled: boolean;
+  wordWrap: boolean;
+  canCopyContent: boolean;
+  onToggleWordWrap: () => void;
+  onToggleRichPreview: () => void;
+  onCopyContent: () => void;
+  onCopyPath: () => void;
 }) {
-  const activeOption = options.find((option) => option.scope === activeScope) ?? options[0];
-
   return (
-    <PopoverButton
-      trigger={(
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-6 gap-1 rounded-md px-1.5 text-xs text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground"
-          aria-label="Diff scope"
-        >
-          {activeOption.label}
-          <ChevronDown className="size-3" />
-        </Button>
-      )}
-      align="end"
-      className={`w-48 ${POPOVER_SURFACE_CLASS}`}
+    <PaneOptionsMenu
+      label="File viewer options"
+      className="min-w-[220px]"
     >
       {(close) => (
-        <PickerPopoverContent className="max-h-72">
-          {options.map((option) => (
-            <PopoverMenuItem
-              key={option.scope}
-              label={option.label}
-              icon={<GitBranch className="size-3.5 text-muted-foreground" />}
-              trailing={option.scope === activeScope
-                ? <Check className="size-3.5 text-foreground/70" />
-                : null}
+        <div className="flex flex-col gap-px">
+          <PaneOptionsMenuItem
+            icon={<Copy />}
+            label="Copy content"
+            disabled={!canCopyContent}
+            onClick={() => {
+              onCopyContent();
+              close();
+            }}
+          />
+          <PaneOptionsMenuItem
+            icon={<Copy />}
+            label="Copy path"
+            onClick={() => {
+              onCopyPath();
+              close();
+            }}
+          />
+          <PaneOptionsMenuSeparator />
+          <PaneOptionsMenuItem
+            icon={<WrapText />}
+            label={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+            onClick={() => {
+              onToggleWordWrap();
+              close();
+            }}
+          />
+          {canRenderRichPreview && (
+            <PaneOptionsMenuItem
+              icon={<FileText />}
+              label={richPreviewEnabled ? "Disable rich preview" : "Enable rich preview"}
               onClick={() => {
-                onScopeChange(option.scope);
+                onToggleRichPreview();
                 close();
               }}
-            >
-              <span className="block truncate text-sm leading-4 text-muted-foreground">
-                {option.description}
-              </span>
-            </PopoverMenuItem>
-          ))}
-        </PickerPopoverContent>
+            />
+          )}
+        </div>
       )}
-    </PopoverButton>
+    </PaneOptionsMenu>
   );
 }

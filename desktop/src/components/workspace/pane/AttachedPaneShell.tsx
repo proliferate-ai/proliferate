@@ -94,7 +94,7 @@ export function AttachedPaneShell({
   }, [isDragging, maxAttachedWidth, minAttachedWidth, side]);
 
   const content = (
-    <div className={twMerge("min-h-0 min-w-0 flex-1", contentClassName)}>
+    <div className={twMerge("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden", contentClassName)}>
       {children}
     </div>
   );
@@ -109,7 +109,7 @@ export function AttachedPaneShell({
   const attachedPane = attachedOpen && attached ? (
     <aside
       className={twMerge(
-        "h-full min-h-0 shrink-0 bg-sidebar-background",
+        "flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-sidebar-background",
         side === "right"
           ? "border-l border-sidebar-border/70"
           : "border-r border-sidebar-border/70",

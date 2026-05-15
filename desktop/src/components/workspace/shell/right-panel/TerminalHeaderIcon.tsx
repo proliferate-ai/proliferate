@@ -5,7 +5,6 @@ import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Tooltip } from "@/components/ui/Tooltip";
 import { useTerminalTabNativeContextMenu } from "@/hooks/terminals/ui/use-terminal-tab-native-context-menu";
 import {
   AppShellTabCloseIcon,
@@ -108,7 +107,6 @@ export function TerminalHeaderIcon({
               type="submit"
               size="icon-sm"
               variant="ghost"
-              title="Save terminal title"
               aria-label="Save terminal title"
               disabled={renaming || !renameDraft.trim()}
               className={HEADER_TAB_ACTION_CLASS}
@@ -119,7 +117,6 @@ export function TerminalHeaderIcon({
               type="button"
               size="icon-sm"
               variant="ghost"
-              title="Cancel terminal title edit"
               aria-label="Cancel terminal title edit"
               className={HEADER_TAB_ACTION_CLASS}
               onClick={() => {
@@ -174,57 +171,55 @@ export function TerminalHeaderIcon({
   );
 
   return (
-    <Tooltip content={displayTitle} className="right-panel-terminal-tooltip">
-      <div className="right-panel-terminal-tab-shell">
-        <PopoverButton
-          triggerMode="contextMenu"
-          side="bottom"
-          align="start"
-          className="w-56 rounded-md border border-border bg-popover p-1 shadow-floating"
-          trigger={trigger}
+    <div className="right-panel-terminal-tab-shell">
+      <PopoverButton
+        triggerMode="contextMenu"
+        side="bottom"
+        align="start"
+        className="w-56 rounded-md border border-border bg-popover p-1 shadow-floating"
+        trigger={trigger}
+      >
+        {(close) => (
+          <div className="py-0.5">
+            <PopoverMenuItem
+              label="Rename"
+              icon={<Pencil className="size-3.5" />}
+              onClick={() => {
+                close();
+                handleRenameCommand();
+              }}
+            />
+            <PopoverMenuItem
+              label="Close"
+              icon={<X className="size-3.5" />}
+              disabled={!isRuntimeReady}
+              className="text-destructive hover:text-destructive"
+              onClick={() => {
+                close();
+                onClose();
+              }}
+            />
+          </div>
+        )}
+      </PopoverButton>
+      <div
+        className="ui-tab-system-tab__close-container"
+        data-right-panel-tab-no-drag="true"
+      >
+        <IconButton
+          size="xs"
+          tone="sidebar"
+          aria-label={`Close ${displayTitle}`}
+          disabled={!isRuntimeReady}
+          className="ui-icon-button ui-tab-system-tab__close"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClose();
+          }}
         >
-          {(close) => (
-            <div className="py-0.5">
-              <PopoverMenuItem
-                label="Rename"
-                icon={<Pencil className="size-3.5" />}
-                onClick={() => {
-                  close();
-                  handleRenameCommand();
-                }}
-              />
-              <PopoverMenuItem
-                label="Close"
-                icon={<X className="size-3.5" />}
-                disabled={!isRuntimeReady}
-                className="text-destructive hover:text-destructive"
-                onClick={() => {
-                  close();
-                  onClose();
-                }}
-              />
-            </div>
-          )}
-        </PopoverButton>
-        <div
-          className="ui-tab-system-tab__close-container"
-          data-right-panel-tab-no-drag="true"
-        >
-          <IconButton
-            size="xs"
-            tone="sidebar"
-            title={`Close ${displayTitle}`}
-            disabled={!isRuntimeReady}
-            className="ui-icon-button ui-tab-system-tab__close"
-            onClick={(event) => {
-              event.stopPropagation();
-              onClose();
-            }}
-          >
-            <AppShellTabCloseIcon className="ui-icon" />
-          </IconButton>
-        </div>
+          <AppShellTabCloseIcon className="ui-icon" />
+        </IconButton>
       </div>
-    </Tooltip>
+    </div>
   );
 }

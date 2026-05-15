@@ -103,14 +103,14 @@ describe("useMainScreenActions right panel actions", () => {
   it("opens singleton right-panel tools by writing an active entry key", () => {
     const { result, spies } = renderActions();
 
-    act(() => result.current.onSetRightPanelTool("files"));
+    act(() => result.current.onSetRightPanelTool("git"));
 
     expect(spies.setRightPanelOpen).toHaveBeenCalledWith(true);
     const nextState = applyRightPanelStateUpdate(
       DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
       lastCallArg(spies.setRightPanelState),
     );
-    expect(nextState.activeEntryKey).toBe("tool:files");
+    expect(nextState.activeEntryKey).toBe("tool:git");
     expect(spies.requestRightPanelFocus).toHaveBeenCalledTimes(1);
   });
 
@@ -153,7 +153,7 @@ describe("useMainScreenActions right panel actions", () => {
     expect(spies.requestRightPanelFocus).not.toHaveBeenCalled();
   });
 
-  it("toggles a closed right panel to files when a singleton tool is active", () => {
+  it("toggles a closed right panel to Changes when a singleton tool is active", () => {
     const { result, spies } = renderActions({
       rightPanelState: {
         ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
@@ -168,7 +168,7 @@ describe("useMainScreenActions right panel actions", () => {
       DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
       lastCallArg(spies.setRightPanelState),
     );
-    expect(nextState.activeEntryKey).toBe("tool:files");
+    expect(nextState.activeEntryKey).toBe("tool:git");
     expect(spies.setRightPanelOpen).toHaveBeenCalledWith(true);
     expect(spies.requestRightPanelFocus).toHaveBeenCalledTimes(1);
   });

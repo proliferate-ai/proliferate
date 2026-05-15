@@ -1,11 +1,11 @@
 import type { GitDiffScope } from "@anyharness/sdk";
-import { canPreviewAsMarkdown } from "@/lib/domain/files/document-preview";
+import { canPreviewAsRichFile } from "@/lib/domain/files/document-preview";
 import {
   decodeBase64UrlUtf8,
   encodeBase64UrlUtf8,
 } from "@/lib/infra/encoding/base64url";
 
-export type FileViewerMode = "edit" | "rendered" | "diff";
+export type FileViewerMode = "source" | "rendered" | "diff" | "edit";
 export type DiffViewerLayout = "unified" | "split";
 export type FileDiffViewerScope = Exclude<GitDiffScope, "working_tree" | "base_worktree">;
 export type AllChangesViewerScope = FileDiffViewerScope | "working_tree_composite";
@@ -207,7 +207,11 @@ export function viewerTargetLabel(target: ViewerTarget): string {
 }
 
 export function defaultFileViewerMode(path: string): FileViewerMode {
-  return canPreviewAsMarkdown(path) ? "rendered" : "edit";
+  return canPreviewAsRichFile(path) ? "rendered" : "source";
+}
+
+export function normalizeFileViewerMode(mode: FileViewerMode): Exclude<FileViewerMode, "edit"> {
+  return mode === "edit" ? "source" : mode;
 }
 
 function normalizeFileDiffScope(scope: FileDiffViewerScope): FileDiffViewerScope | null {

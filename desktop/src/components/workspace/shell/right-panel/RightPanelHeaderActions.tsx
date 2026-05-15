@@ -1,6 +1,5 @@
 import { IconButton } from "@/components/ui/IconButton";
-import { Tooltip } from "@/components/ui/Tooltip";
-import { AppShellPanelToggleIcon, Settings } from "@/components/ui/icons";
+import { Settings, SplitPanel } from "@/components/ui/icons";
 
 interface RightPanelHeaderActionsProps {
   onOpenRepoSettings: () => void;
@@ -14,38 +13,26 @@ export function RightPanelHeaderActions({
   return (
     <div className="ui-tab-system-section ui-tab-system-section__trailing" role="presentation">
       <div className="editor-panel-overflow-action">
-        <Tooltip
-          content="Repo's settings"
-          className="right-panel-repo-settings-tooltip"
-          singleLine
+        <IconButton
+          size="xs"
+          tone="sidebar"
+          className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger"
+          onClick={onOpenRepoSettings}
         >
-          <IconButton
-            size="xs"
-            tone="sidebar"
-            title="Repo's settings"
-            className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger"
-            onClick={onOpenRepoSettings}
-          >
-            <Settings className="ui-icon" />
-          </IconButton>
-        </Tooltip>
+          <Settings className="ui-icon" />
+          <span className="sr-only">Repo&apos;s settings</span>
+        </IconButton>
       </div>
       <div className="editor-panel-overflow-action">
-        <Tooltip
-          content="Hide side panel"
-          className="right-panel-hide-panel-tooltip"
-          singleLine
+        <IconButton
+          size="xs"
+          tone="sidebar"
+          className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger"
+          onClick={onTogglePanel}
         >
-          <IconButton
-            size="xs"
-            tone="sidebar"
-            title="Hide side panel"
-            className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger"
-            onClick={onTogglePanel}
-          >
-            <AppShellPanelToggleIcon className="ui-icon" />
-          </IconButton>
-        </Tooltip>
+          <SplitPanel className="ui-icon" />
+          <span className="sr-only">Hide side panel</span>
+        </IconButton>
       </div>
     </div>
   );

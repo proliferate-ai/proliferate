@@ -56,12 +56,13 @@ export function HeaderTabsActions({
         size="icon-sm"
         disabled={!canOpenNewSessionTab}
         onClick={onOpenNewSessionTab}
-        aria-label={newSessionDisabledReason ?? `New chat (${SHORTCUTS.newSessionTab.label})`}
-        title={newSessionDisabledReason ?? `New chat (${SHORTCUTS.newSessionTab.label})`}
         data-chat-new-tab-button
         className={HEADER_ICON_BUTTON_CLASS}
       >
         <Plus className="size-3.5" />
+        <span className="sr-only">
+          {newSessionDisabledReason ?? `New chat (${SHORTCUTS.newSessionTab.label})`}
+        </span>
       </Button>
 
       {closedCount > 0 ? (
