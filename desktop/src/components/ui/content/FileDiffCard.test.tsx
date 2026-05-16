@@ -53,6 +53,7 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain("sorry-im-eant-liek-moonlit-goose.md");
     expect(html).toContain(">.claude/plans/sorry-im-eant-liek-moonlit-goose.md</span>");
     expect(html).not.toContain(">/Users/pablo/.claude/plans/sorry-im-eant-liek-moonlit-goose.md</span>");
+    expect(html).not.toContain("hover:underline");
     expect(html).not.toContain("opacity-0");
   });
 });

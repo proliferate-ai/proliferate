@@ -266,7 +266,7 @@ export function FileDiffCard({
                       event.stopPropagation();
                       onOpenFile();
                     }}
-                    className={`h-auto min-w-0 truncate rounded-none border-0 bg-transparent p-0 text-start text-chat font-normal leading-[var(--text-chat--line-height)] shadow-none select-text [direction:rtl] hover:bg-transparent hover:underline focus-visible:ring-1 ${
+                    className={`h-auto min-w-0 truncate rounded-none border-0 bg-transparent p-0 text-start text-chat font-normal leading-[var(--text-chat--line-height)] shadow-none select-text [direction:rtl] hover:bg-transparent focus-visible:ring-1 ${
                       surface === "sidebar" ? "text-sidebar-foreground hover:text-sidebar-foreground focus-visible:ring-sidebar-ring" : "text-foreground hover:text-foreground focus-visible:ring-border"
                     }`}
                   >

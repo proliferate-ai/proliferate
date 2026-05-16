@@ -306,7 +306,7 @@
   --diffs-deletion-color-override: var(--color-diff-deleted);
   --codex-diffs-surface: var(--color-diff-surface);
   --codex-diffs-context-surface: color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-diff-main-surface));
-  --codex-diffs-separator-surface: color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-link-foreground));
+  --codex-diffs-separator-surface: color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-foreground));
   --codex-diffs-hover-surface: color-mix(in srgb, var(--codex-diffs-surface) 92%, var(--color-diff-main-surface));
   --codex-diffs-header-surface: var(--color-diff-header-surface);
   --codex-diffs-context-number: color-mix(in lab, var(--codex-diffs-surface) 98.5%, var(--diffs-mixer));
