@@ -1,6 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
 import {
-  AnyHarnessError,
   type CreateWorktreeWorkspaceResponse,
   type Workspace,
 } from "@anyharness/sdk";
@@ -13,7 +12,6 @@ import { getHomeDir } from "@/lib/access/tauri/shell";
 import {
   createWorkspace,
   createWorktreeWorkspace,
-  resolveWorkspaceFromPath,
 } from "@/lib/access/anyharness/workspaces";
 import {
   collectWorktreeBasenamesForRepo,
@@ -45,21 +43,6 @@ import { getLatencyFlowRequestHeaders } from "@/lib/infra/measurement/latency-fl
 interface CreateWorktreeMutationInput {
   params: WorktreeCreationParams;
   latencyFlowId?: string | null;
-}
-
-interface CreateLocalWorkspaceResult {
-  workspace: Workspace;
-  created: boolean;
-}
-
-function isExistingWorkspacePathError(error: unknown): boolean {
-  if (error instanceof AnyHarnessError) {
-    return error.problem.code === "WORKSPACE_CREATE_FAILED"
-      && error.problem.detail?.includes("a workspace record already exists for path") === true;
-  }
-
-  return error instanceof Error
-    && error.message.includes("a workspace record already exists for path");
 }
 
 export function useWorkspaceActions() {
@@ -106,7 +89,7 @@ export function useWorkspaceActions() {
     });
   };
 
-  const createLocalWorkspaceMutation = useMutation<CreateLocalWorkspaceResult, Error, string>({
+  const createLocalWorkspaceMutation = useMutation<Workspace, Error, string>({
     meta: {
       telemetryHandled: true,
     },
@@ -118,33 +101,16 @@ export function useWorkspaceActions() {
         origin: DESKTOP_ORIGIN,
       };
 
-      try {
-        const response = await createWorkspace(connection, request);
-        return {
-          workspace: response.workspace,
-          created: true,
-        };
-      } catch (error) {
-        if (!isExistingWorkspacePathError(error)) {
-          throw error;
-        }
-
-        const response = await resolveWorkspaceFromPath(connection, request);
-        return {
-          workspace: response.workspace,
-          created: false,
-        };
-      }
+      const response = await createWorkspace(connection, request);
+      return response.workspace;
     },
-    onSuccess: ({ workspace, created }) => {
+    onSuccess: (workspace) => {
       primeWorkspaceCollections(workspace, "local_create");
       refreshWorkspaceCollections("local_create", workspace.id);
-      if (created) {
-        trackProductEvent("workspace_created", {
-          workspace_kind: "local",
-          creation_kind: "local",
-        });
-      }
+      trackProductEvent("workspace_created", {
+        workspace_kind: "local",
+        creation_kind: "local",
+      });
     },
     onError: (error) => {
       captureTelemetryException(error, {
@@ -262,7 +228,7 @@ export function useWorkspaceActions() {
       });
     },
     createLocalWorkspace: async (sourceRoot: string) =>
-      (await createLocalWorkspaceMutation.mutateAsync(sourceRoot)).workspace,
+      createLocalWorkspaceMutation.mutateAsync(sourceRoot),
     isCreatingLocalWorkspace: createLocalWorkspaceMutation.isPending,
     createWorktreeWorkspace: (
       params: WorktreeCreationParams,

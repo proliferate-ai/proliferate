@@ -162,7 +162,7 @@ impl RetirePreflightChecker {
 
         if let Some(active) = self
             .workspace_runtime
-            .find_active_workspace_by_path_excluding_id(&workspace.path, &workspace.id)?
+            .find_active_worktree_by_path_excluding_id(&workspace.path, &workspace.id)?
         {
             blockers.push(active_path_owner_retire_blocker(&active));
         }

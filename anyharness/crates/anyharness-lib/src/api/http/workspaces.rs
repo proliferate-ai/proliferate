@@ -479,7 +479,7 @@ pub async fn retire_workspace(
     }
     if let Some(active) = state
         .workspace_runtime
-        .find_active_workspace_by_path_excluding_id(&workspace.path, &workspace.id)
+        .find_active_worktree_by_path_excluding_id(&workspace.path, &workspace.id)
         .map_err(|e| ApiError::internal(e.to_string()))?
     {
         preflight.can_retire = false;
@@ -613,7 +613,7 @@ pub async fn retry_retire_cleanup(
         .await;
     if let Some(active) = state
         .workspace_runtime
-        .find_active_workspace_by_path_excluding_id(&workspace.path, &workspace.id)
+        .find_active_worktree_by_path_excluding_id(&workspace.path, &workspace.id)
         .map_err(|e| ApiError::internal(e.to_string()))?
     {
         let mut preflight = build_retire_preflight(&state, &workspace_id).await?;

@@ -8,6 +8,7 @@ import type {
   AgentModelRegistry,
   AgentModelRegistryModel,
 } from "@/lib/domain/agents/model-options";
+import { buildLocalSlotLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 import {
   buildHomeNextModelGroups,
   buildHomeNextAgentOptions,
@@ -148,6 +149,22 @@ describe("findHomeNextMatchingWorkspace", () => {
     expect(match?.id).toBe("match");
   });
 
+  it("treats local-slot aliases as archived workspace ids", () => {
+    const archivedSlotId = buildLocalSlotLogicalWorkspaceId("slot-archived");
+    const match = findHomeNextMatchingWorkspace({
+      repoRootId: "repo-root-1",
+      branchName: "feature/raw-name",
+      archivedWorkspaceIds: [archivedSlotId],
+      workspaceLastInteracted: {},
+      workspaces: [
+        workspace({ id: "slot-archived", currentBranch: "feature/raw-name" }),
+        workspace({ id: "match", currentBranch: "feature/raw-name" }),
+      ],
+    });
+
+    expect(match?.id).toBe("match");
+  });
+
   it("prefers most recently interacted, then most recently updated", () => {
     const match = findHomeNextMatchingWorkspace({
       repoRootId: "repo-root-1",
@@ -179,6 +196,20 @@ describe("findHomeNextLocalWorkspace", () => {
       workspaces: [
         workspace({ id: "worktree", kind: "worktree" }),
         workspace({ id: "archived-local", kind: "local" }),
+        workspace({ id: "local", kind: "local" }),
+      ],
+    });
+
+    expect(match?.id).toBe("local");
+  });
+
+  it("excludes local checkouts archived by local-slot alias", () => {
+    const match = findHomeNextLocalWorkspace({
+      repoRootId: "repo-root-1",
+      archivedWorkspaceIds: [buildLocalSlotLogicalWorkspaceId("slot-archived")],
+      workspaceLastInteracted: {},
+      workspaces: [
+        workspace({ id: "slot-archived", kind: "local" }),
         workspace({ id: "local", kind: "local" }),
       ],
     });

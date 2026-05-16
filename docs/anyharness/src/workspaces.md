@@ -88,7 +88,8 @@ It:
 1. canonicalizes the input path
 2. resolves git context
 3. ensures a repo root exists for the canonical repo root path
-4. checks for an existing workspace by canonical path
+4. checks for an existing active workspace by canonical path and kind using
+   `created_at ASC, id ASC` ordering
 5. if the path is a worktree:
    - creates or returns a `kind=worktree` workspace for that repo root
 6. otherwise creates or returns a `kind=local` workspace for that repo root
@@ -97,12 +98,27 @@ This is the main registration path when a client points AnyHarness at a repo.
 It is also the endpoint used by `proliferate-worker` for
 `materialize_workspace(mode=existing_path)`.
 
+For local workspaces, duplicate active rows may share the same canonical path.
+`resolve_from_path(...)` still returns the deterministic first active local row
+for that path. The runtime does not expose a canonical-vs-sibling concept for
+these duplicates; desktop reconstructs that projection from the returned local
+workspace rows.
+
 ### Create Workspace
 
 `create_workspace(...)`
 (`anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`)
-is the explicit create path and follows the same
-local-vs-worktree logic without the early return for an existing record.
+is the explicit create path.
+
+For `kind=local`, create is intentionally non-idempotent by path: creating a
+local workspace for a repo path that already has an active local workspace
+inserts a fresh workspace row. These duplicate local workspaces share the same
+checkout and git state, but have distinct workspace ids and therefore distinct
+session lists and runtime session state.
+
+For `kind=worktree`, create remains path-unique. A worktree workspace owns its
+materialized checkout path, so active worktree path collisions and pending
+retired cleanup for the same worktree path still block creation.
 
 ### Create Worktree
 
@@ -177,6 +193,11 @@ The durable workspace rows are loaded and stored through:
 ## Important Invariants
 
 - Local and worktree workspaces are different durable kinds.
+- Multiple active local workspace rows may point at the same canonical repo
+  path. This is only allowed for explicit local create; path resolve stays
+  deterministic and idempotent.
+- Active worktree workspace paths remain unique because worktree cleanup may
+  remove the materialized checkout.
 - Every workspace must point at exactly one repo root.
 - Workspace paths should be canonicalized before identity decisions.
 - Workspace env should be derived from durable workspace + repo-root records,

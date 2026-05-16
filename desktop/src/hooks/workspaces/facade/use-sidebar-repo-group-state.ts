@@ -107,12 +107,20 @@ export function useSidebarRepoGroupState({
   }, [groups, selectedLogicalWorkspaceId, selectedWorkspaceBelongsToLogicalWorkspace]);
 
   useEffect(() => {
-    if (!selectedLogicalWorkspaceId || !selectedWorkspaceId || !autoShowMoreRepoKey) {
+    if (
+      !selectedLogicalWorkspaceId
+      || !selectedWorkspaceId
+      || !autoShowMoreRepoKey
+      || !selectedLogicalWorkspace
+    ) {
       return;
     }
 
     const autoRecordMatches =
-      lastAutoShownMoreSelection?.logicalWorkspaceId === selectedLogicalWorkspaceId
+      !!lastAutoShownMoreSelection
+      && logicalWorkspaceRelatedIds(selectedLogicalWorkspace).includes(
+        lastAutoShownMoreSelection.logicalWorkspaceId,
+      )
       && lastAutoShownMoreSelection.selectedWorkspaceId === selectedWorkspaceId
       && lastAutoShownMoreSelection.repoKey === autoShowMoreRepoKey
       && lastAutoShownMoreSelection.workspaceSelectionNonce === workspaceSelectionNonce;
@@ -123,7 +131,7 @@ export function useSidebarRepoGroupState({
     }
 
     recordAutoRepoGroupShowMore({
-      logicalWorkspaceId: selectedLogicalWorkspaceId,
+      logicalWorkspaceId: selectedLogicalWorkspace.id,
       selectedWorkspaceId,
       repoKey: autoShowMoreRepoKey,
       workspaceSelectionNonce,
@@ -134,6 +142,7 @@ export function useSidebarRepoGroupState({
     lastAutoShownMoreSelection,
     recordAutoRepoGroupShowMore,
     repoGroupsShowMoreClearedByCollapseKeys,
+    selectedLogicalWorkspace,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     workspaceSelectionNonce,

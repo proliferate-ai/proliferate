@@ -13,6 +13,7 @@ import {
 import { ProliferateClientError } from "@/lib/access/cloud/client";
 import { startCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import { buildLocalSlotLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 import { runWorkspaceSelection } from "./run-workspace-selection";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";
@@ -230,6 +231,43 @@ describe("runWorkspaceSelection", () => {
     });
     expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["logical:workspace-1"])
       .toBe(chatWorkspaceShellTabKey("session-forgotten"));
+  });
+
+  it("normalizes a stale local-slot selection and reads alias-keyed session state", async () => {
+    vi.mocked(resolveCloudWorkspaceReadiness).mockResolvedValueOnce({ kind: "local" });
+    vi.mocked(resolveSelectionConnection).mockResolvedValueOnce({
+      runtimeUrl: "http://runtime.test",
+      workspaceConnection: {
+        runtimeUrl: "http://runtime.test",
+        anyharnessWorkspaceId: "ah-workspace-1",
+      },
+    });
+    const staleSlotId = buildLocalSlotLogicalWorkspaceId("workspace-1");
+    useWorkspaceUiStore.setState({
+      lastViewedSessionByWorkspace: {
+        [staleSlotId]: "session-from-slot",
+      },
+    });
+
+    await runWorkspaceSelection({
+      cache: selectionCache(),
+      logicalWorkspaces,
+      rawWorkspaces: [],
+      setSelectedLogicalWorkspaceId: (id) =>
+        useSessionSelectionStore.getState().setSelectedLogicalWorkspaceId(id),
+      setSelectedWorkspace,
+      removeWorkspaceSlots: vi.fn(),
+      clearSelection: vi.fn(),
+      bootstrapWorkspace: vi.fn().mockResolvedValue({ sessions: [] }),
+      reconcileHotWorkspace: vi.fn(),
+    }, {
+      workspaceId: staleSlotId,
+    });
+
+    expect(useSessionSelectionStore.getState().selectedLogicalWorkspaceId)
+      .toBe("logical:workspace-1");
+    expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBe("workspace-1");
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-from-slot");
   });
 
   it("falls back to the first persisted visible chat tab when no last-viewed session exists", async () => {

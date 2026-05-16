@@ -3,6 +3,7 @@ import type { GitBranchRef, RepoRoot, Workspace } from "@anyharness/sdk";
 import { useRepoRootGitBranchesQuery } from "@anyharness/sdk-react";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
+import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import {
   buildCloudRepoActionBySourceRoot,
@@ -22,6 +23,7 @@ import {
   type HomeNextRepoLaunchKind,
   type HomeNextRepositorySelection,
 } from "@/lib/domain/home/home-next-launch";
+import { expandLogicalWorkspaceRelatedIdSet } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -45,6 +47,7 @@ export function useHomeNextRepositorySelection({
 }: UseHomeNextRepositorySelectionArgs) {
   const { localWorkspaces = EMPTY_WORKSPACES, repoRoots = EMPTY_REPO_ROOTS } =
     useStandardRepoProjection();
+  const { logicalWorkspaces } = useLogicalWorkspaces();
   const hiddenRepoRootIds = useWorkspaceUiStore((state) => state.hiddenRepoRootIds);
   const archivedWorkspaceIds = useWorkspaceUiStore((state) => state.archivedWorkspaceIds);
   const workspaceLastInteracted = useWorkspaceUiStore((state) => state.workspaceLastInteracted);
@@ -97,12 +100,16 @@ export function useHomeNextRepositorySelection({
     baseBranchOverride && branchOptions.includes(baseBranchOverride)
       ? baseBranchOverride
       : defaultBranchName;
+  const expandedArchivedWorkspaceIds = useMemo(
+    () => Array.from(expandLogicalWorkspaceRelatedIdSet(logicalWorkspaces, archivedWorkspaceIds)),
+    [archivedWorkspaceIds, logicalWorkspaces],
+  );
 
   const existingLocalWorkspace = selectedRepository
     ? findHomeNextLocalWorkspace({
       workspaces: localWorkspaces,
       repoRootId: selectedRepository.repoRootId,
-      archivedWorkspaceIds,
+      archivedWorkspaceIds: expandedArchivedWorkspaceIds,
       workspaceLastInteracted,
     })
     : null;
