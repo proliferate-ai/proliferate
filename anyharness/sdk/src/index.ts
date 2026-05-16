@@ -297,6 +297,8 @@ export type {
   ToolInputTextContentPart,
   ToolResultTextContentPart,
   PlanEntry,
+  AvailableSessionCommand,
+  AvailableSessionCommandInput,
   AvailableCommandsUpdateEvent,
   CurrentModeUpdateEvent,
   ConfigOptionUpdateEvent,

@@ -11,6 +11,36 @@ import {
 import type { ContentPart, SessionEventEnvelope, ThoughtItem, ToolCallItem } from "../../index.js";
 
 describe("transcript reducer", () => {
+  it("normalizes available slash commands at the reducer boundary", () => {
+    const state = reduceEvent(createTranscriptState("session-1"), {
+      sessionId: "session-1",
+      seq: 1,
+      timestamp: "2026-04-04T00:00:01Z",
+      event: {
+        type: "available_commands_update",
+        availableCommands: [
+          { name: " review ", description: "Review changes", input: { hint: "scope" } },
+          { name: "init" },
+          { name: "" },
+          { description: "missing name" },
+        ],
+      },
+    } as unknown as SessionEventEnvelope);
+
+    expect(state.availableCommands).toEqual([
+      {
+        name: "review",
+        description: "Review changes",
+        input: { hint: "scope" },
+      },
+      {
+        name: "init",
+        description: "",
+        input: null,
+      },
+    ]);
+  });
+
   it("reduces assistant streaming lifecycle into one completed prose item", () => {
     const state = reduceEvents(
       [

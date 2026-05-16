@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  isComposerMentionSelectKey,
+  isComposerOverlaySelectKey,
   isRepeatedComposerSubmitKey,
   isComposerSubmitKey,
   isRawComposerSubmitKey,
@@ -104,12 +104,12 @@ describe("composer keyboard predicates", () => {
     }))).toBe(false);
   });
 
-  it("uses raw Enter or unshifted Tab for mention selection only", () => {
-    expect(isComposerMentionSelectKey(event())).toBe(true);
-    expect(isComposerMentionSelectKey(event({ key: "Tab" }))).toBe(true);
-    expect(isComposerMentionSelectKey(event({ key: "Tab", shiftKey: true }))).toBe(false);
-    expect(isComposerMentionSelectKey(event({ metaKey: true }))).toBe(false);
-    expect(isComposerMentionSelectKey(event({ ctrlKey: true }))).toBe(false);
-    expect(isComposerMentionSelectKey(event({ nativeEvent: { isComposing: true } }))).toBe(false);
+  it("uses raw Enter or unshifted Tab for overlay selection only", () => {
+    expect(isComposerOverlaySelectKey(event())).toBe(true);
+    expect(isComposerOverlaySelectKey(event({ key: "Tab" }))).toBe(true);
+    expect(isComposerOverlaySelectKey(event({ key: "Tab", shiftKey: true }))).toBe(false);
+    expect(isComposerOverlaySelectKey(event({ metaKey: true }))).toBe(false);
+    expect(isComposerOverlaySelectKey(event({ ctrlKey: true }))).toBe(false);
+    expect(isComposerOverlaySelectKey(event({ nativeEvent: { isComposing: true } }))).toBe(false);
   });
 });

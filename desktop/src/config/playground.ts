@@ -16,7 +16,8 @@ export type ScenarioKey =
   | "review-feedback-message"
   | "review-complete-message"
   | "composer-long-input"
-  | "file-mention-search"
+  | "slash-command-search"
+  | "slash-command-empty"
   | "workspace-arrival-created"
   | "cloud-first-runtime"
   | "cloud-provisioning"
@@ -108,7 +109,8 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "review-feedback-message": { label: "Review feedback message" },
   "review-complete-message": { label: "Review complete message" },
   "composer-long-input": { label: "Composer long input" },
-  "file-mention-search": { label: "File mention search" },
+  "slash-command-search": { label: "Slash commands" },
+  "slash-command-empty": { label: "Slash commands empty" },
   "workspace-arrival-created": { label: "Workspace arrival" },
   "cloud-first-runtime": { label: "Cloud first runtime" },
   "cloud-provisioning": { label: "Cloud provisioning" },

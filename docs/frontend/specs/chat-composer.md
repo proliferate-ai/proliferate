@@ -43,7 +43,7 @@ ChatView
     │     └── DelegatedWorkComposerControl  (one Agents trigger + popover for reviews and subagents)
     ├── ChatInput
     │   └── ChatComposerSurface
-    │       └── form: ComposerMentionEditor + ModelSelector + SessionConfigControls + ChatComposerActions
+    │       └── form: ComposerCommandEditor + ModelSelector + SessionConfigControls + ChatComposerActions
     └── footerSlot
         └── WorkspaceMobilityFooterRow
 ```
@@ -54,7 +54,7 @@ Non-negotiable:
 - **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above and below the composer surface is the dock's responsibility, and the workspace footer row is rendered via the dock's dedicated footer slot rather than ad hoc workspace logic in `ChatInput.tsx`.
 - **Do not add in-composer read-only status badges.** MCP/plugin state belongs in settings, session details, or explicit action surfaces, not as a persistent strip inside `ChatInput`.
 - **The composer surface stays unchanged and paints the seam.** There is no `flatTop` mode. Dock-region panels are narrower attached trays that sit directly above the composer: rounded top corners, side/top borders, no bottom border, and no gap. The composer surface paints after the dock regions so its own top outline remains visible at the seam.
-- **File mention search is composer-local, not a dock-region inhabitant.** The `@` file search tray renders from `ChatInput` in a small host directly above `ChatComposerSurface` while a trigger is active. It is transient editor UI and does not participate in `useComposerDockSlots` precedence.
+- **Composer command overlays are composer-local, not dock-region inhabitants.** The slash-command tray renders from `ChatInput` in a small host directly above `ChatComposerSurface` while a prompt-leading `/` trigger is active. It is transient editor UI and does not participate in `useComposerDockSlots` precedence.
 
 ## 2. Dock Regions
 

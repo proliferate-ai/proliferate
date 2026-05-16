@@ -46,7 +46,7 @@ export function isRepeatedComposerSubmitKey(event: ComposerKeyboardEventLike): b
   return event.repeat === true && isComposerSubmitKey(event);
 }
 
-export function isComposerMentionSelectKey(event: ComposerKeyboardEventLike): boolean {
+export function isComposerOverlaySelectKey(event: ComposerKeyboardEventLike): boolean {
   if (isComposing(event) || !isPlainModifierState(event)) {
     return false;
   }

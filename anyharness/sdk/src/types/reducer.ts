@@ -1,4 +1,5 @@
 import type {
+  AvailableSessionCommand,
   ContentPart,
   McpElicitationInteractionPayload,
   PermissionInteractionContext,
@@ -31,7 +32,7 @@ export interface TranscriptState {
   openAssistantItemId: string | null;
   openThoughtItemId: string | null;
   pendingInteractions: PendingInteraction[];
-  availableCommands: unknown[];
+  availableCommands: AvailableSessionCommand[];
   liveConfig: SessionLiveConfigSnapshot | null;
   currentModeId: string | null;
   usageState: UsageState | null;

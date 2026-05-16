@@ -2,16 +2,12 @@ import {
   chatDraftLength,
   chatDraftNodeLength,
   chatDraftNodeStartOffset,
-  chatDraftUnits,
   clampDraftOffset,
   cloneChatDraftNode,
-  isFileMentionTriggerBoundary,
   normalizeChatDraft,
   type ChatComposerDraft,
   type ChatComposerDraftNode,
-  type ChatComposerFileMentionNode,
   type DraftEditResult,
-  type DraftPosition,
   type DraftSelection,
 } from "@/lib/domain/chat/composer/file-mention-draft-model";
 import {
@@ -20,12 +16,6 @@ import {
   linearOffsetFromPosition,
   positionFromLinearOffset,
 } from "@/lib/domain/chat/composer/file-mention-draft-position";
-
-export interface MentionTrigger {
-  query: string;
-  start: DraftPosition;
-  end: DraftPosition;
-}
 
 export function appendTextToDraft(draft: ChatComposerDraft, text: string): DraftEditResult {
   if (text.length === 0) {
@@ -96,24 +86,6 @@ export function deleteForwardAtSelection(
   return replaceRangeWithNodes(normalized, range.start, range.start + 1, []);
 }
 
-export function insertFileMentionAtTrigger(
-  draft: ChatComposerDraft,
-  trigger: MentionTrigger,
-  mention: ChatComposerFileMentionNode,
-): DraftEditResult {
-  const normalized = normalizeChatDraft(draft);
-  const start = linearOffsetFromPosition(normalized, trigger.start);
-  const triggerEnd = linearOffsetFromPosition(normalized, trigger.end);
-  const nextUnit = chatDraftUnits(normalized)[triggerEnd] ?? null;
-  const end = nextUnit?.kind === "text" && /\s/u.test(nextUnit.char)
-    ? triggerEnd + 1
-    : triggerEnd;
-  return replaceRangeWithNodes(normalized, start, end, [
-    mention,
-    { type: "text", text: " " },
-  ]);
-}
-
 export function removeMentionAtIndex(
   draft: ChatComposerDraft,
   nodeIndex: number,
@@ -129,45 +101,6 @@ export function removeMentionAtIndex(
 
   const start = chatDraftNodeStartOffset(normalized, nodeIndex);
   return replaceRangeWithNodes(normalized, start, start + 1, []);
-}
-
-export function findMentionTrigger(
-  draft: ChatComposerDraft,
-  position: DraftPosition,
-): MentionTrigger | null {
-  const normalized = normalizeChatDraft(draft);
-  const units = chatDraftUnits(normalized);
-  const caret = linearOffsetFromPosition(normalized, position);
-  if (caret < 1 || caret > units.length) {
-    return null;
-  }
-
-  for (let index = caret - 1; index >= 0; index -= 1) {
-    const unit = units[index];
-    if (!unit) {
-      return null;
-    }
-    if (unit.kind === "mention" || /\s/u.test(unit.char)) {
-      return null;
-    }
-    if (unit.char !== "@") {
-      continue;
-    }
-
-    const before = units[index - 1] ?? null;
-    if (!isFileMentionTriggerBoundary(before)) {
-      continue;
-    }
-
-    const query = units.slice(index + 1, caret).map((entry) => entry.char).join("");
-    return {
-      query,
-      start: positionFromLinearOffset(normalized, index),
-      end: positionFromLinearOffset(normalized, caret),
-    };
-  }
-
-  return null;
 }
 
 function replaceRangeWithNodes(
