@@ -44,7 +44,7 @@ describe("DiffViewer chat variant", () => {
     expect(html).toContain(
       "--diffs-column-number-width:max(24px, 5ch)",
     );
-    expect(html).toContain("diff-content-cell relative flex");
+    expect(html).toContain("diff-content-cell relative min-h");
     expect(html).not.toContain("thread-diff-virtualized");
   });
 
@@ -57,20 +57,40 @@ describe("DiffViewer chat variant", () => {
       }),
     );
 
-    expect(html).toContain("overflow-x-auto overflow-y-auto");
+    expect(html).toContain("overflow-y-auto");
+    expect(html).toContain("overflow-x-auto");
     expect(html).toContain("sticky left-0 z-10");
     expect(html).toContain("min-w-max");
     expect(html).toContain("whitespace-pre");
     expect(html).not.toContain("overflow-clip");
   });
 
-  it("can allow nested diff scroll views to chain wheel scrolling", () => {
+  it("wraps chat diff lines as inline text instead of flex items", () => {
+    const html = renderToStaticMarkup(
+      createElement(DiffViewer, {
+        patch: LONG_LINE_PATCH,
+        filePath: "src/long.ts",
+        variant: "chat",
+        wrapLongLines: true,
+      }),
+    );
+
+    expect(html).toContain("overflow-y-auto");
+    expect(html).toContain("overflow-x-hidden");
+    expect(html).toContain("diff-content-cell relative min-h");
+    expect(html).toContain("block min-w-0 whitespace-pre-wrap break-words");
+    expect(html).not.toContain("diff-content-cell relative flex");
+  });
+
+  it("clamps native overscroll on git diff viewers", () => {
     const chatHtml = renderToStaticMarkup(
       createElement(DiffViewer, {
         patch: PATCH,
         filePath: "src/example.ts",
         variant: "chat",
-        overscrollBehavior: "auto",
+        overscrollBehaviorX: "none",
+        overscrollBehaviorY: "none",
+        chainVerticalWheel: true,
       }),
     );
     const splitHtml = renderToStaticMarkup(
@@ -78,11 +98,30 @@ describe("DiffViewer chat variant", () => {
         patch: PATCH,
         filePath: "src/example.ts",
         layout: "split",
-        overscrollBehavior: "auto",
+        overscrollBehaviorX: "none",
+        overscrollBehaviorY: "none",
+        chainVerticalWheel: true,
       }),
     );
 
-    expect(chatHtml).toContain("overscroll-behavior:auto");
-    expect(splitHtml).toContain("overscroll-behavior:auto");
+    expect(chatHtml).toContain("overscroll-behavior:none");
+    expect(chatHtml).toContain("overscroll-behavior-x:none");
+    expect(chatHtml).toContain("overscroll-behavior-y:none");
+    expect(splitHtml).toContain("overscroll-behavior:none");
+    expect(splitHtml).toContain("overscroll-behavior-x:none");
+    expect(splitHtml).toContain("overscroll-behavior-y:none");
+  });
+
+  it("keeps diff viewer overscroll non-chaining by default", () => {
+    const html = renderToStaticMarkup(
+      createElement(DiffViewer, {
+        patch: PATCH,
+        filePath: "src/example.ts",
+        variant: "chat",
+      }),
+    );
+
+    expect(html).toContain("overscroll-behavior:none");
+    expect(html).not.toContain("overscroll-behavior-y:");
   });
 });

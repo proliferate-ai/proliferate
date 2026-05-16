@@ -8,11 +8,13 @@ import { FileViewerContent } from "./FileViewerContent";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { useReadWorkspaceFileQuery } from "@anyharness/sdk-react";
 import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
+import { WorkspaceFileSearchModal } from "@/components/workspace/files/search/WorkspaceFileSearchModal";
 import { FileViewerFrame } from "@/components/workspace/files/viewer/FileViewerFrame";
 import { WorkspaceFileBrowserOverlay } from "@/components/workspace/files/viewer/WorkspaceFileBrowserOverlay";
 import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
 import { useWorkspaceFileTargetActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-target-actions";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { canPreviewAsRichFile } from "@/lib/domain/files/document-preview";
 import type { FileDiffTarget } from "@/lib/domain/workspaces/viewer/file-diff-options";
 import {
@@ -31,6 +33,8 @@ interface FileEditorViewProps {
 export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorViewProps) {
   const fileContext = useWorkspaceFileContext();
   const materializedWorkspaceId = fileContext.materializedWorkspaceId;
+  const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(materializedWorkspaceId);
   const rawMode = useWorkspaceViewerTabsStore(
     (s) => s.modeByTargetKey[targetKey] ?? defaultFileViewerMode(filePath),
   );
@@ -45,6 +49,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
   const parentPath = useMemo(() => parentDirectoryPath(filePath), [filePath]);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [browserPath, setBrowserPath] = useState(parentPath);
+  const [fileSearchOpen, setFileSearchOpen] = useState(false);
   const activeDiffTarget = diffTarget ?? null;
   const effectiveMode = activeDiffTarget
     ? "diff"
@@ -97,7 +102,18 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
   const closeBrowser = () => {
     setBrowserOpen(false);
   };
+  const openFileSearch = () => {
+    setFileSearchOpen(true);
+  };
+  const closeFileSearch = () => {
+    setFileSearchOpen(false);
+  };
   const openBrowserFile = (path: string) => {
+    setBrowserOpen(false);
+    void openFile(path);
+  };
+  const openSearchFile = (path: string) => {
+    setFileSearchOpen(false);
     setBrowserOpen(false);
     void openFile(path);
   };
@@ -114,6 +130,13 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
         onPathPrefixChange={setBrowserPath}
         onOpenFile={openBrowserFile}
         onClose={closeBrowser}
+      />
+      <WorkspaceFileSearchModal
+        open={fileSearchOpen}
+        workspaceId={materializedWorkspaceId}
+        runtimeBlockedReason={runtimeBlockedReason}
+        onClose={closeFileSearch}
+        onOpenFile={openSearchFile}
       />
     </div>
   );
@@ -133,6 +156,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
         onOpenExternal={openExternal}
         browserOpen={browserOpen}
         onToggleBrowser={toggleBrowser}
+        onOpenSearch={openFileSearch}
         onBrowsePath={browsePath}
       >
         {renderPaneContent(
@@ -157,6 +181,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
         onOpenExternal={openExternal}
         browserOpen={browserOpen}
         onToggleBrowser={toggleBrowser}
+        onOpenSearch={openFileSearch}
         onBrowsePath={browsePath}
       >
         {renderPaneContent(
@@ -182,6 +207,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       onOpenExternal={openExternal}
       browserOpen={browserOpen}
       onToggleBrowser={toggleBrowser}
+      onOpenSearch={openFileSearch}
       onBrowsePath={browsePath}
     >
       {renderPaneContent(

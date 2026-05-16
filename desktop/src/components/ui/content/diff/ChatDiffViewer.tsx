@@ -1,6 +1,13 @@
-import { Fragment, useMemo, useState, type CSSProperties } from "react";
+import {
+  Fragment,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
 import { DiffLineContent } from "@/components/ui/content/diff/DiffLineContent";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
+import { chainVerticalWheelScroll } from "@/lib/infra/dom/scroll-chain";
 import type {
   CollapsedContext,
   DiffLine,
@@ -131,10 +138,10 @@ function ChatContentCell({
       data-alt-line={altLineNumber}
       data-line-type={lineType}
       data-line-index={getChatLineIndex(line)}
-      className={`diff-content-cell relative flex min-h-[var(--diffs-line-height)] items-center pr-3 pl-2 ${
+      className={`diff-content-cell relative min-h-[var(--diffs-line-height)] pr-3 pl-2 ${
         wrapLongLines
-          ? "min-w-0 whitespace-pre-wrap break-words"
-          : "min-w-max whitespace-pre"
+          ? "block min-w-0 whitespace-pre-wrap break-words py-[calc((var(--diffs-line-height)-1em)/2)]"
+          : "flex min-w-max items-center whitespace-pre"
       }`}
     >
       <DiffLineContent line={line} tokens={tokens} />
@@ -175,6 +182,9 @@ export function ChatDiffViewer({
   viewportClassName,
   wrapLongLines,
   overscrollBehavior = "none",
+  overscrollBehaviorX,
+  overscrollBehaviorY,
+  chainVerticalWheel = false,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
@@ -182,6 +192,9 @@ export function ChatDiffViewer({
   viewportClassName?: string;
   wrapLongLines: boolean;
   overscrollBehavior?: CSSProperties["overscrollBehavior"];
+  overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
+  overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
+  chainVerticalWheel?: boolean;
 }) {
   const resolvedMode = useResolvedMode();
   const [expandedCollapsedKeys, setExpandedCollapsedKeys] = useState<Set<string>>(
@@ -199,6 +212,14 @@ export function ChatDiffViewer({
     }) as CSSProperties,
     [lineNumberDigits],
   );
+  const viewportStyle = useMemo(
+    () => ({
+      overscrollBehavior,
+      ...(overscrollBehaviorX ? { overscrollBehaviorX } : {}),
+      ...(overscrollBehaviorY ? { overscrollBehaviorY } : {}),
+    }) as CSSProperties,
+    [overscrollBehavior, overscrollBehaviorX, overscrollBehaviorY],
+  );
 
   const expandCollapsedRow = (key: string) => {
     setExpandedCollapsedKeys((prev) => {
@@ -207,12 +228,23 @@ export function ChatDiffViewer({
       return next;
     });
   };
+  const handleViewportWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
+    if (!chainVerticalWheel) {
+      return;
+    }
+    if (chainVerticalWheelScroll(event.currentTarget, event.deltaY)) {
+      event.preventDefault();
+    }
+  };
 
   return (
     <div className={className ?? ""}>
       <div
-        style={{ overscrollBehavior }}
-        className={`relative [contain:content] composer-diff-simple-line overflow-x-auto overflow-y-auto ${
+        style={viewportStyle}
+        onWheel={handleViewportWheel}
+        className={`relative [contain:content] composer-diff-simple-line overflow-y-auto ${
+          wrapLongLines ? "overflow-x-hidden" : "overflow-x-auto"
+        } ${
           viewportClassName ?? ""
         }`}
       >

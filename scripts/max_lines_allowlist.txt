@@ -42,6 +42,7 @@ desktop/src/hooks/sessions/use-session-runtime-actions.ts
 desktop/src/hooks/workspaces/tabs/use-workspace-shell-activation.ts
 desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts
 desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts
+desktop/src/lib/infra/measurement/boot-stall-diagnostics.ts
 desktop/src/hooks/workspaces/tabs/use-workspace-shell-activation.ts
 desktop/src/lib/infra/measurement/boot-stall-diagnostics.ts
 server/tests/integration/test_cloud_api.py

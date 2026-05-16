@@ -72,4 +72,21 @@ describe("FileChangesCard and FileDiffCard", () => {
 
     expect(html).toContain(">.../ui/content/FileDiffCard.tsx</span>");
   });
+
+  it("renders fallback metadata for zero-stat sidebar rows", () => {
+    const html = renderToStaticMarkup(
+      createElement(FileDiffCard, {
+        filePath: "new-file.ts",
+        additions: 0,
+        deletions: 0,
+        isExpanded: false,
+        onToggleExpand: () => {},
+        metadata: createElement("span", { "aria-label": "Added" }, "A"),
+        surface: "sidebar",
+      }),
+    );
+
+    expect(html).toContain("aria-label=\"Added\"");
+    expect(html).toContain(">A</span>");
+  });
 });

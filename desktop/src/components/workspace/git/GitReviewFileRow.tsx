@@ -11,6 +11,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
 import type {
+  GitPanelFile,
   GitPanelReviewFile,
   GitPanelReviewScope,
 } from "@/lib/domain/workspaces/changes/git-panel-diff";
@@ -142,6 +143,9 @@ export function GitReviewFileRow({
         filePath={file.displayPath}
         additions={additions}
         deletions={deletions}
+        metadata={currentDiff && additions === 0 && deletions === 0 ? (
+          <GitReviewStatusBadge status={currentDiff.status} />
+        ) : null}
         isExpanded={!collapsed}
         onToggleExpand={onToggleCollapsed}
         onOpenFile={() => void openFile(file.path)}
@@ -216,7 +220,9 @@ export function GitReviewFileRow({
                 variant={layout === "unified" ? "chat" : "default"}
                 viewportClassName="max-h-[calc(var(--diffs-line-height)*24)]"
                 operationId={measurementOperationId ?? null}
-                overscrollBehavior="auto"
+                overscrollBehaviorX="none"
+                overscrollBehaviorY="none"
+                chainVerticalWheel
               />
               {diffQuery.data?.truncated ? (
                 <p className="px-3 py-2 text-center text-xs text-sidebar-muted-foreground">
@@ -233,6 +239,66 @@ export function GitReviewFileRow({
       </FileDiffCard>
     </div>
   );
+}
+
+function GitReviewStatusBadge({ status }: { status: GitPanelFile["status"] }) {
+  const meta = fileStatusMeta(status);
+  return (
+    <span
+      className={`inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded px-1 text-[9px] font-medium leading-none ${meta.className}`}
+      title={meta.title}
+      aria-label={meta.title}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
+function fileStatusMeta(status: GitPanelFile["status"]): {
+  label: string;
+  title: string;
+  className: string;
+} {
+  switch (status) {
+    case "added":
+    case "untracked":
+      return {
+        label: "A",
+        title: "Added",
+        className: "bg-git-green/10 text-git-green",
+      };
+    case "deleted":
+      return {
+        label: "D",
+        title: "Deleted",
+        className: "bg-git-red/10 text-git-red",
+      };
+    case "renamed":
+      return {
+        label: "R",
+        title: "Renamed",
+        className: "bg-sidebar-accent text-sidebar-foreground",
+      };
+    case "copied":
+      return {
+        label: "C",
+        title: "Copied",
+        className: "bg-sidebar-accent text-sidebar-foreground",
+      };
+    case "conflicted":
+      return {
+        label: "!",
+        title: "Conflicted",
+        className: "bg-destructive/10 text-destructive",
+      };
+    case "modified":
+    default:
+      return {
+        label: "M",
+        title: "Modified",
+        className: "bg-sidebar-accent text-sidebar-muted-foreground",
+      };
+  }
 }
 
 function DiffDisplayPolicyPlaceholder({

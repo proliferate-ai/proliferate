@@ -16,6 +16,9 @@ interface DiffViewerProps {
   layout?: "unified" | "split";
   operationId?: MeasurementOperationId | null;
   overscrollBehavior?: CSSProperties["overscrollBehavior"];
+  overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
+  overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
+  chainVerticalWheel?: boolean;
 }
 
 const ROOT_CLASS =
@@ -31,6 +34,9 @@ export function DiffViewer({
   layout = "unified",
   operationId,
   overscrollBehavior,
+  overscrollBehaviorX,
+  overscrollBehaviorY,
+  chainVerticalWheel,
 }: DiffViewerProps) {
   const { parsed, tokens } = useDiffHighlight(patch, filePath, operationId);
 
@@ -44,6 +50,9 @@ export function DiffViewer({
           viewportClassName={viewportClassName}
           wrapLongLines={wrapLongLines}
           overscrollBehavior={overscrollBehavior}
+          overscrollBehaviorX={overscrollBehaviorX}
+          overscrollBehaviorY={overscrollBehaviorY}
+          chainVerticalWheel={chainVerticalWheel}
         />
       </DebugProfiler>
     );
@@ -60,6 +69,9 @@ export function DiffViewer({
           className={rootClass}
           viewportClassName={viewportClassName}
           overscrollBehavior={overscrollBehavior}
+          overscrollBehaviorX={overscrollBehaviorX}
+          overscrollBehaviorY={overscrollBehaviorY}
+          chainVerticalWheel={chainVerticalWheel}
         />
       </DebugProfiler>
     );
@@ -75,6 +87,9 @@ export function DiffViewer({
         wrapLongLines={wrapLongLines}
         variant={variant}
         overscrollBehavior={overscrollBehavior}
+        overscrollBehaviorX={overscrollBehaviorX}
+        overscrollBehaviorY={overscrollBehaviorY}
+        chainVerticalWheel={chainVerticalWheel}
       />
     </DebugProfiler>
   );

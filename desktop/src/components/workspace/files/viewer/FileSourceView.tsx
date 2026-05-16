@@ -81,7 +81,6 @@ export function FileSourceView({
         "--file-source-line-number-gutter-width": lineNumberGutterWidth,
       } as CSSProperties}
     >
-      <div className="file-source-gutter-rail" aria-hidden="true" />
       <div
         ref={scrollRef}
         className="file-source-scroll h-full min-h-0 min-w-0 overflow-auto"

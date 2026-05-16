@@ -8,9 +8,10 @@ all-changes review surfaces.
 Files is filesystem navigation from file-viewing surfaces:
 
 - open file viewer targets from chat links, command-palette results, git rows,
-  and the file viewer browser overlay
-- browse or search files from the overlay attached to file/diff viewing
-  surfaces
+  the file viewer browser overlay, and the file viewer search modal
+- browse directories from the overlay attached to file/diff viewing surfaces
+- search workspace files from the command palette or the file-viewer-local
+  search modal
 
 Files is not a standalone durable right-panel tool. The old Files pane/tab must
 not be rendered in the shared right-panel header.
@@ -106,6 +107,11 @@ closed.
 The file viewer frame owns the path header, copy path, save/reload actions,
 dirty/conflict states, and binary/too-large placeholders. Cmd/Ctrl+S saves the
 active file target only.
+
+The file viewer may open a palette-style file search modal scoped to the
+current viewer tab. It reuses the workspace file search API and command-palette
+input/list primitives; global shortcut ownership remains with the workspace
+command palette unless a dedicated binding is introduced later.
 
 ## Diff Viewing
 

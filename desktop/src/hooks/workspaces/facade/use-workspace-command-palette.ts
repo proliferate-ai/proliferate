@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
-import { useWorkspaceCommandPaletteFileSearch } from "@/hooks/workspaces/ui/use-workspace-command-palette-file-search";
+import { useWorkspaceFileSearch } from "@/hooks/workspaces/files/ui/use-workspace-file-search";
 import { useWorkspaceCommandPaletteOpenFiles } from "@/hooks/workspaces/derived/use-workspace-command-palette-open-files";
 import { useWorkspaceCommandPaletteTabs } from "@/hooks/workspaces/workflows/use-workspace-command-palette-tabs";
 import { useAppCommandActionsContext } from "@/providers/AppCommandActionsProvider";
@@ -72,10 +72,10 @@ export function useWorkspaceCommandPalette({
     restoreLastDismissedTab,
     restoreTabDisabledReason,
   } = useWorkspaceCommandPaletteTabs();
-  const fileSearch = useWorkspaceCommandPaletteFileSearch({
+  const fileSearch = useWorkspaceFileSearch({
     open,
-    selectedWorkspaceId,
-    hasRuntimeReadyWorkspace,
+    workspaceId: selectedWorkspaceId,
+    runtimeReady: hasRuntimeReadyWorkspace,
     query,
   });
   const openFiles = useWorkspaceCommandPaletteOpenFiles(selectedWorkspaceId);

@@ -57,12 +57,18 @@ export function SplitDiffViewer({
   className,
   viewportClassName,
   overscrollBehavior,
+  overscrollBehaviorX,
+  overscrollBehaviorY,
+  chainVerticalWheel,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
   className?: string;
   viewportClassName?: string;
   overscrollBehavior?: CSSProperties["overscrollBehavior"];
+  overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
+  overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
+  chainVerticalWheel?: boolean;
 }) {
   const rows: SplitDiffRow[] = [];
   parsed.hunks.forEach((hunk, hunkIndex) => {
@@ -89,9 +95,13 @@ export function SplitDiffViewer({
   return (
     <AutoHideScrollArea
       className={`font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] ${className ?? ""}`}
-      viewportClassName={viewportClassName}
+      viewportClassName={`bg-[var(--codex-diffs-surface)] ${viewportClassName ?? ""}`}
+      contentClassName="min-h-full bg-[var(--codex-diffs-surface)]"
       allowHorizontal={false}
       overscrollBehavior={overscrollBehavior}
+      overscrollBehaviorX={overscrollBehaviorX}
+      overscrollBehaviorY={overscrollBehaviorY}
+      chainVerticalWheel={chainVerticalWheel}
     >
       <div className="grid min-w-0 grid-cols-2">
         {rows.map((row) =>

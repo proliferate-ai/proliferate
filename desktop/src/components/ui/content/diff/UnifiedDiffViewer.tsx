@@ -155,6 +155,9 @@ export function UnifiedDiffViewer({
   wrapLongLines,
   variant,
   overscrollBehavior,
+  overscrollBehaviorX,
+  overscrollBehaviorY,
+  chainVerticalWheel,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
@@ -163,14 +166,22 @@ export function UnifiedDiffViewer({
   wrapLongLines: boolean;
   variant: "default" | "chat";
   overscrollBehavior?: CSSProperties["overscrollBehavior"];
+  overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
+  overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
+  chainVerticalWheel?: boolean;
 }) {
   return (
     <AutoHideScrollArea
       className={className}
-      viewportClassName={viewportClassName}
-      contentClassName={wrapLongLines ? "" : "min-w-max"}
+      viewportClassName={`bg-[var(--codex-diffs-surface)] ${viewportClassName ?? ""}`}
+      contentClassName={`min-h-full bg-[var(--codex-diffs-surface)] ${
+        wrapLongLines ? "" : "min-w-max"
+      }`}
       allowHorizontal={!wrapLongLines}
       overscrollBehavior={overscrollBehavior}
+      overscrollBehaviorX={overscrollBehaviorX}
+      overscrollBehaviorY={overscrollBehaviorY}
+      chainVerticalWheel={chainVerticalWheel}
     >
       {parsed.hunks.map((hunk, index) => (
         <HunkView

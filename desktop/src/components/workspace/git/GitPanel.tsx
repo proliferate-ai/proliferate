@@ -116,8 +116,16 @@ function GitPanelContent({
             deletions: currentDiff.deletions,
           })
         : null;
-      return index >= INITIAL_EXPANDED_DIFF_FILE_LIMIT
-        || Boolean(displayPolicy?.shouldAutoCollapse)
+      const hasKnownChangedLines = currentDiff
+        ? currentDiff.additions + currentDiff.deletions > 0
+        : false;
+      const shouldResolveInline = Boolean(
+        currentDiff
+        && !hasKnownChangedLines
+        && !displayPolicy?.shouldAutoCollapse,
+      );
+      return Boolean(displayPolicy?.shouldAutoCollapse)
+        || (index >= INITIAL_EXPANDED_DIFF_FILE_LIMIT && !shouldResolveInline)
         ? [entry.key]
         : [];
     });
@@ -295,7 +303,11 @@ function GitPanelContent({
       />
 
       <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-        <AutoHideScrollArea className="h-full min-h-0 min-w-0" viewportClassName="px-2 py-2">
+        <AutoHideScrollArea
+          className="h-full min-h-0 min-w-0"
+          viewportClassName="px-2 pb-2"
+          contentClassName="pt-2"
+        >
           {isLoading && (
             <div className="space-y-2 px-2 py-4">
               <div className="h-3 w-32 animate-pulse rounded bg-sidebar-accent" />
