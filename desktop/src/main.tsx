@@ -12,6 +12,11 @@ import {
   initializeDesktopTelemetry,
 } from "./lib/integrations/telemetry/client";
 import { elapsedStartupMs, startStartupTimer } from "./lib/infra/measurement/debug-startup";
+import {
+  installBootStallDiagnostics,
+  installWebKitPerformanceMeasureDetailGuard,
+  recordBootDiagnostic,
+} from "./lib/infra/measurement/boot-stall-diagnostics";
 import { installDebugMeasurement } from "./lib/infra/measurement/debug-measurement-install";
 import { logRendererEvent } from "./lib/access/tauri/diagnostics";
 import { AppProviders } from "./providers/AppProviders";
@@ -22,9 +27,12 @@ const IS_TAURI_DESKTOP =
   && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
 
 const rendererStartupStartedAt = startStartupTimer();
+installWebKitPerformanceMeasureDetailGuard();
+installBootStallDiagnostics();
 installDebugMeasurement();
 
 function recordRendererStartupEvent(message: string): void {
+  recordBootDiagnostic(`renderer_startup.${message}`);
   void logRendererEvent({
     source: "renderer_startup",
     message,

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/icons";
 import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
+import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
 import { ToolActionRow } from "./ToolActionRow";
 import { ToolFileChip } from "./ToolFileChip";
@@ -74,6 +75,14 @@ export function FileChangeCall({
     newBasename,
   );
   const statsHint = buildStatsHint(additions, deletions);
+  const diffDisplayPolicy = patch
+    ? resolveDiffDisplayPolicy({
+        path: displayPath,
+        additions,
+        deletions,
+        patch,
+      })
+    : null;
 
   if (status === "completed" && hasDiff) {
     const nextAdditions = additions ?? 0;
@@ -104,13 +113,20 @@ export function FileChangeCall({
                 ? handleOpenFile
                 : undefined}
             >
-              <DiffViewer
-                patch={patch!}
-                filePath={displayPath}
-                className="w-full"
-                viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
-                variant="chat"
-              />
+              {diffDisplayPolicy && !diffDisplayPolicy.canRenderInline ? (
+                <DiffDisplayPolicyPlaceholder
+                  title={diffDisplayPolicy.placeholderTitle}
+                  description={diffDisplayPolicy.placeholderDescription}
+                />
+              ) : (
+                <DiffViewer
+                  patch={patch!}
+                  filePath={displayPath}
+                  className="w-full"
+                  viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+                  variant="chat"
+                />
+              )}
             </FileDiffCard>
           </div>
         )}
@@ -130,7 +146,12 @@ export function FileChangeCall({
     >
       {hasDiff || preview ? (
         <ToolActionDetailsPanel>
-          {hasDiff ? (
+          {hasDiff && diffDisplayPolicy && !diffDisplayPolicy.canRenderInline ? (
+            <DiffDisplayPolicyPlaceholder
+              title={diffDisplayPolicy.placeholderTitle}
+              description={diffDisplayPolicy.placeholderDescription}
+            />
+          ) : hasDiff ? (
             <DiffViewer
               patch={patch!}
               filePath={displayPath}
@@ -152,6 +173,21 @@ export function FileChangeCall({
         </ToolActionDetailsPanel>
       ) : null}
     </ToolActionRow>
+  );
+}
+
+function DiffDisplayPolicyPlaceholder({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="px-3 py-4 text-xs text-muted-foreground">
+      <p className="font-medium text-foreground">{title}</p>
+      <p className="mt-0.5 leading-5">{description}</p>
+    </div>
   );
 }
 

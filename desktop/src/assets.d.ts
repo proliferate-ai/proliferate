@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   readonly VITE_PROLIFERATE_DEBUG_LATENCY?: string;
   readonly VITE_PROLIFERATE_DEBUG_MAIN_THREAD?: string;
   readonly VITE_PROLIFERATE_DEBUG_ANYHARNESS_TIMING?: string;
+  readonly VITE_PROLIFERATE_BOOT_DIAGNOSTICS?: string;
   readonly VITE_DEV_DISABLE_AUTH?: string;
   readonly VITE_REQUIRE_AUTH?: string;
   readonly VITE_PROLIFERATE_SENTRY_DSN?: string;

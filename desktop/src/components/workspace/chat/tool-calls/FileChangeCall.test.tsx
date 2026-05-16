@@ -65,4 +65,27 @@ describe("FileChangeCall", () => {
     expect(html).toContain("Long preview body");
     expect(html).toContain("max-h-[220px]");
   });
+
+  it("does not render oversized completed patches inline", () => {
+    const largePatch = [
+      "@@ -1 +1 @@",
+      ...Array.from({ length: 5_001 }, (_, index) => `+generated ${index}`),
+    ].join("\n");
+
+    const html = renderToStaticMarkup(
+      createElement(FileChangeCall, {
+        operation: "edit",
+        path: "anyharness/sdk/generated/openapi.json",
+        basename: "openapi.json",
+        additions: 5_001,
+        deletions: 0,
+        patch: largePatch,
+        status: "completed",
+        defaultExpanded: true,
+      }),
+    );
+
+    expect(html).toContain("Too large to render inline");
+    expect(html).not.toContain("overflow-x-auto overflow-y-auto");
+  });
 });

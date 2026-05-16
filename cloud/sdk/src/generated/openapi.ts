@@ -5537,18 +5537,6 @@ export interface components {
             /** Label */
             label?: string | null;
         };
-        /**
-         * WorkspaceDirectTargetContext
-         * @description Direct runtime materialization for non-managed cloud targets.
-         */
-        WorkspaceDirectTargetContext: {
-            /** Targetid */
-            targetId: string;
-            /** Targetkind */
-            targetKind: string;
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string;
-        };
         /** WorkspaceCredentialFreshness */
         WorkspaceCredentialFreshness: {
             /**
@@ -5619,6 +5607,18 @@ export interface components {
             readyAgentKinds: string[];
             /** Anyharnessworkspaceid */
             anyharnessWorkspaceId: string | null;
+        };
+        /**
+         * WorkspaceDirectTargetContext
+         * @description Direct runtime materialization for non-managed cloud targets.
+         */
+        WorkspaceDirectTargetContext: {
+            /** Targetid */
+            targetId: string;
+            /** Targetkind */
+            targetKind: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
         };
         /** WorkspaceMobilityPreflightRequest */
         WorkspaceMobilityPreflightRequest: {

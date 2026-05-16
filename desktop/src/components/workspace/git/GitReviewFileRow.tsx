@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from "react";
 import {
   type AnyHarnessQueryTimingOptions,
   useGitDiffQuery,
@@ -8,6 +9,7 @@ import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
 import { Minus, Plus } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
 import type {
   GitPanelReviewFile,
   GitPanelReviewScope,
@@ -26,7 +28,9 @@ export function GitReviewFileRow({
   wrapLongLines,
   collapsed,
   isRuntimeReady,
+  fetchDiff,
   onToggleCollapsed,
+  onDiffFetchSettled,
   openFile,
   stagePath,
   unstagePath,
@@ -42,7 +46,9 @@ export function GitReviewFileRow({
   wrapLongLines: boolean;
   collapsed: boolean;
   isRuntimeReady: boolean;
+  fetchDiff: boolean;
   onToggleCollapsed: () => void;
+  onDiffFetchSettled: () => void;
   openFile: OpenFile;
   stagePath: StagePath;
   unstagePath: StagePath;
@@ -53,28 +59,72 @@ export function GitReviewFileRow({
   const isBranchMode = sectionScope === "branch";
   const isLastTurnMode = sectionScope === "last_turn";
   const shouldUnstage = sectionScope === "staged";
+  const metadataPolicy = useMemo(
+    () => currentDiff
+      ? resolveDiffDisplayPolicy({
+          path: currentDiff.path,
+          additions: currentDiff.additions,
+          deletions: currentDiff.deletions,
+        })
+      : null,
+    [currentDiff],
+  );
   const diffQuery = useGitDiffQuery({
     workspaceId,
     path: file.path,
     scope: isLastTurnMode ? "base_worktree" : sectionScope,
     baseRef: isBranchMode || isLastTurnMode ? baseRef : null,
     oldPath: isBranchMode || isLastTurnMode ? file.oldPath : null,
-    enabled: isRuntimeReady && !collapsed && Boolean(currentDiff),
+    enabled:
+      isRuntimeReady
+      && !collapsed
+      && fetchDiff
+      && Boolean(currentDiff)
+      && Boolean(metadataPolicy?.canFetchInline),
     ...(diffTimingOptions ?? {}),
   });
   const diffErrorMessage = diffQuery.isError ? formatDiffErrorMessage(diffQuery.error) : null;
   const additions = diffQuery.data?.additions ?? currentDiff?.additions ?? 0;
   const deletions = diffQuery.data?.deletions ?? currentDiff?.deletions ?? 0;
   const patch = diffQuery.data?.patch ?? null;
+  const patchPolicy = useMemo(
+    () => patch
+      ? resolveDiffDisplayPolicy({
+          path: file.path,
+          additions,
+          deletions,
+          patch,
+        })
+      : metadataPolicy,
+    [additions, deletions, file.path, metadataPolicy, patch],
+  );
+  const waitingForDiffPermit = Boolean(
+    currentDiff
+    && isRuntimeReady
+    && !collapsed
+    && metadataPolicy?.canFetchInline
+    && !fetchDiff
+    && !patch
+    && !diffQuery.data
+    && !diffQuery.isError,
+  );
   const emptyDiffMessage = formatEmptyDiffMessage({
     binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
     truncated: Boolean(diffQuery.data?.truncated && !patch),
   });
 
+  useEffect(() => {
+    if (diffQuery.data || diffQuery.isError) {
+      onDiffFetchSettled();
+    }
+  }, [diffQuery.data, diffQuery.isError, onDiffFetchSettled]);
+
   if (
     currentDiff
     && isRuntimeReady
     && !collapsed
+    && fetchDiff
+    && metadataPolicy?.canFetchInline
     && !patch
     && !diffQuery.isLoading
     && !diffErrorMessage
@@ -131,6 +181,16 @@ export function GitReviewFileRow({
           <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
             No current diff against base
           </p>
+        ) : !metadataPolicy?.canFetchInline ? (
+          <DiffDisplayPolicyPlaceholder
+            title={metadataPolicy?.placeholderTitle ?? "Too large to render inline"}
+            description={metadataPolicy?.placeholderDescription ?? "Open the file to inspect this change."}
+            onOpenFile={() => void openFile(file.path)}
+          />
+        ) : waitingForDiffPermit ? (
+          <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
+            Waiting to load diff
+          </p>
         ) : diffQuery.isLoading ? (
           <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
             Loading diff
@@ -140,29 +200,65 @@ export function GitReviewFileRow({
             Diff unavailable: {diffErrorMessage}
           </p>
         ) : patch ? (
-          <>
-            <DiffViewer
-              patch={patch}
-              filePath={file.displayPath}
-              wrapLongLines={wrapLongLines}
-              layout={layout}
-              variant={layout === "unified" ? "chat" : "default"}
-              viewportClassName="max-h-[calc(var(--diffs-line-height)*24)]"
-              operationId={measurementOperationId ?? null}
-              overscrollBehavior="auto"
+          patchPolicy && !patchPolicy.canRenderInline ? (
+            <DiffDisplayPolicyPlaceholder
+              title={patchPolicy.placeholderTitle}
+              description={patchPolicy.placeholderDescription}
+              onOpenFile={() => void openFile(file.path)}
             />
-            {diffQuery.data?.truncated ? (
-              <p className="px-3 py-2 text-center text-xs text-sidebar-muted-foreground">
-                Diff truncated because it is too large
-              </p>
-            ) : null}
-          </>
+          ) : (
+            <>
+              <DiffViewer
+                patch={patch}
+                filePath={file.displayPath}
+                wrapLongLines={wrapLongLines}
+                layout={layout}
+                variant={layout === "unified" ? "chat" : "default"}
+                viewportClassName="max-h-[calc(var(--diffs-line-height)*24)]"
+                operationId={measurementOperationId ?? null}
+                overscrollBehavior="auto"
+              />
+              {diffQuery.data?.truncated ? (
+                <p className="px-3 py-2 text-center text-xs text-sidebar-muted-foreground">
+                  Diff truncated because it is too large
+                </p>
+              ) : null}
+            </>
+          )
         ) : emptyDiffMessage ? (
           <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
             {emptyDiffMessage}
           </p>
         ) : null}
       </FileDiffCard>
+    </div>
+  );
+}
+
+function DiffDisplayPolicyPlaceholder({
+  title,
+  description,
+  onOpenFile,
+}: {
+  title: string;
+  description: string;
+  onOpenFile: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-4 text-xs text-sidebar-muted-foreground">
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-sidebar-foreground">{title}</p>
+        <p className="mt-0.5 leading-5">{description}</p>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={onOpenFile}
+        className="h-7 shrink-0 rounded-md border border-sidebar-border/70 px-2.5 text-xs text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+      >
+        Open file
+      </Button>
     </div>
   );
 }

@@ -17,7 +17,8 @@ function browserFlagEnabled(): boolean {
   }
 
   try {
-    return envFlagEnabled(window.localStorage.getItem("proliferate.debugStartup") ?? undefined, false);
+    return envFlagEnabled(window.localStorage.getItem("proliferate.debugStartup") ?? undefined, false)
+      || envFlagEnabled(window.localStorage.getItem("proliferate.bootDiagnostics") ?? undefined, false);
   } catch {
     return false;
   }
@@ -25,6 +26,7 @@ function browserFlagEnabled(): boolean {
 
 export function isStartupDebugLoggingEnabled(): boolean {
   return envFlagEnabled(import.meta.env.VITE_PROLIFERATE_DEBUG_STARTUP, false)
+    || envFlagEnabled(import.meta.env.VITE_PROLIFERATE_BOOT_DIAGNOSTICS, false)
     || browserFlagEnabled();
 }
 
