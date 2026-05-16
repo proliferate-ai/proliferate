@@ -61,6 +61,19 @@ export type ItemDeltaEvent = ItemDeltaPayload & {
 export type ItemCompletedEvent = ItemCompletedPayload & {
   type: "item_completed";
 };
+
+// ACP command payloads are currently emitted through an OpenAPI `unknown[]`
+// envelope. The reducer validates these records before storing them on
+// TranscriptState; keep `meta` opaque because ACP reserves it for extensions.
+export interface AvailableSessionCommandInput {
+  hint?: string | null;
+}
+export interface AvailableSessionCommand {
+  name: string;
+  description: string;
+  input?: AvailableSessionCommandInput | null;
+  meta?: unknown;
+}
 export type AvailableCommandsUpdateEvent = AvailableCommandsUpdatePayload & {
   type: "available_commands_update";
 };

@@ -6,7 +6,7 @@ import {
   DraftAttachmentPreviewList,
   type DraftAttachmentPreviewListProps,
 } from "@/components/workspace/chat/content/PromptContentRenderer";
-import { ComposerMentionEditor } from "./ComposerMentionEditor";
+import { ComposerCommandEditor } from "./ComposerCommandEditor";
 import { ComposerTextarea } from "./ComposerTextarea";
 import { ComposerTextareaFrame } from "./ComposerTextareaFrame";
 import { QueuedPromptEditBanner } from "./QueuedPromptEditBanner";
@@ -25,7 +25,7 @@ interface ChatInputDraftAreaProps {
   hasDraftAttachments: boolean;
   draftAttachments: DraftAttachmentPreviewListProps["attachments"];
   onRemoveDraftAttachment: DraftAttachmentPreviewListProps["onRemove"];
-  searchHostElement: HTMLElement | null;
+  overlayHostElement: HTMLElement | null;
   onCancelEdit: () => void;
 }
 
@@ -43,7 +43,7 @@ export function ChatInputDraftArea({
   hasDraftAttachments,
   draftAttachments,
   onRemoveDraftAttachment,
-  searchHostElement,
+  overlayHostElement,
   onCancelEdit,
 }: ChatInputDraftAreaProps) {
   if (isEditingQueuedPrompt) {
@@ -76,7 +76,7 @@ export function ChatInputDraftArea({
         attachments={draftAttachments}
         onRemove={onRemoveDraftAttachment}
       />
-      <ComposerMentionEditor
+      <ComposerCommandEditor
         draft={draft}
         onDraftChange={onDraftChange}
         placeholder={CHAT_COMPOSER_LABELS.placeholder}
@@ -85,7 +85,7 @@ export function ChatInputDraftArea({
         onSubmit={onSubmit}
         onKeyDown={onKeyDown}
         topInset={hasDraftAttachments ? "none" : "standard"}
-        searchHostElement={searchHostElement}
+        overlayHostElement={overlayHostElement}
       />
     </>
   );

@@ -40,14 +40,6 @@ export interface DraftEditResult {
   selection: DraftSelection;
 }
 
-export interface ChatDraftUnit {
-  kind: "text" | "mention";
-  char: string;
-}
-
-const MENTION_UNIT_CHAR = "\uFFFC";
-const OPENING_TRIGGER_BOUNDARIES = new Set(["(", "[", "{", "<"]);
-
 export const EMPTY_CHAT_DRAFT: ChatComposerDraft = Object.freeze({ nodes: [] });
 
 let mentionIdSequence = 0;
@@ -63,6 +55,8 @@ export function createTextDraft(text: string): ChatComposerDraft {
   });
 }
 
+// The live composer no longer mints file mention nodes, but the draft model
+// still round-trips persisted/serialized file-link prompts.
 export function createFileMentionNode(input: {
   id?: string;
   name: string;
@@ -151,25 +145,6 @@ export function chatDraftNodeStartOffset(draft: ChatComposerDraft, nodeIndex: nu
     offset += chatDraftNodeLength(draft.nodes[index]!);
   }
   return offset;
-}
-
-export function chatDraftUnits(draft: ChatComposerDraft): ChatDraftUnit[] {
-  return draft.nodes.flatMap((node): ChatDraftUnit[] => {
-    if (node.type === "file_mention") {
-      return [{ kind: "mention", char: MENTION_UNIT_CHAR }];
-    }
-    return Array.from(node.text, (char) => ({ kind: "text", char }));
-  });
-}
-
-export function isFileMentionTriggerBoundary(unit: ChatDraftUnit | null): boolean {
-  if (!unit) {
-    return true;
-  }
-  if (unit.kind === "mention") {
-    return true;
-  }
-  return /\s/u.test(unit.char) || OPENING_TRIGGER_BOUNDARIES.has(unit.char);
 }
 
 export function clampDraftOffset(value: number, min: number, max: number): number {

@@ -1,4 +1,5 @@
 import type {
+  AvailableSessionCommand,
   ContentPart,
   FileChangeContentPart,
   FileReadContentPart,
@@ -64,6 +65,39 @@ export function createTranscriptState(sessionId: string): TranscriptState {
     linkCompletionsByCompletionId: {},
     latestLinkCompletionBySessionLinkId: {},
   };
+}
+
+export function normalizeAvailableSessionCommands(
+  commands: readonly unknown[],
+): AvailableSessionCommand[] {
+  const normalized: AvailableSessionCommand[] = [];
+
+  for (const command of commands) {
+    if (!isRecord(command) || typeof command.name !== "string") {
+      continue;
+    }
+    const name = command.name.trim();
+    if (!name) {
+      continue;
+    }
+    const description = typeof command.description === "string"
+      ? command.description
+      : "";
+    const input = isRecord(command.input) && typeof command.input.hint === "string"
+      ? { hint: command.input.hint }
+      : null;
+    const normalizedCommand: AvailableSessionCommand = {
+      name,
+      description,
+      input,
+    };
+    if ("meta" in command) {
+      normalizedCommand.meta = command.meta;
+    }
+    normalized.push(normalizedCommand);
+  }
+
+  return normalized;
 }
 
 export interface ReduceOptions {
@@ -159,7 +193,7 @@ export function reduceEvent(
     }
 
     case "available_commands_update":
-      s.availableCommands = evt.availableCommands;
+      s.availableCommands = normalizeAvailableSessionCommands(evt.availableCommands);
       break;
 
     case "current_mode_update":
@@ -1534,4 +1568,8 @@ export function isFileReadPart(part: ContentPart): part is FileReadContentPart {
 
 export function isFileChangePart(part: ContentPart): part is FileChangeContentPart {
   return part.type === "file_change";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
