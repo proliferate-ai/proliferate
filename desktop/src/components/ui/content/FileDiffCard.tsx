@@ -191,6 +191,7 @@ interface FileDiffCardProps {
   openActionTitle?: string;
   actions?: ReactNode;
   children?: ReactNode;
+  metadata?: ReactNode;
   embedded?: boolean;
   collapsible?: boolean;
   surface?: "chat" | "sidebar";
@@ -208,6 +209,7 @@ export function FileDiffCard({
   openActionTitle,
   actions,
   children,
+  metadata,
   embedded = false,
   collapsible = true,
   surface = "chat",
@@ -310,6 +312,7 @@ export function FileDiffCard({
                   deletions={deletions}
                   className="leading-none"
                 />
+                {!additions && !deletions && metadata}
                 {handleOpenAction && (
                   <div className="shrink-0 opacity-0 transition-opacity duration-200 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100">
                     <Button

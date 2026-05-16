@@ -351,9 +351,29 @@
   --file-source-line-number-hover: color-mix(in srgb, var(--color-foreground) 58%, transparent);
   --file-source-content-gap: 0.625rem;
   --file-source-content-padding-inline: 0.125rem;
+  background:
+    linear-gradient(
+      to right,
+      var(--file-source-gutter-surface) 0,
+      var(--file-source-gutter-surface) var(--file-source-line-number-gutter-width),
+      var(--file-source-surface) var(--file-source-line-number-gutter-width),
+      var(--file-source-surface) 100%
+    );
+}
+
+.file-source-view::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: calc(var(--file-source-line-number-gutter-width) - 1px);
+  z-index: 6;
+  width: 1px;
+  pointer-events: none;
+  background: var(--file-source-gutter-border);
 }
 
 .file-source-scroll {
+  overscroll-behavior: none;
   scrollbar-color: var(--color-scrollbar-thumb) transparent;
 }
 
@@ -361,21 +381,8 @@
   scrollbar-color: var(--color-scrollbar-thumb-active) transparent;
 }
 
-.file-source-gutter-rail {
-  position: absolute;
-  inset-block: 0;
-  left: 0;
-  z-index: 5;
-  width: var(--file-source-line-number-gutter-width);
-  pointer-events: none;
-  background: var(--file-source-gutter-surface);
-  box-shadow:
-    inset 1px 0 0 var(--file-source-gutter-border),
-    inset -1px 0 0 var(--file-source-gutter-border);
-}
-
 .file-source-view [data-file] {
-  background: var(--file-source-surface);
+  background: transparent;
   color: var(--diffs-fg);
 }
 
@@ -389,7 +396,12 @@
 }
 
 .file-source-line-number {
+  box-sizing: border-box;
+  background: var(--file-source-gutter-surface);
   color: var(--file-source-line-number);
+  box-shadow:
+    inset 1px 0 0 var(--file-source-gutter-border),
+    inset -1px 0 0 var(--file-source-gutter-border);
 }
 
 .file-source-line:hover .file-source-line-number {

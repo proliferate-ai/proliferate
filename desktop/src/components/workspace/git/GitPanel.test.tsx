@@ -117,6 +117,9 @@ describe("GitPanel", () => {
     expect(html).toContain("Git review options");
     expect(html).toContain("Show files");
     expect(html).toContain("data-diff-surface=\"sidebar\"");
+    expect(html).toContain("px-2 pb-2");
+    expect(html).toContain("pt-2");
+    expect(html).not.toContain("px-2 py-2");
     expect(html).not.toContain("No diff available");
     expect(html).toContain("GitPanel.tsx");
   });
@@ -148,17 +151,25 @@ describe("GitPanel", () => {
     expect(html).toContain("Refresh");
   });
 
-  it("renders last-turn touched files without stage actions when current diff is clean", () => {
+  it("renders last-turn current diffs without stage actions", () => {
+    const currentDiff = {
+      key: ":README.md:modified",
+      path: "README.md",
+      oldPath: null,
+      displayPath: "README.md",
+      status: "modified",
+      includedState: null,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+    };
     mockGitPanelState.mockReturnValue(createGitPanelState({
       sections: [{
         scope: "last_turn",
         label: "Last turn",
         files: [{
-          key: "last-turn:README.md:edit",
-          path: "README.md",
-          oldPath: null,
-          displayPath: "README.md",
-          currentDiff: null,
+          ...currentDiff,
+          currentDiff,
         }],
       }],
       visibleChangedCount: 1,
@@ -168,8 +179,42 @@ describe("GitPanel", () => {
     const html = renderToStaticMarkup(createElement(GitPanel));
 
     expect(html).toContain("README.md");
-    expect(html).toContain("No current diff against base");
+    expect(html).toContain('text-right">+</span><span class="text-right">1');
     expect(html).not.toContain("Stage README.md");
+  });
+
+  it("keeps zero-stat rows expanded so empty status entries can resolve", () => {
+    const files = Array.from({ length: 4 }, (_, index) => {
+      const path = index === 3 ? "src/unknown-stat.ts" : `src/file-${index}.ts`;
+      const diff = {
+        key: `:${path}:modified`,
+        path,
+        oldPath: null,
+        displayPath: path,
+        status: "modified",
+        includedState: "excluded",
+        additions: index === 3 ? 0 : 1,
+        deletions: index === 3 ? 0 : 1,
+        binary: false,
+      };
+      return {
+        ...diff,
+        currentDiff: diff,
+      };
+    });
+    mockGitPanelState.mockReturnValue(createGitPanelState({
+      sections: [{
+        scope: "unstaged",
+        label: "Unstaged",
+        files,
+      }],
+      visibleChangedCount: files.length,
+    }));
+
+    const html = renderToStaticMarkup(createElement(GitPanel));
+
+    expect(html).toContain("src/unknown-stat.ts");
+    expect(html.match(/new line/g)).toHaveLength(4);
   });
 
   it("skips loaded changed-file rows that have no renderable diff", () => {

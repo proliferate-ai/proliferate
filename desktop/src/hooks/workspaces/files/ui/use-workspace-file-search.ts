@@ -1,32 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchWorkspaceFilesQuery } from "@anyharness/sdk-react";
 
-const EMPTY_FILE_RESULTS: Array<{ path: string; name: string }> = [];
+const EMPTY_FILE_RESULTS: WorkspaceFileSearchResult[] = [];
 
-export interface CommandPaletteFileSearchResult {
+interface WorkspaceFileSearchResult {
   path: string;
   name: string;
 }
 
-interface UseWorkspaceCommandPaletteFileSearchArgs {
+interface UseWorkspaceFileSearchArgs {
   open: boolean;
-  selectedWorkspaceId: string | null;
-  hasRuntimeReadyWorkspace: boolean;
+  workspaceId: string | null;
+  runtimeReady: boolean;
   query: string;
+  limit?: number;
 }
 
-// Owns command-palette-specific file search debouncing and query state.
-export function useWorkspaceCommandPaletteFileSearch({
+// Owns debounced workspace file path search state for palette-style surfaces.
+export function useWorkspaceFileSearch({
   open,
-  selectedWorkspaceId,
-  hasRuntimeReadyWorkspace,
+  workspaceId,
+  runtimeReady,
   query,
-}: UseWorkspaceCommandPaletteFileSearchArgs) {
+  limit = 50,
+}: UseWorkspaceFileSearchArgs) {
   const trimmedQuery = query.trim();
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
   useEffect(() => {
-    if (!open || trimmedQuery.length === 0 || !hasRuntimeReadyWorkspace) {
+    if (!open || trimmedQuery.length === 0 || !runtimeReady) {
       setDebouncedQuery("");
       return undefined;
     }
@@ -36,21 +38,22 @@ export function useWorkspaceCommandPaletteFileSearch({
     }, 120);
 
     return () => window.clearTimeout(timeoutId);
-  }, [hasRuntimeReadyWorkspace, open, trimmedQuery]);
+  }, [open, runtimeReady, trimmedQuery]);
 
-  const searchEnabled = open
-    && hasRuntimeReadyWorkspace
-    && selectedWorkspaceId !== null
+  const searchEnabled =
+    open
+    && runtimeReady
+    && workspaceId !== null
     && debouncedQuery.length > 0;
 
   const queryResult = useSearchWorkspaceFilesQuery({
-    workspaceId: selectedWorkspaceId,
+    workspaceId,
     query: debouncedQuery,
-    limit: 50,
+    limit,
     enabled: searchEnabled,
   });
 
-  const results = useMemo<CommandPaletteFileSearchResult[]>(() => {
+  const results = useMemo<WorkspaceFileSearchResult[]>(() => {
     if (!searchEnabled) {
       return EMPTY_FILE_RESULTS;
     }

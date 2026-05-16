@@ -31,33 +31,35 @@ export function PlaygroundSidebarGitDiff() {
       <div className="shrink-0 border-b border-sidebar-border/70 px-3 py-2">
         <p className="text-xs text-sidebar-muted-foreground">Git diff sidebar</p>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 py-2">
-        {PLAYGROUND_SIDEBAR_GIT_DIFF_SECTIONS.map((section) => {
-          const files = PLAYGROUND_SIDEBAR_GIT_DIFF_FILES.filter(
-            (file) => file.section === section,
-          );
-          return (
-            <section key={section} className="flex flex-col gap-2">
-              <h2 className="px-1 text-xs font-medium text-sidebar-muted-foreground">
-                {section}
-              </h2>
-              {files.length > 0 ? (
-                files.map((file) => (
-                  <PlaygroundSidebarGitDiffCard
-                    key={file.key}
-                    file={file}
-                    isExpanded={expandedKeys.has(file.key)}
-                    onToggle={() => toggleExpanded(file.key)}
-                  />
-                ))
-              ) : (
-                <p className="rounded-lg bg-sidebar-accent px-3 py-4 text-center text-xs text-sidebar-muted-foreground">
-                  Working tree clean
-                </p>
-              )}
-            </section>
-          );
-        })}
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        <div className="flex flex-col gap-3 pt-2">
+          {PLAYGROUND_SIDEBAR_GIT_DIFF_SECTIONS.map((section) => {
+            const files = PLAYGROUND_SIDEBAR_GIT_DIFF_FILES.filter(
+              (file) => file.section === section,
+            );
+            return (
+              <section key={section} className="flex flex-col gap-2">
+                <h2 className="px-1 text-xs font-medium text-sidebar-muted-foreground">
+                  {section}
+                </h2>
+                {files.length > 0 ? (
+                  files.map((file) => (
+                    <PlaygroundSidebarGitDiffCard
+                      key={file.key}
+                      file={file}
+                      isExpanded={expandedKeys.has(file.key)}
+                      onToggle={() => toggleExpanded(file.key)}
+                    />
+                  ))
+                ) : (
+                  <p className="rounded-lg bg-sidebar-accent px-3 py-4 text-center text-xs text-sidebar-muted-foreground">
+                    Working tree clean
+                  </p>
+                )}
+              </section>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import type { GitChangedFile, GitDiffFile } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
 import {
   buildGitPanelFiles,
+  buildGitPanelSections,
   gitPanelRuntimeBlockWorkspaceId,
   resolveGitPanelBaseRef,
 } from "./git-panel-diff";
@@ -72,6 +73,38 @@ describe("git panel diff domain", () => {
       path: "deleted.ts",
       status: "deleted",
     });
+  });
+
+  it("omits last-turn touched files that no longer have a current diff", () => {
+    const sections = buildGitPanelSections({
+      mode: "last_turn",
+      statusFiles: [],
+      branchFiles: [],
+      lastTurnFiles: [
+        {
+          key: ":clean.md:edit",
+          path: "clean.md",
+          oldPath: null,
+          displayPath: "clean.md",
+          operation: "edit",
+          topLevel: true,
+        },
+        {
+          key: ":dirty.md:edit",
+          path: "dirty.md",
+          oldPath: null,
+          displayPath: "dirty.md",
+          operation: "edit",
+          topLevel: true,
+        },
+      ],
+      baseWorktreeFiles: [
+        branchFile({ path: "dirty.md", additions: 2 }),
+      ],
+    });
+
+    expect(sections).toHaveLength(1);
+    expect(sections[0].files.map((file) => file.path)).toEqual(["dirty.md"]);
   });
 
   it("resolves branch base-ref precedence", () => {

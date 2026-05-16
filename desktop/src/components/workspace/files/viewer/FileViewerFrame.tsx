@@ -8,6 +8,7 @@ import {
   ExternalLink,
   FileText,
   FolderOpen,
+  Search,
   WrapText,
 } from "@/components/ui/icons";
 import {
@@ -35,6 +36,7 @@ export function FileViewerFrame({
   onOpenExternal,
   browserOpen,
   onToggleBrowser,
+  onOpenSearch,
   onBrowsePath,
   children,
 }: {
@@ -51,6 +53,7 @@ export function FileViewerFrame({
   onOpenExternal: () => void;
   browserOpen: boolean;
   onToggleBrowser: () => void;
+  onOpenSearch: () => void;
   onBrowsePath: (path: string) => void;
   children: ReactNode;
 }) {
@@ -75,6 +78,12 @@ export function FileViewerFrame({
             onClick={onOpenExternal}
           >
             <ExternalLink className="size-3.5" />
+          </PaneIconButton>
+          <PaneIconButton
+            label="Search files"
+            onClick={onOpenSearch}
+          >
+            <Search className="size-3.5" />
           </PaneIconButton>
           <PaneIconButton
             label={browserOpen ? "Hide files" : "Show files"}
