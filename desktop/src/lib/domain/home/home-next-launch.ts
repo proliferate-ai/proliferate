@@ -16,6 +16,7 @@ import {
 } from "@/lib/domain/agents/model-options";
 import { resolveModelForRegistry } from "@/lib/domain/chat/launch/session-config";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import { buildLocalSlotLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 
 export type HomeNextRepositorySelection =
   | { kind: "auto" }
@@ -226,7 +227,7 @@ export function findHomeNextLocalWorkspace(input: {
       workspace.repoRootId === input.repoRootId
       && workspace.kind === "local"
       && workspace.surface !== "cowork"
-      && !archivedWorkspaceIdSet.has(workspace.id)
+      && !isWorkspaceArchived(workspace.id, archivedWorkspaceIdSet)
     )
     .sort((left, right) => {
       const byInteraction =
@@ -323,7 +324,7 @@ export function findHomeNextMatchingWorkspace(input: {
     .filter((workspace) =>
       workspace.repoRootId === input.repoRootId
       && workspace.surface !== "cowork"
-      && !archivedWorkspaceIdSet.has(workspace.id)
+      && !isWorkspaceArchived(workspace.id, archivedWorkspaceIdSet)
       && rawWorkspaceBranch(workspace) === input.branchName
     )
     .sort((left, right) => {
@@ -341,4 +342,9 @@ export function findHomeNextMatchingWorkspace(input: {
 
       return left.id.localeCompare(right.id);
     })[0] ?? null;
+}
+
+function isWorkspaceArchived(workspaceId: string, archivedWorkspaceIdSet: Set<string>): boolean {
+  return archivedWorkspaceIdSet.has(workspaceId)
+    || archivedWorkspaceIdSet.has(buildLocalSlotLogicalWorkspaceId(workspaceId));
 }

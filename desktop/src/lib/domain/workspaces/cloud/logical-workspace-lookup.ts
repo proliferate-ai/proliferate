@@ -3,6 +3,10 @@ import {
   logicalWorkspaceCloudMaterializationId,
   logicalWorkspaceTargetMaterializationId,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
+import {
+  buildLocalSlotLogicalWorkspaceId,
+  parseLogicalWorkspaceId,
+} from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 
 export function logicalWorkspaceMatchesId(
   workspace: LogicalWorkspace,
@@ -12,8 +16,15 @@ export function logicalWorkspaceMatchesId(
     return false;
   }
 
+  const localSlotWorkspaceId = parseLocalSlotWorkspaceId(candidateId);
   return candidateId === workspace.id
     || candidateId === workspace.localWorkspace?.id
+    || (!!localSlotWorkspaceId && localSlotWorkspaceId === workspace.localWorkspace?.id)
+    || candidateId === (
+      workspace.localWorkspace
+        ? buildLocalSlotLogicalWorkspaceId(workspace.localWorkspace.id)
+        : null
+    )
     || candidateId === logicalWorkspaceCloudMaterializationId(workspace)
     || candidateId === logicalWorkspaceTargetMaterializationId(workspace);
 }
@@ -33,10 +44,34 @@ export function logicalWorkspaceRelatedIds(
 
   pushId(workspace.id);
   pushId(workspace.localWorkspace?.id);
+  if (workspace.localWorkspace) {
+    pushId(buildLocalSlotLogicalWorkspaceId(workspace.localWorkspace.id));
+  }
   pushId(logicalWorkspaceCloudMaterializationId(workspace));
   pushId(logicalWorkspaceTargetMaterializationId(workspace));
   pushId(workspace.preferredMaterializationId);
   return ids;
+}
+
+export function expandLogicalWorkspaceRelatedIdSet(
+  workspaces: readonly Pick<
+    LogicalWorkspace,
+    "id" | "localWorkspace" | "cloudWorkspace" | "mobilityWorkspace" | "preferredMaterializationId"
+  >[],
+  ids: Iterable<string>,
+): Set<string> {
+  const seed = new Set(ids);
+  const expanded = new Set(seed);
+  for (const workspace of workspaces) {
+    const relatedIds = logicalWorkspaceRelatedIds(workspace);
+    if (!relatedIds.some((id) => seed.has(id))) {
+      continue;
+    }
+    for (const id of relatedIds) {
+      expanded.add(id);
+    }
+  }
+  return expanded;
 }
 
 export function latestLogicalWorkspaceTimestamp(
@@ -68,4 +103,12 @@ export function findLogicalWorkspace(
   }
 
   return workspaces.find((workspace) => logicalWorkspaceMatchesId(workspace, candidateId)) ?? null;
+}
+
+function parseLocalSlotWorkspaceId(candidateId: string): string | null {
+  const parsed = parseLogicalWorkspaceId(candidateId);
+  if (parsed?.kind !== "local-slot" || parsed.segments.length !== 1) {
+    return null;
+  }
+  return parsed.segments[0] ?? null;
 }

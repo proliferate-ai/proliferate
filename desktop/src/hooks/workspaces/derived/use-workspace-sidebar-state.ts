@@ -9,6 +9,7 @@ import {
   buildSidebarGroupStates,
   resolveSidebarEmptyState,
 } from "@/lib/domain/workspaces/sidebar/sidebar-groups";
+import { logicalWorkspaceRelatedIds } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import type {
   SidebarEmptyState,
   SidebarGroupState,
@@ -99,7 +100,9 @@ export function useWorkspaceSidebarState({
   );
 
   const archivedCount = useMemo(
-    () => logicalWorkspaces.filter((entry) => archivedSet.has(entry.id)).length,
+    () => logicalWorkspaces.filter((entry) =>
+      logicalWorkspaceRelatedIds(entry).some((id) => archivedSet.has(id))
+    ).length,
     [archivedSet, logicalWorkspaces],
   );
   const pendingPromptCounts = useMemo(() => {

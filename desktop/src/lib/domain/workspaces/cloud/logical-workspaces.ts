@@ -12,6 +12,7 @@ import {
   localWorkspaceGroupKey,
 } from "@/lib/domain/workspaces/cloud/collections";
 import {
+  buildLocalSlotLogicalWorkspaceId,
   buildPathLogicalWorkspaceId,
   buildRemoteLogicalWorkspaceId,
   buildRepoRootLogicalWorkspaceId,
@@ -36,7 +37,7 @@ function cloudBranchKey(workspace: CloudWorkspaceSummary): string {
   return normalizeLogicalWorkspaceBranchKey(workspace.repo.branch);
 }
 
-function buildLogicalWorkspaceIdForLocalWorkspace(workspace: Workspace): string {
+function buildBaseLogicalWorkspaceIdForLocalWorkspace(workspace: Workspace): string {
   if (workspace.gitProvider && workspace.gitOwner && workspace.gitRepoName) {
     return buildRemoteLogicalWorkspaceId(
       workspace.gitProvider,
@@ -54,6 +55,14 @@ function buildLogicalWorkspaceIdForLocalWorkspace(workspace: Workspace): string 
     workspace.sourceRepoRootPath ?? workspace.path,
     workspaceBranchKey(workspace),
   );
+}
+
+function compareLocalWorkspaceCanonicalOrder(left: Workspace, right: Workspace): number {
+  const byCreatedAt = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+  if (byCreatedAt !== 0) {
+    return byCreatedAt;
+  }
+  return left.id.localeCompare(right.id);
 }
 
 function buildLogicalWorkspaceIdForCloudWorkspace(workspace: CloudWorkspaceSummary): string {
@@ -162,26 +171,29 @@ export function buildLogicalWorkspaces(args: {
     mobilityWorkspace: CloudMobilityWorkspaceSummary | null;
   }>();
 
+  const localBuckets = new Map<string, Workspace[]>();
   for (const workspace of args.localWorkspaces) {
-    const logicalId = buildLogicalWorkspaceIdForLocalWorkspace(workspace);
-    const current = byId.get(logicalId);
-    if (!current) {
+    const baseLogicalId = buildBaseLogicalWorkspaceIdForLocalWorkspace(workspace);
+    const bucket = localBuckets.get(baseLogicalId);
+    if (bucket) {
+      bucket.push(workspace);
+    } else {
+      localBuckets.set(baseLogicalId, [workspace]);
+    }
+  }
+
+  for (const [baseLogicalId, bucket] of localBuckets) {
+    const sortedBucket = [...bucket].sort(compareLocalWorkspaceCanonicalOrder);
+    sortedBucket.forEach((workspace, index) => {
+      const logicalId = index === 0
+        ? baseLogicalId
+        : buildLocalSlotLogicalWorkspaceId(workspace.id);
       byId.set(logicalId, {
         localWorkspace: workspace,
         cloudWorkspace: null,
         mobilityWorkspace: null,
       });
-      continue;
-    }
-
-    if (!current.localWorkspace) {
-      current.localWorkspace = workspace;
-      continue;
-    }
-
-    if (new Date(workspace.updatedAt).getTime() > new Date(current.localWorkspace.updatedAt).getTime()) {
-      current.localWorkspace = workspace;
-    }
+    });
   }
 
   for (const workspace of args.cloudWorkspaces) {

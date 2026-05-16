@@ -128,6 +128,30 @@ describe("upsertLocalWorkspaceCollections", () => {
     expect(next?.workspaces[0]?.updatedAt).toBe("2026-04-06T12:00:00.000Z");
   });
 
+  it("keeps same-path local workspaces distinct by workspace id", () => {
+    const existing = buildWorkspaceCollections(
+      [makeWorkspace({
+        id: "workspace-1",
+        path: "/tmp/repo",
+        updatedAt: "2026-04-06T10:00:00.000Z",
+      })],
+      [makeRepoRoot()],
+      [],
+    );
+    const inserted = makeWorkspace({
+      id: "workspace-2",
+      path: "/tmp/repo",
+      updatedAt: "2026-04-06T11:00:00.000Z",
+    });
+
+    const next = upsertLocalWorkspaceCollections(existing, inserted);
+
+    expect(next?.localWorkspaces.map((workspace) => workspace.id)).toEqual([
+      "workspace-2",
+      "workspace-1",
+    ]);
+  });
+
   it("returns undefined when the workspace collections cache is not populated", () => {
     expect(
       upsertLocalWorkspaceCollections(undefined, makeWorkspace()),

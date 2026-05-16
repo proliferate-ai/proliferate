@@ -9,6 +9,10 @@ import {
   type HomeActionId,
   buildHomeActionCards,
 } from "@/lib/domain/home/home-screen";
+import {
+  expandLogicalWorkspaceRelatedIdSet,
+  logicalWorkspaceRelatedIds,
+} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import { compareLogicalWorkspaceRecency } from "@/lib/domain/workspaces/sidebar/recency";
 import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -29,11 +33,11 @@ export function useHomeScreen() {
   const { selectWorkspace } = useWorkspaceSelection();
 
   const recentLogicalWorkspaces = useMemo(() => {
-    const archivedSet = new Set(archivedWorkspaceIds);
+    const archivedSet = expandLogicalWorkspaceRelatedIdSet(logicalWorkspaces, archivedWorkspaceIds);
     const hiddenRepoRootIdSet = new Set(hiddenRepoRootIds);
     return [...logicalWorkspaces]
       .filter((workspace) =>
-        !archivedSet.has(workspace.id)
+        !logicalWorkspaceRelatedIds(workspace).some((id) => archivedSet.has(id))
         && !(
           workspace.repoRoot?.id && hiddenRepoRootIdSet.has(workspace.repoRoot.id)
         )

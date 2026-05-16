@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 
 export function usePersistedLogicalWorkspaceSelection() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
@@ -25,7 +26,7 @@ export function usePersistedLogicalWorkspaceSelection() {
       return;
     }
 
-    if (!logicalWorkspaces.some((workspace) => workspace.id === selectedLogicalWorkspaceId)) {
+    if (!findLogicalWorkspace(logicalWorkspaces, selectedLogicalWorkspaceId)) {
       return;
     }
 

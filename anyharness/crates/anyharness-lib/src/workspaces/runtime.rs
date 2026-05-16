@@ -179,6 +179,8 @@ impl WorkspaceRuntime {
         }
 
         let existing_lookup_started = Instant::now();
+        // Worktrees own their materialized checkout path across workspace
+        // kinds; do not create a worktree where any active workspace points.
         if self.store.find_active_by_path(&canonical_path)?.is_some() {
             anyhow::bail!("a workspace record already exists for path: {canonical_path}");
         }
@@ -292,6 +294,8 @@ impl WorkspaceRuntime {
             validate_mobility_destination_id(destination_id)?;
             let candidate = base_dir.join(destination_id);
             let candidate_string = candidate.to_string_lossy().to_string();
+            // Mobility destinations are managed worktree paths and must not
+            // collide with any active workspace row, regardless of kind.
             if let Some(existing) = self.store.find_active_by_path(&candidate_string)? {
                 if existing.current_branch.as_deref() == Some(requested_branch) {
                     return Ok(existing);
@@ -326,6 +330,8 @@ impl WorkspaceRuntime {
                 .find(|candidate| {
                     let candidate_string = candidate.to_string_lossy();
                     !candidate.exists()
+                        // Mobility destinations are managed worktree paths and
+                        // remain unique across all active workspace kinds.
                         && self
                             .store
                             .find_active_by_path(&candidate_string)
@@ -496,13 +502,13 @@ impl WorkspaceRuntime {
         self.store.find_active_by_path_and_kind(path, kind)
     }
 
-    pub fn find_active_workspace_by_path_excluding_id(
+    pub fn find_active_worktree_by_path_excluding_id(
         &self,
         path: &str,
         excluded_id: &str,
     ) -> anyhow::Result<Option<WorkspaceRecord>> {
         self.store
-            .find_active_by_path_excluding_id(path, excluded_id)
+            .find_active_by_path_and_kind_excluding_id(path, "worktree", excluded_id)
     }
 
     pub fn retire_worktree_materialization(
@@ -731,7 +737,9 @@ impl WorkspaceRuntime {
                 });
             }
 
-            anyhow::bail!("a workspace record already exists for path: {workspace_path}");
+            if workspace_kind == "worktree" {
+                anyhow::bail!("a workspace record already exists for path: {workspace_path}");
+            }
         }
         if let Some(retired) = self
             .store
@@ -997,9 +1005,12 @@ mod tests {
     use uuid::Uuid;
 
     use super::WorkspaceRuntime;
+    use crate::origin::OriginContext;
     use crate::persistence::Db;
     use crate::repo_roots::service::RepoRootService;
     use crate::repo_roots::store::RepoRootStore;
+    use crate::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
+    use crate::sessions::store::SessionStore;
     use crate::workspaces::service::WorkspaceService;
     use crate::workspaces::store::WorkspaceStore;
 
@@ -1089,6 +1100,13 @@ mod tests {
         let source_workspace = runtime
             .create_workspace(&source.path().display().to_string())
             .expect("create source workspace");
+        let duplicate_source_workspace = runtime
+            .create_workspace(&source.path().display().to_string())
+            .expect("create duplicate source workspace");
+        assert_ne!(
+            source_workspace.workspace.id,
+            duplicate_source_workspace.workspace.id
+        );
         let base_sha = git_stdout(source.path(), ["rev-parse", "HEAD"]);
 
         let workspace = runtime
@@ -1122,26 +1140,96 @@ mod tests {
     }
 
     #[test]
-    fn create_workspace_rejects_existing_active_path() {
-        let source = TempDirGuard::new("runtime-create-existing-source");
-        let runtime_home = TempDirGuard::new("runtime-create-existing-home");
+    fn create_workspace_creates_distinct_local_records_for_existing_path() {
+        let source = TempDirGuard::new("runtime-create-duplicate-local-source");
+        let runtime_home = TempDirGuard::new("runtime-create-duplicate-local-home");
         init_repo(source.path());
 
         let db = Db::open_in_memory().expect("open db");
         let runtime = make_runtime(&db, runtime_home.path());
         let path = source.path().display().to_string();
 
-        let first = runtime.create_workspace(&path).expect("create workspace");
-        let error = match runtime.create_workspace(&path) {
-            Ok(_) => panic!("second create should reject existing path"),
-            Err(error) => error,
-        };
+        let first = runtime
+            .create_workspace(&path)
+            .expect("create first workspace");
+        let second = runtime
+            .create_workspace(&path)
+            .expect("create duplicate local workspace");
 
-        assert!(error
-            .to_string()
-            .contains("a workspace record already exists for path"));
+        assert_ne!(first.workspace.id, second.workspace.id);
+        assert_eq!(first.workspace.kind, "local");
+        assert_eq!(second.workspace.kind, "local");
+        assert_eq!(first.workspace.path, second.workspace.path);
+        assert_eq!(first.repo_root.id, second.repo_root.id);
+
+        let repo_roots = RepoRootStore::new(db.clone())
+            .list_all()
+            .expect("list repo roots");
+        assert_eq!(repo_roots.len(), 1);
+        assert_eq!(repo_roots[0].id, first.repo_root.id);
+
+        db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE workspaces SET created_at = ?1 WHERE id = ?2",
+                ["2026-01-01T00:00:00Z", first.workspace.id.as_str()],
+            )?;
+            conn.execute(
+                "UPDATE workspaces SET created_at = ?1 WHERE id = ?2",
+                ["2026-01-01T00:00:01Z", second.workspace.id.as_str()],
+            )?;
+            Ok(())
+        })
+        .expect("pin canonical ordering");
+
         let resolved = runtime.resolve_from_path(&path).expect("resolve existing");
         assert_eq!(resolved.workspace.id, first.workspace.id);
+    }
+
+    #[test]
+    fn duplicate_local_workspace_sessions_are_isolated_by_workspace_id() {
+        let source = TempDirGuard::new("runtime-duplicate-local-sessions-source");
+        let runtime_home = TempDirGuard::new("runtime-duplicate-local-sessions-home");
+        init_repo(source.path());
+
+        let db = Db::open_in_memory().expect("open db");
+        let runtime = make_runtime(&db, runtime_home.path());
+        let path = source.path().display().to_string();
+        let first = runtime
+            .create_workspace(&path)
+            .expect("create first workspace");
+        let second = runtime
+            .create_workspace(&path)
+            .expect("create duplicate local workspace");
+        let session_store = SessionStore::new(db.clone());
+
+        session_store
+            .insert(&session_record("session-first", &first.workspace.id))
+            .expect("insert first session");
+        session_store
+            .insert(&session_record("session-second", &second.workspace.id))
+            .expect("insert second session");
+
+        let first_sessions = session_store
+            .list_visible_by_workspace(&first.workspace.id)
+            .expect("list first workspace sessions");
+        let second_sessions = session_store
+            .list_visible_by_workspace(&second.workspace.id)
+            .expect("list second workspace sessions");
+
+        assert_eq!(
+            first_sessions
+                .iter()
+                .map(|session| session.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["session-first"]
+        );
+        assert_eq!(
+            second_sessions
+                .iter()
+                .map(|session| session.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["session-second"]
+        );
     }
 
     #[test]
@@ -1282,6 +1370,35 @@ mod tests {
             repo_root_service,
             runtime_home.to_path_buf(),
         )
+    }
+
+    fn session_record(id: &str, workspace_id: &str) -> SessionRecord {
+        SessionRecord {
+            id: id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            agent_kind: "claude".to_string(),
+            native_session_id: None,
+            requested_model_id: None,
+            current_model_id: None,
+            requested_mode_id: None,
+            current_mode_id: None,
+            title: None,
+            thinking_level_id: None,
+            thinking_budget_tokens: None,
+            status: "idle".to_string(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+            last_prompt_at: None,
+            closed_at: None,
+            dismissed_at: None,
+            mcp_bindings_ciphertext: None,
+            mcp_binding_summaries_json: None,
+            mcp_binding_policy: SessionMcpBindingPolicy::InheritWorkspace,
+            system_prompt_append: None,
+            subagents_enabled: false,
+            action_capabilities_json: None,
+            origin: Some(OriginContext::api_local_runtime()),
+        }
     }
 
     fn run_git<const N: usize>(cwd: &Path, args: [&str; N]) {
