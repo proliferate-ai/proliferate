@@ -286,7 +286,7 @@
   --scratch-font-family: "Geist", var(--font-sans);
   --scratch-code-font-family: var(--font-mono);
   --scratch-font-size: var(--text-chat);
-  --scratch-line-height: var(--text-chat--line-height);
+  --scratch-line-height: calc(var(--scratch-font-size) * 1.42);
   --scratch-list-marker-width: 1.35em;
   --scratch-task-box-size: 0.82em;
   --readable-code-font-size: 0.6875rem;
