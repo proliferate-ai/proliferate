@@ -105,6 +105,9 @@ start of the task, not after implementation has already started.
   - concrete implementation spec for the shared target/workspace/materialization
     launch model used by automations, Slack, web, mobile, and Desktop cloud
     surfaces
+- `docs/architecture/cloud-surfaces-launch-plan.md`
+  - high-level launch plan for cloud surfaces, target selection, Desktop
+    automations, Slack, mobile/web clients, testing, and release sequencing
 - `docs/architecture/plugins-and-skills.md`
   - reference architecture for plugin packages, skill bundles, plugin-owned
     MCP servers, the plugins UI, and the session bundle boundary
