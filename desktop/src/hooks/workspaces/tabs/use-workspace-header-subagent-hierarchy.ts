@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -62,7 +62,12 @@ export interface WorkspaceHeaderSubagentHierarchy {
   resolvedSessionIds: Set<string>;
 }
 
+const HEADER_HIERARCHY_INITIAL_QUERY_BATCH_SIZE = 4;
+const HEADER_HIERARCHY_QUERY_BATCH_SIZE = 4;
+const HEADER_HIERARCHY_QUERY_BATCH_DELAY_MS = 1_200;
+
 export function useWorkspaceHeaderSubagentHierarchy(args: {
+  prioritySessionIds?: string[];
   workspaceId: string | null;
   sessionIds: string[];
 }): WorkspaceHeaderSubagentHierarchy {
@@ -75,6 +80,11 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     () => [...new Set(args.sessionIds)].filter(Boolean),
     [args.sessionIds],
   );
+  const enabledSessionIds = useBatchedHeaderHierarchySessionIds({
+    prioritySessionIds: args.prioritySessionIds ?? [],
+    sessionIds: uniqueSessionIds,
+    workspaceId: args.workspaceId,
+  });
   const materializedSessionIds = useSessionDirectoryStore(useShallow((state) =>
     uniqueSessionIds.map((sessionId) => resolveHierarchyMaterializedSessionId({
       sessionId,
@@ -95,7 +105,10 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       const materializedSessionId = materializedSessionIds[index];
       return {
         queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, args.workspaceId, sessionId),
-        enabled: !!args.workspaceId && !!sessionId && !!materializedSessionId,
+        enabled: !!args.workspaceId
+          && !!sessionId
+          && !!materializedSessionId
+          && enabledSessionIds.has(sessionId),
         queryFn: async ({ signal }): Promise<SessionSubagentsResponse> => {
           if (!materializedSessionId) {
             throw new Error("Session is still starting. Try again in a moment.");
@@ -116,7 +129,10 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       const materializedSessionId = materializedSessionIds[index];
       return {
         queryKey: anyHarnessSessionReviewsKey(runtimeUrl, args.workspaceId, sessionId),
-        enabled: !!args.workspaceId && !!sessionId && !!materializedSessionId,
+        enabled: !!args.workspaceId
+          && !!sessionId
+          && !!materializedSessionId
+          && enabledSessionIds.has(sessionId),
         queryFn: async ({ signal }): Promise<SessionReviewsResponse> => {
           if (!materializedSessionId) {
             throw new Error("Session is still starting. Try again in a moment.");
@@ -128,6 +144,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
           return listSessionReviews(resolved.connection, materializedSessionId, { signal });
         },
         staleTime: 2_500,
+        retry: false,
       };
     }),
   });
@@ -136,7 +153,10 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       const materializedSessionId = materializedSessionIds[index];
       return {
         queryKey: anyHarnessCoworkManagedWorkspacesKey(runtimeUrl, materializedSessionId),
-        enabled: !!args.workspaceId && !!sessionId && !!materializedSessionId,
+        enabled: !!args.workspaceId
+          && !!sessionId
+          && !!materializedSessionId
+          && enabledSessionIds.has(sessionId),
         queryFn: async ({ signal }): Promise<CoworkManagedWorkspacesResponse> => {
           if (!materializedSessionId) {
             throw new Error("Session is still starting. Try again in a moment.");
@@ -370,6 +390,58 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     hierarchyQueryRows,
     resolveClientSessionId,
   ]);
+}
+
+function useBatchedHeaderHierarchySessionIds({
+  prioritySessionIds,
+  sessionIds,
+  workspaceId,
+}: {
+  prioritySessionIds: string[];
+  sessionIds: string[];
+  workspaceId: string | null;
+}): Set<string> {
+  const orderedSessionIds = useMemo(() => {
+    const sessionIdSet = new Set(sessionIds);
+    const prioritized = prioritySessionIds.filter((sessionId) => sessionIdSet.has(sessionId));
+    return [
+      ...new Set(prioritized),
+      ...sessionIds.filter((sessionId) => !prioritized.includes(sessionId)),
+    ];
+  }, [prioritySessionIds, sessionIds]);
+  const sessionSignature = useMemo(
+    () => [workspaceId ?? "", ...orderedSessionIds].join("\u001f"),
+    [orderedSessionIds, workspaceId],
+  );
+  const [enabledCount, setEnabledCount] = useState(() =>
+    Math.min(HEADER_HIERARCHY_INITIAL_QUERY_BATCH_SIZE, orderedSessionIds.length)
+  );
+
+  useEffect(() => {
+    setEnabledCount(Math.min(
+      HEADER_HIERARCHY_INITIAL_QUERY_BATCH_SIZE,
+      orderedSessionIds.length,
+    ));
+  }, [orderedSessionIds.length, sessionSignature]);
+
+  useEffect(() => {
+    if (enabledCount >= orderedSessionIds.length) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setEnabledCount((current) =>
+        Math.min(current + HEADER_HIERARCHY_QUERY_BATCH_SIZE, orderedSessionIds.length)
+      );
+    }, HEADER_HIERARCHY_QUERY_BATCH_DELAY_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [enabledCount, orderedSessionIds.length, sessionSignature]);
+
+  return useMemo(
+    () => new Set(orderedSessionIds.slice(0, enabledCount)),
+    [enabledCount, orderedSessionIds],
+  );
 }
 
 function buildHierarchyQuerySignature({

@@ -1,4 +1,4 @@
-import { Fragment, type ReactElement } from "react";
+import { Fragment, Profiler, type ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
@@ -10,11 +10,23 @@ describe("DebugProfiler", () => {
 
   it("returns children without a Profiler wrapper when disabled", () => {
     vi.stubEnv("VITE_PROLIFERATE_DEBUG_MAIN_THREAD", "0");
+    vi.stubEnv("VITE_PROLIFERATE_BOOT_DIAGNOSTICS", "0");
     const rendered = DebugProfiler({
       id: "workspace-shell",
       children: "child",
     }) as ReactElement;
 
     expect(rendered.type).toBe(Fragment);
+  });
+
+  it("wraps children when boot diagnostics are enabled", () => {
+    vi.stubEnv("VITE_PROLIFERATE_DEBUG_MAIN_THREAD", "0");
+    vi.stubEnv("VITE_PROLIFERATE_BOOT_DIAGNOSTICS", "1");
+    const rendered = DebugProfiler({
+      id: "workspace-shell",
+      children: "child",
+    }) as ReactElement;
+
+    expect(rendered.type).toBe(Profiler);
   });
 });

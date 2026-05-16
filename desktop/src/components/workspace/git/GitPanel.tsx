@@ -22,11 +22,20 @@ import {
   type GitPanelSection,
 } from "@/lib/domain/workspaces/changes/git-panel-diff";
 import {
+  GIT_DIFF_FETCH_CONCURRENCY_LIMIT,
+  resolveDiffDisplayPolicy,
+  summarizeDiffDisplayPolicies,
+  type DiffDisplayPolicySummary,
+} from "@/lib/domain/workspaces/changes/diff-display-policy";
+import {
   buildGitReviewFileEntries,
   gitReviewEntryForFile,
   type GitReviewFileEntry,
 } from "@/lib/domain/workspaces/changes/git-review-entries";
 import { useGitPanelUiStore } from "@/stores/editor/git-panel-ui-store";
+
+const INITIAL_EXPANDED_DIFF_FILE_LIMIT = 3;
+const EMPTY_COLLAPSED_FILE_KEYS = new Set<string>();
 
 export function GitPanel() {
   const diffReviewMeasurement = useDiffReviewMeasurement();
@@ -57,6 +66,8 @@ function GitPanelContent({
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<GitPanelReviewScope>>(new Set());
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
+  const [fileCollapseTouched, setFileCollapseTouched] = useState(false);
+  const [settledDiffFetchKeys, setSettledDiffFetchKeys] = useState<Set<string>>(new Set());
   const fileContext = useWorkspaceFileContext();
   const modeRequest = useGitPanelUiStore((state) =>
     fileContext.materializedWorkspaceId
@@ -92,12 +103,102 @@ function GitPanelContent({
     () => buildGitReviewFileEntries(sections),
     [sections],
   );
+  const autoCollapsedFiles = useMemo<ReadonlySet<string>>(() => {
+    if (fileCollapseTouched) {
+      return EMPTY_COLLAPSED_FILE_KEYS;
+    }
+    const collapsedKeys = reviewEntries.flatMap((entry, index) => {
+      const currentDiff = entry.file.currentDiff;
+      const displayPolicy = currentDiff
+        ? resolveDiffDisplayPolicy({
+            path: currentDiff.path,
+            additions: currentDiff.additions,
+            deletions: currentDiff.deletions,
+          })
+        : null;
+      return index >= INITIAL_EXPANDED_DIFF_FILE_LIMIT
+        || Boolean(displayPolicy?.shouldAutoCollapse)
+        ? [entry.key]
+        : [];
+    });
+    return collapsedKeys.length === 0
+      ? EMPTY_COLLAPSED_FILE_KEYS
+      : new Set(collapsedKeys);
+  }, [fileCollapseTouched, reviewEntries]);
+  const effectiveCollapsedFiles = useMemo<ReadonlySet<string>>(() => {
+    if (autoCollapsedFiles.size === 0) {
+      return collapsedFiles;
+    }
+    const next = new Set(collapsedFiles);
+    for (const key of autoCollapsedFiles) {
+      next.add(key);
+    }
+    return next;
+  }, [autoCollapsedFiles, collapsedFiles]);
   const visibleSections = useMemo(
     () => sections.filter((section) => !collapsedSections.has(section.scope)),
     [collapsedSections, sections],
   );
+  const visibleSectionScopes = useMemo(
+    () => new Set(visibleSections.map((section) => section.scope)),
+    [visibleSections],
+  );
+  const diffPolicySummary = useMemo(
+    () => summarizeDiffDisplayPolicies(
+      reviewEntries.flatMap((entry) => {
+        const currentDiff = entry.file.currentDiff;
+        return currentDiff
+          ? [resolveDiffDisplayPolicy({
+              path: currentDiff.path,
+              additions: currentDiff.additions,
+              deletions: currentDiff.deletions,
+            })]
+          : [];
+      }),
+    ),
+    [reviewEntries],
+  );
+  const diffFetchScopeKey = useMemo(
+    () => [
+      activeWorkspaceId ?? "",
+      baseRef ?? "",
+      changesFilter,
+      reviewEntries.map((entry) => entry.key).join("\n"),
+    ].join("\u001f"),
+    [activeWorkspaceId, baseRef, changesFilter, reviewEntries],
+  );
+  useEffect(() => {
+    setSettledDiffFetchKeys(new Set());
+  }, [diffFetchScopeKey]);
+  const permittedDiffFetchKeys = useMemo<ReadonlySet<string>>(() => {
+    const permitted = new Set(settledDiffFetchKeys);
+    let activeFetchCount = 0;
+    for (const entry of reviewEntries) {
+      if (activeFetchCount >= GIT_DIFF_FETCH_CONCURRENCY_LIMIT) {
+        break;
+      }
+      if (permitted.has(entry.key) || !visibleSectionScopes.has(entry.sectionScope)) {
+        continue;
+      }
+      const currentDiff = entry.file.currentDiff;
+      if (!currentDiff || effectiveCollapsedFiles.has(entry.key)) {
+        continue;
+      }
+      const displayPolicy = resolveDiffDisplayPolicy({
+        path: currentDiff.path,
+        additions: currentDiff.additions,
+        deletions: currentDiff.deletions,
+      });
+      if (!displayPolicy.canFetchInline) {
+        continue;
+      }
+      permitted.add(entry.key);
+      activeFetchCount += 1;
+    }
+    return permitted;
+  }, [effectiveCollapsedFiles, reviewEntries, settledDiffFetchKeys, visibleSectionScopes]);
   const allFilesCollapsed = reviewEntries.length > 0
-    && reviewEntries.every((entry) => collapsedFiles.has(entry.key));
+    && reviewEntries.every((entry) => effectiveCollapsedFiles.has(entry.key));
 
   useEffect(() => {
     if (!modeRequest) {
@@ -106,6 +207,7 @@ function GitPanelContent({
     setChangesFilter(modeRequest.mode);
     setCollapsedSections(new Set());
     setCollapsedFiles(new Set());
+    setFileCollapseTouched(false);
   }, [modeRequest]);
 
   const handleToggleLayout = useCallback(() => {
@@ -117,25 +219,36 @@ function GitPanelContent({
   }, []);
 
   const handleToggleAllFiles = useCallback(() => {
-    setCollapsedFiles((current) => {
-      const allCollapsed = reviewEntries.length > 0
-        && reviewEntries.every((entry) => current.has(entry.key));
-      if (allCollapsed) {
-        return new Set();
-      }
-      return new Set(reviewEntries.map((entry) => entry.key));
-    });
-  }, [reviewEntries]);
+    setFileCollapseTouched(true);
+    if (allFilesCollapsed) {
+      setCollapsedFiles(new Set());
+      return;
+    }
+    setCollapsedFiles(new Set(reviewEntries.map((entry) => entry.key)));
+  }, [allFilesCollapsed, reviewEntries]);
 
   const toggleSectionCollapsed = useCallback((scope: GitPanelReviewScope) => {
     setCollapsedSections((current) => toggleSetValue(current, scope));
   }, []);
 
   const toggleFileCollapsed = useCallback((key: string) => {
-    setCollapsedFiles((current) => toggleSetValue(current, key));
+    setFileCollapseTouched(true);
+    setCollapsedFiles(() => toggleSetValue(new Set(effectiveCollapsedFiles), key));
+  }, [effectiveCollapsedFiles]);
+
+  const markDiffFetchSettled = useCallback((key: string) => {
+    setSettledDiffFetchKeys((current) => {
+      if (current.has(key)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
   }, []);
 
   const focusReviewFile = useCallback((entry: GitReviewFileEntry) => {
+    setFileCollapseTouched(true);
     setCollapsedSections((current) => {
       if (!current.has(entry.sectionScope)) {
         return current;
@@ -145,10 +258,10 @@ function GitPanelContent({
       return next;
     });
     setCollapsedFiles((current) => {
-      if (!current.has(entry.key)) {
+      if (!effectiveCollapsedFiles.has(entry.key)) {
         return current;
       }
-      const next = new Set(current);
+      const next = new Set(effectiveCollapsedFiles);
       next.delete(entry.key);
       return next;
     });
@@ -158,7 +271,7 @@ function GitPanelContent({
         behavior: "smooth",
       });
     });
-  }, []);
+  }, [effectiveCollapsedFiles]);
 
   return (
     <div className="flex h-full flex-col bg-sidebar-background text-sidebar-foreground">
@@ -208,6 +321,9 @@ function GitPanelContent({
 
           {!isLoading && !errorMessage && !runtimeBlockedReason && sections.length > 0 && (
             <div className="flex flex-col gap-2">
+              {diffPolicySummary.total > 0 && (
+                <GitReviewDiffPolicyNotice summary={diffPolicySummary} />
+              )}
               {sections.map((section) => (
                 <div key={section.scope} className="flex flex-col gap-1.5">
                   {changesFilter === "working_tree_composite" && (
@@ -230,9 +346,11 @@ function GitPanelContent({
                           baseRef={baseRef}
                           layout={layout}
                           wrapLongLines={wrapLongLines}
-                          collapsed={collapsedFiles.has(entry.key)}
+                          collapsed={effectiveCollapsedFiles.has(entry.key)}
                           isRuntimeReady={isRuntimeReady}
+                          fetchDiff={permittedDiffFetchKeys.has(entry.key)}
                           onToggleCollapsed={() => toggleFileCollapsed(entry.key)}
+                          onDiffFetchSettled={() => markDiffFetchSettled(entry.key)}
                           openFile={openFile}
                           stagePath={(path) => stageMutation.mutateAsync([path])}
                           unstagePath={(path) => unstageMutation.mutateAsync([path])}
@@ -260,6 +378,23 @@ function GitPanelContent({
           />
         </PaneSideOverlay>
       </div>
+    </div>
+  );
+}
+
+function GitReviewDiffPolicyNotice({ summary }: { summary: DiffDisplayPolicySummary }) {
+  const hiddenLabel = `${summary.total} large/generated diff${summary.total === 1 ? "" : "s"}`;
+  const tooLargeLabel = summary.tooLargeInline > 0
+    ? `${summary.tooLargeInline} too large to render inline`
+    : null;
+  return (
+    <div className="rounded-md border border-sidebar-border/70 bg-sidebar-accent/35 px-2.5 py-2 text-xs leading-5 text-sidebar-muted-foreground">
+      <span>
+        {hiddenLabel} collapsed to keep review responsive.
+      </span>
+      {tooLargeLabel && (
+        <span> {tooLargeLabel}; open the file to inspect those changes.</span>
+      )}
     </div>
   );
 }
