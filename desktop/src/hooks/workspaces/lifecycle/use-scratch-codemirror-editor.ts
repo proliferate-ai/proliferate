@@ -85,7 +85,7 @@ export function useScratchCodeMirrorEditor({
   // Owns the imperative CodeMirror editor lifecycle and keeps React as the source of saved text.
   const extensions = useMemo(() => [
     history(),
-    markdown(),
+    markdown({ addKeymap: false }),
     syntaxHighlighting(scratchHighlightStyle),
     placeholderCompartmentRef.current.of(placeholder(placeholderText)),
     scratchEditorTheme,
