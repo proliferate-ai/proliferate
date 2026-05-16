@@ -41,7 +41,7 @@ describe("UpdateNotificationCard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "See changes" }));
     expect(shellMocks.openExternal).toHaveBeenCalledWith(
-      "https://github.com/proliferate-ai/proliferate/releases/latest",
+      "https://proliferate.com/changelog",
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Download" }));

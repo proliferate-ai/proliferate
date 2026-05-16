@@ -5,7 +5,7 @@ import { X } from "@/components/ui/icons";
 import { useUpdater, type UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
-const CHANGELOG_URL = "https://github.com/proliferate-ai/proliferate/releases/latest";
+const CHANGELOG_URL = "https://proliferate.com/changelog";
 
 const UPDATE_CARD_PHASES = new Set<UpdaterPhase>([
   "available",
