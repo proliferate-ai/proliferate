@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type {
   FileChangeContentPart,
   FileReadContentPart,
@@ -6,6 +7,7 @@ import type {
   ToolCallItem,
   ToolResultTextContentPart,
 } from "@anyharness/sdk";
+import { Button } from "@/components/ui/Button";
 import { BashCommandCall } from "@/components/workspace/chat/tool-calls/BashCommandCall";
 import { CoworkArtifactToolActionRow } from "@/components/workspace/chat/tool-calls/CoworkArtifactToolActionRow";
 import { CoworkCodingToolActionRow } from "@/components/workspace/chat/tool-calls/cowork/CoworkCodingToolActionRow";
@@ -18,6 +20,7 @@ import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspac
 import { deriveSkillsToolResultPresentation } from "@/lib/domain/chat/tools/skills-tool-result";
 import { describeToolCallDisplay } from "@/lib/domain/chat/tools/tool-call-display";
 import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
+import { CHAT_VISIBLE_FILE_CHANGE_LIMIT } from "@/lib/domain/workspaces/changes/diff-display-policy";
 import { ToolKindIcon } from "./TranscriptToolKindIcon";
 
 export function TranscriptToolCallItemBlock({
@@ -31,6 +34,7 @@ export function TranscriptToolCallItemBlock({
 }) {
   const openCodingSession = useOpenCoworkCodingSession();
   const { selectWorkspace } = useWorkspaceSelection();
+  const [showAllFileChanges, setShowAllFileChanges] = useState(false);
 
   if (
     item.semanticKind === "cowork_artifact_create"
@@ -85,8 +89,13 @@ export function TranscriptToolCallItemBlock({
   const rows: React.ReactNode[] = [];
   const status = mapStatus(item.status);
   const skillsToolResult = deriveSkillsToolResultPresentation(item, normalizedResultText);
+  const visibleFileChanges = showAllFileChanges
+    ? fileChanges
+    : fileChanges.slice(0, CHAT_VISIBLE_FILE_CHANGE_LIMIT);
+  const hiddenFileChangeCount = fileChanges.length - visibleFileChanges.length;
+  const canToggleFileChanges = fileChanges.length > CHAT_VISIBLE_FILE_CHANGE_LIMIT;
 
-  fileChanges.forEach((part, idx) => {
+  visibleFileChanges.forEach((part, idx) => {
     rows.push(
       <FileChangeCall
         key={`file-change-${idx}`}
@@ -105,6 +114,16 @@ export function TranscriptToolCallItemBlock({
       />,
     );
   });
+  if (canToggleFileChanges) {
+    rows.push(
+      <FileChangesToggleRow
+        key="file-change-toggle"
+        expanded={showAllFileChanges}
+        hiddenCount={hiddenFileChangeCount}
+        onToggle={() => setShowAllFileChanges((value) => !value)}
+      />,
+    );
+  }
 
   fileReads.forEach((part, idx) => {
     rows.push(
@@ -206,11 +225,36 @@ export function TranscriptToolCallItemBlock({
     return <>{rows[0]}</>;
   }
 
-  const hasOnlyFileChangeRows = rows.length === fileChanges.length;
+  const hasOnlyFileChangeRows =
+    fileChanges.length > 0
+    && fileReads.length === 0
+    && terminalParts.length === 0;
   return (
     <div className={hasOnlyFileChangeRows ? "flex flex-col" : "space-y-1.5"}>
       {rows}
     </div>
+  );
+}
+
+function FileChangesToggleRow({
+  expanded,
+  hiddenCount,
+  onToggle,
+}: {
+  expanded: boolean;
+  hiddenCount: number;
+  onToggle: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={onToggle}
+      className="h-7 w-fit justify-start rounded-md px-1.5 text-chat font-normal text-muted-foreground hover:bg-muted hover:text-foreground"
+    >
+      {expanded ? "Show less" : `Show ${hiddenCount} more`}
+    </Button>
   );
 }
 

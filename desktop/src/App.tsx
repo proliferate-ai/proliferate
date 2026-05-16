@@ -31,6 +31,10 @@ import {
   logStartupDebug,
   startStartupTimer,
 } from "@/lib/infra/measurement/debug-startup"
+import {
+  recordBootDiagnostic,
+  recordBootDiagnosticOnce,
+} from "@/lib/infra/measurement/boot-stall-diagnostics"
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap"
 import { AppErrorBoundary } from "@/components/ui/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
@@ -47,6 +51,9 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
 
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"])
+const APP_RUNTIME_RENDER_MILESTONES = new Set([1, 2, 3, 5, 10, 25, 50, 100, 250])
+
+let appRuntimeRenderCount = 0
 
 // Dev-only playground. Lazy-loaded with a DEV guard so neither this file
 // nor any of its fixtures / transitive deps land in production bundles.
@@ -93,6 +100,10 @@ function cloudSettingsDeepLink(search: string): string {
 }
 
 function recordAppRendererEvent(message: string, elapsedMs?: number): void {
+  recordBootDiagnostic(
+    `app_bootstrap.${message}`,
+    elapsedMs === undefined ? undefined : { elapsedMs },
+  )
   void logRendererEvent({
     source: "app_bootstrap",
     message,
@@ -145,21 +156,55 @@ function App() {
 }
 
 function AppRuntime() {
+  appRuntimeRenderCount += 1
+  if (APP_RUNTIME_RENDER_MILESTONES.has(appRuntimeRenderCount)) {
+    recordBootDiagnostic("app_runtime.render.pass", { count: appRuntimeRenderCount })
+  }
+  recordBootDiagnosticOnce("app_runtime.render.before.use_auth_bootstrap")
   const bootstrapAuth = useAuthBootstrap()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_auth_bootstrap")
+  recordBootDiagnosticOnce("app_runtime.render.before.auth_status")
   const authStatus = useAuthStore((s) => s.status)
+  recordBootDiagnosticOnce("app_runtime.render.after.auth_status", { authStatus })
+  recordBootDiagnosticOnce("app_runtime.render.before.use_app_command_actions")
   const appCommandActions = useAppCommandActions()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_app_command_actions")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_export_running_agent_count")
   useExportRunningAgentCount()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_export_running_agent_count")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_shortcut_dispatcher")
   useShortcutDispatcher()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_shortcut_dispatcher")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_app_shortcuts")
   useAppShortcuts(appCommandActions)
+  recordBootDiagnosticOnce("app_runtime.render.after.use_app_shortcuts")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_turn_end_sound")
   useTurnEndSound()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_turn_end_sound")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_agent_auto_reconcile")
   useAgentAutoReconcile()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_agent_auto_reconcile")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
   useLocalAutomationExecutor()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_home_deferred_launch_runner")
   useHomeDeferredLaunchRunner()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_home_deferred_launch_runner")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_user_preferences_lifecycle")
   useUserPreferencesLifecycle()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_user_preferences_lifecycle")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_repo_preferences_lifecycle")
   useRepoPreferencesLifecycle()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_repo_preferences_lifecycle")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_ui_lifecycle")
   useWorkspaceUiLifecycle()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_ui_lifecycle")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_session_intent_dispatcher")
   useSessionIntentDispatcher()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_session_intent_dispatcher")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_session_selection_lifecycle")
   useSessionSelectionLifecycle()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_session_selection_lifecycle")
 
   useEffect(() => {
     recordAppRendererEvent("app.bootstrap.start")
@@ -235,6 +280,8 @@ function AppRuntime() {
       })
     }
   }, [authStatus])
+
+  recordBootDiagnosticOnce("app_runtime.render.before_return", { authStatus })
 
   return (
     <>

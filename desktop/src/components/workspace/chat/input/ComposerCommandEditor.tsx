@@ -1,4 +1,3 @@
-import type { SearchWorkspaceFilesResponse } from "@anyharness/sdk";
 import {
   useCallback,
   useEffect,
@@ -13,40 +12,34 @@ import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   WORKSPACE_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
-import { useChatFileMentionSearch } from "@/hooks/chat/ui/use-chat-file-mention-search";
+import { useChatSlashCommandMenu } from "@/hooks/chat/ui/use-chat-slash-command-menu";
 import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
 import {
-  isComposerMentionSelectKey,
+  isComposerOverlaySelectKey,
   isRawComposerSubmitKey,
   isRepeatedComposerSubmitKey,
 } from "@/lib/domain/chat/composer/composer-keyboard";
-import {
-  findMentionTrigger,
-  type MentionTrigger,
-} from "@/lib/domain/chat/composer/file-mention-draft-edits";
 import {
   createTextDraft,
   serializeChatDraftToPrompt,
   type ChatComposerDraft,
 } from "@/lib/domain/chat/composer/file-mention-draft-model";
 import {
-  linearOffsetFromPosition,
-  positionFromLinearOffset,
-} from "@/lib/domain/chat/composer/file-mention-draft-position";
-import { formatMarkdownFileLink } from "@/lib/domain/chat/composer/file-mention-links";
+  findSlashCommandTrigger,
+  type SlashCommandTrigger,
+} from "@/lib/domain/chat/composer/slash-command-draft-edits";
+import type { SessionSlashCommandViewModel } from "@/lib/domain/chat/composer/session-slash-command-policy";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { ComposerFileMentionSearch } from "./ComposerFileMentionSearch";
+import { ComposerSlashCommandSearch } from "./ComposerSlashCommandSearch";
 import { ComposerTextarea } from "./ComposerTextarea";
 import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "./ComposerTextareaFrame";
 
-type FileSearchResult = SearchWorkspaceFilesResponse["results"][number];
-
-interface ComposerMentionEditorProps {
+interface ComposerCommandEditorProps {
   draft: ChatComposerDraft;
   onDraftChange: (draft: ChatComposerDraft) => void;
   placeholder: string;
@@ -55,10 +48,10 @@ interface ComposerMentionEditorProps {
   onSubmit: () => void;
   onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   topInset: ComposerTextareaFrameTopInset;
-  searchHostElement?: HTMLElement | null;
+  overlayHostElement?: HTMLElement | null;
 }
 
-export function ComposerMentionEditor({
+export function ComposerCommandEditor({
   draft,
   onDraftChange,
   placeholder,
@@ -67,8 +60,8 @@ export function ComposerMentionEditor({
   onSubmit,
   onKeyDown,
   topInset,
-  searchHostElement,
-}: ComposerMentionEditorProps) {
+  overlayHostElement,
+}: ComposerCommandEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingSelectionRef = useRef<number | null>(null);
   const typingOperationRef = useRef<MeasurementOperationId | null>(null);
@@ -79,8 +72,7 @@ export function ComposerMentionEditor({
     if (searchSuppressed || disabled) {
       return null;
     }
-    const textDraft = createTextDraft(text);
-    return findMentionTrigger(textDraft, positionFromLinearOffset(textDraft, selectionOffset));
+    return findSlashCommandTrigger(text, selectionOffset);
   }, [disabled, searchSuppressed, selectionOffset, text]);
 
   const updateSelection = useCallback(() => {
@@ -161,13 +153,13 @@ export function ComposerMentionEditor({
     typingOperationRef.current = null;
   }, []);
 
-  const handleSelectSearchResult = useCallback((result: FileSearchResult) => {
+  const handleSelectSearchResult = useCallback((command: SessionSlashCommandViewModel) => {
     if (!trigger) {
       return;
     }
 
-    const replacement = `${formatMarkdownFileLink(result.name, result.path)} `;
-    const { start, end } = mentionTriggerOffsets(text, trigger);
+    const replacement = `${command.displayName} `;
+    const { start, end } = slashTriggerOffsets(trigger);
     const replaceEnd = /\s/u.test(text[end] ?? "") ? end + 1 : end;
     replaceText(
       `${text.slice(0, start)}${replacement}${text.slice(replaceEnd)}`,
@@ -177,7 +169,7 @@ export function ComposerMentionEditor({
     textareaRef.current?.focus({ preventScroll: true });
   }, [replaceText, text, trigger]);
 
-  const search = useChatFileMentionSearch({
+  const search = useChatSlashCommandMenu({
     open: !!trigger,
     query: trigger?.query ?? "",
     onSelect: handleSelectSearchResult,
@@ -199,7 +191,8 @@ export function ComposerMentionEditor({
         search.moveHighlight(-1);
         return;
       }
-      if (isComposerMentionSelectKey(event)) {
+      // Empty slash results should leave Enter available for normal prompt submit.
+      if (isComposerOverlaySelectKey(event) && search.commands.length > 0) {
         event.preventDefault();
         search.selectHighlighted();
         return;
@@ -239,24 +232,21 @@ export function ComposerMentionEditor({
   ]);
 
   const searchTray = trigger ? (
-    <ComposerFileMentionSearch
-      query={trigger.query}
-      results={search.results}
+    <ComposerSlashCommandSearch
+      commands={search.commands}
       highlightedIndex={search.highlightedIndex}
-      isLoading={search.isLoading}
-      errorMessage={search.errorMessage}
       listRef={search.listRef}
       onSelect={handleSelectSearchResult}
       onRowMouseEnter={search.handleRowMouseEnter}
       setRowRef={search.setRowRef}
-      className={searchHostElement ? "mx-0" : undefined}
+      className={overlayHostElement ? "mx-0" : undefined}
     />
   ) : null;
 
   return (
     <>
-      {searchTray && searchHostElement
-        ? createPortal(searchTray, searchHostElement)
+      {searchTray && overlayHostElement
+        ? createPortal(searchTray, overlayHostElement)
         : searchTray}
       <ComposerTextareaFrame topInset={topInset}>
         <ComposerTextarea
@@ -284,13 +274,9 @@ export function ComposerMentionEditor({
   );
 }
 
-function mentionTriggerOffsets(
-  text: string,
-  trigger: MentionTrigger,
-): { start: number; end: number } {
-  const textDraft = createTextDraft(text);
+function slashTriggerOffsets(trigger: SlashCommandTrigger): { start: number; end: number } {
   return {
-    start: linearOffsetFromPosition(textDraft, trigger.start),
-    end: linearOffsetFromPosition(textDraft, trigger.end),
+    start: trigger.start,
+    end: trigger.end,
   };
 }

@@ -4,8 +4,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { ArrowRight } from "@/components/ui/icons";
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
 import { ChatInputControlRow } from "@/components/workspace/chat/input/ChatInputControlRow";
-import { ComposerFileMentionBadge } from "@/components/workspace/chat/input/ComposerFileMentionBadge";
-import { ComposerFileMentionSearch } from "@/components/workspace/chat/input/ComposerFileMentionSearch";
+import { ComposerSlashCommandSearch } from "@/components/workspace/chat/input/ComposerSlashCommandSearch";
 import { ComposerTextarea } from "@/components/workspace/chat/input/ComposerTextarea";
 import { ComposerTextareaFrame } from "@/components/workspace/chat/input/ComposerTextareaFrame";
 import {
@@ -18,17 +17,20 @@ import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-sessio
 import {
   createPlaygroundModelSelectorProps,
   createPlaygroundSessionConfigControls,
-  FILE_MENTION_SEARCH_RESULTS,
   PLAYGROUND_LONG_COMPOSER_DRAFT,
+  PLAYGROUND_SLASH_COMMANDS,
 } from "@/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
+import type { SessionSlashCommandViewModel } from "@/lib/domain/chat/composer/session-slash-command-policy";
 import { noop } from "@/components/playground/PlaygroundComposerActions";
 
 export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNode {
   switch (scenario) {
     case "composer-long-input":
       return <PlaygroundLongInputComposerSurface />;
-    case "file-mention-search":
-      return <PlaygroundFileMentionComposerSurface />;
+    case "slash-command-search":
+      return <PlaygroundSlashCommandComposerSurface commands={PLAYGROUND_SLASH_COMMANDS} />;
+    case "slash-command-empty":
+      return <PlaygroundSlashCommandComposerSurface commands={[]} />;
     default:
       return <PlaygroundComposerSurface />;
   }
@@ -89,19 +91,20 @@ function PlaygroundLongInputComposerSurface() {
   );
 }
 
-function PlaygroundFileMentionComposerSurface() {
+function PlaygroundSlashCommandComposerSurface({
+  commands,
+}: {
+  commands: SessionSlashCommandViewModel[];
+}) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   return (
     <>
       <div className="relative z-20 flex flex-col px-5">
-        <ComposerFileMentionSearch
-          query="chat"
-          results={FILE_MENTION_SEARCH_RESULTS}
+        <ComposerSlashCommandSearch
+          commands={commands}
           highlightedIndex={0}
-          isLoading={false}
-          errorMessage={null}
           listRef={listRef}
           onSelect={noop}
           onRowMouseEnter={noop}
@@ -117,15 +120,7 @@ function PlaygroundFileMentionComposerSurface() {
             data-telemetry-mask
             className="mb-2 flex min-h-14 flex-grow select-text items-start px-5 text-base leading-relaxed text-foreground"
           >
-            <span>
-              Update{" "}
-              <ComposerFileMentionBadge
-                name="ChatInput.tsx"
-                path="desktop/src/components/workspace/chat/input/ChatInput.tsx"
-                onRemove={noop}
-              />
-              {" "}and @chat
-            </span>
+            <span>/rev</span>
           </div>
           <PlaygroundComposerControlRow />
         </form>

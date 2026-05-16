@@ -53,7 +53,7 @@ import { ChatComposerSurface } from "./ChatComposerSurface";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 
 /**
- * The composer surface: mention-aware editor + model / session controls +
+ * The composer surface: command-aware editor + model / session controls +
  * send button. The outer dock shell (backdrop, padding, max-width, dock-slot
  * area) is owned by ChatComposerDock so it can be shared with the dev
  * playground.
@@ -68,7 +68,7 @@ export function ChatInput({
   useDebugRenderCount("chat-composer");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [mentionSearchHost, setMentionSearchHost] = useState<HTMLDivElement | null>(null);
+  const [composerOverlayHost, setComposerOverlayHost] = useState<HTMLDivElement | null>(null);
   const workspaceSelectionNonce = useSessionSelectionStore((state) => state.workspaceSelectionNonce);
   const focusRequestNonce = useChatInputStore((state) => state.focusRequestNonce);
   const activeSessionId = useActiveSessionId();
@@ -306,7 +306,7 @@ export function ChatInput({
   return (
     <DebugProfiler id="chat-composer">
       <div className="relative">
-        <div ref={setMentionSearchHost} className="relative z-20 flex flex-col px-5" />
+        <div ref={setComposerOverlayHost} className="relative z-20 flex flex-col px-5" />
         <ChatComposerSurface
           overflowMode="clip"
           onClick={handleComposerSurfaceClick}
@@ -331,7 +331,7 @@ export function ChatInput({
               hasDraftAttachments={hasDraftAttachments}
               draftAttachments={[...attachments.attachments, ...planAttachments.attachments]}
               onRemoveDraftAttachment={handleRemoveDraftAttachment}
-              searchHostElement={mentionSearchHost}
+              overlayHostElement={composerOverlayHost}
               onCancelEdit={cancelEdit}
             />
             <ChatInputControlRow

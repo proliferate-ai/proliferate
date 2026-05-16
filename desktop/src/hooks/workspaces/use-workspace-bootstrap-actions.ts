@@ -64,6 +64,7 @@ import { writeChatShellIntentForEmptySurface } from "@/hooks/workspaces/tabs/wor
 import {
   isOptimisticWorkspaceSessionPlaceholder,
 } from "@/lib/domain/workspaces/selection/optimistic-session-shell";
+import { buildLocalSlotLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 
 interface BootstrapWorkspaceInput {
   workspaceId: string;
@@ -146,6 +147,29 @@ function clearInvalidOptimisticActiveSession(input: {
     sessionId: activeSessionId,
   });
   return true;
+}
+
+function resolveLastViewedSessionForWorkspace(
+  lastViewedSessionByWorkspace: Record<string, string>,
+  logicalWorkspaceId: string,
+  workspaceId: string,
+): { sessionId: string | null; sourceKey: string | null } {
+  for (const key of [
+    logicalWorkspaceId,
+    workspaceId,
+    buildLocalSlotLogicalWorkspaceId(workspaceId),
+  ]) {
+    if (Object.prototype.hasOwnProperty.call(lastViewedSessionByWorkspace, key)) {
+      return {
+        sessionId: lastViewedSessionByWorkspace[key] ?? null,
+        sourceKey: key,
+      };
+    }
+  }
+  return {
+    sessionId: null,
+    sourceKey: null,
+  };
 }
 
 export function useWorkspaceBootstrapActions() {
@@ -533,13 +557,18 @@ export function useWorkspaceBootstrapActions() {
         });
       }
     } else {
-      const rememberedSessionId = lastViewedSessionByWorkspace[logicalWorkspaceId] ?? null;
+      const rememberedSession = resolveLastViewedSessionForWorkspace(
+        lastViewedSessionByWorkspace,
+        logicalWorkspaceId,
+        workspaceId,
+      );
+      const rememberedSessionId = rememberedSession.sessionId;
       const targetSession = choosePreferredWorkspaceSession(
         sessions,
         rememberedSessionId,
       );
       if (rememberedSessionId && targetSession?.id !== rememberedSessionId) {
-        clearLastViewedSession(logicalWorkspaceId, rememberedSessionId);
+        clearLastViewedSession(rememberedSession.sourceKey ?? logicalWorkspaceId, rememberedSessionId);
       }
 
       if (targetSession && isCurrent()) {

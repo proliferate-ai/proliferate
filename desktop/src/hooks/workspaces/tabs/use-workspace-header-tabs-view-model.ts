@@ -194,7 +194,15 @@ export function useWorkspaceHeaderTabsViewModel() {
   const knownSessionIds = useStableStringArray(
     useMemo(() => Array.from(knownSessions.keys()), [knownSessions]),
   );
+  const hierarchyPrioritySessionIds = useStableStringArray(useMemo(
+    () => uniqueIds([
+      activeSessionId ?? "",
+      ...(persistedVisibleIds ?? []),
+    ]).filter(Boolean),
+    [activeSessionId, persistedVisibleIds],
+  ));
   const hierarchy = useWorkspaceHeaderSubagentHierarchy({
+    prioritySessionIds: hierarchyPrioritySessionIds,
     workspaceId: selectedWorkspaceId,
     sessionIds: knownSessionIds,
   });

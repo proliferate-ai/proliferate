@@ -2,12 +2,15 @@ import type { GitStatusSnapshot, RepoRoot } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import {
   latestLogicalWorkspaceTimestamp,
+  logicalWorkspaceMatchesId,
+  logicalWorkspaceRelatedIds,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { repoRootGroupKey } from "@/lib/domain/workspaces/cloud/collections";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import { humanizeBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
 import { workspaceDefaultDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
+import { parseLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 import {
   activeWorkspaceActivity,
   detailIndicatorsForWorkspace,
@@ -16,11 +19,12 @@ import {
 } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import type { SidebarCloudWorkspaceStatus } from "@/lib/domain/workspaces/sidebar/cloud-workspace";
 import { cloudSidebarEntryDefaultDisplayName } from "@/lib/domain/workspaces/sidebar/sidebar-entries";
-import type { SidebarGroupState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
+import type {
+  SidebarGroupState,
+  SidebarWorkspaceItemState,
+} from "@/lib/domain/workspaces/sidebar/sidebar-model";
 import { buildPendingSidebarProjection } from "@/lib/domain/workspaces/sidebar/pending-sidebar-projection";
-import {
-  resolveSidebarWorkspaceTypes,
-} from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
+import { resolveSidebarWorkspaceTypes } from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 import { isWorkspaceNeedsReview } from "@/lib/domain/workspaces/sidebar/sidebar-review";
 import {
   compareLogicalWorkspaceRecency,
@@ -52,7 +56,9 @@ export function resolveAutoShowMoreRepoKey(args: {
 
   for (const group of groups) {
     if (group.items.length <= itemLimit) continue;
-    const selectedIndex = group.items.findIndex((item) => item.id === selectedLogicalWorkspaceId);
+    const selectedIndex = group.items.findIndex((item) =>
+      sidebarItemMatchesId(item, selectedLogicalWorkspaceId)
+    );
     if (selectedIndex >= itemLimit) {
       return group.sourceRoot;
     }
@@ -143,9 +149,9 @@ export function buildSidebarGroupStates(args: {
       if (repoRoot && args.hiddenRepoRootIds.has(repoRoot.id)) {
         return null;
       }
-      const workspaceItems = groupWorkspaces.map((entry) => {
-        const active = entry.id === args.selectedLogicalWorkspaceId;
-        const archived = args.archivedSet.has(entry.id);
+      const workspaceItemsWithWorkspace = groupWorkspaces.map((entry) => {
+        const active = logicalWorkspaceMatchesId(entry, args.selectedLogicalWorkspaceId);
+        const archived = logicalWorkspaceRelatedIds(entry).some((id) => args.archivedSet.has(id));
         const recency = resolveLogicalWorkspaceRecency(entry, args.workspaceLastInteracted);
         const activityLastInteracted = recency.displayAt;
         const lastInteracted = activityLastInteracted ?? recency.recordUpdatedAt;
@@ -178,36 +184,40 @@ export function buildSidebarGroupStates(args: {
         const activity = activeWorkspaceActivity(entry, args.workspaceActivities);
 
         return {
-          id: entry.id,
-          localWorkspaceId: preferredLocalWorkspace?.id ?? null,
-          name: displayNameOverride ?? defaultName,
-          defaultName,
-          hasDisplayNameOverride: displayNameOverride !== null,
-          renameSupported: !(entry.localWorkspace && entry.cloudWorkspace),
-          subtitle: active ? args.activeSessionTitle : null,
-          active,
-          archived,
-          variant,
-          statusIndicator: sidebarStatusIndicatorFromActivity({
-            activity,
-            needsReview,
-            pendingPromptCount: args.pendingPromptCounts?.[entry.id] ?? 0,
-            errorAction: { kind: "open_workspace", workspaceId: entry.id },
-          }),
-          detailIndicators: detailIndicatorsForWorkspace(
-            entry,
+          workspace: entry,
+          item: {
+            id: entry.id,
+            localWorkspaceId: preferredLocalWorkspace?.id ?? null,
+            name: displayNameOverride ?? defaultName,
+            defaultName,
+            hasDisplayNameOverride: displayNameOverride !== null,
+            renameSupported: !(entry.localWorkspace && entry.cloudWorkspace),
+            subtitle: active ? args.activeSessionTitle : null,
+            active,
+            archived,
             variant,
-            preferredLocalWorkspace
-              ? args.finishSuggestionsByWorkspaceId?.[preferredLocalWorkspace.id] ?? null
+            statusIndicator: sidebarStatusIndicatorFromActivity({
+              activity,
+              needsReview,
+              pendingPromptCount: logicalWorkspaceRelatedCount(args.pendingPromptCounts, entry),
+              errorAction: { kind: "open_workspace", workspaceId: entry.id },
+            }),
+            detailIndicators: detailIndicatorsForWorkspace(
+              entry,
+              variant,
+              preferredLocalWorkspace
+                ? args.finishSuggestionsByWorkspaceId?.[preferredLocalWorkspace.id] ?? null
+                : null,
+            ),
+            cloudStatus: preferredCloudWorkspace
+              ? preferredCloudWorkspace.status as SidebarCloudWorkspaceStatus
               : null,
-          ),
-          cloudStatus: preferredCloudWorkspace
-            ? preferredCloudWorkspace.status as SidebarCloudWorkspaceStatus
-            : null,
-          lastInteracted,
-          needsReview,
+            lastInteracted,
+            needsReview,
+          },
         };
       });
+      const workspaceItems = applyDuplicateLocalNameSuffixes(workspaceItemsWithWorkspace);
       const visibleWorkspaceItems = pendingItem
         ? workspaceItems.filter((item) => item.id !== pendingItem.id)
         : workspaceItems;
@@ -325,4 +335,87 @@ function groupHasWorkActivity(
   return workspaces.some((workspace) =>
     resolveLogicalWorkspaceRecency(workspace, workspaceActivityAt).activityAt !== null
   );
+}
+
+function sidebarItemMatchesId(
+  item: { id: string; localWorkspaceId: string | null },
+  candidateId: string | null,
+): boolean {
+  if (!candidateId) {
+    return false;
+  }
+  if (candidateId === item.id || candidateId === item.localWorkspaceId) {
+    return true;
+  }
+  const parsed = parseLogicalWorkspaceId(candidateId);
+  if (parsed?.kind !== "local-slot" || !item.localWorkspaceId) {
+    return false;
+  }
+  return parsed.segments[0] === item.localWorkspaceId;
+}
+
+function logicalWorkspaceRelatedCount(
+  counts: Record<string, number> | undefined,
+  workspace: LogicalWorkspace,
+): number {
+  if (!counts) {
+    return 0;
+  }
+  return logicalWorkspaceRelatedIds(workspace).reduce(
+    (total, id) => total + (counts[id] ?? 0),
+    0,
+  );
+}
+
+function applyDuplicateLocalNameSuffixes(
+  entries: Array<{
+    workspace: LogicalWorkspace;
+    item: SidebarWorkspaceItemState;
+  }>,
+): SidebarWorkspaceItemState[] {
+  const localEntriesByName = new Map<string, typeof entries>();
+  for (const entry of entries) {
+    if (!entry.workspace.localWorkspace) {
+      continue;
+    }
+    const byName = localEntriesByName.get(entry.item.name);
+    if (byName) {
+      byName.push(entry);
+    } else {
+      localEntriesByName.set(entry.item.name, [entry]);
+    }
+  }
+
+  const suffixById = new Map<string, number>();
+  for (const duplicateEntries of localEntriesByName.values()) {
+    if (duplicateEntries.length < 2) {
+      continue;
+    }
+    [...duplicateEntries]
+      .sort((left, right) => compareDuplicateLocalNameOrder(left.workspace, right.workspace))
+      .forEach((entry, index) => {
+        if (index > 0) {
+          suffixById.set(entry.workspace.id, index + 1);
+        }
+      });
+  }
+
+  return entries.map(({ workspace, item }) => {
+    const suffix = suffixById.get(workspace.id);
+    return suffix
+      ? { ...item, name: `${item.name} #${suffix}` }
+      : item;
+  });
+}
+
+function compareDuplicateLocalNameOrder(left: LogicalWorkspace, right: LogicalWorkspace): number {
+  const leftWorkspace = left.localWorkspace;
+  const rightWorkspace = right.localWorkspace;
+  const byCreatedAt =
+    new Date(leftWorkspace?.createdAt ?? left.updatedAt).getTime()
+    - new Date(rightWorkspace?.createdAt ?? right.updatedAt).getTime();
+  if (byCreatedAt !== 0) {
+    return byCreatedAt;
+  }
+  return left.id.localeCompare(right.id);
 }

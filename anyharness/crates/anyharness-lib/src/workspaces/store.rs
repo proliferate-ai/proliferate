@@ -20,7 +20,7 @@ impl WorkspaceStore {
     pub fn find_by_path(&self, path: &str) -> anyhow::Result<Option<WorkspaceRecord>> {
         self.db.with_conn(|conn| {
             conn.query_row(
-                "SELECT * FROM workspaces WHERE path = ?1 ORDER BY created_at ASC LIMIT 1",
+                "SELECT * FROM workspaces WHERE path = ?1 ORDER BY created_at ASC, id ASC LIMIT 1",
                 [path],
                 |row| map_row(row),
             )
@@ -33,7 +33,7 @@ impl WorkspaceStore {
             conn.query_row(
                 "SELECT * FROM workspaces
                  WHERE path = ?1 AND lifecycle_state = 'active'
-                 ORDER BY created_at ASC LIMIT 1",
+                 ORDER BY created_at ASC, id ASC LIMIT 1",
                 [path],
                 |row| map_row(row),
             )
@@ -50,8 +50,26 @@ impl WorkspaceStore {
             conn.query_row(
                 "SELECT * FROM workspaces
                  WHERE path = ?1 AND id <> ?2 AND lifecycle_state = 'active'
-                 ORDER BY created_at ASC LIMIT 1",
+                 ORDER BY created_at ASC, id ASC LIMIT 1",
                 params![path, excluded_id],
+                |row| map_row(row),
+            )
+            .optional()
+        })
+    }
+
+    pub fn find_active_by_path_and_kind_excluding_id(
+        &self,
+        path: &str,
+        kind: &str,
+        excluded_id: &str,
+    ) -> anyhow::Result<Option<WorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM workspaces
+                 WHERE path = ?1 AND kind = ?2 AND id <> ?3 AND lifecycle_state = 'active'
+                 ORDER BY created_at ASC, id ASC LIMIT 1",
+                params![path, kind, excluded_id],
                 |row| map_row(row),
             )
             .optional()
@@ -65,7 +83,9 @@ impl WorkspaceStore {
     ) -> anyhow::Result<Option<WorkspaceRecord>> {
         self.db.with_conn(|conn| {
             conn.query_row(
-                "SELECT * FROM workspaces WHERE path = ?1 AND kind = ?2 ORDER BY created_at ASC LIMIT 1",
+                "SELECT * FROM workspaces
+                 WHERE path = ?1 AND kind = ?2
+                 ORDER BY created_at ASC, id ASC LIMIT 1",
                 params![path, kind],
                 |row| map_row(row),
             )
@@ -82,7 +102,7 @@ impl WorkspaceStore {
             conn.query_row(
                 "SELECT * FROM workspaces
                  WHERE path = ?1 AND kind = ?2 AND lifecycle_state = 'active'
-                 ORDER BY created_at ASC LIMIT 1",
+                 ORDER BY created_at ASC, id ASC LIMIT 1",
                 params![path, kind],
                 |row| map_row(row),
             )
@@ -632,6 +652,7 @@ mod tests {
         let store = WorkspaceStore::new(db);
 
         let mut retired = workspace_record("workspace-retired", "worktree", "/tmp/workspace");
+        retired.created_at = "2024-01-01T00:00:00Z".to_string();
         retired.lifecycle_state = "retired".to_string();
         retired.cleanup_state = "complete".to_string();
         let active = workspace_record("workspace-active", "worktree", "/tmp/workspace");
@@ -692,6 +713,47 @@ mod tests {
             .find_active_by_path_excluding_id("/tmp/other", "workspace-current")
             .expect("find active path for missing path")
             .is_none());
+    }
+
+    #[test]
+    fn active_path_and_kind_lookup_excludes_current_workspace() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db);
+
+        let current = workspace_record("workspace-current", "worktree", "/tmp/workspace");
+        let local_sibling = workspace_record("workspace-local", "local", "/tmp/workspace");
+        store.insert(&current).expect("insert current workspace");
+        store
+            .insert(&local_sibling)
+            .expect("insert local sibling workspace");
+
+        assert!(store
+            .find_active_by_path_and_kind_excluding_id(
+                "/tmp/workspace",
+                "worktree",
+                "workspace-current",
+            )
+            .expect("find worktree active path excluding current")
+            .is_none());
+
+        let worktree_sibling =
+            workspace_record("workspace-worktree-sibling", "worktree", "/tmp/workspace");
+        store
+            .insert(&worktree_sibling)
+            .expect("insert worktree sibling workspace");
+
+        assert_eq!(
+            store
+                .find_active_by_path_and_kind_excluding_id(
+                    "/tmp/workspace",
+                    "worktree",
+                    "workspace-current",
+                )
+                .expect("find worktree active path excluding current")
+                .expect("worktree sibling")
+                .id,
+            "workspace-worktree-sibling"
+        );
     }
 
     #[test]

@@ -101,6 +101,10 @@ start of the task, not after implementation has already started.
 - `docs/architecture/cloud-worker-automation-migration-spec.md`
   - concrete implementation spec for migrating automations to a target-agnostic
     staged CloudCommand pipeline
+- `docs/architecture/cloud-work-launch-model-spec.md`
+  - concrete implementation spec for the shared target/workspace/materialization
+    launch model used by automations, Slack, web, mobile, and Desktop cloud
+    surfaces
 - `docs/architecture/plugins-and-skills.md`
   - reference architecture for plugin packages, skill bundles, plugin-owned
     MCP servers, the plugins UI, and the session bundle boundary

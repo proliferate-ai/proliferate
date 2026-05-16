@@ -5,6 +5,7 @@ import { GitPanel } from "./GitPanel";
 
 const mockGitPanelState = vi.hoisted(() => vi.fn());
 const gitDiffQuery = vi.hoisted(() => ({
+  calls: [] as unknown[],
   state: {
     data: null as unknown,
     error: null as unknown,
@@ -17,7 +18,10 @@ vi.mock("@anyharness/sdk-react", () => ({
   useAnyHarnessRuntimeContext: () => ({
     runtimeUrl: null,
   }),
-  useGitDiffQuery: () => gitDiffQuery.state,
+  useGitDiffQuery: (options: unknown) => {
+    gitDiffQuery.calls.push(options);
+    return gitDiffQuery.state;
+  },
   useStageGitPathsMutation: () => ({
     mutateAsync: vi.fn(),
   }),
@@ -85,6 +89,7 @@ function createGitPanelState(overrides = {}) {
 describe("GitPanel", () => {
   beforeEach(() => {
     mockGitPanelState.mockReturnValue(createGitPanelState());
+    gitDiffQuery.calls = [];
     gitDiffQuery.state = {
       data: {
         patch: [
@@ -200,5 +205,74 @@ describe("GitPanel", () => {
     const html = renderToStaticMarkup(createElement(GitPanel));
 
     expect(html).toContain("Diff unavailable: pathspec did not match any files");
+  });
+
+  it("does not auto-fetch oversized generated diffs on first render", () => {
+    const largeDiff = {
+      key: ":anyharness/sdk/generated/openapi.json:modified",
+      path: "anyharness/sdk/generated/openapi.json",
+      oldPath: null,
+      displayPath: "anyharness/sdk/generated/openapi.json",
+      status: "modified",
+      includedState: "excluded",
+      additions: 0,
+      deletions: 16_393,
+      binary: false,
+    };
+    mockGitPanelState.mockReturnValue(createGitPanelState({
+      sections: [{
+        scope: "unstaged",
+        label: "Unstaged",
+        files: [{
+          ...largeDiff,
+          currentDiff: largeDiff,
+        }],
+      }],
+    }));
+
+    const html = renderToStaticMarkup(createElement(GitPanel));
+
+    expect(html).toContain("openapi.json");
+    expect(html).toContain("1 large/generated diff collapsed to keep review responsive.");
+    expect(html).toContain("1 too large to render inline");
+    expect(gitDiffQuery.calls[0]).toMatchObject({
+      path: "anyharness/sdk/generated/openapi.json",
+      enabled: false,
+    });
+  });
+
+  it("limits initial expanded diff fetches", () => {
+    const files = Array.from({ length: 4 }, (_, index) => {
+      const path = `src/file-${index}.ts`;
+      const diff = {
+        key: `:${path}:modified`,
+        path,
+        oldPath: null,
+        displayPath: path,
+        status: "modified",
+        includedState: "excluded",
+        additions: 1,
+        deletions: 1,
+        binary: false,
+      };
+      return {
+        ...diff,
+        currentDiff: diff,
+      };
+    });
+    mockGitPanelState.mockReturnValue(createGitPanelState({
+      sections: [{
+        scope: "unstaged",
+        label: "Unstaged",
+        files,
+      }],
+      visibleChangedCount: files.length,
+    }));
+
+    renderToStaticMarkup(createElement(GitPanel));
+
+    expect(gitDiffQuery.calls).toHaveLength(4);
+    expect(gitDiffQuery.calls.map((call) => (call as { enabled?: boolean }).enabled))
+      .toEqual([true, true, false, false]);
   });
 });

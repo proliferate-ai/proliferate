@@ -1,19 +1,31 @@
-import type { SearchWorkspaceFilesResponse } from "@anyharness/sdk";
 import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selection";
+import type { SessionSlashCommandViewModel } from "@/lib/domain/chat/composer/session-slash-command-policy";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 
-export const FILE_MENTION_SEARCH_RESULTS: SearchWorkspaceFilesResponse["results"] = [
+export const PLAYGROUND_SLASH_COMMANDS: SessionSlashCommandViewModel[] = [
   {
-    name: "ChatInput.tsx",
-    path: "desktop/src/components/workspace/chat/input/ChatInput.tsx",
+    id: "review",
+    name: "review",
+    displayName: "/review",
+    description: "Review the current changes",
+    inputHint: null,
+    group: "Commands",
   },
   {
-    name: "file-mentions.ts",
-    path: "desktop/src/lib/domain/chat/file-mentions.ts",
+    id: "compact",
+    name: "compact",
+    displayName: "/compact",
+    description: "Summarize the session context",
+    inputHint: null,
+    group: "Commands",
   },
   {
-    name: "chat-composer.md",
-    path: "docs/frontend/specs/chat-composer.md",
+    id: "mcp:linear:create_issue",
+    name: "mcp:linear:create_issue",
+    displayName: "/mcp:linear:create_issue",
+    description: "Create a Linear issue from the current context",
+    inputHint: "title",
+    group: "MCP",
   },
 ];
 
@@ -30,7 +42,7 @@ export const PLAYGROUND_LONG_COMPOSER_DRAFT = [
   "Plan reference rows should follow the same spacing rule as file attachments.",
   "Queued-prompt editing should use the same autosize workflow.",
   "The Home composer remains intentionally capped at eight rows.",
-  "The file mention search tray still renders above the composer surface.",
+  "The slash command tray still renders above the composer surface.",
   "Focus behavior still depends on data-chat-composer-editor.",
   "Telemetry masking stays on the editable text surface.",
   "This scenario exists to make long prompt regressions visible in the playground.",

@@ -1,5 +1,4 @@
 import type { TranscriptState } from "@anyharness/sdk";
-import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 
 export const OPTIMISTIC_WORKSPACE_SESSION_AGENT_KIND = "";
 export const OPTIMISTIC_WORKSPACE_SESSION_TITLE = "Chat";
@@ -11,6 +10,7 @@ interface OptimisticSessionCandidateInput {
   materializedWorkspaceId: string;
   visibleChatSessionIdsByWorkspace: Record<string, string[]>;
   workspaceUiKey: string;
+  workspaceUiKeys?: readonly string[];
 }
 
 interface OptimisticSessionPlaceholderLike {
@@ -31,25 +31,19 @@ export function resolveOptimisticWorkspaceSessionId({
   materializedWorkspaceId,
   visibleChatSessionIdsByWorkspace,
   workspaceUiKey,
+  workspaceUiKeys,
 }: OptimisticSessionCandidateInput): string | null {
   if (hasExplicitInitialSessionId) {
     return explicitInitialSessionId ?? null;
   }
 
-  const lastViewedSessionId = resolveWithWorkspaceFallback(
-    lastViewedSessionByWorkspace,
-    workspaceUiKey,
-    materializedWorkspaceId,
-  ).value ?? null;
+  const lookupKeys = uniqueStrings([...(workspaceUiKeys ?? [workspaceUiKey]), materializedWorkspaceId]);
+  const lastViewedSessionId = lookupFirst(lastViewedSessionByWorkspace, lookupKeys) ?? null;
   if (lastViewedSessionId) {
     return lastViewedSessionId;
   }
 
-  return resolveWithWorkspaceFallback(
-    visibleChatSessionIdsByWorkspace,
-    workspaceUiKey,
-    materializedWorkspaceId,
-  ).value?.[0] ?? null;
+  return lookupFirst(visibleChatSessionIdsByWorkspace, lookupKeys)?.[0] ?? null;
 }
 
 export function isOptimisticWorkspaceSessionPlaceholder(
@@ -63,4 +57,23 @@ export function isOptimisticWorkspaceSessionPlaceholder(
     && record.events.length === 0
     && record.transcript.turnOrder.length === 0
     && !record.optimisticPrompt;
+}
+
+function lookupFirst<T>(record: Record<string, T>, keys: readonly string[]): T | undefined {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(record, key)) {
+      return record[key];
+    }
+  }
+  return undefined;
+}
+
+function uniqueStrings(values: readonly (string | null | undefined)[]): string[] {
+  const result: string[] = [];
+  for (const value of values) {
+    if (value && !result.includes(value)) {
+      result.push(value);
+    }
+  }
+  return result;
 }

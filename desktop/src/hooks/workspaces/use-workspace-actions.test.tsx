@@ -96,38 +96,12 @@ describe("useWorkspaceActions local workspace creation", () => {
     });
   });
 
-  it("opens an existing workspace when create reports the path is already registered", async () => {
-    const workspace = localWorkspace("workspace-existing");
-    mocks.create.mockRejectedValueOnce(new AnyHarnessError({
-      type: "about:blank",
-      title: "Bad request",
-      status: 400,
-      detail: "a workspace record already exists for path: /Users/pablo/proliferate",
-      code: "WORKSPACE_CREATE_FAILED",
-    }));
-    mocks.resolveFromPath.mockResolvedValueOnce({ workspace });
-
-    const { result } = renderActions();
-    let resolved: Workspace | null = null;
-    await act(async () => {
-      resolved = await result.current.createLocalWorkspace("/Users/pablo/proliferate");
-    });
-
-    expect(resolved).toBe(workspace);
-    expect(mocks.resolveFromPath).toHaveBeenCalledWith({
-      path: "/Users/pablo/proliferate",
-      origin: { kind: "human", entrypoint: "desktop" },
-    });
-    expect(mocks.trackProductEvent).not.toHaveBeenCalled();
-    expect(mocks.captureTelemetryException).not.toHaveBeenCalled();
-  });
-
-  it("propagates non-conflict create errors", async () => {
+  it("propagates create errors without resolving an existing workspace", async () => {
     const error = new AnyHarnessError({
       type: "about:blank",
       title: "Bad request",
       status: 400,
-      detail: "path is not a git repository",
+      detail: "a workspace record already exists for path: /Users/pablo/proliferate",
       code: "WORKSPACE_CREATE_FAILED",
     });
     mocks.create.mockRejectedValueOnce(error);
@@ -146,42 +120,6 @@ describe("useWorkspaceActions local workspace creation", () => {
     expect(mocks.resolveFromPath).not.toHaveBeenCalled();
     expect(mocks.trackProductEvent).not.toHaveBeenCalled();
     expect(mocks.captureTelemetryException).toHaveBeenCalledWith(error, {
-      tags: {
-        action: "create_local_workspace",
-        domain: "workspace",
-        workspace_kind: "local",
-      },
-    });
-  });
-
-  it("propagates resolve failures after a duplicate-path create error", async () => {
-    const resolveError = new Error("runtime connection lost");
-    mocks.create.mockRejectedValueOnce(new AnyHarnessError({
-      type: "about:blank",
-      title: "Bad request",
-      status: 400,
-      detail: "a workspace record already exists for path: /Users/pablo/proliferate",
-      code: "WORKSPACE_CREATE_FAILED",
-    }));
-    mocks.resolveFromPath.mockRejectedValueOnce(resolveError);
-
-    const { result } = renderActions();
-    let thrown: unknown = null;
-    await act(async () => {
-      try {
-        await result.current.createLocalWorkspace("/Users/pablo/proliferate");
-      } catch (caught) {
-        thrown = caught;
-      }
-    });
-
-    expect(thrown).toBe(resolveError);
-    expect(mocks.resolveFromPath).toHaveBeenCalledWith({
-      path: "/Users/pablo/proliferate",
-      origin: { kind: "human", entrypoint: "desktop" },
-    });
-    expect(mocks.trackProductEvent).not.toHaveBeenCalled();
-    expect(mocks.captureTelemetryException).toHaveBeenCalledWith(resolveError, {
       tags: {
         action: "create_local_workspace",
         domain: "workspace",

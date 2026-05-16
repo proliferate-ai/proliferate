@@ -7,7 +7,10 @@ import {
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
-import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import {
+  findLogicalWorkspace,
+  logicalWorkspaceRelatedIds,
+} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
@@ -44,6 +47,7 @@ import type {
 function resolveInitialActiveSessionId(
   workspaceId: string,
   workspaceUiKey: string,
+  workspaceUiKeys: readonly string[],
   options: WorkspaceSelectionOptions | undefined,
   workspaceUiState: {
     lastViewedSessionByWorkspace: Record<string, string>;
@@ -57,6 +61,7 @@ function resolveInitialActiveSessionId(
     materializedWorkspaceId: workspaceId,
     visibleChatSessionIdsByWorkspace: workspaceUiState.visibleChatSessionIdsByWorkspace,
     workspaceUiKey,
+    workspaceUiKeys,
   });
   if (!candidate) {
     return null;
@@ -182,6 +187,7 @@ export async function runWorkspaceSelection(
       const initialActiveSessionId = resolveInitialActiveSessionId(
         request.workspaceId,
         request.workspaceId,
+        [request.workspaceId],
         request.options,
         workspaceUiState,
       );
@@ -269,6 +275,7 @@ export async function runWorkspaceSelection(
       const initialActiveSessionId = resolveInitialActiveSessionId(
         directWorkspace.id,
         directWorkspace.id,
+        [directWorkspace.id],
         request.options,
         workspaceUiState,
       );
@@ -364,6 +371,7 @@ export async function runWorkspaceSelection(
   const initialActiveSessionId = resolveInitialActiveSessionId(
     resolvedWorkspaceId,
     logicalWorkspace.id,
+    logicalWorkspaceRelatedIds(logicalWorkspace),
     request.options,
     workspaceUiState,
   );

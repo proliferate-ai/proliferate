@@ -26,8 +26,9 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain("2 files changed");
     expect(html).not.toContain("+7");
     expect(html).not.toContain("text-git-red\">-3</span>");
-    expect(html).toContain("+4");
-    expect(html).toContain("-1");
+    expect(html).toContain('text-right">+</span><span class="text-right">4');
+    expect(html).toContain('text-right">-</span><span class="text-right">1');
+    expect(html).toContain("grid-cols-[0.65ch_minmax(1ch,max-content)]");
     expect(html).toContain("bg-[var(--color-diff-panel-surface)]");
     expect(html).toContain("text-chat leading-[var(--text-chat--line-height)]");
     expect(html).toContain("thread-diff-virtualized");

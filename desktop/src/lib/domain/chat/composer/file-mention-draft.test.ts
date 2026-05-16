@@ -3,8 +3,6 @@ import {
   appendTextToDraft,
   deleteBackwardAtSelection,
   deleteForwardAtSelection,
-  findMentionTrigger,
-  insertFileMentionAtTrigger,
   insertTextAtSelection,
   removeMentionAtIndex,
 } from "./file-mention-draft-edits";
@@ -17,7 +15,6 @@ import {
 } from "./file-mention-draft-model";
 import {
   collapseSelection,
-  positionFromLinearOffset,
 } from "./file-mention-draft-position";
 import {
   formatMarkdownFileLink,
@@ -29,56 +26,6 @@ const mention = (id: string, path = "desktop/src/App.tsx") =>
   createFileMentionNode({ id, name: path.split("/").pop() ?? path, path });
 
 describe("chat file mentions", () => {
-  it("detects @ triggers at allowed boundaries", () => {
-    const draft = createTextDraft("see @Cha");
-    expect(findMentionTrigger(draft, positionFromLinearOffset(draft, 8))).toEqual({
-      query: "Cha",
-      start: { kind: "text", nodeIndex: 0, offset: 4 },
-      end: { kind: "text", nodeIndex: 0, offset: 8 },
-    });
-
-    const afterNewline = createTextDraft("one\n@two");
-    expect(findMentionTrigger(afterNewline, positionFromLinearOffset(afterNewline, 8))?.query)
-      .toBe("two");
-
-    const afterPunctuation = createTextDraft("(@file");
-    expect(findMentionTrigger(afterPunctuation, positionFromLinearOffset(afterPunctuation, 6))?.query)
-      .toBe("file");
-  });
-
-  it("does not trigger inside words and treats @fo@bar as one query", () => {
-    const emailLike = createTextDraft("foo@bar");
-    expect(findMentionTrigger(emailLike, positionFromLinearOffset(emailLike, 7))).toBeNull();
-
-    const nested = createTextDraft("@fo@bar");
-    expect(findMentionTrigger(nested, positionFromLinearOffset(nested, 7))?.query)
-      .toBe("fo@bar");
-  });
-
-  it("detects @ after a mention boundary", () => {
-    const draft: ChatComposerDraft = {
-      nodes: [mention("a"), { type: "text", text: "@App" }],
-    };
-
-    expect(findMentionTrigger(draft, positionFromLinearOffset(draft, 5))?.query)
-      .toBe("App");
-  });
-
-  it("inserts a file mention and returns the caret after the trailing space", () => {
-    const draft = createTextDraft("open @App today");
-    const trigger = findMentionTrigger(draft, positionFromLinearOffset(draft, 9));
-    expect(trigger).not.toBeNull();
-
-    const result = insertFileMentionAtTrigger(draft, trigger!, mention("a"));
-
-    expect(result.draft.nodes).toEqual([
-      { type: "text", text: "open " },
-      { type: "file_mention", id: "a", name: "App.tsx", path: "desktop/src/App.tsx" },
-      { type: "text", text: " today" },
-    ]);
-    expect(result.selection).toEqual(collapseSelection({ kind: "text", nodeIndex: 2, offset: 1 }));
-  });
-
   it("keeps duplicate mentions of the same path distinct", () => {
     const draft: ChatComposerDraft = {
       nodes: [

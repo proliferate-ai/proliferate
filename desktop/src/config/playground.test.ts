@@ -10,12 +10,11 @@ import { renderAttachedSlot } from "@/components/playground/composer-slots/Playg
 import { renderOutboundSlot } from "@/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
 import { renderPlaygroundReviewTranscript } from "@/components/playground/transcript/PlaygroundReviewTranscript";
 import { renderComposerSurfaceForScenario } from "@/components/playground/PlaygroundComposerSurfaces";
-import { FILE_MENTION_SEARCH_RESULTS } from "@/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
+import { PLAYGROUND_SLASH_COMMANDS } from "@/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
 import {
   PLAYGROUND_REVIEW_COMPOSER_STATES,
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
 } from "@/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
-import { isValidWorkspaceRelativePath } from "@/lib/domain/chat/composer/file-mention-links";
 
 const USER_INPUT_SCENARIOS: ScenarioKey[] = [
   "user-input-single-option",
@@ -256,12 +255,17 @@ describe("playground scenarios", () => {
     expect(isValidElement(renderMobilityOverlayPreview("mobility-failed"))).toBe(true);
   });
 
-  it("includes a file mention search scenario with workspace-relative fixture paths", () => {
-    expect(Object.keys(SCENARIOS)).toContain("file-mention-search");
-    expect(FILE_MENTION_SEARCH_RESULTS.length).toBeGreaterThan(0);
-    expect(FILE_MENTION_SEARCH_RESULTS.every((result) =>
-      isValidWorkspaceRelativePath(result.path)
-    )).toBe(true);
+  it("includes slash command scenarios with grouped and empty states", () => {
+    expect(Object.keys(SCENARIOS)).toContain("slash-command-search");
+    expect(Object.keys(SCENARIOS)).toContain("slash-command-empty");
+    expect(PLAYGROUND_SLASH_COMMANDS.some((command) => command.group === "MCP")).toBe(true);
+
+    const groupedHtml = renderToStaticMarkup(renderComposerSurfaceForScenario("slash-command-search"));
+    expect(groupedHtml).toContain("/review");
+    expect(groupedHtml).toContain("MCP");
+
+    const emptyHtml = renderToStaticMarkup(renderComposerSurfaceForScenario("slash-command-empty"));
+    expect(emptyHtml).toContain("No matching slash commands.");
   });
 
   it("renders a long composer input scenario through the shared editor surface", () => {

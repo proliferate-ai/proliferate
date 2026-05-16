@@ -160,6 +160,7 @@ export function makeLocalLogicalWorkspace(args: {
   repoName: string;
   kind?: Workspace["kind"];
   branch?: string;
+  displayName?: string | null;
   origin?: Workspace["origin"];
   creatorContext?: Workspace["creatorContext"];
   executionSummary?: Workspace["executionSummary"];
@@ -172,6 +173,7 @@ export function makeLocalLogicalWorkspace(args: {
     repoName,
     kind = "local",
     branch,
+    displayName,
     origin,
     creatorContext,
     executionSummary,
@@ -183,6 +185,7 @@ export function makeLocalLogicalWorkspace(args: {
     sourceRoot: repoKey,
     kind,
     branch,
+    displayName,
     origin,
     creatorContext,
     executionSummary,

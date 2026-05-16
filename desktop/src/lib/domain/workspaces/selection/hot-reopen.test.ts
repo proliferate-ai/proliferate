@@ -13,6 +13,7 @@ describe("hotReopenWorkspaceLookupIds", () => {
     expect(hotReopenWorkspaceLookupIds("workspace-local", logicalWorkspace())).toEqual([
       "workspace-local",
       "logical:repo",
+      "local-slot:workspace-local",
       "cloud:cloud-1",
     ]);
   });
