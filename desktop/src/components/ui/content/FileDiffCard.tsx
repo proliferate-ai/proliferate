@@ -19,14 +19,31 @@ export function FileChangeStats({
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 tabular-nums tracking-tight ${className ?? ""}`}
+      className={`inline-flex shrink-0 items-baseline gap-1 tabular-nums tracking-tight ${className ?? ""}`}
     >
       {additions > 0 && (
-        <span className="shrink-0 text-git-green">+{additions}</span>
+        <FileChangeStat sign="+" value={additions} className="text-git-green" />
       )}
       {deletions > 0 && (
-        <span className="shrink-0 text-git-red">-{deletions}</span>
+        <FileChangeStat sign="-" value={deletions} className="text-git-red" />
       )}
+    </span>
+  );
+}
+
+function FileChangeStat({
+  sign,
+  value,
+  className,
+}: {
+  sign: "+" | "-";
+  value: number;
+  className: string;
+}) {
+  return (
+    <span className={`inline-grid shrink-0 grid-cols-[0.65ch_minmax(1ch,max-content)] items-baseline ${className}`}>
+      <span className="text-right">{sign}</span>
+      <span className="text-right">{value}</span>
     </span>
   );
 }

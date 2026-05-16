@@ -4,7 +4,7 @@ import type {
   ToolCallItem,
 } from "@anyharness/sdk";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
-import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
+import { FileChangeStats, FileDiffCard } from "@/components/ui/content/FileDiffCard";
 import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
 import { ChevronRight } from "@/components/ui/icons";
 import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
@@ -94,10 +94,11 @@ function EditActionRow({
           displayName={displayName}
         />
         {(additions > 0 || deletions > 0) && (
-          <span className="inline-flex shrink-0 items-center gap-1 tabular-nums tracking-tight text-sm">
-            {additions > 0 && <span className="text-git-green">+{additions}</span>}
-            {deletions > 0 && <span className="text-git-red">-{deletions}</span>}
-          </span>
+          <FileChangeStats
+            additions={additions}
+            deletions={deletions}
+            className="text-sm"
+          />
         )}
         {hasDetails && (
           <ChevronRight

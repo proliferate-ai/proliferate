@@ -256,20 +256,27 @@ describe("FileEditorView", () => {
       isLoading: false,
     });
 
-    const { container } = render(createElement(FileEditorView, {
+    render(createElement(FileEditorView, {
       filePath: "package.json",
       targetKey,
     }));
 
     fireEvent.click(screen.getByLabelText("Show files"));
 
-    expect(container.querySelector("[data-file-browser-overlay]")).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Browse files" })).toBeTruthy();
+    expect(document.body.querySelector("[data-file-browser-overlay]")).toBeTruthy();
     expect(screen.getByText("{\"ok\":true}")).toBeTruthy();
     expect(screen.getByText("README.md")).toBeTruthy();
     expect(workspaceFilesQuery).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       path: "",
       enabled: true,
+    });
+    expect(searchWorkspaceFilesQuery).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      query: "",
+      limit: 60,
+      enabled: false,
     });
   });
 });
