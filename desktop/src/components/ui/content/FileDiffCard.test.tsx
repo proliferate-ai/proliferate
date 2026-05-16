@@ -54,6 +54,21 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain(">.claude/plans/sorry-im-eant-liek-moonlit-goose.md</span>");
     expect(html).not.toContain(">/Users/pablo/.claude/plans/sorry-im-eant-liek-moonlit-goose.md</span>");
     expect(html).not.toContain("hover:underline");
-    expect(html).not.toContain("opacity-0");
+    expect(html).toContain("opacity-0");
+  });
+
+  it("marks truncated absolute path prefixes with an ellipsis", () => {
+    const html = renderToStaticMarkup(
+      createElement(FileDiffCard, {
+        filePath: "/Users/pablo/projects/proliferate/desktop/src/components/ui/content/FileDiffCard.tsx",
+        additions: 1,
+        deletions: 0,
+        isExpanded: false,
+        onToggleExpand: () => {},
+        onOpenFile: () => {},
+      }),
+    );
+
+    expect(html).toContain(">.../ui/content/FileDiffCard.tsx</span>");
   });
 });

@@ -34,7 +34,7 @@ export const CLOUD_SIDEBAR_STATUS_DEFINITIONS = {
     label: "archived",
     tone: "pending",
     className:
-      "border-sidebar-border bg-sidebar-accent text-sidebar-muted-foreground",
+      "border-sidebar-border bg-transparent text-sidebar-muted-foreground",
   },
   error: {
     label: "error",

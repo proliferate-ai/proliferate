@@ -297,6 +297,12 @@
   --diffs-font-family: var(--font-mono);
   --diffs-font-size: 11px;
   --diffs-line-height: calc(var(--diffs-font-size, 11px) * 1.8);
+  --scratch-font-family: "Geist", var(--font-sans);
+  --scratch-code-font-family: var(--font-mono);
+  --scratch-font-size: var(--text-chat);
+  --scratch-line-height: calc(var(--scratch-font-size) * 1.42);
+  --scratch-list-marker-width: 1.35em;
+  --scratch-task-box-size: 0.82em;
   --readable-code-font-size: 0.6875rem;
   --readable-code-line-height: 1.625;
   --diffs-min-number-column-width: 4ch;
@@ -1220,6 +1226,7 @@
   --git-removed-line-border: color-mix(in oklab, #ba2623 60%, transparent);
   --git-removed-line-highlight: color-mix(in oklab, #ba2623 15%, transparent);
   --color-diff-main-surface: #ffffff;
+  --color-diff-code-surface: var(--color-surface);
   --color-diff-surface: color-mix(in srgb, #ffffff 94%, #0d0d0d);
   --color-diff-panel-surface: color-mix(in oklab, #0d0d0d 3%, transparent);
   --color-diff-header-surface: var(--color-diff-surface);
@@ -1242,6 +1249,13 @@
 
   --color-primary: #1a1c1f;
   --color-primary-foreground: #ffffff;
+
+  --color-border-light: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  --color-border-heavy: color-mix(in oklab, var(--color-foreground) 12%, transparent);
+  --color-surface-elevated-secondary: color-mix(in oklab, var(--color-foreground) 2%, transparent);
+  --color-list-hover: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  --color-foreground-secondary: color-mix(in oklab, var(--color-foreground) 70%, transparent);
+  --color-foreground-tertiary: color-mix(in oklab, var(--color-foreground) 50%, transparent);
 
   --color-secondary: color-mix(in oklab, var(--color-foreground) 5%, transparent);
   --color-secondary-foreground: var(--color-foreground);
@@ -1266,18 +1280,6 @@
   --color-input-border: var(--color-border);
   --color-separator: var(--color-border-light);
   --color-ring: #339cff;
-  --color-border-light: color-mix(in oklab, var(--color-foreground) 5%, transparent);
-  --color-border-heavy: color-mix(in oklab, var(--color-foreground) 12%, transparent);
-  --color-surface: #ffffff;
-  --color-surface-under: #f9f9f9;
-  --color-surface-control: color-mix(in oklab, #ededed 40%, transparent);
-  --color-surface-control-opaque: #f4f4f4;
-  --color-surface-elevated: #ffffff;
-  --color-surface-elevated-secondary: color-mix(in oklab, var(--color-foreground) 2%, transparent);
-  --color-surface-editor: #f7f7f7;
-  --color-list-hover: color-mix(in oklab, var(--color-foreground) 5%, transparent);
-  --color-foreground-secondary: color-mix(in oklab, var(--color-foreground) 70%, transparent);
-  --color-foreground-tertiary: color-mix(in oklab, var(--color-foreground) 50%, transparent);
 
   --color-highlight: #e5f3ff;
   --color-highlight-foreground: var(--color-foreground);

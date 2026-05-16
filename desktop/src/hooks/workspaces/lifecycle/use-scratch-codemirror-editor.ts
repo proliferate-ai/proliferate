@@ -85,7 +85,7 @@ export function useScratchCodeMirrorEditor({
   // Owns the imperative CodeMirror editor lifecycle and keeps React as the source of saved text.
   const extensions = useMemo(() => [
     history(),
-    markdown(),
+    markdown({ addKeymap: false }),
     syntaxHighlighting(scratchHighlightStyle),
     placeholderCompartmentRef.current.of(placeholder(placeholderText)),
     scratchEditorTheme,
@@ -203,7 +203,12 @@ const scratchHighlightStyle = HighlightStyle.define([
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strong, fontWeight: "600" },
   { tag: tags.link, color: "var(--color-foreground)", textDecoration: "underline" },
-  { tag: tags.monospace, color: "var(--color-muted-foreground)" },
+  {
+    tag: tags.monospace,
+    color: "var(--color-muted-foreground)",
+    fontFamily: "var(--scratch-code-font-family)",
+    fontSize: "0.93em",
+  },
 ]);
 
 const scratchEditorTheme = EditorView.theme({
@@ -211,9 +216,9 @@ const scratchEditorTheme = EditorView.theme({
     height: "100%",
     color: "var(--color-foreground)",
     backgroundColor: "transparent",
-    fontFamily: "var(--diffs-font-family)",
-    fontSize: "var(--diffs-font-size)",
-    lineHeight: "var(--diffs-line-height)",
+    fontFamily: "var(--scratch-font-family)",
+    fontSize: "var(--scratch-font-size)",
+    lineHeight: "var(--scratch-line-height)",
   },
   ".cm-scroller": {
     height: "100%",
@@ -222,7 +227,7 @@ const scratchEditorTheme = EditorView.theme({
   },
   ".cm-content": {
     minHeight: "100%",
-    padding: "0.75rem 1rem",
+    padding: "0.9rem 1.05rem",
     caretColor: "var(--color-foreground)",
   },
   ".cm-line": {
@@ -233,6 +238,9 @@ const scratchEditorTheme = EditorView.theme({
   },
   ".cm-cursor": {
     borderLeftColor: "var(--color-foreground)",
+    borderLeftWidth: "1px",
+    minHeight: "1.1em",
+    marginTop: "0.2em",
   },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
     backgroundColor: "color-mix(in oklab, var(--color-foreground) 18%, transparent)",
@@ -242,36 +250,48 @@ const scratchEditorTheme = EditorView.theme({
   },
   ".scratch-list-marker": {
     display: "inline-flex",
-    width: "1.6ch",
+    width: "var(--scratch-list-marker-width)",
     justifyContent: "center",
     color: "var(--color-sidebar-muted-foreground)",
   },
   ".scratch-task-checkbox": {
-    display: "inline-flex",
-    width: "0.98em",
-    height: "0.98em",
-    margin: "0 0.65ch 0 0.16ch",
-    alignItems: "center",
-    justifyContent: "center",
+    display: "inline-block",
+    width: "var(--scratch-list-marker-width)",
+    height: "1em",
+    margin: "0 0.1em 0 0",
     boxSizing: "border-box",
+    lineHeight: "1",
+    position: "relative",
+    verticalAlign: "-0.1em",
+  },
+  ".scratch-task-box": {
+    display: "block",
+    width: "var(--scratch-task-box-size)",
+    height: "var(--scratch-task-box-size)",
+    boxSizing: "border-box",
+    position: "absolute",
+    left: "50%",
+    top: "50%",
     border: "1px solid color-mix(in oklab, var(--color-sidebar-muted-foreground) 72%, transparent)",
-    borderRadius: "0.24em",
+    borderRadius: "0.18em",
     background: "transparent",
     color: "transparent",
-    verticalAlign: "-0.14em",
+    transform: "translate(-50%, -50%)",
   },
-  ".scratch-task-checkbox[data-checked=\"true\"]": {
+  ".scratch-task-checkbox[data-checked=\"true\"] .scratch-task-box": {
     borderColor: "color-mix(in oklab, var(--color-foreground) 68%, transparent)",
     background: "color-mix(in oklab, var(--color-foreground) 8%, transparent)",
     color: "var(--color-foreground)",
   },
   ".scratch-task-check": {
-    width: "0.48em",
-    height: "0.28em",
-    marginTop: "-0.08em",
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: "0.38em",
+    height: "0.22em",
     border: "solid currentColor",
-    borderWidth: "0 0 0.12em 0.12em",
-    transform: "rotate(-45deg)",
+    borderWidth: "0 0 0.095em 0.095em",
+    transform: "translate(-50%, -60%) rotate(-45deg)",
   },
 });
 
@@ -366,11 +386,14 @@ class ScratchTaskWidget extends WidgetType {
     checkbox.tabIndex = 0;
     checkbox.setAttribute("aria-checked", String(this.options.checked));
     checkbox.setAttribute("aria-label", this.options.checked ? "Mark task incomplete" : "Mark task complete");
+    const box = document.createElement("span");
+    box.className = "scratch-task-box";
     if (this.options.checked) {
       const check = document.createElement("span");
       check.className = "scratch-task-check";
-      checkbox.appendChild(check);
+      box.appendChild(check);
     }
+    checkbox.appendChild(box);
     checkbox.addEventListener("mousedown", (event) => {
       event.preventDefault();
     });

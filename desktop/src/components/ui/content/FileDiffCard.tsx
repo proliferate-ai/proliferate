@@ -284,7 +284,7 @@ export function FileDiffCard({
 
               <div className="ms-auto flex shrink-0 items-center gap-1">
                 {actions && (
-                  <div className="hidden items-center group-hover/diff-header:flex group-focus-within/diff-header:flex">
+                  <div className="flex items-center opacity-0 transition-opacity duration-200 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100">
                     {actions}
                   </div>
                 )}
@@ -294,7 +294,7 @@ export function FileDiffCard({
                   className="leading-none"
                 />
                 {handleOpenAction && (
-                  <div className="hidden shrink-0 group-hover/diff-header:flex group-focus-within/diff-header:flex">
+                  <div className="shrink-0 opacity-0 transition-opacity duration-200 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100">
                     <Button
                       type="button"
                       variant="ghost"
@@ -368,5 +368,5 @@ function formatDiffHeaderPath(path: string): string {
     return segments.join("/");
   }
 
-  return segments.slice(-3).join("/");
+  return `.../${segments.slice(-3).join("/")}`;
 }
