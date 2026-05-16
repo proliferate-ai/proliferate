@@ -25,7 +25,7 @@ export function ReviewSetupLoopControls({
       <div className="flex flex-wrap items-center gap-3 rounded-lg bg-foreground/5 px-2 py-1.5">
         <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
           Max rounds
-          <span className="inline-flex items-center overflow-hidden rounded-md border border-border/60 bg-background/40">
+          <span className="inline-flex items-center overflow-hidden rounded-md border border-border/60 bg-surface-control">
             <Button
               type="button"
               variant="ghost"

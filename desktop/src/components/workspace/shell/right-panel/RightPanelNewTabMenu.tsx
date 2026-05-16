@@ -37,7 +37,7 @@ export function RightPanelNewTabMenu({
         <IconButton
           size="xs"
           tone="sidebar"
-          className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger"
+          className="ui-icon-button workspace-shell-icon-button workspace-shell-toolbar-button glass-editor-panel-new-tab-menu-trigger"
         >
           <AppShellPlusIcon className="ui-icon" />
           <span className="sr-only">Open new tab menu</span>

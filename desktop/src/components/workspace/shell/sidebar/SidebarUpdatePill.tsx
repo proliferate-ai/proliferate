@@ -51,7 +51,7 @@ export function SidebarUpdatePill({
     phase === "ready"
       ? actionClassName
       : phase === "downloading"
-        ? "cursor-default border-sidebar-border/50 bg-sidebar-accent/60 text-sidebar-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-muted-foreground"
+        ? "cursor-default border-sidebar-border bg-sidebar-accent text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-muted-foreground"
         : actionClassName;
 
   function handleClick() {

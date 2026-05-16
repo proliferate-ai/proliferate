@@ -14,6 +14,9 @@ import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-dif
 
 type GitReviewBaseMode = Exclude<GitPanelMode, "working_tree_composite">;
 
+const GIT_REVIEW_SELECTOR_TRIGGER_CLASS =
+  "h-6 min-w-0 gap-1 rounded-lg border border-sidebar-border bg-surface-elevated-secondary px-2 py-0 text-[10px] leading-[18px] text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground";
+
 const GIT_REVIEW_BASE_OPTIONS: {
   id: GitReviewBaseMode;
   label: string;
@@ -62,7 +65,7 @@ export function GitReviewBaseSelector({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-6 min-w-0 max-w-[7.5rem] flex-[1_1_6.75rem] gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-[10px] leading-[18px] text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground"
+          className={`${GIT_REVIEW_SELECTOR_TRIGGER_CLASS} max-w-[7.5rem] flex-[1_1_6.75rem]`}
         >
           <ActiveIcon className="size-3 shrink-0 opacity-75" />
           <span className="min-w-0 truncate text-sidebar-foreground">{activeOption.label}</span>

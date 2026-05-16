@@ -25,7 +25,7 @@ export function PickerPopoverContent({
     <div className={`flex max-h-80 min-h-0 flex-col ${className}`}>
       {onSearchChange ? (
         <div className="border-b border-border/70 p-1 pb-2">
-          <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-2.5">
+          <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-control px-2.5">
             <Search className="size-3.5 shrink-0 text-muted-foreground" />
             <Input
               value={searchValue ?? ""}

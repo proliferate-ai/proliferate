@@ -33,8 +33,8 @@ export function SplitButton({
     </>
   );
   const primaryClassName = showLabel
-    ? "inline-flex items-center whitespace-nowrap border border-border bg-background hover:bg-accent hover:text-accent-foreground h-6 px-2 text-xs rounded-lg gap-2 font-medium"
-    : "inline-flex size-7 items-center justify-center whitespace-nowrap rounded-lg border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground";
+    ? "workspace-shell-action-button inline-flex items-center whitespace-nowrap font-medium"
+    : "workspace-shell-icon-button inline-flex items-center justify-center whitespace-nowrap";
 
   if (!targets || targets.length === 0 || !onTargetClick) {
     return (
@@ -63,8 +63,8 @@ export function SplitButton({
             title={label}
             aria-label={label}
             className={showLabel
-              ? "inline-flex items-center whitespace-nowrap border border-border bg-background hover:bg-accent hover:text-accent-foreground h-6 px-2 text-xs rounded-lg flex-1 justify-start gap-2 rounded-r-none border-r-0 font-mono font-medium pr-2"
-              : "inline-flex size-7 items-center justify-center whitespace-nowrap rounded-lg rounded-r-none border border-border border-r-0 bg-background text-muted-foreground hover:bg-accent hover:text-foreground"}
+              ? "workspace-shell-action-button workspace-shell-split-button-left inline-flex items-center whitespace-nowrap flex-1 justify-start font-mono font-medium"
+              : "workspace-shell-icon-button workspace-shell-split-button-left inline-flex items-center justify-center whitespace-nowrap"}
           >
             {content}
           </button>
@@ -76,8 +76,8 @@ export function SplitButton({
             title={`Choose ${label}`}
             aria-label={`Choose ${label}`}
             className={showLabel
-              ? "inline-flex items-center justify-center whitespace-nowrap border border-border hover:bg-accent hover:text-accent-foreground font-[450] h-6 text-xs gap-1.5 rounded-lg rounded-l-none px-2 bg-sidebar-background/4"
-              : "inline-flex h-7 w-6 items-center justify-center whitespace-nowrap rounded-lg rounded-l-none border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"}
+              ? "workspace-shell-action-button workspace-shell-split-button-right inline-flex items-center justify-center whitespace-nowrap gap-1.5 font-[450]"
+              : "workspace-shell-icon-button workspace-shell-split-button-right inline-flex items-center justify-center whitespace-nowrap"}
           >
             <ChevronDown className="size-3" />
           </button>

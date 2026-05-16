@@ -66,7 +66,7 @@ export class SettingsContentBoundary extends React.Component<
         <Button variant="secondary" onClick={this.handleRetry}>
           {SETTINGS_COPY.errorRetry}
         </Button>
-        <details className="rounded-lg border border-border/60 bg-card/60 px-4 py-3 text-sm">
+        <details className="rounded-lg border border-border/60 bg-surface-elevated-secondary px-4 py-3 text-sm">
           <summary className="cursor-pointer select-none text-muted-foreground">
             {SETTINGS_COPY.errorDetailsLabel}
           </summary>

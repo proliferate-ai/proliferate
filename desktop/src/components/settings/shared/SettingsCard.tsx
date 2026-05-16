@@ -8,7 +8,7 @@ interface SettingsCardProps {
 export function SettingsCard({ children, className = "" }: SettingsCardProps) {
   return (
     <div
-      className={`flex flex-col divide-y divide-border/40 rounded-lg border border-border bg-card/50 ${className}`}
+      className={`flex flex-col divide-y divide-border-light rounded-lg border border-border-light bg-surface-elevated shadow-subtle ${className}`}
     >
       {children}
     </div>

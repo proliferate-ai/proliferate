@@ -13,6 +13,9 @@ import {
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 
+const GIT_REVIEW_TARGET_TRIGGER_CLASS =
+  "h-6 min-w-0 max-w-[8rem] flex-[1_1_7.25rem] gap-1 rounded-lg border border-sidebar-border bg-surface-elevated-secondary px-2 py-0 text-[10px] leading-[18px] text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground";
+
 export function GitReviewTargetSelector({
   mode,
   baseRef,
@@ -54,7 +57,7 @@ export function GitReviewTargetSelector({
         variant="ghost"
         size="sm"
         disabled
-        className="h-6 min-w-0 max-w-[8rem] flex-[1_1_7.25rem] cursor-default gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-[10px] leading-[18px] text-sidebar-muted-foreground opacity-100 disabled:opacity-100"
+        className={`${GIT_REVIEW_TARGET_TRIGGER_CLASS} cursor-default opacity-100 disabled:opacity-100`}
       >
         <TargetIcon className="size-3 shrink-0 opacity-75" />
         <span className="min-w-0 truncate text-sidebar-foreground">{localTarget.label}</span>
@@ -70,7 +73,7 @@ export function GitReviewTargetSelector({
           variant="ghost"
           size="sm"
           disabled={!isRuntimeReady}
-          className="h-6 min-w-0 max-w-[8rem] flex-[1_1_7.25rem] gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-[10px] leading-[18px] text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground"
+          className={GIT_REVIEW_TARGET_TRIGGER_CLASS}
         >
           <GitBranchIcon className="size-3 shrink-0 opacity-75" />
           <span className="min-w-0 truncate text-sidebar-foreground">{activeRef}</span>
@@ -82,7 +85,7 @@ export function GitReviewTargetSelector({
     >
       {(close) => (
         <div className="flex flex-col gap-1">
-          <div className="flex h-7 items-center gap-1.5 rounded-lg bg-background/40 px-2 text-muted-foreground">
+          <div className="flex h-7 items-center gap-1.5 rounded-lg bg-surface-control px-2 text-muted-foreground">
             <Search className="size-3 shrink-0" />
             <Input
               value={search}

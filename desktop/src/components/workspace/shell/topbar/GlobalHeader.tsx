@@ -24,9 +24,9 @@ import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { workspaceHeaderTitle } from "@/lib/domain/workspaces/display/workspace-display";
 
 const HEADER_ICON_BUTTON_CLASS =
-  "workspace-shell-icon-button";
+  "workspace-shell-icon-button workspace-shell-toolbar-button";
 const HEADER_RUN_BUTTON_CLASS =
-  "workspace-shell-action-button text-xs font-medium";
+  "workspace-shell-action-button workspace-shell-toolbar-button text-xs font-medium";
 
 interface GlobalHeaderProps {
   selectedWorkspace: Workspace | undefined;
