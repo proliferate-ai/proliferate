@@ -55,4 +55,12 @@ describe("UpdateNotificationCard", () => {
 
     expect(screen.queryByLabelText("Desktop update is available")).toBeNull();
   });
+
+  it("does not render when no update is available", () => {
+    updaterMocks.phase = "current";
+
+    render(<UpdateNotificationCard />);
+
+    expect(screen.queryByText("New update available")).toBeNull();
+  });
 });

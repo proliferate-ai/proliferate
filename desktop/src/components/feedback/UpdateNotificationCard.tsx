@@ -12,9 +12,6 @@ const UPDATE_CARD_PHASES = new Set<UpdaterPhase>([
   "downloading",
   "ready",
 ]);
-const FORCE_DEV_UPDATE_CARD_PREVIEW = import.meta.env.DEV && import.meta.env.MODE !== "test";
-const DEV_UPDATE_CARD_PREVIEW_PHASE: UpdaterPhase = "ready";
-const DEV_UPDATE_CARD_PREVIEW_VERSION = "0.1.99";
 
 export function UpdateNotificationCard() {
   const {
@@ -26,22 +23,17 @@ export function UpdateNotificationCard() {
   } = useUpdater();
   const { openExternal } = useTauriShellActions();
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
-  const previewingDevCard = FORCE_DEV_UPDATE_CARD_PREVIEW && !UPDATE_CARD_PHASES.has(phase);
-  const displayPhase = previewingDevCard ? DEV_UPDATE_CARD_PREVIEW_PHASE : phase;
-  const displayAvailableVersion = previewingDevCard
-    ? DEV_UPDATE_CARD_PREVIEW_VERSION
-    : availableVersion;
-  const visibleKey = `${displayPhase}:${displayAvailableVersion ?? "unknown"}`;
+  const visibleKey = `${phase}:${availableVersion ?? "unknown"}`;
 
   useEffect(() => {
     setDismissedKey(null);
   }, [visibleKey]);
 
-  if (!UPDATE_CARD_PHASES.has(displayPhase) || dismissedKey === visibleKey) {
+  if (!UPDATE_CARD_PHASES.has(phase) || dismissedKey === visibleKey) {
     return null;
   }
 
-  const card = updateCardPresentation(displayPhase, downloadProgress);
+  const card = updateCardPresentation(phase, downloadProgress);
 
   return (
     <aside
@@ -65,7 +57,7 @@ export function UpdateNotificationCard() {
         </h2>
       </div>
 
-      {displayPhase === "downloading" && typeof downloadProgress === "number" && (
+      {phase === "downloading" && typeof downloadProgress === "number" && (
         <ProgressBar
           value={downloadProgress}
           className="h-1 w-full bg-muted"
@@ -87,14 +79,14 @@ export function UpdateNotificationCard() {
           type="button"
           variant="inverted"
           size="sm"
-          disabled={displayPhase === "downloading"}
+          disabled={phase === "downloading"}
           className="h-7 rounded-md px-2.5 text-xs font-medium"
           onClick={() => {
-            if (displayPhase === "available") {
+            if (phase === "available") {
               void downloadUpdate();
               return;
             }
-            if (displayPhase === "ready") {
+            if (phase === "ready") {
               openRestartPrompt();
             }
           }}
