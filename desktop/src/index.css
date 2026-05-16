@@ -297,10 +297,10 @@
   --diffs-font-family: var(--font-mono);
   --diffs-font-size: 11px;
   --diffs-line-height: calc(var(--diffs-font-size, 11px) * 1.8);
-  --scratch-font-family: "Geist", var(--font-sans);
-  --scratch-code-font-family: var(--font-mono);
-  --scratch-font-size: var(--text-chat);
-  --scratch-line-height: calc(var(--scratch-font-size) * 1.42);
+  --scratch-font-family: var(--diffs-font-family);
+  --scratch-code-font-family: var(--diffs-font-family);
+  --scratch-font-size: var(--diffs-font-size);
+  --scratch-line-height: var(--diffs-line-height);
   --scratch-list-marker-width: 1.35em;
   --scratch-task-box-size: 0.82em;
   --readable-code-font-size: 0.6875rem;
