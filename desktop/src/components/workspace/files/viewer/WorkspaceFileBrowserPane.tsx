@@ -36,43 +36,46 @@ export function WorkspaceFileBrowserPane({
   const searchQuery = useSearchWorkspaceFilesQuery({
     workspaceId,
     query: pathPrefix.trim(),
-    limit: 80,
-    enabled: Boolean(workspaceId) && pathPrefix.trim().length > 0 && directoryQuery.isError,
+    limit: 60,
+    enabled: Boolean(workspaceId) && pathPrefix.trim().length > 0,
   });
 
   const sections = useMemo<PaneFileTreeSection[]>(() => {
+    const nextSections: PaneFileTreeSection[] = [];
+
+    if (searchQuery.data?.results?.length) {
+      nextSections.push({
+        id: "search",
+        label: "Matches",
+        nodes: searchQuery.data.results.map((result) => ({
+          id: `search:${result.path}`,
+          name: result.name,
+          path: result.path,
+          kind: "file",
+          selected: result.path === selectedPath,
+          title: result.path,
+        })),
+      });
+    }
+
     if (directoryQuery.data?.entries) {
-      return [{
+      nextSections.push({
         id: "directory",
-        label: directoryPath || "Workspace",
+        label: directoryPath ? `Folder: ${directoryPath}` : "Workspace",
         nodes: directoryEntriesToNodes({
           directoryPath,
           entries: directoryQuery.data.entries,
           selectedPath,
         }),
-      }];
+      });
     }
 
-    if (searchQuery.data?.results) {
-      return [{
-        id: "search",
-        label: "Matches",
-        nodes: searchQuery.data.results.map((result) => ({
-          id: result.path,
-          name: result.name,
-          path: result.path,
-          kind: "file",
-          selected: result.path === selectedPath,
-        })),
-      }];
-    }
-
-    return [];
+    return nextSections;
   }, [directoryPath, directoryQuery.data?.entries, searchQuery.data?.results, selectedPath]);
 
   const emptyMessage = directoryQuery.isLoading || searchQuery.isLoading
     ? "Loading files"
-    : directoryQuery.isError
+    : pathPrefix.trim().length > 0
       ? "No matching files"
       : "No files";
 
@@ -80,7 +83,7 @@ export function WorkspaceFileBrowserPane({
     <PaneFileTree
       sections={sections}
       searchValue={pathPrefix}
-      searchPlaceholder="Filter files..."
+      searchPlaceholder="Search or jump to a folder..."
       searchAutoFocus={autoFocusSearch}
       emptyMessage={emptyMessage}
       onSearchChange={onPathPrefixChange}

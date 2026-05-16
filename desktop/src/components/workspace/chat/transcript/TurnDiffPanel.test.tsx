@@ -18,8 +18,9 @@ describe("TurnDiffPanel", () => {
     expect(html).toContain("2 files changed");
     expect(html).not.toContain("+4");
     expect(html).not.toContain("text-git-red\">-2</span>");
-    expect(html).toContain("+2");
-    expect(html).toContain("-1");
+    expect(html).toContain('text-right">+</span><span class="text-right">2');
+    expect(html).toContain('text-right">-</span><span class="text-right">1');
+    expect(html).toContain("grid-cols-[0.65ch_minmax(1ch,max-content)]");
     expect(html).toContain("data-diff-surface=\"chat\"");
     expect(html).toContain("README.md");
     expect(html).toContain("GitPanel.tsx");
