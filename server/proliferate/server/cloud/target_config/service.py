@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import cast
 from uuid import UUID
 
@@ -51,9 +52,12 @@ from proliferate.server.cloud.target_config.models import (
     WorkerTargetConfigStatusResponse,
     target_config_payload,
 )
+from proliferate.server.cloud.target_config.runtime_config import build_target_runtime_config
 from proliferate.server.cloud.targets.domain.policy import require_target_admin_membership
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 from proliferate.utils.crypto import decrypt_json, encrypt_json
+
+logger = logging.getLogger(__name__)
 
 
 def _command_idempotency_key(
@@ -105,7 +109,11 @@ async def _require_materialization_command(
         command is None
         or command.target_id != target_id
         or command.leased_by_worker_id != worker_id
-        or command.kind != CloudCommandKind.materialize_environment.value
+        or command.kind
+        not in {
+            CloudCommandKind.materialize_environment.value,
+            CloudCommandKind.materialize_environment_runtime_config.value,
+        }
         or command.status != CloudCommandStatus.leased.value
         or command.lease_id != lease_id
     ):
@@ -354,6 +362,77 @@ async def materialize_target_config(
             "config_version": config.config_version,
         }
     )
+    runtime_config, artifact_payloads, credential_payloads, runtime_warnings = (
+        build_target_runtime_config(
+            target_id=target.id,
+            target_config_id=config.id,
+            config_version=config.config_version,
+            owner_scope="organization" if target.organization_id is not None else "personal",
+            mcp=mcp,
+        )
+    )
+    logger.info(
+        "target runtime config built",
+        extra={
+            "target_id": str(target.id),
+            "target_config_id": str(config.id),
+            "config_version": config.config_version,
+            "revision_id": runtime_config["revision"]["id"],
+            "mcp_server_count": len(runtime_config["mcpServers"]),
+            "skill_count": len(runtime_config["skills"]),
+            "artifact_payload_count": len(artifact_payloads),
+            "credential_payload_count": len(credential_payloads),
+            "warning_count": len(runtime_warnings),
+        },
+    )
+    revision_id = UUID(str(runtime_config["revision"]["id"]))
+    await target_config_store.insert_runtime_config_revision(
+        db,
+        target_id=target.id,
+        target_config_id=config.id,
+        user_id=user.id,
+        organization_id=target.organization_id,
+        revision_id=revision_id,
+        revision_sequence=config.config_version,
+        content_hash=str(runtime_config["revision"]["contentHash"]),
+        manifest_json=json.dumps(runtime_config, sort_keys=True, separators=(",", ":")),
+        warnings_json=json.dumps(runtime_warnings, sort_keys=True, separators=(",", ":")),
+    )
+    await target_config_store.insert_runtime_config_artifacts(
+        db,
+        target_id=target.id,
+        revision_id=revision_id,
+        artifacts=[
+            {
+                **artifact,
+                "payloadCiphertext": encrypt_json(
+                    {
+                        "revisionId": artifact.get("revisionId"),
+                        "hash": artifact.get("hash"),
+                        "contentBase64": artifact.get("contentBase64"),
+                    }
+                ),
+            }
+            for artifact in artifact_payloads
+        ],
+    )
+    await target_config_store.set_current_runtime_config_revision(
+        db,
+        target_id=target.id,
+        target_config_id=config.id,
+        revision_id=revision_id,
+    )
+    finalized_plan = finalized_plan.model_copy(
+        update={
+            "target_config_id": str(config.id),
+            "config_version": config.config_version,
+            "mcp": None,
+            "skills": [],
+            "runtime_config": runtime_config,
+            "runtime_config_artifacts": artifact_payloads,
+            "runtime_config_credentials": credential_payloads,
+        }
+    )
     updated_config = await target_config_store.update_target_config_payload(
         db,
         config_id=config.id,
@@ -381,7 +460,7 @@ async def materialize_target_config(
                     version=config.config_version,
                 ),
                 "targetId": str(target.id),
-                "kind": CloudCommandKind.materialize_environment.value,
+                "kind": CloudCommandKind.materialize_environment_runtime_config.value,
                 "payload": {
                     "targetConfigId": str(config.id),
                     "configVersion": config.config_version,

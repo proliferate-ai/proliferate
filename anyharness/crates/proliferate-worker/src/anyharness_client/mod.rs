@@ -1,6 +1,7 @@
 pub mod backfill;
 pub mod events;
 pub mod health;
+pub mod runtime_config;
 pub mod sessions;
 pub mod workspaces;
 

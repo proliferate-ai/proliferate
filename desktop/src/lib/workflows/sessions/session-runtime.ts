@@ -288,6 +288,7 @@ export async function resumeSession(
       measurementOperationId,
       "session.resume.resolve_mcp",
       () => resolveSessionMcpServersForLaunch({
+        connection,
         targetLocation: mcpTargetLocation(target),
         workspacePath: workspace.path ?? null,
         launchId: `${sessionId}:${crypto.randomUUID()}`,
@@ -301,10 +302,9 @@ export async function resumeSession(
     : {
       mcpServers: [],
       mcpBindingSummaries: [],
-      pluginBundle: { plugins: [] },
+      pluginBundle: undefined,
       releaseRuntimeReservations: async () => {},
     };
-  const { mcpServers, mcpBindingSummaries, pluginBundle } = mcpLaunch;
   const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
   if (!shouldResolveLaunchMcp) {
     recordMeasurementWorkflowStep({
@@ -318,13 +318,7 @@ export async function resumeSession(
     return await resumeRuntimeSession(
       connection,
       materializedSessionId,
-      {
-        mcpServers,
-        mcpBindingSummaries: mcpBindingSummaries.length > 0
-          ? mcpBindingSummaries
-          : undefined,
-        pluginBundle,
-      },
+      {},
       getMeasurementRequestOptions({
         operationId: measurementOperationId,
         category: "session.resume",

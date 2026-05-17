@@ -245,6 +245,12 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
             crate::sessions::runtime::CreateAndStartSessionError::MissingDataKey => {
                 ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
             }
+            crate::sessions::runtime::CreateAndStartSessionError::RuntimeConfigResolutionRequired(
+                resolution,
+            ) => ApiError::runtime_config_resolution_required(
+                "runtime config requires artifact or credential fulfillment before cowork thread launch",
+                resolution,
+            ),
             crate::sessions::runtime::CreateAndStartSessionError::StartFailed(error) => {
                 ApiError::internal(format!("ACP session start failed: {error}"))
             }

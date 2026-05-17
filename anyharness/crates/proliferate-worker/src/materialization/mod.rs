@@ -52,8 +52,31 @@ pub struct TargetConfigMaterializationPlan {
     pub mcp: Option<Value>,
     #[serde(default)]
     pub skills: Vec<Value>,
+    pub runtime_config: Option<Value>,
+    #[serde(default)]
+    pub runtime_config_artifacts: Vec<RuntimeConfigArtifactPayload>,
+    #[serde(default)]
+    pub runtime_config_credentials: Vec<RuntimeConfigCredentialPayload>,
     #[serde(default)]
     pub readiness_requirements: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeConfigArtifactPayload {
+    pub hash: String,
+    pub content_base64: Option<String>,
+    pub local_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeConfigCredentialPayload {
+    #[serde(rename = "ref")]
+    pub credential_ref: String,
+    pub value: String,
+    pub expires_at: Option<String>,
+    pub redacted_summary: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -94,6 +117,7 @@ pub struct MaterializationOutcome {
     pub git_configured: bool,
     pub mcp_configured: bool,
     pub skills_configured: bool,
+    pub runtime_config_configured: bool,
 }
 
 pub fn parse_materialize_environment_payload(
@@ -136,6 +160,7 @@ pub fn materialize_plan(
         git_configured,
         mcp_configured,
         skills_configured,
+        runtime_config_configured: plan.runtime_config.is_some(),
     })
 }
 
@@ -372,6 +397,9 @@ mod tests {
             }),
             agent_credentials: BTreeMap::new(),
             mcp: Some(json!({"mcpServers": []})),
+            runtime_config: None,
+            runtime_config_artifacts: vec![],
+            runtime_config_credentials: vec![],
             skills: vec![],
             readiness_requirements: BTreeMap::new(),
         };
@@ -433,6 +461,9 @@ mod tests {
             git_credential: None,
             agent_credentials: BTreeMap::new(),
             mcp: None,
+            runtime_config: None,
+            runtime_config_artifacts: vec![],
+            runtime_config_credentials: vec![],
             skills: vec![],
             readiness_requirements: BTreeMap::new(),
         };

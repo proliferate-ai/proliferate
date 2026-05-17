@@ -85,6 +85,21 @@ class TargetConfigMaterializationPlan(BaseModel):
     )
     mcp: dict[str, Any] | None = Field(default=None, repr=False)
     skills: list[dict[str, Any]] = Field(default_factory=list)
+    runtime_config: dict[str, Any] | None = Field(
+        default=None,
+        alias="runtimeConfig",
+        repr=False,
+    )
+    runtime_config_artifacts: list[dict[str, Any]] = Field(
+        default_factory=list,
+        alias="runtimeConfigArtifacts",
+        repr=False,
+    )
+    runtime_config_credentials: list[dict[str, Any]] = Field(
+        default_factory=list,
+        alias="runtimeConfigCredentials",
+        repr=False,
+    )
     readiness_requirements: dict[str, object] = Field(
         default_factory=dict,
         alias="readinessRequirements",
@@ -121,6 +136,10 @@ class CloudTargetConfigResponse(BaseModel):
     )
     last_error_code: str | None = Field(default=None, serialization_alias="lastErrorCode")
     last_error_message: str | None = Field(default=None, serialization_alias="lastErrorMessage")
+    runtime_config_revision_id: str | None = Field(
+        default=None,
+        serialization_alias="runtimeConfigRevisionId",
+    )
     summary: TargetConfigSummaryModel
     created_at: str = Field(serialization_alias="createdAt")
     updated_at: str = Field(serialization_alias="updatedAt")
@@ -164,6 +183,9 @@ def target_config_payload(value: CloudTargetConfigSnapshot) -> CloudTargetConfig
         last_materialized_at=_to_iso(value.last_materialized_at),
         last_error_code=value.last_error_code,
         last_error_message=value.last_error_message,
+        runtime_config_revision_id=(
+            str(value.runtime_config_revision_id) if value.runtime_config_revision_id else None
+        ),
         summary=TargetConfigSummaryModel(**_json_dict(value.summary_json)),
         created_at=_to_iso(value.created_at) or "",
         updated_at=_to_iso(value.updated_at) or "",

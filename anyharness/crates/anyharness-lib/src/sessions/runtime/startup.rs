@@ -6,6 +6,7 @@ use std::time::Instant;
 use crate::domains::agents::model::{AgentKind, ResolvedAgent};
 use crate::domains::agents::readiness::resolver::resolve_agent_with_env;
 use crate::domains::agents::registry::built_in_registry;
+use crate::domains::runtime_config::RuntimeConfigLaunchError;
 use crate::live::sessions::actor::state::SessionStartupStrategy;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
@@ -176,6 +177,9 @@ impl SessionRuntime {
                 StartSessionError::MissingDataKey => EnsureLiveSessionError::MissingDataKey,
                 StartSessionError::RestartRequired(detail) => {
                     EnsureLiveSessionError::RestartRequired(detail)
+                }
+                StartSessionError::RuntimeConfigResolutionRequired(resolution) => {
+                    EnsureLiveSessionError::RuntimeConfigResolutionRequired(resolution)
                 }
                 StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
                     EnsureLiveSessionError::Internal(error)
@@ -370,6 +374,16 @@ impl SessionRuntime {
         let session_launch_env = build_session_launch_env(&resolved_agent);
         let session_store = self.session_service.store().clone();
         let attachment_storage = self.session_service.attachment_storage().clone();
+        match self
+            .runtime_config_service
+            .session_plugin_bundle(&workspace, record)
+        {
+            Ok(Some(bundle)) => self
+                .plugin_bundle_registry
+                .set_session_bundle(record.id.clone(), bundle),
+            Ok(None) => {}
+            Err(error) => return Err(map_runtime_config_launch_error_to_start(error)),
+        }
         let mcp_launch = assemble_session_mcp_launch(
             self.session_data_cipher.as_ref(),
             &self.session_extensions,
@@ -469,7 +483,19 @@ pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> any
             anyhow::anyhow!("{}", SessionMcpBindingsError::missing_data_key_detail())
         }
         StartSessionError::RestartRequired(detail) => anyhow::anyhow!(detail),
+        StartSessionError::RuntimeConfigResolutionRequired(resolution) => {
+            anyhow::anyhow!("runtime config resolution required: {:?}", resolution)
+        }
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => error,
+    }
+}
+
+fn map_runtime_config_launch_error_to_start(error: RuntimeConfigLaunchError) -> StartSessionError {
+    match error {
+        RuntimeConfigLaunchError::ResolutionRequired(resolution) => {
+            StartSessionError::RuntimeConfigResolutionRequired(resolution)
+        }
+        RuntimeConfigLaunchError::Internal(error) => StartSessionError::Internal(error),
     }
 }
 
@@ -517,6 +543,9 @@ fn map_start_session_error_to_create(error: StartSessionError) -> CreateAndStart
         StartSessionError::MissingDataKey => CreateAndStartSessionError::MissingDataKey,
         StartSessionError::RestartRequired(detail) => {
             CreateAndStartSessionError::Internal(anyhow::anyhow!(detail))
+        }
+        StartSessionError::RuntimeConfigResolutionRequired(resolution) => {
+            CreateAndStartSessionError::RuntimeConfigResolutionRequired(resolution)
         }
         StartSessionError::Internal(error) => CreateAndStartSessionError::Internal(error),
         StartSessionError::AcpStart(error) => CreateAndStartSessionError::StartFailed(error),

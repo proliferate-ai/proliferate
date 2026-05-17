@@ -452,6 +452,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runtime-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_runtime_config"];
+        put: operations["put_runtime_config"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runtime-config/prefetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["prefetch_runtime_config"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runtime-config/resolution-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_runtime_config_resolution_requests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runtime-config/resolution-requests/{request_id}/fulfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["fulfill_runtime_config_resolution_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runtime-config/resolution-requests/{request_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reject_runtime_config_resolution_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions": {
         parameters: {
             query?: never;
@@ -2866,6 +2946,7 @@ export interface components {
             code?: string | null;
             detail?: string | null;
             instance?: string | null;
+            runtimeConfigResolution?: null | components["schemas"]["RuntimeConfigResolutionProblem"];
             /** Format: int32 */
             status: number;
             title: string;
@@ -3317,8 +3398,162 @@ export interface components {
             rows: components["schemas"]["WorktreeRetentionRunRow"][];
             skippedCount: number;
         };
+        RuntimeArtifactCacheEntry: {
+            /** Format: int64 */
+            byteSize: number;
+            cachePath: string;
+            contentType: string;
+            createdAt: string;
+            hash: string;
+            lastUsedAt: string;
+        };
+        RuntimeArtifactFulfillment: {
+            contentBase64?: string | null;
+            hash: string;
+            localPath?: string | null;
+        };
+        /** @enum {string} */
+        RuntimeArtifactKind: "skill_instruction" | "skill_resource" | "package_metadata";
+        RuntimeArtifactRef: {
+            /** Format: int64 */
+            byteSize: number;
+            contentType: string;
+            hash: string;
+            kind: components["schemas"]["RuntimeArtifactKind"];
+            sourceRef?: string | null;
+        };
         RuntimeCapabilities: {
             replay: boolean;
+        };
+        /** @enum {string} */
+        RuntimeConfigOwnerScope: "personal" | "organization" | "unknown";
+        RuntimeConfigPrefetchRequest: {
+            includeCredentials?: boolean;
+        };
+        RuntimeConfigPrefetchResponse: {
+            contentHash: string;
+            requestIds?: string[];
+            revisionId: string;
+        };
+        RuntimeConfigResolutionProblem: {
+            contentHash: string;
+            reason: components["schemas"]["RuntimeConfigResolutionReason"];
+            requestIds?: string[];
+            requestKinds?: components["schemas"]["RuntimeResolutionRequestKind"][];
+            /** Format: int64 */
+            retryAfterMs?: number | null;
+            revisionId: string;
+        };
+        /** @enum {string} */
+        RuntimeConfigResolutionReason: "missing_artifact" | "missing_credential" | "expired_credential" | "revision_superseded";
+        /** @enum {string} */
+        RuntimeConfigSource: "desktop" | "worker" | "test";
+        RuntimeCredentialFulfillment: {
+            expiresAt?: string | null;
+            redactedSummary?: string | null;
+            ref: string;
+            value: string;
+        };
+        /** @enum {string} */
+        RuntimeCredentialKind: "secret_field" | "oauth_access_token" | "local_oauth";
+        RuntimeCredentialRef: {
+            /** Format: int64 */
+            authVersion?: number | null;
+            catalogEntryId?: string | null;
+            /** Format: int64 */
+            catalogEntryVersion?: number | null;
+            connectionId: string;
+            displayName?: string | null;
+            fieldId?: string | null;
+            kind: components["schemas"]["RuntimeCredentialKind"];
+            ref: string;
+        };
+        RuntimeMcpEnvVar: {
+            name: string;
+            value: components["schemas"]["RuntimeTextTemplate"];
+        };
+        RuntimeMcpHeader: {
+            name: string;
+            value: components["schemas"]["RuntimeTextTemplate"];
+        };
+        RuntimeMcpHttpLaunch: {
+            baseUrl: string;
+            headers?: components["schemas"]["RuntimeMcpHeader"][];
+            query?: components["schemas"]["RuntimeMcpQueryParam"][];
+        };
+        RuntimeMcpLaunch: (components["schemas"]["RuntimeMcpHttpLaunch"] & {
+            /** @enum {string} */
+            transport: "http";
+        }) | (components["schemas"]["RuntimeMcpStdioLaunch"] & {
+            /** @enum {string} */
+            transport: "stdio";
+        });
+        RuntimeMcpQueryParam: {
+            name: string;
+            value: components["schemas"]["RuntimeTextTemplate"];
+        };
+        RuntimeMcpServer: {
+            catalogEntryId?: string | null;
+            connectionId: string;
+            credentialRefs?: components["schemas"]["RuntimeCredentialRef"][];
+            id: string;
+            launch: components["schemas"]["RuntimeMcpLaunch"];
+            serverName: string;
+        };
+        RuntimeMcpStdioLaunch: {
+            args?: components["schemas"]["RuntimeTextTemplate"][];
+            command: string;
+            env?: components["schemas"]["RuntimeMcpEnvVar"][];
+        };
+        RuntimeResolutionFulfillRequest: {
+            artifacts?: components["schemas"]["RuntimeArtifactFulfillment"][];
+            credentials?: components["schemas"]["RuntimeCredentialFulfillment"][];
+        };
+        RuntimeResolutionRejectRequest: {
+            detail?: string | null;
+            reason: components["schemas"]["RuntimeConfigResolutionReason"];
+        };
+        RuntimeResolutionRequest: {
+            artifacts?: components["schemas"]["RuntimeArtifactRef"][];
+            contentHash: string;
+            credentialRefs?: components["schemas"]["RuntimeCredentialRef"][];
+            kind: components["schemas"]["RuntimeResolutionRequestKind"];
+            reason: components["schemas"]["RuntimeConfigResolutionReason"];
+            requestId: string;
+            revisionId: string;
+        };
+        /** @enum {string} */
+        RuntimeResolutionRequestKind: "artifact" | "credential";
+        RuntimeSkill: {
+            credentialRefs?: string[];
+            description: string;
+            displayName: string;
+            id: string;
+            instructionArtifact: components["schemas"]["RuntimeArtifactRef"];
+            packageId?: string | null;
+            requiredMcpServerIds?: string[];
+            resources?: components["schemas"]["RuntimeSkillResource"][];
+            version?: string | null;
+        };
+        RuntimeSkillResource: {
+            artifact: components["schemas"]["RuntimeArtifactRef"];
+            displayName?: string | null;
+            resourceId: string;
+        };
+        RuntimeTextTemplate: {
+            parts?: components["schemas"]["RuntimeTextTemplatePart"][];
+        };
+        RuntimeTextTemplatePart: {
+            /** @enum {string} */
+            kind: "literal";
+            value: string;
+        } | {
+            /** @enum {string} */
+            kind: "credential";
+            ref: string;
+        } | {
+            /** @enum {string} */
+            kind: "workspacePath";
         };
         ScheduleSubagentWakeRequest: Record<string, never>;
         ScheduleSubagentWakeResponse: {
@@ -3719,6 +3954,32 @@ export interface components {
         };
         /** @enum {string} */
         SubagentTurnOutcome: "completed" | "failed" | "cancelled";
+        TargetRuntimeConfigApplyResponse: {
+            missingArtifacts?: components["schemas"]["RuntimeArtifactRef"][];
+            revision: components["schemas"]["TargetRuntimeConfigRevision"];
+        };
+        TargetRuntimeConfigRefreshRequest: {
+            artifacts?: components["schemas"]["RuntimeArtifactRef"][];
+            mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][];
+            mcpServers?: components["schemas"]["RuntimeMcpServer"][];
+            revision: components["schemas"]["TargetRuntimeConfigRevision"];
+            skills?: components["schemas"]["RuntimeSkill"][];
+            source: components["schemas"]["RuntimeConfigSource"];
+        };
+        TargetRuntimeConfigResponse: {
+            artifactCache?: components["schemas"]["RuntimeArtifactCacheEntry"][];
+            current?: null | components["schemas"]["TargetRuntimeConfigRefreshRequest"];
+            pendingResolutionRequests?: components["schemas"]["RuntimeResolutionRequest"][];
+        };
+        TargetRuntimeConfigRevision: {
+            contentHash: string;
+            externalTargetId?: string | null;
+            generatedAt: string;
+            id: string;
+            ownerScope: components["schemas"]["RuntimeConfigOwnerScope"];
+            /** Format: int64 */
+            sequence?: number | null;
+        };
         /** @enum {string} */
         TerminalCommandOutputMode: "separate" | "combined";
         TerminalCommandRunDetail: components["schemas"]["TerminalCommandRunSummary"] & {
@@ -5137,6 +5398,182 @@ export interface operations {
                 };
             };
             /** @description Review run not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_runtime_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read current target runtime config and pending resolution requests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetRuntimeConfigResponse"];
+                };
+            };
+        };
+    };
+    put_runtime_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TargetRuntimeConfigRefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Apply a target runtime config revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetRuntimeConfigApplyResponse"];
+                };
+            };
+            /** @description Invalid runtime config manifest */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    prefetch_runtime_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuntimeConfigPrefetchRequest"];
+            };
+        };
+        responses: {
+            /** @description Create resolution requests for currently missing runtime config material */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeConfigPrefetchResponse"];
+                };
+            };
+            /** @description Runtime config has not been applied */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_runtime_config_resolution_requests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List pending runtime config resolution requests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeResolutionRequest"][];
+                };
+            };
+        };
+    };
+    fulfill_runtime_config_resolution_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Runtime config resolution request id */
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuntimeResolutionFulfillRequest"];
+            };
+        };
+        responses: {
+            /** @description Fulfill a pending runtime config resolution request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeResolutionRequest"];
+                };
+            };
+            /** @description Invalid fulfillment payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    reject_runtime_config_resolution_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Runtime config resolution request id */
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuntimeResolutionRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description Reject a pending runtime config resolution request */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Resolution request not found */
             404: {
                 headers: {
                     [name: string]: unknown;

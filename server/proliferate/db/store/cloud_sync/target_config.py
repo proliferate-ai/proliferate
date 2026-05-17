@@ -11,7 +11,12 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudTargetConfigStatus
-from proliferate.db.models.cloud.target_config import CloudTargetConfig
+from proliferate.db.models.cloud.target_config import (
+    CloudTargetConfig,
+    CloudTargetRuntimeConfigArtifact,
+    CloudTargetRuntimeConfigCurrent,
+    CloudTargetRuntimeConfigRevision,
+)
 from proliferate.utils.time import utcnow
 
 
@@ -37,6 +42,7 @@ class CloudTargetConfigSnapshot:
     last_materialized_at: datetime | None
     last_error_code: str | None
     last_error_message: str | None
+    runtime_config_revision_id: UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -63,6 +69,7 @@ def _snapshot(row: CloudTargetConfig) -> CloudTargetConfigSnapshot:
         last_materialized_at=row.last_materialized_at,
         last_error_code=row.last_error_code,
         last_error_message=row.last_error_message,
+        runtime_config_revision_id=row.runtime_config_revision_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -141,6 +148,7 @@ async def upsert_target_config(
     row.last_materialized_at = None
     row.last_error_code = None
     row.last_error_message = None
+    row.runtime_config_revision_id = None
     row.updated_at = now
     await db.flush()
     return _snapshot(row)
@@ -258,6 +266,84 @@ async def update_target_config_payload(
     row.updated_at = utcnow()
     await db.flush()
     return _snapshot(row)
+
+
+async def insert_runtime_config_revision(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    target_config_id: UUID,
+    user_id: UUID,
+    organization_id: UUID | None,
+    revision_id: UUID,
+    revision_sequence: int,
+    content_hash: str,
+    manifest_json: str,
+    warnings_json: str,
+) -> UUID:
+    row = CloudTargetRuntimeConfigRevision(
+        id=revision_id,
+        target_id=target_id,
+        target_config_id=target_config_id,
+        user_id=user_id,
+        organization_id=organization_id,
+        revision_sequence=revision_sequence,
+        content_hash=content_hash,
+        manifest_json=manifest_json,
+        warnings_json=warnings_json,
+        created_at=utcnow(),
+    )
+    db.add(row)
+    await db.flush()
+    return row.id
+
+
+async def set_current_runtime_config_revision(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    target_config_id: UUID,
+    revision_id: UUID,
+) -> None:
+    existing = await db.get(CloudTargetRuntimeConfigCurrent, target_id)
+    if existing is None:
+        db.add(
+            CloudTargetRuntimeConfigCurrent(
+                target_id=target_id,
+                revision_id=revision_id,
+                updated_at=utcnow(),
+            )
+        )
+    else:
+        existing.revision_id = revision_id
+        existing.updated_at = utcnow()
+    config = await db.get(CloudTargetConfig, target_config_id)
+    if config is not None:
+        config.runtime_config_revision_id = revision_id
+        config.updated_at = utcnow()
+    await db.flush()
+
+
+async def insert_runtime_config_artifacts(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    revision_id: UUID,
+    artifacts: list[dict[str, object]],
+) -> None:
+    for artifact in artifacts:
+        db.add(
+            CloudTargetRuntimeConfigArtifact(
+                target_id=target_id,
+                revision_id=revision_id,
+                artifact_hash=str(artifact["hash"]),
+                content_type=str(artifact["contentType"]),
+                byte_size=int(artifact["byteSize"]),
+                payload_ciphertext=str(artifact["payloadCiphertext"]),
+                created_at=utcnow(),
+            )
+        )
+    await db.flush()
 
 
 async def mark_target_config_status(

@@ -12,8 +12,8 @@ use url::form_urlencoded;
 
 use super::http::{
     agents, agents_model_registry, cowork, files, git, health, hosting, mobility, plans, processes,
-    product_mcp, replay, repo_roots, reviews, sessions, subagents, terminals, workspaces,
-    worktrees,
+    product_mcp, replay, repo_roots, reviews, runtime_config, sessions, subagents, terminals,
+    workspaces, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -117,6 +117,27 @@ pub fn build_router(state: AppState) -> Router {
             post(repo_roots::prepare_repo_root_mobility_destination),
         )
         .route("/cowork", get(cowork::get_cowork_status))
+        // Target runtime config
+        .route(
+            "/runtime-config",
+            get(runtime_config::get_runtime_config).put(runtime_config::put_runtime_config),
+        )
+        .route(
+            "/runtime-config/prefetch",
+            post(runtime_config::prefetch_runtime_config),
+        )
+        .route(
+            "/runtime-config/resolution-requests",
+            get(runtime_config::list_runtime_config_resolution_requests),
+        )
+        .route(
+            "/runtime-config/resolution-requests/{request_id}/fulfill",
+            post(runtime_config::fulfill_runtime_config_resolution_request),
+        )
+        .route(
+            "/runtime-config/resolution-requests/{request_id}/reject",
+            post(runtime_config::reject_runtime_config_resolution_request),
+        )
         .route("/cowork/enable", post(cowork::enable_cowork))
         .route(
             "/cowork/threads",

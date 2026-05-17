@@ -267,7 +267,7 @@ describe("pruneInactiveSessionStreams", () => {
 });
 
 describe("resumeSession", () => {
-  it("sends explicit empty MCP bindings without empty summaries when none are launchable", async () => {
+  it("does not send concrete MCP bindings when plugin launch policy is disabled", async () => {
     mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
       anyharnessWorkspaceId: "runtime-workspace-1",
       baseUrl: "http://runtime.local",
@@ -293,11 +293,7 @@ describe("resumeSession", () => {
     expect(mocks.resume).toHaveBeenCalledTimes(1);
     const [sessionId, resumeOptions, requestOptions] = mocks.resume.mock.calls[0]!;
     expect(sessionId).toBe("session-1");
-    expect(resumeOptions).toEqual({
-      mcpBindingSummaries: undefined,
-      mcpServers: [],
-      pluginBundle: { plugins: [] },
-    });
+    expect(resumeOptions).toEqual({});
     if (requestOptions !== undefined) {
       expect(requestOptions).toMatchObject({
         timingCategory: "session.resume",
@@ -327,7 +323,12 @@ describe("resumeSession", () => {
       pluginsInCodingSessionsEnabled: false,
     });
 
-    expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith({
+    expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith(expect.objectContaining({
+      connection: {
+        anyharnessWorkspaceId: "runtime-workspace-1",
+        authToken: undefined,
+        runtimeUrl: "http://runtime.local",
+      },
       targetLocation: "local",
       workspacePath: "/cowork/thread-1",
       launchId: expect.stringMatching(/^session-1:/),
@@ -336,7 +337,7 @@ describe("resumeSession", () => {
         lifecycle: "resume",
         enabled: true,
       },
-    });
+    }));
   });
 
   it("resolves launch MCP when Plugins are enabled for resume", async () => {
@@ -361,7 +362,12 @@ describe("resumeSession", () => {
       pluginsInCodingSessionsEnabled: true,
     });
 
-    expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith({
+    expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith(expect.objectContaining({
+      connection: {
+        anyharnessWorkspaceId: "runtime-workspace-1",
+        authToken: undefined,
+        runtimeUrl: "http://runtime.local",
+      },
       targetLocation: "local",
       workspacePath: "/repo",
       launchId: expect.stringMatching(/^session-1:/),
@@ -370,6 +376,6 @@ describe("resumeSession", () => {
         lifecycle: "resume",
         enabled: true,
       },
-    });
+    }));
   });
 });

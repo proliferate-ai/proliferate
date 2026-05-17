@@ -231,6 +231,11 @@ impl SessionRuntime {
                 })
             }
             Err(error) => {
+                if let StartSessionError::RuntimeConfigResolutionRequired(resolution) = error {
+                    return Err(ForkSessionError::RuntimeConfigResolutionRequired(
+                        resolution,
+                    ));
+                }
                 // If the native child id was persisted before failure, later
                 // resumes should retry fork startup from the parent boundary instead
                 // of looping forever on an ACP-side child id that did not load.
@@ -291,6 +296,9 @@ fn map_start_error_to_fork(error: StartSessionError) -> ForkSessionError {
         StartSessionError::Closed => ForkSessionError::Invalid("session is closed".to_string()),
         StartSessionError::MissingDataKey => ForkSessionError::MissingDataKey,
         StartSessionError::RestartRequired(detail) => ForkSessionError::Invalid(detail),
+        StartSessionError::RuntimeConfigResolutionRequired(resolution) => {
+            ForkSessionError::RuntimeConfigResolutionRequired(resolution)
+        }
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
             ForkSessionError::Internal(error)
         }

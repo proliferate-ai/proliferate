@@ -60,6 +60,12 @@ impl SessionRuntime {
                         "{SESSION_RESTART_REQUIRED_DETAIL}"
                     ))
                 }
+                StartSessionError::RuntimeConfigResolutionRequired(resolution) => {
+                    SetSessionConfigOptionError::Internal(anyhow::anyhow!(
+                        "runtime config resolution required: {:?}",
+                        resolution
+                    ))
+                }
                 StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
                     SetSessionConfigOptionError::Internal(error)
                 }

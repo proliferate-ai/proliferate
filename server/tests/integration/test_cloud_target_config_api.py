@@ -98,16 +98,20 @@ async def test_target_config_materialization_command_is_secret_safe(
     assert target_config["summary"]["trackedFileCount"] == 1
     assert target_config["summary"]["hasGitCredential"] is True
     assert target_config["summary"]["agentCredentialProviders"] == ["claude"]
-    assert payload["command"]["kind"] == "materialize_environment"
+    assert payload["command"]["kind"] == "materialize_environment_runtime_config"
+    assert target_config["runtimeConfigRevisionId"]
 
     lease = await client.post(
         "/v1/cloud/worker/commands/lease",
         headers=worker_headers,
-        json={"supportedKinds": ["materialize_environment"], "leaseTimeoutSeconds": 30},
+        json={
+            "supportedKinds": ["materialize_environment_runtime_config"],
+            "leaseTimeoutSeconds": 30,
+        },
     )
     assert lease.status_code == 200
     command = lease.json()["command"]
-    assert command["kind"] == "materialize_environment"
+    assert command["kind"] == "materialize_environment_runtime_config"
     assert command["payload"] == {
         "targetConfigId": target_config["id"],
         "configVersion": target_config["configVersion"],

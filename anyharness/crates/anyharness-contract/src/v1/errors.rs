@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::RuntimeConfigResolutionProblem;
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProblemDetails {
@@ -14,4 +16,6 @@ pub struct ProblemDetails {
     pub instance: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_config_resolution: Option<RuntimeConfigResolutionProblem>,
 }

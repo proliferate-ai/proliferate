@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyharness_contract::v1::{
-    McpElicitationSubmittedField, SessionMcpBindingSummary, UserInputSubmittedAnswer,
+    McpElicitationSubmittedField, RuntimeConfigResolutionProblem, SessionMcpBindingSummary,
+    UserInputSubmittedAnswer,
 };
 
 use super::links::model::SessionLinkRecord;
@@ -17,6 +18,7 @@ use crate::acp::manager::AcpManager;
 use crate::acp::permission_broker::PermissionDecision;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plugins::registry::PluginBundleRegistry;
+use crate::domains::runtime_config::RuntimeConfigService;
 use crate::sessions::extensions::SessionExtension;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
@@ -44,6 +46,7 @@ pub struct SessionRuntime {
     session_data_cipher: Option<SessionDataCipher>,
     session_extensions: Vec<Arc<dyn SessionExtension>>,
     product_mcp_launch_catalog: ProductMcpLaunchCatalog,
+    runtime_config_service: Arc<RuntimeConfigService>,
     plugin_bundle_registry: PluginBundleRegistry,
     access_gate: Arc<WorkspaceAccessGate>,
     plan_service: Arc<PlanService>,
@@ -65,6 +68,7 @@ pub enum CreateAndStartSessionError {
         session_id: String,
     },
     MissingDataKey,
+    RuntimeConfigResolutionRequired(RuntimeConfigResolutionProblem),
     StartFailed(anyhow::Error),
     Internal(anyhow::Error),
 }
@@ -76,6 +80,7 @@ pub enum EnsureLiveSessionError {
     RestartRequired(String),
     Invalid(String),
     MissingDataKey,
+    RuntimeConfigResolutionRequired(RuntimeConfigResolutionProblem),
     Internal(anyhow::Error),
 }
 
@@ -98,6 +103,7 @@ pub enum SendPromptError {
     SessionClosed,
     EmptyPrompt,
     InvalidPrompt(crate::sessions::prompt::PromptValidationError),
+    RuntimeConfigResolutionRequired(RuntimeConfigResolutionProblem),
     Internal(anyhow::Error),
 }
 
@@ -121,6 +127,7 @@ pub enum ForkSessionError {
     Invalid(String),
     MissingNativeSessionId,
     MissingDataKey,
+    RuntimeConfigResolutionRequired(RuntimeConfigResolutionProblem),
     StartFailed {
         session: SessionRecord,
         link: SessionLinkRecord,
@@ -225,6 +232,7 @@ pub(super) enum StartSessionError {
     Closed,
     MissingDataKey,
     RestartRequired(String),
+    RuntimeConfigResolutionRequired(RuntimeConfigResolutionProblem),
     Internal(anyhow::Error),
     AcpStart(anyhow::Error),
 }
@@ -239,6 +247,7 @@ impl SessionRuntime {
         session_data_cipher: Option<SessionDataCipher>,
         session_extensions: Vec<Arc<dyn SessionExtension>>,
         product_mcp_launch_catalog: ProductMcpLaunchCatalog,
+        runtime_config_service: Arc<RuntimeConfigService>,
         plugin_bundle_registry: PluginBundleRegistry,
         access_gate: Arc<WorkspaceAccessGate>,
         plan_service: Arc<PlanService>,
@@ -252,6 +261,7 @@ impl SessionRuntime {
             session_data_cipher,
             session_extensions,
             product_mcp_launch_catalog,
+            runtime_config_service,
             plugin_bundle_registry,
             access_gate,
             plan_service,

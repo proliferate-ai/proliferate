@@ -308,6 +308,11 @@ impl SessionExtension for PluginSessionLaunchExtension {
         ctx: &SessionLaunchContext<'_>,
     ) -> anyhow::Result<SessionLaunchExtras> {
         if ctx.session.mcp_binding_policy == SessionMcpBindingPolicy::InternalOnly {
+            tracing::debug!(
+                session_id = %ctx.session.id,
+                workspace_id = %ctx.workspace.id,
+                "plugin launch extension skipped for internal-only session"
+            );
             return Ok(SessionLaunchExtras::default());
         }
         let stored_bundle = self
@@ -316,10 +321,21 @@ impl SessionExtension for PluginSessionLaunchExtension {
             .unwrap_or_else(|| SessionPluginBundle {
                 plugins: Vec::new(),
             });
+        let stored_plugin_count = stored_bundle.plugins.len();
+        let stored_skill_count = count_bundle_skills(&stored_bundle);
         let product_skills = product_skills_for_session(self.subagents_workflow_available(ctx)?);
+        let product_skill_count = product_skills.len();
         let bundle = effective_bundle_with_product_skills(stored_bundle, product_skills);
         if bundle.plugins.is_empty() {
             self.registry.clear_session_bundle(&ctx.session.id);
+            tracing::debug!(
+                session_id = %ctx.session.id,
+                workspace_id = %ctx.workspace.id,
+                stored_plugin_count,
+                stored_skill_count,
+                product_skill_count,
+                "plugin launch extension found no plugin bundle"
+            );
             return Ok(SessionLaunchExtras::default());
         }
         if bundle_has_skills(&bundle) {
@@ -343,9 +359,30 @@ impl SessionExtension for PluginSessionLaunchExtension {
             }
             extras.mcp_servers.push(self.build_skills_mcp_server(ctx)?);
         }
+        tracing::info!(
+            session_id = %ctx.session.id,
+            workspace_id = %ctx.workspace.id,
+            stored_plugin_count,
+            stored_skill_count,
+            product_skill_count,
+            effective_plugin_count = bundle.plugins.len(),
+            effective_skill_count = count_bundle_skills(&bundle),
+            mcp_server_count = extras.mcp_servers.len(),
+            summary_count = extras.mcp_binding_summaries.len(),
+            skills_mcp_mounted = bundle_has_skills(&bundle),
+            "plugin launch extension resolved session extras"
+        );
 
         Ok(extras)
     }
+}
+
+fn count_bundle_skills(bundle: &SessionPluginBundle) -> usize {
+    bundle
+        .plugins
+        .iter()
+        .map(|plugin| plugin.skills.len())
+        .sum()
 }
 
 impl PluginSessionLaunchExtension {

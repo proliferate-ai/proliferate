@@ -3,16 +3,14 @@ import type {
   SessionMcpServer,
   SessionPluginBundle,
 } from "@anyharness/sdk";
-import { buildSessionPluginBundle } from "@/lib/domain/plugins/session-plugin-bundle";
-import { cloudPluginPackageToLocal } from "@/lib/domain/plugins/cloud-plugin-package";
-import { finalizeLocalStdioCandidates } from "@/lib/workflows/mcp/finalize-local-stdio-candidates";
+import type {
+  AnyHarnessClientConnection,
+  AnyHarnessResolvedConnection,
+} from "@anyharness/sdk-react";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
-import { materializeCloudMcpServers } from "@proliferate/cloud-sdk/client/mcp_materialization";
-import {
-  releaseGoogleWorkspaceMcpRuntimeEnv,
-  resolveGoogleWorkspaceMcpRuntimeEnv,
-} from "@/lib/access/tauri/google-workspace-mcp";
-import { commandExists } from "@/lib/access/tauri/process";
+import { refreshRuntimeConfigForLaunch } from "@/lib/workflows/mcp/runtime-config-refresh";
+
+type RuntimeConfigConnection = AnyHarnessClientConnection | AnyHarnessResolvedConnection;
 
 export interface ConnectorLaunchContext {
   targetLocation: "local" | "cloud";
@@ -28,6 +26,7 @@ export interface SessionMcpLaunchPolicy {
 }
 
 export interface SessionMcpLaunchRequest extends ConnectorLaunchContext {
+  connection?: RuntimeConfigConnection;
   policy: SessionMcpLaunchPolicy;
 }
 
@@ -48,76 +47,31 @@ export async function resolveSessionMcpServersForLaunch(
       mcpServers: [],
       mcpBindingSummaries: [],
       warnings: [],
-      pluginBundle: launchContext.policy.lifecycle === "resume"
-        ? { plugins: [] }
-        : undefined,
+      pluginBundle: undefined,
+      releaseRuntimeReservations: async () => {},
+    };
+  }
+  if (!launchContext.connection) {
+    return {
+      mcpServers: [],
+      mcpBindingSummaries: [],
+      warnings: [],
+      pluginBundle: undefined,
       releaseRuntimeReservations: async () => {},
     };
   }
 
-  const materialized = await materializeCloudMcpServers({
+  const refreshed = await refreshRuntimeConfigForLaunch({
+    connection: launchContext.connection,
     targetLocation: launchContext.targetLocation,
-  });
-  const finalizedStdio = await finalizeLocalStdioCandidates(
-    materialized.localStdioCandidates,
-    { workspacePath: launchContext.workspacePath, launchId: launchContext.launchId },
-    { commandExists, resolveGoogleWorkspaceMcpRuntimeEnv },
-  );
-  const finalizedStdioIds = new Set(
-    materialized.localStdioCandidates.map((candidate) => candidate.connectionId),
-  );
-
-  const mcpServers = [
-    ...materialized.mcpServers.map((server) => ({
-      ...server,
-      ...(server.transport === "http" ? { headers: server.headers ?? [] } : {}),
-      ...(server.transport === "stdio"
-        ? { args: server.args ?? [], env: server.env ?? [] }
-        : {}),
-    } as SessionMcpServer)),
-    ...finalizedStdio.mcpServers,
-  ];
-  const mcpBindingSummaries = [
-    ...materialized.mcpBindingSummaries
-      .filter((summary) => !finalizedStdioIds.has(summary.id))
-      .map((summary) => ({
-        ...summary,
-        displayName: summary.displayName ?? undefined,
-        reason: summary.reason ?? undefined,
-      } as SessionMcpBindingSummary)),
-    ...finalizedStdio.summaries,
-  ];
-
-  const pluginBundle = buildSessionPluginBundle({
-    mcpServers,
-    mcpBindingSummaries,
-    pluginPackages: (materialized.pluginPackages ?? []).map(cloudPluginPackageToLocal),
+    workspacePath: launchContext.workspacePath,
   });
 
   return {
-    mcpServers,
-    mcpBindingSummaries,
-    warnings: [
-      ...materialized.warnings.map((warning) => ({
-        connectionId: warning.connectionId,
-        catalogEntryId: warning.catalogEntryId as ConnectorLaunchResolutionWarning["catalogEntryId"],
-        connectorName: warning.connectorName,
-        kind: warning.kind,
-      } as ConnectorLaunchResolutionWarning)),
-      ...finalizedStdio.warnings,
-    ],
-    pluginBundle: pluginBundle ?? (
-      launchContext.policy.lifecycle === "resume" ? { plugins: [] } : undefined
-    ),
-    releaseRuntimeReservations: async () => {
-      await Promise.all(
-        finalizedStdio.runtimeReservations.map((reservation) =>
-          releaseGoogleWorkspaceMcpRuntimeEnv({
-            connectionId: reservation.connectionId,
-            launchId: reservation.launchId,
-          }).catch(() => undefined)
-        ),
-      );
-    },
+    mcpServers: [],
+    mcpBindingSummaries: [],
+    warnings: refreshed.warnings,
+    pluginBundle: undefined,
+    releaseRuntimeReservations: async () => {},
   };
 }

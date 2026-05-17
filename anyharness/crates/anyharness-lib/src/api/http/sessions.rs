@@ -1215,6 +1215,12 @@ fn map_create_session_error(error: CreateAndStartSessionError) -> ApiError {
         CreateAndStartSessionError::MissingDataKey => {
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
         }
+        CreateAndStartSessionError::RuntimeConfigResolutionRequired(resolution) => {
+            ApiError::runtime_config_resolution_required(
+                "runtime config requires artifact or credential fulfillment before launch",
+                resolution,
+            )
+        }
         CreateAndStartSessionError::StartFailed(error) => {
             ApiError::internal(format!("ACP session start failed: {error}"))
         }
@@ -1239,6 +1245,12 @@ fn map_ensure_live_session_error(error: EnsureLiveSessionError) -> ApiError {
         }
         EnsureLiveSessionError::MissingDataKey => {
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
+        }
+        EnsureLiveSessionError::RuntimeConfigResolutionRequired(resolution) => {
+            ApiError::runtime_config_resolution_required(
+                "runtime config requires artifact or credential fulfillment before resume",
+                resolution,
+            )
         }
         EnsureLiveSessionError::Internal(error) => {
             ApiError::internal(format!("resume failed: {error}"))
@@ -1268,6 +1280,12 @@ fn map_send_prompt_error(error: SendPromptError) -> ApiError {
         SendPromptError::SessionClosed => ApiError::conflict("session is closed", "SESSION_CLOSED"),
         SendPromptError::EmptyPrompt => ApiError::bad_request("empty prompt", "EMPTY_PROMPT"),
         SendPromptError::InvalidPrompt(error) => ApiError::bad_request(error.detail, error.code),
+        SendPromptError::RuntimeConfigResolutionRequired(resolution) => {
+            ApiError::runtime_config_resolution_required(
+                "runtime config requires artifact or credential fulfillment before prompt",
+                resolution,
+            )
+        }
         SendPromptError::Internal(error) => ApiError::internal(error.to_string()),
     }
 }
@@ -1289,6 +1307,12 @@ fn map_fork_session_error(error: ForkSessionError) -> ApiError {
         ),
         ForkSessionError::MissingDataKey => {
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
+        }
+        ForkSessionError::RuntimeConfigResolutionRequired(resolution) => {
+            ApiError::runtime_config_resolution_required(
+                "runtime config requires artifact or credential fulfillment before fork",
+                resolution,
+            )
         }
         ForkSessionError::StartFailed { error, .. } => {
             ApiError::internal(format!("fork child start failed: {error}"))

@@ -30,6 +30,7 @@ use crate::domains::reviews::mcp::{
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::ReviewStore;
+use crate::domains::runtime_config::{RuntimeConfigService, RuntimeConfigStore};
 use crate::persistence::Db;
 use crate::repo_roots::service::RepoRootService;
 use crate::repo_roots::store::RepoRootStore;
@@ -107,6 +108,7 @@ pub struct AppState {
     pub review_session_hooks: Arc<ReviewSessionHooks>,
     pub review_runtime: Arc<ReviewRuntime>,
     pub product_mcp_endpoint_registry: Arc<ProductMcpEndpointRegistry>,
+    pub runtime_config_service: Arc<RuntimeConfigService>,
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
     pub workspace_access_gate: Arc<WorkspaceAccessGate>,
@@ -173,6 +175,10 @@ impl AppState {
         let acp_manager = AcpManager::new(plan_service.clone());
         let terminal_service = Arc::new(TerminalService::new(
             TerminalStore::new(db.clone()),
+            runtime_home.clone(),
+        ));
+        let runtime_config_service = Arc::new(RuntimeConfigService::new(
+            RuntimeConfigStore::new(db.clone()),
             runtime_home.clone(),
         ));
         let worktree_inventory_service = Arc::new(WorktreeInventoryService::new(
@@ -265,6 +271,7 @@ impl AppState {
             session_data_cipher,
             session_extensions,
             product_mcp_launch_catalog,
+            runtime_config_service.clone(),
             plugin_bundle_registry.clone(),
             workspace_access_gate.clone(),
             plan_service.clone(),
@@ -405,6 +412,7 @@ impl AppState {
             review_session_hooks,
             review_runtime,
             product_mcp_endpoint_registry,
+            runtime_config_service,
             session_service,
             session_runtime,
             workspace_access_gate,

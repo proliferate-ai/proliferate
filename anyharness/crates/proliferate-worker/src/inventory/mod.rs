@@ -22,7 +22,8 @@ pub fn collect() -> InventoryPayload {
             "processSpawn": true,
             "filesystem": true,
             "networkEgress": true,
-            "pty": true
+            "pty": true,
+            "runtimeConfigManifestV1": true
         })),
         providers: providers::collect(),
         mcp: mcp::collect(),

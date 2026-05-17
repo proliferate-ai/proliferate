@@ -1310,6 +1310,222 @@
         }
       }
     },
+    "/v1/runtime-config": {
+      "get": {
+        "tags": [
+          "runtime-config"
+        ],
+        "operationId": "get_runtime_config",
+        "responses": {
+          "200": {
+            "description": "Read current target runtime config and pending resolution requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TargetRuntimeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "runtime-config"
+        ],
+        "operationId": "put_runtime_config",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TargetRuntimeConfigRefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Apply a target runtime config revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TargetRuntimeConfigApplyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid runtime config manifest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runtime-config/prefetch": {
+      "post": {
+        "tags": [
+          "runtime-config"
+        ],
+        "operationId": "prefetch_runtime_config",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuntimeConfigPrefetchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Create resolution requests for currently missing runtime config material",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeConfigPrefetchResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Runtime config has not been applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runtime-config/resolution-requests": {
+      "get": {
+        "tags": [
+          "runtime-config"
+        ],
+        "operationId": "list_runtime_config_resolution_requests",
+        "responses": {
+          "200": {
+            "description": "List pending runtime config resolution requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RuntimeResolutionRequest"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runtime-config/resolution-requests/{request_id}/fulfill": {
+      "post": {
+        "tags": [
+          "runtime-config"
+        ],
+        "operationId": "fulfill_runtime_config_resolution_request",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Runtime config resolution request id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuntimeResolutionFulfillRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Fulfill a pending runtime config resolution request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeResolutionRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fulfillment payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runtime-config/resolution-requests/{request_id}/reject": {
+      "post": {
+        "tags": [
+          "runtime-config"
+        ],
+        "operationId": "reject_runtime_config_resolution_request",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Runtime config resolution request id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuntimeResolutionRejectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Reject a pending runtime config resolution request"
+          },
+          "404": {
+            "description": "Resolution request not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions": {
       "get": {
         "tags": [
@@ -10789,6 +11005,16 @@
               "null"
             ]
           },
+          "runtimeConfigResolution": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RuntimeConfigResolutionProblem"
+              }
+            ]
+          },
           "status": {
             "type": "integer",
             "format": "int32",
@@ -12751,6 +12977,101 @@
           }
         }
       },
+      "RuntimeArtifactCacheEntry": {
+        "type": "object",
+        "required": [
+          "hash",
+          "contentType",
+          "byteSize",
+          "cachePath",
+          "createdAt",
+          "lastUsedAt"
+        ],
+        "properties": {
+          "byteSize": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "cachePath": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "RuntimeArtifactFulfillment": {
+        "type": "object",
+        "required": [
+          "hash"
+        ],
+        "properties": {
+          "contentBase64": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hash": {
+            "type": "string"
+          },
+          "localPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "RuntimeArtifactKind": {
+        "type": "string",
+        "enum": [
+          "skill_instruction",
+          "skill_resource",
+          "package_metadata"
+        ]
+      },
+      "RuntimeArtifactRef": {
+        "type": "object",
+        "required": [
+          "hash",
+          "contentType",
+          "byteSize",
+          "kind"
+        ],
+        "properties": {
+          "byteSize": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RuntimeArtifactKind"
+          },
+          "sourceRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "RuntimeCapabilities": {
         "type": "object",
         "required": [
@@ -12761,6 +13082,576 @@
             "type": "boolean"
           }
         }
+      },
+      "RuntimeConfigOwnerScope": {
+        "type": "string",
+        "enum": [
+          "personal",
+          "organization",
+          "unknown"
+        ]
+      },
+      "RuntimeConfigPrefetchRequest": {
+        "type": "object",
+        "properties": {
+          "includeCredentials": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RuntimeConfigPrefetchResponse": {
+        "type": "object",
+        "required": [
+          "revisionId",
+          "contentHash"
+        ],
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "requestIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "revisionId": {
+            "type": "string"
+          }
+        }
+      },
+      "RuntimeConfigResolutionProblem": {
+        "type": "object",
+        "required": [
+          "revisionId",
+          "contentHash",
+          "reason"
+        ],
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/RuntimeConfigResolutionReason"
+          },
+          "requestIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "requestKinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeResolutionRequestKind"
+            }
+          },
+          "retryAfterMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "revisionId": {
+            "type": "string"
+          }
+        }
+      },
+      "RuntimeConfigResolutionReason": {
+        "type": "string",
+        "enum": [
+          "missing_artifact",
+          "missing_credential",
+          "expired_credential",
+          "revision_superseded"
+        ]
+      },
+      "RuntimeConfigSource": {
+        "type": "string",
+        "enum": [
+          "desktop",
+          "worker",
+          "test"
+        ]
+      },
+      "RuntimeCredentialFulfillment": {
+        "type": "object",
+        "required": [
+          "ref",
+          "value"
+        ],
+        "properties": {
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "redactedSummary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "RuntimeCredentialKind": {
+        "type": "string",
+        "enum": [
+          "secret_field",
+          "oauth_access_token",
+          "local_oauth"
+        ]
+      },
+      "RuntimeCredentialRef": {
+        "type": "object",
+        "required": [
+          "ref",
+          "kind",
+          "connectionId"
+        ],
+        "properties": {
+          "authVersion": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "catalogEntryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "catalogEntryVersion": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "connectionId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fieldId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RuntimeCredentialKind"
+          },
+          "ref": {
+            "type": "string"
+          }
+        }
+      },
+      "RuntimeMcpEnvVar": {
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/RuntimeTextTemplate"
+          }
+        }
+      },
+      "RuntimeMcpHeader": {
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/RuntimeTextTemplate"
+          }
+        }
+      },
+      "RuntimeMcpHttpLaunch": {
+        "type": "object",
+        "required": [
+          "baseUrl"
+        ],
+        "properties": {
+          "baseUrl": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeMcpHeader"
+            }
+          },
+          "query": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeMcpQueryParam"
+            }
+          }
+        }
+      },
+      "RuntimeMcpLaunch": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RuntimeMcpHttpLaunch"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "transport"
+                ],
+                "properties": {
+                  "transport": {
+                    "type": "string",
+                    "enum": [
+                      "http"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RuntimeMcpStdioLaunch"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "transport"
+                ],
+                "properties": {
+                  "transport": {
+                    "type": "string",
+                    "enum": [
+                      "stdio"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "RuntimeMcpQueryParam": {
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/RuntimeTextTemplate"
+          }
+        }
+      },
+      "RuntimeMcpServer": {
+        "type": "object",
+        "required": [
+          "id",
+          "connectionId",
+          "serverName",
+          "launch"
+        ],
+        "properties": {
+          "catalogEntryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "connectionId": {
+            "type": "string"
+          },
+          "credentialRefs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeCredentialRef"
+            }
+          },
+          "id": {
+            "type": "string"
+          },
+          "launch": {
+            "$ref": "#/components/schemas/RuntimeMcpLaunch"
+          },
+          "serverName": {
+            "type": "string"
+          }
+        }
+      },
+      "RuntimeMcpStdioLaunch": {
+        "type": "object",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "args": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeTextTemplate"
+            }
+          },
+          "command": {
+            "type": "string"
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeMcpEnvVar"
+            }
+          }
+        }
+      },
+      "RuntimeResolutionFulfillRequest": {
+        "type": "object",
+        "properties": {
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeArtifactFulfillment"
+            }
+          },
+          "credentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeCredentialFulfillment"
+            }
+          }
+        }
+      },
+      "RuntimeResolutionRejectRequest": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "$ref": "#/components/schemas/RuntimeConfigResolutionReason"
+          }
+        }
+      },
+      "RuntimeResolutionRequest": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "revisionId",
+          "contentHash",
+          "kind",
+          "reason"
+        ],
+        "properties": {
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeArtifactRef"
+            }
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "credentialRefs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeCredentialRef"
+            }
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RuntimeResolutionRequestKind"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/RuntimeConfigResolutionReason"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "string"
+          }
+        }
+      },
+      "RuntimeResolutionRequestKind": {
+        "type": "string",
+        "enum": [
+          "artifact",
+          "credential"
+        ]
+      },
+      "RuntimeSkill": {
+        "type": "object",
+        "required": [
+          "id",
+          "displayName",
+          "description",
+          "instructionArtifact"
+        ],
+        "properties": {
+          "credentialRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "instructionArtifact": {
+            "$ref": "#/components/schemas/RuntimeArtifactRef"
+          },
+          "packageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requiredMcpServerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeSkillResource"
+            }
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "RuntimeSkillResource": {
+        "type": "object",
+        "required": [
+          "resourceId",
+          "artifact"
+        ],
+        "properties": {
+          "artifact": {
+            "$ref": "#/components/schemas/RuntimeArtifactRef"
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resourceId": {
+            "type": "string"
+          }
+        }
+      },
+      "RuntimeTextTemplate": {
+        "type": "object",
+        "properties": {
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeTextTemplatePart"
+            }
+          }
+        }
+      },
+      "RuntimeTextTemplatePart": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "literal"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "ref",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "credential"
+                ]
+              },
+              "ref": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "workspacePath"
+                ]
+              }
+            }
+          }
+        ]
       },
       "ScheduleSubagentWakeRequest": {
         "type": "object"
@@ -14573,6 +15464,125 @@
           "failed",
           "cancelled"
         ]
+      },
+      "TargetRuntimeConfigApplyResponse": {
+        "type": "object",
+        "required": [
+          "revision"
+        ],
+        "properties": {
+          "missingArtifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeArtifactRef"
+            }
+          },
+          "revision": {
+            "$ref": "#/components/schemas/TargetRuntimeConfigRevision"
+          }
+        }
+      },
+      "TargetRuntimeConfigRefreshRequest": {
+        "type": "object",
+        "required": [
+          "revision",
+          "source"
+        ],
+        "properties": {
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeArtifactRef"
+            }
+          },
+          "mcpBindingSummaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionMcpBindingSummary"
+            }
+          },
+          "mcpServers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeMcpServer"
+            }
+          },
+          "revision": {
+            "$ref": "#/components/schemas/TargetRuntimeConfigRevision"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeSkill"
+            }
+          },
+          "source": {
+            "$ref": "#/components/schemas/RuntimeConfigSource"
+          }
+        }
+      },
+      "TargetRuntimeConfigResponse": {
+        "type": "object",
+        "properties": {
+          "artifactCache": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeArtifactCacheEntry"
+            }
+          },
+          "current": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TargetRuntimeConfigRefreshRequest"
+              }
+            ]
+          },
+          "pendingResolutionRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeResolutionRequest"
+            }
+          }
+        }
+      },
+      "TargetRuntimeConfigRevision": {
+        "type": "object",
+        "required": [
+          "id",
+          "generatedAt",
+          "contentHash",
+          "ownerScope"
+        ],
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "externalTargetId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "generatedAt": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ownerScope": {
+            "$ref": "#/components/schemas/RuntimeConfigOwnerScope"
+          },
+          "sequence": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
       },
       "TerminalCommandOutputMode": {
         "type": "string",
