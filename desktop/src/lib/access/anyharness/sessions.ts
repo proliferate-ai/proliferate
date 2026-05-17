@@ -10,6 +10,7 @@ import {
   type AnyHarnessClientConnection,
   type AnyHarnessResolvedConnection,
 } from "@anyharness/sdk-react";
+import { retryAfterRuntimeConfigResolution } from "@/lib/workflows/mcp/runtime-config-resolution";
 
 type SessionConnection = AnyHarnessClientConnection | AnyHarnessResolvedConnection;
 type AnyHarnessClient = ReturnType<typeof getAnyHarnessClient>;
@@ -44,7 +45,9 @@ export function createSession(
   request: CreateSessionRequest,
   options?: CreateSessionOptions,
 ) {
-  return getAnyHarnessClient(connection).sessions.create(request, options);
+  return retryAfterRuntimeConfigResolution(connection, () =>
+    getAnyHarnessClient(connection).sessions.create(request, options)
+  );
 }
 
 export function getSession(
@@ -80,7 +83,9 @@ export function promptSession(
   request: PromptSessionRequest,
   options?: PromptSessionOptions,
 ) {
-  return getAnyHarnessClient(connection).sessions.prompt(sessionId, request, options);
+  return retryAfterRuntimeConfigResolution(connection, () =>
+    getAnyHarnessClient(connection).sessions.prompt(sessionId, request, options)
+  );
 }
 
 export function resumeSession(
@@ -89,7 +94,9 @@ export function resumeSession(
   request: ResumeSessionRequest,
   options?: ResumeSessionOptions,
 ) {
-  return getAnyHarnessClient(connection).sessions.resume(sessionId, request, options);
+  return retryAfterRuntimeConfigResolution(connection, () =>
+    getAnyHarnessClient(connection).sessions.resume(sessionId, request, options)
+  );
 }
 
 export function setSessionConfigOption(

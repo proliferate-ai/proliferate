@@ -1,4 +1,4 @@
-use anyharness_contract::v1::ProblemDetails;
+use anyharness_contract::v1::{ProblemDetails, RuntimeConfigResolutionProblem};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -16,6 +16,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                runtime_config_resolution: None,
             },
         )
     }
@@ -30,6 +31,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                runtime_config_resolution: None,
             },
         )
     }
@@ -44,6 +46,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                runtime_config_resolution: None,
             },
         )
     }
@@ -58,6 +61,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                runtime_config_resolution: None,
             },
         )
     }
@@ -72,6 +76,25 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: None,
+                runtime_config_resolution: None,
+            },
+        )
+    }
+
+    pub fn runtime_config_resolution_required(
+        detail: impl Into<String>,
+        resolution: RuntimeConfigResolutionProblem,
+    ) -> Self {
+        Self(
+            StatusCode::CONFLICT,
+            ProblemDetails {
+                type_url: "about:blank".into(),
+                title: "Runtime config resolution required".into(),
+                status: 409,
+                detail: Some(detail.into()),
+                instance: None,
+                code: Some("RUNTIME_CONFIG_RESOLUTION_REQUIRED".into()),
+                runtime_config_resolution: Some(resolution),
             },
         )
     }

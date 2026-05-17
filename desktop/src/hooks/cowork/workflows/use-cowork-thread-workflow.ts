@@ -134,6 +134,7 @@ export function useCoworkThreadWorkflow() {
     try {
       const resolveStartedAt = startLatencyTimer();
       const mcpLaunch = await resolveSessionMcpServersForLaunch({
+        connection: resolveRuntimeConnection(anyHarnessRuntime),
         targetLocation: "local",
         workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
         launchId: entry.attemptId,
@@ -143,7 +144,7 @@ export function useCoworkThreadWorkflow() {
           enabled: true,
         },
       });
-      const { mcpServers, mcpBindingSummaries } = mcpLaunch;
+      const { mcpServers } = mcpLaunch;
       const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
       logLatency("workspace.cowork.create.mcp_resolved", {
         attemptId: entry.attemptId,
@@ -175,8 +176,6 @@ export function useCoworkThreadWorkflow() {
             modelId: input.modelId,
             coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
             ...(modeId ? { modeId } : {}),
-            ...(mcpServers.length > 0 ? { mcpServers } : {}),
-            mcpBindingSummaries,
           });
         } finally {
           await releaseRuntimeReservations();

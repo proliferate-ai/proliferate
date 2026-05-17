@@ -242,6 +242,9 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
         StartSessionError::MissingDataKey | StartSessionError::RestartRequired(_) => {
             SendPromptError::Internal(anyhow::anyhow!(SESSION_RESTART_REQUIRED_DETAIL))
         }
+        StartSessionError::RuntimeConfigResolutionRequired(resolution) => {
+            SendPromptError::RuntimeConfigResolutionRequired(resolution)
+        }
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
             SendPromptError::Internal(error)
         }

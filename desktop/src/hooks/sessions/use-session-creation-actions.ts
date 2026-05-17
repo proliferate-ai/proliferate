@@ -437,6 +437,7 @@ export function useSessionCreationActions() {
         .pluginsInCodingSessionsEnabled;
       const subagentsEnabled = useUserPreferencesStore.getState().subagentsEnabled;
       const mcpLaunch = await resolveSessionMcpServersForLaunch({
+        connection: targetConnection,
         targetLocation: mcpTargetLocation(target),
         workspacePath: targetWorkspace?.path ?? null,
         launchId: crypto.randomUUID(),
@@ -447,9 +448,6 @@ export function useSessionCreationActions() {
         },
       });
       const {
-        mcpServers,
-        mcpBindingSummaries,
-        pluginBundle,
         warnings: connectorWarnings,
       } = mcpLaunch;
       const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
@@ -460,11 +458,6 @@ export function useSessionCreationActions() {
             agentKind: options.agentKind,
             modelId: options.modelId,
             ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
-            mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
-            mcpBindingSummaries: mcpBindingSummaries.length > 0
-              ? mcpBindingSummaries
-              : undefined,
-            pluginBundle,
             subagentsEnabled,
             origin: DESKTOP_ORIGIN,
           }, requestOptions);

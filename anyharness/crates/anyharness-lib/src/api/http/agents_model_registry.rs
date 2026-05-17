@@ -36,6 +36,7 @@ fn problem(
             detail,
             instance: None,
             code: code.map(String::from),
+            runtime_config_resolution: None,
         }),
     )
 }

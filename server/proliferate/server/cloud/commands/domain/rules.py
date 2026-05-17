@@ -81,6 +81,7 @@ def validate_command_shape(
         CloudCommandKind.configure_git_identity.value,
         CloudCommandKind.ensure_repo_checkout.value,
         CloudCommandKind.materialize_environment.value,
+        CloudCommandKind.materialize_environment_runtime_config.value,
     } and (workspace_id or session_id):
         raise CloudApiError(
             "cloud_command_target_only",

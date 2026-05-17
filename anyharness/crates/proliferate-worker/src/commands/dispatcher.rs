@@ -33,6 +33,7 @@ const ERROR_LEASE_SLEEP: Duration = Duration::from_secs(5);
 const CONFIGURE_GIT_IDENTITY_KIND: &str = "configure_git_identity";
 const ENSURE_REPO_CHECKOUT_KIND: &str = "ensure_repo_checkout";
 const MATERIALIZE_ENVIRONMENT_KIND: &str = "materialize_environment";
+const MATERIALIZE_ENVIRONMENT_RUNTIME_CONFIG_KIND: &str = "materialize_environment_runtime_config";
 
 pub async fn run_loop(
     config: WorkerConfig,
@@ -149,9 +150,11 @@ async fn process_command(
         return process_materialize_environment_command(
             cloud,
             identity,
+            None,
             store,
             materialization_root,
             command,
+            false,
         )
         .await;
     }
@@ -166,6 +169,18 @@ async fn process_command(
         report_command_result(cloud, identity, store, &command.command_id, &result).await?;
         return Ok(());
     };
+    if command.kind == MATERIALIZE_ENVIRONMENT_RUNTIME_CONFIG_KIND {
+        return process_materialize_environment_command(
+            cloud,
+            identity,
+            Some(anyharness),
+            store,
+            materialization_root,
+            command,
+            true,
+        )
+        .await;
+    }
     if command.kind == "sync_existing_workspace" {
         return process_sync_existing_workspace_command(
             cloud, identity, anyharness, store, command,
@@ -200,7 +215,7 @@ async fn process_command(
         )
         .await?;
 
-    let response = dispatch_anyharness(anyharness, &mapped).await;
+    let response = dispatch_with_runtime_resolution(anyharness, &mapped, &command.payload).await;
     if let Ok(response) = &response {
         if response.is_success() {
             if let Err(error) = register_session_for_sync(store, &command, &mapped, response) {
@@ -369,9 +384,11 @@ async fn process_ensure_repo_checkout_command(
 async fn process_materialize_environment_command(
     cloud: &CloudClient,
     identity: &WorkerIdentity,
+    anyharness: Option<&AnyHarnessClient>,
     store: &WorkerStore,
     materialization_root: Option<&Path>,
     command: CloudCommandEnvelope,
+    requires_runtime_config: bool,
 ) -> Result<(), WorkerError> {
     let payload = match parse_materialize_environment_payload(&command.payload) {
         Ok(payload) => payload,
@@ -411,7 +428,16 @@ async fn process_materialize_environment_command(
                 &command.lease_id,
             )
             .await?;
-        materialize_plan(materialization_root, payload.config_version, &plan)
+        let outcome = materialize_plan(materialization_root, payload.config_version, &plan)?;
+        if requires_runtime_config {
+            let Some(anyharness) = anyharness else {
+                return Err(crate::error::WorkerError::Materialization(
+                    "AnyHarness is required for runtime config materialization".to_string(),
+                ));
+            };
+            apply_plan_runtime_config(anyharness, &plan).await?;
+        }
+        Ok(outcome)
     }
     .await;
     let result = match response {
@@ -598,6 +624,155 @@ async fn dispatch_anyharness(
             anyharness.close_session(session_id).await
         }
     }
+}
+
+async fn dispatch_with_runtime_resolution(
+    anyharness: &AnyHarnessClient,
+    command: &AnyHarnessCommand,
+    payload: &Value,
+) -> Result<AnyHarnessCommandResponse, WorkerError> {
+    let first = dispatch_anyharness(anyharness, command).await?;
+    if !is_runtime_config_resolution_required(&first.body) {
+        return Ok(first);
+    }
+    let fulfillments = payload
+        .get("runtimeConfigFulfillments")
+        .unwrap_or(&Value::Null);
+    fulfill_runtime_resolution_from_payload(anyharness, fulfillments).await?;
+    dispatch_anyharness(anyharness, command).await
+}
+
+async fn apply_plan_runtime_config(
+    anyharness: &AnyHarnessClient,
+    plan: &crate::materialization::TargetConfigMaterializationPlan,
+) -> Result<(), WorkerError> {
+    let Some(runtime_config) = plan.runtime_config.as_ref() else {
+        return Err(crate::error::WorkerError::Materialization(
+            "runtime config capable command missing runtimeConfig payload".to_string(),
+        ));
+    };
+    let apply = anyharness.put_runtime_config(runtime_config).await?;
+    if !apply.is_success() {
+        return Err(crate::error::WorkerError::Materialization(format!(
+            "AnyHarness rejected runtime config apply: HTTP {} {}",
+            apply.status, apply.body
+        )));
+    }
+    let prefetch = anyharness.prefetch_runtime_config(true).await?;
+    if !prefetch.is_success() {
+        return Err(crate::error::WorkerError::Materialization(format!(
+            "AnyHarness rejected runtime config prefetch: HTTP {} {}",
+            prefetch.status, prefetch.body
+        )));
+    }
+    let fulfillments = json!({
+        "artifacts": plan.runtime_config_artifacts.iter().map(|artifact| json!({
+            "hash": artifact.hash.clone(),
+            "contentBase64": artifact.content_base64.clone(),
+            "localPath": artifact.local_path.clone(),
+        })).collect::<Vec<_>>(),
+        "credentials": plan.runtime_config_credentials.iter().map(|credential| json!({
+            "ref": credential.credential_ref.clone(),
+            "value": credential.value.clone(),
+            "expiresAt": credential.expires_at.clone(),
+            "redactedSummary": credential.redacted_summary.clone(),
+        })).collect::<Vec<_>>(),
+    });
+    fulfill_runtime_resolution_from_payload(anyharness, &fulfillments).await?;
+    let remaining = anyharness.list_runtime_config_resolution_requests().await?;
+    if remaining.is_success()
+        && remaining
+            .body
+            .as_array()
+            .is_some_and(|requests| !requests.is_empty())
+    {
+        return Err(crate::error::WorkerError::Materialization(format!(
+            "runtime config still has unresolved requests: {}",
+            remaining.body
+        )));
+    }
+    Ok(())
+}
+
+async fn fulfill_runtime_resolution_from_payload(
+    anyharness: &AnyHarnessClient,
+    fulfillments: &Value,
+) -> Result<(), WorkerError> {
+    let listed = anyharness.list_runtime_config_resolution_requests().await?;
+    if !listed.is_success() {
+        return Err(crate::error::WorkerError::Materialization(format!(
+            "failed to list runtime config resolution requests: HTTP {} {}",
+            listed.status, listed.body
+        )));
+    }
+    let Some(requests) = listed.body.as_array() else {
+        return Ok(());
+    };
+    let artifacts = fulfillments
+        .get("artifacts")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let credentials = fulfillments
+        .get("credentials")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for request in requests {
+        let Some(request_id) = request.get("requestId").and_then(Value::as_str) else {
+            continue;
+        };
+        let requested_artifacts = request
+            .get("artifacts")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let requested_credentials = request
+            .get("credentialRefs")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let body = json!({
+            "artifacts": artifacts.iter().filter(|artifact| {
+                let Some(hash) = artifact.get("hash").and_then(Value::as_str) else {
+                    return false;
+                };
+                requested_artifacts.iter().any(|requested| requested.get("hash").and_then(Value::as_str) == Some(hash))
+            }).cloned().collect::<Vec<_>>(),
+            "credentials": credentials.iter().filter(|credential| {
+                let Some(credential_ref) = credential.get("ref").and_then(Value::as_str) else {
+                    return false;
+                };
+                requested_credentials.iter().any(|requested| requested.get("ref").and_then(Value::as_str) == Some(credential_ref))
+            }).cloned().collect::<Vec<_>>(),
+        });
+        let has_artifacts = body
+            .get("artifacts")
+            .and_then(Value::as_array)
+            .is_some_and(|items| !items.is_empty());
+        let has_credentials = body
+            .get("credentials")
+            .and_then(Value::as_array)
+            .is_some_and(|items| !items.is_empty());
+        if !has_artifacts && !has_credentials {
+            continue;
+        }
+        let response = anyharness
+            .fulfill_runtime_config_resolution_request(request_id, &body)
+            .await?;
+        if !response.is_success() {
+            return Err(crate::error::WorkerError::Materialization(format!(
+                "failed to fulfill runtime config request {request_id}: HTTP {} {}",
+                response.status, response.body
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn is_runtime_config_resolution_required(body: &Value) -> bool {
+    body.get("code").and_then(Value::as_str) == Some("RUNTIME_CONFIG_RESOLUTION_REQUIRED")
+        && body.get("runtimeConfigResolution").is_some()
 }
 
 fn command_result(

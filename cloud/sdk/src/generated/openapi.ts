@@ -3012,6 +3012,8 @@ export interface components {
             lastErrorCode?: string | null;
             /** Lasterrormessage */
             lastErrorMessage?: string | null;
+            /** Runtimeconfigrevisionid */
+            runtimeConfigRevisionId?: string | null;
             summary: components["schemas"]["TargetConfigSummaryModel"];
             /** Createdat */
             createdAt: string;
@@ -4791,6 +4793,18 @@ export interface components {
             } | null;
             /** Skills */
             skills?: {
+                [key: string]: unknown;
+            }[];
+            /** Runtimeconfig */
+            runtimeConfig?: {
+                [key: string]: unknown;
+            } | null;
+            /** Runtimeconfigartifacts */
+            runtimeConfigArtifacts?: {
+                [key: string]: unknown;
+            }[];
+            /** Runtimeconfigcredentials */
+            runtimeConfigCredentials?: {
                 [key: string]: unknown;
             }[];
             /** Readinessrequirements */

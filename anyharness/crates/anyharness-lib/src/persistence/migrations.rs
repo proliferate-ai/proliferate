@@ -169,6 +169,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0045_delegated_work_handles_and_closure",
         include_str!("sql/0045_delegated_work_handles_and_closure.sql"),
     ),
+    (
+        "0046_runtime_config",
+        include_str!("sql/0046_runtime_config.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
