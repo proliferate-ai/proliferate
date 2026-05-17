@@ -150,6 +150,7 @@ class Settings(BaseSettings):
     agent_gateway_default_managed_budget_usd: str = "0"
     agent_gateway_max_request_bytes: int = 4_194_304
     agent_gateway_request_timeout_seconds: float = 120.0
+    agent_gateway_opencode_enabled: bool = False
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""

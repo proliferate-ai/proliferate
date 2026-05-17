@@ -256,6 +256,23 @@ async def get_sandbox_profile(
     return _profile_record(row)
 
 
+async def get_active_personal_sandbox_profile_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> SandboxProfileRecord | None:
+    row = (
+        await db.execute(
+            select(SandboxProfile).where(
+                SandboxProfile.owner_scope == "personal",
+                SandboxProfile.owner_user_id == user_id,
+                SandboxProfile.deleted_at.is_(None),
+                SandboxProfile.status == "active",
+            )
+        )
+    ).scalar_one_or_none()
+    return _profile_record(row) if row is not None else None
+
+
 async def ensure_personal_sandbox_profile(
     db: AsyncSession,
     *,
@@ -1253,6 +1270,31 @@ async def revoke_runtime_grants_for_selection(
     now = utcnow()
     for row in rows:
         row.revoked_at = now
+    return len(rows)
+
+
+async def revoke_runtime_grants_by_ids(
+    db: AsyncSession,
+    grant_ids: set[UUID],
+) -> int:
+    if not grant_ids:
+        return 0
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayRuntimeGrant).where(
+                    AgentGatewayRuntimeGrant.id.in_(grant_ids),
+                    AgentGatewayRuntimeGrant.revoked_at.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    now = utcnow()
+    for row in rows:
+        row.revoked_at = now
+    await db.flush()
     return len(rows)
 
 

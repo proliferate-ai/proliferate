@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from collections.abc import Mapping
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -64,22 +65,31 @@ async def forward_gateway_request(
     *,
     raw_token: str,
     gateway_path: str,
+    query_string: str,
     method: str,
     body: bytes,
     content_type: str | None,
+    protocol_headers: Mapping[str, str],
 ) -> GatewayForwardResponse | GatewayForwardStream:
     if len(body) > settings.agent_gateway_max_request_bytes:
         raise AgentGatewayError(
             "Gateway request body is too large.",
-            code="gateway_route_unavailable",
+            code="gateway_request_too_large",
             status_code=413,
         )
     body_json = _json_body(body)
+    request_model = model_from_body(body_json)
+    if request_model is None:
+        raise AgentGatewayError(
+            "Gateway request model is required.",
+            code="invalid_model",
+            status_code=400,
+        )
     authorized = await authorize_gateway_request(
         db,
         raw_token=raw_token,
         gateway_path=gateway_path,
-        request_model=model_from_body(body_json),
+        request_model=request_model,
     )
     client = LiteLLMRuntimeClient()
     metadata = _metadata_for_request(authorized)
@@ -89,9 +99,11 @@ async def forward_gateway_request(
             response_stream = await client.open_stream(
                 method=method,
                 path=litellm_path,
+                query_string=query_string,
                 body=body,
                 litellm_key=authorized.litellm_key,
                 content_type=content_type,
+                protocol_headers=protocol_headers,
                 metadata=metadata,
             )
             return GatewayForwardStream(
@@ -102,9 +114,11 @@ async def forward_gateway_request(
         response = await client.forward(
             method=method,
             path=litellm_path,
+            query_string=query_string,
             body=body,
             litellm_key=authorized.litellm_key,
             content_type=content_type,
+            protocol_headers=protocol_headers,
             metadata=metadata,
         )
         return GatewayForwardResponse(
@@ -129,6 +143,12 @@ async def authorize_gateway_request(
     gateway_path: str,
     request_model: str | None,
 ) -> AuthorizedGatewayRequest:
+    if not settings.agent_gateway_enabled:
+        raise AgentGatewayError(
+            "Agent gateway is disabled.",
+            code="gateway_route_unavailable",
+            status_code=503,
+        )
     if not raw_token:
         raise AgentGatewayError(
             "Missing gateway token.",
@@ -149,6 +169,18 @@ async def authorize_gateway_request(
             "Agent auth is not configured.",
             code="agent_auth_not_configured",
             status_code=403,
+        )
+    if profile.managed_target_id is not None and grant.target_id != profile.managed_target_id:
+        raise AgentGatewayError(
+            "Gateway token is stale.",
+            code="invalid_gateway_token",
+            status_code=401,
+        )
+    if grant.issued_profile_revision != profile.agent_auth_revision:
+        raise AgentGatewayError(
+            "Gateway token is stale.",
+            code="invalid_gateway_token",
+            status_code=401,
         )
     selection = await store.get_selection(db, grant.selection_id)
     if selection is None or selection.status != "active":
@@ -185,6 +217,8 @@ async def authorize_gateway_request(
     _require_policy_ready(policy)
     await _require_budget_ready(db, policy)
     allowed_models = allowed_models_for_agent(grant.agent_kind)
+    if grant.agent_kind == "opencode" and not settings.agent_gateway_opencode_enabled:
+        allowed_models = ()
     if not allowed_models:
         raise AgentGatewayError(
             "Gateway route is unavailable for this agent.",

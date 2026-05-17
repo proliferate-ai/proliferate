@@ -10,7 +10,7 @@
     "mobile:build:ios": "pnpm --filter @proliferate/mobile build:ios",
     "mobile:submit:ios": "pnpm --filter @proliferate/mobile submit:ios",
     "shared:build": "pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-model build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build",
-    "shared:typecheck": "pnpm --filter @proliferate/design typecheck && pnpm --filter @proliferate/product-model typecheck && pnpm --filter @proliferate/ui typecheck && pnpm --filter @proliferate/product-ui typecheck",
+    "shared:typecheck": "pnpm --filter @proliferate/design typecheck && pnpm --filter @proliferate/product-model typecheck && pnpm --filter @proliferate/ui typecheck && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui typecheck",
     "web:dev": "pnpm --filter @proliferate/web dev",
     "web:build": "pnpm --filter @proliferate/web build",
     "web:typecheck": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm shared:build && pnpm --filter @proliferate/web typecheck",

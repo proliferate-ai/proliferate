@@ -73,18 +73,25 @@ class LiteLLMRuntimeClient:
         *,
         method: str,
         path: str,
+        query_string: str,
         body: bytes,
         litellm_key: str,
         content_type: str | None,
+        protocol_headers: Mapping[str, str],
         metadata: Mapping[str, str],
     ) -> LiteLLMRuntimeResponse:
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
             try:
                 response = await client.request(
                     method,
-                    f"{self._base_url}{path}",
+                    _url(self._base_url, path, query_string),
                     content=body,
-                    headers=_headers(litellm_key, content_type, metadata),
+                    headers=_headers(
+                        litellm_key,
+                        content_type,
+                        protocol_headers,
+                        metadata,
+                    ),
                 )
             except httpx.HTTPError as exc:
                 raise LiteLLMIntegrationError("Could not reach LiteLLM proxy.") from exc
@@ -105,17 +112,29 @@ class LiteLLMRuntimeClient:
         *,
         method: str,
         path: str,
+        query_string: str,
         body: bytes,
         litellm_key: str,
         content_type: str | None,
+        protocol_headers: Mapping[str, str],
         metadata: Mapping[str, str],
     ) -> LiteLLMRuntimeStream:
-        client = httpx.AsyncClient(timeout=None)
+        client = httpx.AsyncClient(
+            timeout=httpx.Timeout(
+                self._timeout_seconds,
+                connect=min(10.0, self._timeout_seconds),
+            )
+        )
         request = client.build_request(
             method,
-            f"{self._base_url}{path}",
+            _url(self._base_url, path, query_string),
             content=body,
-            headers=_headers(litellm_key, content_type, metadata),
+            headers=_headers(
+                litellm_key,
+                content_type,
+                protocol_headers,
+                metadata,
+            ),
         )
         try:
             response = await client.send(request, stream=True)
@@ -150,6 +169,7 @@ class LiteLLMRuntimeClient:
 def _headers(
     litellm_key: str,
     content_type: str | None,
+    protocol_headers: Mapping[str, str],
     metadata: Mapping[str, str],
 ) -> dict[str, str]:
     headers = {
@@ -157,14 +177,24 @@ def _headers(
     }
     if content_type:
         headers["Content-Type"] = content_type
+    for key, value in protocol_headers.items():
+        if key.lower() not in _HOP_BY_HOP_HEADERS and key.lower() not in {
+            "authorization",
+            "content-length",
+            "content-type",
+            "x-api-key",
+        }:
+            headers[key] = value
     for key, value in metadata.items():
         headers[f"x-proliferate-{key.replace('_', '-')}"] = value
     return headers
 
 
+def _url(base_url: str, path: str, query_string: str) -> str:
+    if query_string:
+        return f"{base_url}{path}?{query_string}"
+    return f"{base_url}{path}"
+
+
 def _response_headers(headers: Mapping[str, str]) -> dict[str, str]:
-    return {
-        key: value
-        for key, value in headers.items()
-        if key.lower() not in _HOP_BY_HOP_HEADERS
-    }
+    return {key: value for key, value in headers.items() if key.lower() not in _HOP_BY_HOP_HEADERS}

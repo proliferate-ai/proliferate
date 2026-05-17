@@ -101,6 +101,25 @@ async def ensure_personal_sandbox_profile(
     return await _backfill_legacy_cloud_credentials(db, actor_user_id, profile)
 
 
+async def reconcile_legacy_cloud_credentials_for_user(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    create_profile: bool,
+) -> SandboxProfileRecord | None:
+    if create_profile:
+        profile = await store.ensure_personal_sandbox_profile(
+            db,
+            user_id=actor_user_id,
+            managed_target_id=None,
+        )
+    else:
+        profile = await store.get_active_personal_sandbox_profile_for_user(db, actor_user_id)
+        if profile is None:
+            return None
+    return await _backfill_legacy_cloud_credentials(db, actor_user_id, profile)
+
+
 async def ensure_organization_sandbox_profile(
     db: AsyncSession,
     *,
@@ -420,11 +439,14 @@ async def ensure_managed_credits_for_organization(
             error_code=error_code,
             error_message=error_message,
         )
-        credential = await store.update_credential_status(
-            db,
-            credential_id=credential.id,
-            status="ready" if policy.status == "ready" else "invalid",
-        ) or credential
+        credential = (
+            await store.update_credential_status(
+                db,
+                credential_id=credential.id,
+                status="ready" if policy.status == "ready" else "invalid",
+            )
+            or credential
+        )
         credentials.append(credential)
         policies.append(policy)
     await store.record_audit_event(
@@ -657,6 +679,16 @@ async def select_credential_for_profile(
     )
     if not isinstance(plan, SelectionPlan):
         raise AgentAuthError(plan.message, code=plan.code, status_code=plan.status_code)
+    if (
+        agent_kind == "opencode"
+        and plan.materialization_mode == "gateway_env"
+        and not settings.agent_gateway_opencode_enabled
+    ):
+        raise AgentAuthError(
+            "Gateway auth for OpenCode is not enabled.",
+            code="gateway_not_supported_for_agent",
+            status_code=400,
+        )
     selection = await store.upsert_selection(
         db,
         sandbox_profile_id=profile.id,
@@ -759,6 +791,12 @@ async def issue_runtime_grant_for_selection(
         raise AgentAuthError(
             "Selection does not use gateway auth.", code="not_gateway_selection", status_code=400
         )
+    if selection.agent_kind == "opencode" and not settings.agent_gateway_opencode_enabled:
+        raise AgentAuthError(
+            "Gateway auth for OpenCode is not enabled.",
+            code="gateway_not_supported_for_agent",
+            status_code=400,
+        )
 
     now = utcnow()
     existing = await store.list_active_runtime_grants_for_route(
@@ -770,9 +808,10 @@ async def issue_runtime_grant_for_selection(
         now=now,
     )
     # The raw token is intentionally not persisted. Materialization retries get
-    # a fresh overlapping grant instead of failing or trying to recover a secret
-    # from durable storage. Later cleanup removes expired grants.
-    _ = existing
+    # a fresh overlapping grant, but keep only the newest prior grant as a
+    # short compatibility grace token for already-configured runtimes.
+    stale_grant_ids = {grant.id for grant in existing[1:]}
+    await store.revoke_runtime_grants_by_ids(db, stale_grant_ids)
 
     raw_token = secrets.token_urlsafe(32)
     grant = await store.create_runtime_grant(
@@ -801,18 +840,26 @@ async def _backfill_legacy_cloud_credentials(
 ) -> SandboxProfileRecord:
     all_legacy_rows = await store.list_legacy_cloud_credentials_for_user(db, actor_user_id)
     active_legacy_by_id = {row.id: row for row in all_legacy_rows if row.revoked_at is None}
-    existing_selections = {
-        selection.agent_kind: selection
-        for selection in await store.list_selections_for_profile(db, profile.id)
-    }
+    imported_legacy_credentials = await store.list_imported_legacy_credentials_for_user(
+        db,
+        actor_user_id,
+    )
+    imported_credential_ids = {credential.id for credential in imported_legacy_credentials}
     changed = False
-    for imported in await store.list_imported_legacy_credentials_for_user(db, actor_user_id):
+    for imported in imported_legacy_credentials:
         legacy = next(
             (row for row in all_legacy_rows if row.id == imported.legacy_cloud_credential_id),
             None,
         )
         if legacy is None or legacy.revoked_at is not None:
             await store.revoke_credential(db, credential_id=imported.id)
+            replacement_exists = legacy is not None and any(
+                active.provider == legacy.provider and active.id != legacy.id
+                for active in active_legacy_by_id.values()
+            )
+            if replacement_exists:
+                changed = True
+                continue
             affected = await store.list_active_selections_for_credential_or_share(
                 db,
                 credential_id=imported.id,
@@ -834,6 +881,10 @@ async def _backfill_legacy_cloud_credentials(
             changed = True
     if not active_legacy_by_id:
         return profile
+    existing_selections = {
+        selection.agent_kind: selection
+        for selection in await store.list_selections_for_profile(db, profile.id)
+    }
     for legacy in active_legacy_by_id.values():
         credential = await store.find_agent_auth_credential_for_legacy_cloud_credential(
             db,
@@ -872,25 +923,42 @@ async def _backfill_legacy_cloud_credentials(
                     {"legacyCloudCredentialId": str(legacy.id)}, sort_keys=True
                 ),
             )
+            imported_credential_ids.add(credential.id)
         elif (
             credential.revoked_at is None
             and legacy.updated_at is not None
             and legacy.updated_at > credential.updated_at
         ):
-            credential = await store.update_credential_status(
-                db,
-                credential_id=credential.id,
-                status="ready",
-                redacted_summary_json=json.dumps(
-                    {
-                        "source": "cloud_credential",
-                        "authMode": legacy.auth_mode,
-                    },
-                    sort_keys=True,
-                ),
-            ) or credential
+            credential = (
+                await store.update_credential_status(
+                    db,
+                    credential_id=credential.id,
+                    status="ready",
+                    redacted_summary_json=json.dumps(
+                        {
+                            "source": "cloud_credential",
+                            "authMode": legacy.auth_mode,
+                        },
+                        sort_keys=True,
+                    ),
+                )
+                or credential
+            )
+            imported_credential_ids.add(credential.id)
             changed = True
-        if legacy.provider not in existing_selections:
+        if credential.revoked_at is not None:
+            continue
+        selection = existing_selections.get(legacy.provider)
+        should_select = False
+        if selection is None:
+            should_select = True
+        elif selection.credential_id in imported_credential_ids:
+            should_select = (
+                selection.status != "active"
+                or selection.credential_id != credential.id
+                or selection.selected_revision != credential.revision
+            )
+        if should_select:
             await store.upsert_selection(
                 db,
                 sandbox_profile_id=profile.id,

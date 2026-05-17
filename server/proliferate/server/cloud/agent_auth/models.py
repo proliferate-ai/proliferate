@@ -38,9 +38,7 @@ class LiteLLMModelDeploymentRequest(BaseModel):
 
 class EnsureManagedCreditsRequest(BaseModel):
     included_budget_usd: str | None = Field(default=None, alias="includedBudgetUsd")
-    agent_kinds: list[AgentKind] = Field(
-        default_factory=lambda: ["claude"], alias="agentKinds"
-    )
+    agent_kinds: list[AgentKind] = Field(default_factory=lambda: ["claude"], alias="agentKinds")
 
 
 class CreateGatewayCredentialRequest(BaseModel):

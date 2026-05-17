@@ -216,7 +216,7 @@ def _patch_repo_branches_lookup(
 ) -> None:
     monkeypatch.setattr(repos_service, "get_github_repo_branches", resolver)
     monkeypatch.setattr(cloud_service, "get_github_repo_branches", resolver)
-    monkeypatch.setattr(repo_config_service, "get_repo_branches_for_user", resolver)
+    monkeypatch.setattr(repo_config_service, "get_repo_branches_for_credentials", resolver)
 
 
 class TestCloudWorktreeRetentionPolicy:

@@ -6,7 +6,9 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db.engine import get_async_session
+from proliferate.server.agent_gateway.errors import AgentGatewayError
 from proliferate.server.agent_gateway.models import (
     GatewayForwardResponse,
     GatewayForwardStream,
@@ -17,6 +19,14 @@ from proliferate.server.agent_gateway.service import (
 )
 
 router = APIRouter(tags=["agent_gateway"])
+
+_PROTOCOL_HEADER_ALLOWLIST = frozenset(
+    {
+        "anthropic-version",
+        "anthropic-beta",
+        "openai-beta",
+    }
+)
 
 
 @router.get("/agent-gateway/health")
@@ -86,9 +96,11 @@ async def forward_protocol_request(
         db,
         raw_token=_bearer_token(request),
         gateway_path=request.url.path,
+        query_string=request.url.query,
         method=request.method,
-        body=await request.body(),
+        body=await _limited_request_body(request),
         content_type=request.headers.get("content-type"),
+        protocol_headers=_protocol_headers(request),
     )
     if isinstance(result, GatewayForwardStream):
         return StreamingResponse(
@@ -113,3 +125,24 @@ def _bearer_token(request: Request) -> str:
     if not authorization.startswith(prefix):
         return ""
     return authorization[len(prefix) :].strip()
+
+
+def _protocol_headers(request: Request) -> dict[str, str]:
+    return {
+        key.lower(): value
+        for key, value in request.headers.items()
+        if key.lower() in _PROTOCOL_HEADER_ALLOWLIST
+    }
+
+
+async def _limited_request_body(request: Request) -> bytes:
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > settings.agent_gateway_max_request_bytes:
+            raise AgentGatewayError(
+                "Gateway request body is too large.",
+                code="gateway_request_too_large",
+                status_code=413,
+            )
+    return bytes(body)

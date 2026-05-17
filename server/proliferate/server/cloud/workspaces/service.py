@@ -1134,7 +1134,8 @@ async def get_cloud_connection(
     ):
         raise CloudApiError(
             "direct_target_connection_required",
-            "This workspace runs on an SSH target and must be opened through direct target access.",
+            "This workspace runs on an SSH target and must be opened through "
+            "direct target access.",
             status_code=409,
         )
     try:

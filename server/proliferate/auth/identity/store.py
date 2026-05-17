@@ -71,9 +71,7 @@ def _provider_grant_status(verified: VerifiedProviderIdentity) -> AuthProviderGr
         )
         if expires_at <= _now():
             return AuthProviderGrantStatus.EXPIRED
-    if verified.provider == "github" and not _github_scopes_satisfy_requirements(
-        verified.scopes
-    ):
+    if verified.provider == "github" and not _github_scopes_satisfy_requirements(verified.scopes):
         return AuthProviderGrantStatus.NEEDS_REAUTH
     return AuthProviderGrantStatus.READY
 

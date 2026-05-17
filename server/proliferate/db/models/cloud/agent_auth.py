@@ -376,7 +376,7 @@ class AgentGatewayPolicy(Base):
         nullable=True,
     )
     budget_subject_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("agent_gateway_budget_subject.id", ondelete="SET NULL"),
+        ForeignKey("agent_gateway_budget_subject.id", ondelete="RESTRICT"),
         index=True,
         nullable=True,
     )

@@ -10,6 +10,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.store.cloud_agent_auth import store
@@ -25,6 +26,11 @@ class _GatewaySeed:
     sandbox_profile_id: UUID
     policy_id: UUID
     selection_id: UUID
+
+
+@pytest.fixture(autouse=True)
+def _enable_agent_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
 
 
 async def _seed_gateway_grant(
@@ -148,14 +154,23 @@ async def test_anthropic_gateway_forwards_valid_grant_to_litellm(
     )
 
     response = await client.post(
-        "/anthropic/v1/messages",
-        headers={"Authorization": f"Bearer {seed.raw_token}"},
+        "/anthropic/v1/messages?beta=true",
+        headers={
+            "Authorization": f"Bearer {seed.raw_token}",
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "messages-2023-12-15",
+        },
         json={"model": "us.anthropic.claude-sonnet-4-6", "messages": []},
     )
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
     assert fake_client.calls[0]["path"] == "/v1/messages"
+    assert fake_client.calls[0]["query_string"] == "beta=true"
+    assert fake_client.calls[0]["protocol_headers"] == {
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "messages-2023-12-15",
+    }
     assert fake_client.calls[0]["litellm_key"] == "litellm-runtime-key"
     assert fake_client.calls[0]["metadata"] == {
         "target_id": str(seed.target_id),
@@ -176,6 +191,59 @@ async def test_gateway_rejects_invalid_token(client: AsyncClient) -> None:
 
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "invalid_gateway_token"
+
+
+@pytest.mark.asyncio
+async def test_gateway_fails_closed_when_disabled(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed = await _seed_gateway_grant(db_session)
+    monkeypatch.setattr(settings, "agent_gateway_enabled", False)
+
+    response = await client.post(
+        "/anthropic/v1/messages",
+        headers={"Authorization": f"Bearer {seed.raw_token}"},
+        json={"model": "us.anthropic.claude-sonnet-4-6", "messages": []},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "gateway_route_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_gateway_rejects_oversized_body_before_authorization(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "agent_gateway_max_request_bytes", 8)
+
+    response = await client.post(
+        "/anthropic/v1/messages",
+        headers={"Authorization": "Bearer invalid"},
+        content=b'{"model":"too-large"}',
+    )
+
+    assert response.status_code == 413
+    assert response.json()["detail"]["code"] == "gateway_request_too_large"
+
+
+@pytest.mark.asyncio
+async def test_gateway_rejects_missing_model(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    seed = await _seed_gateway_grant(db_session)
+
+    response = await client.post(
+        "/anthropic/v1/messages",
+        headers={"Authorization": f"Bearer {seed.raw_token}"},
+        json={"messages": []},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "invalid_model"
 
 
 @pytest.mark.asyncio
@@ -215,6 +283,71 @@ async def test_gateway_rejects_revoked_token(
 
 
 @pytest.mark.asyncio
+async def test_gateway_rejects_stale_profile_revision(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    seed = await _seed_gateway_grant(db_session)
+    await store.bump_sandbox_profile_agent_auth_revision(
+        db_session,
+        sandbox_profile_id=seed.sandbox_profile_id,
+        reason="test_revision_change",
+        actor_user_id=None,
+        force_restart=True,
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        "/anthropic/v1/messages",
+        headers={"Authorization": f"Bearer {seed.raw_token}"},
+        json={"model": "us.anthropic.claude-sonnet-4-6", "messages": []},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "invalid_gateway_token"
+
+
+@pytest.mark.asyncio
+async def test_gateway_rejects_grant_after_target_rebind(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    seed = await _seed_gateway_grant(db_session)
+    profile = await store.get_sandbox_profile(db_session, seed.sandbox_profile_id)
+    assert profile is not None
+    user_id = profile.owner_user_id
+    assert user_id is not None
+    target = CloudTarget(
+        display_name="Replacement Target",
+        kind="managed_cloud",
+        status="online",
+        owner_scope="personal",
+        owner_user_id=user_id,
+        organization_id=None,
+        created_by_user_id=user_id,
+        default_workspace_root=None,
+        update_channel="stable",
+    )
+    db_session.add(target)
+    await db_session.flush()
+    await store.ensure_personal_sandbox_profile(
+        db_session,
+        user_id=user_id,
+        managed_target_id=target.id,
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        "/anthropic/v1/messages",
+        headers={"Authorization": f"Bearer {seed.raw_token}"},
+        json={"model": "us.anthropic.claude-sonnet-4-6", "messages": []},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "invalid_gateway_token"
+
+
+@pytest.mark.asyncio
 async def test_gateway_rejects_unavailable_model(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -229,6 +362,40 @@ async def test_gateway_rejects_unavailable_model(
 
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "model_not_available"
+
+
+@pytest.mark.asyncio
+async def test_runtime_grant_rotation_keeps_one_grace_grant(
+    db_session: AsyncSession,
+) -> None:
+    seed = await _seed_gateway_grant(db_session)
+    profile = await store.get_sandbox_profile(db_session, seed.sandbox_profile_id)
+    selection = await store.get_selection(db_session, seed.selection_id)
+    assert profile is not None
+    assert selection is not None
+
+    await issue_runtime_grant_for_selection(
+        db_session,
+        selection=selection,
+        profile=profile,
+        target_id=seed.target_id,
+    )
+    await issue_runtime_grant_for_selection(
+        db_session,
+        selection=selection,
+        profile=profile,
+        target_id=seed.target_id,
+    )
+    active = await store.list_active_runtime_grants_for_route(
+        db_session,
+        policy_id=seed.policy_id,
+        target_id=seed.target_id,
+        sandbox_profile_id=seed.sandbox_profile_id,
+        agent_kind="claude",
+        now=profile.updated_at,
+    )
+
+    assert len(active) == 2
 
 
 @pytest.mark.asyncio

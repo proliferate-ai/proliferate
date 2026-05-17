@@ -14,6 +14,9 @@ from proliferate.db.store.cloud_credentials import (
     get_user_cloud_credentials,
     sync_cloud_credential_if_changed,
 )
+from proliferate.server.cloud.agent_auth.service import (
+    reconcile_legacy_cloud_credentials_for_user,
+)
 from proliferate.server.cloud.credentials.domain.status import (
     CredentialStatusRecord,
     build_credential_statuses,
@@ -84,13 +87,20 @@ async def sync_cloud_credential_for_user(
         env_vars=getattr(body, "env_vars", None),
         files=getattr(body, "files", None),
     )
-    return await _persist_cloud_credential_if_changed(
+    changed = await _persist_cloud_credential_if_changed(
         db,
         user_id=user_id,
         provider=provider,
         payload=normalized.payload,
         auth_mode=normalized.auth_mode,
     )
+    if changed:
+        await reconcile_legacy_cloud_credentials_for_user(
+            db,
+            actor_user_id=user_id,
+            create_profile=True,
+        )
+    return changed
 
 
 async def _persist_cloud_credential_if_changed(
@@ -117,4 +127,11 @@ async def delete_cloud_credential_for_user(
     user_id: UUID,
     provider: CloudAgentKind,
 ) -> bool:
-    return await delete_cloud_credential(db, user_id, provider)
+    changed = await delete_cloud_credential(db, user_id, provider)
+    if changed:
+        await reconcile_legacy_cloud_credentials_for_user(
+            db,
+            actor_user_id=user_id,
+            create_profile=False,
+        )
+    return changed
