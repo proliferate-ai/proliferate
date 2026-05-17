@@ -17,9 +17,23 @@ from typing import Final, Literal
 # Supported cloud agent kinds
 # ---------------------------------------------------------------------------
 
-CloudAgentKind = Literal["claude", "codex", "gemini"]
+CloudAgentKind = Literal["claude", "codex", "opencode", "gemini"]
 
-SUPPORTED_CLOUD_AGENTS: tuple[CloudAgentKind, ...] = ("claude", "codex", "gemini")
+SUPPORTED_CLOUD_AGENTS: tuple[CloudAgentKind, ...] = (
+    "claude",
+    "codex",
+    "opencode",
+    "gemini",
+)
+
+# Legacy native credential sync does not support every catalog agent kind yet.
+# The agent-auth gateway model can refer to OpenCode, but old CloudCredential
+# sync/status APIs must not advertise it until they can materialize its files.
+SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS: tuple[CloudAgentKind, ...] = (
+    "claude",
+    "codex",
+    "gemini",
+)
 
 ANYHARNESS_RESERVED_ENV_PREFIX: str = "ANYHARNESS_"
 PROLIFERATE_RESERVED_ENV_PREFIX: str = "PROLIFERATE_"
@@ -40,6 +54,171 @@ RESERVED_CLOUD_REPO_ENV_VARS: frozenset[str] = frozenset(
 )
 
 CLOUD_REPO_CONFIG_FILE_MAX_BYTES: Final = 1_048_576
+
+# ---------------------------------------------------------------------------
+# Agent LLM auth gateway
+# ---------------------------------------------------------------------------
+
+
+class SandboxProfileOwnerScope(StrEnum):
+    personal = "personal"
+    organization = "organization"
+
+
+class SandboxProfileStatus(StrEnum):
+    active = "active"
+    archived = "archived"
+
+
+class AgentAuthOwnerScope(StrEnum):
+    system = "system"
+    personal = "personal"
+    organization = "organization"
+
+
+class AgentAuthCredentialKind(StrEnum):
+    managed_gateway = "managed_gateway"
+    synced_path = "synced_path"
+
+
+class AgentAuthCredentialStatus(StrEnum):
+    pending = "pending"
+    ready = "ready"
+    needs_resync = "needs_resync"
+    invalid = "invalid"
+    revoked = "revoked"
+
+
+class AgentAuthCredentialShareStatus(StrEnum):
+    active = "active"
+    revoked = "revoked"
+
+
+class AgentGatewayPolicyKind(StrEnum):
+    proliferate_managed = "proliferate_managed"
+    org_byok = "org_byok"
+    personal_byok = "personal_byok"
+
+
+class AgentGatewayBudgetKind(StrEnum):
+    proliferate_managed = "proliferate_managed"
+
+
+class AgentGatewaySyncStatus(StrEnum):
+    pending = "pending"
+    synced = "synced"
+    drifted = "drifted"
+    failed = "failed"
+
+
+class AgentGatewayPolicyStatus(StrEnum):
+    provisioning = "provisioning"
+    ready = "ready"
+    invalid = "invalid"
+    revoked = "revoked"
+
+
+class AgentGatewayBudgetSubjectStatus(StrEnum):
+    ready = "ready"
+    exhausted = "exhausted"
+    invalid = "invalid"
+    revoked = "revoked"
+
+
+class AgentGatewayProviderKind(StrEnum):
+    proliferate_bedrock_pool = "proliferate_bedrock_pool"
+    anthropic_api_key = "anthropic_api_key"
+    openai_api_key = "openai_api_key"
+    bedrock_assume_role = "bedrock_assume_role"
+    openai_compatible = "openai_compatible"
+
+
+class AgentGatewayProviderValidationStatus(StrEnum):
+    unvalidated = "unvalidated"
+    valid = "valid"
+    invalid = "invalid"
+
+
+class SandboxAgentAuthMaterializationMode(StrEnum):
+    gateway_env = "gateway_env"
+    synced_files = "synced_files"
+
+
+class SandboxAgentAuthSelectionStatus(StrEnum):
+    active = "active"
+    needs_resync = "needs_resync"
+    invalid = "invalid"
+
+
+class SandboxAgentAuthTargetStateStatus(StrEnum):
+    pending = "pending"
+    materializing = "materializing"
+    applied = "applied"
+    failed = "failed"
+    superseded = "superseded"
+
+
+class AgentGatewayProtocolFacade(StrEnum):
+    anthropic = "anthropic"
+    openai = "openai"
+
+
+SUPPORTED_SANDBOX_PROFILE_OWNER_SCOPES: tuple[str, ...] = tuple(
+    scope.value for scope in SandboxProfileOwnerScope
+)
+SUPPORTED_SANDBOX_PROFILE_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in SandboxProfileStatus
+)
+SUPPORTED_AGENT_AUTH_OWNER_SCOPES: tuple[str, ...] = tuple(
+    scope.value for scope in AgentAuthOwnerScope
+)
+SUPPORTED_AGENT_AUTH_CREDENTIAL_KINDS: tuple[str, ...] = tuple(
+    kind.value for kind in AgentAuthCredentialKind
+)
+SUPPORTED_AGENT_AUTH_CREDENTIAL_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in AgentAuthCredentialStatus
+)
+SUPPORTED_AGENT_AUTH_CREDENTIAL_SHARE_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in AgentAuthCredentialShareStatus
+)
+SUPPORTED_AGENT_GATEWAY_POLICY_KINDS: tuple[str, ...] = tuple(
+    kind.value for kind in AgentGatewayPolicyKind
+)
+SUPPORTED_AGENT_GATEWAY_BUDGET_KINDS: tuple[str, ...] = tuple(
+    kind.value for kind in AgentGatewayBudgetKind
+)
+SUPPORTED_AGENT_GATEWAY_SYNC_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in AgentGatewaySyncStatus
+)
+SUPPORTED_AGENT_GATEWAY_POLICY_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in AgentGatewayPolicyStatus
+)
+SUPPORTED_AGENT_GATEWAY_BUDGET_SUBJECT_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in AgentGatewayBudgetSubjectStatus
+)
+SUPPORTED_AGENT_GATEWAY_PROVIDER_KINDS: tuple[str, ...] = tuple(
+    kind.value for kind in AgentGatewayProviderKind
+)
+SUPPORTED_AGENT_GATEWAY_PROVIDER_VALIDATION_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in AgentGatewayProviderValidationStatus
+)
+SUPPORTED_SANDBOX_AGENT_AUTH_MATERIALIZATION_MODES: tuple[str, ...] = tuple(
+    mode.value for mode in SandboxAgentAuthMaterializationMode
+)
+SUPPORTED_SANDBOX_AGENT_AUTH_SELECTION_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in SandboxAgentAuthSelectionStatus
+)
+SUPPORTED_SANDBOX_AGENT_AUTH_TARGET_STATE_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in SandboxAgentAuthTargetStateStatus
+)
+SUPPORTED_AGENT_GATEWAY_PROTOCOL_FACADES: tuple[str, ...] = tuple(
+    facade.value for facade in AgentGatewayProtocolFacade
+)
+
+AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN: Final = "agent-gateway-runtime-grant"
+AGENT_GATEWAY_TOKEN_HASH_KEY_ID: Final = "cloud_secret_key:v1"
+AGENT_GATEWAY_CIPHERTEXT_KEY_ID: Final = "cloud_secret_key:v1"
+AGENT_GATEWAY_BUDGET_DURATION_V1: Final = "30d"
 
 # ---------------------------------------------------------------------------
 # Allowed credential auth files

@@ -23,6 +23,17 @@ async def assert_current_schema(
         "cloud_workspace_handoff_op",
         "cloud_workspace_mobility",
         "cloud_sandbox",
+        "agent_auth_audit_event",
+        "agent_auth_credential",
+        "agent_auth_credential_share",
+        "agent_gateway_budget_subject",
+        "agent_gateway_policy",
+        "agent_gateway_provider_credential",
+        "agent_gateway_runtime_grant",
+        "sandbox_agent_auth_selection",
+        "sandbox_profile",
+        "sandbox_profile_agent_auth_revision",
+        "sandbox_profile_agent_auth_target_state",
         "cloud_worktree_retention_policy",
         "cloud_workspace",
         "desktop_auth_code",
@@ -275,6 +286,45 @@ async def assert_current_schema(
         "settings_json",
         "config_version",
     } <= mcp_connection_columns
+
+    agent_auth_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("agent_auth_credential")
+        }
+    )
+    assert {
+        "ix_agent_auth_credential_owner_user_kind_status",
+        "ix_agent_auth_credential_org_kind_status",
+    } <= agent_auth_indexes
+
+    sandbox_profile_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("sandbox_profile")
+        }
+    )
+    assert {
+        "uq_sandbox_profile_active_personal_user",
+        "uq_sandbox_profile_active_organization",
+    } <= sandbox_profile_indexes
+
+    target_state_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("sandbox_profile_agent_auth_target_state")
+        }
+    )
+    assert "uq_sandbox_profile_agent_auth_target_state_target_profile" in target_state_indexes
+
+    runtime_grant_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("agent_gateway_runtime_grant")
+        }
+    )
+    assert {
+        "uq_agent_gateway_runtime_grant_token_hash",
+        "ix_agent_gateway_runtime_grant_target_profile_agent",
+    } <= runtime_grant_indexes
 
     version = await conn.scalar(text("SELECT version_num FROM alembic_version"))
     assert version == head_revision
