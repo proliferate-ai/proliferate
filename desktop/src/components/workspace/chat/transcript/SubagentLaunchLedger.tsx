@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { ChevronRight, ExternalLink } from "@/components/ui/icons";

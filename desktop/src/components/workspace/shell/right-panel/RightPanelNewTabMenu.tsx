@@ -1,5 +1,5 @@
 import { useCallback, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { IconButton } from "@/components/ui/IconButton";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import {

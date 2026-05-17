@@ -11,7 +11,7 @@ import {
 } from "@/config/shortcuts";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import { Input } from "@/components/ui/Input";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 
 interface ShortcutRowProps {

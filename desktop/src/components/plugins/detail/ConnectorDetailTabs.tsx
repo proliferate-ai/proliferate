@@ -1,5 +1,5 @@
 import type { ConnectorModalTab } from "@/lib/domain/mcp/connector-catalog-view-model";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 const TAB_LABELS: Record<ConnectorModalTab, string> = {
   configure: "Configure",

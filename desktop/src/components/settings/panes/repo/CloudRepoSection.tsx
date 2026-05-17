@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { CloudIcon } from "@/components/ui/icons";
 import {
   EnvironmentPanel,

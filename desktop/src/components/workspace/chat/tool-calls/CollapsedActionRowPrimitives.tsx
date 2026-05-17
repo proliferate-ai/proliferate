@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ChevronRight } from "@/components/ui/icons";
 import { FileReferenceBadge } from "@/components/workspace/file-references/FileReferenceBadge";
 

@@ -4,8 +4,8 @@ import { AGENT_SETUP_COPY } from "@/copy/agents/agents-copy";
 import { type AgentReconcileState } from "@/lib/domain/agents/status-presentation";
 import { useAgentSetupWorkflow } from "@/hooks/agents/workflows/use-agent-setup-workflow";
 import { ProviderIcon } from "@/components/ui/provider-icons";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@/components/ui/Label";
 import { ModalShell } from "@/components/ui/ModalShell";
 

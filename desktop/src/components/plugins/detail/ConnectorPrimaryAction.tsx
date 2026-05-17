@@ -1,5 +1,5 @@
 import type { ConnectorPrimaryButtonSpec } from "@/lib/domain/mcp/detail-modal";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 export function ConnectorPrimaryAction({
   onCancelOAuth,

@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import {
   ArrowUp,

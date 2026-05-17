@@ -8,10 +8,10 @@ import {
 } from "@/components/ui/EnvironmentLayout";
 import { EnvironmentSearchSelect } from "@/components/ui/EnvironmentSearchSelect";
 import { RunCommandHelp } from "@/components/settings/shared/RunCommandHelp";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Monitor } from "@/components/ui/icons";
-import { Input } from "@/components/ui/Input";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@/components/ui/Label";
 import { Textarea } from "@/components/ui/Textarea";
 import { useRepositorySettings } from "@/hooks/settings/workflows/use-repository-settings";

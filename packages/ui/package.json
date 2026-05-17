@@ -1,0 +1,49 @@
+{
+  "name": "@proliferate/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./primitives/Button": {
+      "types": "./dist/primitives/Button.d.ts",
+      "import": "./dist/primitives/Button.js"
+    },
+    "./primitives/IconButton": {
+      "types": "./dist/primitives/IconButton.d.ts",
+      "import": "./dist/primitives/IconButton.js"
+    },
+    "./primitives/Input": {
+      "types": "./dist/primitives/Input.d.ts",
+      "import": "./dist/primitives/Input.js"
+    },
+    "./primitives/Spinner": {
+      "types": "./dist/primitives/Spinner.d.ts",
+      "import": "./dist/primitives/Spinner.js"
+    },
+    "./primitives/Tooltip": {
+      "types": "./dist/primitives/Tooltip.d.ts",
+      "import": "./dist/primitives/Tooltip.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "tailwind-merge": "^3.5.0"
+  },
+  "peerDependencies": {
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "typescript": "^5.7"
+  }
+}

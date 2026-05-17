@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Check, Copy } from "@/components/ui/icons";
 
 export function BranchBadge({ branchName }: { branchName: string }) {

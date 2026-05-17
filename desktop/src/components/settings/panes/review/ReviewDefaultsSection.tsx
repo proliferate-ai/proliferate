@@ -1,6 +1,6 @@
 import type { ReviewKind } from "@anyharness/sdk";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { RefreshCw } from "@/components/ui/icons";
 import type { AgentModelGroup } from "@/lib/domain/agents/model-options";
 import {

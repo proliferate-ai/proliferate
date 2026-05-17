@@ -3,7 +3,7 @@ import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
 import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
 import { Monitor, Moon, Sun } from "@/components/ui/icons";

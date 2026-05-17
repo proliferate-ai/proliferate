@@ -8,10 +8,10 @@ import {
   GitMerge,
   Spinner,
 } from "@/components/ui/icons";
-import { IconButton } from "@/components/ui/IconButton";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Tooltip } from "@/components/ui/Tooltip";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type {
   SidebarDetailIndicator,
   SidebarIndicatorAction,

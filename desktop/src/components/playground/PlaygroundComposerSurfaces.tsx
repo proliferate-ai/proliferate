@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { ArrowRight } from "@/components/ui/icons";
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";

@@ -5,7 +5,7 @@ import type {
   ConnectorSettings,
   ConnectorSettingsField,
 } from "@/lib/domain/mcp/types";
-import { Input } from "@/components/ui/Input";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@/components/ui/Label";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";

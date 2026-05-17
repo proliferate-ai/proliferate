@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { ReviewKind } from "@anyharness/sdk";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import {
   Plus,

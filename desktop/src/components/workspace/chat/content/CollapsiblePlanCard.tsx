@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Check, ChevronDown, Copy } from "@/components/ui/icons";
 import { PlanMarkdownBody } from "@/components/workspace/chat/content/PlanMarkdownBody";
 

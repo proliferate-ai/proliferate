@@ -1,5 +1,5 @@
 import { type KeyboardEvent } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { MoreHorizontal, Pause, Pencil, Play, Zap } from "@/components/ui/icons";

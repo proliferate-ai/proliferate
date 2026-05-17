@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import { ChatView } from "@/components/workspace/chat/ChatView";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
-import { IconButton } from "@/components/ui/IconButton";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { SplitPanel } from "@/components/ui/icons";
 import { CoworkArtifactsPanel } from "@/components/workspace/cowork/CoworkArtifactsPanel";
 import { CoworkWorkspaceHeader } from "@/components/workspace/cowork/CoworkWorkspaceHeader";

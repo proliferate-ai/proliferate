@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@/components/ui/Label";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { useComputeTargetEnrollment } from "@/hooks/settings/workflows/use-compute-target-enrollment";

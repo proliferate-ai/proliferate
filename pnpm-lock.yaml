@@ -157,6 +157,12 @@ importers:
       '@proliferate/cloud-sdk-react':
         specifier: workspace:*
         version: link:../cloud/sdk-react
+      '@proliferate/design':
+        specifier: workspace:*
+        version: link:../packages/design
+      '@proliferate/ui':
+        specifier: workspace:*
+        version: link:../packages/ui
       '@sentry/react':
         specifier: ^10.45.0
         version: 10.45.0(react@19.1.0)
@@ -314,6 +320,43 @@ importers:
         version: 19.1.17
       typescript:
         specifier: ~5.9.2
+        version: 5.9.3
+
+  packages/design:
+    devDependencies:
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+
+  packages/product-model:
+    devDependencies:
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@25.5.0)(jiti@2.6.1)(jsdom@29.1.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)
+
+  packages/ui:
+    dependencies:
+      tailwind-merge:
+        specifier: ^3.5.0
+        version: 3.5.0
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.2.3(@types/react@19.2.14)
+      react:
+        specifier: 19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: 19.2.4
+        version: 19.2.4(react@19.2.4)
+      typescript:
+        specifier: ^5.7
         version: 5.9.3
 
   server/artifact-runtime:

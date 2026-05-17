@@ -1,5 +1,5 @@
 import type { ReviewKind } from "@anyharness/sdk";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import {
   Plus,
   X,

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { GitBranchRef } from "@anyharness/sdk";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import {
   Check,
   ChevronDown,

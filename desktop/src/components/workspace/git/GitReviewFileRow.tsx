@@ -3,11 +3,11 @@ import {
   type AnyHarnessQueryTimingOptions,
   useGitDiffQuery,
 } from "@anyharness/sdk-react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
 import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
 import { Minus, Plus } from "@/components/ui/icons";
-import { Tooltip } from "@/components/ui/Tooltip";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
 import type {

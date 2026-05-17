@@ -1,5 +1,5 @@
 import type { ConnectorCardStatus } from "@/lib/domain/mcp/connector-catalog-view-model";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 const TONE_CLASSES: Record<ConnectorCardStatus["tone"], string> = {
   neutral:

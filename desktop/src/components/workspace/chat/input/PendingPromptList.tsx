@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Pencil, X } from "@/components/ui/icons";
 import { useActiveSessionId } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox-actions";

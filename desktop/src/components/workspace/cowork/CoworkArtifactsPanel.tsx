@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft } from "@/components/ui/icons";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { useCoworkArtifactDetail } from "@/hooks/access/anyharness/cowork/use-cowork-artifact-detail";

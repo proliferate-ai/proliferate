@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { McpElicitationInlineError } from "./McpElicitationInlineError";
 
 const BUTTON_CLASSNAME = "rounded-xl px-2.5 text-sm";

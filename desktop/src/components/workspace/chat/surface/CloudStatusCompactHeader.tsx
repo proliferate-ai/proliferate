@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import type { CloudWorkspaceCompactStatusTone } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 
 interface CloudStatusCompactHeaderProps {

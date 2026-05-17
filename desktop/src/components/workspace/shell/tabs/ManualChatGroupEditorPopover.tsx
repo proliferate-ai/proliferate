@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
 import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
 import {

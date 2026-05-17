@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { useHighlightedCode } from "@/hooks/ui/use-highlighted-code";
 
 interface HighlightedCodePanelProps {

@@ -1,5 +1,5 @@
 import type { TerminalRecord } from "@anyharness/sdk";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { AppShellTerminalIcon } from "@/components/ui/icons";
 import { TerminalHeaderIcon } from "@/components/workspace/shell/right-panel/TerminalHeaderIcon";
 

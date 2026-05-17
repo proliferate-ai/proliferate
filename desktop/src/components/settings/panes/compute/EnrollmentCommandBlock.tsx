@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Copy } from "@/components/ui/icons";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
 

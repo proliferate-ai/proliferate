@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ExternalLink } from "@/components/ui/icons";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 

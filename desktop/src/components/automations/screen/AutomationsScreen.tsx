@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { PageContentFrame } from "@/components/ui/PageContentFrame";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ArrowLeft, Pause, Pencil, Play, Plus, Zap } from "@/components/ui/icons";

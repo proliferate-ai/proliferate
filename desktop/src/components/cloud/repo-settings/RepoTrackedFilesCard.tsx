@@ -3,7 +3,7 @@ import {
   EnvironmentAdvancedDisclosure,
   EnvironmentField,
 } from "@/components/ui/EnvironmentLayout";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@/components/ui/Badge";
 import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
 import { PopoverButton } from "@/components/ui/PopoverButton";

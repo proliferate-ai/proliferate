@@ -1,5 +1,5 @@
 import type { ToolCallItem } from "@anyharness/sdk";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { FileText } from "@/components/ui/icons";
 import { ToolActionRow } from "./ToolActionRow";

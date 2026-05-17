@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
-import { Button } from "@/components/ui/Button";
-import { IconButton } from "@/components/ui/IconButton";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import {
   Check,

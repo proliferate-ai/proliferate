@@ -6,7 +6,7 @@ import {
 import { GitPanelHeader } from "./GitPanelHeader";
 import { GitReviewFileRow } from "./GitReviewFileRow";
 import { GitReviewFileTree } from "./GitReviewFileTree";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { CheckCircleFilled, ChevronRight, GitBranchIcon, RefreshCw } from "@/components/ui/icons";
 import { PaneSideOverlay } from "@/components/workspace/pane/PaneSideOverlay";

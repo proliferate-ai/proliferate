@@ -8,7 +8,7 @@ import {
   buildAvailablePluginPresentation,
   buildConnectedPluginPresentation,
 } from "@/lib/domain/plugins/plugin-package-view-model";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Switch } from "@/components/ui/Switch";
 import { ConnectorIcon } from "@/components/plugins/status/ConnectorIcon";
 import { ConnectorOverflowMenu } from "@/components/plugins/status/ConnectorOverflowMenu";

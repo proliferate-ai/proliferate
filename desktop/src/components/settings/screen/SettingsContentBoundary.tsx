@@ -2,7 +2,7 @@ import React, { type ErrorInfo, type ReactNode } from "react";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
 import type { SettingsSection } from "@/config/settings";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 interface SettingsContentBoundaryProps {
   section: SettingsSection;

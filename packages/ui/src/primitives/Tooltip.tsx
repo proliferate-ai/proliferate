@@ -29,12 +29,6 @@ export function Tooltip({
   const anchorRef = useRef<HTMLSpanElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  // `left` is the anchor's center x; the tooltip is rendered with
-  // `-translate-x-1/2` so it sits centered above. After mount we measure
-  // the actual tooltip width and clamp `left` so the *translated* tooltip
-  // (left-edge = left - width/2) stays within VIEWPORT_MARGIN of both
-  // viewport edges. `measured` gates the reveal so the user never sees
-  // the pre-clamp position.
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [measured, setMeasured] = useState(false);
 

@@ -11,8 +11,8 @@ import {
   AUTOMATION_SCHEDULE_PRESET_OPTIONS,
   formatScheduleControlLabel,
 } from "@/lib/domain/automations/schedule/presentation";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@/components/ui/Label";
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";

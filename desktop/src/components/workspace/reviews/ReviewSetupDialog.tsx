@@ -8,7 +8,7 @@ import {
   type ReviewSessionDefaults,
   type ReviewSetupDraft,
 } from "@/lib/domain/reviews/review-config";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
 import { X } from "@/components/ui/icons";

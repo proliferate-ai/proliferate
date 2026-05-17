@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ChevronDown } from "@/components/ui/icons";
-import { Input } from "@/components/ui/Input";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Switch } from "@/components/ui/Switch";
 import type { SettingsAgentModelVisibilityRow } from "@/lib/domain/settings/agent-defaults";
 

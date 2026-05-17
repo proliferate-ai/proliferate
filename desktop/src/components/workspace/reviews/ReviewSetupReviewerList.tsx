@@ -7,7 +7,7 @@ import {
   type ReviewPersonaTemplate,
   type ReviewSetupDraft,
 } from "@/lib/domain/reviews/review-config";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import {
   Brain,

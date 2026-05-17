@@ -6,6 +6,9 @@ packages:
   - "cloud/sdk-react"
   - "desktop"
   - "mobile"
+  - "packages/design"
+  - "packages/product-model"
+  - "packages/ui"
   - "server/artifact-runtime"
 
 onlyBuiltDependencies:

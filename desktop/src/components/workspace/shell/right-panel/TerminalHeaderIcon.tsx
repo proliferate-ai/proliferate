@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
-import { Button } from "@/components/ui/Button";
-import { IconButton } from "@/components/ui/IconButton";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { useTerminalTabNativeContextMenu } from "@/hooks/terminals/ui/use-terminal-tab-native-context-menu";

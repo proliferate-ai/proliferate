@@ -8,7 +8,7 @@ import {
   type SetStateAction,
 } from "react";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
-import { Input } from "@/components/ui/Input";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import {

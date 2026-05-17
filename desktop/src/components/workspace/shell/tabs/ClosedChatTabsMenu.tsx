@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Trash } from "@/components/ui/icons";
 import type {
   HeaderChatMenuEntry,
