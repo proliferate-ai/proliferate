@@ -914,6 +914,193 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/agent-auth/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Agent Auth Credentials Endpoint */
+        get: operations["list_agent_auth_credentials_endpoint_v1_cloud_agent_auth_credentials_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-auth/credentials/gateway": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Gateway Credential Endpoint */
+        post: operations["create_gateway_credential_endpoint_v1_cloud_agent_auth_credentials_gateway_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/agent-auth/managed-credits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ensure Managed Credits Endpoint */
+        post: operations["ensure_managed_credits_endpoint_v1_cloud_organizations__organization_id__agent_auth_managed_credits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-auth/credentials/{credential_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Agent Auth Credential Endpoint */
+        delete: operations["revoke_agent_auth_credential_endpoint_v1_cloud_agent_auth_credentials__credential_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-auth/credentials/{credential_id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Share Agent Auth Credential Endpoint */
+        post: operations["share_agent_auth_credential_endpoint_v1_cloud_agent_auth_credentials__credential_id__shares_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-auth/credential-shares/{share_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Agent Auth Credential Share Endpoint */
+        delete: operations["revoke_agent_auth_credential_share_endpoint_v1_cloud_agent_auth_credential_shares__share_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sandbox-profiles/personal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ensure Personal Sandbox Profile Endpoint */
+        post: operations["ensure_personal_sandbox_profile_endpoint_v1_cloud_sandbox_profiles_personal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/sandbox-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ensure Organization Sandbox Profile Endpoint */
+        post: operations["ensure_organization_sandbox_profile_endpoint_v1_cloud_organizations__organization_id__sandbox_profile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-selections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Agent Auth Selections Endpoint */
+        get: operations["list_agent_auth_selections_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_selections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-selections/{agent_kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Select Agent Auth Credential Endpoint */
+        put: operations["select_agent_auth_credential_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_selections__agent_kind__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-target-states": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Agent Auth Target States Endpoint */
+        get: operations["list_agent_auth_target_states_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_target_states_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/mcp/catalog": {
         parameters: {
             query?: never;
@@ -1495,6 +1682,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/worker/agent-auth-configs/{sandbox_profile_id}/materialization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Worker Agent Auth Materialization Endpoint */
+        get: operations["worker_agent_auth_materialization_endpoint_v1_cloud_worker_agent_auth_configs__sandbox_profile_id__materialization_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/agent-auth-configs/{sandbox_profile_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Agent Auth Status Endpoint */
+        post: operations["worker_agent_auth_status_endpoint_v1_cloud_worker_agent_auth_configs__sandbox_profile_id__status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/worker/target-configs/{config_id}/materialization": {
         parameters: {
             query?: never;
@@ -1727,6 +1948,125 @@ export interface paths {
         put?: never;
         /** Generate Session Title Endpoint */
         post: operations["generate_session_title_endpoint_v1_ai_magic_session_titles_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent-gateway/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agent Gateway Health */
+        get: operations["agent_gateway_health_agent_gateway_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/anthropic/v1/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Anthropic Models */
+        get: operations["anthropic_models_anthropic_v1_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/openai/v1/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Openai Models */
+        get: operations["openai_models_openai_v1_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/openai/v1/chat/completions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Forward Protocol Request */
+        post: operations["forward_protocol_request_openai_v1_chat_completions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/openai/v1/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Forward Protocol Request */
+        post: operations["forward_protocol_request_openai_v1_responses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/anthropic/v1/messages/count_tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Forward Protocol Request */
+        post: operations["forward_protocol_request_anthropic_v1_messages_count_tokens_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/anthropic/v1/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Forward Protocol Request */
+        post: operations["forward_protocol_request_anthropic_v1_messages_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2314,6 +2654,91 @@ export interface components {
             /** Githubgrantstatus */
             githubGrantStatus: string | null;
         };
+        /** AgentAuthCredentialResponse */
+        AgentAuthCredentialResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Owneruserid */
+            ownerUserId: string | null;
+            /** Organizationid */
+            organizationId: string | null;
+            /** Createdbyuserid */
+            createdByUserId: string | null;
+            /** Agentkind */
+            agentKind: string;
+            /** Credentialkind */
+            credentialKind: string;
+            /** Displayname */
+            displayName: string;
+            /** Redactedsummary */
+            redactedSummary: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+            /** Revision */
+            revision: number;
+            /** Legacycloudcredentialid */
+            legacyCloudCredentialId: string | null;
+            /** Revokedat */
+            revokedAt: string | null;
+        };
+        /** AgentAuthCredentialShareResponse */
+        AgentAuthCredentialShareResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Credentialid
+             * Format: uuid
+             */
+            credentialId: string;
+            /**
+             * Owneruserid
+             * Format: uuid
+             */
+            ownerUserId: string;
+            /**
+             * Organizationid
+             * Format: uuid
+             */
+            organizationId: string;
+            /** Sharescope */
+            shareScope: string;
+            /**
+             * Sharedbyuserid
+             * Format: uuid
+             */
+            sharedByUserId: string;
+            /** Status */
+            status: string;
+            /** Allowedagentkind */
+            allowedAgentKind: string;
+            /** Revokedat */
+            revokedAt: string | null;
+            /** Revokedbyuserid */
+            revokedByUserId: string | null;
+        };
+        /** AgentAuthMutationResponse */
+        AgentAuthMutationResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+            /**
+             * Changed
+             * @default false
+             */
+            changed: boolean;
+        };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
             /**
@@ -2530,6 +2955,99 @@ export interface components {
             controls: components["schemas"]["AgentCatalogControl"][];
         } & {
             [key: string]: unknown;
+        };
+        /** AgentGatewayBudgetSubjectResponse */
+        AgentGatewayBudgetSubjectResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Organizationid
+             * Format: uuid
+             */
+            organizationId: string;
+            /** Litellmteamid */
+            litellmTeamId: string | null;
+            /** Includedbudgetusd */
+            includedBudgetUsd: string;
+            /** Budgetduration */
+            budgetDuration: string;
+            /** Litellmsyncstatus */
+            litellmSyncStatus: string;
+            /** Status */
+            status: string;
+            /** Revision */
+            revision: number;
+            /** Lasterrorcode */
+            lastErrorCode: string | null;
+            /** Lasterrormessage */
+            lastErrorMessage: string | null;
+        };
+        /** AgentGatewayPolicyResponse */
+        AgentGatewayPolicyResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Credentialid
+             * Format: uuid
+             */
+            credentialId: string;
+            /** Policykind */
+            policyKind: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Owneruserid */
+            ownerUserId: string | null;
+            /** Organizationid */
+            organizationId: string | null;
+            /** Budgetsubjectid */
+            budgetSubjectId: string | null;
+            /** Litellmteamid */
+            litellmTeamId: string | null;
+            /** Litellmvirtualkeyid */
+            litellmVirtualKeyId: string | null;
+            /** Litellmsyncstatus */
+            litellmSyncStatus: string;
+            /** Status */
+            status: string;
+            /** Revision */
+            revision: number;
+            /** Lasterrorcode */
+            lastErrorCode: string | null;
+            /** Lasterrormessage */
+            lastErrorMessage: string | null;
+        };
+        /** AgentGatewayProviderCredentialResponse */
+        AgentGatewayProviderCredentialResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Policyid
+             * Format: uuid
+             */
+            policyId: string;
+            /** Providerkind */
+            providerKind: string;
+            /** Redactedsummary */
+            redactedSummary: {
+                [key: string]: unknown;
+            };
+            /** Validationstatus */
+            validationStatus: string;
+            /** Validationerrorcode */
+            validationErrorCode: string | null;
+            /** Validationerrormessage */
+            validationErrorMessage: string | null;
+            /** Revision */
+            revision: number;
         };
         /** AnonymousTelemetryAcceptedResponse */
         AnonymousTelemetryAcceptedResponse: {
@@ -3874,6 +4392,43 @@ export interface components {
             /** Organizationid */
             organizationId?: string | null;
         };
+        /** CreateGatewayCredentialRequest */
+        CreateGatewayCredentialRequest: {
+            /**
+             * Ownerscope
+             * @enum {string}
+             */
+            ownerScope: "personal" | "organization";
+            /** Organizationid */
+            organizationId?: string | null;
+            /**
+             * Agentkind
+             * @enum {string}
+             */
+            agentKind: "claude" | "codex" | "opencode" | "gemini";
+            /** Displayname */
+            displayName: string;
+            /**
+             * Policykind
+             * @enum {string}
+             */
+            policyKind: "org_byok" | "personal_byok";
+            /**
+             * Providerkind
+             * @enum {string}
+             */
+            providerKind: "anthropic_api_key" | "openai_api_key" | "bedrock_assume_role" | "openai_compatible";
+            /** Payload */
+            payload: {
+                [key: string]: string;
+            };
+        };
+        /** CreateGatewayCredentialResponse */
+        CreateGatewayCredentialResponse: {
+            credential: components["schemas"]["AgentAuthCredentialResponse"];
+            policy: components["schemas"]["AgentGatewayPolicyResponse"];
+            providerCredential: components["schemas"]["AgentGatewayProviderCredentialResponse"];
+        };
         /** CredentialStatus */
         CredentialStatus: {
             /** Provider */
@@ -3900,6 +4455,21 @@ export interface components {
              */
             received: boolean;
         };
+        /** EnsureManagedCreditsRequest */
+        EnsureManagedCreditsRequest: {
+            /** Includedbudgetusd */
+            includedBudgetUsd?: string | null;
+            /** Agentkinds */
+            agentKinds?: ("claude" | "codex" | "opencode" | "gemini")[];
+        };
+        /** EnsureManagedCreditsResponse */
+        EnsureManagedCreditsResponse: {
+            budgetSubject: components["schemas"]["AgentGatewayBudgetSubjectResponse"];
+            /** Credentials */
+            credentials: components["schemas"]["AgentAuthCredentialResponse"][];
+            /** Policies */
+            policies: components["schemas"]["AgentGatewayPolicyResponse"][];
+        };
         /** EnsureMobilityWorkspaceRequest */
         EnsureMobilityWorkspaceRequest: {
             /** Gitprovider */
@@ -3917,6 +4487,16 @@ export interface components {
              * @default local
              */
             ownerHint: string;
+        };
+        /** EnsureOrganizationSandboxProfileRequest */
+        EnsureOrganizationSandboxProfileRequest: {
+            /** Managedtargetid */
+            managedTargetId?: string | null;
+        };
+        /** EnsurePersonalSandboxProfileRequest */
+        EnsurePersonalSandboxProfileRequest: {
+            /** Managedtargetid */
+            managedTargetId?: string | null;
         };
         /** ErrorModel */
         ErrorModel: {
@@ -4747,6 +5327,94 @@ export interface components {
             /** Activecommandcount */
             activeCommandCount: number;
         };
+        /** SandboxAgentAuthSelectionResponse */
+        SandboxAgentAuthSelectionResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Sandboxprofileid
+             * Format: uuid
+             */
+            sandboxProfileId: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Agentkind */
+            agentKind: string;
+            /**
+             * Credentialid
+             * Format: uuid
+             */
+            credentialId: string;
+            /** Credentialshareid */
+            credentialShareId: string | null;
+            /** Materializationmode */
+            materializationMode: string;
+            /** Selectedrevision */
+            selectedRevision: number;
+            /** Status */
+            status: string;
+            /** Lasterrorcode */
+            lastErrorCode: string | null;
+            /** Lasterrormessage */
+            lastErrorMessage: string | null;
+        };
+        /** SandboxProfileAgentAuthTargetStateResponse */
+        SandboxProfileAgentAuthTargetStateResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Sandboxprofileid
+             * Format: uuid
+             */
+            sandboxProfileId: string;
+            /**
+             * Targetid
+             * Format: uuid
+             */
+            targetId: string;
+            /** Desiredrevision */
+            desiredRevision: number;
+            /** Appliedrevision */
+            appliedRevision: number | null;
+            /** Status */
+            status: string;
+            /** Forcerestartrequired */
+            forceRestartRequired: boolean;
+            /** Lastcommandid */
+            lastCommandId: string | null;
+            /** Lastworkerid */
+            lastWorkerId: string | null;
+            /** Lasterrorcode */
+            lastErrorCode: string | null;
+            /** Lasterrormessage */
+            lastErrorMessage: string | null;
+        };
+        /** SandboxProfileResponse */
+        SandboxProfileResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Owneruserid */
+            ownerUserId: string | null;
+            /** Organizationid */
+            organizationId: string | null;
+            /** Managedtargetid */
+            managedTargetId: string | null;
+            /** Agentauthrevision */
+            agentAuthRevision: number;
+            /** Status */
+            status: string;
+        };
         /** SaveCloudRepoConfigFile */
         SaveCloudRepoConfigFile: {
             /** Relativepath */
@@ -4776,6 +5444,21 @@ export interface components {
             runCommand: string;
             /** Files */
             files?: components["schemas"]["SaveCloudRepoConfigFile"][];
+        };
+        /** SelectAgentAuthCredentialRequest */
+        SelectAgentAuthCredentialRequest: {
+            /**
+             * Credentialid
+             * Format: uuid
+             */
+            credentialId: string;
+            /** Credentialshareid */
+            credentialShareId?: string | null;
+            /**
+             * Forcerestart
+             * @default false
+             */
+            forceRestart: boolean;
         };
         /** SessionMcpBindingSummaryModel */
         SessionMcpBindingSummaryModel: {
@@ -4866,6 +5549,14 @@ export interface components {
         /** SetDesiredVersionsResponse */
         SetDesiredVersionsResponse: {
             target: components["schemas"]["CloudTargetDetail"];
+        };
+        /** ShareCredentialRequest */
+        ShareCredentialRequest: {
+            /**
+             * Organizationid
+             * Format: uuid
+             */
+            organizationId: string;
         };
         /** StartAuthRequest */
         StartAuthRequest: {
@@ -5356,6 +6047,134 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** WorkerAgentAuthGatewayConfig */
+        WorkerAgentAuthGatewayConfig: {
+            /** Protocolfacade */
+            protocolFacade: string;
+            /** Baseurls */
+            baseUrls: {
+                [key: string]: string;
+            };
+            /** Runtimegranttoken */
+            runtimeGrantToken: string;
+            /** Expiresat */
+            expiresAt: string;
+            /** Protectedenv */
+            protectedEnv?: {
+                [key: string]: string;
+            };
+            /** Supportenv */
+            supportEnv?: {
+                [key: string]: string;
+            };
+            /** Protectedconfig */
+            protectedConfig?: {
+                [key: string]: unknown;
+            };
+            /** Supportconfig */
+            supportConfig?: {
+                [key: string]: unknown;
+            };
+        };
+        /** WorkerAgentAuthMaterializationPlan */
+        WorkerAgentAuthMaterializationPlan: {
+            /**
+             * Applied
+             * @default true
+             */
+            applied: boolean;
+            /** Reason */
+            reason?: string | null;
+            /** Currentrevision */
+            currentRevision?: number | null;
+            /** Targetid */
+            targetId?: string | null;
+            /**
+             * Sandboxprofileid
+             * Format: uuid
+             */
+            sandboxProfileId: string;
+            /** Revision */
+            revision: number;
+            /** Selections */
+            selections?: components["schemas"]["WorkerAgentAuthSelectionPlan"][];
+        };
+        /** WorkerAgentAuthSelectionPlan */
+        WorkerAgentAuthSelectionPlan: {
+            /** Agentkind */
+            agentKind: string;
+            /** Materializationmode */
+            materializationMode: string;
+            /**
+             * Credentialid
+             * Format: uuid
+             */
+            credentialId: string;
+            /** Credentialrevision */
+            credentialRevision: number;
+            /** Credentialshareid */
+            credentialShareId?: string | null;
+            gateway?: components["schemas"]["WorkerAgentAuthGatewayConfig"] | null;
+            syncedFiles?: components["schemas"]["WorkerAgentAuthSyncedFilesConfig"] | null;
+        };
+        /** WorkerAgentAuthStatusRequest */
+        WorkerAgentAuthStatusRequest: {
+            /** Status */
+            status: string;
+            /**
+             * Commandid
+             * Format: uuid
+             */
+            commandId: string;
+            /** Revision */
+            revision: number;
+            /** Leaseid */
+            leaseId: string;
+            /** Appliedrevision */
+            appliedRevision?: number | null;
+            /** Currentrevision */
+            currentRevision?: number | null;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+        };
+        /** WorkerAgentAuthStatusResponse */
+        WorkerAgentAuthStatusResponse: {
+            /**
+             * Sandboxprofileid
+             * Format: uuid
+             */
+            sandboxProfileId: string;
+            /**
+             * Targetid
+             * Format: uuid
+             */
+            targetId: string;
+            /** Desiredrevision */
+            desiredRevision: number;
+            /** Appliedrevision */
+            appliedRevision: number | null;
+            /** Status */
+            status: string;
+        };
+        /** WorkerAgentAuthSyncedFilesConfig */
+        WorkerAgentAuthSyncedFilesConfig: {
+            /** Credentialshareid */
+            credentialShareId?: string | null;
+            /** Envvars */
+            envVars?: {
+                [key: string]: string;
+            };
+            /** Files */
+            files?: {
+                [key: string]: unknown;
+            }[];
+            /** Cleanup */
+            cleanup?: {
+                [key: string]: unknown;
+            }[];
+        };
         /** WorkerBackfillPendingInteraction */
         WorkerBackfillPendingInteraction: {
             /** Requestid */
@@ -5842,7 +6661,7 @@ export interface components {
             /** Runtimegeneration */
             runtimeGeneration: number;
             /** Allowedagentkinds */
-            allowedAgentKinds: ("claude" | "codex" | "gemini")[];
+            allowedAgentKinds: ("claude" | "codex" | "opencode" | "gemini")[];
             /** Readyagentkinds */
             readyAgentKinds: string[];
             credentialFreshness: components["schemas"]["WorkspaceCredentialFreshness"];
@@ -7974,7 +8793,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                provider: "claude" | "codex" | "gemini";
+                provider: "claude" | "codex" | "opencode" | "gemini";
             };
             cookie?: never;
         };
@@ -8009,7 +8828,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                provider: "claude" | "codex" | "gemini";
+                provider: "claude" | "codex" | "opencode" | "gemini";
             };
             cookie?: never;
         };
@@ -8022,6 +8841,369 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CloudCredentialMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_auth_credentials_endpoint_v1_cloud_agent_auth_credentials_get: {
+        parameters: {
+            query?: {
+                organizationId?: string | null;
+                agentKind?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthCredentialResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_gateway_credential_endpoint_v1_cloud_agent_auth_credentials_gateway_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGatewayCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateGatewayCredentialResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ensure_managed_credits_endpoint_v1_cloud_organizations__organization_id__agent_auth_managed_credits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnsureManagedCreditsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnsureManagedCreditsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_agent_auth_credential_endpoint_v1_cloud_agent_auth_credentials__credential_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                credential_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_agent_auth_credential_endpoint_v1_cloud_agent_auth_credentials__credential_id__shares_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                credential_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthCredentialShareResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_agent_auth_credential_share_endpoint_v1_cloud_agent_auth_credential_shares__share_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthCredentialShareResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ensure_personal_sandbox_profile_endpoint_v1_cloud_sandbox_profiles_personal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnsurePersonalSandboxProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ensure_organization_sandbox_profile_endpoint_v1_cloud_organizations__organization_id__sandbox_profile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnsureOrganizationSandboxProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_auth_selections_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_selections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxAgentAuthSelectionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_agent_auth_credential_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_selections__agent_kind__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_profile_id: string;
+                agent_kind: "claude" | "codex" | "opencode" | "gemini";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectAgentAuthCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxAgentAuthSelectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_auth_target_states_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_target_states_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxProfileAgentAuthTargetStateResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -9193,6 +10375,80 @@ export interface operations {
             };
         };
     };
+    worker_agent_auth_materialization_endpoint_v1_cloud_worker_agent_auth_configs__sandbox_profile_id__materialization_get: {
+        parameters: {
+            query: {
+                revision: number;
+                command_id: string;
+                lease_id: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                sandbox_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerAgentAuthMaterializationPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_agent_auth_status_endpoint_v1_cloud_worker_agent_auth_configs__sandbox_profile_id__status_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                sandbox_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerAgentAuthStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerAgentAuthStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     worker_target_config_materialization_endpoint_v1_cloud_worker_target_configs__config_id__materialization_get: {
         parameters: {
             query: {
@@ -9699,6 +10955,148 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    agent_gateway_health_agent_gateway_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    anthropic_models_anthropic_v1_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    openai_models_openai_v1_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    forward_protocol_request_openai_v1_chat_completions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    forward_protocol_request_openai_v1_responses_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    forward_protocol_request_anthropic_v1_messages_count_tokens_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    forward_protocol_request_anthropic_v1_messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

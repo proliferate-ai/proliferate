@@ -1,4 +1,5 @@
 import type { CloudAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import { isCloudAgentKind } from "@/lib/access/cloud/client";
 import {
   getCloudWorkspace,
   getCloudWorkspaceConnection,
@@ -70,7 +71,7 @@ export async function resolveRuntimeTargetForWorkspace(
     authToken: connection.accessToken,
     anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
     runtimeGeneration: connection.runtimeGeneration,
-    allowedAgentKinds: connection.allowedAgentKinds,
-    readyAgentKinds: connection.readyAgentKinds as CloudAgentKind[],
+    allowedAgentKinds: connection.allowedAgentKinds.filter(isCloudAgentKind),
+    readyAgentKinds: connection.readyAgentKinds.filter(isCloudAgentKind),
   };
 }

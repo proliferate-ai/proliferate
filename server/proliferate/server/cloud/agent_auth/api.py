@@ -17,6 +17,8 @@ from proliferate.server.cloud.agent_auth.models import (
     AgentAuthMutationResponse,
     CreateGatewayCredentialRequest,
     CreateGatewayCredentialResponse,
+    EnsureManagedCreditsRequest,
+    EnsureManagedCreditsResponse,
     EnsureOrganizationSandboxProfileRequest,
     EnsurePersonalSandboxProfileRequest,
     SandboxAgentAuthSelectionResponse,
@@ -27,6 +29,7 @@ from proliferate.server.cloud.agent_auth.models import (
     WorkerAgentAuthMaterializationPlan,
     WorkerAgentAuthStatusRequest,
     WorkerAgentAuthStatusResponse,
+    budget_subject_response,
     credential_response,
     credential_share_response,
     policy_response,
@@ -37,6 +40,7 @@ from proliferate.server.cloud.agent_auth.models import (
 )
 from proliferate.server.cloud.agent_auth.service import (
     create_gateway_credential,
+    ensure_managed_credits_for_organization,
     ensure_organization_sandbox_profile,
     ensure_personal_sandbox_profile,
     list_credentials,
@@ -87,6 +91,29 @@ async def create_gateway_credential_endpoint(
         credential=credential_response(result.credential),
         policy=policy_response(result.policy),
         providerCredential=provider_credential_response(result.provider_credential),
+    )
+
+
+@router.post(
+    "/organizations/{organization_id}/agent-auth/managed-credits",
+    response_model=EnsureManagedCreditsResponse,
+)
+async def ensure_managed_credits_endpoint(
+    organization_id: UUID,
+    body: EnsureManagedCreditsRequest,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> EnsureManagedCreditsResponse:
+    result = await ensure_managed_credits_for_organization(
+        db,
+        actor_user_id=user.id,
+        organization_id=organization_id,
+        body=body,
+    )
+    return EnsureManagedCreditsResponse(
+        budgetSubject=budget_subject_response(result.budget_subject),
+        credentials=[credential_response(record) for record in result.credentials],
+        policies=[policy_response(record) for record in result.policies],
     )
 
 

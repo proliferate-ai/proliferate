@@ -344,7 +344,7 @@ async def test_gateway_policy_kind_must_match_owner_scope(
 
 
 @pytest.mark.asyncio
-async def test_managed_credits_route_is_not_customer_accessible(
+async def test_managed_credits_route_uses_server_entitlement_budget(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -354,13 +354,21 @@ async def test_managed_credits_route_is_not_customer_accessible(
         email="agent-auth-managed-credits@example.com",
     )
 
+    organizations = await client.get("/v1/organizations", headers=_headers(tokens))
+    assert organizations.status_code == 200
+    organization_id = organizations.json()["organizations"][0]["id"]
+
     response = await client.post(
-        f"/v1/cloud/agent-auth/managed-credits/organizations/{uuid.uuid4()}",
+        f"/v1/cloud/organizations/{organization_id}/agent-auth/managed-credits",
         headers=_headers(tokens),
-        json={"includedBudgetUsd": "999999"},
+        json={"includedBudgetUsd": "999999", "agentKinds": ["claude"]},
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 200
+    body = response.json()
+    assert body["budgetSubject"]["includedBudgetUsd"] != "999999"
+    assert body["credentials"][0]["displayName"] == "Proliferate managed credits"
+    assert body["credentials"][0]["status"] == "invalid"
 
 
 @pytest.mark.asyncio
