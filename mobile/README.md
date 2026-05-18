@@ -1,35 +1,47 @@
 # Proliferate Mobile
 
-Expo-managed mobile client scaffold.
+Expo-managed mobile client scaffold for the Web/Mobile stack.
 
-## iOS TestFlight
+This PR intentionally keeps product UI shallow. Shared design, auth, cloud
+viewer state, and the real mobile shell land in the follow-up stack PRs.
 
-The app is configured with:
+## App Identity
 
-- bundle id: `ai.proliferate.mobile`
-- app scheme: `proliferate`
-- EAS build profiles in `eas.json`
-- Sign in with Apple capability enabled
-- export compliance flag set for standard encryption only
+- Expo project: `proliferate-mobile`
+- owner: `pablojosecodes`
+- iOS bundle id: `ai.proliferate.mobile`
+- URL scheme: `proliferate`
+- App Store Connect app id: `6770219581`
+- Sign in with Apple capability: enabled
+- export compliance: `ITSAppUsesNonExemptEncryption=false`
 
-One-time setup still required from an authenticated Expo + Apple account:
-
-```bash
-cd mobile
-pnpm dlx eas-cli@18.13.0 login
-pnpm dlx eas-cli@18.13.0 init
-pnpm build:ios
-pnpm submit:ios
-```
-
-If the App Store Connect app record does not exist yet, create it with the same
-bundle id before submit. EAS can manage certificates/profiles during the first
-iOS build.
-
-## Local
+## Local Development
 
 ```bash
-cd mobile
-pnpm install
-pnpm start
+pnpm install --frozen-lockfile
+pnpm --filter @proliferate/mobile start
+pnpm --filter @proliferate/mobile typecheck
 ```
+
+## iOS Build And Submit
+
+EAS manages the iOS distribution certificate and provisioning profile remotely.
+Use an Expo account with access to the `pablojosecodes` project and an Apple
+Developer Program account with access to the App Store Connect app.
+
+```bash
+pnpm --filter @proliferate/mobile build:ios
+pnpm --filter @proliferate/mobile submit:ios
+```
+
+Preview/internal builds use:
+
+```bash
+pnpm --filter @proliferate/mobile build:ios:preview
+```
+
+## Scope Notes
+
+- Do not add shared design or product shell code in this PR.
+- Do not duplicate components that will move to shared packages later.
+- Keep this scaffold buildable while later PRs layer on auth and real UI.
