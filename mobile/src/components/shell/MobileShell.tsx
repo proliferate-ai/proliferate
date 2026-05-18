@@ -21,10 +21,11 @@ import { MobileSettingsScreen } from "../settings/MobileSettingsScreen";
 import { MobileWorkspacesScreen } from "../workspaces/MobileWorkspacesScreen";
 import { chats } from "../../lib/fixtures/mobile-fixtures";
 import { drawerRoutes, routeTitle, type RouteId } from "../../navigation/navigation-model";
+import { useMobileAuth } from "../../providers/MobileAuthProvider";
 import { colors, radius } from "../../styles/tokens";
 
 export function MobileShell() {
-  const [authState, setAuthState] = useState<"signed_out" | "needs_github" | "active">("signed_out");
+  const { authState, signInWithGitHub, signOut } = useMobileAuth();
   const [route, setRoute] = useState<RouteId>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<ProductChat | null>(chats[0] ?? null);
@@ -45,10 +46,7 @@ export function MobileShell() {
     return (
       <SafeAreaView style={styles.root}>
         <StatusBar style="light" />
-        <MobileAuthScreen
-          onGitHub={() => setAuthState("active")}
-          onGoogle={() => setAuthState("needs_github")}
-        />
+        <MobileAuthScreen onGitHub={signInWithGitHub} />
       </SafeAreaView>
     );
   }
@@ -58,8 +56,8 @@ export function MobileShell() {
       <SafeAreaView style={styles.root}>
         <StatusBar style="light" />
         <MobileConnectGitHubScreen
-          onConnect={() => setAuthState("active")}
-          onSignOut={() => setAuthState("signed_out")}
+          onConnect={signInWithGitHub}
+          onSignOut={signOut}
         />
       </SafeAreaView>
     );
@@ -188,8 +186,8 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   iconButton: {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: radius.md,
@@ -215,8 +213,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   smallButton: {
-    minWidth: 42,
-    minHeight: 34,
+    minWidth: 44,
+    minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: radius.md,

@@ -5,16 +5,16 @@ import { colors, radius } from "../../styles/tokens";
 export function MobileTextInput(props: TextInputProps) {
   return (
     <TextInput
-      placeholderTextColor={colors.faint}
-      style={[styles.input, props.multiline && styles.multiline, props.style]}
       {...props}
+      placeholderTextColor={props.placeholderTextColor ?? colors.faint}
+      style={[styles.input, props.multiline && styles.multiline, props.style]}
     />
   );
 }
 
 const styles = StyleSheet.create({
   input: {
-    minHeight: 42,
+    minHeight: 44,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.input,

@@ -1,24 +1,11 @@
 import { Github } from "lucide-react";
-import { useState } from "react";
 
 import { Button } from "@proliferate/ui/primitives/Button";
 
-import { webEnv } from "../../../config/env";
-import { startBrowserOAuth } from "../../../lib/access/cloud/client";
 import { useAuthToken } from "../../../providers/WebCloudProvider";
 
 export function ConnectGitHubScreen() {
   const { clearToken } = useAuthToken();
-  const [error, setError] = useState<string | null>(null);
-
-  async function connectGitHub() {
-    setError(null);
-    try {
-      await startBrowserOAuth(webEnv.apiBaseUrl, "github");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start GitHub sign in.");
-    }
-  }
 
   return (
     <div className="flex h-full items-center justify-center bg-background px-6 text-foreground">
@@ -32,7 +19,7 @@ export function ConnectGitHubScreen() {
           sessions are available.
         </p>
         <div className="mt-6 flex flex-wrap gap-2">
-          <Button onClick={connectGitHub}>
+          <Button disabled title="GitHub linking lands with the server callback in the auth implementation PR.">
             <Github size={15} />
             Continue with GitHub
           </Button>
@@ -40,7 +27,6 @@ export function ConnectGitHubScreen() {
             Sign out
           </Button>
         </div>
-        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
       </section>
     </div>
   );

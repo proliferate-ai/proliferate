@@ -6,10 +6,9 @@ import { colors, radius, text } from "../../styles/tokens";
 
 interface MobileAuthScreenProps {
   onGitHub: () => void;
-  onGoogle: () => void;
 }
 
-export function MobileAuthScreen({ onGitHub, onGoogle }: MobileAuthScreenProps) {
+export function MobileAuthScreen({ onGitHub }: MobileAuthScreenProps) {
   return (
     <View style={styles.root}>
       <View style={styles.mark}>
@@ -19,7 +18,6 @@ export function MobileAuthScreen({ onGitHub, onGoogle }: MobileAuthScreenProps) 
       <Text style={styles.subtitle}>Run and orchestrate coding agents from mobile.</Text>
       <View style={styles.actions}>
         <MobileButton label="Continue with GitHub" onPress={onGitHub} />
-        <MobileButton label="Continue with Google" variant="secondary" onPress={onGoogle} />
       </View>
       <Text style={text.caption}>
         GitHub is required before cloud workspaces and automations are available.

@@ -39,7 +39,7 @@ export function MobileButton({ label, onPress, variant = "primary", leading }: M
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 42,
+    minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",

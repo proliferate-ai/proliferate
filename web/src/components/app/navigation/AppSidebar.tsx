@@ -79,7 +79,8 @@ function ChatRow({ chat }: { chat: ProductChat }) {
 
 export function AppSidebar() {
   const cloudWorkspaces = useCloudWorkspaces();
-  const workspaceCount = cloudWorkspaces.data?.length ?? workspaces.length;
+  const liveWorkspaces = cloudWorkspaces.data ?? [];
+  const workspaceCount = cloudWorkspaces.isLoading ? "..." : liveWorkspaces.length.toString();
 
   return (
     <aside className="flex h-full w-[264px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
@@ -137,18 +138,21 @@ export function AppSidebar() {
         <span className="text-[10px] text-sidebar-muted-foreground">{workspaceCount}</span>
       </div>
       <div className="space-y-1 px-2">
-        {(cloudWorkspaces.data ?? workspaces).slice(0, 4).map((workspace) => (
+        {liveWorkspaces.slice(0, 4).map((workspace) => (
           <div key={workspace.id} className="rounded-md px-2 py-1 text-xs text-sidebar-muted-foreground">
             <div className="truncate font-[450] text-sidebar-foreground">
-              {"name" in workspace ? workspace.name : workspace.displayName ?? workspace.repo.name}
+              {workspace.displayName ?? workspace.repo.name}
             </div>
             <div className="truncate text-[11px]">
-              {"repoLabel" in workspace
-                ? workspace.repoLabel
-                : `${workspace.repo.owner}/${workspace.repo.name}`}
+              {workspace.repo.owner}/{workspace.repo.name}
             </div>
           </div>
         ))}
+        {!cloudWorkspaces.isLoading && liveWorkspaces.length === 0 && (
+          <div className="rounded-md px-2 py-1 text-xs text-sidebar-muted-foreground">
+            No cloud workspaces
+          </div>
+        )}
       </div>
 
       <div className="mt-3 flex items-center justify-between px-3 pb-1">

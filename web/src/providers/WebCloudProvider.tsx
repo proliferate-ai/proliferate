@@ -33,14 +33,14 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
     () => ({
       token,
       setToken(nextToken) {
+        queryClient.clear();
         writeStoredAuthToken(nextToken);
         setTokenState(nextToken);
-        void queryClient.invalidateQueries();
       },
       clearToken() {
+        queryClient.clear();
         clearStoredAuthToken();
         setTokenState(null);
-        queryClient.clear();
       },
     }),
     [token],
