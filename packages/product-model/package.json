@@ -7,6 +7,26 @@
     "dist"
   ],
   "exports": {
+    "./auth/model": {
+      "types": "./dist/auth/model.d.ts",
+      "import": "./dist/auth/model.js"
+    },
+    "./auth/presentation": {
+      "types": "./dist/auth/presentation.d.ts",
+      "import": "./dist/auth/presentation.js"
+    },
+    "./auth/rules": {
+      "types": "./dist/auth/rules.d.ts",
+      "import": "./dist/auth/rules.js"
+    },
+    "./automations/model": {
+      "types": "./dist/automations/model.d.ts",
+      "import": "./dist/automations/model.js"
+    },
+    "./automations/presentation": {
+      "types": "./dist/automations/presentation.d.ts",
+      "import": "./dist/automations/presentation.js"
+    },
     "./chats/model": {
       "types": "./dist/chats/model.d.ts",
       "import": "./dist/chats/model.js"
@@ -22,6 +42,14 @@
     "./chats/fixtures": {
       "types": "./dist/chats/fixtures.d.ts",
       "import": "./dist/chats/fixtures.js"
+    },
+    "./workspaces/model": {
+      "types": "./dist/workspaces/model.d.ts",
+      "import": "./dist/workspaces/model.js"
+    },
+    "./workspaces/presentation": {
+      "types": "./dist/workspaces/presentation.d.ts",
+      "import": "./dist/workspaces/presentation.js"
     }
   },
   "scripts": {

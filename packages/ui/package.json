@@ -7,6 +7,74 @@
     "dist"
   ],
   "exports": {
+    "./account/AccountIdentityCard": {
+      "types": "./dist/account/AccountIdentityCard.d.ts",
+      "import": "./dist/account/AccountIdentityCard.js"
+    },
+    "./account/ConnectedProviderRow": {
+      "types": "./dist/account/ConnectedProviderRow.d.ts",
+      "import": "./dist/account/ConnectedProviderRow.js"
+    },
+    "./auth/AuthLayout": {
+      "types": "./dist/auth/AuthLayout.d.ts",
+      "import": "./dist/auth/AuthLayout.js"
+    },
+    "./auth/AuthProviderButton": {
+      "types": "./dist/auth/AuthProviderButton.d.ts",
+      "import": "./dist/auth/AuthProviderButton.js"
+    },
+    "./auth/ConnectGitHubPanel": {
+      "types": "./dist/auth/ConnectGitHubPanel.d.ts",
+      "import": "./dist/auth/ConnectGitHubPanel.js"
+    },
+    "./auth/LegalLinks": {
+      "types": "./dist/auth/LegalLinks.d.ts",
+      "import": "./dist/auth/LegalLinks.js"
+    },
+    "./automations/AutomationRow": {
+      "types": "./dist/automations/AutomationRow.d.ts",
+      "import": "./dist/automations/AutomationRow.js"
+    },
+    "./automations/AutomationStatusBadge": {
+      "types": "./dist/automations/AutomationStatusBadge.d.ts",
+      "import": "./dist/automations/AutomationStatusBadge.js"
+    },
+    "./layout/AppShell": {
+      "types": "./dist/layout/AppShell.d.ts",
+      "import": "./dist/layout/AppShell.js"
+    },
+    "./layout/EmptyState": {
+      "types": "./dist/layout/EmptyState.d.ts",
+      "import": "./dist/layout/EmptyState.js"
+    },
+    "./layout/ListRow": {
+      "types": "./dist/layout/ListRow.d.ts",
+      "import": "./dist/layout/ListRow.js"
+    },
+    "./layout/ListSurface": {
+      "types": "./dist/layout/ListSurface.d.ts",
+      "import": "./dist/layout/ListSurface.js"
+    },
+    "./layout/PageHeader": {
+      "types": "./dist/layout/PageHeader.d.ts",
+      "import": "./dist/layout/PageHeader.js"
+    },
+    "./layout/SectionHeader": {
+      "types": "./dist/layout/SectionHeader.d.ts",
+      "import": "./dist/layout/SectionHeader.js"
+    },
+    "./layout/SidebarFrame": {
+      "types": "./dist/layout/SidebarFrame.d.ts",
+      "import": "./dist/layout/SidebarFrame.js"
+    },
+    "./layout/SidebarNavItem": {
+      "types": "./dist/layout/SidebarNavItem.d.ts",
+      "import": "./dist/layout/SidebarNavItem.js"
+    },
+    "./primitives/Badge": {
+      "types": "./dist/primitives/Badge.d.ts",
+      "import": "./dist/primitives/Badge.js"
+    },
     "./primitives/Button": {
       "types": "./dist/primitives/Button.d.ts",
       "import": "./dist/primitives/Button.js"
@@ -23,9 +91,25 @@
       "types": "./dist/primitives/Spinner.d.ts",
       "import": "./dist/primitives/Spinner.js"
     },
+    "./primitives/Tabs": {
+      "types": "./dist/primitives/Tabs.d.ts",
+      "import": "./dist/primitives/Tabs.js"
+    },
+    "./primitives/Textarea": {
+      "types": "./dist/primitives/Textarea.d.ts",
+      "import": "./dist/primitives/Textarea.js"
+    },
     "./primitives/Tooltip": {
       "types": "./dist/primitives/Tooltip.d.ts",
       "import": "./dist/primitives/Tooltip.js"
+    },
+    "./primitives/Toggle": {
+      "types": "./dist/primitives/Toggle.d.ts",
+      "import": "./dist/primitives/Toggle.js"
+    },
+    "./workspaces/WorkspaceRow": {
+      "types": "./dist/workspaces/WorkspaceRow.d.ts",
+      "import": "./dist/workspaces/WorkspaceRow.js"
     }
   },
   "scripts": {

@@ -25,8 +25,9 @@ supported themes instead of dropping palette classes into a component.
 Shared token ownership:
 
 - `packages/design/src/tokens.ts` owns serializable cross-client token values.
-- `packages/design/src/theme.css` exposes shared CSS theme variables and
-  shared non-product animation utilities for Desktop/Web.
+- `packages/design/dist/theme.css` is generated from those tokens and exposes
+  shared CSS theme variables plus shared non-product animation utilities for
+  Desktop/Web. Do not hand-edit generated theme output.
 - Desktop keeps Desktop-only global CSS, third-party overrides, and theme
   runtime behavior in `desktop/src/**`.
 - Mobile consumes React Native-safe values from
