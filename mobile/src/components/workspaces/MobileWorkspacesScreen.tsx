@@ -1,67 +1,163 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import { MobileGlyph } from "../primitives/MobileGlyph";
+import type { ProductChat, ProductWorkspace } from "@proliferate/product-model/chats/model";
+import { isTeamChat } from "@proliferate/product-model/chats/claiming";
+
+import { MobileIcon } from "../primitives/MobileIcon";
+import { MobileListRow } from "../primitives/MobileListRow";
 import {
-  MobileCard,
-  MobileCardTitle,
+  MobileEmptyState,
   MobileScreen,
-  MobileScreenHeader,
-  MobileSectionHeader,
-  MobileStack,
+  MobileSectionLabel,
 } from "../primitives/MobileLayout";
-import { workspaces } from "../../lib/fixtures/mobile-fixtures";
-import { spacing, text } from "../../styles/tokens";
+import { chats, workspaces } from "../../lib/fixtures/mobile-fixtures";
+import { colors, radius, spacing } from "../../styles/tokens";
 
 export function MobileWorkspacesScreen() {
-  const sharedWorkspaces = workspaces.filter((workspace) => workspace.kind === "shared");
-  const personalWorkspaces = workspaces.filter((workspace) => workspace.kind !== "shared");
+  const shared = workspaces.filter((workspace) => workspace.kind === "shared");
+  const personal = workspaces.filter((workspace) => workspace.kind !== "shared");
 
   return (
-    <MobileScreen>
-      <MobileStack>
-        <MobileScreenHeader eyebrow="Workspaces" title="Cloud sandboxes" />
-
-        <MobileSectionHeader title="Shared" meta={sharedWorkspaces.length.toString()} />
-        {sharedWorkspaces.map((workspace) => (
-          <WorkspaceRow key={workspace.id} workspace={workspace} />
-        ))}
-
-        <MobileSectionHeader title="Personal" meta={personalWorkspaces.length.toString()} />
-        {personalWorkspaces.map((workspace) => (
-          <WorkspaceRow key={workspace.id} workspace={workspace} />
-        ))}
-      </MobileStack>
+    <MobileScreen contentStyle={styles.screenContent}>
+      {workspaces.length === 0 ? (
+        <MobileEmptyState
+          title="No workspaces yet"
+          body="Create or join a workspace from the desktop app."
+        />
+      ) : (
+        <View style={styles.stack}>
+          <Section label="Shared" count={shared.length}>
+            {shared.map((workspace) => (
+              <WorkspaceRow key={workspace.id} workspace={workspace} />
+            ))}
+          </Section>
+          <Section label="Personal" count={personal.length}>
+            {personal.map((workspace) => (
+              <WorkspaceRow key={workspace.id} workspace={workspace} />
+            ))}
+          </Section>
+        </View>
+      )}
     </MobileScreen>
   );
 }
 
-function WorkspaceRow({ workspace }: { workspace: (typeof workspaces)[number] }) {
+function Section({
+  label,
+  count,
+  children,
+}: {
+  label: string;
+  count: number;
+  children: React.ReactNode;
+}) {
   return (
-    <MobileCard style={styles.card}>
-      <MobileGlyph tone={workspace.kind === "shared" ? "info" : "muted"}>
-        {workspace.kind === "shared" ? "T" : "P"}
-      </MobileGlyph>
-      <View style={styles.cardBody}>
-        <MobileCardTitle>{workspace.name}</MobileCardTitle>
-        <Text style={text.caption}>{workspace.repoLabel}</Text>
-        <Text style={styles.branch}>{workspace.branchLabel}</Text>
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <MobileSectionLabel>{label}</MobileSectionLabel>
+        <Text style={styles.sectionCount}>{count}</Text>
       </View>
-    </MobileCard>
+      <View style={styles.list}>{children}</View>
+    </View>
+  );
+}
+
+function WorkspaceRow({ workspace }: { workspace: ProductWorkspace }) {
+  const ws = workspace;
+  const wsChats = chats.filter((c) => c.workspaceId === ws.id);
+  const running = wsChats.filter((c) => c.status === "running").length;
+  const unclaimed = wsChats.filter((c: ProductChat) => isTeamChat(c.kind) && !c.claimantUserId).length;
+
+  return (
+    <MobileListRow
+      leading={
+        <View style={styles.icon}>
+          <MobileIcon
+            name={ws.kind === "shared" ? "users" : "folder"}
+            size={17}
+            color={colors.mutedForeground}
+          />
+        </View>
+      }
+      title={ws.name}
+      subtitle={`${ws.repoLabel} · ${ws.branchLabel}`}
+      trailing={
+        <View style={styles.trailing}>
+          {unclaimed > 0 ? (
+            <View style={styles.unclaimed}>
+              <MobileIcon name="hand" size={11} color={colors.success} />
+              <Text style={styles.unclaimedText}>{unclaimed}</Text>
+            </View>
+          ) : null}
+          <Text style={styles.meta}>
+            {wsChats.length} chat{wsChats.length === 1 ? "" : "s"}
+            {running ? ` · ${running} running` : ""}
+          </Text>
+        </View>
+      }
+      showChevron
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    flexDirection: "row",
-    gap: spacing[3],
+  screenContent: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
   },
-  cardBody: {
-    minWidth: 0,
-    flex: 1,
+  stack: {
+    gap: spacing[4],
+  },
+  section: {
     gap: spacing[1],
   },
-  branch: {
-    color: text.caption.color,
-    fontSize: 12,
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[1],
+  },
+  sectionCount: {
+    color: colors.faint,
+    fontSize: 11.5,
+    fontWeight: "500",
+  },
+  list: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderLight,
+  },
+  icon: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  trailing: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  meta: {
+    color: colors.faint,
+    fontSize: 11.5,
+  },
+  unclaimed: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    backgroundColor: colors.successSubtle,
+  },
+  unclaimedText: {
+    color: colors.success,
+    fontSize: 11,
+    fontWeight: "600",
   },
 });

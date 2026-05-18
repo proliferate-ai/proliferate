@@ -1,17 +1,19 @@
+import type { MobileIconName } from "../components/primitives/MobileIcon";
+
 export type RouteId = "home" | "workspaces" | "sessions" | "automations" | "settings";
 
 export interface DrawerRoute {
   id: RouteId;
   label: string;
-  glyph: string;
+  icon: MobileIconName;
 }
 
 export const drawerRoutes: DrawerRoute[] = [
-  { id: "home", label: "Home", glyph: "H" },
-  { id: "workspaces", label: "Workspaces", glyph: "W" },
-  { id: "sessions", label: "Sessions", glyph: "S" },
-  { id: "automations", label: "Automations", glyph: "A" },
-  { id: "settings", label: "Settings", glyph: "G" },
+  { id: "home", label: "Home", icon: "home" },
+  { id: "workspaces", label: "Workspaces", icon: "workspaces" },
+  { id: "sessions", label: "Sessions", icon: "sessions" },
+  { id: "automations", label: "Automations", icon: "automations" },
+  { id: "settings", label: "Settings", icon: "settings" },
 ];
 
 export function routeTitle(route: RouteId): string {

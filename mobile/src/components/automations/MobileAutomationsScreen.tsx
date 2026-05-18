@@ -1,59 +1,83 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import { MobileButton } from "../primitives/MobileButton";
-import { MobileGlyph } from "../primitives/MobileGlyph";
+import { MobileIcon } from "../primitives/MobileIcon";
+import { MobileListRow } from "../primitives/MobileListRow";
 import {
-  MobileCard,
-  MobileCardTitle,
   MobileScreen,
-  MobileScreenHeader,
-  MobileStack,
   MobileStatusPill,
 } from "../primitives/MobileLayout";
 import { automations } from "../../lib/fixtures/mobile-fixtures";
-import { spacing, text } from "../../styles/tokens";
+import { colors, radius, spacing } from "../../styles/tokens";
 
 export function MobileAutomationsScreen() {
   return (
-    <MobileScreen>
-      <MobileStack>
-        <MobileScreenHeader eyebrow="Automations" title="Scheduled cloud work" />
+    <MobileScreen contentStyle={styles.screenContent}>
+      <View style={styles.note}>
+        <MobileIcon name="cloud" size={15} color={colors.faint} />
+        <Text style={styles.noteText}>
+          Desktop runs more automation kinds — anything that needs local
+          compute, browser, or computer use.
+        </Text>
+      </View>
 
-        {automations.map((automation) => (
-          <MobileCard key={automation.id} style={styles.card}>
-            <MobileGlyph tone={automation.status === "enabled" ? "success" : "muted"}>A</MobileGlyph>
-            <View style={styles.cardBody}>
-              <View style={styles.rowBetween}>
-                <MobileCardTitle>{automation.name}</MobileCardTitle>
-                <MobileStatusPill tone={automation.status === "enabled" ? "success" : "muted"}>
-                  {automation.status}
+      <View style={styles.list}>
+        {automations.map((automation) => {
+          const enabled = automation.status === "enabled";
+          return (
+            <MobileListRow
+              key={automation.id}
+              leading={
+                <View style={styles.icon}>
+                  <MobileIcon name="automations" size={17} color={colors.info} />
+                </View>
+              }
+              title={automation.name}
+              subtitle={automation.detail}
+              trailing={
+                <MobileStatusPill tone={enabled ? "success" : "muted"}>
+                  {enabled ? "On" : "Paused"}
                 </MobileStatusPill>
-              </View>
-              <Text style={text.caption}>{automation.detail}</Text>
-            </View>
-          </MobileCard>
-        ))}
-
-        <MobileButton label="New automation" variant="secondary" />
-      </MobileStack>
+              }
+            />
+          );
+        })}
+      </View>
     </MobileScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    flexDirection: "row",
-    gap: spacing[3],
+  screenContent: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
   },
-  cardBody: {
-    minWidth: 0,
-    flex: 1,
-    gap: spacing[1],
-  },
-  rowBetween: {
+  note: {
+    marginHorizontal: spacing[4],
+    marginTop: spacing[3],
+    marginBottom: spacing[2],
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: spacing[2],
-    justifyContent: "space-between",
+    padding: spacing[3],
+    borderRadius: radius.md,
+    backgroundColor: colors.accent,
+  },
+  noteText: {
+    flex: 1,
+    color: colors.mutedForeground,
+    fontSize: 12.5,
+    lineHeight: 17,
+  },
+  list: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderLight,
+  },
+  icon: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
+    backgroundColor: colors.infoSubtle,
   },
 });

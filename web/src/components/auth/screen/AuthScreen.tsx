@@ -1,6 +1,8 @@
-import { Github, KeyRound } from "lucide-react";
+import { Apple, Github, KeyRound } from "lucide-react";
 import { useState } from "react";
 
+import { AuthLayout } from "@proliferate/ui/auth/AuthLayout";
+import { AuthProviderButton } from "@proliferate/ui/auth/AuthProviderButton";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 
@@ -10,57 +12,84 @@ import { ProliferateMark } from "../../app/navigation/ProliferateMark";
 export function AuthScreen() {
   const { setToken } = useAuthToken();
   const [manualToken, setManualToken] = useState("");
+  const [showDevAccess, setShowDevAccess] = useState(false);
 
   return (
-    <div className="flex h-full items-center justify-center bg-background px-6 py-8 text-foreground">
-      <section className="w-full max-w-[390px]">
-        <div className="mb-10 flex flex-col items-center text-center">
-          <div className="flex size-[66px] items-center justify-center rounded-lg border border-border bg-card shadow-keystone">
-            <ProliferateMark size={32} />
+    <AuthLayout
+      mark={<ProliferateMark size={36} />}
+      title={<span className="text-2xl tracking-tight">Proliferate</span>}
+      subtitle="Run and orchestrate coding agents."
+      footer={
+        <span className="block text-faint">
+          By continuing you agree to the Proliferate
+          <br />
+          Terms and Privacy Policy.
+        </span>
+      }
+    >
+      <AuthProviderButton
+        icon={<Github size={18} />}
+        disabled
+        title="GitHub browser sign-in is wired in the auth implementation PR."
+      >
+        Continue with GitHub
+      </AuthProviderButton>
+      <AuthProviderButton
+        icon={<Apple size={18} />}
+        disabled
+        title="Apple sign-in is wired in the auth implementation PR."
+      >
+        Continue with Apple
+      </AuthProviderButton>
+
+      <p className="mt-2 text-center text-xs leading-5 text-muted-foreground">
+        A GitHub connection is required to run cloud workspaces and automations.
+      </p>
+
+      <div className="mt-2 border-t border-border pt-4">
+        {showDevAccess ? (
+          <div className="grid gap-2">
+            <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+              <KeyRound size={12} />
+              Development access
+            </div>
+            <Input
+              value={manualToken}
+              onChange={(event) => setManualToken(event.target.value)}
+              placeholder="Paste a development access token"
+              className="text-sm"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowDevAccess(false);
+                  setManualToken("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!manualToken.trim()}
+                onClick={() => setToken(manualToken.trim())}
+              >
+                Use token
+              </Button>
+            </div>
           </div>
-          <h1 className="mt-5 text-[26px] font-semibold leading-8">Proliferate</h1>
-          <p className="mt-2 text-sm leading-5 text-muted-foreground">
-            Run and orchestrate coding agents.
-            <br />
-            Sign in to get started.
-          </p>
-        </div>
-
-        <div className="grid gap-2">
-          <Button
-            className="h-[54px] w-full justify-center rounded-lg border-border bg-card text-[15px]"
-            variant="secondary"
-            disabled
-            title="GitHub browser sign-in is wired in the auth implementation PR."
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowDevAccess(true)}
+            className="block w-full text-center text-[11px] text-muted-foreground transition-colors hover:text-foreground"
           >
-            <Github size={18} />
-            Continue with GitHub
-          </Button>
-        </div>
-
-        <div className="mt-5 grid gap-2 rounded-lg border border-border bg-card p-3">
-          <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-            <KeyRound size={13} />
-            Development access
-          </div>
-          <Input
-            value={manualToken}
-            onChange={(event) => setManualToken(event.target.value)}
-            placeholder="Paste a development access token"
-          />
-          <Button
-            variant="secondary"
-            disabled={!manualToken.trim()}
-            onClick={() => setToken(manualToken.trim())}
-          >
-            Use token
-          </Button>
-        </div>
-
-        <p className="mx-auto mt-4 max-w-[290px] text-center text-[11.5px] leading-[17px] text-muted-foreground/70">
-          A GitHub connection is required for cloud workspaces and automations.
-        </p>
-      </section>
-    </div>
+            Use a development access token
+          </button>
+        )}
+      </div>
+    </AuthLayout>
   );
 }

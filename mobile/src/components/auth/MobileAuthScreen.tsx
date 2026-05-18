@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileProliferateMark } from "../primitives/MobileProliferateMark";
-import { colors, radius, text } from "../../styles/tokens";
+import { colors, radius, spacing } from "../../styles/tokens";
 
 interface MobileAuthScreenProps {
   onApple: () => void;
@@ -10,21 +11,36 @@ interface MobileAuthScreenProps {
 
 interface ProviderButtonProps {
   label: string;
-  marker: string;
+  icon: "github" | "apple";
   onPress: () => void;
+  primary?: boolean;
 }
 
-function ProviderButton({ label, marker, onPress }: ProviderButtonProps) {
+function ProviderButton({ label, icon, onPress, primary }: ProviderButtonProps) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       onPress={onPress}
-      style={({ pressed }) => [styles.providerButton, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.providerButton,
+        primary ? styles.providerPrimary : styles.providerSecondary,
+        pressed && styles.pressed,
+      ]}
     >
-      <View style={styles.providerMarker}>
-        <Text style={styles.providerMarkerText}>{marker}</Text>
-      </View>
-      <Text style={styles.providerLabel}>{label}</Text>
+      <MobileIcon
+        name={icon}
+        size={18}
+        color={primary ? colors.background : colors.fg}
+      />
+      <Text
+        style={[
+          styles.providerLabel,
+          primary ? styles.providerLabelPrimary : styles.providerLabelSecondary,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -33,25 +49,26 @@ export function MobileAuthScreen({ onApple, onGitHub }: MobileAuthScreenProps) {
   return (
     <View style={styles.root}>
       <View style={styles.content}>
-        <View style={styles.mark}>
-          <MobileProliferateMark size={32} />
+        <View style={styles.brand}>
+          <MobileProliferateMark size={42} />
+          <Text style={styles.wordmark}>Proliferate</Text>
         </View>
-        <Text style={styles.title}>Proliferate</Text>
-        <Text style={styles.subtitle}>
-          Run and orchestrate coding agents. Sign in to get started.
+        <Text style={styles.tagline}>
+          Run and orchestrate coding agents.
         </Text>
 
         <View style={styles.actions}>
-          <ProviderButton label="Continue with GitHub" marker="GH" onPress={onGitHub} />
-          <ProviderButton label="Continue with Apple" marker="A" onPress={onApple} />
+          <ProviderButton label="Continue with GitHub" icon="github" onPress={onGitHub} primary />
+          <ProviderButton label="Continue with Apple" icon="apple" onPress={onApple} />
         </View>
 
-        <Text style={[text.caption, styles.note]}>
-          A GitHub connection is required for cloud workspaces and automations.
+        <Text style={styles.note}>
+          A GitHub connection is required to run cloud workspaces and automations.
         </Text>
       </View>
+
       <Text style={styles.legal}>
-        By continuing you agree to the Proliferate Terms and Privacy Policy.
+        By continuing you agree to the Proliferate{"\n"}Terms and Privacy Policy.
       </Text>
     </View>
   );
@@ -60,81 +77,81 @@ export function MobileAuthScreen({ onApple, onGitHub }: MobileAuthScreenProps) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    justifyContent: "space-between",
-    padding: 28,
-    backgroundColor: colors.bg,
+    paddingHorizontal: spacing[6],
+    paddingTop: spacing[12],
+    paddingBottom: spacing[8],
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  mark: {
-    width: 66,
-    height: 66,
+  brand: {
     alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    gap: spacing[3],
   },
-  title: {
+  wordmark: {
     color: colors.fg,
-    fontSize: 26,
-    fontWeight: "700",
-    marginTop: 22,
+    fontSize: 28,
+    fontWeight: "600",
+    letterSpacing: -0.4,
   },
-  subtitle: {
-    maxWidth: 280,
+  tagline: {
     color: colors.mutedForeground,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 8,
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: spacing[3],
     textAlign: "center",
+    maxWidth: 280,
   },
   actions: {
     alignSelf: "stretch",
-    gap: 11,
-    marginTop: 40,
-    marginBottom: 16,
+    gap: spacing[2],
+    marginTop: spacing[10],
   },
   providerButton: {
-    minHeight: 54,
+    minHeight: 52,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 11,
+    gap: spacing[2],
     borderRadius: radius.xl,
+  },
+  providerPrimary: {
+    backgroundColor: colors.fg,
+  },
+  providerSecondary: {
+    backgroundColor: colors.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  providerMarker: {
-    width: 24,
-    alignItems: "center",
-  },
-  providerMarkerText: {
-    color: colors.fg,
-    fontSize: 12,
-    fontWeight: "800",
   },
   providerLabel: {
-    color: colors.fg,
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "600",
+    letterSpacing: -0.1,
+  },
+  providerLabelPrimary: {
+    color: colors.background,
+  },
+  providerLabelSecondary: {
+    color: colors.fg,
   },
   note: {
-    maxWidth: 290,
+    marginTop: spacing[6],
+    color: colors.faint,
+    fontSize: 12.5,
+    lineHeight: 18,
     textAlign: "center",
+    maxWidth: 280,
   },
   legal: {
     color: colors.sidebarMutedForeground,
-    fontSize: 11,
+    fontSize: 11.5,
     lineHeight: 17,
     textAlign: "center",
   },
   pressed: {
-    opacity: 0.72,
+    opacity: 0.78,
   },
 });

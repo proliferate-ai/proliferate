@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { MobileButton } from "../primitives/MobileButton";
+import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileProliferateMark } from "../primitives/MobileProliferateMark";
-import { colors, radius, text } from "../../styles/tokens";
+import { colors, radius, spacing } from "../../styles/tokens";
 
 interface MobileConnectGitHubScreenProps {
   onConnect: () => void;
@@ -16,19 +16,37 @@ export function MobileConnectGitHubScreen({
   return (
     <View style={styles.root}>
       <View style={styles.content}>
-        <View style={styles.mark}>
-          <MobileProliferateMark size={28} />
-        </View>
+        <MobileProliferateMark size={36} />
         <Text style={styles.title}>Connect GitHub</Text>
-        <Text style={[text.body, styles.body]}>
-          GitHub is the product identity for cloud sessions, workspaces, and
-          automations.
+        <Text style={styles.body}>
+          Proliferate runs cloud sessions on your behalf. Linking GitHub gives
+          agents the access they need to read and modify your repos.
         </Text>
+
         <View style={styles.actions}>
-          <MobileButton label="Continue with GitHub" variant="secondary" onPress={onConnect} />
-          <MobileButton label="Sign out" variant="secondary" onPress={onSignOut} />
+          <Pressable
+            accessibilityRole="button"
+            onPress={onConnect}
+            style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
+          >
+            <MobileIcon name="github" size={18} color={colors.background} />
+            <Text style={styles.primaryLabel}>Continue with GitHub</Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={onSignOut}
+            style={({ pressed }) => [styles.signOut, pressed && styles.pressed]}
+          >
+            <Text style={styles.signOutLabel}>Sign out</Text>
+          </Pressable>
         </View>
       </View>
+
+      <Text style={styles.fineprint}>
+        We only request the permissions needed to materialize sandboxes and
+        push branches.
+      </Text>
     </View>
   );
 }
@@ -36,40 +54,69 @@ export function MobileConnectGitHubScreen({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 28,
-    backgroundColor: colors.bg,
+    paddingHorizontal: spacing[6],
+    paddingTop: spacing[12],
+    paddingBottom: spacing[8],
+    backgroundColor: colors.background,
   },
   content: {
-    width: "100%",
-    maxWidth: 340,
-    alignItems: "center",
-  },
-  mark: {
-    width: 58,
-    height: 58,
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
   },
   title: {
     color: colors.fg,
     fontSize: 24,
-    fontWeight: "700",
-    marginTop: 22,
+    fontWeight: "600",
+    letterSpacing: -0.3,
+    marginTop: spacing[4],
     textAlign: "center",
   },
   body: {
-    marginTop: 10,
+    color: colors.mutedForeground,
+    fontSize: 14.5,
+    lineHeight: 21,
+    marginTop: spacing[2],
     textAlign: "center",
+    maxWidth: 320,
   },
   actions: {
     alignSelf: "stretch",
-    gap: 10,
-    marginTop: 32,
+    gap: spacing[2],
+    marginTop: spacing[8],
+  },
+  primary: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[2],
+    backgroundColor: colors.fg,
+    borderRadius: radius.xl,
+  },
+  primaryLabel: {
+    color: colors.background,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  signOut: {
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  signOutLabel: {
+    color: colors.faint,
+    fontSize: 13.5,
+    fontWeight: "500",
+  },
+  fineprint: {
+    color: colors.sidebarMutedForeground,
+    fontSize: 11.5,
+    lineHeight: 17,
+    textAlign: "center",
+    paddingHorizontal: spacing[4],
+  },
+  pressed: {
+    opacity: 0.78,
   },
 });

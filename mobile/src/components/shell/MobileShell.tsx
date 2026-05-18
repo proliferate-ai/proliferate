@@ -15,41 +15,29 @@ import { MobileConnectGitHubScreen } from "../auth/MobileConnectGitHubScreen";
 import { MobileAutomationsScreen } from "../automations/MobileAutomationsScreen";
 import { MobileChatScreen } from "../chat/MobileChatScreen";
 import { MobileHomeScreen } from "../home/MobileHomeScreen";
-import { MobileGlyph } from "../primitives/MobileGlyph";
+import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileProliferateMark } from "../primitives/MobileProliferateMark";
 import { MobileSessionsScreen } from "../sessions/MobileSessionsScreen";
 import { MobileSettingsScreen } from "../settings/MobileSettingsScreen";
+import { MobileTopBar, MobileTopBarIconButton } from "../primitives/MobileTopBar";
 import { MobileWorkspacesScreen } from "../workspaces/MobileWorkspacesScreen";
-import { chats } from "../../lib/fixtures/mobile-fixtures";
 import { drawerRoutes, routeTitle, type RouteId } from "../../navigation/navigation-model";
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
 import { colors, radius, shadow, spacing } from "../../styles/tokens";
 
-function MenuIcon({ open }: { open: boolean }) {
-  if (open) {
-    return (
-      <View style={styles.closeIcon}>
-        <View style={[styles.closeLine, styles.closeLineOne]} />
-        <View style={[styles.closeLine, styles.closeLineTwo]} />
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.menuIcon}>
-      <View style={styles.menuLine} />
-      <View style={styles.menuLine} />
-      <View style={styles.menuLine} />
-    </View>
-  );
-}
+const ACCOUNT = {
+  initials: "PH",
+  name: "Pablo Hansen",
+  handle: "pablo@proliferate.ai",
+};
 
 export function MobileShell() {
   const { authState, signInWithApple, signInWithGitHub, signOut } = useMobileAuth();
   const [route, setRoute] = useState<RouteId>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedChat, setSelectedChat] = useState<ProductChat | null>(chats[0] ?? null);
-  const title = useMemo(() => (selectedChat ? selectedChat.title : routeTitle(route)), [route, selectedChat]);
+  const [selectedChat, setSelectedChat] = useState<ProductChat | null>(null);
+
+  const subtitle = useMemo(() => routeSubtitle(route), [route]);
 
   function navigate(nextRoute: RouteId) {
     setRoute(nextRoute);
@@ -86,191 +74,162 @@ export function MobileShell() {
   return (
     <SafeAreaView style={styles.root}>
       <StatusBar style="light" />
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={drawerOpen ? "Close navigation" : "Open navigation"}
-          onPress={() => setDrawerOpen((value) => !value)}
-          style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
-        >
-          <MenuIcon open={drawerOpen} />
-        </Pressable>
-        <View style={styles.headerText}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {title}
-          </Text>
-          <Text style={styles.headerSubtitle}>
-            {selectedChat ? "Session" : "Mobile cloud preview"}
-          </Text>
-        </View>
-        {selectedChat ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back to sessions"
-            onPress={() => setSelectedChat(null)}
-            style={({ pressed }) => [styles.smallButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.smallButtonText}>Back</Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="New chat"
-            onPress={() => navigate("home")}
-            style={({ pressed }) => [styles.smallButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.smallButtonText}>+</Text>
-          </Pressable>
-        )}
-      </View>
 
-      <View style={styles.body}>
-        {selectedChat ? (
-          <MobileChatScreen chat={selectedChat} />
-        ) : route === "home" ? (
-          <MobileHomeScreen onOpenSessions={() => navigate("sessions")} />
-        ) : route === "workspaces" ? (
-          <MobileWorkspacesScreen />
-        ) : route === "sessions" ? (
-          <MobileSessionsScreen onOpenChat={openChat} />
-        ) : route === "automations" ? (
-          <MobileAutomationsScreen />
-        ) : (
-          <MobileSettingsScreen />
-        )}
-      </View>
+      {selectedChat ? (
+        <MobileChatScreen chat={selectedChat} onBack={() => setSelectedChat(null)} />
+      ) : (
+        <>
+          <MobileTopBar
+            title={routeTitle(route)}
+            subtitle={subtitle}
+            leading={{ kind: "menu", onPress: () => setDrawerOpen(true) }}
+            trailing={
+              <MobileTopBarIconButton
+                name={route === "home" ? "search" : "more"}
+                accessibilityLabel="More"
+              />
+            }
+          />
 
-      {!selectedChat && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="New chat"
-          onPress={() => navigate("home")}
-          style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
-        >
-          <Text style={styles.fabText}>+</Text>
-        </Pressable>
+          <View style={styles.body}>
+            {route === "home" ? (
+              <MobileHomeScreen onOpenSessions={() => navigate("sessions")} />
+            ) : route === "workspaces" ? (
+              <MobileWorkspacesScreen />
+            ) : route === "sessions" ? (
+              <MobileSessionsScreen onOpenChat={openChat} />
+            ) : route === "automations" ? (
+              <MobileAutomationsScreen />
+            ) : (
+              <MobileSettingsScreen onSignOut={signOut} />
+            )}
+          </View>
+
+          {route !== "home" && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="New chat"
+              onPress={() => navigate("home")}
+              style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
+            >
+              <MobileIcon name="plus" size={22} color={colors.background} />
+            </Pressable>
+          )}
+        </>
       )}
 
       {drawerOpen && (
-        <View style={styles.drawerLayer}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close navigation"
-            onPress={() => setDrawerOpen(false)}
-            style={styles.scrim}
-          />
-          <View style={styles.drawer}>
-            <View style={styles.brandRow}>
-              <View style={styles.brandMark}>
-                <MobileProliferateMark size={18} />
-              </View>
-              <View>
-                <Text style={styles.brandTitle}>Proliferate</Text>
-                <Text style={styles.brandSubtitle}>Cloud mobile</Text>
-              </View>
-            </View>
+        <Drawer
+          activeRoute={route}
+          onNavigate={navigate}
+          onClose={() => setDrawerOpen(false)}
+          onSignOut={signOut}
+        />
+      )}
+    </SafeAreaView>
+  );
+}
 
-            {drawerRoutes.map((item) => (
+function routeSubtitle(route: RouteId): string | undefined {
+  switch (route) {
+    case "home":
+      return "New chat";
+    case "workspaces":
+      return "Cloud sandboxes";
+    case "sessions":
+      return "Running and recent";
+    case "automations":
+      return "Scheduled runs";
+    case "settings":
+      return "Account · device";
+  }
+}
+
+interface DrawerProps {
+  activeRoute: RouteId;
+  onNavigate: (route: RouteId) => void;
+  onClose: () => void;
+  onSignOut: () => void;
+}
+
+function Drawer({ activeRoute, onNavigate, onClose, onSignOut }: DrawerProps) {
+  return (
+    <View style={styles.drawerLayer}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Close navigation"
+        onPress={onClose}
+        style={styles.scrim}
+      />
+      <View style={styles.drawer}>
+        <View style={styles.brand}>
+          <MobileProliferateMark size={20} />
+          <Text style={styles.wordmark}>Proliferate</Text>
+        </View>
+
+        <View style={styles.drawerNav}>
+          {drawerRoutes.map((item) => {
+            const active = item.id === activeRoute;
+            return (
               <Pressable
                 key={item.id}
                 accessibilityRole="button"
-                onPress={() => navigate(item.id)}
+                accessibilityState={{ selected: active }}
+                onPress={() => onNavigate(item.id)}
                 style={({ pressed }) => [
                   styles.drawerRow,
-                  route === item.id && !selectedChat && styles.drawerRowActive,
-                  pressed && styles.pressed,
+                  active && styles.drawerRowActive,
+                  pressed && styles.drawerRowPressed,
                 ]}
               >
-                <MobileGlyph tone={route === item.id && !selectedChat ? "info" : "muted"}>{item.glyph}</MobileGlyph>
-                <Text style={styles.drawerRowText}>{item.label}</Text>
+                <MobileIcon
+                  name={item.icon}
+                  size={19}
+                  color={active ? colors.fg : colors.mutedForeground}
+                />
+                <Text
+                  style={[
+                    styles.drawerRowText,
+                    active && styles.drawerRowTextActive,
+                  ]}
+                >
+                  {item.label}
+                </Text>
               </Pressable>
-            ))}
-          </View>
+            );
+          })}
         </View>
-      )}
-    </SafeAreaView>
+
+        <View style={styles.account}>
+          <View style={styles.accountAvatar}>
+            <Text style={styles.accountAvatarText}>{ACCOUNT.initials}</Text>
+          </View>
+          <View style={styles.accountText}>
+            <Text style={styles.accountName} numberOfLines={1}>
+              {ACCOUNT.name}
+            </Text>
+            <Text style={styles.accountHandle} numberOfLines={1}>
+              {ACCOUNT.handle}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+            onPress={onSignOut}
+            style={({ pressed }) => [styles.accountAction, pressed && styles.pressed]}
+          >
+            <MobileIcon name="log-out" size={17} color={colors.mutedForeground} />
+          </Pressable>
+        </View>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg,
-  },
-  header: {
-    minHeight: 60,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.md,
-    backgroundColor: colors.accent,
-  },
-  menuIcon: {
-    gap: 4,
-  },
-  menuLine: {
-    width: 17,
-    height: 2,
-    borderRadius: 2,
-    backgroundColor: colors.fg,
-  },
-  closeIcon: {
-    width: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeLine: {
-    position: "absolute",
-    width: 18,
-    height: 2,
-    borderRadius: 2,
-    backgroundColor: colors.fg,
-  },
-  closeLineOne: {
-    transform: [{ rotate: "45deg" }],
-  },
-  closeLineTwo: {
-    transform: [{ rotate: "-45deg" }],
-  },
-  headerText: {
-    minWidth: 0,
-    flex: 1,
-  },
-  headerTitle: {
-    color: colors.fg,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  headerSubtitle: {
-    color: colors.faint,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  smallButton: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  smallButtonText: {
-    color: colors.fg,
-    fontSize: 13,
-    fontWeight: "800",
+    backgroundColor: colors.background,
   },
   body: {
     flex: 1,
@@ -279,19 +238,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 18,
     bottom: 26,
-    width: 54,
-    height: 54,
+    width: 52,
+    height: 52,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 27,
+    borderRadius: 26,
     backgroundColor: colors.fg,
     ...shadow.floating,
-  },
-  fabText: {
-    color: colors.bg,
-    fontSize: 26,
-    lineHeight: 28,
-    fontWeight: "700",
   },
   drawerLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -303,54 +256,98 @@ const styles = StyleSheet.create({
     backgroundColor: colors.overlayStrong,
   },
   drawer: {
-    width: 298,
+    width: 296,
     height: "100%",
-    paddingTop: 76,
-    paddingHorizontal: 12,
+    paddingTop: 64,
+    paddingHorizontal: spacing[3],
+    paddingBottom: spacing[4],
     backgroundColor: colors.sidebar,
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: colors.border,
+    borderRightColor: colors.sidebarBorder,
   },
-  brandRow: {
+  brand: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 8,
-    marginBottom: 18,
+    gap: spacing[2],
+    paddingHorizontal: spacing[2],
+    marginBottom: spacing[4],
   },
-  brandMark: {
-    width: 30,
-    height: 30,
+  wordmark: {
+    color: colors.fg,
+    fontSize: 17,
+    fontWeight: "600",
+    letterSpacing: -0.3,
+  },
+  drawerNav: {
+    flex: 1,
+    gap: 2,
+  },
+  drawerRow: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    borderRadius: radius.md,
+    paddingHorizontal: spacing[3],
+  },
+  drawerRowActive: {
+    backgroundColor: colors.sidebarAccent,
+  },
+  drawerRowPressed: {
+    backgroundColor: colors.accent,
+    opacity: 0.85,
+  },
+  drawerRowText: {
+    color: colors.sidebarForeground,
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  drawerRowTextActive: {
+    color: colors.fg,
+    fontWeight: "600",
+  },
+  account: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    paddingTop: spacing[3],
+    paddingHorizontal: spacing[1],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.sidebarBorder,
+  },
+  accountAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.infoSubtle,
+  },
+  accountAvatarText: {
+    color: colors.info,
+    fontSize: 11.5,
+    fontWeight: "700",
+  },
+  accountText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  accountName: {
+    color: colors.fg,
+    fontSize: 13.5,
+    fontWeight: "600",
+  },
+  accountHandle: {
+    color: colors.faint,
+    fontSize: 11.5,
+    marginTop: 1,
+  },
+  accountAction: {
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: radius.md,
-    backgroundColor: colors.accent,
-  },
-  brandTitle: {
-    color: colors.fg,
-    fontSize: 17,
-    fontWeight: "800",
-  },
-  brandSubtitle: {
-    color: colors.faint,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  drawerRow: {
-    minHeight: 48,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: radius.lg,
-    paddingHorizontal: 10,
-  },
-  drawerRowActive: {
-    backgroundColor: colors.accent,
-  },
-  drawerRowText: {
-    color: colors.fg,
-    fontSize: 15,
-    fontWeight: "700",
   },
   pressed: {
     opacity: 0.72,

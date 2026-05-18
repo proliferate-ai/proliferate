@@ -3,8 +3,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  type TextProps,
-  type TextStyle,
   View,
   type StyleProp,
   type ViewStyle,
@@ -15,6 +13,7 @@ import { colors, layout, radius, spacing, text } from "../../styles/tokens";
 interface MobileScreenProps {
   children: ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
+  scroll?: boolean;
 }
 
 interface MobileCardProps {
@@ -23,26 +22,33 @@ interface MobileCardProps {
 }
 
 interface MobileScreenHeaderProps {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description?: string;
 }
 
 interface MobileStatusPillProps {
   children: ReactNode;
-  tone?: "success" | "info" | "muted";
+  tone?: "success" | "info" | "muted" | "warning";
 }
 
-export function MobileScreen({ children, contentStyle }: MobileScreenProps) {
+export function MobileScreen({ children, contentStyle, scroll = true }: MobileScreenProps) {
+  if (!scroll) {
+    return <View style={[styles.screen, contentStyle]}>{children}</View>;
+  }
   return (
-    <ScrollView contentContainerStyle={[styles.screen, contentStyle]}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={[styles.screen, contentStyle]}
+      keyboardShouldPersistTaps="handled"
+    >
       {children}
     </ScrollView>
   );
 }
 
-export function MobileStack({ children }: { children: ReactNode }) {
-  return <View style={styles.stack}>{children}</View>;
+export function MobileStack({ children, gap }: { children: ReactNode; gap?: number }) {
+  return <View style={[styles.stack, gap !== undefined && { gap }]}>{children}</View>;
 }
 
 export function MobileScreenHeader({
@@ -52,7 +58,7 @@ export function MobileScreenHeader({
 }: MobileScreenHeaderProps) {
   return (
     <View style={styles.header}>
-      <Text style={text.eyebrow}>{eyebrow}</Text>
+      {eyebrow ? <Text style={text.eyebrow}>{eyebrow}</Text> : null}
       <Text style={styles.title}>{title}</Text>
       {description ? <Text style={styles.description}>{description}</Text> : null}
     </View>
@@ -63,35 +69,8 @@ export function MobileCard({ children, style }: MobileCardProps) {
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-export function MobileSectionHeader({
-  title,
-  meta,
-}: {
-  title: string;
-  meta?: string;
-}) {
-  return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {meta ? <Text style={styles.sectionMeta}>{meta}</Text> : null}
-    </View>
-  );
-}
-
-export function MobileCardTitle({
-  children,
-  numberOfLines,
-  style,
-}: {
-  children: ReactNode;
-  numberOfLines?: TextProps["numberOfLines"];
-  style?: StyleProp<TextStyle>;
-}) {
-  return (
-    <Text numberOfLines={numberOfLines} style={[styles.cardTitle, style]}>
-      {children}
-    </Text>
-  );
+export function MobileSectionLabel({ children }: { children: ReactNode }) {
+  return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
 export function MobileStatusPill({
@@ -99,29 +78,52 @@ export function MobileStatusPill({
   tone = "muted",
 }: MobileStatusPillProps) {
   return (
-    <Text
+    <View
       style={[
         styles.statusPill,
         tone === "success" && styles.statusPillSuccess,
         tone === "info" && styles.statusPillInfo,
+        tone === "warning" && styles.statusPillWarning,
       ]}
     >
-      {children}
-    </Text>
+      <Text
+        style={[
+          styles.statusPillText,
+          tone === "success" && styles.statusPillTextSuccess,
+          tone === "info" && styles.statusPillTextInfo,
+          tone === "warning" && styles.statusPillTextWarning,
+        ]}
+      >
+        {children}
+      </Text>
+    </View>
+  );
+}
+
+export function MobileEmptyState({ title, body }: { title: string; body?: string }) {
+  return (
+    <View style={styles.empty}>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      {body ? <Text style={styles.emptyBody}>{body}</Text> : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+  },
   screen: {
-    padding: layout.screenPadding,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing[3],
     paddingBottom: layout.screenBottomPadding,
   },
   stack: {
     gap: layout.stackGap,
   },
   header: {
-    gap: spacing[2],
-    marginBottom: spacing[1],
+    gap: spacing[1],
+    marginBottom: spacing[2],
   },
   title: {
     ...text.title,
@@ -136,42 +138,61 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     padding: spacing[3],
   },
-  sectionHeader: {
-    marginTop: spacing[2],
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sectionTitle: {
-    color: colors.fg,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  sectionMeta: {
-    color: colors.faint,
-    fontSize: 12,
-  },
-  cardTitle: {
-    color: colors.fg,
-    fontSize: 15,
-    fontWeight: "700",
+  sectionLabel: {
+    color: colors.sidebarMutedForeground,
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
   },
   statusPill: {
+    alignSelf: "flex-start",
     overflow: "hidden",
     borderRadius: radius.full,
     paddingHorizontal: spacing[2],
-    paddingVertical: 3,
-    color: colors.faint,
+    paddingVertical: 2,
     backgroundColor: colors.accent,
-    fontSize: 11,
-    fontWeight: "700",
   },
   statusPillSuccess: {
-    color: colors.success,
     backgroundColor: colors.successSubtle,
   },
   statusPillInfo: {
-    color: colors.info,
     backgroundColor: colors.infoSubtle,
+  },
+  statusPillWarning: {
+    backgroundColor: colors.warningSubtle,
+  },
+  statusPillText: {
+    color: colors.faint,
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+  },
+  statusPillTextSuccess: {
+    color: colors.success,
+  },
+  statusPillTextInfo: {
+    color: colors.info,
+  },
+  statusPillTextWarning: {
+    color: colors.warning,
+  },
+  empty: {
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[8],
+    alignItems: "center",
+    gap: 6,
+  },
+  emptyTitle: {
+    color: colors.fg,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  emptyBody: {
+    color: colors.faint,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+    maxWidth: 280,
   },
 });

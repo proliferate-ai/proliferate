@@ -1,165 +1,152 @@
-import { ArrowRight, Bot, Cloud, GitBranch, Plus, Users } from "lucide-react";
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Bot, Cloud, GitBranch, Send, Smartphone, Users } from "lucide-react";
+import { useState, type ComponentType } from "react";
 
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { chatKindPresentation } from "@proliferate/product-model/chats/presentation";
 
-import { routes } from "../../../config/routes";
-import {
-  automations,
-  chatCountsByKind,
-  chats,
-  workspaces,
-  workspaceForChat,
-} from "../../../lib/fixtures/web-fixtures";
+import { workspaces } from "../../../lib/fixtures/web-fixtures";
 
-const modeOptions = [
-  { id: "personal", label: "Personal", icon: Cloud },
-  { id: "team", label: "Team", icon: Users },
-  { id: "automation", label: "Automation", icon: Bot },
-] as const;
+type ModeId = "dispatch" | "shared" | "personal";
 
-type ModeId = (typeof modeOptions)[number]["id"];
+interface ModeOption {
+  id: ModeId;
+  label: string;
+  description: string;
+  icon: ComponentType<{ size?: number; className?: string }>;
+  placeholder: string;
+}
+
+const MODES: ModeOption[] = [
+  {
+    id: "dispatch",
+    label: "Dispatch",
+    description: "Lightweight remote task. No setup.",
+    icon: Smartphone,
+    placeholder: "Describe a quick remote task...",
+  },
+  {
+    id: "shared",
+    label: "Shared chat",
+    description: "Team work in the shared sandbox. Claimable.",
+    icon: Users,
+    placeholder: "Ask the shared sandbox to take this on...",
+  },
+  {
+    id: "personal",
+    label: "Personal cloud",
+    description: "Your repo, your tools, your model.",
+    icon: Cloud,
+    placeholder: "Ask Proliferate to work in your sandbox...",
+  },
+];
 
 export function HomeScreen() {
-  const [mode, setMode] = useState<ModeId>("personal");
+  const [mode, setMode] = useState<ModeId>("dispatch");
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
-  const navigate = useNavigate();
-  const counts = useMemo(() => chatCountsByKind(), []);
-  const recentChats = chats.slice(0, 4);
+  const [draft, setDraft] = useState("");
+  const meta = MODES.find((option) => option.id === mode) ?? MODES[0];
+  const workspace = workspaces.find((item) => item.id === workspaceId);
 
   return (
     <div className="web-scrollbar h-full overflow-y-auto">
-      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-8 py-10">
-        <header className="mb-8">
-          <p className="text-xs font-medium uppercase text-muted-foreground">
-            Cloud command center
+      <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col px-6 py-16">
+        <header className="mb-8 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight">What should we run?</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Pick a run shape, then send the task.
           </p>
-          <h1 className="mt-2 text-3xl font-semibold">Start or continue work</h1>
         </header>
 
-        <section className="rounded-lg border border-border bg-card p-4 shadow-floating">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="inline-flex rounded-md border border-border bg-background p-1">
-              {modeOptions.map((option) => {
-                const Icon = option.icon;
-                const active = option.id === mode;
-                return (
-                  <Button
-                    variant="unstyled"
-                    size="unstyled"
-                    key={option.id}
-                    type="button"
-                    onClick={() => setMode(option.id)}
-                    className={`inline-flex h-8 items-center gap-2 rounded px-3 text-xs font-medium transition-colors ${
-                      active
-                        ? "bg-accent text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <Icon size={14} />
+        <div className="grid gap-2 rounded-lg border border-border bg-card p-2">
+          {MODES.map((option) => {
+            const Icon = option.icon;
+            const active = option.id === mode;
+            return (
+              <Button
+                key={option.id}
+                type="button"
+                variant="unstyled"
+                size="unstyled"
+                onClick={() => setMode(option.id)}
+                className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors ${
+                  active ? "bg-accent" : "hover:bg-accent/60"
+                }`}
+              >
+                <span
+                  className={`flex size-9 items-center justify-center rounded-md border ${
+                    active
+                      ? "border-border-heavy bg-sidebar text-foreground"
+                      : "border-border bg-background text-muted-foreground"
+                  }`}
+                >
+                  <Icon size={16} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13.5px] font-medium text-foreground">
                     {option.label}
-                  </Button>
-                );
-              })}
-            </div>
-            <Select
-              value={workspaceId}
-              onChange={(event) => setWorkspaceId(event.target.value)}
-              className="h-9 min-w-56 rounded-md border border-input bg-surface-control px-3 text-xs text-foreground outline-none"
-            >
-              {workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name} - {workspace.repoLabel}
-                </option>
-              ))}
-            </Select>
-          </div>
+                  </span>
+                  <span className="block text-xs text-muted-foreground">{option.description}</span>
+                </span>
+                <span
+                  className={`flex size-4 items-center justify-center rounded-full border ${
+                    active ? "border-foreground" : "border-border-heavy"
+                  }`}
+                >
+                  {active ? <span className="size-2 rounded-full bg-foreground" /> : null}
+                </span>
+              </Button>
+            );
+          })}
+        </div>
 
+        <div className="mt-3 rounded-lg border border-border bg-card p-3">
           <Textarea
-            className="min-h-32 w-full resize-none rounded-md border border-input bg-background p-4 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring"
-            placeholder={
-              mode === "team"
-                ? "Ask the shared sandbox to handle a team task..."
-                : mode === "automation"
-                  ? "Set up a recurring automation..."
-                  : "Ask Proliferate to work in your cloud sandbox..."
-            }
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            className="min-h-28 w-full resize-none border-0 bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-0"
+            placeholder={meta.placeholder}
           />
           <div className="mt-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <GitBranch size={14} />
-              <span>{workspaces.find((workspace) => workspace.id === workspaceId)?.branchLabel ?? "main"}</span>
-            </div>
-            <Button size="md">
-              <Plus size={15} />
-              Start
+            {mode === "personal" ? (
+              <div className="flex items-center gap-2">
+                <Select
+                  value={workspaceId}
+                  onChange={(event) => setWorkspaceId(event.target.value)}
+                  className="h-7 w-auto rounded-md border-border bg-background px-2 text-xs focus:border-border-heavy"
+                >
+                  {workspaces.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </Select>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <GitBranch size={12} />
+                  {workspace?.branchLabel ?? "main"}
+                </span>
+              </div>
+            ) : (
+              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {mode === "dispatch" ? "Mobile-first" : "Team"}
+              </span>
+            )}
+            <Button
+              size="sm"
+              variant="inverted"
+              disabled={!draft.trim()}
+              className="rounded-full px-3"
+            >
+              <Send size={13} />
+              {mode === "dispatch" ? "Dispatch" : mode === "shared" ? "Send" : "Run"}
             </Button>
           </div>
-        </section>
-
-        <div className="mt-8 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Recent sessions</h2>
-              <Button variant="ghost" size="sm" onClick={() => navigate(routes.automations)}>
-                Automations
-                <ArrowRight size={14} />
-              </Button>
-            </div>
-            <div className="grid gap-2">
-              {recentChats.map((chat) => {
-                const presentation = chatKindPresentation(chat.kind);
-                const workspace = workspaceForChat(chat);
-                return (
-                  <Button
-                    variant="unstyled"
-                    size="unstyled"
-                    key={chat.id}
-                    type="button"
-                    onClick={() => navigate(routes.chat(chat.workspaceId, chat.id))}
-                    className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{chat.title}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {presentation.label} - {workspace?.repoLabel ?? "Unknown repo"}
-                      </span>
-                    </span>
-                    <ArrowRight size={15} className="shrink-0 text-muted-foreground" />
-                  </Button>
-                );
-              })}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="mb-3 text-sm font-semibold">Workspace mix</h2>
-            <div className="grid gap-2">
-              {Object.entries(counts).map(([kind, count]) => {
-                const presentation = chatKindPresentation(kind as keyof typeof counts);
-                return (
-                  <div key={kind} className="flex items-center justify-between rounded-lg border border-border bg-card p-3">
-                    <span>
-                      <span className="block text-sm font-medium">{presentation.label}</span>
-                      <span className="block text-xs text-muted-foreground">{presentation.description}</span>
-                    </span>
-                    <span className="text-sm text-muted-foreground">{count}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-4 rounded-lg border border-border bg-card p-3">
-              <h3 className="text-sm font-medium">Next automation</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {automations[0]?.name} - {automations[0]?.scheduleLabel}
-              </p>
-            </div>
-          </section>
         </div>
+
+        <p className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <Bot size={13} />
+          Configure agents, models, and skills in Settings.
+        </p>
       </div>
     </div>
   );
