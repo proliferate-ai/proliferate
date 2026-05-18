@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     cors_allow_origins: str = (
         "http://localhost:1420,"
         "http://127.0.0.1:1420,"
+        "http://localhost:5174,"
+        "http://127.0.0.1:5174,"
         "http://localhost:3000,"
         "http://127.0.0.1:3000,"
         "http://localhost:5174,"

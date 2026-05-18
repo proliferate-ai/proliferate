@@ -1,17 +1,49 @@
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+
 import { AuthHandoffScreen } from "../components/auth/screen/AuthHandoffScreen";
 import { routes } from "../config/routes";
+import { completeWebAuthFlow } from "../lib/access/cloud/auth/web-auth-flow";
+import { useAuthToken } from "../providers/WebCloudProvider";
 
 export function AuthCallbackPage() {
-  const desktopHref = `proliferate://auth/callback${window.location.search}`;
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { setSession } = useAuthToken();
+  const started = useRef(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (started.current) {
+      return;
+    }
+    started.current = true;
+    completeWebAuthFlow(searchParams)
+      .then((session) => {
+        setSession(session);
+        navigate(routes.home, { replace: true });
+      })
+      .catch((callbackError) => {
+        const message =
+          callbackError instanceof Error
+            ? callbackError.message
+            : "The sign-in callback could not be completed.";
+        setError(message);
+        navigate(`${routes.authError}?code=${encodeURIComponent(message)}`, {
+          replace: true,
+        });
+      });
+  }, [navigate, searchParams, setSession]);
+
   return (
     <AuthHandoffScreen
-      title="Finishing sign in"
-      description="Your browser session is ready. Continue in the app to finish account setup."
-      stateLabel="Waiting for auth result"
-      primaryActionLabel="Open desktop"
-      primaryActionHref={desktopHref}
-      secondaryActionLabel="Go to dashboard"
-      secondaryActionHref={routes.home}
+      tone={error ? "error" : "default"}
+      title={error ? "Sign in needs attention" : "Finishing sign in"}
+      description={
+        error ??
+        "Your browser session is being created. You will be redirected when it is ready."
+      }
+      stateLabel={error ? "Auth error" : "Exchanging auth code"}
     />
   );
 }

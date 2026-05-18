@@ -8,7 +8,10 @@ import pytest
 from httpx import AsyncClient
 
 from proliferate.auth.desktop import service as desktop_service
+from proliferate.auth.identity import providers as identity_providers
+from proliferate.auth.identity.service import WEB_CSRF_COOKIE
 from proliferate.auth.oauth import github_oauth_client
+from proliferate.auth.oauth import google_oauth_client
 from proliferate.config import settings
 from proliferate.constants.auth import DESKTOP_GITHUB_CSRF_COOKIE
 from proliferate.integrations.github import GitHubUserProfile
@@ -509,6 +512,247 @@ class TestDesktopGitHubBrowserFlow:
         )
         assert exchange.status_code == 200
         assert exchange.json()["user"]["email"] == "desktop-github@example.com"
+
+
+class TestWebMobileProductAuthFlow:
+    @staticmethod
+    def _enable_identity_github(monkeypatch: pytest.MonkeyPatch, email: str) -> None:
+        monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
+        monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
+
+        async def fake_get_authorization_url(
+            redirect_uri: str,
+            state: str | None = None,
+            scope: list[str] | None = None,
+            code_challenge: str | None = None,
+            code_challenge_method: str | None = None,
+            extras_params: dict[str, str] | None = None,
+        ) -> str:
+            assert redirect_uri.endswith("/auth/web/github/callback") or redirect_uri.endswith(
+                "/auth/mobile/github/callback"
+            )
+            assert scope == ["repo", "user", "user:email"]
+            assert code_challenge is None
+            assert code_challenge_method is None
+            assert state is not None
+            return (
+                "https://github.com/login/oauth/authorize"
+                f"?state={state}&redirect_uri={redirect_uri}"
+            )
+
+        async def fake_get_access_token(code: str, redirect_uri: str) -> dict[str, object]:
+            assert code == "github-code"
+            assert "/auth/" in redirect_uri
+            return {"access_token": "github-access-token", "scope": "repo,user,user:email"}
+
+        async def fake_get_id_email(token: str) -> tuple[str, str]:
+            assert token == "github-access-token"
+            return (f"github-account-{email}", email)
+
+        async def fake_get_github_user_profile(token: str) -> GitHubUserProfile:
+            assert token == "github-access-token"
+            return GitHubUserProfile(
+                login=f"github-{email.split('@')[0]}",
+                avatar_url="https://avatars.githubusercontent.com/u/583231?v=4",
+                display_name="GitHub Tester",
+            )
+
+        monkeypatch.setattr(
+            github_oauth_client,
+            "get_authorization_url",
+            fake_get_authorization_url,
+        )
+        monkeypatch.setattr(github_oauth_client, "get_access_token", fake_get_access_token)
+        monkeypatch.setattr(github_oauth_client, "get_id_email", fake_get_id_email)
+        monkeypatch.setattr(
+            identity_providers,
+            "get_github_user_profile",
+            fake_get_github_user_profile,
+        )
+
+    @staticmethod
+    def _enable_google(monkeypatch: pytest.MonkeyPatch, email: str) -> None:
+        monkeypatch.setattr(settings, "google_oauth_client_id", "google-client-id")
+        monkeypatch.setattr(settings, "google_oauth_client_secret", "google-client-secret")
+
+        async def fake_get_authorization_url(
+            redirect_uri: str,
+            state: str | None = None,
+            scope: list[str] | None = None,
+            code_challenge: str | None = None,
+            code_challenge_method: str | None = None,
+            extras_params: dict[str, str] | None = None,
+        ) -> str:
+            assert redirect_uri.endswith("/auth/web/google/callback")
+            assert scope == ["openid", "email", "profile"]
+            assert code_challenge is None
+            assert code_challenge_method is None
+            assert state is not None
+            return (
+                "https://accounts.google.com/o/oauth2/v2/auth"
+                f"?state={state}&redirect_uri={redirect_uri}"
+            )
+
+        async def fake_get_access_token(code: str, redirect_uri: str) -> dict[str, object]:
+            assert code == "google-code"
+            assert redirect_uri.endswith("/auth/web/google/callback")
+            return {"access_token": "google-access-token", "scope": "openid email profile"}
+
+        async def fake_get_id_email(token: str) -> tuple[str, str]:
+            assert token == "google-access-token"
+            return (f"google-account-{email}", email)
+
+        monkeypatch.setattr(
+            google_oauth_client,
+            "get_authorization_url",
+            fake_get_authorization_url,
+        )
+        monkeypatch.setattr(google_oauth_client, "get_access_token", fake_get_access_token)
+        monkeypatch.setattr(google_oauth_client, "get_id_email", fake_get_id_email)
+
+    @pytest.mark.asyncio
+    async def test_web_github_login_sets_cookie_session_and_product_identity(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        verifier, challenge = _make_pkce_pair()
+        self._enable_identity_github(monkeypatch, "web-github@example.com")
+
+        started = await client.post(
+            "/auth/web/github/start",
+            json={
+                "purpose": "login",
+                "clientState": "web-client-state",
+                "codeChallenge": challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "http://localhost:5174/auth/callback",
+                "prompt": "select_account",
+            },
+        )
+        assert started.status_code == 200
+        oauth_state = parse_qs(urlparse(started.json()["authorizationUrl"]).query)["state"][0]
+
+        callback = await client.get(
+            "/auth/web/github/callback",
+            params={"code": "github-code", "state": oauth_state},
+            follow_redirects=False,
+        )
+        assert callback.status_code == 302
+        callback_query = parse_qs(urlparse(callback.headers["location"]).query)
+        assert callback_query["state"] == ["web-client-state"]
+
+        token = await client.post(
+            "/auth/web/token",
+            json={
+                "code": callback_query["code"][0],
+                "codeVerifier": verifier,
+                "grantType": "authorization_code",
+            },
+        )
+        assert token.status_code == 200
+        payload = token.json()
+        assert payload["refreshToken"] is None
+        assert payload["readiness"]["productReady"] is True
+        assert "proliferate_web_refresh" in token.headers["set-cookie"]
+
+        bootstrap = await client.post("/auth/web/session/bootstrap")
+        assert bootstrap.status_code == 200
+        assert bootstrap.json()["readiness"]["productReady"] is True
+
+        csrf = client.cookies.get(WEB_CSRF_COOKIE)
+        assert csrf is not None
+        refreshed = await client.post(
+            "/auth/web/session/refresh",
+            headers={"x-proliferate-csrf": csrf},
+        )
+        assert refreshed.status_code == 200
+
+        protected = await client.get(
+            "/v1/cloud/workspaces",
+            headers={"Authorization": f"Bearer {payload['accessToken']}"},
+        )
+        assert protected.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_web_google_login_requires_github_then_links_github(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        google_verifier, google_challenge = _make_pkce_pair()
+        self._enable_google(monkeypatch, "google-web@example.com")
+
+        google_start = await client.post(
+            "/auth/web/google/start",
+            json={
+                "purpose": "login",
+                "clientState": "google-client-state",
+                "codeChallenge": google_challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "http://localhost:5174/auth/callback",
+            },
+        )
+        oauth_state = parse_qs(urlparse(google_start.json()["authorizationUrl"]).query)["state"][0]
+
+        google_callback = await client.get(
+            "/auth/web/google/callback",
+            params={"code": "google-code", "state": oauth_state},
+            follow_redirects=False,
+        )
+        google_query = parse_qs(urlparse(google_callback.headers["location"]).query)
+        google_token = await client.post(
+            "/auth/web/token",
+            json={
+                "code": google_query["code"][0],
+                "codeVerifier": google_verifier,
+                "grantType": "authorization_code",
+            },
+        )
+        assert google_token.status_code == 200
+        google_payload = google_token.json()
+        assert google_payload["readiness"]["productReady"] is False
+
+        blocked = await client.get(
+            "/v1/cloud/workspaces",
+            headers={"Authorization": f"Bearer {google_payload['accessToken']}"},
+        )
+        assert blocked.status_code == 403
+        assert blocked.json()["detail"]["code"] == "github_link_required"
+
+        github_verifier, github_challenge = _make_pkce_pair()
+        self._enable_identity_github(monkeypatch, "github-for-google@example.com")
+        github_start = await client.post(
+            "/auth/web/github/start",
+            headers={"Authorization": f"Bearer {google_payload['accessToken']}"},
+            json={
+                "purpose": "required_github_link",
+                "clientState": "github-link-client-state",
+                "codeChallenge": github_challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "http://localhost:5174/auth/callback",
+            },
+        )
+        assert github_start.status_code == 200
+        github_state = parse_qs(urlparse(github_start.json()["authorizationUrl"]).query)[
+            "state"
+        ][0]
+        github_callback = await client.get(
+            "/auth/web/github/callback",
+            params={"code": "github-code", "state": github_state},
+            follow_redirects=False,
+        )
+        github_query = parse_qs(urlparse(github_callback.headers["location"]).query)
+        linked_token = await client.post(
+            "/auth/web/token",
+            json={
+                "code": github_query["code"][0],
+                "codeVerifier": github_verifier,
+                "grantType": "authorization_code",
+            },
+        )
+        assert linked_token.status_code == 200
+        assert linked_token.json()["readiness"]["productReady"] is True
 
 
 class TestRefreshToken:

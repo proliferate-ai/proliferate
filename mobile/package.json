@@ -16,6 +16,7 @@
     "submit:ios": "pnpm dlx eas-cli@18.13.0 submit --platform ios --profile production"
   },
   "dependencies": {
+    "@proliferate/cloud-sdk": "workspace:*",
     "@proliferate/design": "workspace:*",
     "@proliferate/product-model": "workspace:*",
     "expo": "~54.0.33",

@@ -1,6 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   BackHandler,
   Pressable,
   StyleSheet,
@@ -33,7 +34,14 @@ const ACCOUNT = {
 };
 
 export function MobileShell() {
-  const { authState, signInWithApple, signInWithGitHub, signOut } = useMobileAuth();
+  const {
+    authState,
+    signInWithProvider,
+    connectGitHub,
+    signOut,
+    loadingAction,
+    error,
+  } = useMobileAuth();
   const [route, setRoute] = useState<RouteId>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<ProductChat | null>(null);
@@ -78,11 +86,27 @@ export function MobileShell() {
     signOut();
   }
 
+  if (authState === "bootstrapping") {
+    return (
+      <SafeAreaView style={styles.root} edges={["top", "right", "bottom", "left"]}>
+        <StatusBar style="light" />
+        <View style={styles.loadingRoot}>
+          <ActivityIndicator color={colors.fg} />
+          <Text style={styles.loadingText}>Opening Proliferate</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (authState === "signed_out") {
     return (
       <SafeAreaView style={styles.root} edges={["top", "right", "bottom", "left"]}>
         <StatusBar style="light" />
-        <MobileAuthScreen onApple={signInWithApple} onGitHub={signInWithGitHub} />
+        <MobileAuthScreen
+          onProvider={(provider) => void signInWithProvider(provider)}
+          loadingAction={loadingAction}
+          error={error}
+        />
       </SafeAreaView>
     );
   }
@@ -92,8 +116,10 @@ export function MobileShell() {
       <SafeAreaView style={styles.root} edges={["top", "right", "bottom", "left"]}>
         <StatusBar style="light" />
         <MobileConnectGitHubScreen
-          onConnect={signInWithGitHub}
+          onConnect={() => void connectGitHub()}
           onSignOut={handleSignOut}
+          loading={loadingAction === "github_link"}
+          error={error}
         />
       </SafeAreaView>
     );
@@ -258,6 +284,17 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingRoot: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[3],
+    backgroundColor: colors.background,
+  },
+  loadingText: {
+    color: colors.mutedForeground,
+    fontSize: 13,
   },
   body: {
     flex: 1,

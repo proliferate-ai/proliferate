@@ -290,6 +290,9 @@ importers:
 
   mobile:
     dependencies:
+      '@proliferate/cloud-sdk':
+        specifier: workspace:*
+        version: link:../cloud/sdk
       '@proliferate/design':
         specifier: workspace:*
         version: link:../packages/design

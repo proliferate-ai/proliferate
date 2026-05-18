@@ -37,6 +37,9 @@ from proliferate.auth.desktop.pages import (
     make_browser_flow_page,
     make_desktop_handoff_page,
 )
+from proliferate.auth.identity.providers import parse_scope_string
+from proliferate.auth.identity.service import attach_verified_identity
+from proliferate.auth.identity.types import VerifiedProviderIdentity
 from proliferate.auth.jwt import get_jwt_strategy
 from proliferate.auth.oauth import github_oauth_client
 from proliferate.auth.pkce import build_code_challenge, verify_pkce
@@ -44,6 +47,7 @@ from proliferate.config import settings
 from proliferate.constants.auth import (
     DESKTOP_DEEP_LINK_LAUNCH_ENABLED,
     DESKTOP_REDIRECT_SCHEME,
+    GITHUB_OAUTH_SCOPES,
     JWT_LIFETIME_SECONDS,
     REFRESH_TOKEN_LIFETIME_SECONDS,
     SUPPORTED_CODE_CHALLENGE_METHODS,
@@ -338,8 +342,14 @@ async def finish_github_desktop_callback(
             message="This account is inactive.",
         )
 
+    github_login: str | None = None
+    github_display_name: str | None = None
+    github_avatar_url: str | None = None
     try:
         github_profile = await get_github_user_profile(token["access_token"])
+        github_login = github_profile.login
+        github_display_name = github_profile.display_name
+        github_avatar_url = github_profile.avatar_url
         synced_user = await update_user_github_profile(
             db,
             user.id,
@@ -353,6 +363,31 @@ async def finish_github_desktop_callback(
         logger.info("Could not sync GitHub profile for desktop auth", exc_info=True)
     except Exception:
         logger.exception("Could not persist GitHub profile for desktop auth")
+
+    await attach_verified_identity(
+        db,
+        user=user,
+        verified=VerifiedProviderIdentity(
+            provider="github",
+            provider_subject=account_id,
+            email=account_email,
+            email_verified=True,
+            display_name=github_display_name,
+            provider_login=github_login,
+            avatar_url=github_avatar_url,
+            access_token=str(token["access_token"]),
+            refresh_token=(
+                token.get("refresh_token") if isinstance(token.get("refresh_token"), str) else None
+            ),
+            expires_at=None,
+            expires_at_timestamp=(
+                int(token["expires_at"])
+                if isinstance(token.get("expires_at"), (int, float))
+                else None
+            ),
+            scopes=parse_scope_string(token.get("scope")) or frozenset(GITHUB_OAUTH_SCOPES),
+        ),
+    )
 
     auth_code = await create_auth_code(
         db,
