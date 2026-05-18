@@ -22,6 +22,8 @@ pub struct AgentAuthSelectionConfig {
     pub credential_revision: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_share_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
     #[serde(default)]
     pub protected_env: BTreeMap<String, String>,
     #[serde(default)]
@@ -53,6 +55,8 @@ pub struct AgentAuthSelectionStatus {
     pub credential_revision: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_share_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
     pub protected_env_keys: Vec<String>,
     pub support_env_keys: Vec<String>,
     pub protected_config_keys: Vec<String>,

@@ -1378,6 +1378,8 @@ mod tests {
             workspace_id: workspace_id.to_string(),
             agent_kind: "claude".to_string(),
             native_session_id: None,
+            agent_auth_scope: None,
+            required_agent_auth_revision: None,
             requested_model_id: None,
             current_model_id: None,
             requested_mode_id: None,

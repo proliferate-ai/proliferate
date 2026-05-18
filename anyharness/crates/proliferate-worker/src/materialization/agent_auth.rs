@@ -121,9 +121,23 @@ pub fn parse_refresh_agent_auth_config_payload(
 
 pub fn build_anyharness_agent_auth_request(
     allowed_root: Option<&Path>,
+    expected_sandbox_profile_id: &str,
+    expected_target_id: &str,
     expected_revision: i64,
     plan: &AgentAuthMaterializationPlan,
 ) -> Result<(Value, AgentAuthMaterializationOutcome), WorkerError> {
+    if plan.sandbox_profile_id != expected_sandbox_profile_id {
+        return Err(materialization_error(format!(
+            "agent auth sandbox profile mismatch: expected {expected_sandbox_profile_id}, got {}",
+            plan.sandbox_profile_id
+        )));
+    }
+    if plan.target_id.as_deref() != Some(expected_target_id) {
+        return Err(materialization_error(format!(
+            "agent auth target mismatch: expected {expected_target_id}, got {}",
+            plan.target_id.as_deref().unwrap_or("<missing>")
+        )));
+    }
     if plan.revision != expected_revision {
         return Err(materialization_error(format!(
             "agent auth revision mismatch: expected {expected_revision}, got {}",
@@ -152,13 +166,11 @@ pub fn build_anyharness_agent_auth_request(
         let mut protected_config = BTreeMap::new();
         let mut support_config = BTreeMap::new();
         let mut synced_file_paths = Vec::new();
+        let mut expires_at = None;
 
         if let Some(gateway) = &selection.gateway {
-            let _ = (
-                &gateway.protocol_facade,
-                &gateway.base_urls,
-                &gateway.expires_at,
-            );
+            let _ = (&gateway.protocol_facade, &gateway.base_urls);
+            expires_at = Some(gateway.expires_at.clone());
             protected_env.extend(gateway.protected_env.clone());
             support_env.extend(gateway.support_env.clone());
             protected_config.extend(gateway.protected_config.clone());
@@ -189,6 +201,7 @@ pub fn build_anyharness_agent_auth_request(
             "credentialId": selection.credential_id,
             "credentialRevision": selection.credential_revision,
             "credentialShareId": selection.credential_share_id,
+            "expiresAt": expires_at,
             "protectedEnv": protected_env,
             "supportEnv": support_env,
             "protectedConfig": protected_config,
@@ -317,7 +330,8 @@ mod tests {
         .expect("plan");
 
         let (request, outcome) =
-            build_anyharness_agent_auth_request(None, 7, &plan).expect("request");
+            build_anyharness_agent_auth_request(None, "profile-1", "target-1", 7, &plan)
+                .expect("request");
 
         assert!(outcome.applied);
         assert_eq!(outcome.selection_count, 1);
@@ -326,5 +340,35 @@ mod tests {
             request["selections"][0]["protectedEnv"]["ANTHROPIC_BASE_URL"],
             "https://gateway.example/anthropic"
         );
+        assert_eq!(
+            request["selections"][0]["expiresAt"],
+            "2026-05-18T00:00:00Z"
+        );
+    }
+
+    #[test]
+    fn rejects_plan_for_different_profile_or_target() {
+        let plan: AgentAuthMaterializationPlan = serde_json::from_value(json!({
+            "applied": true,
+            "targetId": "target-1",
+            "sandboxProfileId": "profile-1",
+            "revision": 7,
+            "selections": []
+        }))
+        .expect("plan");
+
+        let profile_error =
+            build_anyharness_agent_auth_request(None, "profile-2", "target-1", 7, &plan)
+                .expect_err("profile mismatch");
+        assert!(profile_error
+            .to_string()
+            .contains("agent auth sandbox profile mismatch"));
+
+        let target_error =
+            build_anyharness_agent_auth_request(None, "profile-1", "target-2", 7, &plan)
+                .expect_err("target mismatch");
+        assert!(target_error
+            .to_string()
+            .contains("agent auth target mismatch"));
     }
 }

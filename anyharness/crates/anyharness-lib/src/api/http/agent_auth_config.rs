@@ -9,6 +9,7 @@ use crate::app::AppState;
 #[utoipa::path(
     put,
     path = "/v1/agents/auth-config",
+    tag = "agents",
     request_body = ApplyAgentAuthConfigRequest,
     responses(
         (status = 200, description = "Agent auth config applied", body = ApplyAgentAuthConfigResponse)
@@ -28,6 +29,7 @@ pub async fn apply_agent_auth_config(
 #[utoipa::path(
     get,
     path = "/v1/agents/auth-config/status",
+    tag = "agents",
     responses(
         (status = 200, description = "Redacted agent auth config status", body = AgentAuthConfigStatusResponse)
     )

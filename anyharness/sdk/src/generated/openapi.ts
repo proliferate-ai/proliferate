@@ -1725,6 +1725,7 @@ export interface components {
             /** Format: int64 */
             credentialRevision: number;
             credentialShareId?: string | null;
+            expiresAt?: string | null;
             materializationMode: string;
             protectedConfig?: {
                 [key: string]: unknown;
@@ -1746,6 +1747,7 @@ export interface components {
             /** Format: int64 */
             credentialRevision: number;
             credentialShareId?: string | null;
+            expiresAt?: string | null;
             materializationMode: string;
             protectedConfigKeys: string[];
             protectedEnvKeys: string[];
@@ -2173,6 +2175,7 @@ export interface components {
             session: components["schemas"]["Session"];
         };
         CreateSessionRequest: {
+            agentAuthScope?: null | components["schemas"]["AgentAuthExternalScope"];
             agentKind: string;
             mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
             mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
@@ -2180,6 +2183,8 @@ export interface components {
             modelId?: string | null;
             origin?: null | components["schemas"]["OriginContext"];
             pluginBundle?: null | components["schemas"]["SessionPluginBundle"];
+            /** Format: int64 */
+            requiredAgentAuthRevision?: number | null;
             subagentsEnabled?: boolean | null;
             systemPromptAppend?: string[] | null;
             workspaceId: string;

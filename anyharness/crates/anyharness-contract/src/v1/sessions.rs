@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::OriginContext;
+use super::{AgentAuthExternalScope, OriginContext};
 use super::{
     ContentPart, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
     PermissionInteractionOption, PromptProvenance, SessionLiveConfigSnapshot,
@@ -155,6 +155,10 @@ pub struct PendingPromptSummary {
 pub struct CreateSessionRequest {
     pub workspace_id: String,
     pub agent_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_auth_scope: Option<AgentAuthExternalScope>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required_agent_auth_revision: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

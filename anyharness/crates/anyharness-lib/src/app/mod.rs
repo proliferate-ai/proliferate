@@ -174,6 +174,7 @@ impl AppState {
             SessionStore::new(db.clone()),
             WorkspaceStore::new(db.clone()),
             DynamicModelRegistryStore::new(db.clone()),
+            agent_auth_config_service.clone(),
             runtime_home.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));

@@ -722,7 +722,7 @@ async def test_agent_auth_selection_queues_secret_safe_worker_materialization(
         headers=_headers(tokens),
     )
     assert command_status.status_code == 200
-    assert command_status.json()["result"] is None
+    assert command_status.json()["result"] == {"applied": True}
     assert token not in str(command_status.json())
 
     target_states = await client.get(

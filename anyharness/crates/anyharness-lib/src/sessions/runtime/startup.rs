@@ -355,8 +355,19 @@ impl SessionRuntime {
             .workspace_runtime
             .workspace_env(&workspace)
             .map_err(StartSessionError::Internal)?;
+        let agent_auth_overlay = self
+            .agent_auth_config_service
+            .launch_overlay(
+                &record.agent_kind,
+                record.agent_auth_scope.as_ref(),
+                record.required_agent_auth_revision,
+            )
+            .map_err(StartSessionError::Internal)?;
+        let mut readiness_env = workspace_env.clone();
+        readiness_env.extend(agent_auth_overlay.support_env.clone());
+        readiness_env.extend(agent_auth_overlay.protected_env.clone());
         let agent_resolution_started = Instant::now();
-        let resolved_agent = resolve_agent_with_env(descriptor, &self.runtime_home, &workspace_env);
+        let resolved_agent = resolve_agent_with_env(descriptor, &self.runtime_home, &readiness_env);
         tracing::info!(
             session_id = %record.id,
             agent_kind = %record.agent_kind,
@@ -368,10 +379,6 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.start_live_session.agent_resolved"
         );
         let session_launch_env = build_session_launch_env(&resolved_agent);
-        let agent_auth_overlay = self
-            .agent_auth_config_service
-            .launch_overlay(&record.agent_kind)
-            .map_err(StartSessionError::Internal)?;
         let session_store = self.session_service.store().clone();
         let attachment_storage = self.session_service.attachment_storage().clone();
         let mcp_launch = assemble_session_mcp_launch(

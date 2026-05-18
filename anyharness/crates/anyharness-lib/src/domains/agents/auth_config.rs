@@ -1,11 +1,13 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use anyharness_contract::v1::{
     AgentAuthConfigStatusResponse, AgentAuthExternalScope, AgentAuthSelectionConfig,
     AgentAuthSelectionStatus, ApplyAgentAuthConfigRequest, ApplyAgentAuthConfigResponse,
 };
+use chrono::{DateTime, Utc};
 use rusqlite::{params, OptionalExtension};
 use serde_json::{Map, Value};
 
@@ -15,12 +17,16 @@ use crate::sessions::mcp_bindings::crypto::{decrypt_bytes, encrypt_bytes, Sessio
 const LOCAL_SCOPE_KEY: &str = "local:default";
 const PROTECTED_ENV_KEYS: &[&str] = &[
     "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_API_KEY",
     "ANTHROPIC_BASE_URL",
     "ANTHROPIC_CUSTOM_HEADERS",
     "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
     "CLAUDE_CODE_USE_BEDROCK",
     "CODEX_API_KEY",
     "CODEX_HOME",
+    "CURSOR_API_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
     "OPENAI_API_KEY",
     "OPENAI_BASE_URL",
 ];
@@ -50,15 +56,26 @@ impl AgentAuthConfigStore {
         Self { db }
     }
 
+    fn current_revision(&self, scope_key: &str) -> anyhow::Result<Option<i64>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT revision FROM agent_auth_config WHERE scope_key = ?1",
+                [scope_key],
+                |row| row.get(0),
+            )
+            .optional()
+        })
+    }
+
     fn upsert(
         &self,
         scope_key: &str,
         scope: &AgentAuthExternalScope,
         revision: i64,
         config_ciphertext: &str,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<bool> {
         self.db.with_tx(|conn| {
-            conn.execute(
+            let changed = conn.execute(
                 "INSERT INTO agent_auth_config (
                     scope_key, scope_provider, scope_id, target_id, revision,
                     config_ciphertext, created_at, updated_at
@@ -71,7 +88,8 @@ impl AgentAuthConfigStore {
                     target_id = excluded.target_id,
                     revision = excluded.revision,
                     config_ciphertext = excluded.config_ciphertext,
-                    updated_at = datetime('now')",
+                    updated_at = datetime('now')
+                 WHERE agent_auth_config.revision <= excluded.revision",
                 params![
                     scope_key,
                     scope.provider,
@@ -81,7 +99,7 @@ impl AgentAuthConfigStore {
                     config_ciphertext,
                 ],
             )?;
-            Ok(())
+            Ok(changed > 0)
         })
     }
 
@@ -106,6 +124,27 @@ impl AgentAuthConfigStore {
             .optional()
         })
     }
+
+    fn find_by_scope(&self, scope_key: &str) -> anyhow::Result<Option<AgentAuthConfigRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT scope_provider, scope_id, target_id, revision, config_ciphertext
+                 FROM agent_auth_config
+                 WHERE scope_key = ?1",
+                [scope_key],
+                |row| {
+                    Ok(AgentAuthConfigRecord {
+                        scope_provider: row.get(0)?,
+                        scope_id: row.get(1)?,
+                        target_id: row.get(2)?,
+                        revision: row.get(3)?,
+                        config_ciphertext: row.get(4)?,
+                    })
+                },
+            )
+            .optional()
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -113,6 +152,7 @@ pub struct AgentAuthConfigService {
     store: AgentAuthConfigStore,
     cipher: Option<SessionDataCipher>,
     runtime_home: PathBuf,
+    apply_lock: Arc<Mutex<()>>,
 }
 
 impl AgentAuthConfigService {
@@ -125,6 +165,7 @@ impl AgentAuthConfigService {
             store,
             cipher,
             runtime_home,
+            apply_lock: Arc::new(Mutex::new(())),
         }
     }
 
@@ -133,18 +174,44 @@ impl AgentAuthConfigService {
         request: ApplyAgentAuthConfigRequest,
     ) -> anyhow::Result<ApplyAgentAuthConfigResponse> {
         validate_config_request(&request)?;
+        let _guard = self
+            .apply_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("agent auth config apply lock poisoned"))?;
         let Some(cipher) = self.cipher.as_ref() else {
             anyhow::bail!("ANYHARNESS_DATA_KEY is required to apply agent auth config");
         };
-        self.write_managed_config_files(&request)?;
         let scope = request
             .external_auth_scope
             .clone()
             .unwrap_or_else(default_external_scope);
+        let scope_key = scope_key(&scope);
+        if self
+            .store
+            .current_revision(&scope_key)?
+            .is_some_and(|current| current > request.revision)
+        {
+            return Ok(ApplyAgentAuthConfigResponse {
+                applied: false,
+                revision: request.revision,
+                selection_count: 0,
+                status: "stale".to_string(),
+            });
+        }
+        self.write_managed_config_files(&request)?;
         let plaintext = serde_json::to_vec(&request)?;
         let ciphertext = encrypt_bytes(cipher, &plaintext)?;
-        self.store
-            .upsert(&scope_key(&scope), &scope, request.revision, &ciphertext)?;
+        let applied = self
+            .store
+            .upsert(&scope_key, &scope, request.revision, &ciphertext)?;
+        if !applied {
+            return Ok(ApplyAgentAuthConfigResponse {
+                applied: false,
+                revision: request.revision,
+                selection_count: 0,
+                status: "stale".to_string(),
+            });
+        }
         Ok(ApplyAgentAuthConfigResponse {
             applied: true,
             revision: request.revision,
@@ -174,10 +241,33 @@ impl AgentAuthConfigService {
         ))
     }
 
-    pub fn launch_overlay(&self, agent_kind: &str) -> anyhow::Result<AgentAuthLaunchOverlay> {
-        let Some(record) = self.store.latest()? else {
+    pub fn launch_overlay(
+        &self,
+        agent_kind: &str,
+        scope: Option<&AgentAuthExternalScope>,
+        required_revision: Option<i64>,
+    ) -> anyhow::Result<AgentAuthLaunchOverlay> {
+        let record = if let Some(scope) = scope {
+            let scope_key = scope_key(scope);
+            self.store.find_by_scope(&scope_key)?
+        } else {
+            self.store.find_by_scope(LOCAL_SCOPE_KEY)?
+        };
+        let Some(record) = record else {
+            if scope.is_some() || required_revision.is_some() {
+                anyhow::bail!("missing required agent auth config");
+            }
             return Ok(AgentAuthLaunchOverlay::default());
         };
+        if let Some(required_revision) = required_revision {
+            if record.revision < required_revision {
+                anyhow::bail!(
+                    "agent auth config revision {} is older than required revision {}",
+                    record.revision,
+                    required_revision
+                );
+            }
+        }
         let config = self.decrypt_record(&record)?;
         let Some(selection) = config
             .selections
@@ -186,6 +276,7 @@ impl AgentAuthConfigService {
         else {
             return Ok(AgentAuthLaunchOverlay::default());
         };
+        reject_expired_selection(selection)?;
         let mut protected_env = selection.protected_env.clone();
         if agent_kind == "codex" && selection.protected_config.contains_key("codex") {
             protected_env.insert(
@@ -238,6 +329,11 @@ fn validate_config_request(request: &ApplyAgentAuthConfigRequest) -> anyhow::Res
     for selection in &request.selections {
         if selection.agent_kind.trim().is_empty() {
             anyhow::bail!("agent auth selection agentKind is required");
+        }
+        if let Some(expires_at) = selection.expires_at.as_deref() {
+            DateTime::parse_from_rfc3339(expires_at).map_err(|error| {
+                anyhow::anyhow!("agent auth selection expiresAt is invalid: {error}")
+            })?;
         }
         validate_env_map(&selection.protected_env)?;
         validate_env_map(&selection.support_env)?;
@@ -295,12 +391,30 @@ fn selection_status(selection: &AgentAuthSelectionConfig) -> AgentAuthSelectionS
         credential_id: selection.credential_id.clone(),
         credential_revision: selection.credential_revision,
         credential_share_id: selection.credential_share_id.clone(),
+        expires_at: selection.expires_at.clone(),
         protected_env_keys: selection.protected_env.keys().cloned().collect(),
         support_env_keys: selection.support_env.keys().cloned().collect(),
         protected_config_keys: selection.protected_config.keys().cloned().collect(),
         support_config_keys: selection.support_config.keys().cloned().collect(),
         synced_file_paths: selection.synced_file_paths.clone(),
     }
+}
+
+fn reject_expired_selection(selection: &AgentAuthSelectionConfig) -> anyhow::Result<()> {
+    let Some(expires_at) = selection.expires_at.as_deref() else {
+        return Ok(());
+    };
+    let expires_at = DateTime::parse_from_rfc3339(expires_at)
+        .map_err(|error| anyhow::anyhow!("agent auth selection expiresAt is invalid: {error}"))?
+        .with_timezone(&Utc);
+    if expires_at <= Utc::now() {
+        anyhow::bail!(
+            "agent auth selection for {} expired at {}",
+            selection.agent_kind,
+            expires_at.to_rfc3339()
+        );
+    }
+    Ok(())
 }
 
 fn default_external_scope() -> AgentAuthExternalScope {
@@ -399,142 +513,5 @@ fn set_private_file_permissions(_path: &PathBuf) -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::collections::BTreeMap;
-
-    use anyharness_contract::v1::{
-        AgentAuthExternalScope, AgentAuthSelectionConfig, ApplyAgentAuthConfigRequest,
-    };
-    use serde_json::json;
-
-    use crate::persistence::Db;
-    use crate::sessions::mcp_bindings::crypto::SessionDataCipher;
-
-    use super::{AgentAuthConfigService, AgentAuthConfigStore};
-
-    fn cipher() -> SessionDataCipher {
-        SessionDataCipher::from_env_value("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
-            .expect("cipher")
-    }
-
-    #[test]
-    fn applies_status_without_secret_values() {
-        let root = std::env::temp_dir().join(format!(
-            "anyharness-agent-auth-config-{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        let service = AgentAuthConfigService::new(
-            AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
-            Some(cipher()),
-            root,
-        );
-
-        service
-            .apply_config(ApplyAgentAuthConfigRequest {
-                external_auth_scope: Some(AgentAuthExternalScope {
-                    provider: "proliferate-cloud".to_string(),
-                    id: "profile-1".to_string(),
-                    target_id: Some("target-1".to_string()),
-                }),
-                revision: 3,
-                selections: vec![AgentAuthSelectionConfig {
-                    agent_kind: "claude".to_string(),
-                    materialization_mode: "gateway_env".to_string(),
-                    credential_id: "credential-1".to_string(),
-                    credential_revision: 2,
-                    credential_share_id: None,
-                    protected_env: BTreeMap::from([(
-                        "ANTHROPIC_CUSTOM_HEADERS".to_string(),
-                        "Authorization: Bearer secret".to_string(),
-                    )]),
-                    support_env: BTreeMap::new(),
-                    protected_config: BTreeMap::new(),
-                    support_config: BTreeMap::new(),
-                    synced_file_paths: Vec::new(),
-                }],
-            })
-            .expect("apply");
-
-        let status = service.status().expect("status");
-        assert_eq!(status.revision, Some(3));
-        assert_eq!(
-            status.selections[0].protected_env_keys,
-            vec!["ANTHROPIC_CUSTOM_HEADERS".to_string()]
-        );
-        let serialized = serde_json::to_string(&status).expect("serialize");
-        assert!(!serialized.contains("Bearer secret"));
-    }
-
-    #[test]
-    fn codex_launch_overlay_sets_managed_codex_home() {
-        let root = std::env::temp_dir().join(format!(
-            "anyharness-agent-auth-codex-{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        let service = AgentAuthConfigService::new(
-            AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
-            Some(cipher()),
-            root.clone(),
-        );
-        service
-            .apply_config(ApplyAgentAuthConfigRequest {
-                external_auth_scope: None,
-                revision: 1,
-                selections: vec![AgentAuthSelectionConfig {
-                    agent_kind: "codex".to_string(),
-                    materialization_mode: "gateway_env".to_string(),
-                    credential_id: "credential-1".to_string(),
-                    credential_revision: 1,
-                    credential_share_id: None,
-                    protected_env: BTreeMap::from([(
-                        "CODEX_API_KEY".to_string(),
-                        "runtime-token".to_string(),
-                    )]),
-                    support_env: BTreeMap::new(),
-                    protected_config: BTreeMap::from([(
-                        "codex".to_string(),
-                        json!({
-                            "model_provider_id": "proliferate",
-                            "model_providers": {
-                                "proliferate": {
-                                    "name": "Proliferate Gateway",
-                                    "base_url": "https://gateway.example/openai/v1",
-                                    "env_key": "CODEX_API_KEY",
-                                    "wire_api": "responses",
-                                    "requires_openai_auth": false
-                                }
-                            }
-                        }),
-                    )]),
-                    support_config: BTreeMap::new(),
-                    synced_file_paths: Vec::new(),
-                }],
-            })
-            .expect("apply");
-
-        let overlay = service.launch_overlay("codex").expect("overlay");
-        assert_eq!(
-            overlay
-                .protected_env
-                .get("CODEX_API_KEY")
-                .map(String::as_str),
-            Some("runtime-token")
-        );
-        assert_eq!(
-            overlay.protected_env.get("CODEX_HOME").map(String::as_str),
-            Some(
-                root.join("agent-auth")
-                    .join("codex")
-                    .to_string_lossy()
-                    .as_ref()
-            )
-        );
-        assert!(root
-            .join("agent-auth")
-            .join("codex")
-            .join("config.toml")
-            .exists());
-    }
-}
+#[path = "auth_config_tests.rs"]
+mod auth_config_tests;

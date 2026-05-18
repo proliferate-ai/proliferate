@@ -56,7 +56,7 @@
     "/v1/agents/auth-config": {
       "put": {
         "tags": [
-          "super::http::agent_auth_config"
+          "agents"
         ],
         "operationId": "apply_agent_auth_config",
         "requestBody": {
@@ -86,7 +86,7 @@
     "/v1/agents/auth-config/status": {
       "get": {
         "tags": [
-          "super::http::agent_auth_config"
+          "agents"
         ],
         "operationId": "get_agent_auth_config_status",
         "responses": {
@@ -5619,6 +5619,12 @@
               "null"
             ]
           },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "materializationMode": {
             "type": "string"
           },
@@ -5687,6 +5693,12 @@
             "format": "int64"
           },
           "credentialShareId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expiresAt": {
             "type": [
               "string",
               "null"
@@ -7655,6 +7667,16 @@
           "agentKind"
         ],
         "properties": {
+          "agentAuthScope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentAuthExternalScope"
+              }
+            ]
+          },
           "agentKind": {
             "type": "string"
           },
@@ -7707,6 +7729,13 @@
                 "$ref": "#/components/schemas/SessionPluginBundle"
               }
             ]
+          },
+          "requiredAgentAuthRevision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           },
           "subagentsEnabled": {
             "type": [

@@ -80,6 +80,8 @@ async fn actor_exit_test_context(
             workspace_id: "workspace-1".to_string(),
             agent_kind: "claude".to_string(),
             native_session_id: Some("native-1".to_string()),
+            agent_auth_scope: None,
+            required_agent_auth_revision: None,
             requested_model_id: None,
             current_model_id: None,
             requested_mode_id: None,

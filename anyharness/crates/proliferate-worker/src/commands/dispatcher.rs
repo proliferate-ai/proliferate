@@ -38,6 +38,7 @@ const CONFIGURE_GIT_IDENTITY_KIND: &str = "configure_git_identity";
 const ENSURE_REPO_CHECKOUT_KIND: &str = "ensure_repo_checkout";
 const MATERIALIZE_ENVIRONMENT_KIND: &str = "materialize_environment";
 const REFRESH_AGENT_AUTH_CONFIG_KIND: &str = "refresh_agent_auth_config";
+const SAFE_AGENT_AUTH_REFRESH_ERROR: &str = "Agent auth config refresh failed.";
 
 pub async fn run_loop(
     config: WorkerConfig,
@@ -283,8 +284,13 @@ async fn process_refresh_agent_auth_config_command(
                 &command.lease_id,
             )
             .await?;
-        let (request, outcome) =
-            build_anyharness_agent_auth_request(materialization_root, payload.revision, &plan)?;
+        let (request, outcome) = build_anyharness_agent_auth_request(
+            materialization_root,
+            &payload.sandbox_profile_id,
+            &command.target_id,
+            payload.revision,
+            &plan,
+        )?;
         if outcome.applied {
             anyharness.apply_agent_auth_config(&request).await?;
             cloud
@@ -335,7 +341,13 @@ async fn process_refresh_agent_auth_config_command(
             result: Some(serde_json::to_value(outcome)?),
         },
         Err(error) => {
-            let message = error.to_string();
+            warn!(
+                ?error,
+                command_id = %command.command_id,
+                sandbox_profile_id = %payload.sandbox_profile_id,
+                revision = payload.revision,
+                "agent auth config refresh failed"
+            );
             let _ = cloud
                 .report_agent_auth_status(
                     &identity.worker_token,
@@ -348,7 +360,7 @@ async fn process_refresh_agent_auth_config_command(
                         applied_revision: None,
                         current_revision: None,
                         error_code: Some("agent_auth_materialization_failed".to_string()),
-                        error_message: Some(message.clone()),
+                        error_message: Some(SAFE_AGENT_AUTH_REFRESH_ERROR.to_string()),
                     },
                 )
                 .await;
@@ -356,7 +368,7 @@ async fn process_refresh_agent_auth_config_command(
                 lease_id: command.lease_id.clone(),
                 status: "failed_delivery".to_string(),
                 error_code: Some("agent_auth_materialization_failed".to_string()),
-                error_message: Some(message),
+                error_message: Some(SAFE_AGENT_AUTH_REFRESH_ERROR.to_string()),
                 result: None,
             }
         }
