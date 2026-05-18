@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -9,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.models.auth import OAuthAccount, User
-from proliferate.utils.crypto import encrypt_text
+from proliferate.server.cloud.agent_auth import service as agent_auth_service
+from proliferate.utils.crypto import decrypt_text, encrypt_json, encrypt_text
+from proliferate.utils.time import utcnow
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
@@ -376,6 +379,117 @@ async def test_managed_credits_route_uses_server_entitlement_budget(
     assert len(body["credentials"]) == 1
     assert body["credentials"][0]["displayName"] == "Proliferate managed credits"
     assert body["credentials"][0]["status"] == "invalid"
+
+
+@pytest.mark.asyncio
+async def test_litellm_reconciler_repairs_valid_byok_policy(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_litellm_master_key",
+        "sk-master-test",
+    )
+    user = User(
+        email=f"agent-auth-reconcile-{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password="unused",
+        is_active=True,
+        is_superuser=False,
+        is_verified=True,
+        display_name="Agent Auth Reconciler",
+    )
+    db_session.add(user)
+    await db_session.flush()
+    credential = await store.create_agent_auth_credential(
+        db_session,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        created_by_user_id=user.id,
+        agent_kind="claude",
+        credential_kind="managed_gateway",
+        display_name="Claude BYOK",
+        redacted_summary_json='{"providerKind":"anthropic_api_key"}',
+        status="invalid",
+    )
+    policy = await store.ensure_gateway_policy(
+        db_session,
+        credential_id=credential.id,
+        policy_kind="personal_byok",
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        budget_subject_id=None,
+        litellm_team_id=None,
+        litellm_virtual_key_id=None,
+        litellm_virtual_key_ciphertext=None,
+        litellm_virtual_key_ciphertext_key_id=None,
+        litellm_sync_status="failed",
+        litellm_sync_fingerprint=None,
+        status="invalid",
+        last_error_code="litellm_provisioning_failed",
+        last_error_message="previous failure",
+    )
+    await store.upsert_provider_credential(
+        db_session,
+        policy_id=policy.id,
+        provider_kind="anthropic_api_key",
+        payload_ciphertext=encrypt_json({"apiKey": "sk-provider-secret"}),
+        payload_ciphertext_key_id="cloud_secret_key:v1",
+        redacted_summary_json='{"providerKind":"anthropic_api_key"}',
+        validation_status="valid",
+        validated_at=utcnow(),
+        validation_error_code=None,
+        validation_error_message=None,
+    )
+
+    class _FakeLiteLLMAdminClient:
+        def __init__(self) -> None:
+            self.deployments: list[dict[str, object]] = []
+
+        async def ensure_team(self, **_kwargs: object) -> object:
+            return SimpleNamespace(team_id="team-reconciled")
+
+        async def generate_key(self, **_kwargs: object) -> object:
+            return SimpleNamespace(key="litellm-reconciled-key", key_id="key-reconciled")
+
+        async def create_model_deployment(self, **kwargs: object) -> object:
+            self.deployments.append(dict(kwargs))
+            return SimpleNamespace(
+                model_id="model-reconciled",
+                public_model_name=kwargs["public_model_name"],
+                team_id=kwargs["team_id"],
+            )
+
+    fake_litellm = _FakeLiteLLMAdminClient()
+    monkeypatch.setattr(agent_auth_service, "LiteLLMAdminClient", lambda: fake_litellm)
+
+    result = await agent_auth_service.reconcile_agent_gateway_litellm_mirror(
+        db_session,
+        stale_before=utcnow(),
+        limit=10,
+    )
+
+    assert result.policies_checked == 1
+    assert result.policies_reconciled == 1
+    repaired_policy = await store.get_gateway_policy(db_session, policy.id)
+    assert repaired_policy is not None
+    assert repaired_policy.status == "ready"
+    assert repaired_policy.litellm_sync_status == "synced"
+    assert repaired_policy.litellm_team_id == "team-reconciled"
+    assert repaired_policy.litellm_virtual_key_ciphertext is not None
+    assert decrypt_text(repaired_policy.litellm_virtual_key_ciphertext) == "litellm-reconciled-key"
+    repaired_credential = await store.get_credential(db_session, credential.id)
+    assert repaired_credential is not None
+    assert repaired_credential.status == "ready"
+    assert fake_litellm.deployments[0]["litellm_params"] == {
+        "api_key": "sk-provider-secret",
+        "custom_llm_provider": "anthropic",
+    }
 
 
 @pytest.mark.asyncio

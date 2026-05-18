@@ -10,7 +10,7 @@ import secrets
 import socket
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 from uuid import UUID
@@ -108,6 +108,16 @@ class CredentialListItem:
 class RuntimeGrantIssueResult:
     grant: AgentGatewayRuntimeGrantRecord
     raw_token: str
+
+
+@dataclass(frozen=True)
+class AgentGatewayReconcilePassResult:
+    budgets_checked: int
+    budgets_reconciled: int
+    budgets_failed: int
+    policies_checked: int
+    policies_reconciled: int
+    policies_failed: int
 
 
 async def ensure_personal_sandbox_profile(
@@ -521,6 +531,78 @@ async def ensure_managed_credits_for_organization(
         budget_subject=budget,
         credentials=tuple(credentials),
         policies=tuple(policies),
+    )
+
+
+async def reconcile_agent_gateway_litellm_mirror(
+    db: AsyncSession,
+    *,
+    stale_before: datetime | None = None,
+    limit: int = 50,
+) -> AgentGatewayReconcilePassResult:
+    if limit <= 0:
+        return AgentGatewayReconcilePassResult(
+            budgets_checked=0,
+            budgets_reconciled=0,
+            budgets_failed=0,
+            policies_checked=0,
+            policies_reconciled=0,
+            policies_failed=0,
+        )
+    if not settings.agent_gateway_enabled or not settings.agent_gateway_litellm_master_key:
+        return AgentGatewayReconcilePassResult(
+            budgets_checked=0,
+            budgets_reconciled=0,
+            budgets_failed=0,
+            policies_checked=0,
+            policies_reconciled=0,
+            policies_failed=0,
+        )
+
+    cutoff = stale_before or (
+        utcnow() - timedelta(seconds=settings.agent_gateway_reconciler_stale_after_seconds)
+    )
+    budgets = await store.list_managed_budget_subjects_for_reconciliation(
+        db,
+        stale_before=cutoff,
+        limit=limit,
+    )
+    budgets_reconciled = 0
+    budgets_failed = 0
+    for budget in budgets:
+        reconciled_budget = await _reconcile_managed_budget_subject(db, budget=budget)
+        if reconciled_budget.litellm_sync_status == "synced" and reconciled_budget.status in {
+            "ready",
+            "exhausted",
+        }:
+            budgets_reconciled += 1
+        else:
+            budgets_failed += 1
+
+    policies = await store.list_gateway_policies_for_reconciliation(
+        db,
+        stale_before=cutoff,
+        limit=limit,
+    )
+    policies_reconciled = 0
+    policies_failed = 0
+    for policy in policies:
+        reconciled_policy = await _reconcile_gateway_policy(db, policy=policy)
+        if (
+            reconciled_policy.status == "ready"
+            and reconciled_policy.litellm_sync_status == "synced"
+        ):
+            policies_reconciled += 1
+        else:
+            policies_failed += 1
+
+    return AgentGatewayReconcilePassResult(
+        budgets_checked=len(budgets),
+        budgets_reconciled=budgets_reconciled,
+        budgets_failed=budgets_failed,
+        policies_checked=len(policies),
+        policies_reconciled=policies_reconciled,
+        policies_failed=policies_failed,
     )
 
 
@@ -1475,6 +1557,221 @@ async def _backfill_legacy_cloud_credentials(
     return updated or profile
 
 
+async def _reconcile_managed_budget_subject(
+    db: AsyncSession,
+    *,
+    budget: AgentGatewayBudgetSubjectRecord,
+) -> AgentGatewayBudgetSubjectRecord:
+    managed_deployments = tuple(
+        deployment
+        for agent_kind in _MANAGED_CREDIT_AGENT_KINDS_V1
+        for deployment in _gateway_deployments_for_credential(
+            agent_kind=agent_kind,
+            provider_kind="proliferate_bedrock_pool",
+        )
+    )
+    sync_status = "failed"
+    status = "invalid"
+    fingerprint = None
+    error_code = "managed_credit_models_not_configured"
+    error_message = "No managed-credit model deployments are configured."
+    team_id = budget.litellm_team_id
+    if managed_deployments:
+        try:
+            client = LiteLLMAdminClient()
+            team = await client.ensure_team(
+                team_alias=f"org-{budget.organization_id}-managed-credits",
+                team_id=budget.litellm_team_id,
+                max_budget=budget.included_budget_usd,
+                budget_duration=budget.budget_duration,
+            )
+            team_id = team.team_id
+            for deployment in managed_deployments:
+                await client.create_model_deployment(
+                    public_model_name=deployment.public_model_name,
+                    provider_model=deployment.provider_model,
+                    team_id=team_id,
+                    litellm_params=_provider_litellm_params(
+                        provider_kind="proliferate_bedrock_pool",
+                        provider_payload={},
+                        deployment=deployment,
+                    ),
+                    metadata={
+                        "organizationId": str(budget.organization_id),
+                        "budgetKind": budget.budget_kind,
+                    },
+                )
+            sync_status = "synced"
+            status = "exhausted" if budget.status == "exhausted" else "ready"
+            fingerprint = _deployment_fingerprint(
+                policy_kind="proliferate_managed",
+                litellm_team_id=team_id,
+                budget_subject_id=str(budget.id),
+                provider_kind="proliferate_bedrock_pool",
+                deployments=managed_deployments,
+            )
+            error_code = None
+            error_message = None
+        except LiteLLMIntegrationError as exc:
+            error_code = "litellm_provisioning_failed"
+            error_message = _safe_error_message(str(exc), {})
+    return await store.ensure_managed_budget_subject(
+        db,
+        organization_id=budget.organization_id,
+        included_budget_usd=budget.included_budget_usd,
+        litellm_team_id=team_id,
+        litellm_sync_status=sync_status,
+        litellm_sync_fingerprint=fingerprint,
+        status=status,
+        last_error_code=error_code,
+        last_error_message=error_message,
+    )
+
+
+async def _reconcile_gateway_policy(
+    db: AsyncSession,
+    *,
+    policy: AgentGatewayPolicyRecord,
+) -> AgentGatewayPolicyRecord:
+    credential = await store.get_credential(db, policy.credential_id)
+    if credential is None or credential.revoked_at is not None or credential.status == "revoked":
+        return await store.ensure_gateway_policy(
+            db,
+            credential_id=policy.credential_id,
+            policy_kind=policy.policy_kind,
+            owner_scope=policy.owner_scope,
+            owner_user_id=policy.owner_user_id,
+            organization_id=policy.organization_id,
+            budget_subject_id=policy.budget_subject_id,
+            litellm_team_id=policy.litellm_team_id,
+            litellm_virtual_key_id=policy.litellm_virtual_key_id,
+            litellm_virtual_key_ciphertext=policy.litellm_virtual_key_ciphertext,
+            litellm_virtual_key_ciphertext_key_id=policy.litellm_virtual_key_ciphertext_key_id,
+            litellm_sync_status="failed",
+            litellm_sync_fingerprint=policy.litellm_sync_fingerprint,
+            status="invalid",
+            last_error_code="credential_not_ready",
+            last_error_message="Agent auth credential is not available for reconciliation.",
+        )
+    if policy.policy_kind == "proliferate_managed":
+        if policy.budget_subject_id is None:
+            return await _mark_policy_reconciliation_failed(
+                db,
+                policy=policy,
+                error_code="managed_budget_missing",
+                error_message="Managed gateway policy is missing a budget subject.",
+            )
+        budget = await store.get_budget_subject(db, policy.budget_subject_id)
+        if budget is None or budget.status == "revoked":
+            return await _mark_policy_reconciliation_failed(
+                db,
+                policy=policy,
+                error_code="managed_budget_missing",
+                error_message="Managed budget subject is not available.",
+            )
+        if budget.litellm_sync_status != "synced" or budget.status not in {"ready", "exhausted"}:
+            budget = await _reconcile_managed_budget_subject(db, budget=budget)
+        policy_status = (
+            "ready"
+            if budget.litellm_sync_status == "synced" and budget.status in {"ready", "exhausted"}
+            else "invalid"
+        )
+        policy_sync_status = "synced" if policy_status == "ready" else "failed"
+        return await _ensure_managed_policy(
+            db,
+            credential=credential,
+            budget=budget,
+            sync_status=policy_sync_status,
+            status=policy_status,
+            fingerprint=budget.litellm_sync_fingerprint,
+            error_code=None if policy_status == "ready" else budget.last_error_code,
+            error_message=None if policy_status == "ready" else budget.last_error_message,
+            existing_policy=policy,
+        )
+
+    provider_credential = await store.get_provider_credential_for_policy(db, policy.id)
+    if provider_credential is None:
+        return await _mark_policy_reconciliation_failed(
+            db,
+            policy=policy,
+            error_code="provider_credential_missing",
+            error_message="Gateway provider credential is not configured.",
+        )
+    if provider_credential.validation_status == "invalid":
+        return await _mark_policy_reconciliation_failed(
+            db,
+            policy=policy,
+            error_code=provider_credential.validation_error_code or "provider_credential_invalid",
+            error_message=(
+                provider_credential.validation_error_message
+                or "Gateway provider credential is invalid."
+            ),
+        )
+    if provider_credential.validation_status != "valid":
+        return await _mark_policy_reconciliation_failed(
+            db,
+            policy=policy,
+            error_code=(
+                provider_credential.validation_error_code or "provider_live_validation_required"
+            ),
+            error_message=(
+                provider_credential.validation_error_message
+                or "Provider credentials require live validation before use."
+            ),
+        )
+    payload = decrypt_json(provider_credential.payload_ciphertext)
+    provider_payload = {str(key): str(value) for key, value in payload.items()}
+    reconciled_policy, sync_status, status, _error_code, _error_message = await _provision_policy(
+        db,
+        credential=credential,
+        policy_kind=policy.policy_kind,
+        owner_scope=policy.owner_scope,
+        owner_user_id=policy.owner_user_id,
+        organization_id=policy.organization_id,
+        budget_subject_id=policy.budget_subject_id,
+        provider_kind=provider_credential.provider_kind,
+        provider_payload=provider_payload,
+        model_deployments=_gateway_deployments_for_credential(
+            agent_kind=credential.agent_kind,
+            provider_kind=provider_credential.provider_kind,
+        ),
+        existing_policy=policy,
+    )
+    await store.update_credential_status(
+        db,
+        credential_id=credential.id,
+        status="ready" if sync_status == "synced" and status == "ready" else "invalid",
+    )
+    return reconciled_policy
+
+
+async def _mark_policy_reconciliation_failed(
+    db: AsyncSession,
+    *,
+    policy: AgentGatewayPolicyRecord,
+    error_code: str,
+    error_message: str,
+) -> AgentGatewayPolicyRecord:
+    return await store.ensure_gateway_policy(
+        db,
+        credential_id=policy.credential_id,
+        policy_kind=policy.policy_kind,
+        owner_scope=policy.owner_scope,
+        owner_user_id=policy.owner_user_id,
+        organization_id=policy.organization_id,
+        budget_subject_id=policy.budget_subject_id,
+        litellm_team_id=policy.litellm_team_id,
+        litellm_virtual_key_id=policy.litellm_virtual_key_id,
+        litellm_virtual_key_ciphertext=policy.litellm_virtual_key_ciphertext,
+        litellm_virtual_key_ciphertext_key_id=policy.litellm_virtual_key_ciphertext_key_id,
+        litellm_sync_status="failed",
+        litellm_sync_fingerprint=policy.litellm_sync_fingerprint,
+        status="invalid",
+        last_error_code=error_code,
+        last_error_message=error_message,
+    )
+
+
 async def _ensure_managed_policy(
     db: AsyncSession,
     *,
@@ -1485,17 +1782,29 @@ async def _ensure_managed_policy(
     fingerprint: str | None,
     error_code: str | None,
     error_message: str | None,
+    existing_policy: AgentGatewayPolicyRecord | None = None,
 ) -> AgentGatewayPolicyRecord:
-    virtual_key_id = None
-    virtual_key_ciphertext = None
+    virtual_key_id = existing_policy.litellm_virtual_key_id if existing_policy else None
+    virtual_key_ciphertext = (
+        existing_policy.litellm_virtual_key_ciphertext if existing_policy else None
+    )
+    virtual_key_ciphertext_key_id = (
+        existing_policy.litellm_virtual_key_ciphertext_key_id if existing_policy else None
+    )
+    if existing_policy is not None and existing_policy.litellm_team_id != budget.litellm_team_id:
+        virtual_key_id = None
+        virtual_key_ciphertext = None
+        virtual_key_ciphertext_key_id = None
     if sync_status == "synced" and budget.litellm_team_id:
         try:
-            key = await LiteLLMAdminClient().generate_key(
-                team_id=budget.litellm_team_id,
-                key_alias=f"credential-{credential.id}",
-            )
-            virtual_key_id = key.key_id
-            virtual_key_ciphertext = encrypt_text(key.key)
+            if virtual_key_ciphertext is None:
+                key = await LiteLLMAdminClient().generate_key(
+                    team_id=budget.litellm_team_id,
+                    key_alias=f"credential-{credential.id}",
+                )
+                virtual_key_id = key.key_id
+                virtual_key_ciphertext = encrypt_text(key.key)
+                virtual_key_ciphertext_key_id = AGENT_GATEWAY_CIPHERTEXT_KEY_ID
         except LiteLLMIntegrationError as exc:
             sync_status = "failed"
             status = "invalid"
@@ -1512,9 +1821,7 @@ async def _ensure_managed_policy(
         litellm_team_id=budget.litellm_team_id,
         litellm_virtual_key_id=virtual_key_id,
         litellm_virtual_key_ciphertext=virtual_key_ciphertext,
-        litellm_virtual_key_ciphertext_key_id=(
-            AGENT_GATEWAY_CIPHERTEXT_KEY_ID if virtual_key_ciphertext else None
-        ),
+        litellm_virtual_key_ciphertext_key_id=virtual_key_ciphertext_key_id,
         litellm_sync_status=sync_status,
         litellm_sync_fingerprint=fingerprint,
         status=status,
@@ -1535,12 +1842,22 @@ async def _provision_policy(
     provider_kind: str,
     provider_payload: dict[str, str],
     model_deployments: Sequence[LiteLLMModelDeploymentRequest],
+    existing_policy: AgentGatewayPolicyRecord | None = None,
 ) -> tuple[AgentGatewayPolicyRecord, str, str, str | None, str | None]:
     sync_status = "failed"
     status = "invalid"
-    litellm_team_id = None
-    virtual_key_id = None
-    virtual_key_ciphertext = None
+    litellm_team_id = existing_policy.litellm_team_id if existing_policy else None
+    virtual_key_id = existing_policy.litellm_virtual_key_id if existing_policy else None
+    virtual_key_ciphertext = (
+        existing_policy.litellm_virtual_key_ciphertext if existing_policy else None
+    )
+    virtual_key_ciphertext_key_id = (
+        existing_policy.litellm_virtual_key_ciphertext_key_id if existing_policy else None
+    )
+    if litellm_team_id is None:
+        virtual_key_id = None
+        virtual_key_ciphertext = None
+        virtual_key_ciphertext_key_id = None
     error_code = "litellm_not_configured"
     error_message = "LiteLLM provisioning is not configured."
     if not model_deployments:
@@ -1560,14 +1877,19 @@ async def _provision_policy(
     ):
         try:
             client = LiteLLMAdminClient()
-            team = await client.ensure_team(team_alias=f"credential-{credential.id}")
-            litellm_team_id = team.team_id
-            key = await client.generate_key(
-                team_id=team.team_id,
-                key_alias=f"credential-{credential.id}",
+            team = await client.ensure_team(
+                team_alias=f"credential-{credential.id}",
+                team_id=litellm_team_id,
             )
-            virtual_key_id = key.key_id
-            virtual_key_ciphertext = encrypt_text(key.key)
+            litellm_team_id = team.team_id
+            if virtual_key_ciphertext is None:
+                key = await client.generate_key(
+                    team_id=team.team_id,
+                    key_alias=f"credential-{credential.id}",
+                )
+                virtual_key_id = key.key_id
+                virtual_key_ciphertext = encrypt_text(key.key)
+                virtual_key_ciphertext_key_id = AGENT_GATEWAY_CIPHERTEXT_KEY_ID
             for deployment in model_deployments:
                 await client.create_model_deployment(
                     public_model_name=deployment.public_model_name,
@@ -1609,9 +1931,7 @@ async def _provision_policy(
         litellm_team_id=litellm_team_id,
         litellm_virtual_key_id=virtual_key_id,
         litellm_virtual_key_ciphertext=virtual_key_ciphertext,
-        litellm_virtual_key_ciphertext_key_id=(
-            AGENT_GATEWAY_CIPHERTEXT_KEY_ID if virtual_key_ciphertext else None
-        ),
+        litellm_virtual_key_ciphertext_key_id=virtual_key_ciphertext_key_id,
         litellm_sync_status=sync_status,
         litellm_sync_fingerprint=fingerprint,
         status=status,

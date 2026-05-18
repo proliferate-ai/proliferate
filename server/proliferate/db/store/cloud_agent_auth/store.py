@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import AGENT_GATEWAY_BUDGET_DURATION_V1
@@ -920,25 +921,29 @@ async def get_managed_gateway_credential(
     agent_kind: str,
 ) -> AgentAuthCredentialRecord | None:
     row = (
-        await db.execute(
-            select(AgentAuthCredential)
-            .join(
-                AgentGatewayPolicy,
-                AgentGatewayPolicy.credential_id == AgentAuthCredential.id,
+        (
+            await db.execute(
+                select(AgentAuthCredential)
+                .join(
+                    AgentGatewayPolicy,
+                    AgentGatewayPolicy.credential_id == AgentAuthCredential.id,
+                )
+                .where(
+                    AgentAuthCredential.owner_scope == "organization",
+                    AgentAuthCredential.organization_id == organization_id,
+                    AgentAuthCredential.agent_kind == agent_kind,
+                    AgentAuthCredential.credential_kind == "managed_gateway",
+                    AgentAuthCredential.revoked_at.is_(None),
+                    AgentAuthCredential.status != "revoked",
+                    AgentGatewayPolicy.policy_kind == "proliferate_managed",
+                )
+                .order_by(AgentAuthCredential.created_at.asc())
+                .with_for_update()
             )
-            .where(
-                AgentAuthCredential.owner_scope == "organization",
-                AgentAuthCredential.organization_id == organization_id,
-                AgentAuthCredential.agent_kind == agent_kind,
-                AgentAuthCredential.credential_kind == "managed_gateway",
-                AgentAuthCredential.revoked_at.is_(None),
-                AgentAuthCredential.status != "revoked",
-                AgentGatewayPolicy.policy_kind == "proliferate_managed",
-            )
-            .order_by(AgentAuthCredential.created_at.asc())
-            .with_for_update()
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     return _credential_record(row) if row is not None else None
 
 
@@ -950,12 +955,81 @@ async def get_gateway_policy(
     return _policy_record(row) if row is not None else None
 
 
+async def list_gateway_policies_for_reconciliation(
+    db: AsyncSession,
+    *,
+    stale_before: datetime,
+    limit: int,
+) -> tuple[AgentGatewayPolicyRecord, ...]:
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayPolicy)
+                .join(
+                    AgentAuthCredential,
+                    AgentAuthCredential.id == AgentGatewayPolicy.credential_id,
+                )
+                .where(
+                    AgentGatewayPolicy.status != "revoked",
+                    AgentAuthCredential.status != "revoked",
+                    AgentAuthCredential.revoked_at.is_(None),
+                    or_(
+                        AgentGatewayPolicy.status != "ready",
+                        AgentGatewayPolicy.litellm_sync_status != "synced",
+                        AgentGatewayPolicy.last_litellm_reconciled_at.is_(None),
+                        AgentGatewayPolicy.last_litellm_reconciled_at <= stale_before,
+                    ),
+                )
+                .order_by(
+                    AgentGatewayPolicy.last_litellm_reconciled_at.asc().nullsfirst(),
+                    AgentGatewayPolicy.updated_at.asc(),
+                )
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_policy_record(row) for row in rows)
+
+
 async def get_budget_subject(
     db: AsyncSession,
     budget_subject_id: UUID,
 ) -> AgentGatewayBudgetSubjectRecord | None:
     row = await db.get(AgentGatewayBudgetSubject, budget_subject_id)
     return _budget_subject_record(row) if row is not None else None
+
+
+async def list_managed_budget_subjects_for_reconciliation(
+    db: AsyncSession,
+    *,
+    stale_before: datetime,
+    limit: int,
+) -> tuple[AgentGatewayBudgetSubjectRecord, ...]:
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayBudgetSubject)
+                .where(
+                    AgentGatewayBudgetSubject.status != "revoked",
+                    or_(
+                        AgentGatewayBudgetSubject.litellm_sync_status != "synced",
+                        AgentGatewayBudgetSubject.last_litellm_reconciled_at.is_(None),
+                        AgentGatewayBudgetSubject.last_litellm_reconciled_at <= stale_before,
+                    ),
+                )
+                .order_by(
+                    AgentGatewayBudgetSubject.last_litellm_reconciled_at.asc().nullsfirst(),
+                    AgentGatewayBudgetSubject.updated_at.asc(),
+                )
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_budget_subject_record(row) for row in rows)
 
 
 async def upsert_provider_credential(
@@ -1008,6 +1082,20 @@ async def upsert_provider_credential(
         row.updated_at = now
     await db.flush()
     return _provider_credential_record(row)
+
+
+async def get_provider_credential_for_policy(
+    db: AsyncSession,
+    policy_id: UUID,
+) -> AgentGatewayProviderCredentialRecord | None:
+    row = (
+        await db.execute(
+            select(AgentGatewayProviderCredential).where(
+                AgentGatewayProviderCredential.policy_id == policy_id
+            )
+        )
+    ).scalar_one_or_none()
+    return _provider_credential_record(row) if row is not None else None
 
 
 async def list_selections_for_profile(
@@ -1372,3 +1460,35 @@ async def record_audit_event(
     db.add(row)
     await db.flush()
     return _audit_event_record(row)
+
+
+async def try_acquire_agent_gateway_reconciler_lock(db: AsyncSession) -> bool:
+    result = await db.scalar(
+        text("SELECT pg_try_advisory_lock(hashtextextended(:lock_key, 0))"),
+        {"lock_key": "agent_gateway_litellm_reconciler"},
+    )
+    return bool(result)
+
+
+async def release_agent_gateway_reconciler_lock(db: AsyncSession) -> None:
+    await db.execute(
+        text("SELECT pg_advisory_unlock(hashtextextended(:lock_key, 0))"),
+        {"lock_key": "agent_gateway_litellm_reconciler"},
+    )
+
+
+async def with_agent_gateway_reconciler_lock[T](
+    callback: Callable[[AsyncSession], Awaitable[T]],
+) -> tuple[bool, T | None]:
+    from proliferate.db import engine as db_engine
+
+    async with db_engine.async_session_factory() as db:
+        acquired = await try_acquire_agent_gateway_reconciler_lock(db)
+        if not acquired:
+            return False, None
+        try:
+            result = await callback(db)
+            await db.commit()
+            return True, result
+        finally:
+            await release_agent_gateway_reconciler_lock(db)
