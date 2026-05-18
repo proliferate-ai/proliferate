@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import OwnerSelection
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
@@ -39,7 +39,7 @@ router = APIRouter()
 async def list_cloud_workspaces_endpoint(
     owner_scope: Literal["personal", "organization"] = Query("personal", alias="ownerScope"),
     organization_id: UUID | None = Query(default=None, alias="organizationId"),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[WorkspaceSummary]:
     try:
@@ -59,7 +59,7 @@ async def list_cloud_workspaces_endpoint(
 @router.post("/workspaces", response_model=WorkspaceDetail)
 async def create_cloud_workspace_endpoint(
     body: CreateCloudWorkspaceRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceDetail:
     try:
@@ -85,7 +85,7 @@ async def create_cloud_workspace_endpoint(
 @router.get("/workspaces/{workspace_id}", response_model=WorkspaceDetail)
 async def get_cloud_workspace_endpoint(
     workspace_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceDetail:
     try:
@@ -97,7 +97,7 @@ async def get_cloud_workspace_endpoint(
 @router.get("/workspaces/{workspace_id}/connection", response_model=WorkspaceConnection)
 async def get_cloud_workspace_connection_endpoint(
     workspace_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> WorkspaceConnection:
     try:
         return await get_cloud_connection(user.id, workspace_id)
@@ -108,7 +108,7 @@ async def get_cloud_workspace_connection_endpoint(
 @router.post("/workspaces/{workspace_id}/start", response_model=WorkspaceDetail)
 async def start_cloud_workspace_endpoint(
     workspace_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> WorkspaceDetail:
     try:
         payload = await start_cloud_workspace(user, workspace_id)
@@ -120,7 +120,7 @@ async def start_cloud_workspace_endpoint(
 @router.post("/workspaces/{workspace_id}/stop", response_model=WorkspaceDetail)
 async def stop_cloud_workspace_endpoint(
     workspace_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> WorkspaceDetail:
     try:
         payload = await stop_cloud_workspace(user.id, workspace_id)
@@ -133,7 +133,7 @@ async def stop_cloud_workspace_endpoint(
 async def update_cloud_workspace_branch_endpoint(
     workspace_id: UUID,
     body: UpdateCloudWorkspaceBranchRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceDetail:
     try:
@@ -152,7 +152,7 @@ async def update_cloud_workspace_branch_endpoint(
 async def update_cloud_workspace_display_name_endpoint(
     workspace_id: UUID,
     body: UpdateCloudWorkspaceDisplayNameRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceDetail:
     try:
@@ -170,7 +170,7 @@ async def update_cloud_workspace_display_name_endpoint(
 @router.post("/workspaces/{workspace_id}/sync-credentials", response_model=WorkspaceDetail)
 async def sync_cloud_workspace_credentials_endpoint(
     workspace_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceDetail:
     try:
@@ -183,7 +183,7 @@ async def sync_cloud_workspace_credentials_endpoint(
 @router.delete("/workspaces/{workspace_id}")
 async def delete_cloud_workspace_endpoint(
     workspace_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> dict[str, bool]:
     try:
         await delete_cloud_workspace(user.id, workspace_id)

@@ -64,12 +64,6 @@ def _provider_availability_payload(provider: AuthProvider) -> AuthProviderAvaila
             enabled = bool(settings.google_oauth_client_id and settings.google_oauth_client_secret)
             reason = None if enabled else "not_configured"
         case "apple":
-            enabled = bool(
-                settings.apple_sign_in_enabled
-                and settings.apple_team_id
-                and settings.apple_key_id
-                and settings.apple_private_key
-                and (settings.apple_web_service_id or settings.apple_ios_bundle_id)
-            )
-            reason = None if enabled else "not_configured"
+            enabled = False
+            reason = "not_supported"
     return AuthProviderAvailability(provider=provider, enabled=enabled, reason=reason)

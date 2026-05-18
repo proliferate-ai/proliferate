@@ -6,8 +6,8 @@ export function authRootKey() {
   return ["auth"] as const;
 }
 
-export function authViewerKey() {
-  return [...authRootKey(), "viewer"] as const;
+export function authViewerKey(apiBaseUrl: string) {
+  return [...authRootKey(), "viewer", apiBaseUrl] as const;
 }
 
 export function controlPlaneHealthKey(apiBaseUrl: string) {

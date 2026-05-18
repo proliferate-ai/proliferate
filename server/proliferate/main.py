@@ -179,15 +179,6 @@ def create_app() -> FastAPI:
             prefix=f"{api_prefix}/auth/github",
             tags=["auth"],
         )
-        app.include_router(
-            fastapi_users.get_oauth_associate_router(
-                github_oauth_client,
-                UserRead,
-                state_secret=settings.jwt_secret,
-            ),
-            prefix=f"{api_prefix}/auth/associate/github",
-            tags=["auth"],
-        )
 
     if settings.google_oauth_client_id and settings.google_oauth_client_secret:
         app.include_router(
@@ -199,15 +190,6 @@ def create_app() -> FastAPI:
                 is_verified_by_default=True,
             ),
             prefix=f"{api_prefix}/auth/google",
-            tags=["auth"],
-        )
-        app.include_router(
-            fastapi_users.get_oauth_associate_router(
-                google_oauth_client,
-                UserRead,
-                state_secret=settings.jwt_secret,
-            ),
-            prefix=f"{api_prefix}/auth/associate/google",
             tags=["auth"],
         )
 

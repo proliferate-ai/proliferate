@@ -98,6 +98,32 @@ async def test_auth_viewer_marks_google_only_user_as_needing_github(
 
 
 @pytest.mark.asyncio
+async def test_google_only_user_is_rejected_from_product_surface(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    user_id, access_token = await _create_user_and_get_token(
+        client,
+        db_session,
+        email="viewer-product-gate@example.com",
+    )
+    await _link_provider(db_session, user_id, "google")
+
+    response = await client.get(
+        "/v1/cloud/workspaces",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": {
+            "code": "github_link_required",
+            "message": "Connect GitHub before using Proliferate Cloud product surfaces.",
+        }
+    }
+
+
+@pytest.mark.asyncio
 async def test_auth_viewer_marks_github_user_as_active(
     client: AsyncClient,
     db_session: AsyncSession,

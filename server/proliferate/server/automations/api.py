@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.constants.automations import (
     AUTOMATION_RUN_LIST_DEFAULT_LIMIT,
     AUTOMATION_RUN_LIST_MAX_LIMIT,
@@ -61,7 +61,7 @@ router = APIRouter(prefix="/automations", tags=["automations"])
 @router.get("", response_model=AutomationListResponse)
 async def list_automations_endpoint(
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> AutomationListResponse:
     values = await list_automations(db, user.id)
     return AutomationListResponse(automations=[automation_payload(value) for value in values])
@@ -71,7 +71,7 @@ async def list_automations_endpoint(
 async def create_automation_endpoint(
     body: CreateAutomationRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> AutomationResponse:
     return automation_payload(await create_automation(db, user.id, body))
 
@@ -80,7 +80,7 @@ async def create_automation_endpoint(
 async def claim_local_runs_endpoint(
     body: LocalAutomationClaimRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> LocalAutomationClaimListResponse:
     return await claim_local_runs(db, user.id, body)
 
@@ -93,7 +93,7 @@ async def heartbeat_local_run_endpoint(
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> LocalAutomationMutationResponse:
     return await heartbeat_local_run(db, user.id, run_id, body)
 
@@ -106,7 +106,7 @@ async def mark_local_run_creating_workspace_endpoint(
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> LocalAutomationMutationResponse:
     return await mark_local_run_creating_workspace(db, user.id, run_id, body)
 
@@ -119,7 +119,7 @@ async def attach_local_run_workspace_endpoint(
     run_id: UUID,
     body: LocalAutomationAttachWorkspaceRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> LocalAutomationMutationResponse:
     return await attach_local_run_workspace(db, user.id, run_id, body)
 
@@ -132,7 +132,7 @@ async def mark_local_run_provisioning_workspace_endpoint(
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> LocalAutomationMutationResponse:
     return await mark_local_run_provisioning_workspace(db, user.id, run_id, body)
 
@@ -145,7 +145,7 @@ async def mark_local_run_creating_session_endpoint(
     run_id: UUID,
     body: LocalAutomationAttachWorkspaceRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> LocalAutomationMutationResponse:
     return await mark_local_run_creating_session(db, user.id, run_id, body)
 
@@ -158,7 +158,7 @@ async def attach_local_run_session_endpoint(
     run_id: UUID,
     body: LocalAutomationAttachSessionRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> LocalAutomationMutationResponse:
     return await attach_local_run_session(db, user.id, run_id, body)
 
@@ -171,7 +171,7 @@ async def mark_local_run_dispatching_endpoint(
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> LocalAutomationMutationResponse:
     return await mark_local_run_dispatching(db, user.id, run_id, body)
 
@@ -184,7 +184,7 @@ async def mark_local_run_dispatched_endpoint(
     run_id: UUID,
     body: LocalAutomationAttachSessionRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> LocalAutomationMutationResponse:
     return await mark_local_run_dispatched(db, user.id, run_id, body)
 
@@ -197,7 +197,7 @@ async def mark_local_run_failed_endpoint(
     run_id: UUID,
     body: LocalAutomationFailRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> LocalAutomationMutationResponse:
     return await mark_local_run_failed(db, user.id, run_id, body)
 
@@ -206,7 +206,7 @@ async def mark_local_run_failed_endpoint(
 async def get_automation_endpoint(
     automation_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> AutomationResponse:
     return automation_payload(await get_automation(db, user.id, automation_id))
 
@@ -216,7 +216,7 @@ async def update_automation_endpoint(
     automation_id: UUID,
     body: UpdateAutomationRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> AutomationResponse:
     return automation_payload(await update_automation(db, user.id, automation_id, body))
 
@@ -225,7 +225,7 @@ async def update_automation_endpoint(
 async def pause_automation_endpoint(
     automation_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> AutomationResponse:
     return automation_payload(await pause_automation(db, user.id, automation_id))
 
@@ -234,7 +234,7 @@ async def pause_automation_endpoint(
 async def resume_automation_endpoint(
     automation_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> AutomationResponse:
     return automation_payload(await resume_automation(db, user.id, automation_id))
 
@@ -243,7 +243,7 @@ async def resume_automation_endpoint(
 async def run_automation_now_endpoint(
     automation_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> AutomationRunResponse:
     return automation_run_payload(await run_automation_now(db, user.id, automation_id))
 
@@ -255,7 +255,7 @@ async def list_automation_runs_endpoint(
         AUTOMATION_RUN_LIST_DEFAULT_LIMIT
     ),
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> AutomationRunListResponse:
     values = await list_automation_runs(db, user.id, automation_id, limit=limit)
     return AutomationRunListResponse(runs=[automation_run_payload(value) for value in values])

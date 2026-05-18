@@ -9,7 +9,7 @@ import { authViewerKey } from "../lib/query-keys.js";
 export function useAuthViewer(enabled = true) {
   const client = useCloudClient();
   return useQuery<AuthViewerResponse>({
-    queryKey: authViewerKey(),
+    queryKey: authViewerKey(client.baseUrl),
     queryFn: () => getAuthViewer(client),
     enabled,
   });

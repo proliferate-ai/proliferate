@@ -4,8 +4,5 @@ import type { AuthViewerResponse } from "../types/auth.js";
 export async function getAuthViewer(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AuthViewerResponse> {
-  return client.requestJson<AuthViewerResponse>({
-    method: "GET",
-    path: "/v1/auth/viewer",
-  });
+  return (await client.GET("/v1/auth/viewer")).data!;
 }
