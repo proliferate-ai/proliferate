@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_active_user
@@ -24,6 +24,9 @@ from proliferate.server.cloud.agent_auth.models import (
     SandboxProfileResponse,
     SelectAgentAuthCredentialRequest,
     ShareCredentialRequest,
+    WorkerAgentAuthMaterializationPlan,
+    WorkerAgentAuthStatusRequest,
+    WorkerAgentAuthStatusResponse,
     credential_response,
     credential_share_response,
     policy_response,
@@ -39,13 +42,20 @@ from proliferate.server.cloud.agent_auth.service import (
     list_credentials,
     list_selections,
     list_target_states,
+    record_worker_agent_auth_status,
     revoke_credential,
     revoke_credential_share,
     select_credential_for_profile,
     share_personal_credential_with_organization,
+    worker_agent_auth_materialization_plan,
 )
+from proliferate.server.cloud.worker.service import authenticate_worker
 
 router = APIRouter()
+worker_router = APIRouter(
+    prefix="/worker/agent-auth-configs",
+    tags=["cloud-worker-agent-auth"],
+)
 
 
 @router.get("/agent-auth/credentials", response_model=list[AgentAuthCredentialResponse])
@@ -202,3 +212,45 @@ async def list_agent_auth_target_states_endpoint(
             sandbox_profile_id=sandbox_profile_id,
         )
     ]
+
+
+@worker_router.get(
+    "/{sandbox_profile_id}/materialization",
+    response_model=WorkerAgentAuthMaterializationPlan,
+)
+async def worker_agent_auth_materialization_endpoint(
+    sandbox_profile_id: UUID,
+    revision: int,
+    command_id: UUID,
+    lease_id: str,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkerAgentAuthMaterializationPlan:
+    auth = await authenticate_worker(db, authorization=authorization)
+    return await worker_agent_auth_materialization_plan(
+        db,
+        auth=auth,
+        sandbox_profile_id=sandbox_profile_id,
+        command_id=command_id,
+        revision=revision,
+        lease_id=lease_id,
+    )
+
+
+@worker_router.post(
+    "/{sandbox_profile_id}/status",
+    response_model=WorkerAgentAuthStatusResponse,
+)
+async def worker_agent_auth_status_endpoint(
+    sandbox_profile_id: UUID,
+    body: WorkerAgentAuthStatusRequest,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkerAgentAuthStatusResponse:
+    auth = await authenticate_worker(db, authorization=authorization)
+    return await record_worker_agent_auth_status(
+        db,
+        auth=auth,
+        sandbox_profile_id=sandbox_profile_id,
+        body=body,
+    )

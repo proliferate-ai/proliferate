@@ -49,6 +49,14 @@ async def get_user_cloud_credentials(
     return [_credential_record(record) for record in records]
 
 
+async def get_cloud_credential_by_id(
+    db: AsyncSession,
+    credential_id: UUID,
+) -> CloudCredentialRecord | None:
+    record = await db.get(CloudCredential, credential_id)
+    return _credential_record(record) if record is not None else None
+
+
 async def sync_cloud_credential_if_changed(
     db: AsyncSession,
     user_id: UUID,

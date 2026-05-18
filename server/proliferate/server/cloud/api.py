@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from proliferate.server.cloud.agent_auth.api import router as agent_auth_router
+from proliferate.server.cloud.agent_auth.api import worker_router as agent_auth_worker_router
 from proliferate.server.cloud.backfill.api import router as backfill_router
 from proliferate.server.cloud.commands.api import router as commands_router
 from proliferate.server.cloud.compute.api import router as compute_router
@@ -47,6 +48,7 @@ router.include_router(commands_router)
 router.include_router(events_router)
 router.include_router(live_router)
 router.include_router(backfill_router)
+router.include_router(agent_auth_worker_router)
 router.include_router(target_config_worker_router)
 router.include_router(target_git_identity_worker_router)
 router.include_router(worker_router)
