@@ -1,12 +1,19 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { deriveClaimState } from "@proliferate/product-model/chats/claiming";
 import { chatKindPresentation, claimStateLabel } from "@proliferate/product-model/chats/presentation";
 import type { ProductChat } from "@proliferate/product-model/chats/model";
 
 import { MobileGlyph } from "../primitives/MobileGlyph";
+import {
+  MobileCardTitle,
+  MobileScreen,
+  MobileScreenHeader,
+  MobileStack,
+  MobileStatusPill,
+} from "../primitives/MobileLayout";
 import { chats, currentUser, workspaceForChat } from "../../lib/fixtures/mobile-fixtures";
-import { colors, radius, text } from "../../styles/tokens";
+import { colors, radius, spacing, text } from "../../styles/tokens";
 
 interface MobileSessionsScreenProps {
   onOpenChat: (chat: ProductChat) => void;
@@ -14,12 +21,9 @@ interface MobileSessionsScreenProps {
 
 export function MobileSessionsScreen({ onOpenChat }: MobileSessionsScreenProps) {
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.stack}>
-        <View>
-          <Text style={text.eyebrow}>Sessions</Text>
-          <Text style={styles.title}>Running and recent work</Text>
-        </View>
+    <MobileScreen>
+      <MobileStack>
+        <MobileScreenHeader eyebrow="Sessions" title="Running and recent work" />
 
         {chats.map((chat) => {
           const presentation = chatKindPresentation(chat.kind);
@@ -38,10 +42,12 @@ export function MobileSessionsScreen({ onOpenChat }: MobileSessionsScreenProps) 
               </MobileGlyph>
               <View style={styles.cardBody}>
                 <View style={styles.rowBetween}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>
+                  <MobileCardTitle numberOfLines={1} style={styles.cardTitle}>
                     {chat.title}
-                  </Text>
-                  <Text style={styles.status}>{chat.status}</Text>
+                  </MobileCardTitle>
+                  <MobileStatusPill tone={chat.status === "running" ? "success" : "muted"}>
+                    {chat.status}
+                  </MobileStatusPill>
                 </View>
                 <Text style={text.caption} numberOfLines={1}>
                   {presentation.label} - {workspace?.name ?? "Unknown"}
@@ -51,31 +57,20 @@ export function MobileSessionsScreen({ onOpenChat }: MobileSessionsScreenProps) 
             </Pressable>
           );
         })}
-      </View>
-    </ScrollView>
+      </MobileStack>
+    </MobileScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    padding: 18,
-    paddingBottom: 96,
-  },
-  stack: {
-    gap: 12,
-  },
-  title: {
-    ...text.title,
-    marginTop: 8,
-  },
   card: {
     flexDirection: "row",
-    gap: 12,
+    gap: spacing[3],
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.card,
-    padding: 12,
+    padding: spacing[3],
   },
   pressed: {
     opacity: 0.72,
@@ -83,7 +78,7 @@ const styles = StyleSheet.create({
   cardBody: {
     minWidth: 0,
     flex: 1,
-    gap: 4,
+    gap: spacing[1],
   },
   rowBetween: {
     flexDirection: "row",
@@ -93,19 +88,6 @@ const styles = StyleSheet.create({
   cardTitle: {
     minWidth: 0,
     flex: 1,
-    color: colors.fg,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  status: {
-    overflow: "hidden",
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    color: colors.green,
-    backgroundColor: "rgba(64,201,119,0.10)",
-    fontSize: 11,
-    fontWeight: "700",
   },
   claim: {
     color: colors.faint,

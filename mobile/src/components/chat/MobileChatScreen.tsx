@@ -5,9 +5,10 @@ import { chatKindPresentation, claimStateLabel } from "@proliferate/product-mode
 import type { ProductChat } from "@proliferate/product-model/chats/model";
 
 import { MobileButton } from "../primitives/MobileButton";
+import { MobileCard } from "../primitives/MobileLayout";
 import { MobileTextInput } from "../primitives/MobileTextInput";
 import { chatMessages, currentUser, workspaceForChat } from "../../lib/fixtures/mobile-fixtures";
-import { colors, radius, text } from "../../styles/tokens";
+import { colors, radius, spacing, text } from "../../styles/tokens";
 
 interface MobileChatScreenProps {
   chat: ProductChat;
@@ -35,10 +36,10 @@ export function MobileChatScreen({ chat }: MobileChatScreenProps) {
         </View>
 
         {claimState.kind === "unclaimed" && (
-          <View style={styles.claimBanner}>
+          <MobileCard style={styles.claimBanner}>
             <Text style={styles.bannerTitle}>Unclaimed shared session</Text>
             <Text style={text.caption}>Claim this session before continuing from Desktop.</Text>
-          </View>
+          </MobileCard>
         )}
 
         <View style={styles.messageStack}>
@@ -67,24 +68,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 18,
-    paddingBottom: 24,
+    padding: spacing[5],
+    paddingBottom: spacing[6],
   },
   headerBlock: {
-    gap: 8,
-    marginBottom: 14,
+    gap: spacing[2],
+    marginBottom: spacing[4],
   },
   title: {
     ...text.title,
   },
   claimBanner: {
-    gap: 6,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    gap: spacing[2],
     borderColor: colors.blue,
-    backgroundColor: "rgba(51,156,255,0.10)",
-    padding: 12,
-    marginBottom: 14,
+    backgroundColor: colors.infoSubtle,
+    marginBottom: spacing[4],
   },
   bannerTitle: {
     color: colors.fg,
@@ -92,13 +90,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   messageStack: {
-    gap: 10,
+    gap: spacing[3],
   },
   message: {
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    padding: 12,
+    padding: spacing[3],
   },
   assistant: {
     backgroundColor: colors.card,
@@ -119,12 +117,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   composer: {
-    gap: 10,
+    gap: spacing[3],
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 18,
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[3],
+    paddingBottom: spacing[5],
     backgroundColor: colors.bg,
   },
   composerInput: {

@@ -1,68 +1,67 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { MobileGlyph } from "../primitives/MobileGlyph";
+import {
+  MobileCard,
+  MobileCardTitle,
+  MobileScreen,
+  MobileScreenHeader,
+  MobileSectionHeader,
+  MobileStack,
+} from "../primitives/MobileLayout";
 import { workspaces } from "../../lib/fixtures/mobile-fixtures";
-import { colors, radius, text } from "../../styles/tokens";
+import { spacing, text } from "../../styles/tokens";
 
 export function MobileWorkspacesScreen() {
-  return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.stack}>
-        <View>
-          <Text style={text.eyebrow}>Workspaces</Text>
-          <Text style={styles.title}>Cloud sandboxes</Text>
-        </View>
+  const sharedWorkspaces = workspaces.filter((workspace) => workspace.kind === "shared");
+  const personalWorkspaces = workspaces.filter((workspace) => workspace.kind !== "shared");
 
-        {workspaces.map((workspace) => (
-          <View key={workspace.id} style={styles.card}>
-            <MobileGlyph tone={workspace.kind === "shared" ? "info" : "muted"}>
-              {workspace.kind === "shared" ? "T" : "P"}
-            </MobileGlyph>
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle}>{workspace.name}</Text>
-              <Text style={text.caption}>{workspace.repoLabel}</Text>
-              <Text style={styles.branch}>{workspace.branchLabel}</Text>
-            </View>
-          </View>
+  return (
+    <MobileScreen>
+      <MobileStack>
+        <MobileScreenHeader eyebrow="Workspaces" title="Cloud sandboxes" />
+
+        <MobileSectionHeader title="Shared" meta={sharedWorkspaces.length.toString()} />
+        {sharedWorkspaces.map((workspace) => (
+          <WorkspaceRow key={workspace.id} workspace={workspace} />
         ))}
+
+        <MobileSectionHeader title="Personal" meta={personalWorkspaces.length.toString()} />
+        {personalWorkspaces.map((workspace) => (
+          <WorkspaceRow key={workspace.id} workspace={workspace} />
+        ))}
+      </MobileStack>
+    </MobileScreen>
+  );
+}
+
+function WorkspaceRow({ workspace }: { workspace: (typeof workspaces)[number] }) {
+  return (
+    <MobileCard style={styles.card}>
+      <MobileGlyph tone={workspace.kind === "shared" ? "info" : "muted"}>
+        {workspace.kind === "shared" ? "T" : "P"}
+      </MobileGlyph>
+      <View style={styles.cardBody}>
+        <MobileCardTitle>{workspace.name}</MobileCardTitle>
+        <Text style={text.caption}>{workspace.repoLabel}</Text>
+        <Text style={styles.branch}>{workspace.branchLabel}</Text>
       </View>
-    </ScrollView>
+    </MobileCard>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    padding: 18,
-    paddingBottom: 96,
-  },
-  stack: {
-    gap: 12,
-  },
-  title: {
-    ...text.title,
-    marginTop: 8,
-  },
   card: {
     flexDirection: "row",
-    gap: 12,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    padding: 12,
+    gap: spacing[3],
   },
   cardBody: {
     minWidth: 0,
     flex: 1,
-    gap: 4,
-  },
-  cardTitle: {
-    color: colors.fg,
-    fontSize: 15,
-    fontWeight: "700",
+    gap: spacing[1],
   },
   branch: {
-    color: colors.faint,
+    color: text.caption.color,
     fontSize: 12,
   },
 });

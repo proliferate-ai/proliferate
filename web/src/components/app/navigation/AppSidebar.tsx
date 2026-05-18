@@ -41,7 +41,7 @@ const navItems: NavItem[] = [
 function chatStatusClass(status: ProductChat["status"]) {
   switch (status) {
     case "running":
-      return "bg-success shadow-[0_0_8px_rgba(64,201,119,0.6)]";
+      return "bg-success";
     case "failed":
       return "bg-destructive";
     case "done":

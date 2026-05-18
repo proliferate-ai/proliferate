@@ -32,10 +32,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   success: {
-    backgroundColor: "rgba(64,201,119,0.14)",
+    backgroundColor: colors.successSubtle,
   },
   info: {
-    backgroundColor: "rgba(51,156,255,0.14)",
+    backgroundColor: colors.infoSubtle,
   },
   muted: {
     backgroundColor: colors.card,

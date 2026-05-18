@@ -48,7 +48,7 @@ a {
 
 .web-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  scrollbar-color: var(--color-border-heavy) transparent;
 }
 
 .web-scrollbar::-webkit-scrollbar {
@@ -57,7 +57,7 @@ a {
 }
 
 .web-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--color-border-heavy);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;

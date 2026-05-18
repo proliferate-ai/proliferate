@@ -23,7 +23,7 @@ import { MobileWorkspacesScreen } from "../workspaces/MobileWorkspacesScreen";
 import { chats } from "../../lib/fixtures/mobile-fixtures";
 import { drawerRoutes, routeTitle, type RouteId } from "../../navigation/navigation-model";
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
-import { colors, radius } from "../../styles/tokens";
+import { colors, radius, shadow, spacing } from "../../styles/tokens";
 
 function MenuIcon({ open }: { open: boolean }) {
   if (open) {
@@ -201,9 +201,9 @@ const styles = StyleSheet.create({
     minHeight: 60,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    gap: spacing[3],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
@@ -285,11 +285,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 27,
     backgroundColor: colors.fg,
-    shadowColor: "#000000",
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
+    ...shadow.floating,
   },
   fabText: {
     color: colors.bg,
@@ -304,7 +300,7 @@ const styles = StyleSheet.create({
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.58)",
+    backgroundColor: colors.overlayStrong,
   },
   drawer: {
     width: 298,

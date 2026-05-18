@@ -15,6 +15,13 @@ export const radius = mobileTheme.radius;
 export const typography = mobileTheme.typography;
 export const shadow = mobileTheme.shadow;
 
+export const layout = {
+  screenPadding: spacing[5],
+  screenBottomPadding: 96,
+  stackGap: spacing[3],
+  rowGap: spacing[3],
+} as const;
+
 export const text = {
   eyebrow: {
     color: colors.faint,

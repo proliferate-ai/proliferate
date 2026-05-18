@@ -1,79 +1,59 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { MobileButton } from "../primitives/MobileButton";
 import { MobileGlyph } from "../primitives/MobileGlyph";
+import {
+  MobileCard,
+  MobileCardTitle,
+  MobileScreen,
+  MobileScreenHeader,
+  MobileStack,
+  MobileStatusPill,
+} from "../primitives/MobileLayout";
 import { automations } from "../../lib/fixtures/mobile-fixtures";
-import { colors, radius, text } from "../../styles/tokens";
+import { spacing, text } from "../../styles/tokens";
 
 export function MobileAutomationsScreen() {
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.stack}>
-        <View>
-          <Text style={text.eyebrow}>Automations</Text>
-          <Text style={styles.title}>Scheduled cloud work</Text>
-        </View>
+    <MobileScreen>
+      <MobileStack>
+        <MobileScreenHeader eyebrow="Automations" title="Scheduled cloud work" />
 
         {automations.map((automation) => (
-          <View key={automation.id} style={styles.card}>
+          <MobileCard key={automation.id} style={styles.card}>
             <MobileGlyph tone={automation.status === "enabled" ? "success" : "muted"}>A</MobileGlyph>
             <View style={styles.cardBody}>
               <View style={styles.rowBetween}>
-                <Text style={styles.cardTitle}>{automation.name}</Text>
-                <Text style={styles.status}>{automation.status}</Text>
+                <MobileCardTitle>{automation.name}</MobileCardTitle>
+                <MobileStatusPill tone={automation.status === "enabled" ? "success" : "muted"}>
+                  {automation.status}
+                </MobileStatusPill>
               </View>
               <Text style={text.caption}>{automation.detail}</Text>
             </View>
-          </View>
+          </MobileCard>
         ))}
 
         <MobileButton label="New automation" variant="secondary" />
-      </View>
-    </ScrollView>
+      </MobileStack>
+    </MobileScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    padding: 18,
-    paddingBottom: 96,
-  },
-  stack: {
-    gap: 12,
-  },
-  title: {
-    ...text.title,
-    marginTop: 8,
-  },
   card: {
     flexDirection: "row",
-    gap: 12,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    padding: 12,
+    gap: spacing[3],
   },
   cardBody: {
     minWidth: 0,
     flex: 1,
-    gap: 4,
+    gap: spacing[1],
   },
   rowBetween: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-  cardTitle: {
-    minWidth: 0,
-    flex: 1,
-    color: colors.fg,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  status: {
-    color: colors.green,
-    fontSize: 12,
-    fontWeight: "700",
+    gap: spacing[2],
+    justifyContent: "space-between",
   },
 });
