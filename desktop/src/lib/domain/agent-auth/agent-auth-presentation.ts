@@ -92,6 +92,20 @@ export function describeAgentAuthCredential(credential: AgentAuthCredential): st
   return details ? `${owner} · ${details}` : owner;
 }
 
+export function isHostedCloudV1AgentAuthCredential(credential: AgentAuthCredential): boolean {
+  if (credential.credentialKind === "synced_path") {
+    return true;
+  }
+  return isProliferateManagedCreditsCredential(credential);
+}
+
+export function isProliferateManagedCreditsCredential(
+  credential: AgentAuthCredential,
+): boolean {
+  return credential.credentialKind === "managed_gateway"
+    && credential.redactedSummary.providerKind === "proliferate_bedrock_pool";
+}
+
 export function credentialSummaryDetails(credential: AgentAuthCredential): string {
   const summary = credential.redactedSummary;
   if (typeof summary.roleArn === "string" && typeof summary.region === "string") {

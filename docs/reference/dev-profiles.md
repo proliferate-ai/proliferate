@@ -11,6 +11,8 @@ make dev-init PROFILE=<name>       # create or update profile state
 make dev-list                      # list profiles and TCP-probed status
 make dev PROFILE=<name>            # full stack for this profile
 make dev PROFILE=<name> STRIPE=1   # also run Stripe webhook forwarding
+make dev PROFILE=<name> AGENT_GATEWAY=1
+                                    # also run local private LiteLLM for gateway work
 ```
 
 Profile names must be lowercase letters, numbers, hyphens, or underscores.
@@ -56,6 +58,24 @@ Desktop auth sessions and pending-auth entries are profile-scoped in the dev
 Keychain so per-profile databases do not reuse each other's login tokens.
 Provider API keys and the AnyHarness runtime data key stay shared in v1 because
 those credentials are user-level local secrets, not profile state.
+
+## Agent Gateway Local Dev
+
+`make dev PROFILE=<name> AGENT_GATEWAY=1` starts the private LiteLLM proxy from
+`server/docker-compose.yml` through the `agent-gateway` compose profile and
+exports the gateway env needed by the API process:
+
+```text
+AGENT_GATEWAY_ENABLED=true
+AGENT_GATEWAY_LITELLM_BASE_URL=http://127.0.0.1:4000
+AGENT_GATEWAY_PUBLIC_BASE_URL=http://127.0.0.1:<profile-api-port>
+AGENT_GATEWAY_RECONCILER_ENABLED=true
+```
+
+The default local LiteLLM master key is `sk-local-dev-agent-gateway`. Override it
+with `AGENT_GATEWAY_LITELLM_MASTER_KEY=...` or `LOCAL_LITELLM_MASTER_KEY=...`
+when a test needs a different key. `make server-litellm-up` starts only the
+local LiteLLM stack, and `make server-litellm-down` stops it.
 
 ## Ports And UI Identity
 

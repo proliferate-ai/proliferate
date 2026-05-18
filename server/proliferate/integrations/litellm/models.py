@@ -20,4 +20,4 @@ class LiteLLMKeyResult:
 class LiteLLMModelDeploymentResult:
     model_id: str | None
     public_model_name: str
-    team_id: str
+    team_id: str | None

@@ -16,6 +16,8 @@ The host then runs the same production deployment from `server/deploy/**`:
 
 - `caddy`
 - `db`
+- optional `litellm-db` through the `agent-gateway` compose profile
+- optional `litellm` through the `agent-gateway` compose profile
 - `migrate`
 - `api`
 
@@ -63,6 +65,8 @@ bootstrap if you leave them blank:
 - `JWT_SECRET`
 - `CLOUD_SECRET_KEY`
 - `POSTGRES_PASSWORD`
+- `LITELLM_POSTGRES_PASSWORD`
+- `AGENT_GATEWAY_LITELLM_MASTER_KEY`
 
 For a real domain:
 
@@ -77,11 +81,11 @@ Environment-boundary note:
 
 - the stack only promotes the common self-hosted operator subset into
   CloudFormation parameters
-- advanced auth-flow and sandbox-template overrides still exist in
+- advanced auth-flow, agent-gateway, and sandbox-template overrides still exist in
   `server/proliferate/config.py`, but they intentionally stay on code defaults
   in the launch-stack flow unless you customize
   [template.yaml](/Users/pablo/proliferate/server/infra/self-hosted-aws/template.yaml)
-  or edit the generated `.env.static` on the host
+  or add host-local overrides in `/opt/proliferate/server/deploy/.env.local`
 - the full control-plane env surface is documented in
   [docs/reference/env-secrets-matrix.md](/Users/pablo/proliferate/docs/reference/env-secrets-matrix.md)
 
@@ -118,6 +122,21 @@ The GitHub OAuth app must use the stack hostname:
 5. Open the desktop app and sign in with GitHub.
 6. Sync Codex credentials.
 7. Create a cloud workspace.
+
+Agent gateway defaults are written into `.env.static` but disabled by default.
+CloudFormation rewrites `.env.static` on release updates, so host-specific
+overrides should go in `/opt/proliferate/server/deploy/.env.local`:
+
+```text
+AGENT_GATEWAY_ENABLED=true
+AGENT_GATEWAY_PUBLIC_BASE_URL=https://<site-address>
+AGENT_GATEWAY_RECONCILER_ENABLED=true
+```
+
+Then run `/opt/proliferate/server/deploy/update.sh`. The update script merges
+`.env.static` with `.env.local`, starts the private LiteLLM services through the
+`agent-gateway` compose profile, and preserves the override across later stack
+updates.
 
 ## Update Flow
 

@@ -93,7 +93,6 @@ class CloudSyncedWorkspace(Base):
     )
     cloud_workspace_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("cloud_workspace.id", ondelete="CASCADE"),
-        index=True,
     )
     workspace_id: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

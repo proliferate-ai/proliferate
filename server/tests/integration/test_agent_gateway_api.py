@@ -17,7 +17,8 @@ from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.integrations.litellm import LiteLLMRuntimeResponse, LiteLLMRuntimeStatusError
 from proliferate.server.cloud.agent_auth.service import issue_runtime_grant_for_selection
-from proliferate.utils.crypto import encrypt_text
+from proliferate.utils.crypto import encrypt_json, encrypt_text
+from proliferate.utils.time import utcnow
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,8 @@ class _GatewaySeed:
 @pytest.fixture(autouse=True)
 def _enable_agent_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_byok_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_anthropic_byok_enabled", True)
 
 
 async def _seed_gateway_grant(
@@ -96,6 +99,18 @@ async def _seed_gateway_grant(
         litellm_sync_fingerprint="fingerprint",
         status="ready",
     )
+    await store.upsert_provider_credential(
+        db_session,
+        policy_id=policy.id,
+        provider_kind="anthropic_api_key",
+        payload_ciphertext=encrypt_json({"apiKey": "sk-provider-secret"}),
+        payload_ciphertext_key_id="cloud_secret_key:v1",
+        redacted_summary_json='{"providerKind":"anthropic_api_key"}',
+        validation_status="valid",
+        validated_at=utcnow(),
+        validation_error_code=None,
+        validation_error_message=None,
+    )
     selection = await store.upsert_selection(
         db_session,
         sandbox_profile_id=profile.id,
@@ -141,6 +156,15 @@ class _FakeRuntimeClient:
         )
 
 
+class _LogRecordHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
 @pytest.mark.asyncio
 async def test_anthropic_gateway_forwards_valid_grant_to_litellm(
     client: AsyncClient,
@@ -161,16 +185,23 @@ async def test_anthropic_gateway_forwards_valid_grant_to_litellm(
             "anthropic-version": "2023-06-01",
             "anthropic-beta": "messages-2023-12-15",
         },
-        json={"model": "us.anthropic.claude-sonnet-4-6", "messages": []},
+        json={
+            "model": "us.anthropic.claude-sonnet-4-6",
+            "messages": [],
+            "context_management": {"edits": []},
+        },
     )
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
     assert fake_client.calls[0]["path"] == "/v1/messages"
-    assert fake_client.calls[0]["query_string"] == "beta=true"
+    assert fake_client.calls[0]["query_string"] == ""
+    assert json.loads(fake_client.calls[0]["body"]) == {
+        "model": "us.anthropic.claude-sonnet-4-6",
+        "messages": [],
+    }
     assert fake_client.calls[0]["protocol_headers"] == {
         "anthropic-version": "2023-06-01",
-        "anthropic-beta": "messages-2023-12-15",
     }
     assert fake_client.calls[0]["litellm_key"] == "litellm-runtime-key"
     assert fake_client.calls[0]["metadata"] == {
@@ -187,7 +218,6 @@ async def test_gateway_request_logging_is_privacy_safe(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
     seed = await _seed_gateway_grant(db_session)
     fake_client = _FakeRuntimeClient()
@@ -195,9 +225,13 @@ async def test_gateway_request_logging_is_privacy_safe(
         "proliferate.server.agent_gateway.service.LiteLLMRuntimeClient",
         lambda: fake_client,
     )
-    caplog.set_level(logging.INFO, logger="proliferate.agent_gateway")
     gateway_logger = logging.getLogger("proliferate.agent_gateway")
-    gateway_logger.addHandler(caplog.handler)
+    previous_level = gateway_logger.level
+    previous_disabled = gateway_logger.disabled
+    handler = _LogRecordHandler()
+    gateway_logger.setLevel(logging.INFO)
+    gateway_logger.disabled = False
+    gateway_logger.addHandler(handler)
 
     try:
         response = await client.post(
@@ -209,12 +243,14 @@ async def test_gateway_request_logging_is_privacy_safe(
             },
         )
     finally:
-        gateway_logger.removeHandler(caplog.handler)
+        gateway_logger.removeHandler(handler)
+        gateway_logger.setLevel(previous_level)
+        gateway_logger.disabled = previous_disabled
 
     assert response.status_code == 200
     records = [
         record
-        for record in caplog.records
+        for record in handler.records
         if getattr(record, "event", None) == "agent_gateway_request"
     ]
     assert len(records) == 1
@@ -225,12 +261,15 @@ async def test_gateway_request_logging_is_privacy_safe(
     assert not hasattr(record, "target_id")
     assert not hasattr(record, "sandbox_profile_id")
     assert record.model_hash != "us.anthropic.claude-sonnet-4-6"
-    assert "super-secret-prompt" not in caplog.text
-    assert str(seed.policy_id) not in caplog.text
-    assert str(seed.target_id) not in caplog.text
-    assert str(seed.sandbox_profile_id) not in caplog.text
-    assert seed.raw_token not in caplog.text
-    assert "litellm-runtime-key" not in caplog.text
+    rendered_records = "\n".join(
+        f"{captured.getMessage()} {captured.__dict__}" for captured in handler.records
+    )
+    assert "super-secret-prompt" not in rendered_records
+    assert str(seed.policy_id) not in rendered_records
+    assert str(seed.target_id) not in rendered_records
+    assert str(seed.sandbox_profile_id) not in rendered_records
+    assert seed.raw_token not in rendered_records
+    assert "litellm-runtime-key" not in rendered_records
 
 
 @pytest.mark.asyncio
@@ -262,6 +301,56 @@ async def test_gateway_fails_closed_when_disabled(
 
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "gateway_route_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_gateway_fails_closed_when_byok_disabled_after_grant_issue(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed = await _seed_gateway_grant(db_session)
+    fake_client = _FakeRuntimeClient()
+    monkeypatch.setattr(
+        "proliferate.server.agent_gateway.service.LiteLLMRuntimeClient",
+        lambda: fake_client,
+    )
+    monkeypatch.setattr(settings, "agent_gateway_byok_enabled", False)
+
+    response = await client.post(
+        "/anthropic/v1/messages",
+        headers={"Authorization": f"Bearer {seed.raw_token}"},
+        json={"model": "us.anthropic.claude-sonnet-4-6", "messages": []},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "gateway_byok_disabled"
+    assert fake_client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_gateway_fails_closed_when_byok_provider_disabled_after_grant_issue(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed = await _seed_gateway_grant(db_session)
+    fake_client = _FakeRuntimeClient()
+    monkeypatch.setattr(
+        "proliferate.server.agent_gateway.service.LiteLLMRuntimeClient",
+        lambda: fake_client,
+    )
+    monkeypatch.setattr(settings, "agent_gateway_anthropic_byok_enabled", False)
+
+    response = await client.post(
+        "/anthropic/v1/messages",
+        headers={"Authorization": f"Bearer {seed.raw_token}"},
+        json={"model": "us.anthropic.claude-sonnet-4-6", "messages": []},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "gateway_byok_disabled"
+    assert fake_client.calls == []
 
 
 @pytest.mark.asyncio

@@ -7,6 +7,7 @@ import type {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
+import { AGENT_GATEWAY_BYOK_ENABLED } from "@/config/agent-auth";
 import {
   useAgentAuthCredentials,
   useAgentAuthMutations,
@@ -20,6 +21,7 @@ import {
   agentAuthCredentialStatusLabel,
   agentAuthCredentialStatusTone,
   credentialSelectableReason,
+  isHostedCloudV1AgentAuthCredential,
   selectionByAgentKind,
   targetStateSummary,
 } from "@/lib/domain/agent-auth/agent-auth-presentation";
@@ -42,6 +44,13 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
   });
   const { data: selections = [] } = useSandboxAgentAuthSelections(profile?.id ?? null);
   const { data: targetStates = [] } = useSandboxAgentAuthTargetStates(profile?.id ?? null);
+  const visibleCredentials = useMemo(
+    () =>
+      AGENT_GATEWAY_BYOK_ENABLED
+        ? credentials
+        : credentials.filter(isHostedCloudV1AgentAuthCredential),
+    [credentials],
+  );
   const selectionsByAgent = useMemo(() => selectionByAgentKind(selections), [selections]);
   const targetState = profile ? targetStateSummary(targetStates, target.id) : null;
 
@@ -124,9 +133,21 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
         <div className="divide-y divide-border/40 rounded-md border border-border/50">
           {AGENT_AUTH_AGENT_ORDER.map((agentKind) => {
             const selection = selectionsByAgent.get(agentKind);
-            const agentCredentials = credentials.filter(
+            const agentCredentials = visibleCredentials.filter(
               (credential) => credential.agentKind === agentKind,
             );
+            const selectedCredential = selection
+              ? credentials.find((credential) => credential.id === selection.credentialId)
+              : undefined;
+            const selectedCredentialVisible = selectedCredential
+              ? agentCredentials.some((credential) => credential.id === selectedCredential.id)
+              : selection === undefined;
+            let unavailableSelectedCredentialLabel: string | null = null;
+            if (selection && !selectedCredential) {
+              unavailableSelectedCredentialLabel = "Selected credential unavailable";
+            } else if (selectedCredential && !selectedCredentialVisible) {
+              unavailableSelectedCredentialLabel = `${selectedCredential.displayName} · unavailable in hosted cloud`;
+            }
             return (
               <AgentAuthSelectionRow
                 key={agentKind}
@@ -134,6 +155,7 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
                 profile={profile}
                 credentials={agentCredentials}
                 selectedCredentialId={selection?.credentialId ?? ""}
+                unavailableSelectedCredentialLabel={unavailableSelectedCredentialLabel}
                 selecting={mutations.isSelectingCredential}
                 onSelect={handleSelect}
               />
@@ -151,6 +173,7 @@ function AgentAuthSelectionRow({
   profile,
   credentials,
   selectedCredentialId,
+  unavailableSelectedCredentialLabel,
   selecting,
   onSelect,
 }: {
@@ -158,6 +181,7 @@ function AgentAuthSelectionRow({
   profile: SandboxProfile;
   credentials: AgentAuthCredential[];
   selectedCredentialId: string;
+  unavailableSelectedCredentialLabel: string | null;
   selecting: boolean;
   onSelect: (agentKind: AgentAuthAgentKind, credentialId: string) => void;
 }) {
@@ -172,6 +196,11 @@ function AgentAuthSelectionRow({
         <option value="">
           {credentials.length === 0 ? "No compatible credentials" : "Select credential"}
         </option>
+        {unavailableSelectedCredentialLabel && (
+          <option value={selectedCredentialId} disabled>
+            {unavailableSelectedCredentialLabel}
+          </option>
+        )}
         {credentials.map((credential) => {
           const disabledReason = credentialSelectableReason(credential, profile.ownerScope);
           return (

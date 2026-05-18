@@ -264,6 +264,7 @@ async def create_gateway_credential(
             status_code=400,
         )
     _validate_policy_owner_scope(body.policy_kind, body.owner_scope)
+    _require_gateway_byok_enabled(body.provider_kind)
 
     validation = _validate_provider_payload(body.provider_kind, body.payload)
     credential = await store.create_agent_auth_credential(
@@ -419,10 +420,13 @@ async def ensure_managed_credits_for_organization(
             )
             team_id = team.team_id
             for deployment in managed_deployments:
+                # LiteLLM OSS supports team budgets but gates team-scoped model
+                # deployments. Managed credits use Proliferate-owned Bedrock
+                # credentials, so a global deployment plus team virtual key keeps
+                # budget enforcement without mixing customer provider secrets.
                 await client.create_model_deployment(
                     public_model_name=deployment.public_model_name,
                     provider_model=deployment.provider_model,
-                    team_id=team_id,
                     litellm_params=_provider_litellm_params(
                         provider_kind="proliferate_bedrock_pool",
                         provider_payload={},
@@ -1588,10 +1592,11 @@ async def _reconcile_managed_budget_subject(
             )
             team_id = team.team_id
             for deployment in managed_deployments:
+                # See ensure_managed_credits_for_organization for why managed
+                # credits intentionally use global LiteLLM deployments.
                 await client.create_model_deployment(
                     public_model_name=deployment.public_model_name,
                     provider_model=deployment.provider_model,
-                    team_id=team_id,
                     litellm_params=_provider_litellm_params(
                         provider_kind="proliferate_bedrock_pool",
                         provider_payload={},
@@ -1689,6 +1694,21 @@ async def _reconcile_gateway_policy(
             error_message=None if policy_status == "ready" else budget.last_error_message,
             existing_policy=policy,
         )
+
+    byok_verdict = await _gateway_byok_launch_verdict(db, policy)
+    if byok_verdict is not None:
+        reconciled = await _mark_policy_reconciliation_failed(
+            db,
+            policy=policy,
+            error_code=byok_verdict[0],
+            error_message=byok_verdict[1],
+        )
+        await store.update_credential_status(
+            db,
+            credential_id=credential.id,
+            status="invalid",
+        )
+        return reconciled
 
     provider_credential = await store.get_provider_credential_for_policy(db, policy.id)
     if provider_credential is None:
@@ -2025,6 +2045,9 @@ async def _require_credential_ready_for_selection(
             code="gateway_policy_not_ready",
             status_code=409,
         )
+    byok_verdict = await _gateway_byok_launch_verdict(db, policy)
+    if byok_verdict is not None:
+        raise AgentAuthError(byok_verdict[1], code=byok_verdict[0], status_code=403)
 
 
 def _validate_policy_owner_scope(policy_kind: str, owner_scope: str) -> None:
@@ -2040,6 +2063,59 @@ def _validate_policy_owner_scope(policy_kind: str, owner_scope: str) -> None:
             code="policy_owner_scope_mismatch",
             status_code=400,
         )
+
+
+def _require_gateway_byok_enabled(provider_kind: str) -> None:
+    if not _gateway_byok_provider_enabled(provider_kind):
+        raise AgentAuthError(
+            "Gateway BYOK provider credentials are disabled.",
+            code="gateway_byok_disabled",
+            status_code=403,
+        )
+
+
+async def _gateway_byok_launch_verdict(
+    db: AsyncSession,
+    policy: AgentGatewayPolicyRecord,
+) -> tuple[str, str] | None:
+    if policy.policy_kind == "proliferate_managed":
+        return None
+    if policy.policy_kind not in {"org_byok", "personal_byok"}:
+        return (
+            "unsupported_gateway_policy_kind",
+            "Gateway policy kind is not supported.",
+        )
+    if not settings.agent_gateway_byok_enabled:
+        return (
+            "gateway_byok_disabled",
+            "Gateway BYOK provider credentials are disabled.",
+        )
+    provider_credential = await store.get_provider_credential_for_policy(db, policy.id)
+    if provider_credential is None:
+        return (
+            "provider_credential_missing",
+            "Gateway provider credential is not configured.",
+        )
+    if not _gateway_byok_provider_enabled(provider_credential.provider_kind):
+        return (
+            "gateway_byok_disabled",
+            "Gateway BYOK provider credentials are disabled.",
+        )
+    return None
+
+
+def _gateway_byok_provider_enabled(provider_kind: str) -> bool:
+    if not settings.agent_gateway_byok_enabled:
+        return False
+    if provider_kind == "anthropic_api_key":
+        return settings.agent_gateway_anthropic_byok_enabled
+    if provider_kind == "openai_api_key":
+        return settings.agent_gateway_openai_byok_enabled
+    if provider_kind == "bedrock_assume_role":
+        return settings.agent_gateway_bedrock_byok_enabled
+    if provider_kind == "openai_compatible":
+        return settings.agent_gateway_openai_compatible_byok_enabled
+    return False
 
 
 def _safe_error_message(

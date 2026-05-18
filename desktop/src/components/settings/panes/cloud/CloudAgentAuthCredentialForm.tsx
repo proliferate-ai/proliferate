@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import type {
   AgentAuthAgentKind,
   CreateGatewayCredentialRequest,
@@ -28,6 +28,7 @@ interface CloudAgentAuthCredentialFormProps {
   organizations: OrganizationOption[];
   libraryOrganizationId: string | null;
   onLibraryOrganizationChange: (organizationId: string | null) => void;
+  gatewayByokEnabled: boolean;
 }
 
 const PROVIDER_OPTIONS: { value: ProviderChoice; label: string }[] = [
@@ -41,6 +42,7 @@ export function CloudAgentAuthCredentialForm({
   organizations,
   libraryOrganizationId,
   onLibraryOrganizationChange,
+  gatewayByokEnabled,
 }: CloudAgentAuthCredentialFormProps) {
   const adminOrganizations = organizations.filter(isAdminOrganization);
   const firstAdminOrganizationId = adminOrganizations[0]?.id ?? null;
@@ -113,156 +115,171 @@ export function CloudAgentAuthCredentialForm({
               ))}
             </Select>
           </div>
-          <div>
-            <Label htmlFor="agent-auth-owner-scope">New credential owner</Label>
-            <Select
-              id="agent-auth-owner-scope"
-              value={ownerScope}
-              onChange={(event) => {
-                const nextOwnerScope = event.target.value as typeof ownerScope;
-                setOwnerScope(nextOwnerScope);
-                if (
-                  nextOwnerScope === "organization"
-                  && !libraryOrganizationCanOwnCredential
-                  && firstAdminOrganizationId
-                ) {
-                  onLibraryOrganizationChange(firstAdminOrganizationId);
-                }
-              }}
-            >
-              <option value="personal">Personal</option>
-              <option value="organization" disabled={!firstAdminOrganizationId}>
-                Organization
-              </option>
-            </Select>
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="agent-auth-provider-kind">Provider</Label>
-            <Select
-              id="agent-auth-provider-kind"
-              value={providerKind}
-              onChange={(event) => setProviderKind(event.target.value as ProviderChoice)}
-            >
-              {PROVIDER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          {(providerKind === "openai_api_key" || providerKind === "openai_compatible") && (
+          {gatewayByokEnabled && (
             <div>
-              <Label htmlFor="agent-auth-agent-kind">Agent</Label>
+              <Label htmlFor="agent-auth-owner-scope">New credential owner</Label>
               <Select
-                id="agent-auth-agent-kind"
-                value={agentKind}
-                onChange={(event) => setAgentKind(
-                  event.target.value as Extract<AgentAuthAgentKind, "codex" | "opencode">,
-                )}
+                id="agent-auth-owner-scope"
+                value={ownerScope}
+                onChange={(event) => {
+                  const nextOwnerScope = event.target.value as typeof ownerScope;
+                  setOwnerScope(nextOwnerScope);
+                  if (
+                    nextOwnerScope === "organization"
+                    && !libraryOrganizationCanOwnCredential
+                    && firstAdminOrganizationId
+                  ) {
+                    onLibraryOrganizationChange(firstAdminOrganizationId);
+                  }
+                }}
               >
-                <option value="codex">Codex</option>
-                <option value="opencode">OpenCode</option>
+                <option value="personal">Personal</option>
+                <option value="organization" disabled={!firstAdminOrganizationId}>
+                  Organization
+                </option>
               </Select>
             </div>
           )}
         </div>
 
-        <div>
-          <Label htmlFor="agent-auth-display-name">Display name</Label>
-          <Input
-            id="agent-auth-display-name"
-            value={displayName}
-            placeholder="Production Bedrock"
-            onChange={(event) => setDisplayName(event.target.value)}
-          />
-        </div>
+        {gatewayByokEnabled && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="agent-auth-provider-kind">Provider</Label>
+                <Select
+                  id="agent-auth-provider-kind"
+                  value={providerKind}
+                  onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                    setProviderKind(event.target.value as ProviderChoice)}
+                >
+                  {PROVIDER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              {(providerKind === "openai_api_key" || providerKind === "openai_compatible") && (
+                <div>
+                  <Label htmlFor="agent-auth-agent-kind">Agent</Label>
+                  <Select
+                    id="agent-auth-agent-kind"
+                    value={agentKind}
+                    onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                      setAgentKind(
+                        event.target.value as Extract<AgentAuthAgentKind, "codex" | "opencode">,
+                      )}
+                  >
+                    <option value="codex">Codex</option>
+                    <option value="opencode">OpenCode</option>
+                  </Select>
+                </div>
+              )}
+            </div>
 
-        {(providerKind === "anthropic_api_key" || providerKind === "openai_api_key") && (
-          <div>
-            <Label htmlFor="agent-auth-api-key">API key</Label>
-            <Input
-              id="agent-auth-api-key"
-              value={apiKey}
-              type="password"
-              placeholder="sk-..."
-              onChange={(event) => setApiKey(event.target.value)}
-            />
-          </div>
+            <div>
+              <Label htmlFor="agent-auth-display-name">Display name</Label>
+              <Input
+                id="agent-auth-display-name"
+                value={displayName}
+                placeholder="Production Bedrock"
+                onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                  setDisplayName(event.target.value)}
+              />
+            </div>
+
+            {(providerKind === "anthropic_api_key" || providerKind === "openai_api_key") && (
+              <div>
+                <Label htmlFor="agent-auth-api-key">API key</Label>
+                <Input
+                  id="agent-auth-api-key"
+                  value={apiKey}
+                  type="password"
+                  placeholder="sk-..."
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                    setApiKey(event.target.value)}
+                />
+              </div>
+            )}
+
+            {providerKind === "openai_compatible" && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="agent-auth-base-url">Base URL</Label>
+                  <Input
+                    id="agent-auth-base-url"
+                    value={baseUrl}
+                    placeholder="https://api.example.com/v1"
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setBaseUrl(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="agent-auth-compatible-api-key">API key</Label>
+                  <Input
+                    id="agent-auth-compatible-api-key"
+                    value={apiKey}
+                    type="password"
+                    placeholder="sk-..."
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setApiKey(event.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {providerKind === "bedrock_assume_role" && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Label htmlFor="agent-auth-role-arn">Role ARN</Label>
+                  <Input
+                    id="agent-auth-role-arn"
+                    value={roleArn}
+                    placeholder="arn:aws:iam::123456789012:role/proliferate-bedrock"
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setRoleArn(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="agent-auth-region">Region</Label>
+                  <Input
+                    id="agent-auth-region"
+                    value={region}
+                    placeholder="us-east-1"
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setRegion(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="agent-auth-external-id">External ID</Label>
+                  <Input
+                    id="agent-auth-external-id"
+                    value={externalId}
+                    placeholder="proliferate-..."
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setExternalId(event.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3">
+              <p className="min-w-0 text-xs text-muted-foreground">
+                {feedback ?? "Secrets are stored in Cloud and never displayed after saving."}
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                loading={mutations.isCreatingCredential}
+                disabled={!canCreate}
+                onClick={() => { void handleCreateCredential(); }}
+              >
+                Add credential
+              </Button>
+            </div>
+          </>
         )}
-
-        {providerKind === "openai_compatible" && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="agent-auth-base-url">Base URL</Label>
-              <Input
-                id="agent-auth-base-url"
-                value={baseUrl}
-                placeholder="https://api.example.com/v1"
-                onChange={(event) => setBaseUrl(event.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="agent-auth-compatible-api-key">API key</Label>
-              <Input
-                id="agent-auth-compatible-api-key"
-                value={apiKey}
-                type="password"
-                placeholder="sk-..."
-                onChange={(event) => setApiKey(event.target.value)}
-              />
-            </div>
-          </div>
-        )}
-
-        {providerKind === "bedrock_assume_role" && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Label htmlFor="agent-auth-role-arn">Role ARN</Label>
-              <Input
-                id="agent-auth-role-arn"
-                value={roleArn}
-                placeholder="arn:aws:iam::123456789012:role/proliferate-bedrock"
-                onChange={(event) => setRoleArn(event.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="agent-auth-region">Region</Label>
-              <Input
-                id="agent-auth-region"
-                value={region}
-                placeholder="us-east-1"
-                onChange={(event) => setRegion(event.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="agent-auth-external-id">External ID</Label>
-              <Input
-                id="agent-auth-external-id"
-                value={externalId}
-                placeholder="proliferate-..."
-                onChange={(event) => setExternalId(event.target.value)}
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between gap-3">
-          <p className="min-w-0 text-xs text-muted-foreground">
-            {feedback ?? "Secrets are stored in Cloud and never displayed after saving."}
-          </p>
-          <Button
-            type="button"
-            variant="secondary"
-            loading={mutations.isCreatingCredential}
-            disabled={!canCreate}
-            onClick={() => { void handleCreateCredential(); }}
-          >
-            Add credential
-          </Button>
-        </div>
       </div>
     </SettingsCard>
   );

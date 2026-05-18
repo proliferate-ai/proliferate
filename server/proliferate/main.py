@@ -40,11 +40,11 @@ from proliferate.server.billing.reconciler import (
     stop_billing_reconciler,
 )
 from proliferate.server.catalogs.api import router as catalogs_router
-from proliferate.server.cloud.api import router as cloud_router
 from proliferate.server.cloud.agent_auth.reconciler import (
     start_agent_gateway_reconciler,
     stop_agent_gateway_reconciler,
 )
+from proliferate.server.cloud.api import router as cloud_router
 from proliferate.server.cloud.runtime.setup_monitor import (
     start_cloud_setup_monitor,
     stop_cloud_setup_monitor,

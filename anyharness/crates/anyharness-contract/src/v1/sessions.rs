@@ -669,6 +669,8 @@ mod tests {
         let request = CreateSessionRequest {
             workspace_id: "workspace-1".to_string(),
             agent_kind: "claude".to_string(),
+            agent_auth_scope: None,
+            required_agent_auth_revision: None,
             model_id: Some("default".to_string()),
             mode_id: Some("bypassPermissions".to_string()),
             system_prompt_append: Some(vec!["Rename the branch".to_string()]),

@@ -17,7 +17,9 @@ Proliferate managed credits
 
 BYOK through gateway
   User/org-owned provider credentials stored server-side, never injected into
-  the sandbox.
+  the sandbox. Hosted-cloud V1 does not expose this path; it is gated on
+  LiteLLM Enterprise team-scoped routing or an equivalent isolated-router
+  topology.
 
 Synced path
   Existing native auth files or env vars synced into the sandbox by Desktop and
@@ -37,6 +39,45 @@ spend, and enforces budgets.
 Proliferate does not do per-request model remapping. It provisions LiteLLM so
 the harness-visible model ids that AnyHarness launches are valid LiteLLM public
 model names for the policy's team.
+
+## Hosted Cloud Launch Scope
+
+Hosted-cloud V1 intentionally ships a narrower gateway surface:
+
+```text
+Enabled
+  Proliferate managed credits through the gateway.
+  Synced native auth files/env vars for user-owned or explicitly shared auth.
+
+Disabled
+  User/org BYOK provider credentials through the gateway.
+  Gateway UI for adding Anthropic/OpenAI/Bedrock/OpenAI-compatible provider
+  credentials.
+  Shared public-model BYOK routing on the OSS LiteLLM router.
+```
+
+This is a product-scope cut, not a permanent architecture change. The BYOK
+gateway path remains the V2 design, but hosted cloud must not expose it until
+one of these isolation mechanisms is available:
+
+```text
+preferred
+  LiteLLM Enterprise team-scoped deployments, where duplicate public model names
+  are isolated by team/policy using team_public_model_name.
+
+fallback
+  isolated LiteLLM routers/instances per policy or budget subject.
+
+deferred alternative
+  Proliferate-side internal model aliases and protocol-aware request/response
+  rewriting.
+```
+
+Managed credits can still ship on OSS LiteLLM because Proliferate owns the
+provider credentials. For that path, global LiteLLM model deployments are
+acceptable as long as they are backed only by Proliferate-owned provider
+credentials, and org/user budgets are enforced through LiteLLM teams/virtual
+keys plus Proliferate entitlement checks.
 
 ## Docs Read For This Spec
 
@@ -66,7 +107,8 @@ In scope:
 
 - Agent auth credential library for personal, organization, and system
   credentials.
-- Gateway-backed provider auth for Proliferate managed credits and BYOK.
+- Gateway-backed provider auth for Proliferate managed credits.
+- V2 architecture for BYOK through gateway, behind explicit availability gates.
 - Synced-path credentials as a selectable auth source for personal and shared
   sandboxes.
 - Org-scoped Proliferate managed credits with LiteLLM-enforced hard budget.
@@ -74,14 +116,15 @@ In scope:
   team-scoped model deployments.
 - Gateway runtime grants and runtime agent auth refresh through worker and
   AnyHarness.
-- UI flows for adding provider credentials and selecting agent auth per
-  sandbox/harness.
+- UI flows for managed-credit status, synced native auth, and selecting agent
+  auth per sandbox/harness. BYOK provider-credential setup is V2-gated.
 
 Out of scope:
 
 - Overage billing.
 - Proliferate-owned per-request usage ledger.
 - Self-hosted gateway/LiteLLM management.
+- Hosted-cloud V1 BYOK through gateway.
 - Gemini gateway support. V1 may keep Gemini on synced-path auth.
 - A new product model catalog. `catalogs/agents/v1/catalog.json` remains the
   product model catalog.
@@ -97,7 +140,7 @@ target-runtime-mcp-skills-config.md
   credential gap fill.
 
 agent-llm-auth-gateway-spec.md
-  owns agent harness LLM auth: Proliferate managed credits, BYOK through the
+  owns agent harness LLM auth: Proliferate managed credits, V2 BYOK through the
   gateway, synced native auth files, LiteLLM provisioning, and runtime grants.
 
 shared-sandbox-config-admin-ui-spec.md
@@ -213,11 +256,12 @@ consumer contract above instead of copying the older credential-source model.
    Alice personal sandbox uses Alice OpenAI key
    ```
 
-   For BYOK, use one LiteLLM team per gateway policy unless isolation later
-   requires a different shape. For Proliferate managed credits, policies for
-   the same org must share one `agent_gateway_budget_subject` and one LiteLLM
-   team so the included credit budget is enforced across harnesses, not once
-   per harness.
+   For hosted-cloud V1 managed credits, policies for the same org must share
+   one `agent_gateway_budget_subject` and one LiteLLM team so the included
+   credit budget is enforced across harnesses, not once per harness. BYOK
+   gateway policies are V2: use LiteLLM Enterprise team-scoped routing if
+   available, otherwise use isolated LiteLLM routers/instances per policy or
+   defer the feature.
 
 4. Proliferate managed credits are org-scoped in V1.
 
@@ -237,11 +281,13 @@ consumer contract above instead of copying the older credential-source model.
    subscription-period alignment can be added later by updating/resetting the
    LiteLLM team on renewal.
 
-7. BYOK has no default dollar cap.
+7. BYOK through gateway is V2 and has no default dollar cap when enabled.
 
-   BYOK usage is reported, but Proliferate does not hard cap BYOK by default.
-   Gateway still applies operational abuse protection. Admin-configured BYOK
-   caps can be a later feature.
+   Hosted-cloud V1 should not expose BYOK provider credentials through the
+   gateway. When the V2 path is enabled, BYOK usage is reported, but
+   Proliferate does not hard cap BYOK by default. Gateway still applies
+   operational abuse protection. Admin-configured BYOK caps can be a later
+   feature.
 
 8. Fail closed.
 
@@ -272,18 +318,24 @@ consumer contract above instead of copying the older credential-source model.
 
     AnyHarness chooses the model string from the existing product catalog and
     launches the harness with it. The harness sends the same model string to
-    the gateway. Proliferate Gateway does not translate it. LiteLLM team-scoped
-    deployments expose the same public model name and translate to provider
-    model ids internally.
+    the gateway. Proliferate Gateway does not translate it in the launch path.
+    For managed credits, LiteLLM deployments are backed by Proliferate-owned
+    provider credentials. For V2 BYOK, LiteLLM team-scoped deployments expose
+    the same public model name and translate to provider model ids internally.
 
-13. Team-scoped LiteLLM model support is a V1 gate.
+13. Team-scoped LiteLLM model support is a BYOK gateway gate, not a managed
+    credits launch gate.
 
     LiteLLM must support multiple teams using the same public model name with
-    different provider credentials. The intended mechanism is team-scoped model
+    different provider credentials before hosted cloud can expose user/org
+    BYOK through the gateway. The intended mechanism is team-scoped model
     deployments: `/model/new` with `model_info.team_id`, where LiteLLM stores a
     unique internal `model_name_*` and exposes `team_public_model_name` equal to
     the harness-visible model string. If this cannot be validated in the
-    deployed LiteLLM edition, do not ship shared BYOK/managed gateway broadly.
+    deployed LiteLLM edition, do not ship shared BYOK through the gateway.
+    Managed credits may still ship if they use Proliferate-owned provider
+    credentials and do not mix tenant-owned provider credentials into the same
+    global model routing pool.
 
 14. Request/response bodies are not persisted by default.
 
@@ -867,8 +919,10 @@ When an org receives included credits:
    /key/generate
    team_id = litellm_team_id
 
-6. Create team-scoped LiteLLM model deployments for supported harness-visible
-   model ids.
+6. Create LiteLLM model deployments for supported harness-visible model ids.
+   Hosted-cloud V1 managed credits may use global deployments because the
+   provider credentials are Proliferate-owned. Do not add tenant-owned provider
+   credentials to those global public model names.
 ```
 
 LiteLLM is the source of truth for current spend. Proliferate is the source of
@@ -886,7 +940,12 @@ launch preflight fails if required managed-credit policy is not synced
 reconciliation is a launch/readiness gate, not a post-rollout hardening task
 ```
 
-### BYOK
+### BYOK (Enterprise-Gated V2)
+
+Hosted-cloud V1 does not expose this setup flow. The API/data model may keep
+the V2 shape, but BYOK provider credentials must not become selectable or
+launchable in hosted cloud until LiteLLM Enterprise team-scoped routing or an
+equivalent isolated-router topology is enabled.
 
 When an admin adds BYOK through gateway:
 
@@ -900,7 +959,7 @@ When an admin adds BYOK through gateway:
 7. Create team-scoped model deployments backed by that provider credential
 ```
 
-### Team-Scoped Model Deployment
+### Team-Scoped Model Deployment (V2 BYOK)
 
 For every harness-visible model id that should work under a policy, provision a
 team-scoped LiteLLM model whose public name equals the model string AnyHarness
@@ -930,6 +989,11 @@ requested `model_name` as `team_public_model_name`. Runtime requests still send
 
 Do not create a Proliferate hot-path route table that maps catalog model ids to
 provider models. The mapping is LiteLLM provisioning state.
+
+For hosted-cloud V1 managed credits, this team-scoped deployment mechanism is
+not required if every public model deployment is backed by Proliferate-owned
+provider credentials. The V1 isolation boundary is the gateway grant plus
+LiteLLM team/key budget enforcement, not per-tenant provider credential routing.
 
 This is the exact boundary:
 
@@ -998,6 +1062,11 @@ Codex
 
 ### AWS Bedrock BYOK
 
+Deferred for hosted-cloud V1. Keep this as the V2 provider setup contract for
+the gateway BYOK path. For launch, Bedrock may be used only as a
+Proliferate-owned managed-credit provider credential or through synced native
+auth outside the gateway.
+
 Admin UX asks for:
 
 ```text
@@ -1062,6 +1131,9 @@ JSON. Terraform can come later.
 
 ### Anthropic API Key
 
+Deferred for hosted-cloud V1 when the credential would back the gateway. A user
+may still sync native Claude auth to a sandbox through the synced path.
+
 Admin/user input:
 
 ```text
@@ -1073,6 +1145,9 @@ Stored encrypted in Proliferate. Provisioned into LiteLLM model deployments
 server-side. Never written to sandbox for `managed_gateway`.
 
 ### OpenAI API Key
+
+Deferred for hosted-cloud V1 when the credential would back the gateway. A user
+may still sync native Codex/OpenCode auth to a sandbox through the synced path.
 
 Admin/user input:
 
@@ -1086,6 +1161,10 @@ optional project id
 Stored encrypted in Proliferate. Provisioned into LiteLLM model deployments.
 
 ### OpenAI-Compatible Provider
+
+Deferred for hosted-cloud V1. Arbitrary provider base URLs through the gateway
+are a V2 feature because they require tenant-provider isolation and SSRF-safe
+validation.
 
 Admin/user input:
 
@@ -1859,10 +1938,11 @@ V1 matrix:
 Claude Code
   gateway-backed:
     Proliferate managed credits, if Anthropic-compatible path is validated
-    AWS Bedrock AssumeRole for Anthropic/Claude models
-    Anthropic API key
   synced-path:
     synced Claude Code native auth files/env
+  V2 gateway-backed:
+    AWS Bedrock AssumeRole for Anthropic/Claude models
+    Anthropic API key
   do not show:
     OpenAI API key
     generic OpenAI-compatible provider
@@ -1870,11 +1950,12 @@ Claude Code
 Codex
   gateway-backed:
     Proliferate managed credits, only after Responses facade is validated
+  synced-path:
+    synced Codex native auth files
+  V2 gateway-backed:
     OpenAI API key
     OpenAI-compatible provider, only if compatible with the required OpenAI API
     shape for the selected Codex path
-  synced-path:
-    synced Codex native auth files
   do not show:
     Anthropic API key
     AWS Bedrock role unless a Codex-compatible gateway path is explicitly
@@ -1882,11 +1963,12 @@ Codex
 
 OpenCode
   gateway-backed:
-    OpenAI API key, if AnyHarness can force managed provider config
-    OpenAI-compatible provider, if AnyHarness can force managed provider config
     Proliferate managed credits, only if launch hardening is complete
   synced-path:
     synced OpenCode native config/auth files
+  V2 gateway-backed:
+    OpenAI API key, if AnyHarness can force managed provider config
+    OpenAI-compatible provider, if AnyHarness can force managed provider config
   do not show:
     gateway-backed options when project config can override the managed provider
 
@@ -1947,19 +2029,19 @@ Personal and admin settings should show an auth library grouped by harness:
 ```text
 Claude Code
   Proliferate managed credits
-  AWS Bedrock role
-  Anthropic API key
+  AWS Bedrock role (V2 gateway BYOK)
+  Anthropic API key (V2 gateway BYOK)
   synced Claude Code auth
 
 Codex
   Proliferate managed credits, if Responses support is enabled
-  OpenAI API key
-  OpenAI-compatible provider
+  OpenAI API key (V2 gateway BYOK)
+  OpenAI-compatible provider (V2 gateway BYOK)
   synced Codex auth
 
 OpenCode
-  OpenAI API key, if managed config is enforceable
-  OpenAI-compatible provider, if managed config is enforceable
+  OpenAI API key (V2 gateway BYOK), if managed config is enforceable
+  OpenAI-compatible provider (V2 gateway BYOK), if managed config is enforceable
   synced OpenCode auth
 
 Gemini
@@ -1979,7 +2061,10 @@ where used
 
 No secret values are displayed.
 
-The auth library owns all provider setup forms. It should support:
+The auth library owns all provider setup forms. Hosted-cloud V1 should expose
+only managed credits and synced native auth. Gateway provider setup forms are
+V2 and should remain hidden unless the BYOK gateway capability is enabled. The
+surface should support:
 
 ```text
 create provider credential
@@ -2381,18 +2466,22 @@ audit event records share revocation and affected selections
 
 ## Verification
 
-### LiteLLM Preflight
+### Managed-Credits LiteLLM Preflight
 
-Before wiring UI broadly, prove:
+Before wiring managed-credit UI broadly, prove:
 
 ```text
-same public model name can exist for two teams with different provider creds
-team key routes public model name to that team's deployment
 team spend increments
 team max_budget rejects when exhausted
 team budget_duration resets as expected for 30d
-Bedrock aws_external_id is passed to STS AssumeRole
+Proliferate-owned provider credential routes through LiteLLM
+managed Claude Code gateway streaming path preserves protocol shape
 ```
+
+The team-scoped duplicate public-model proof is a V2 BYOK gate. If OSS LiteLLM
+cannot route duplicate public model names by team/policy, hosted cloud must keep
+BYOK gateway setup disabled and use only Proliferate-owned provider credentials
+for managed credits.
 
 ### Gateway Tests
 
@@ -2406,6 +2495,7 @@ model not allowed for policy rejected before forwarding
 oversized request body rejected before forwarding
 drifted LiteLLM mirror fails closed for managed credits
 grant issued for old revoked selection/revision rejected
+BYOK grant fails closed if global/provider BYOK capability is disabled later
 token hash stored as keyed hash, raw token never persisted
 valid token forwards to LiteLLM with internal key
 LiteLLM budget error maps to credits_exhausted
@@ -2442,13 +2532,14 @@ new session uses refreshed env
 ### UI Tests
 
 ```text
-admin can add Bedrock role and see validation errors
 admin can select org/system credentials for shared sandbox
 admin can select personal synced credentials only after owner share exists
 non-admin cannot edit shared sandbox auth selections
 shared selection shows source owner
 owner can revoke credential share and affected shared selections fail closed
 credits exhausted state renders distinctly from provider auth failure
+hosted-cloud V1 hides Bedrock/OpenAI/Anthropic/OpenAI-compatible BYOK setup
+hidden stale BYOK selections render as unavailable instead of disappearing
 ```
 
 ## Implementation Phases
@@ -2457,20 +2548,22 @@ Feature flags/capabilities:
 
 ```text
 agent_gateway_enabled
-agent_gateway_claude_enabled
-agent_gateway_codex_enabled
-agent_gateway_opencode_enabled
-agent_gateway_managed_credits_enabled
+agent_gateway_byok_enabled
+agent_gateway_anthropic_byok_enabled
 agent_gateway_bedrock_byok_enabled
 agent_gateway_openai_byok_enabled
+agent_gateway_openai_compatible_byok_enabled
+agent_gateway_opencode_enabled
+agent_gateway_reconciler_enabled
 ```
 
 Implementation can parallelize within phases, but the correctness gates are
-strict: Phase 0B compatibility proof must pass before exposing gateway-backed
-credentials in UI, launch preflight must land before credential switching on
-managed targets, and target/profile applied state must exist before any worker
-materialization command reports success. `CloudCredential` read cutover must
-not happen until Phase 3 runtime plumbing is live behind a feature flag.
+strict: Phase 0B compatibility proof must pass before exposing managed-credit
+gateway credentials in UI, launch preflight must land before credential
+switching on managed targets, and target/profile applied state must exist
+before any worker materialization command reports success. `CloudCredential`
+read cutover must not happen until Phase 3 runtime plumbing is live behind a
+feature flag. BYOK gateway feature flags stay off in hosted-cloud V1.
 
 ### Phase 0A: Contract Alignment
 
@@ -2486,6 +2579,10 @@ can depend on it without inventing parallel models.
 
 - Validate LiteLLM team-scoped model deployments with duplicate public model
   names and different provider credentials.
+- Use `scripts/agent-gateway-phase0-probe.py` and record results in
+  `docs/notes/agent-gateway-phase0-compatibility.md`.
+- Record the LiteLLM team-scoped model result, but treat failure as a BYOK V2
+  blocker, not a managed-credits V1 blocker.
 - Validate managed Claude Code -> gateway -> LiteLLM streaming path.
 - Validate Codex Responses path or mark Codex managed credits as unavailable
   until the facade is implemented.
@@ -2506,7 +2603,9 @@ unavailable.
   `agent_auth_credential`, but leave launch/materialization reads on the legacy
   path until Phase 3 cutover gates pass.
 - Add LiteLLM integration client.
-- Add Bedrock validation integration.
+- Add managed-credit LiteLLM provisioning. BYOK provider credential validation
+  and provisioning can land only as dormant V2 surface, with hosted-cloud UI
+  and selection gates disabled.
 - Implement policy provisioning and reconciliation, including fail-closed
   synced/drifted readiness flags for managed-credit budgets.
 - Add admin/user API endpoints.
@@ -2552,7 +2651,8 @@ launches.
 
 - Add Cloud SDK helpers and SDK React/query-key support.
 - Add auth library surfaces.
-- Add Bedrock setup flow with CloudFormation link and validation.
+- Add managed-credits status and synced-native credential flows. Do not expose
+  Bedrock/OpenAI/Anthropic/OpenAI-compatible BYOK setup in hosted-cloud V1.
 - Add sandbox per-agent auth selection.
 - Add owner opt-in UI for sharing personal synced credentials with an org.
 - Add spend/credits status for Proliferate managed credits.
@@ -2574,9 +2674,6 @@ in place for controlled rollout.
 Use real provider credentials and a real managed target to prove the system:
 
 ```text
-AWS Bedrock AssumeRole with ExternalId validates and serves Claude-compatible traffic.
-Anthropic API key through gateway serves Claude-compatible traffic.
-OpenAI API key through gateway serves OpenAI/Responses-compatible traffic.
 Proliferate managed credits exhaust a tiny test budget and fail closed.
 Synced Claude/Codex/OpenCode credentials materialize and launch correctly.
 Shared sandbox can select a named user's synced credential and shows the owner.
@@ -2586,6 +2683,14 @@ Credential revocation immediately fails gateway requests for affected policies.
 Credential update queues refresh_agent_auth_config and updates target launch config.
 Routine grant rotation refreshes target config without breaking a live turn.
 Offline target applies only the latest auth revision after reconnect/bootstrap.
+```
+
+V2 BYOK manual E2E adds:
+
+```text
+AWS Bedrock AssumeRole with ExternalId validates and serves Claude-compatible traffic.
+Anthropic API key through gateway serves Claude-compatible traffic.
+OpenAI API key through gateway serves OpenAI/Responses-compatible traffic.
 ```
 
 ## Ambiguities And Gates
@@ -2627,12 +2732,11 @@ Implementation gates:
 
 ```text
 LiteLLM team-scoped public model routing
-  Must be validated in the deployed LiteLLM edition before shared BYOK or
-  managed credits rely on duplicate public model names.
-  If it fails, keep the product model and change only the LiteLLM deployment
-  topology: policy/budget subjects can point at isolated LiteLLM routers or
-  instances so each policy still sees the same public model ids without
-  Proliferate doing request-time model remapping.
+  Must be validated in the deployed LiteLLM edition before hosted cloud exposes
+  shared BYOK through the gateway.
+  If it fails, hosted-cloud V1 still ships managed credits and synced native
+  auth only. BYOK through gateway waits for LiteLLM Enterprise, isolated
+  LiteLLM routers/instances, or a deliberate Proliferate alias-rewrite design.
 
 Claude Code protocol behavior
   Anthropic-compatible streaming through LiteLLM must be smoke-tested with the
@@ -2665,6 +2769,7 @@ Provider coverage
 Deferred, not V1 blockers:
 
 ```text
+gateway BYOK/provider-credential setup in hosted cloud
 self-hosted gateway/LiteLLM management
 BYOK admin dollar caps
 overage billing
