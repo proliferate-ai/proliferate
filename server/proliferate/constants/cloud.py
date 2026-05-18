@@ -501,7 +501,6 @@ DEFAULT_CLOUD_WORKER_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.ensure_repo_checkout.value,
     CloudCommandKind.materialize_workspace.value,
     CloudCommandKind.materialize_environment.value,
-    CloudCommandKind.refresh_agent_auth_config.value,
     CloudCommandKind.send_prompt.value,
     CloudCommandKind.resolve_interaction.value,
     CloudCommandKind.update_session_config.value,

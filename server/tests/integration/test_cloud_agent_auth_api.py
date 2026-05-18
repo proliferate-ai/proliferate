@@ -504,6 +504,28 @@ async def test_agent_auth_selection_queues_secret_safe_worker_materialization(
     assert applied.json()["status"] == "applied"
     assert applied.json()["appliedRevision"] == 1
 
+    result = await client.post(
+        f"/v1/cloud/worker/commands/{command['commandId']}/result",
+        headers=worker_headers,
+        json={
+            "status": "accepted",
+            "leaseId": command["leaseId"],
+            "result": {
+                "applied": True,
+                "runtimeGrantToken": token,
+                "protectedEnv": selection["gateway"]["protectedEnv"],
+            },
+        },
+    )
+    assert result.status_code == 200
+    command_status = await client.get(
+        f"/v1/cloud/commands/{command['commandId']}",
+        headers=_headers(tokens),
+    )
+    assert command_status.status_code == 200
+    assert command_status.json()["result"] is None
+    assert token not in str(command_status.json())
+
     target_states = await client.get(
         f"/v1/cloud/sandbox-profiles/{profile['id']}/agent-auth-target-states",
         headers=_headers(tokens),

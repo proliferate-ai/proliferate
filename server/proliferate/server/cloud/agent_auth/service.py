@@ -865,7 +865,7 @@ async def worker_agent_auth_materialization_plan(
     revision: int,
     lease_id: str,
 ) -> WorkerAgentAuthMaterializationPlan:
-    await _require_agent_auth_refresh_command(
+    command = await _require_agent_auth_refresh_command(
         db,
         auth=auth,
         sandbox_profile_id=sandbox_profile_id,
@@ -896,6 +896,12 @@ async def worker_agent_auth_materialization_plan(
             code="agent_auth_revision_mismatch",
             status_code=409,
         )
+    await _require_agent_auth_target_state(
+        db,
+        profile=profile,
+        auth=auth,
+        command=command,
+    )
     selections = []
     for selection in await store.list_selections_for_profile(db, profile.id):
         if selection.status != "active":
@@ -926,7 +932,7 @@ async def record_worker_agent_auth_status(
     sandbox_profile_id: UUID,
     body: WorkerAgentAuthStatusRequest,
 ) -> WorkerAgentAuthStatusResponse:
-    await _require_agent_auth_refresh_command(
+    command = await _require_agent_auth_refresh_command(
         db,
         auth=auth,
         sandbox_profile_id=sandbox_profile_id,
@@ -947,6 +953,13 @@ async def record_worker_agent_auth_status(
             code="sandbox_profile_not_found",
             status_code=404,
         )
+    _validate_worker_status_revisions(body, profile)
+    await _require_agent_auth_target_state(
+        db,
+        profile=profile,
+        auth=auth,
+        command=command,
+    )
     existing = await store.get_target_state(
         db,
         sandbox_profile_id=profile.id,
@@ -970,7 +983,7 @@ async def record_worker_agent_auth_status(
         status = "superseded"
     elif body.status == "failed":
         error_code = body.error_code or "agent_auth_materialization_failed"
-        error_message = body.error_message or "Agent auth materialization failed."
+        error_message = _worker_status_error_message(error_code)
     if applied_revision is not None and applied_revision > desired_revision:
         desired_revision = applied_revision
     force_restart_required = existing.force_restart_required if existing is not None else False
@@ -996,6 +1009,30 @@ async def record_worker_agent_auth_status(
         appliedRevision=state.applied_revision,
         status=state.status,
     )
+
+
+def _validate_worker_status_revisions(
+    body: WorkerAgentAuthStatusRequest,
+    profile: SandboxProfileRecord,
+) -> None:
+    current_revision = body.current_revision
+    applied_revision = body.applied_revision
+    if current_revision is not None and current_revision > profile.agent_auth_revision:
+        raise AgentAuthError(
+            "Worker reported an unknown agent-auth revision.",
+            code="agent_auth_revision_mismatch",
+            status_code=409,
+        )
+    if applied_revision is not None and applied_revision > profile.agent_auth_revision:
+        raise AgentAuthError(
+            "Worker reported an unknown applied agent-auth revision.",
+            code="agent_auth_revision_mismatch",
+            status_code=409,
+        )
+
+
+def _worker_status_error_message(error_code: str) -> str:
+    return f"Agent auth materialization failed ({error_code})."
 
 
 async def _require_agent_auth_refresh_command(
@@ -1044,6 +1081,27 @@ async def _require_agent_auth_refresh_command(
             status_code=409,
         )
     return command
+
+
+async def _require_agent_auth_target_state(
+    db: AsyncSession,
+    *,
+    profile: SandboxProfileRecord,
+    auth: WorkerAuthContext,
+    command: commands_store.CloudCommandSnapshot,
+) -> SandboxProfileAgentAuthTargetStateRecord:
+    state = await store.get_target_state(
+        db,
+        sandbox_profile_id=profile.id,
+        target_id=auth.target_id,
+    )
+    if state is None or state.last_command_id != command.id:
+        raise AgentAuthError(
+            "Agent auth config command is not current for this profile and target.",
+            code="agent_auth_command_mismatch",
+            status_code=409,
+        )
+    return state
 
 
 async def _worker_selection_plan(
