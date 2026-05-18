@@ -1,5 +1,5 @@
 import {
-  Bot,
+  CalendarClock,
   ChevronDown,
   ChevronRight,
   CircleHelp,
@@ -7,7 +7,7 @@ import {
   Hand,
   Home,
   MoreHorizontal,
-  PlugZap,
+  Plug,
   Plus,
   Settings,
   Users,
@@ -41,8 +41,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: routes.home, label: "Home", icon: Home },
-  { to: routes.automations, label: "Automations", icon: Bot },
-  { to: routes.plugins, label: "Plugins & MCPs", icon: PlugZap },
+  { to: routes.automations, label: "Automations", icon: CalendarClock },
+  { to: routes.plugins, label: "Plugins & MCPs", icon: Plug },
   { to: routes.support, label: "Support", icon: CircleHelp },
 ];
 

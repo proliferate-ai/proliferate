@@ -2,46 +2,38 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileListRow } from "../primitives/MobileListRow";
-import {
-  MobileScreen,
-  MobileStatusPill,
-} from "../primitives/MobileLayout";
+import { MobileScreen } from "../primitives/MobileLayout";
+import { MobileStatusDot } from "../primitives/MobileStatusDot";
 import { automations } from "../../lib/fixtures/mobile-fixtures";
-import { colors, radius, spacing } from "../../styles/tokens";
+import { colors, spacing } from "../../styles/tokens";
 
 export function MobileAutomationsScreen() {
   return (
     <MobileScreen contentStyle={styles.screenContent}>
-      <View style={styles.note}>
-        <MobileIcon name="cloud" size={15} color={colors.faint} />
-        <Text style={styles.noteText}>
-          Desktop runs more automation kinds — anything that needs local
-          compute, browser, or computer use.
-        </Text>
-      </View>
-
       <View style={styles.list}>
         {automations.map((automation) => {
           const enabled = automation.status === "enabled";
           return (
             <MobileListRow
               key={automation.id}
-              leading={
-                <View style={styles.icon}>
-                  <MobileIcon name="automations" size={17} color={colors.info} />
-                </View>
-              }
+              leading={<MobileStatusDot status={enabled ? "running" : "paused"} size={8} />}
               title={automation.name}
               subtitle={automation.detail}
               trailing={
-                <MobileStatusPill tone={enabled ? "success" : "muted"}>
-                  {enabled ? "On" : "Paused"}
-                </MobileStatusPill>
+                <View style={styles.scheduleMeta}>
+                  <MobileIcon name="calendar-clock" size={12} color={colors.faint} />
+                  <Text style={styles.scheduleText}>{enabled ? "On" : "Paused"}</Text>
+                </View>
               }
             />
           );
         })}
       </View>
+
+      <Text style={styles.footnote}>
+        Desktop runs more automation kinds — anything that needs local compute,
+        browser, or computer use.
+      </Text>
     </MobileScreen>
   );
 }
@@ -51,33 +43,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingTop: 0,
   },
-  note: {
-    marginHorizontal: spacing[4],
-    marginTop: spacing[3],
-    marginBottom: spacing[2],
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing[2],
-    padding: spacing[3],
-    borderRadius: radius.md,
-    backgroundColor: colors.accent,
-  },
-  noteText: {
-    flex: 1,
-    color: colors.mutedForeground,
-    fontSize: 12.5,
-    lineHeight: 17,
-  },
   list: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderLight,
   },
-  icon: {
-    width: 38,
-    height: 38,
+  scheduleMeta: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.md,
-    backgroundColor: colors.infoSubtle,
+    gap: 6,
+  },
+  scheduleText: {
+    color: colors.faint,
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  footnote: {
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[5],
+    color: colors.faint,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: "center",
   },
 });

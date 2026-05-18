@@ -12,7 +12,7 @@ export const drawerRoutes: DrawerRoute[] = [
   { id: "home", label: "Home", icon: "home" },
   { id: "workspaces", label: "Workspaces", icon: "workspaces" },
   { id: "sessions", label: "Sessions", icon: "sessions" },
-  { id: "automations", label: "Automations", icon: "automations" },
+  { id: "automations", label: "Automations", icon: "calendar-clock" },
   { id: "settings", label: "Settings", icon: "settings" },
 ];
 

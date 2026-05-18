@@ -1,4 +1,4 @@
-import { Bot, Cloud, GitBranch, Send, Smartphone, Users } from "lucide-react";
+import { Cloud, GitBranch, Send, Smartphone, Users } from "lucide-react";
 import { useState, type ComponentType } from "react";
 
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -143,8 +143,7 @@ export function HomeScreen() {
           </div>
         </div>
 
-        <p className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <Bot size={13} />
+        <p className="mt-6 text-center text-xs text-muted-foreground">
           Configure agents, models, and skills in Settings.
         </p>
       </div>

@@ -6,7 +6,6 @@ export type MobileIconName =
   | "home"
   | "workspaces"
   | "sessions"
-  | "automations"
   | "settings"
   | "github"
   | "apple"
@@ -73,12 +72,6 @@ export function MobileIcon({ name, size = 18, color = colors.fg }: MobileIconPro
       return (
         <Svg {...props}>
           <Path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </Svg>
-      );
-    case "automations":
-      return (
-        <Svg {...props}>
-          <Path d="M13 2L3 14h7l-1 8 10-12h-7z" />
         </Svg>
       );
     case "settings":
