@@ -43,7 +43,7 @@ from proliferate.server.cloud.agent_auth.service import (
     ensure_managed_credits_for_organization,
     ensure_organization_sandbox_profile,
     ensure_personal_sandbox_profile,
-    list_credentials,
+    list_credentials_for_response,
     list_selections,
     list_target_states,
     record_worker_agent_auth_status,
@@ -70,8 +70,11 @@ async def list_agent_auth_credentials_endpoint(
     db: AsyncSession = Depends(get_async_session),
 ) -> list[AgentAuthCredentialResponse]:
     return [
-        credential_response(record)
-        for record in await list_credentials(
+        credential_response(
+            item.credential,
+            active_credential_share_id=item.active_share.id if item.active_share else None,
+        )
+        for item in await list_credentials_for_response(
             db,
             actor_user_id=user.id,
             organization_id=organization_id,

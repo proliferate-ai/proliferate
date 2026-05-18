@@ -140,10 +140,10 @@ export function useAgentAuthMutations() {
   const ensureManagedCredits = useMutation({
     mutationFn: (input: {
       organizationId: string;
-      request: EnsureManagedCreditsRequest;
+      request?: EnsureManagedCreditsRequest;
     }) => ensureManagedCreditsForOrganization(
       input.organizationId,
-      input.request,
+      input.request ?? {},
       client,
     ),
     onSuccess: invalidateAgentAuth,

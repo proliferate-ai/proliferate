@@ -120,6 +120,7 @@ export function credentialSelectableReason(
     profileOwnerScope === "organization"
     && credential.ownerScope === "personal"
     && credential.credentialKind === "synced_path"
+    && !credential.activeCredentialShareId
   ) {
     return "Personal synced credentials need an active owner share before shared sandbox selection.";
   }

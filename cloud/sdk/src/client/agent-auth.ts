@@ -228,7 +228,7 @@ export async function getSandboxAgentAuthTargetStates(
 
 export async function ensureManagedCreditsForOrganization(
   organizationId: string,
-  input: EnsureManagedCreditsRequest,
+  input: EnsureManagedCreditsRequest = {},
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<EnsureManagedCreditsResponse> {
   return client.requestJson<EnsureManagedCreditsResponse>({

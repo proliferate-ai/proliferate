@@ -75,7 +75,12 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
       await mutations.selectCredential({
         sandboxProfileId: profile.id,
         agentKind,
-        selection: { credentialId },
+        selection: {
+          credentialId,
+          credentialShareId: credentials.find(
+            (credential) => credential.id === credentialId && credential.agentKind === agentKind,
+          )?.activeCredentialShareId ?? null,
+        },
       });
       setFeedback(`${agentAuthAgentLabel(agentKind)} auth selection saved.`);
     } catch (error) {

@@ -347,7 +347,13 @@ async def test_gateway_policy_kind_must_match_owner_scope(
 async def test_managed_credits_route_uses_server_entitlement_budget(
     client: AsyncClient,
     db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_default_managed_budget_usd",
+        "12.50",
+    )
     tokens = await _create_user_and_get_tokens(
         client,
         db_session,
@@ -361,12 +367,13 @@ async def test_managed_credits_route_uses_server_entitlement_budget(
     response = await client.post(
         f"/v1/cloud/organizations/{organization_id}/agent-auth/managed-credits",
         headers=_headers(tokens),
-        json={"includedBudgetUsd": "999999", "agentKinds": ["claude"]},
+        json={"includedBudgetUsd": "999999", "agentKinds": ["claude", "claude", "gemini"]},
     )
 
     assert response.status_code == 200
     body = response.json()
-    assert body["budgetSubject"]["includedBudgetUsd"] != "999999"
+    assert body["budgetSubject"]["includedBudgetUsd"] == "12.50"
+    assert len(body["credentials"]) == 1
     assert body["credentials"][0]["displayName"] == "Proliferate managed credits"
     assert body["credentials"][0]["status"] == "invalid"
 

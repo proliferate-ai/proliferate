@@ -16,6 +16,7 @@ import {
   agentAuthCredentialStatusTone,
   describeAgentAuthCredential,
 } from "@/lib/domain/agent-auth/agent-auth-presentation";
+import { useAuthStore } from "@/stores/auth/auth-store";
 
 export function CloudAgentAuthLibrary() {
   const organizations = useOrganizations();
@@ -27,6 +28,18 @@ export function CloudAgentAuthLibrary() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [sharingCredentialId, setSharingCredentialId] = useState<string | null>(null);
   const [revokingCredentialId, setRevokingCredentialId] = useState<string | null>(null);
+  const currentUserId = useAuthStore((state) => state.user?.id ?? null);
+  const adminOrganizationIds = useMemo(
+    () => new Set(
+      (organizations.data?.organizations ?? [])
+        .filter((organization) => {
+          const role = organization.membership?.role;
+          return role === "owner" || role === "admin";
+        })
+        .map((organization) => organization.id),
+    ),
+    [organizations.data?.organizations],
+  );
 
   const grouped = useMemo(() => groupCredentialsByAgent(credentials), [credentials]);
 
@@ -88,6 +101,8 @@ export function CloudAgentAuthLibrary() {
           sharingCredentialId={sharingCredentialId}
           revokingCredentialId={revokingCredentialId}
           sharingEnabled={Boolean(libraryOrganizationId)}
+          currentUserId={currentUserId}
+          adminOrganizationIds={adminOrganizationIds}
           onShare={handleShareCredential}
           onRevoke={handleRevokeCredential}
         />
@@ -102,6 +117,8 @@ function AgentCredentialGroup({
   sharingCredentialId,
   revokingCredentialId,
   sharingEnabled,
+  currentUserId,
+  adminOrganizationIds,
   onShare,
   onRevoke,
 }: {
@@ -110,6 +127,8 @@ function AgentCredentialGroup({
   sharingCredentialId: string | null;
   revokingCredentialId: string | null;
   sharingEnabled: boolean;
+  currentUserId: string | null;
+  adminOrganizationIds: ReadonlySet<string>;
   onShare: (credential: AgentAuthCredential) => void;
   onRevoke: (credential: AgentAuthCredential) => void;
 }) {
@@ -122,6 +141,11 @@ function AgentCredentialGroup({
       {credentials.map((credential) => {
         const canShare = credential.ownerScope === "personal"
           && credential.credentialKind === "synced_path";
+        const canManage = canManageCredential(
+          credential,
+          currentUserId,
+          adminOrganizationIds,
+        );
         return (
           <SettingsCardRow
             key={credential.id}
@@ -135,7 +159,7 @@ function AgentCredentialGroup({
               <Badge tone={agentAuthCredentialStatusTone(credential.status)}>
                 {agentAuthCredentialStatusLabel(credential.status)}
               </Badge>
-              {canShare && (
+              {canShare && credential.ownerUserId === currentUserId && (
                 <Button
                   type="button"
                   variant="outline"
@@ -147,15 +171,17 @@ function AgentCredentialGroup({
                   Share
                 </Button>
               )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                loading={revokingCredentialId === credential.id}
-                onClick={() => onRevoke(credential)}
-              >
-                Revoke
-              </Button>
+              {canManage && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  loading={revokingCredentialId === credential.id}
+                  onClick={() => onRevoke(credential)}
+                >
+                  Revoke
+                </Button>
+              )}
             </div>
           </SettingsCardRow>
         );
@@ -172,4 +198,18 @@ function groupCredentialsByAgent(credentials: AgentAuthCredential[]) {
     grouped.set(credential.agentKind, entries);
   }
   return grouped;
+}
+
+function canManageCredential(
+  credential: AgentAuthCredential,
+  currentUserId: string | null,
+  adminOrganizationIds: ReadonlySet<string>,
+): boolean {
+  if (credential.ownerScope === "personal") {
+    return credential.ownerUserId === currentUserId;
+  }
+  if (credential.ownerScope === "organization" && credential.organizationId) {
+    return adminOrganizationIds.has(credential.organizationId);
+  }
+  return false;
 }

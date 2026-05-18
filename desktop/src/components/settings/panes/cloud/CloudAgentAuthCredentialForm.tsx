@@ -19,6 +19,9 @@ type ProviderChoice =
 interface OrganizationOption {
   id: string;
   name: string;
+  membership?: {
+    role?: "owner" | "admin" | "member";
+  } | null;
 }
 
 interface CloudAgentAuthCredentialFormProps {
@@ -39,7 +42,8 @@ export function CloudAgentAuthCredentialForm({
   libraryOrganizationId,
   onLibraryOrganizationChange,
 }: CloudAgentAuthCredentialFormProps) {
-  const firstOrganizationId = organizations[0]?.id ?? null;
+  const adminOrganizations = organizations.filter(isAdminOrganization);
+  const firstAdminOrganizationId = adminOrganizations[0]?.id ?? null;
   const mutations = useAgentAuthMutations();
   const [providerKind, setProviderKind] = useState<ProviderChoice>("anthropic_api_key");
   const [agentKind, setAgentKind] = useState<Extract<AgentAuthAgentKind, "codex" | "opencode">>("codex");
@@ -51,8 +55,12 @@ export function CloudAgentAuthCredentialForm({
   const [region, setRegion] = useState("us-east-1");
   const [externalId, setExternalId] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const libraryOrganizationCanOwnCredential = adminOrganizations.some(
+    (organization) => organization.id === libraryOrganizationId,
+  );
   const selectedOrganizationId = ownerScope === "organization"
-    ? libraryOrganizationId ?? firstOrganizationId
+    ? adminOrganizations.find((organization) => organization.id === libraryOrganizationId)?.id
+      ?? null
     : null;
   const canCreate =
     displayName.trim().length > 0
@@ -115,15 +123,15 @@ export function CloudAgentAuthCredentialForm({
                 setOwnerScope(nextOwnerScope);
                 if (
                   nextOwnerScope === "organization"
-                  && !libraryOrganizationId
-                  && firstOrganizationId
+                  && !libraryOrganizationCanOwnCredential
+                  && firstAdminOrganizationId
                 ) {
-                  onLibraryOrganizationChange(firstOrganizationId);
+                  onLibraryOrganizationChange(firstAdminOrganizationId);
                 }
               }}
             >
               <option value="personal">Personal</option>
-              <option value="organization" disabled={!firstOrganizationId}>
+              <option value="organization" disabled={!firstAdminOrganizationId}>
                 Organization
               </option>
             </Select>
@@ -279,6 +287,11 @@ function createPayloadReady(
   return values.roleArn.trim().length > 0
     && values.region.trim().length > 0
     && values.externalId.trim().length > 0;
+}
+
+function isAdminOrganization(organization: OrganizationOption): boolean {
+  const role = organization.membership?.role;
+  return role === "owner" || role === "admin";
 }
 
 function buildCreateCredentialRequest(input: {

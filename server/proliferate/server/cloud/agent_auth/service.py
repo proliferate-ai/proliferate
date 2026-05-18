@@ -81,6 +81,7 @@ from proliferate.utils.time import utcnow
 
 _ORG_ADMIN_ROLES = {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN}
 _GATEWAY_GRANT_TTL = timedelta(days=7)
+_MANAGED_CREDIT_AGENT_KINDS_V1: tuple[CloudAgentKind, ...] = ("claude",)
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,12 @@ class EnsureManagedCreditsResult:
     budget_subject: AgentGatewayBudgetSubjectRecord
     credentials: tuple[AgentAuthCredentialRecord, ...]
     policies: tuple[AgentGatewayPolicyRecord, ...]
+
+
+@dataclass(frozen=True)
+class CredentialListItem:
+    credential: AgentAuthCredentialRecord
+    active_share: AgentAuthCredentialShareRecord | None
 
 
 @dataclass(frozen=True)
@@ -184,6 +191,36 @@ async def list_credentials(
         organization_id=organization_id,
         agent_kind=agent_kind,
     )
+
+
+async def list_credentials_for_response(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    organization_id: UUID | None,
+    agent_kind: str | None,
+) -> tuple[CredentialListItem, ...]:
+    credentials = await list_credentials(
+        db,
+        actor_user_id=actor_user_id,
+        organization_id=organization_id,
+        agent_kind=agent_kind,
+    )
+    items: list[CredentialListItem] = []
+    for credential in credentials:
+        active_share = None
+        if (
+            organization_id is not None
+            and credential.owner_scope == "personal"
+            and credential.credential_kind == "synced_path"
+        ):
+            active_share = await store.get_active_credential_share(
+                db,
+                credential_id=credential.id,
+                organization_id=organization_id,
+            )
+        items.append(CredentialListItem(credential=credential, active_share=active_share))
+    return tuple(items)
 
 
 async def create_gateway_credential(
@@ -339,7 +376,7 @@ async def ensure_managed_credits_for_organization(
     # Customer-facing callers never choose managed-credit amounts. The value
     # comes from Proliferate entitlement/billing state; Phase 1 uses settings as
     # that entitlement source until billing integration wires this internally.
-    included_budget_usd = _budget_amount(settings.agent_gateway_default_managed_budget_usd)
+    included_budget_usd = _managed_credit_entitlement_budget()
     existing_budget = await store.get_managed_budget_subject(db, organization_id)
     team_id = existing_budget.litellm_team_id if existing_budget else None
     sync_status = "failed"
@@ -347,9 +384,7 @@ async def ensure_managed_credits_for_organization(
     fingerprint = None
     error_code = "litellm_not_configured"
     error_message = "LiteLLM provisioning is not configured."
-    requested_agent_kinds = tuple(
-        agent_kind for agent_kind in body.agent_kinds if agent_kind != "gemini"
-    )
+    requested_agent_kinds = _MANAGED_CREDIT_AGENT_KINDS_V1
     managed_deployments = tuple(
         deployment
         for agent_kind in requested_agent_kinds
@@ -416,29 +451,16 @@ async def ensure_managed_credits_for_organization(
 
     credentials: list[AgentAuthCredentialRecord] = []
     policies: list[AgentGatewayPolicyRecord] = []
-    visible = await store.list_visible_credentials(
-        db,
-        actor_user_id=actor_user_id,
-        organization_id=organization_id,
-        agent_kind=None,
-    )
     for agent_kind in requested_agent_kinds:
         if not _gateway_deployments_for_credential(
             agent_kind=agent_kind,
             provider_kind="proliferate_bedrock_pool",
         ):
             continue
-        credential = next(
-            (
-                item
-                for item in visible
-                if item.owner_scope == "organization"
-                and item.organization_id == organization_id
-                and item.agent_kind == agent_kind
-                and item.credential_kind == "managed_gateway"
-                and item.display_name == "Proliferate managed credits"
-            ),
-            None,
+        credential = await store.get_managed_gateway_credential(
+            db,
+            organization_id=organization_id,
+            agent_kind=agent_kind,
         )
         if credential is None:
             credential = await store.create_agent_auth_credential(
@@ -489,7 +511,7 @@ async def ensure_managed_credits_for_organization(
         metadata_json=json.dumps(
             {
                 "includedBudgetUsd": included_budget_usd,
-                "agentKinds": list(body.agent_kinds),
+                "agentKinds": list(requested_agent_kinds),
                 "litellmSyncStatus": sync_status,
             },
             sort_keys=True,
@@ -1066,9 +1088,7 @@ async def _require_agent_auth_refresh_command(
             code="agent_auth_command_invalid",
             status_code=409,
         ) from exc
-    if not isinstance(payload, dict) or payload.get("sandboxProfileId") != str(
-        sandbox_profile_id
-    ):
+    if not isinstance(payload, dict) or payload.get("sandboxProfileId") != str(sandbox_profile_id):
         raise AgentAuthError(
             "Agent auth config command does not match the requested profile.",
             code="agent_auth_command_mismatch",
@@ -1245,11 +1265,7 @@ async def _worker_synced_files_config(
             status_code=409,
         )
     legacy = await get_cloud_credential_by_id(db, credential.legacy_cloud_credential_id)
-    if (
-        legacy is None
-        or legacy.revoked_at is not None
-        or legacy.provider != credential.agent_kind
-    ):
+    if legacy is None or legacy.revoked_at is not None or legacy.provider != credential.agent_kind:
         raise AgentAuthError(
             "Synced credential source is not active.",
             code="synced_credential_source_missing",
@@ -1271,9 +1287,7 @@ async def _worker_synced_files_config(
     raw_files = payload.get("files")
     files = [
         {"relativePath": relative_path, "content": content}
-        for relative_path, content in (
-            raw_files if isinstance(raw_files, dict) else {}
-        ).items()
+        for relative_path, content in (raw_files if isinstance(raw_files, dict) else {}).items()
         if isinstance(relative_path, str) and isinstance(content, str)
     ]
     if not env_vars and not files:
@@ -2138,6 +2152,17 @@ def _budget_amount(value: str) -> str:
             "Included budget must be non-negative.", code="invalid_budget", status_code=400
         )
     return format(amount, "f")
+
+
+def _managed_credit_entitlement_budget() -> str:
+    budget = _budget_amount(settings.agent_gateway_default_managed_budget_usd)
+    if Decimal(budget) <= 0:
+        raise AgentAuthError(
+            "Managed credits are not enabled for this organization.",
+            code="managed_credits_not_entitled",
+            status_code=403,
+        )
+    return budget
 
 
 def _redact_secret(value: str) -> str:
