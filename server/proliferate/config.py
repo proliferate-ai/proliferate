@@ -43,6 +43,18 @@ class Settings(BaseSettings):
     github_oauth_client_id: str = ""
     github_oauth_client_secret: str = ""
 
+    # Google OAuth
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+
+    # Apple OAuth / Sign in with Apple
+    apple_sign_in_enabled: bool = False
+    apple_web_service_id: str = ""
+    apple_ios_bundle_id: str = ""
+    apple_team_id: str = ""
+    apple_key_id: str = ""
+    apple_private_key: str = ""
+
     # Customer.io (optional)
     customerio_site_id: str = ""
     customerio_api_key: str = ""

@@ -13,10 +13,11 @@ import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
 from proliferate.auth.dependencies import fastapi_users
+from proliferate.auth.api import router as auth_viewer_router
 from proliferate.auth.desktop.api import router as desktop_router
 from proliferate.auth.jwt import auth_backend
 from proliferate.auth.models import UserRead, UserUpdate
-from proliferate.auth.oauth import github_oauth_client
+from proliferate.auth.oauth import github_oauth_client, google_oauth_client
 from proliferate.config import get_cors_allow_origins, settings
 from proliferate.constants.app import APP_NAME
 from proliferate.db import engine as db_engine
@@ -178,9 +179,41 @@ def create_app() -> FastAPI:
             prefix=f"{api_prefix}/auth/github",
             tags=["auth"],
         )
+        app.include_router(
+            fastapi_users.get_oauth_associate_router(
+                github_oauth_client,
+                UserRead,
+                state_secret=settings.jwt_secret,
+            ),
+            prefix=f"{api_prefix}/auth/associate/github",
+            tags=["auth"],
+        )
+
+    if settings.google_oauth_client_id and settings.google_oauth_client_secret:
+        app.include_router(
+            fastapi_users.get_oauth_router(
+                google_oauth_client,
+                auth_backend,
+                state_secret=settings.jwt_secret,
+                associate_by_email=False,
+                is_verified_by_default=True,
+            ),
+            prefix=f"{api_prefix}/auth/google",
+            tags=["auth"],
+        )
+        app.include_router(
+            fastapi_users.get_oauth_associate_router(
+                google_oauth_client,
+                UserRead,
+                state_secret=settings.jwt_secret,
+            ),
+            prefix=f"{api_prefix}/auth/associate/google",
+            tags=["auth"],
+        )
 
     # ── Auth: Desktop PKCE flow ──
     app.include_router(desktop_router, prefix=f"{api_prefix}/auth", tags=["auth"])
+    app.include_router(auth_viewer_router, prefix=f"{api_prefix}/v1", tags=["auth"])
 
     # ── Domain routes ──
     app.include_router(health_router, prefix=api_prefix, tags=["health"])

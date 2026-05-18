@@ -2,6 +2,14 @@ export function cloudRootKey() {
   return ["cloud"] as const;
 }
 
+export function authRootKey() {
+  return ["auth"] as const;
+}
+
+export function authViewerKey() {
+  return [...authRootKey(), "viewer"] as const;
+}
+
 export function controlPlaneHealthKey(apiBaseUrl: string) {
   return [...cloudRootKey(), "control-plane-health", apiBaseUrl] as const;
 }

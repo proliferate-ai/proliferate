@@ -78,6 +78,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/associate/github/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Oauth-Associate:Github.Authorize */
+        get: operations["oauth_associate_github_authorize_auth_associate_github_authorize_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/associate/github/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth-Associate:Github.Callback
+         * @description The response varies based on the authentication backend used.
+         */
+        get: operations["oauth_associate_github_callback_auth_associate_github_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/desktop/authorize": {
         parameters: {
             query?: never;
@@ -209,6 +246,23 @@ export interface paths {
          * @description Exchange a refresh token for a new access + refresh token pair.
          */
         post: operations["refresh_access_token_auth_desktop_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/viewer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Auth Viewer */
+        get: operations["get_auth_viewer_v1_auth_viewer_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2386,6 +2440,47 @@ export interface components {
             redirect_uri: string;
             /** State */
             state: string;
+        };
+        /** AuthLinkedProvider */
+        AuthLinkedProvider: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "github" | "google" | "apple";
+            /** Connected */
+            connected: boolean;
+            /** Accountemail */
+            accountEmail?: string | null;
+            /** Accountid */
+            accountId?: string | null;
+        };
+        /** AuthProviderAvailability */
+        AuthProviderAvailability: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "github" | "google" | "apple";
+            /** Enabled */
+            enabled: boolean;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** AuthViewerResponse */
+        AuthViewerResponse: {
+            user: components["schemas"]["UserRead"];
+            /** Githubconnected */
+            githubConnected: boolean;
+            /**
+             * Onboardingstate
+             * @enum {string}
+             */
+            onboardingState: "needs_github" | "active";
+            /** Linkedproviders */
+            linkedProviders: components["schemas"]["AuthLinkedProvider"][];
+            /** Provideravailability */
+            providerAvailability: components["schemas"]["AuthProviderAvailability"][];
         };
         /**
          * AuthorizeParams
@@ -6025,6 +6120,80 @@ export interface operations {
             };
         };
     };
+    oauth_associate_github_authorize_auth_associate_github_authorize_get: {
+        parameters: {
+            query?: {
+                scopes?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuth2AuthorizeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_associate_github_callback_auth_associate_github_callback_get: {
+        parameters: {
+            query?: {
+                code?: string | null;
+                code_verifier?: string | null;
+                state?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_desktop_auth_code_auth_desktop_authorize_post: {
         parameters: {
             query: {
@@ -6255,6 +6424,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_auth_viewer_v1_auth_viewer_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthViewerResponse"];
                 };
             };
         };
