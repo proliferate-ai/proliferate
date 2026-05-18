@@ -16,6 +16,7 @@ import { MobileAutomationsScreen } from "../automations/MobileAutomationsScreen"
 import { MobileChatScreen } from "../chat/MobileChatScreen";
 import { MobileHomeScreen } from "../home/MobileHomeScreen";
 import { MobileGlyph } from "../primitives/MobileGlyph";
+import { MobileProliferateMark } from "../primitives/MobileProliferateMark";
 import { MobileSessionsScreen } from "../sessions/MobileSessionsScreen";
 import { MobileSettingsScreen } from "../settings/MobileSettingsScreen";
 import { MobileWorkspacesScreen } from "../workspaces/MobileWorkspacesScreen";
@@ -24,8 +25,27 @@ import { drawerRoutes, routeTitle, type RouteId } from "../../navigation/navigat
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
 import { colors, radius } from "../../styles/tokens";
 
+function MenuIcon({ open }: { open: boolean }) {
+  if (open) {
+    return (
+      <View style={styles.closeIcon}>
+        <View style={[styles.closeLine, styles.closeLineOne]} />
+        <View style={[styles.closeLine, styles.closeLineTwo]} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.menuIcon}>
+      <View style={styles.menuLine} />
+      <View style={styles.menuLine} />
+      <View style={styles.menuLine} />
+    </View>
+  );
+}
+
 export function MobileShell() {
-  const { authState, signInWithGitHub, signOut } = useMobileAuth();
+  const { authState, signInWithApple, signInWithGitHub, signOut } = useMobileAuth();
   const [route, setRoute] = useState<RouteId>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<ProductChat | null>(chats[0] ?? null);
@@ -46,7 +66,7 @@ export function MobileShell() {
     return (
       <SafeAreaView style={styles.root}>
         <StatusBar style="light" />
-        <MobileAuthScreen onGitHub={signInWithGitHub} />
+        <MobileAuthScreen onApple={signInWithApple} onGitHub={signInWithGitHub} />
       </SafeAreaView>
     );
   }
@@ -73,7 +93,7 @@ export function MobileShell() {
           onPress={() => setDrawerOpen((value) => !value)}
           style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
         >
-          <Text style={styles.iconText}>{drawerOpen ? "X" : "="}</Text>
+          <MenuIcon open={drawerOpen} />
         </Pressable>
         <View style={styles.headerText}>
           <Text style={styles.headerTitle} numberOfLines={1}>
@@ -141,7 +161,9 @@ export function MobileShell() {
           />
           <View style={styles.drawer}>
             <View style={styles.brandRow}>
-              <MobileGlyph>P</MobileGlyph>
+              <View style={styles.brandMark}>
+                <MobileProliferateMark size={18} />
+              </View>
               <View>
                 <Text style={styles.brandTitle}>Proliferate</Text>
                 <Text style={styles.brandSubtitle}>Cloud mobile</Text>
@@ -193,10 +215,33 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.accent,
   },
-  iconText: {
-    color: colors.fg,
-    fontSize: 18,
-    fontWeight: "800",
+  menuIcon: {
+    gap: 4,
+  },
+  menuLine: {
+    width: 17,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: colors.fg,
+  },
+  closeIcon: {
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closeLine: {
+    position: "absolute",
+    width: 18,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: colors.fg,
+  },
+  closeLineOne: {
+    transform: [{ rotate: "45deg" }],
+  },
+  closeLineTwo: {
+    transform: [{ rotate: "-45deg" }],
   },
   headerText: {
     minWidth: 0,
@@ -276,6 +321,14 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 8,
     marginBottom: 18,
+  },
+  brandMark: {
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
+    backgroundColor: colors.accent,
   },
   brandTitle: {
     color: colors.fg,

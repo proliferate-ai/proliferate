@@ -10,6 +10,7 @@ export type MobileAuthState = "signed_out" | "needs_github" | "active";
 
 interface MobileAuthContextValue {
   authState: MobileAuthState;
+  signInWithApple: () => void;
   signInWithGitHub: () => void;
   signOut: () => void;
 }
@@ -22,6 +23,9 @@ export function MobileAuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<MobileAuthContextValue>(
     () => ({
       authState,
+      signInWithApple() {
+        setAuthState("needs_github");
+      },
       signInWithGitHub() {
         setAuthState("active");
       },
