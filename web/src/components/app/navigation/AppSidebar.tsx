@@ -7,7 +7,9 @@ import {
   Search,
   Settings,
   Sparkles,
+  SquareKanban,
 } from "lucide-react";
+import { useCloudWorkspaces } from "@proliferate/cloud-sdk-react";
 import type { ComponentType } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
@@ -30,6 +32,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: routes.home, label: "Home", icon: Home },
+  { to: routes.workspaces, label: "Workspaces", icon: SquareKanban },
   { to: routes.automations, label: "Automations", icon: Bot },
   { to: routes.plugins, label: "Plugins & MCPs", icon: PlugZap },
   { to: routes.support, label: "Support", icon: CircleHelp },
@@ -75,6 +78,9 @@ function ChatRow({ chat }: { chat: ProductChat }) {
 }
 
 export function AppSidebar() {
+  const cloudWorkspaces = useCloudWorkspaces();
+  const workspaceCount = cloudWorkspaces.data?.length ?? workspaces.length;
+
   return (
     <aside className="flex h-full w-[264px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
       <div className="flex h-12 items-center gap-2 px-3">
@@ -128,13 +134,19 @@ export function AppSidebar() {
 
       <div className="mt-3 flex items-center justify-between px-3 pb-1">
         <span className="text-[10px] font-semibold uppercase text-sidebar-muted-foreground">Workspaces</span>
-        <span className="text-[10px] text-sidebar-muted-foreground">{workspaces.length}</span>
+        <span className="text-[10px] text-sidebar-muted-foreground">{workspaceCount}</span>
       </div>
       <div className="space-y-1 px-2">
-        {workspaces.map((workspace) => (
+        {(cloudWorkspaces.data ?? workspaces).slice(0, 4).map((workspace) => (
           <div key={workspace.id} className="rounded-md px-2 py-1 text-xs text-sidebar-muted-foreground">
-            <div className="truncate font-[450] text-sidebar-foreground">{workspace.name}</div>
-            <div className="truncate text-[11px]">{workspace.repoLabel}</div>
+            <div className="truncate font-[450] text-sidebar-foreground">
+              {"name" in workspace ? workspace.name : workspace.displayName ?? workspace.repo.name}
+            </div>
+            <div className="truncate text-[11px]">
+              {"repoLabel" in workspace
+                ? workspace.repoLabel
+                : `${workspace.repo.owner}/${workspace.repo.name}`}
+            </div>
           </div>
         ))}
       </div>

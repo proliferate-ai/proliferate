@@ -414,6 +414,12 @@ importers:
 
   web:
     dependencies:
+      '@proliferate/cloud-sdk':
+        specifier: workspace:*
+        version: link:../cloud/sdk
+      '@proliferate/cloud-sdk-react':
+        specifier: workspace:*
+        version: link:../cloud/sdk-react
       '@proliferate/design':
         specifier: workspace:*
         version: link:../packages/design
@@ -426,6 +432,9 @@ importers:
       '@proliferate/ui':
         specifier: workspace:*
         version: link:../packages/ui
+      '@tanstack/react-query':
+        specifier: ^5.95.2
+        version: 5.95.2(react@19.2.4)
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.1.0)

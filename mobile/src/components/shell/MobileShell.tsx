@@ -10,17 +10,21 @@ import {
 
 import type { ProductChat } from "@proliferate/product-model/chats/model";
 
+import { MobileAuthScreen } from "../auth/MobileAuthScreen";
+import { MobileConnectGitHubScreen } from "../auth/MobileConnectGitHubScreen";
 import { MobileAutomationsScreen } from "../automations/MobileAutomationsScreen";
 import { MobileChatScreen } from "../chat/MobileChatScreen";
 import { MobileHomeScreen } from "../home/MobileHomeScreen";
 import { MobileGlyph } from "../primitives/MobileGlyph";
 import { MobileSessionsScreen } from "../sessions/MobileSessionsScreen";
 import { MobileSettingsScreen } from "../settings/MobileSettingsScreen";
+import { MobileWorkspacesScreen } from "../workspaces/MobileWorkspacesScreen";
 import { chats } from "../../lib/fixtures/mobile-fixtures";
 import { drawerRoutes, routeTitle, type RouteId } from "../../navigation/navigation-model";
 import { colors, radius } from "../../styles/tokens";
 
 export function MobileShell() {
+  const [authState, setAuthState] = useState<"signed_out" | "needs_github" | "active">("signed_out");
   const [route, setRoute] = useState<RouteId>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<ProductChat | null>(chats[0] ?? null);
@@ -35,6 +39,30 @@ export function MobileShell() {
   function openChat(chat: ProductChat) {
     setSelectedChat(chat);
     setDrawerOpen(false);
+  }
+
+  if (authState === "signed_out") {
+    return (
+      <SafeAreaView style={styles.root}>
+        <StatusBar style="light" />
+        <MobileAuthScreen
+          onGitHub={() => setAuthState("active")}
+          onGoogle={() => setAuthState("needs_github")}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (authState === "needs_github") {
+    return (
+      <SafeAreaView style={styles.root}>
+        <StatusBar style="light" />
+        <MobileConnectGitHubScreen
+          onConnect={() => setAuthState("active")}
+          onSignOut={() => setAuthState("signed_out")}
+        />
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -83,6 +111,8 @@ export function MobileShell() {
           <MobileChatScreen chat={selectedChat} />
         ) : route === "home" ? (
           <MobileHomeScreen onOpenSessions={() => navigate("sessions")} />
+        ) : route === "workspaces" ? (
+          <MobileWorkspacesScreen />
         ) : route === "sessions" ? (
           <MobileSessionsScreen onOpenChat={openChat} />
         ) : route === "automations" ? (

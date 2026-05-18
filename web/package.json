@@ -10,10 +10,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@proliferate/cloud-sdk": "workspace:*",
+    "@proliferate/cloud-sdk-react": "workspace:*",
     "@proliferate/design": "workspace:*",
     "@proliferate/product-model": "workspace:*",
     "@proliferate/product-ui": "workspace:*",
     "@proliferate/ui": "workspace:*",
+    "@tanstack/react-query": "^5.95.2",
     "lucide-react": "^0.468.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
