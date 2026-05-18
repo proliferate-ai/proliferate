@@ -24,7 +24,7 @@ export async function runMobileOAuthFlow(input: {
   const purpose = input.purpose ?? "login";
   const client = createMobileCloudClient(mobileEnv.apiBaseUrl, null);
   const pkce = await createPkcePair();
-  const clientState = createOAuthState();
+  const clientState = await createOAuthState();
   const start = await startAuthProvider(
     "mobile",
     input.provider,
@@ -74,7 +74,7 @@ export async function runMobileAppleFlow(input: {
   const purpose = input.purpose ?? "login";
   const client = createMobileCloudClient(mobileEnv.apiBaseUrl, null);
   const pkce = await createPkcePair();
-  const clientState = createOAuthState();
+  const clientState = await createOAuthState();
   const start = await startAuthProvider(
     "mobile",
     "apple",
@@ -126,7 +126,7 @@ function openMobileAuthUrl(authorizationUrl: string): Promise<string> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const subscription = Linking.addEventListener("url", ({ url }) => {
-      if (url.startsWith(mobileEnv.redirectUri)) {
+      if (isMobileAuthCallback(url)) {
         finish(() => resolve(url));
       }
     });
@@ -148,4 +148,18 @@ function openMobileAuthUrl(authorizationUrl: string): Promise<string> {
       finish(() => reject(error));
     });
   });
+}
+
+function isMobileAuthCallback(url: string): boolean {
+  try {
+    const actual = new URL(url);
+    const expected = new URL(mobileEnv.redirectUri);
+    return (
+      actual.protocol === expected.protocol &&
+      actual.hostname === expected.hostname &&
+      actual.pathname === expected.pathname
+    );
+  } catch {
+    return false;
+  }
 }

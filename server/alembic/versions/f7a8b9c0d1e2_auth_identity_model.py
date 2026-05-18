@@ -187,7 +187,15 @@ def _backfill_oauth_accounts() -> None:
         ).scalar_one_or_none()
         if grant_exists is not None:
             continue
-        scopes = ["repo", "user", "user:email"] if row["oauth_name"] == "github" else []
+        scopes: list[str] = []
+        expires_at = (
+            datetime.fromtimestamp(row["expires_at"], tz=UTC)
+            if row["expires_at"] is not None
+            else None
+        )
+        status = "expired" if expires_at is not None and expires_at <= now else "ready"
+        if row["oauth_name"] == "github" and status == "ready":
+            status = "needs_reauth"
         bind.execute(
             sa.text(
                 """
@@ -198,7 +206,7 @@ def _backfill_oauth_accounts() -> None:
                 )
                 VALUES (
                     :id, :user_id, :auth_identity_id, :provider, :access_token_ciphertext,
-                    :refresh_token_ciphertext, :scopes_json, NULL, 'ready',
+                    :refresh_token_ciphertext, :scopes_json, :expires_at, :status,
                     :now, :now, :now
                 )
                 """
@@ -215,6 +223,8 @@ def _backfill_oauth_accounts() -> None:
                     encrypt_text(row["refresh_token"]) if row["refresh_token"] else None
                 ),
                 "scopes_json": json.dumps(scopes),
+                "expires_at": expires_at,
+                "status": status,
                 "now": now,
             },
         )

@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.auth import OAuthAccount, User
+from proliferate.db.models.auth import AuthIdentity, OAuthAccount, ProviderGrant, User
 
 
 async def _create_user_and_get_token(
@@ -66,6 +66,32 @@ async def _link_provider(
             access_token=f"{provider}-access-token",
             account_id=f"{provider}-account-id",
             account_email=f"{provider}@example.com",
+        )
+    )
+    await db_session.commit()
+
+
+async def _link_ready_github_identity(
+    db_session: AsyncSession,
+    user_id: str,
+) -> None:
+    identity = AuthIdentity(
+        user_id=uuid.UUID(user_id),
+        provider="github",
+        provider_subject="github-account-id",
+        email="github@example.com",
+        email_verified=True,
+    )
+    db_session.add(identity)
+    await db_session.flush()
+    db_session.add(
+        ProviderGrant(
+            user_id=uuid.UUID(user_id),
+            auth_identity_id=identity.id,
+            provider="github",
+            access_token_ciphertext="encrypted-github-access-token",
+            scopes_json='["repo","user","user:email"]',
+            status="ready",
         )
     )
     await db_session.commit()
@@ -133,7 +159,7 @@ async def test_auth_viewer_marks_github_user_as_active(
         db_session,
         email="viewer-github@example.com",
     )
-    await _link_provider(db_session, user_id, "github")
+    await _link_ready_github_identity(db_session, user_id)
 
     response = await client.get(
         "/v1/auth/viewer",
@@ -146,6 +172,38 @@ async def test_auth_viewer_marks_github_user_as_active(
     assert payload["onboardingState"] == "active"
     providers = {provider["provider"] for provider in payload["providerAvailability"]}
     assert providers == {"github", "google", "apple"}
+
+
+@pytest.mark.asyncio
+async def test_legacy_github_oauth_account_without_scopes_requires_reauth(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    user_id, access_token = await _create_user_and_get_token(
+        client,
+        db_session,
+        email="viewer-legacy-github@example.com",
+    )
+    await _link_provider(db_session, user_id, "github")
+
+    response = await client.get(
+        "/v1/auth/viewer",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["githubConnected"] is False
+    assert payload["onboardingState"] == "needs_github"
+    linked = {provider["provider"]: provider for provider in payload["linkedProviders"]}
+    assert linked["github"]["connected"] is True
+
+    blocked = await client.get(
+        "/v1/cloud/workspaces",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"]["code"] == "github_link_required"
 
 
 @pytest.mark.asyncio

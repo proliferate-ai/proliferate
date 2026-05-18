@@ -45,6 +45,26 @@ def _parse_scopes(value: str | None) -> frozenset[str]:
     return frozenset(item for item in parsed if isinstance(item, str))
 
 
+def _provider_grant_status(verified: VerifiedProviderIdentity) -> AuthProviderGrantStatus:
+    if verified.expires_at is not None:
+        expires_at = (
+            verified.expires_at
+            if verified.expires_at.tzinfo
+            else verified.expires_at.replace(tzinfo=UTC)
+        )
+        if expires_at <= _now():
+            return AuthProviderGrantStatus.EXPIRED
+    if verified.provider == "github" and not REQUIRED_GITHUB_SCOPES.issubset(verified.scopes):
+        return AuthProviderGrantStatus.NEEDS_REAUTH
+    return AuthProviderGrantStatus.READY
+
+
+def _legacy_expires_at(value: int | None) -> datetime | None:
+    if value is None:
+        return None
+    return datetime.fromtimestamp(value, tz=UTC)
+
+
 async def get_user_by_id(db: AsyncSession, user_id: UUID) -> User | None:
     return await db.get(User, user_id)
 
@@ -178,7 +198,7 @@ async def upsert_provider_grant(
     )
     grant.scopes_json = _scopes_json(verified.scopes)
     grant.expires_at = verified.expires_at
-    grant.status = AuthProviderGrantStatus.READY.value
+    grant.status = _provider_grant_status(verified).value
     grant.last_verified_at = now
     grant.updated_at = now
     await db.flush()
@@ -378,7 +398,7 @@ async def backfill_legacy_oauth_accounts_for_user(db: AsyncSession, *, user_id: 
         )
         if existing_user_provider is not None:
             continue
-        scopes = frozenset({"repo", "user", "user:email"}) if provider == "github" else frozenset()
+        scopes = frozenset()
         verified = VerifiedProviderIdentity(
             provider=provider,  # type: ignore[arg-type]
             provider_subject=account.account_id,
@@ -389,7 +409,7 @@ async def backfill_legacy_oauth_accounts_for_user(db: AsyncSession, *, user_id: 
             avatar_url=None,
             access_token=account.access_token,
             refresh_token=account.refresh_token,
-            expires_at=None,
+            expires_at=_legacy_expires_at(account.expires_at),
             expires_at_timestamp=account.expires_at,
             scopes=scopes,
         )

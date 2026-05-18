@@ -64,12 +64,12 @@ def append_query(base_url: str, **params: str) -> str:
 
 
 def validate_redirect_uri(surface: str, redirect_uri: str) -> None:
-    parsed = urlparse(redirect_uri)
     if surface == "mobile":
-        if parsed.scheme != "proliferate":
-            raise HTTPException(status_code=400, detail="Mobile redirect URI must use proliferate://.")
+        if redirect_uri != settings.mobile_redirect_uri:
+            raise HTTPException(status_code=400, detail="Mobile redirect URI is not allowed.")
         return
     if surface == "web":
+        parsed = urlparse(redirect_uri)
         allowed = _allowed_web_redirect_origins()
         origin = f"{parsed.scheme}://{parsed.netloc}"
         if origin not in allowed:
@@ -161,7 +161,12 @@ async def complete_oauth_provider_callback(
     state: str,
     code: str,
 ) -> str:
-    challenge = await _consume_challenge_for_callback(db, state=state, provider=provider)
+    challenge = await _consume_challenge_for_callback(
+        db,
+        state=state,
+        provider=provider,
+        surface=surface,
+    )
     verified = await providers.verify_oauth_callback(
         provider=provider,
         surface=surface,
@@ -184,6 +189,23 @@ async def complete_oauth_provider_callback(
     return append_query(challenge.redirect_uri, code=auth_code.code, state=challenge.client_state)
 
 
+async def complete_oauth_provider_error_callback(
+    db: AsyncSession,
+    *,
+    provider: AuthProviderName,
+    surface: str,
+    state: str,
+    error: str,
+) -> str:
+    challenge = await _consume_challenge_for_callback(
+        db,
+        state=state,
+        provider=provider,
+        surface=surface,
+    )
+    return append_query(challenge.redirect_uri, error=error, state=challenge.client_state)
+
+
 async def complete_apple_mobile_login(
     db: AsyncSession,
     *,
@@ -192,7 +214,12 @@ async def complete_apple_mobile_login(
     email: str | None,
     display_name: str | None,
 ) -> AuthSession:
-    challenge = await _consume_challenge_for_callback(db, state=state, provider="apple")
+    challenge = await _consume_challenge_for_callback(
+        db,
+        state=state,
+        provider="apple",
+        surface="mobile",
+    )
     verified = await providers.verify_apple_identity_token(
         identity_token=identity_token,
         expected_nonce=_nonce_unavailable_marker(challenge),
@@ -212,7 +239,12 @@ async def complete_apple_web_callback(
     email: str | None,
     display_name: str | None,
 ) -> str:
-    challenge = await _consume_challenge_for_callback(db, state=state, provider="apple")
+    challenge = await _consume_challenge_for_callback(
+        db,
+        state=state,
+        provider="apple",
+        surface="web",
+    )
     verified = await providers.verify_apple_identity_token(
         identity_token=identity_token,
         expected_nonce=_nonce_unavailable_marker(challenge),
@@ -243,9 +275,10 @@ async def _consume_challenge_for_callback(
     *,
     state: str,
     provider: AuthProviderName,
+    surface: str,
 ) -> AuthChallengeSnapshot:
     challenge = await consume_auth_challenge(db, state_hash=hash_secret(state))
-    if challenge is None or challenge.provider != provider:
+    if challenge is None or challenge.provider != provider or challenge.surface != surface:
         raise HTTPException(status_code=400, detail="Invalid or expired auth state.")
     return challenge
 

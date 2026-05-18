@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     apple_team_id: str = ""
     apple_key_id: str = ""
     apple_private_key: str = ""
+    mobile_redirect_uri: str = "proliferate://auth/callback"
 
     # Customer.io (optional)
     customerio_site_id: str = ""

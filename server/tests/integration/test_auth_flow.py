@@ -754,6 +754,108 @@ class TestWebMobileProductAuthFlow:
         assert linked_token.status_code == 200
         assert linked_token.json()["readiness"]["productReady"] is True
 
+    @pytest.mark.asyncio
+    async def test_mobile_start_rejects_unregistered_redirect_uri(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _, challenge = _make_pkce_pair()
+        self._enable_identity_github(monkeypatch, "mobile-redirect@example.com")
+
+        started = await client.post(
+            "/auth/mobile/github/start",
+            json={
+                "purpose": "login",
+                "clientState": "mobile-client-state",
+                "codeChallenge": challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "proliferate://other/callback",
+            },
+        )
+
+        assert started.status_code == 400
+        assert started.json()["detail"] == "Mobile redirect URI is not allowed."
+
+    @pytest.mark.asyncio
+    async def test_mobile_provider_error_redirects_to_app_callback(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _, challenge = _make_pkce_pair()
+        self._enable_identity_github(monkeypatch, "mobile-error@example.com")
+
+        started = await client.post(
+            "/auth/mobile/github/start",
+            json={
+                "purpose": "login",
+                "clientState": "mobile-client-state",
+                "codeChallenge": challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "proliferate://auth/callback",
+            },
+        )
+        assert started.status_code == 200
+        oauth_state = parse_qs(urlparse(started.json()["authorizationUrl"]).query)["state"][0]
+
+        callback = await client.get(
+            "/auth/mobile/github/callback",
+            params={"error": "access_denied", "state": oauth_state},
+            follow_redirects=False,
+        )
+
+        assert callback.status_code == 302
+        parsed = urlparse(callback.headers["location"])
+        assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "proliferate://auth/callback"
+        callback_query = parse_qs(parsed.query)
+        assert callback_query["error"] == ["access_denied"]
+        assert callback_query["state"] == ["mobile-client-state"]
+
+    @pytest.mark.asyncio
+    async def test_required_github_link_route_is_registered_before_generic_start_route(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id = await _create_user_via_manager("direct-github-link@example.com")
+        verifier, challenge = _make_pkce_pair()
+        self._enable_identity_github(monkeypatch, "direct-github-link@example.com")
+
+        authorize = await client.post(
+            "/auth/desktop/authorize",
+            params={"user_id": user_id},
+            json={
+                "state": "direct-link-state",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+                "redirect_uri": "proliferate://auth/callback",
+            },
+        )
+        token = await client.post(
+            "/auth/desktop/token",
+            json={
+                "code": authorize.json()["code"],
+                "code_verifier": verifier,
+                "grant_type": "authorization_code",
+            },
+        )
+
+        link_start = await client.post(
+            "/auth/github/link/start",
+            headers={"Authorization": f"Bearer {token.json()['access_token']}"},
+            json={
+                "purpose": "required_github_link",
+                "clientState": "github-link-state",
+                "codeChallenge": challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "http://localhost:5174/auth/callback",
+            },
+        )
+
+        assert link_start.status_code == 200
+        assert link_start.json()["provider"] == "github"
+
 
 class TestRefreshToken:
     @pytest.mark.asyncio

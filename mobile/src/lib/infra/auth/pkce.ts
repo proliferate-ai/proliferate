@@ -1,3 +1,5 @@
+import * as Crypto from "expo-crypto";
+
 const PKCE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
 const SHA256_K = [
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
@@ -19,19 +21,19 @@ export interface PkcePair {
 }
 
 export async function createPkcePair(): Promise<PkcePair> {
-  const verifier = randomPkceString(64);
+  const verifier = await randomPkceString(64);
   return {
     verifier,
     challenge: base64UrlEncode(sha256Ascii(verifier)),
   };
 }
 
-export function createOAuthState(): string {
-  return randomPkceString(48);
+export async function createOAuthState(): Promise<string> {
+  return await randomPkceString(48);
 }
 
-function randomPkceString(length: number): string {
-  const bytes = randomBytes(length);
+async function randomPkceString(length: number): Promise<string> {
+  const bytes = await randomBytes(length);
   let value = "";
   for (const byte of bytes) {
     value += PKCE_ALPHABET[byte % PKCE_ALPHABET.length];
@@ -39,17 +41,13 @@ function randomPkceString(length: number): string {
   return value;
 }
 
-function randomBytes(length: number): Uint8Array {
-  const bytes = new Uint8Array(length);
-  const cryptoSource = globalThis.crypto;
-  if (cryptoSource?.getRandomValues) {
-    cryptoSource.getRandomValues(bytes);
+async function randomBytes(length: number): Promise<Uint8Array> {
+  if (globalThis.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(length);
+    globalThis.crypto.getRandomValues(bytes);
     return bytes;
   }
-  for (let index = 0; index < length; index += 1) {
-    bytes[index] = Math.floor(Math.random() * 256);
-  }
-  return bytes;
+  return await Crypto.getRandomBytesAsync(length);
 }
 
 function sha256Ascii(input: string): Uint8Array {

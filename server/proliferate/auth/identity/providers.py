@@ -12,6 +12,7 @@ import httpx
 from fastapi import HTTPException, Request, status
 from jose import JWTError, jwt
 
+from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.auth.identity.types import AuthProviderName, VerifiedProviderIdentity
 from proliferate.auth.oauth import github_oauth_client, google_oauth_client
 from proliferate.config import settings
@@ -294,7 +295,11 @@ def provider_callback_url(request: Request, *, provider: AuthProviderName, surfa
     base = settings.api_base_url.strip().rstrip("/")
     if not base:
         base = str(request.base_url).rstrip("/")
-    return f"{base}/auth/{surface}/{provider}/callback"
+    path = auth_route_path_for_base(
+        f"/auth/{surface}/{provider}/callback",
+        base_url=base,
+    )
+    return f"{base}{path}"
 
 
 def new_secret() -> str:

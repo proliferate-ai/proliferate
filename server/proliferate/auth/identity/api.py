@@ -28,6 +28,7 @@ from proliferate.auth.identity.models import (
     StartAuthRequest,
     StartAuthResponse,
 )
+from proliferate.auth.identity.routing import auth_route_path
 from proliferate.auth.identity.service import (
     WEB_CSRF_COOKIE,
     WEB_CSRF_HEADER,
@@ -36,6 +37,7 @@ from proliferate.auth.identity.service import (
     complete_apple_mobile_login,
     complete_apple_web_callback,
     complete_oauth_provider_callback,
+    complete_oauth_provider_error_callback,
     exchange_auth_code,
     hash_secret,
     refresh_auth_session,
@@ -48,6 +50,36 @@ from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 
 router = APIRouter(tags=["auth"])
+
+
+@router.post("/github/link/start", response_model=StartAuthResponse)
+async def start_required_github_link(
+    body: StartAuthRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_limited_user),
+) -> StartAuthResponse:
+    authorization_url, state, nonce, expires_at = await start_provider_auth(
+        db,
+        request,
+        provider="github",
+        surface="web",
+        purpose="required_github_link",
+        client_state=body.client_state,
+        code_challenge=body.code_challenge,
+        code_challenge_method=body.code_challenge_method,
+        redirect_uri=body.redirect_uri,
+        prompt=body.prompt,
+        user=user,
+    )
+    await db.commit()
+    return StartAuthResponse(
+        provider="github",
+        authorization_url=authorization_url,
+        state=state,
+        nonce=nonce,
+        expires_at=expires_at,
+    )
 
 
 @router.post("/{surface}/{provider}/start", response_model=StartAuthResponse)
@@ -95,6 +127,19 @@ async def oauth_callback(
     db: AsyncSession = Depends(get_async_session),
 ) -> RedirectResponse:
     if error is not None:
+        if state is not None:
+            try:
+                redirect_url = await complete_oauth_provider_error_callback(
+                    db,
+                    provider=provider,
+                    surface=surface,
+                    state=state,
+                    error=error,
+                )
+                await db.commit()
+                return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
+            except HTTPException:
+                await db.rollback()
         return RedirectResponse(_auth_error_url(error), status_code=status.HTTP_302_FOUND)
     if state is None or code is None:
         return RedirectResponse(_auth_error_url("missing_callback_params"), status_code=302)
@@ -218,7 +263,7 @@ async def web_session_logout(
     csrf_header: Annotated[str | None, Header(alias=WEB_CSRF_HEADER)] = None,
 ) -> dict[str, bool]:
     _validate_csrf(csrf_cookie=csrf_cookie, csrf_header=csrf_header)
-    response.delete_cookie(WEB_REFRESH_COOKIE, path="/auth/web/session")
+    response.delete_cookie(WEB_REFRESH_COOKIE, path=_web_session_cookie_path())
     response.delete_cookie(WEB_CSRF_COOKIE, path="/")
     return {"ok": True}
 
@@ -232,36 +277,6 @@ async def mobile_session_refresh(
     return auth_session_response(session, include_refresh_token=True)
 
 
-@router.post("/github/link/start", response_model=StartAuthResponse)
-async def start_required_github_link(
-    body: StartAuthRequest,
-    request: Request,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_limited_user),
-) -> StartAuthResponse:
-    authorization_url, state, nonce, expires_at = await start_provider_auth(
-        db,
-        request,
-        provider="github",
-        surface="web",
-        purpose="required_github_link",
-        client_state=body.client_state,
-        code_challenge=body.code_challenge,
-        code_challenge_method=body.code_challenge_method,
-        redirect_uri=body.redirect_uri,
-        prompt=body.prompt,
-        user=user,
-    )
-    await db.commit()
-    return StartAuthResponse(
-        provider="github",
-        authorization_url=authorization_url,
-        state=state,
-        nonce=nonce,
-        expires_at=expires_at,
-    )
-
-
 def _set_web_session_cookies(response: Response, refresh_token: str) -> None:
     secure = _cookie_secure()
     response.set_cookie(
@@ -271,7 +286,7 @@ def _set_web_session_cookies(response: Response, refresh_token: str) -> None:
         httponly=True,
         secure=secure,
         samesite="lax",
-        path="/auth/web/session",
+        path=_web_session_cookie_path(),
     )
     csrf = hash_secret(refresh_token)[:32]
     response.set_cookie(
@@ -289,6 +304,10 @@ def _cookie_secure() -> bool:
     return settings.api_base_url.startswith("https://") or settings.frontend_base_url.startswith(
         "https://"
     )
+
+
+def _web_session_cookie_path() -> str:
+    return auth_route_path("/auth/web/session")
 
 
 def _validate_csrf(*, csrf_cookie: str | None, csrf_header: str | None) -> None:
