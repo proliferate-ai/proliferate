@@ -368,6 +368,10 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.start_live_session.agent_resolved"
         );
         let session_launch_env = build_session_launch_env(&resolved_agent);
+        let agent_auth_overlay = self
+            .agent_auth_config_service
+            .launch_overlay(&record.agent_kind)
+            .map_err(StartSessionError::Internal)?;
         let session_store = self.session_service.store().clone();
         let attachment_storage = self.session_service.attachment_storage().clone();
         let mcp_launch = assemble_session_mcp_launch(
@@ -394,6 +398,8 @@ impl SessionRuntime {
                 workspace_path,
                 workspace_env,
                 session_launch_env,
+                agent_auth_overlay.support_env,
+                agent_auth_overlay.protected_env,
                 session_store,
                 attachment_storage,
                 mcp_launch.mcp_servers,

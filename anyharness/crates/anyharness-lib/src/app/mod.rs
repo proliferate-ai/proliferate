@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::acp::manager::AcpManager;
 use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::processes::ProcessService;
+use crate::domains::agents::auth_config::{AgentAuthConfigService, AgentAuthConfigStore};
 use crate::domains::agents::model_registry::service::DynamicModelRegistryService;
 use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
 use crate::domains::agents::reconcile::execution::AgentReconcileService;
@@ -90,6 +91,7 @@ pub struct AppState {
     pub db: Db,
     pub bearer_token: Option<String>,
     pub agent_seed_store: AgentSeedStore,
+    pub agent_auth_config_service: Arc<AgentAuthConfigService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub dynamic_model_registry_service: Arc<DynamicModelRegistryService>,
     pub repo_root_service: Arc<RepoRootService>,
@@ -146,6 +148,11 @@ impl AppState {
             runtime_home.clone(),
         ));
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
+        let agent_auth_config_service = Arc::new(AgentAuthConfigService::new(
+            AgentAuthConfigStore::new(db.clone()),
+            session_data_cipher.clone(),
+            runtime_home.clone(),
+        ));
         let dynamic_model_registry_service = Arc::new(DynamicModelRegistryService::new(
             DynamicModelRegistryStore::new(db.clone()),
             WorkspaceStore::new(db.clone()),
@@ -268,6 +275,7 @@ impl AppState {
             plugin_bundle_registry.clone(),
             workspace_access_gate.clone(),
             plan_service.clone(),
+            agent_auth_config_service.clone(),
         ));
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
@@ -388,6 +396,7 @@ impl AppState {
             db,
             bearer_token,
             agent_seed_store,
+            agent_auth_config_service,
             agent_reconcile_service,
             dynamic_model_registry_service,
             repo_root_service,

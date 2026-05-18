@@ -1,3 +1,4 @@
+pub mod auth_config;
 pub mod catalog;
 pub mod credentials;
 pub mod install_lock;

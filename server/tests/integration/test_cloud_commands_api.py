@@ -1009,6 +1009,85 @@ class TestCloudCommandsApi:
         assert ready.status_code == 200
 
     @pytest.mark.asyncio
+    async def test_agent_auth_preflight_command_requires_refresh_capable_worker(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-agent-auth-worker-capability",
+        )
+        target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
+        target_uuid = UUID(target_id)
+        profile = await agent_auth_store.ensure_personal_sandbox_profile(
+            db_session,
+            user_id=UUID(auth.user_id),
+            managed_target_id=target_uuid,
+        )
+        profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
+            db_session,
+            sandbox_profile_id=profile.id,
+            reason="test_worker_capability",
+            actor_user_id=UUID(auth.user_id),
+            force_restart=False,
+        )
+        assert profile is not None
+        await agent_auth_store.upsert_target_state(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+            desired_revision=profile.agent_auth_revision,
+            applied_revision=profile.agent_auth_revision,
+            status="applied",
+            force_restart_required=False,
+            last_command_id=None,
+            last_worker_id=None,
+            last_error_code=None,
+            last_error_message=None,
+        )
+        await db_session.commit()
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "agent-auth-preflight-worker-capability",
+                "targetId": target_id,
+                "kind": "start_session",
+                "payload": {
+                    "workspaceId": "anyharness-workspace-1",
+                    "agentKind": "claude",
+                    "sandboxProfileId": str(profile.id),
+                    "requiredAgentAuthRevision": profile.agent_auth_revision,
+                },
+            },
+        )
+        assert created.status_code == 200
+        command_id = created.json()["commandId"]
+
+        old_worker_lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={"supportedKinds": ["start_session"], "leaseTimeoutSeconds": 30},
+        )
+        assert old_worker_lease.status_code == 200
+        assert old_worker_lease.json()["command"] is None
+
+        refresh_capable_lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["start_session", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert refresh_capable_lease.status_code == 200
+        leased_command = refresh_capable_lease.json()["command"]
+        assert leased_command["commandId"] == command_id
+
+    @pytest.mark.asyncio
     async def test_preconditions_are_rejected_until_supported(
         self,
         client: AsyncClient,

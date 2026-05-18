@@ -53,6 +53,56 @@
         }
       }
     },
+    "/v1/agents/auth-config": {
+      "put": {
+        "tags": [
+          "super::http::agent_auth_config"
+        ],
+        "operationId": "apply_agent_auth_config",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyAgentAuthConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Agent auth config applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyAgentAuthConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/auth-config/status": {
+      "get": {
+        "tags": [
+          "super::http::agent_auth_config"
+        ],
+        "operationId": "get_agent_auth_config_status",
+        "responses": {
+          "200": {
+            "description": "Redacted agent auth config status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentAuthConfigStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agents/launch-options": {
       "get": {
         "tags": [
@@ -5489,6 +5539,194 @@
           }
         }
       },
+      "AgentAuthConfigStatusResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "externalAuthScope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentAuthExternalScope"
+              }
+            ]
+          },
+          "revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "selections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentAuthSelectionStatus"
+            }
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "AgentAuthExternalScope": {
+        "type": "object",
+        "required": [
+          "provider",
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "targetId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "AgentAuthSelectionConfig": {
+        "type": "object",
+        "required": [
+          "agentKind",
+          "materializationMode",
+          "credentialId",
+          "credentialRevision"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "credentialId": {
+            "type": "string"
+          },
+          "credentialRevision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "credentialShareId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "materializationMode": {
+            "type": "string"
+          },
+          "protectedConfig": {
+            "type": "object",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "protectedEnv": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "supportConfig": {
+            "type": "object",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "supportEnv": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "syncedFilePaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AgentAuthSelectionStatus": {
+        "type": "object",
+        "required": [
+          "agentKind",
+          "materializationMode",
+          "credentialId",
+          "credentialRevision",
+          "protectedEnvKeys",
+          "supportEnvKeys",
+          "protectedConfigKeys",
+          "supportConfigKeys",
+          "syncedFilePaths"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "credentialId": {
+            "type": "string"
+          },
+          "credentialRevision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "credentialShareId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "materializationMode": {
+            "type": "string"
+          },
+          "protectedConfigKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "protectedEnvKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "supportConfigKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "supportEnvKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "syncedFilePaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "AgentCredentialState": {
         "type": "string",
         "enum": [
@@ -5883,6 +6121,59 @@
           },
           "supportsLogin": {
             "type": "boolean"
+          }
+        }
+      },
+      "ApplyAgentAuthConfigRequest": {
+        "type": "object",
+        "required": [
+          "revision"
+        ],
+        "properties": {
+          "externalAuthScope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentAuthExternalScope"
+              }
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "selections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentAuthSelectionConfig"
+            }
+          }
+        }
+      },
+      "ApplyAgentAuthConfigResponse": {
+        "type": "object",
+        "required": [
+          "applied",
+          "revision",
+          "selectionCount",
+          "status"
+        ],
+        "properties": {
+          "applied": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "selectionCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string"
           }
         }
       },

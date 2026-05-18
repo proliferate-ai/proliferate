@@ -1,3 +1,4 @@
+pub mod agent_auth_config;
 pub mod agents;
 pub mod cowork;
 pub mod errors;
@@ -22,6 +23,7 @@ pub mod terminals;
 pub mod workspaces;
 pub mod worktrees;
 
+pub use agent_auth_config::*;
 pub use agents::*;
 pub use cowork::*;
 pub use errors::*;

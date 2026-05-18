@@ -36,6 +36,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/auth-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["apply_agent_auth_config"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/auth-config/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_agent_auth_config_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/launch-options": {
         parameters: {
             query?: never;
@@ -1675,6 +1707,52 @@ export interface components {
         AdvanceReplaySessionResponse: {
             advanced: boolean;
         };
+        AgentAuthConfigStatusResponse: {
+            externalAuthScope?: null | components["schemas"]["AgentAuthExternalScope"];
+            /** Format: int64 */
+            revision?: number | null;
+            selections?: components["schemas"]["AgentAuthSelectionStatus"][];
+            status: string;
+        };
+        AgentAuthExternalScope: {
+            id: string;
+            provider: string;
+            targetId?: string | null;
+        };
+        AgentAuthSelectionConfig: {
+            agentKind: string;
+            credentialId: string;
+            /** Format: int64 */
+            credentialRevision: number;
+            credentialShareId?: string | null;
+            materializationMode: string;
+            protectedConfig?: {
+                [key: string]: unknown;
+            };
+            protectedEnv?: {
+                [key: string]: string;
+            };
+            supportConfig?: {
+                [key: string]: unknown;
+            };
+            supportEnv?: {
+                [key: string]: string;
+            };
+            syncedFilePaths?: string[];
+        };
+        AgentAuthSelectionStatus: {
+            agentKind: string;
+            credentialId: string;
+            /** Format: int64 */
+            credentialRevision: number;
+            credentialShareId?: string | null;
+            materializationMode: string;
+            protectedConfigKeys: string[];
+            protectedEnvKeys: string[];
+            supportConfigKeys: string[];
+            supportEnvKeys: string[];
+            syncedFilePaths: string[];
+        };
         /** @enum {string} */
         AgentCredentialState: "ready" | "missing_env" | "login_required" | "unknown";
         /** @enum {string} */
@@ -1758,6 +1836,19 @@ export interface components {
             nativeRequired: boolean;
             readiness: components["schemas"]["AgentReadinessState"];
             supportsLogin: boolean;
+        };
+        ApplyAgentAuthConfigRequest: {
+            externalAuthScope?: null | components["schemas"]["AgentAuthExternalScope"];
+            /** Format: int64 */
+            revision: number;
+            selections?: components["schemas"]["AgentAuthSelectionConfig"][];
+        };
+        ApplyAgentAuthConfigResponse: {
+            applied: boolean;
+            /** Format: int64 */
+            revision: number;
+            selectionCount: number;
+            status: string;
         };
         ArtifactStatus: {
             installed: boolean;
@@ -4158,6 +4249,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentSummary"][];
+                };
+            };
+        };
+    };
+    apply_agent_auth_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyAgentAuthConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Agent auth config applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyAgentAuthConfigResponse"];
+                };
+            };
+        };
+    };
+    get_agent_auth_config_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redacted agent auth config status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthConfigStatusResponse"];
                 };
             };
         };

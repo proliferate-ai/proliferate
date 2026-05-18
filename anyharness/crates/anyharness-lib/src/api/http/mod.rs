@@ -1,4 +1,5 @@
 pub mod access;
+pub mod agent_auth_config;
 pub mod agents;
 pub mod agents_model_registry;
 pub mod blocking;

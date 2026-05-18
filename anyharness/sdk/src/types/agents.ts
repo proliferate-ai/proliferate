@@ -5,6 +5,13 @@ export type AgentCredentialState = components["schemas"]["AgentCredentialState"]
 export type AgentReadinessState = components["schemas"]["AgentReadinessState"];
 export type ArtifactStatus = components["schemas"]["ArtifactStatus"];
 export type AgentSummary = components["schemas"]["AgentSummary"];
+export type AgentAuthExternalScope = components["schemas"]["AgentAuthExternalScope"];
+export type AgentAuthSelectionConfig = components["schemas"]["AgentAuthSelectionConfig"];
+export type ApplyAgentAuthConfigRequest = components["schemas"]["ApplyAgentAuthConfigRequest"];
+export type ApplyAgentAuthConfigResponse = components["schemas"]["ApplyAgentAuthConfigResponse"];
+export type AgentAuthSelectionStatus = components["schemas"]["AgentAuthSelectionStatus"];
+export type AgentAuthConfigStatusResponse =
+  components["schemas"]["AgentAuthConfigStatusResponse"];
 export type ModelRegistrySource = components["schemas"]["ModelRegistrySource"];
 export type ModelRegistryStatus = components["schemas"]["ModelRegistryStatus"];
 export type ModelCatalogStatus = components["schemas"]["ModelCatalogStatus"];

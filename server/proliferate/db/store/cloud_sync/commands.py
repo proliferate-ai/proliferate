@@ -212,22 +212,39 @@ async def lease_next_command(
     lease_expires_at: datetime,
     now: datetime,
 ) -> CloudCommandSnapshot | None:
+    query = (
+        select(CloudCommand)
+        .where(CloudCommand.target_id == target_id)
+        .where(CloudCommand.kind.in_(supported_kinds))
+        .where(
+            or_(
+                CloudCommand.status == CloudCommandStatus.queued.value,
+                and_(
+                    CloudCommand.status == CloudCommandStatus.leased.value,
+                    CloudCommand.lease_expires_at.is_not(None),
+                    CloudCommand.lease_expires_at <= now,
+                ),
+            )
+        )
+    )
+    if CloudCommandKind.refresh_agent_auth_config.value not in supported_kinds:
+        query = query.where(
+            ~and_(
+                CloudCommand.kind.in_(
+                    (
+                        CloudCommandKind.start_session.value,
+                        CloudCommandKind.send_prompt.value,
+                    )
+                ),
+                or_(
+                    CloudCommand.payload_json.contains('"sandboxProfileId"'),
+                    CloudCommand.payload_json.contains('"requiredAgentAuthRevision"'),
+                ),
+            )
+        )
     row = (
         await db.execute(
-            select(CloudCommand)
-            .where(CloudCommand.target_id == target_id)
-            .where(CloudCommand.kind.in_(supported_kinds))
-            .where(
-                or_(
-                    CloudCommand.status == CloudCommandStatus.queued.value,
-                    and_(
-                        CloudCommand.status == CloudCommandStatus.leased.value,
-                        CloudCommand.lease_expires_at.is_not(None),
-                        CloudCommand.lease_expires_at <= now,
-                    ),
-                )
-            )
-            .order_by(CloudCommand.created_at.asc())
+            query.order_by(CloudCommand.created_at.asc())
             .with_for_update(skip_locked=True)
             .limit(1)
         )
