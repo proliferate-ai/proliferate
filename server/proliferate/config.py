@@ -153,7 +153,6 @@ class Settings(BaseSettings):
     agent_gateway_opencode_enabled: bool = False
     agent_gateway_reconciler_enabled: bool = False
     agent_gateway_reconciler_interval_seconds: float = 300.0
-    agent_gateway_reconciler_stale_after_seconds: float = 900.0
     agent_gateway_reconciler_batch_size: int = 50
     e2b_api_key: str = ""
     e2b_template_name: str = ""

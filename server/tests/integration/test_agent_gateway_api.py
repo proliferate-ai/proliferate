@@ -220,9 +220,15 @@ async def test_gateway_request_logging_is_privacy_safe(
     assert len(records) == 1
     record = records[0]
     assert record.outcome == "success"
-    assert record.policy_id == str(seed.policy_id)
+    assert record.policy_hash != str(seed.policy_id)
+    assert not hasattr(record, "policy_id")
+    assert not hasattr(record, "target_id")
+    assert not hasattr(record, "sandbox_profile_id")
     assert record.model_hash != "us.anthropic.claude-sonnet-4-6"
     assert "super-secret-prompt" not in caplog.text
+    assert str(seed.policy_id) not in caplog.text
+    assert str(seed.target_id) not in caplog.text
+    assert str(seed.sandbox_profile_id) not in caplog.text
     assert seed.raw_token not in caplog.text
     assert "litellm-runtime-key" not in caplog.text
 

@@ -125,6 +125,22 @@ Rate-limit thresholds (`SESSION_TITLE_RATE_LIMIT_REQUESTS`,
 The billing reconciler interval (`BILLING_RECONCILE_INTERVAL_SECONDS`) now
 lives in `server/proliferate/constants/billing.py`. It is not env-overridable.
 
+## Agent LLM Gateway
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `AGENT_GATEWAY_ENABLED` | No | No | Enables Proliferate gateway routes and LiteLLM provisioning paths |
+| `AGENT_GATEWAY_LITELLM_BASE_URL` | No | When gateway is enabled | Private LiteLLM proxy base URL |
+| `AGENT_GATEWAY_LITELLM_MASTER_KEY` | Yes | When provisioning gateway credentials or managed credits | LiteLLM admin key for teams, virtual keys, and model deployments |
+| `AGENT_GATEWAY_PUBLIC_BASE_URL` | No | When sandbox gateway auth is materialized | Public Proliferate gateway base URL written into sandbox auth config |
+| `AGENT_GATEWAY_DEFAULT_MANAGED_BUDGET_USD` | No | Only for managed credits | Organization managed-credit entitlement; `0` disables managed credits |
+| `AGENT_GATEWAY_MAX_REQUEST_BYTES` | No | No | Maximum gateway request body size |
+| `AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS` | No | No | Timeout for gateway forwarding to LiteLLM |
+| `AGENT_GATEWAY_OPENCODE_ENABLED` | No | No | Enables the experimental OpenCode gateway route |
+| `AGENT_GATEWAY_RECONCILER_ENABLED` | No | No | Starts the background LiteLLM mirror reconciler |
+| `AGENT_GATEWAY_RECONCILER_INTERVAL_SECONDS` | No | No | Delay between reconciliation passes |
+| `AGENT_GATEWAY_RECONCILER_BATCH_SIZE` | No | No | Maximum unsynced, drifted, or failed policy and budget rows checked by one reconciliation pass |
+
 ## Cloud MCP
 
 | Variable | Secret | Required | Used for |

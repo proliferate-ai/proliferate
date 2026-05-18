@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from datetime import datetime
 from uuid import UUID
 
@@ -958,7 +957,6 @@ async def get_gateway_policy(
 async def list_gateway_policies_for_reconciliation(
     db: AsyncSession,
     *,
-    stale_before: datetime,
     limit: int,
 ) -> tuple[AgentGatewayPolicyRecord, ...]:
     rows = (
@@ -977,7 +975,6 @@ async def list_gateway_policies_for_reconciliation(
                         AgentGatewayPolicy.status != "ready",
                         AgentGatewayPolicy.litellm_sync_status != "synced",
                         AgentGatewayPolicy.last_litellm_reconciled_at.is_(None),
-                        AgentGatewayPolicy.last_litellm_reconciled_at <= stale_before,
                     ),
                 )
                 .order_by(
@@ -1004,7 +1001,6 @@ async def get_budget_subject(
 async def list_managed_budget_subjects_for_reconciliation(
     db: AsyncSession,
     *,
-    stale_before: datetime,
     limit: int,
 ) -> tuple[AgentGatewayBudgetSubjectRecord, ...]:
     rows = (
@@ -1016,7 +1012,6 @@ async def list_managed_budget_subjects_for_reconciliation(
                     or_(
                         AgentGatewayBudgetSubject.litellm_sync_status != "synced",
                         AgentGatewayBudgetSubject.last_litellm_reconciled_at.is_(None),
-                        AgentGatewayBudgetSubject.last_litellm_reconciled_at <= stale_before,
                     ),
                 )
                 .order_by(
@@ -1372,6 +1367,25 @@ async def list_active_runtime_grants_for_route(
     return tuple(_runtime_grant_record(row) for row in rows)
 
 
+async def lock_runtime_grant_route(
+    db: AsyncSession,
+    *,
+    policy_id: UUID,
+    target_id: UUID,
+    sandbox_profile_id: UUID,
+    agent_kind: str,
+) -> None:
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+        {
+            "lock_key": (
+                "agent_gateway_runtime_grant:"
+                f"{policy_id}:{target_id}:{sandbox_profile_id}:{agent_kind}"
+            )
+        },
+    )
+
+
 async def mark_runtime_grant_used(
     db: AsyncSession,
     grant_id: UUID,
@@ -1475,20 +1489,3 @@ async def release_agent_gateway_reconciler_lock(db: AsyncSession) -> None:
         text("SELECT pg_advisory_unlock(hashtextextended(:lock_key, 0))"),
         {"lock_key": "agent_gateway_litellm_reconciler"},
     )
-
-
-async def with_agent_gateway_reconciler_lock[T](
-    callback: Callable[[AsyncSession], Awaitable[T]],
-) -> tuple[bool, T | None]:
-    from proliferate.db import engine as db_engine
-
-    async with db_engine.async_session_factory() as db:
-        acquired = await try_acquire_agent_gateway_reconciler_lock(db)
-        if not acquired:
-            return False, None
-        try:
-            result = await callback(db)
-            await db.commit()
-            return True, result
-        finally:
-            await release_agent_gateway_reconciler_lock(db)

@@ -10,6 +10,7 @@ from contextlib import suppress
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.db import engine as db_engine
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.server.cloud.agent_auth.service import (
@@ -46,32 +47,39 @@ async def stop_agent_gateway_reconciler() -> None:
 
 
 async def run_agent_gateway_reconcile_pass() -> AgentGatewayReconcilePassResult:
-    async def _run(db: AsyncSession) -> AgentGatewayReconcilePassResult:
-        started = time.perf_counter()
-        result = await reconcile_agent_gateway_litellm_mirror(
-            db,
-            limit=settings.agent_gateway_reconciler_batch_size,
-        )
-        logger.info(
-            "agent gateway LiteLLM reconcile pass completed",
-            extra={
-                "event": "agent_gateway_litellm_reconcile",
-                "budgets_checked": result.budgets_checked,
-                "budgets_reconciled": result.budgets_reconciled,
-                "budgets_failed": result.budgets_failed,
-                "policies_checked": result.policies_checked,
-                "policies_reconciled": result.policies_reconciled,
-                "policies_failed": result.policies_failed,
-                "elapsed_ms": duration_ms(started),
-            },
-        )
-        return result
+    async with db_engine.async_session_factory() as db:
+        acquired = await store.try_acquire_agent_gateway_reconciler_lock(db)
+        if not acquired:
+            logger.debug("agent gateway LiteLLM reconciler skipped; lock already owned")
+            return _empty_result()
+        try:
+            result = await _run_reconcile_pass(db)
+            await db.commit()
+            return result
+        finally:
+            await store.release_agent_gateway_reconciler_lock(db)
 
-    acquired, result = await store.with_agent_gateway_reconciler_lock(_run)
-    if not acquired:
-        logger.debug("agent gateway LiteLLM reconciler skipped; lock already owned")
-        return _empty_result()
-    return result or _empty_result()
+
+async def _run_reconcile_pass(db: AsyncSession) -> AgentGatewayReconcilePassResult:
+    started = time.perf_counter()
+    result = await reconcile_agent_gateway_litellm_mirror(
+        db,
+        limit=settings.agent_gateway_reconciler_batch_size,
+    )
+    logger.info(
+        "agent gateway LiteLLM reconcile pass completed",
+        extra={
+            "event": "agent_gateway_litellm_reconcile",
+            "budgets_checked": result.budgets_checked,
+            "budgets_reconciled": result.budgets_reconciled,
+            "budgets_failed": result.budgets_failed,
+            "policies_checked": result.policies_checked,
+            "policies_reconciled": result.policies_reconciled,
+            "policies_failed": result.policies_failed,
+            "elapsed_ms": duration_ms(started),
+        },
+    )
+    return result
 
 
 async def _agent_gateway_reconciler_loop() -> None:

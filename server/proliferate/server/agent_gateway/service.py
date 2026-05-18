@@ -442,13 +442,24 @@ def _log_gateway_request(
             "stream": stream,
             "model_hash": _privacy_hash(request_model),
             "agent_kind": authorized.agent_kind if authorized else None,
-            "policy_id": str(authorized.policy_id) if authorized else None,
-            "organization_id": str(authorized.organization_id)
-            if authorized and authorized.organization_id
+            "policy_hash": _privacy_hash_id("policy", authorized.policy_id)
+            if authorized
             else None,
-            "user_id": str(authorized.user_id) if authorized and authorized.user_id else None,
-            "target_id": str(authorized.target_id) if authorized else None,
-            "sandbox_profile_id": str(authorized.sandbox_profile_id) if authorized else None,
+            "organization_hash": _privacy_hash_id("organization", authorized.organization_id)
+            if authorized and authorized.organization_id is not None
+            else None,
+            "user_hash": _privacy_hash_id("user", authorized.user_id)
+            if authorized and authorized.user_id is not None
+            else None,
+            "target_hash": _privacy_hash_id("target", authorized.target_id)
+            if authorized
+            else None,
+            "sandbox_profile_hash": _privacy_hash_id(
+                "sandbox_profile",
+                authorized.sandbox_profile_id,
+            )
+            if authorized
+            else None,
         },
     )
 
@@ -457,6 +468,10 @@ def _privacy_hash(value: str | None) -> str | None:
     if value is None:
         return None
     return hashlib.sha256(f"agent-gateway:{value}".encode()).hexdigest()[:16]
+
+
+def _privacy_hash_id(scope: str, value: object) -> str:
+    return _privacy_hash(f"{scope}:{value}") or ""
 
 
 def _map_litellm_error(error: LiteLLMRuntimeStatusError) -> AgentGatewayError:

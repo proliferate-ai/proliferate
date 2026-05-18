@@ -10,7 +10,7 @@ import secrets
 import socket
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 from uuid import UUID
@@ -537,7 +537,6 @@ async def ensure_managed_credits_for_organization(
 async def reconcile_agent_gateway_litellm_mirror(
     db: AsyncSession,
     *,
-    stale_before: datetime | None = None,
     limit: int = 50,
 ) -> AgentGatewayReconcilePassResult:
     if limit <= 0:
@@ -559,12 +558,8 @@ async def reconcile_agent_gateway_litellm_mirror(
             policies_failed=0,
         )
 
-    cutoff = stale_before or (
-        utcnow() - timedelta(seconds=settings.agent_gateway_reconciler_stale_after_seconds)
-    )
     budgets = await store.list_managed_budget_subjects_for_reconciliation(
         db,
-        stale_before=cutoff,
         limit=limit,
     )
     budgets_reconciled = 0
@@ -581,7 +576,6 @@ async def reconcile_agent_gateway_litellm_mirror(
 
     policies = await store.list_gateway_policies_for_reconciliation(
         db,
-        stale_before=cutoff,
         limit=limit,
     )
     policies_reconciled = 0
@@ -926,6 +920,13 @@ async def issue_runtime_grant_for_selection(
         )
 
     now = utcnow()
+    await store.lock_runtime_grant_route(
+        db,
+        policy_id=policy.id,
+        target_id=target_id,
+        sandbox_profile_id=profile.id,
+        agent_kind=selection.agent_kind,
+    )
     existing = await store.list_active_runtime_grants_for_route(
         db,
         policy_id=policy.id,

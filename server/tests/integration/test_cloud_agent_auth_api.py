@@ -470,7 +470,6 @@ async def test_litellm_reconciler_repairs_valid_byok_policy(
 
     result = await agent_auth_service.reconcile_agent_gateway_litellm_mirror(
         db_session,
-        stale_before=utcnow(),
         limit=10,
     )
 
@@ -490,6 +489,77 @@ async def test_litellm_reconciler_repairs_valid_byok_policy(
         "api_key": "sk-provider-secret",
         "custom_llm_provider": "anthropic",
     }
+
+
+@pytest.mark.asyncio
+async def test_litellm_reconciler_does_not_replay_synced_policy(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_litellm_master_key",
+        "sk-master-test",
+    )
+    user = User(
+        email=f"agent-auth-reconcile-synced-{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password="unused",
+        is_active=True,
+        is_superuser=False,
+        is_verified=True,
+        display_name="Agent Auth Reconciler",
+    )
+    db_session.add(user)
+    await db_session.flush()
+    credential = await store.create_agent_auth_credential(
+        db_session,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        created_by_user_id=user.id,
+        agent_kind="claude",
+        credential_kind="managed_gateway",
+        display_name="Synced Claude BYOK",
+        redacted_summary_json='{"providerKind":"anthropic_api_key"}',
+        status="ready",
+    )
+    await store.ensure_gateway_policy(
+        db_session,
+        credential_id=credential.id,
+        policy_kind="personal_byok",
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        budget_subject_id=None,
+        litellm_team_id="team-synced",
+        litellm_virtual_key_id="key-synced",
+        litellm_virtual_key_ciphertext=encrypt_text("litellm-synced-key"),
+        litellm_virtual_key_ciphertext_key_id="cloud_secret_key:v1",
+        litellm_sync_status="synced",
+        litellm_sync_fingerprint="fingerprint-synced",
+        status="ready",
+    )
+
+    class _UnexpectedLiteLLMAdminClient:
+        async def ensure_team(self, **_kwargs: object) -> object:
+            raise AssertionError("synced policies should not be blindly reconciled")
+
+    monkeypatch.setattr(
+        agent_auth_service,
+        "LiteLLMAdminClient",
+        lambda: _UnexpectedLiteLLMAdminClient(),
+    )
+
+    result = await agent_auth_service.reconcile_agent_gateway_litellm_mirror(
+        db_session,
+        limit=10,
+    )
+
+    assert result.policies_checked == 0
+    assert result.policies_reconciled == 0
 
 
 @pytest.mark.asyncio
