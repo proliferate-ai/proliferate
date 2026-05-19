@@ -29,6 +29,10 @@ EAS manages the iOS distribution certificate and provisioning profile remotely.
 Use an Expo account with access to the `pablojosecodes` project and an Apple
 Developer Program account with access to the App Store Connect app.
 
+Before treating this as the durable product release path, transfer the EAS
+project to the Proliferate organization and update `owner` / `projectId` in
+`app.json`. The checked-in project owner reflects the bootstrap TestFlight setup.
+
 ```bash
 pnpm --filter @proliferate/mobile build:ios
 pnpm --filter @proliferate/mobile submit:ios

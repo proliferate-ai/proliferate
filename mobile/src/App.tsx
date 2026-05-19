@@ -1,11 +1,11 @@
 import { StatusBar } from "expo-status-bar";
 import {
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 const tokens = {
   bg: "#181818",
@@ -18,49 +18,78 @@ const tokens = {
   green: "#40c977",
 };
 
+const markNodes = [
+  { x: 35, y: 35, size: 24 },
+  { x: 41, y: 2, size: 12 },
+  { x: 61, y: 21, size: 12 },
+  { x: 80, y: 41, size: 12 },
+  { x: 61, y: 61, size: 12 },
+  { x: 41, y: 80, size: 12 },
+  { x: 21, y: 61, size: 12 },
+  { x: 2, y: 41, size: 12 },
+  { x: 21, y: 21, size: 12 },
+];
+
 function ProliferateMark({ size = 36 }: { size?: number }) {
+  const frameSize = size + 24;
+  const scale = size / 94;
   return (
-    <View style={[styles.mark, { width: size + 24, height: size + 24 }]}>
-      <Text style={[styles.markText, { fontSize: Math.round(size * 0.72) }]}>
-        P
-      </Text>
+    <View style={[styles.mark, { width: frameSize, height: frameSize }]}>
+      <View style={[styles.markCanvas, { width: size, height: size }]}>
+        {markNodes.map((node, index) => (
+          <View
+            key={`proliferate-mark-${index}`}
+            style={[
+              styles.markNode,
+              {
+                left: node.x * scale,
+                top: node.y * scale,
+                width: node.size * scale,
+                height: node.size * scale,
+              },
+            ]}
+          />
+        ))}
+      </View>
     </View>
   );
 }
 
 export default function App() {
   return (
-    <SafeAreaView style={styles.root}>
-      <StatusBar style="light" />
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.hero}>
-          <ProliferateMark />
-          <Text style={styles.title}>Proliferate</Text>
-          <Text style={styles.subtitle}>
-            Mobile release scaffold is ready for TestFlight.
-          </Text>
-        </View>
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.root} edges={["top", "right", "bottom", "left"]}>
+        <StatusBar style="light" />
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.hero}>
+            <ProliferateMark />
+            <Text style={styles.title}>Proliferate</Text>
+            <Text style={styles.subtitle}>
+              Mobile app scaffold is ready for native build validation.
+            </Text>
+          </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>iOS build configuration</Text>
-          <Text style={styles.cardText}>Bundle ID: ai.proliferate.mobile</Text>
-          <Text style={styles.cardText}>Scheme: proliferate</Text>
-          <Text style={styles.cardText}>Sign in with Apple: enabled</Text>
-        </View>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>iOS build configuration</Text>
+            <Text style={styles.cardText}>Bundle ID: ai.proliferate.mobile</Text>
+            <Text style={styles.cardText}>Scheme: proliferate</Text>
+            <Text style={styles.cardText}>Sign in with Apple: enabled</Text>
+          </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Next stack PRs</Text>
-          <Text style={styles.cardText}>
-            Shared design, auth, and product shell work lands in follow-up PRs.
-          </Text>
-        </View>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Next stack PRs</Text>
+            <Text style={styles.cardText}>
+              Shared design, auth, and product shell work lands in follow-up PRs.
+            </Text>
+          </View>
 
-        <View style={styles.statusRow}>
-          <View style={styles.statusDot} />
-          <Text style={styles.statusText}>Expo app loaded</Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+          <View style={styles.statusRow}>
+            <View style={styles.statusDot} />
+            <Text style={styles.statusText}>Expo app loaded</Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
@@ -88,10 +117,12 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.card,
     marginBottom: 18,
   },
-  markText: {
-    color: tokens.fg,
-    fontWeight: "700",
-    lineHeight: 36,
+  markCanvas: {
+    position: "relative",
+  },
+  markNode: {
+    position: "absolute",
+    backgroundColor: tokens.fg,
   },
   title: {
     color: tokens.fg,
