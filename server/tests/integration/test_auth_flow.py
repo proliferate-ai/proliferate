@@ -658,7 +658,12 @@ class TestWebMobileProductAuthFlow:
         )
 
     @staticmethod
-    def _enable_google(monkeypatch: pytest.MonkeyPatch, email: str) -> None:
+    def _enable_google(
+        monkeypatch: pytest.MonkeyPatch,
+        email: str,
+        *,
+        expected_surface: str = "web",
+    ) -> None:
         monkeypatch.setattr(settings, "google_oauth_client_id", "google-client-id")
         monkeypatch.setattr(settings, "google_oauth_client_secret", "google-client-secret")
 
@@ -670,7 +675,7 @@ class TestWebMobileProductAuthFlow:
             code_challenge_method: str | None = None,
             extras_params: dict[str, str] | None = None,
         ) -> str:
-            assert redirect_uri.endswith("/auth/web/google/callback")
+            assert redirect_uri.endswith(f"/auth/{expected_surface}/google/callback")
             assert scope == ["openid", "email", "profile"]
             assert code_challenge is None
             assert code_challenge_method is None
@@ -682,7 +687,7 @@ class TestWebMobileProductAuthFlow:
 
         async def fake_get_access_token(code: str, redirect_uri: str) -> dict[str, object]:
             assert code == "google-code"
-            assert redirect_uri.endswith("/auth/web/google/callback")
+            assert redirect_uri.endswith(f"/auth/{expected_surface}/google/callback")
             return {"access_token": "google-access-token", "scope": "openid email profile"}
 
         async def fake_get_id_email(token: str) -> tuple[str, str]:
@@ -840,6 +845,174 @@ class TestWebMobileProductAuthFlow:
         )
         assert linked_token.status_code == 200
         assert linked_token.json()["readiness"]["productReady"] is True
+
+    @pytest.mark.asyncio
+    async def test_web_google_callback_uses_id_token_identity(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        verifier, challenge = _make_pkce_pair()
+        monkeypatch.setattr(settings, "google_oauth_client_id", "google-client-id")
+        monkeypatch.setattr(settings, "google_oauth_client_secret", "google-client-secret")
+
+        async def fake_get_authorization_url(
+            redirect_uri: str,
+            state: str | None = None,
+            scope: list[str] | None = None,
+            code_challenge: str | None = None,
+            code_challenge_method: str | None = None,
+            extras_params: dict[str, str] | None = None,
+        ) -> str:
+            assert redirect_uri.endswith("/auth/web/google/callback")
+            assert scope == ["openid", "email", "profile"]
+            assert code_challenge is None
+            assert code_challenge_method is None
+            assert state is not None
+            return (
+                "https://accounts.google.com/o/oauth2/v2/auth"
+                f"?state={state}&redirect_uri={redirect_uri}"
+            )
+
+        async def fake_get_access_token(code: str, redirect_uri: str) -> dict[str, object]:
+            assert code == "google-code"
+            assert redirect_uri.endswith("/auth/web/google/callback")
+            return {
+                "access_token": "google-access-token",
+                "id_token": "google-id-token",
+                "scope": "openid email profile",
+            }
+
+        async def fake_get_id_email(_token: str) -> tuple[str, str]:
+            raise AssertionError(
+                "Google profile endpoint should not be used when id_token exists."
+            )
+
+        async def fake_decode_google_id_token(id_token: str) -> dict[str, object]:
+            assert id_token == "google-id-token"
+            return {
+                "sub": "google-subject-from-id-token",
+                "email": "google-id-token@example.com",
+                "email_verified": True,
+                "name": "Google ID Token",
+                "picture": "https://example.com/avatar.png",
+                "iss": "https://accounts.google.com",
+            }
+
+        monkeypatch.setattr(
+            google_oauth_client,
+            "get_authorization_url",
+            fake_get_authorization_url,
+        )
+        monkeypatch.setattr(google_oauth_client, "get_access_token", fake_get_access_token)
+        monkeypatch.setattr(google_oauth_client, "get_id_email", fake_get_id_email)
+        monkeypatch.setattr(
+            identity_providers,
+            "_decode_google_id_token",
+            fake_decode_google_id_token,
+        )
+
+        started = await client.post(
+            "/auth/web/google/start",
+            json={
+                "purpose": "login",
+                "clientState": "google-id-token-client-state",
+                "codeChallenge": challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "http://localhost:5174/auth/callback",
+            },
+        )
+        assert started.status_code == 200
+        oauth_state = parse_qs(urlparse(started.json()["authorizationUrl"]).query)["state"][0]
+
+        callback = await client.get(
+            "/auth/web/google/callback",
+            params={"code": "google-code", "state": oauth_state},
+            follow_redirects=False,
+        )
+        assert callback.status_code == 302
+        callback_query = parse_qs(urlparse(callback.headers["location"]).query)
+        token = await client.post(
+            "/auth/web/token",
+            json={
+                "code": callback_query["code"][0],
+                "codeVerifier": verifier,
+                "grantType": "authorization_code",
+            },
+        )
+        assert token.status_code == 200
+        assert token.json()["user"]["email"] == "google-id-token@example.com"
+
+    @pytest.mark.asyncio
+    async def test_desktop_google_link_uses_desktop_redirect(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id = await _create_user_via_manager("desktop-google-link@example.com")
+        verifier, challenge = _make_pkce_pair()
+        self._enable_google(
+            monkeypatch,
+            "desktop-google-link@example.com",
+            expected_surface="desktop",
+        )
+
+        authorize = await client.post(
+            "/auth/desktop/authorize",
+            params={"user_id": user_id},
+            json={
+                "state": "desktop-google-existing-session",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+                "redirect_uri": "proliferate://auth/callback",
+            },
+        )
+        session = await client.post(
+            "/auth/desktop/token",
+            json={
+                "code": authorize.json()["code"],
+                "code_verifier": verifier,
+                "grant_type": "authorization_code",
+            },
+        )
+        assert session.status_code == 200
+
+        link_verifier, link_challenge = _make_pkce_pair()
+        started = await client.post(
+            "/auth/desktop/google/start",
+            headers={"Authorization": f"Bearer {session.json()['access_token']}"},
+            json={
+                "purpose": "link",
+                "clientState": "desktop-google-client-state",
+                "codeChallenge": link_challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "proliferate://auth/callback",
+            },
+        )
+        assert started.status_code == 200
+        oauth_state = parse_qs(urlparse(started.json()["authorizationUrl"]).query)["state"][0]
+
+        callback = await client.get(
+            "/auth/desktop/google/callback",
+            params={"code": "google-code", "state": oauth_state},
+            follow_redirects=False,
+        )
+        assert callback.status_code == 302
+        callback_url = urlparse(callback.headers["location"])
+        assert callback_url.scheme == "proliferate"
+        callback_query = parse_qs(callback_url.query)
+        assert callback_query["state"] == ["desktop-google-client-state"]
+
+        linked_session = await client.post(
+            "/auth/desktop/token",
+            json={
+                "code": callback_query["code"][0],
+                "code_verifier": link_verifier,
+                "grant_type": "authorization_code",
+            },
+        )
+        assert linked_session.status_code == 200
+        assert linked_session.json()["user"]["email"] == "desktop-google-link@example.com"
 
     @pytest.mark.asyncio
     async def test_mobile_start_rejects_unregistered_redirect_uri(

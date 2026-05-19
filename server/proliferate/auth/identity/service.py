@@ -27,6 +27,7 @@ from proliferate.auth.identity.store import (
     upsert_provider_grant,
 )
 from proliferate.auth.identity.types import (
+    AUTH_PROVIDERS,
     AccountReadiness,
     AuthChallengeSnapshot,
     AuthProviderName,
@@ -39,6 +40,7 @@ from proliferate.auth.pkce import verify_pkce
 from proliferate.config import settings
 from proliferate.constants.auth import (
     AUTH_CODE_LIFETIME_SECONDS,
+    DESKTOP_REDIRECT_SCHEME,
     JWT_LIFETIME_SECONDS,
     REFRESH_TOKEN_LIFETIME_SECONDS,
     SUPPORTED_CODE_CHALLENGE_METHODS,
@@ -67,6 +69,17 @@ def validate_redirect_uri(surface: str, redirect_uri: str) -> None:
     if surface == "mobile":
         if redirect_uri != settings.mobile_redirect_uri:
             raise HTTPException(status_code=400, detail="Mobile redirect URI is not allowed.")
+        return
+    if surface == "desktop":
+        parsed = urlparse(redirect_uri)
+        if parsed.scheme != DESKTOP_REDIRECT_SCHEME:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Desktop redirect URI must use the configured "
+                    f"'{DESKTOP_REDIRECT_SCHEME}' scheme."
+                ),
+            )
         return
     if surface == "web":
         parsed = urlparse(redirect_uri)
@@ -438,18 +451,26 @@ async def auth_viewer_payload(
 ) -> tuple[bool, str, list[AuthLinkedProvider], list[AuthProviderAvailability]]:
     readiness = await get_account_readiness(db, user_id=user.id)
     identities = await linked_provider_payloads(db, user_id=user.id)
-    by_provider = {identity.provider: identity for identity in identities}
     linked = [
         AuthLinkedProvider(
-            provider=provider,  # type: ignore[arg-type]
-            connected=provider in by_provider,
-            account_email=by_provider[provider].email if provider in by_provider else None,
-            account_id=(
-                by_provider[provider].provider_subject if provider in by_provider else None
-            ),
+            provider=identity.provider,  # type: ignore[arg-type]
+            connected=True,
+            account_email=identity.email,
+            account_id=identity.provider_subject,
         )
-        for provider in ("github", "google", "apple")
+        for identity in identities
     ]
+    connected_providers = {identity.provider for identity in identities}
+    linked.extend(
+        AuthLinkedProvider(
+            provider=provider,
+            connected=False,
+            account_email=None,
+            account_id=None,
+        )
+        for provider in AUTH_PROVIDERS
+        if provider not in connected_providers
+    )
     availability = [
         AuthProviderAvailability(
             provider=provider,  # type: ignore[arg-type]

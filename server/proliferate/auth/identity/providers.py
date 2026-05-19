@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 
 import httpx
 from fastapi import HTTPException, Request, status
+from httpx_oauth.exceptions import GetIdEmailError
 from jose import JWTError, jwt
 
 from proliferate.auth.identity.routing import auth_route_path_for_base
@@ -20,6 +21,8 @@ from proliferate.constants.auth import GITHUB_OAUTH_SCOPES
 from proliferate.integrations.github import GitHubIntegrationError, get_github_user_profile
 
 GOOGLE_OAUTH_SCOPES = ["openid", "email", "profile"]
+GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
+GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
 APPLE_AUTHORIZE_URL = "https://appleid.apple.com/auth/authorize"
 APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
 APPLE_ISSUER = "https://appleid.apple.com"
@@ -56,7 +59,9 @@ def provider_enabled(provider: AuthProviderName, *, surface: str) -> bool:
                 return False
             if surface == "web":
                 return bool(settings.apple_web_service_id)
-            return bool(settings.apple_ios_bundle_id)
+            if surface == "mobile":
+                return bool(settings.apple_ios_bundle_id)
+            return False
 
 
 def apple_client_id_for_surface(surface: str) -> str:
@@ -154,7 +159,16 @@ async def verify_oauth_callback(
     if provider == "google":
         token = await google_oauth_client.get_access_token(code, provider_callback_url)
         access_token = str(token["access_token"])
-        account_id, account_email = await google_oauth_client.get_id_email(access_token)
+        id_token = token.get("id_token")
+        if isinstance(id_token, str) and id_token:
+            return await _verified_google_identity_from_id_token(token, id_token)
+        try:
+            account_id, account_email = await google_oauth_client.get_id_email(access_token)
+        except GetIdEmailError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Google did not return a usable account profile.",
+            ) from exc
         if account_email is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -181,6 +195,78 @@ async def verify_oauth_callback(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail="Unsupported OAuth provider.",
     )
+
+
+async def _verified_google_identity_from_id_token(
+    token: dict[str, object],
+    id_token: str,
+) -> VerifiedProviderIdentity:
+    claims = await _decode_google_id_token(id_token)
+    subject = claims.get("sub")
+    if not isinstance(subject, str) or not subject:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google subject is missing.",
+        )
+    email = claims.get("email") if isinstance(claims.get("email"), str) else None
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google did not return an email address.",
+        )
+    email_verified = claims.get("email_verified")
+    display_name = claims.get("name") if isinstance(claims.get("name"), str) else None
+    avatar_url = claims.get("picture") if isinstance(claims.get("picture"), str) else None
+    access_token = str(token["access_token"])
+    return VerifiedProviderIdentity(
+        provider="google",
+        provider_subject=subject,
+        email=email,
+        email_verified=email_verified in {True, "true", "1"},
+        display_name=display_name,
+        provider_login=None,
+        avatar_url=avatar_url,
+        access_token=access_token,
+        refresh_token=(
+            token.get("refresh_token") if isinstance(token.get("refresh_token"), str) else None
+        ),
+        expires_at=token_expiry_from_timestamp(token.get("expires_at")),
+        expires_at_timestamp=token_expiry_timestamp(token.get("expires_at")),
+        scopes=parse_scope_string(token.get("scope")),
+    )
+
+
+async def _decode_google_id_token(id_token: str) -> dict[str, object]:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        jwks = (await client.get(GOOGLE_JWKS_URL)).json()
+    keys = jwks.get("keys")
+    if not isinstance(keys, list):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google JWKS is invalid.",
+        )
+
+    last_error: Exception | None = None
+    for key in keys:
+        if not isinstance(key, dict):
+            continue
+        try:
+            claims = jwt.decode(
+                id_token,
+                key,
+                algorithms=["RS256"],
+                audience=settings.google_oauth_client_id,
+            )
+            issuer = claims.get("iss")
+            if issuer not in GOOGLE_ISSUERS:
+                raise JWTError("Unexpected Google issuer.")
+            return dict(claims)
+        except JWTError as exc:
+            last_error = exc
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Google identity token could not be verified.",
+    ) from last_error
 
 
 async def verify_apple_identity_token(

@@ -11,6 +11,7 @@ const frontendBaseUrl = process.env.FRONTEND_BASE_URL || "http://localhost:5174"
 const ngrokApiUrl = process.env.NGROK_API_URL || "http://127.0.0.1:4040/api/tunnels";
 const expoArgs = (process.env.MOBILE_EXPO_ARGS || "--tunnel").split(/\s+/).filter(Boolean);
 const preferredMetroPort = Number(process.env.PROLIFERATE_MOBILE_PORT || "8081");
+const defaultAppleIosBundleId = "ai.proliferate.mobile";
 const children = new Set();
 let shuttingDown = false;
 
@@ -273,6 +274,8 @@ async function main() {
   }
   const serverEnv = {
     ...baseEnv,
+    APPLE_SIGN_IN_ENABLED: baseEnv.APPLE_SIGN_IN_ENABLED || "true",
+    APPLE_IOS_BUNDLE_ID: baseEnv.APPLE_IOS_BUNDLE_ID || defaultAppleIosBundleId,
     API_BASE_URL: tunnelUrl,
     FRONTEND_BASE_URL: frontendBaseUrl,
   };

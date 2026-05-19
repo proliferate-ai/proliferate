@@ -129,6 +129,44 @@ async def test_auth_viewer_marks_google_only_user_as_needing_github(
 
 
 @pytest.mark.asyncio
+async def test_auth_viewer_allows_multiple_google_identities_for_one_user(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    user_id, access_token = await _create_user_and_get_token(
+        client,
+        db_session,
+        email="viewer-multiple-google@example.com",
+    )
+    for index in range(2):
+        db_session.add(
+            AuthIdentity(
+                user_id=uuid.UUID(user_id),
+                provider="google",
+                provider_subject=f"google-account-id-{index}",
+                email=f"google-{index}@example.com",
+                email_verified=True,
+            )
+        )
+    await db_session.commit()
+
+    response = await client.get(
+        "/v1/auth/viewer",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    google_rows = [
+        provider for provider in payload["linkedProviders"] if provider["provider"] == "google"
+    ]
+    assert [row["accountEmail"] for row in google_rows] == [
+        "google-0@example.com",
+        "google-1@example.com",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_google_only_user_is_rejected_from_product_surface(
     client: AsyncClient,
     db_session: AsyncSession,

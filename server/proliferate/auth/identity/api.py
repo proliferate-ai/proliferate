@@ -91,7 +91,7 @@ async def start_auth(
     db: AsyncSession = Depends(get_async_session),
     user: User | None = Depends(optional_current_active_user),
 ) -> StartAuthResponse:
-    if surface not in {"web", "mobile"}:
+    if surface not in {"web", "mobile", "desktop"}:
         raise HTTPException(status_code=404, detail="Unknown auth surface.")
     authorization_url, state, nonce, expires_at = await start_provider_auth(
         db,

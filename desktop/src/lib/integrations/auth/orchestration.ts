@@ -34,6 +34,7 @@ import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/prolife
 import type { AuthSignInSource, AuthTelemetryProvider } from "@/lib/domain/telemetry/events";
 import {
   AuthRequestError,
+  beginDesktopProviderAuth,
   beginGitHubDesktopSignIn,
   createPendingGitHubDesktopAuth,
   exchangeDesktopAuthCode,
@@ -41,9 +42,11 @@ import {
   getGitHubDesktopAuthAvailability,
   isPendingDesktopAuthExpired,
   isSessionExpiring,
+  PENDING_AUTH_MAX_AGE_MS,
   parseDesktopAuthCallback,
   pollGitHubDesktopSession,
   refreshDesktopUserSession,
+  type DesktopIdentityProvider,
 } from "@/lib/integrations/auth/proliferate-auth";
 import {
   captureTelemetryException,
@@ -422,6 +425,80 @@ export async function signInWithGitHub(
   }
 }
 
+export async function linkDesktopProvider(
+  provider: Exclude<DesktopIdentityProvider, "github">,
+  deps: AuthOrchestrationDeps,
+): Promise<{
+  provider: AuthTelemetryProvider;
+  source: AuthSignInSource;
+}> {
+  if (isDevAuthBypassed()) {
+    throw new AuthRequestError("Provider linking requires real sign-in.", 401);
+  }
+
+  const authState = deps.getAuthState();
+  if (authState.status !== "authenticated" || !authState.session) {
+    throw new AuthRequestError("Sign in before linking another provider.", 401);
+  }
+
+  const controlPlaneReachable = await checkControlPlaneReachable();
+  if (!controlPlaneReachable) {
+    throw new AuthRequestError(
+      "Provider linking requires a reachable control plane.",
+      503,
+    );
+  }
+
+  const existingPending = await getStoredPendingAuthSession();
+  if (existingPending) {
+    if (isPendingDesktopAuthExpired(existingPending)) {
+      await clearPendingGitHubAuth(existingPending.state);
+    } else if (getActiveGitHubSignIn() && !getActiveGitHubSignIn()?.settled) {
+      throw new Error("Another auth flow is already in progress.");
+    } else {
+      await clearPendingGitHubAuth(existingPending.state);
+    }
+  }
+
+  const pending = createPendingGitHubDesktopAuth();
+  await setStoredPendingAuthSession(pending);
+  const controller = startGitHubSignIn(pending.state);
+
+  try {
+    await beginDesktopProviderAuth(
+      provider,
+      pending.state,
+      pending.code_verifier,
+      pending.redirect_uri,
+      {
+        purpose: "link",
+        prompt: "select_account",
+        accessToken: authState.session.access_token,
+      },
+    );
+
+    const session = await Promise.race([
+      controller.promise,
+      wait(PENDING_AUTH_MAX_AGE_MS).then(() => {
+        throw new AuthRequestError("Provider linking timed out. Start again from Proliferate.", 408);
+      }),
+    ]);
+
+    await clearStoredPendingAuthSession();
+    await applyAuthenticatedState(deps, session);
+    return {
+      provider,
+      source: "desktop_callback",
+    };
+  } catch (error) {
+    await clearPendingGitHubAuth(
+      pending.state,
+      toError(error, "Provider linking failed"),
+    );
+    throw toError(error, "Provider linking failed");
+  }
+}
+
 export async function signOut(deps: AuthOrchestrationDeps): Promise<{
   provider: AuthTelemetryProvider;
 }> {
@@ -463,7 +540,7 @@ export async function handleDesktopCallbackUrl(
   }
 
   if (isPendingDesktopAuthExpired(pending)) {
-    const message = "GitHub sign-in expired. Start again from Proliferate.";
+    const message = "Authentication expired. Start again from Proliferate.";
     await clearPendingGitHubAuth(pending.state, new Error(message));
     reportBackgroundAuthError(message, deps);
     return false;
@@ -471,7 +548,7 @@ export async function handleDesktopCallbackUrl(
 
   if (pending.state !== callback.state) {
     reportBackgroundAuthError(
-      "Proliferate ignored a stale browser callback because it did not match the active sign-in.",
+      "Proliferate ignored a stale browser callback because it did not match the active auth flow.",
       deps,
     );
     return false;
@@ -511,13 +588,13 @@ export async function handleDesktopCallbackUrl(
       });
       rejectGitHubSignIn(
         pending.state,
-        markTelemetryHandled(toError(error, "GitHub sign-in failed")),
+        markTelemetryHandled(toError(error, "Authentication failed")),
       );
       return false;
     }
 
     reportBackgroundAuthError(
-      error instanceof Error ? error.message : "GitHub sign-in failed",
+      error instanceof Error ? error.message : "Authentication failed",
       deps,
     );
     return false;

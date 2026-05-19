@@ -29,7 +29,7 @@ export type RuntimeInputSyncTelemetryFailureKind =
   | "too_large"
   | "runtime_unavailable"
   | "request_failed";
-export type AuthTelemetryProvider = "dev_bypass" | "github";
+export type AuthTelemetryProvider = "apple" | "dev_bypass" | "github" | "google";
 export type AuthSignInSource = "desktop_callback" | "dev_bypass" | "interactive_poll";
 export type WorkspaceCreationKind = "repo" | "worktree" | "local";
 export type WorkspaceOpenSource = "filesystem";

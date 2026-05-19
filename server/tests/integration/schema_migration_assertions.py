@@ -188,8 +188,13 @@ async def assert_current_schema(
     )
     assert {
         "uq_auth_identity_provider_subject",
-        "uq_auth_identity_user_provider",
     } <= auth_identity_uniques
+    auth_identity_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("auth_identity")
+        }
+    )
+    assert "ix_auth_identity_user_provider" in auth_identity_indexes
 
     provider_grant_columns = await conn.run_sync(
         lambda sync_conn: {

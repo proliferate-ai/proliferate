@@ -124,10 +124,13 @@ async def get_identity_for_user_provider(
     provider: AuthProviderName,
 ) -> AuthIdentity | None:
     result = await db.execute(
-        select(AuthIdentity).where(
+        select(AuthIdentity)
+        .where(
             AuthIdentity.user_id == user_id,
             AuthIdentity.provider == provider,
         )
+        .order_by(AuthIdentity.linked_at.asc(), AuthIdentity.created_at.asc())
+        .limit(1)
     )
     return result.scalar_one_or_none()
 
@@ -138,11 +141,14 @@ async def upsert_identity_for_user(
     user_id: UUID,
     verified: VerifiedProviderIdentity,
 ) -> AuthIdentity:
-    identity = await get_identity_for_user_provider(
+    identity = await get_identity_by_provider_subject(
         db,
-        user_id=user_id,
         provider=verified.provider,
+        provider_subject=verified.provider_subject,
     )
+    if identity is not None and identity.user_id != user_id:
+        raise ValueError("Provider identity is already linked to another user.")
+
     now = _now()
     if identity is None:
         identity = AuthIdentity(
@@ -382,7 +388,11 @@ async def linked_provider_payloads(
     user_id: UUID,
 ) -> list[AuthIdentity]:
     await backfill_legacy_oauth_accounts_for_user(db, user_id=user_id)
-    result = await db.execute(select(AuthIdentity).where(AuthIdentity.user_id == user_id))
+    result = await db.execute(
+        select(AuthIdentity)
+        .where(AuthIdentity.user_id == user_id)
+        .order_by(AuthIdentity.provider.asc(), AuthIdentity.linked_at.asc())
+    )
     return list(result.scalars().all())
 
 
@@ -404,13 +414,6 @@ async def backfill_legacy_oauth_accounts_for_user(db: AsyncSession, *, user_id: 
             provider_subject=account.account_id,
         )
         if existing_subject is not None:
-            continue
-        existing_user_provider = await get_identity_for_user_provider(
-            db,
-            user_id=user_id,
-            provider=provider,  # type: ignore[arg-type]
-        )
-        if existing_user_provider is not None:
             continue
         # Legacy GitHub OAuth rows predate canonical grant scopes but were
         # created by our GitHub flow with the product-required scopes.

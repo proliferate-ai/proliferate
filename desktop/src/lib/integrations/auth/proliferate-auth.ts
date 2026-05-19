@@ -35,6 +35,10 @@ interface OAuthAvailabilityResponse {
   client_id?: string | null
 }
 
+interface StartAuthResponse {
+  authorizationUrl?: string | null
+}
+
 export interface GitHubDesktopAuthAvailability {
   enabled: boolean
   clientId: string | null
@@ -42,6 +46,14 @@ export interface GitHubDesktopAuthAvailability {
 
 export interface GitHubDesktopSignInOptions {
   prompt?: "select_account"
+}
+
+export type DesktopIdentityProvider = "github" | "google" | "apple"
+
+export interface DesktopProviderAuthOptions {
+  purpose?: "login" | "link" | "required_github_link"
+  prompt?: "select_account"
+  accessToken?: string | null
 }
 
 export interface DesktopAuthCallback {
@@ -305,6 +317,46 @@ export async function beginGitHubDesktopSignIn(
   }
 
   await openAuthSessionUrl(authorizeUrl.toString())
+}
+
+export async function beginDesktopProviderAuth(
+  provider: DesktopIdentityProvider,
+  state: string,
+  codeVerifier: string,
+  redirectUri = DESKTOP_AUTH_REDIRECT_URI,
+  options?: DesktopProviderAuthOptions,
+): Promise<void> {
+  const codeChallenge = await sha256Base64Url(codeVerifier)
+  const headers = new Headers({
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  })
+  if (options?.accessToken) {
+    headers.set("Authorization", `Bearer ${options.accessToken}`)
+  }
+  const response = await fetchAuthResponse(buildUrl(`/auth/desktop/${provider}/start`), {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      purpose: options?.purpose ?? "login",
+      clientState: state,
+      codeChallenge,
+      codeChallengeMethod: "S256",
+      redirectUri,
+      prompt: options?.prompt,
+    }),
+  })
+
+  if (!response.ok) {
+    throw await parseError(response)
+  }
+
+  const payload = (await response.json()) as StartAuthResponse
+  if (!payload.authorizationUrl) {
+    throw new AuthRequestError("Provider did not return an authorization URL.", 503)
+  }
+
+  await openAuthSessionUrl(payload.authorizationUrl)
 }
 
 export async function exchangeDesktopAuthCode(

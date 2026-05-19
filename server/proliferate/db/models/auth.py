@@ -57,8 +57,8 @@ class AuthIdentity(Base):
     __tablename__ = "auth_identity"
     __table_args__ = (
         UniqueConstraint("provider", "provider_subject", name="uq_auth_identity_provider_subject"),
-        UniqueConstraint("user_id", "provider", name="uq_auth_identity_user_provider"),
         Index("ix_auth_identity_user_id", "user_id"),
+        Index("ix_auth_identity_user_provider", "user_id", "provider"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
