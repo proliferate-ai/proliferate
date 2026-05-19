@@ -1,6 +1,9 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { WebAppShell } from "./components/app/shell/WebAppShell";
+import { AuthGate } from "./components/auth/AuthGate";
+import { AuthScreen } from "./components/auth/screen/AuthScreen";
+import { ConnectGitHubScreen } from "./components/auth/screen/ConnectGitHubScreen";
 import { routes } from "./config/routes";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { AuthErrorPage } from "./pages/AuthErrorPage";
@@ -11,15 +14,25 @@ import { HomePage } from "./pages/HomePage";
 import { PluginsPage } from "./pages/PluginsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SupportPage } from "./pages/SupportPage";
+import { WorkspacesPage } from "./pages/WorkspacesPage";
 
 export function App() {
   return (
     <Routes>
+      <Route path="auth" element={<AuthScreen />} />
       <Route path="auth/callback" element={<AuthCallbackPage />} />
       <Route path="auth/desktop/handoff" element={<DesktopHandoffPage />} />
       <Route path="auth/error" element={<AuthErrorPage />} />
-      <Route element={<WebAppShell />}>
+      <Route path="connect-github" element={<ConnectGitHubScreen />} />
+      <Route
+        element={
+          <AuthGate>
+            <WebAppShell />
+          </AuthGate>
+        }
+      >
         <Route index element={<HomePage />} />
+        <Route path="workspaces" element={<WorkspacesPage />} />
         <Route path="automations" element={<AutomationsPage />} />
         <Route path="plugins" element={<PluginsPage />} />
         <Route path="support" element={<SupportPage />} />

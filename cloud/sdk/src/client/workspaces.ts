@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core.js";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import {
   measureCloudRequest,
   type CloudMeasurementOptions,
@@ -61,13 +61,14 @@ function normalizeCloudWorkspace<T extends CloudWorkspaceTransport>(
 export async function listCloudWorkspaces(
   options?: CloudMeasurementOptions,
   owner?: CloudOwnerSelection,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudWorkspaceSummary[]> {
   const data = await measureCloudRequest({
     operationId: options?.measurementOperationId,
     category: "cloud.workspace.list",
     method: "GET",
     run: async () => (
-      await getProliferateClient().GET("/v1/cloud/workspaces", {
+      await client.GET("/v1/cloud/workspaces", {
         params: {
           query: {
             ownerScope: owner?.ownerScope ?? "personal",

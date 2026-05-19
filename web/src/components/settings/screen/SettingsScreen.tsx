@@ -1,8 +1,14 @@
 import { Apple, Github, KeyRound, ShieldCheck } from "lucide-react";
+import { useAuthViewer } from "@proliferate/cloud-sdk-react";
 
 import { Button } from "@proliferate/ui/primitives/Button";
 
 export function SettingsScreen() {
+  const viewer = useAuthViewer();
+  const linkedProviders = viewer.data?.linkedProviders ?? [];
+  const providerStatus = (provider: "github" | "google" | "apple") =>
+    linkedProviders.find((item) => item.provider === provider)?.connected ?? false;
+
   return (
     <div className="web-scrollbar h-full overflow-y-auto px-8 py-8">
       <header className="mb-6">
@@ -17,7 +23,7 @@ export function SettingsScreen() {
             Product identity
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            GitHub stays connected to the product account before cloud workspaces are available.
+            {viewer.data?.user.email ?? "Signed in account"}
           </p>
           <div className="mt-4 grid gap-2">
             <div className="flex items-center justify-between rounded-md border border-border bg-background p-3">
@@ -25,14 +31,18 @@ export function SettingsScreen() {
                 <Github size={15} />
                 GitHub
               </span>
-              <span className="text-xs text-success">Connected</span>
+              <span className={`text-xs ${providerStatus("github") ? "text-success" : "text-muted-foreground"}`}>
+                {providerStatus("github") ? "Connected" : "Required"}
+              </span>
             </div>
             <div className="flex items-center justify-between rounded-md border border-border bg-background p-3">
               <span className="inline-flex items-center gap-2 text-sm">
                 <Apple size={15} />
                 Apple
               </span>
-              <Button variant="secondary" size="sm">Connect</Button>
+              <Button variant="secondary" size="sm" disabled>
+                {providerStatus("apple") ? "Connected" : "Unavailable"}
+              </Button>
             </div>
           </div>
         </section>

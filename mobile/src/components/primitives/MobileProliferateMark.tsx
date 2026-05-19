@@ -1,5 +1,10 @@
-interface ProliferateMarkProps {
+import Svg, { Rect } from "react-native-svg";
+
+import { colors } from "../../styles/tokens";
+
+interface MobileProliferateMarkProps {
   size?: number;
+  color?: string;
 }
 
 const nodes = [
@@ -14,26 +19,22 @@ const nodes = [
   { x: 346.33, y: 346.33, size: 24.67 },
 ];
 
-export function ProliferateMark({ size = 18 }: ProliferateMarkProps) {
+export function MobileProliferateMark({
+  size = 24,
+  color = colors.fg,
+}: MobileProliferateMarkProps) {
   return (
-    <svg
-      viewBox="300 300 200 200"
-      width={size}
-      height={size}
-      fill="none"
-      aria-hidden="true"
-      shapeRendering="crispEdges"
-    >
+    <Svg viewBox="300 300 200 200" width={size} height={size} fill="none">
       {nodes.map((node, index) => (
-        <rect
+        <Rect
           key={`proliferate-mark-${index}`}
           x={node.x}
           y={node.y}
           width={node.size}
           height={node.size}
-          fill="currentColor"
+          fill={color}
         />
       ))}
-    </svg>
+    </Svg>
   );
 }

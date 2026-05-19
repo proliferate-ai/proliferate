@@ -91,6 +91,10 @@ export function cloudWorkspaceConnectionKey(
   ] as const;
 }
 
+export function cloudWorkspacesKey() {
+  return [...cloudRootKey(), "workspaces", "list"] as const;
+}
+
 export function isCloudWorkspaceConnectionQueryKey(
   queryKey: readonly unknown[],
 ): boolean {
