@@ -100,12 +100,12 @@ It prints the Google mobile redirect URI to add in Google Console:
 https://<ngrok-host>/auth/mobile/google/callback
 ```
 
-By default Expo runs over LAN and picks the first free Metro port at or above
-`8081`. Override with:
+By default Expo runs through its tunnel and picks the first free Metro port at
+or above `8081`. Override with:
 
 ```bash
 PROLIFERATE_MOBILE_PORT=8090 make dev-mobile-auth
-MOBILE_EXPO_ARGS="--tunnel" make dev-mobile-auth
+MOBILE_EXPO_ARGS="--lan" make dev-mobile-auth
 ```
 
 ## Bundled Agent Seed Testing

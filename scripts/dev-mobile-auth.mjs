@@ -9,7 +9,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const apiPort = Number(process.env.PROLIFERATE_API_PORT || "8000");
 const frontendBaseUrl = process.env.FRONTEND_BASE_URL || "http://localhost:5174";
 const ngrokApiUrl = process.env.NGROK_API_URL || "http://127.0.0.1:4040/api/tunnels";
-const expoArgs = (process.env.MOBILE_EXPO_ARGS || "--lan").split(/\s+/).filter(Boolean);
+const expoArgs = (process.env.MOBILE_EXPO_ARGS || "--tunnel").split(/\s+/).filter(Boolean);
 const preferredMetroPort = Number(process.env.PROLIFERATE_MOBILE_PORT || "8081");
 const children = new Set();
 let shuttingDown = false;
@@ -23,12 +23,12 @@ Environment overrides:
   PROLIFERATE_API_PORT=8000
   FRONTEND_BASE_URL=http://localhost:5174
   PROLIFERATE_MOBILE_PORT=8081
-  MOBILE_EXPO_ARGS="--lan"
+  MOBILE_EXPO_ARGS="--tunnel"
   NGROK_API_URL=http://127.0.0.1:4040/api/tunnels
 
 This starts local Postgres/migrations, ngrok, the server, and Expo mobile.
 Add the printed Google redirect URI to Google Console for the auth flow.
-Use MOBILE_EXPO_ARGS="--tunnel" if your phone cannot reach Expo over LAN.`);
+Use MOBILE_EXPO_ARGS="--lan" when your phone is reliably on the same LAN.`);
 }
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
