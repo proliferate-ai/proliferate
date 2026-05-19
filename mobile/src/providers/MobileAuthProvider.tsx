@@ -12,6 +12,7 @@ import {
   refreshMobileSession,
   type AuthProviderName,
   type AuthSessionResponse,
+  type AuthUser,
 } from "@proliferate/cloud-sdk";
 
 import {
@@ -30,6 +31,7 @@ export type MobileAuthAction = AuthProviderName | "github_link" | null;
 interface MobileAuthContextValue {
   authState: MobileAuthState;
   accessToken: string | null;
+  user: AuthUser | null;
   loadingAction: MobileAuthAction;
   error: string | null;
   signInWithProvider: (provider: AuthProviderName) => Promise<void>;
@@ -43,6 +45,7 @@ const MobileAuthContext = createContext<MobileAuthContextValue | null>(null);
 export function MobileAuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<MobileAuthState>("bootstrapping");
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loadingAction, setLoadingAction] = useState<MobileAuthAction>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,13 +54,14 @@ export function MobileAuthProvider({ children }: { children: ReactNode }) {
     bootstrapSession()
       .then(async (session) => {
         if (!cancelled && session) {
-          await applySession(session, setAccessToken, setAuthState);
+          await applySession(session, setAccessToken, setUser, setAuthState);
         }
       })
       .catch(() => {
         if (!cancelled) {
           void clearStoredSession();
           setAccessToken(null);
+          setUser(null);
           setAuthState("signed_out");
         }
       })
@@ -75,6 +79,7 @@ export function MobileAuthProvider({ children }: { children: ReactNode }) {
     () => ({
       authState,
       accessToken,
+      user,
       loadingAction,
       error,
       clearError() {
@@ -91,7 +96,7 @@ export function MobileAuthProvider({ children }: { children: ReactNode }) {
             provider === "apple"
               ? await runMobileAppleFlow({})
               : await runMobileOAuthFlow({ provider });
-          await applySession(session, setAccessToken, setAuthState);
+          await applySession(session, setAccessToken, setUser, setAuthState);
         } catch (authError) {
           setError(errorMessage(authError));
         } finally {
@@ -110,7 +115,7 @@ export function MobileAuthProvider({ children }: { children: ReactNode }) {
             purpose: "required_github_link",
             accessToken,
           });
-          await applySession(session, setAccessToken, setAuthState);
+          await applySession(session, setAccessToken, setUser, setAuthState);
         } catch (authError) {
           setError(errorMessage(authError));
         } finally {
@@ -122,10 +127,11 @@ export function MobileAuthProvider({ children }: { children: ReactNode }) {
         setError(null);
         await clearStoredSession();
         setAccessToken(null);
+        setUser(null);
         setAuthState("signed_out");
       },
     }),
-    [accessToken, authState, error, loadingAction],
+    [accessToken, authState, error, loadingAction, user],
   );
 
   return (
@@ -161,9 +167,11 @@ async function bootstrapSession(): Promise<AuthSessionResponse | null> {
 async function applySession(
   session: AuthSessionResponse,
   setAccessToken: (token: string | null) => void,
+  setUser: (user: AuthUser | null) => void,
   setAuthState: (state: MobileAuthState) => void,
 ): Promise<void> {
   setAccessToken(session.accessToken);
+  setUser(session.user);
   await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, session.accessToken);
   if (session.refreshToken) {
     await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, session.refreshToken);

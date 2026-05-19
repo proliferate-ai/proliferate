@@ -8,20 +8,31 @@ import {
 } from "../primitives/MobileLayout";
 import { colors, radius, spacing } from "../../styles/tokens";
 
+interface AccountSummary {
+  initials: string;
+  name: string;
+  handle: string;
+}
+
 interface MobileSettingsScreenProps {
+  account: AccountSummary;
   onSignOut: () => void;
 }
 
-export function MobileSettingsScreen({ onSignOut }: MobileSettingsScreenProps) {
+export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScreenProps) {
   return (
     <MobileScreen contentStyle={styles.screenContent}>
       <View style={styles.profile}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>PH</Text>
+          <Text style={styles.avatarText}>{account.initials}</Text>
         </View>
         <View style={styles.profileText}>
-          <Text style={styles.name}>Pablo Hansen</Text>
-          <Text style={styles.handle}>pablo@proliferate.ai</Text>
+          <Text style={styles.name} numberOfLines={1}>
+            {account.name}
+          </Text>
+          <Text style={styles.handle} numberOfLines={1}>
+            {account.handle}
+          </Text>
         </View>
       </View>
 
@@ -29,7 +40,7 @@ export function MobileSettingsScreen({ onSignOut }: MobileSettingsScreenProps) {
         <MobileListRow
           leading={<RowIcon name="github" tint={colors.fg} />}
           title="GitHub"
-          subtitle="Connected · pablonyx"
+          subtitle="Required for cloud sessions"
           trailing={
             <View style={styles.connected}>
               <MobileIcon name="check" size={12} color={colors.success} />

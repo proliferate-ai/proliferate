@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -74,7 +75,9 @@ async def _link_provider(
 async def _link_ready_github_identity(
     db_session: AsyncSession,
     user_id: str,
-) -> None:
+    *,
+    expires_at: datetime | None = None,
+) -> uuid.UUID:
     identity = AuthIdentity(
         user_id=uuid.UUID(user_id),
         provider="github",
@@ -84,17 +87,18 @@ async def _link_ready_github_identity(
     )
     db_session.add(identity)
     await db_session.flush()
-    db_session.add(
-        ProviderGrant(
-            user_id=uuid.UUID(user_id),
-            auth_identity_id=identity.id,
-            provider="github",
-            access_token_ciphertext="encrypted-github-access-token",
-            scopes_json='["repo","user","user:email"]',
-            status="ready",
-        )
+    grant = ProviderGrant(
+        user_id=uuid.UUID(user_id),
+        auth_identity_id=identity.id,
+        provider="github",
+        access_token_ciphertext="encrypted-github-access-token",
+        scopes_json='["repo","user","user:email"]',
+        status="ready",
+        expires_at=expires_at,
     )
+    db_session.add(grant)
     await db_session.commit()
+    return grant.id
 
 
 @pytest.mark.asyncio
@@ -204,6 +208,36 @@ async def test_legacy_github_oauth_account_without_scopes_requires_reauth(
     )
     assert blocked.status_code == 403
     assert blocked.json()["detail"]["code"] == "github_link_required"
+
+
+@pytest.mark.asyncio
+async def test_expired_github_grant_requires_reauth(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    user_id, access_token = await _create_user_and_get_token(
+        client,
+        db_session,
+        email="viewer-expired-github@example.com",
+    )
+    grant_id = await _link_ready_github_identity(
+        db_session,
+        user_id,
+        expires_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+
+    response = await client.get(
+        "/v1/auth/viewer",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["githubConnected"] is False
+    assert payload["onboardingState"] == "needs_github"
+    refreshed_grant = await db_session.get(ProviderGrant, grant_id, populate_existing=True)
+    assert refreshed_grant is not None
+    assert refreshed_grant.status == "expired"
 
 
 @pytest.mark.asyncio

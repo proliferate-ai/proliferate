@@ -91,6 +91,11 @@ def _allowed_web_redirect_origins() -> set[str]:
     return origins
 
 
+def _ensure_active_user(user: User) -> None:
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="User is inactive.")
+
+
 async def start_provider_auth(
     db: AsyncSession,
     request: Request,
@@ -303,6 +308,7 @@ async def resolve_provider_user(
         user = await get_user_by_id(db, challenge.user_id)
         if user is None:
             raise HTTPException(status_code=400, detail="User not found.")
+        _ensure_active_user(user)
         await attach_verified_identity(db, user=user, verified=verified)
         return user
 
@@ -310,6 +316,7 @@ async def resolve_provider_user(
         user = await get_user_by_id(db, existing_identity.user_id)
         if user is None:
             raise HTTPException(status_code=400, detail="Linked user not found.")
+        _ensure_active_user(user)
         await attach_verified_identity(db, user=user, verified=verified)
         return user
 
@@ -382,6 +389,7 @@ def _auth_code_expired(created_at: datetime) -> bool:
 
 
 async def mint_auth_session(db: AsyncSession, *, user: User) -> AuthSession:
+    _ensure_active_user(user)
     access_token = await get_jwt_strategy().write_token(user)
     refresh_token = generate_jwt(
         data={"sub": str(user.id), "aud": "proliferate:refresh"},
@@ -395,6 +403,9 @@ async def mint_auth_session(db: AsyncSession, *, user: User) -> AuthSession:
         expires_in=JWT_LIFETIME_SECONDS,
         user_id=user.id,
         email=user.email,
+        is_active=user.is_active,
+        is_superuser=user.is_superuser,
+        is_verified=user.is_verified,
         display_name=user.display_name,
         github_login=user.github_login,
         avatar_url=user.avatar_url,
@@ -471,9 +482,9 @@ def auth_session_response(
         user=UserRead(
             id=session.user_id,
             email=session.email,
-            is_active=True,
-            is_superuser=False,
-            is_verified=True,
+            is_active=session.is_active,
+            is_superuser=session.is_superuser,
+            is_verified=session.is_verified,
             display_name=session.display_name,
             github_login=session.github_login,
             avatar_url=session.avatar_url,

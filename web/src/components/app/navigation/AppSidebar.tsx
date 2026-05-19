@@ -17,6 +17,8 @@ import { NavLink, useNavigate } from "react-router-dom";
 
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import type { AuthUser } from "@proliferate/cloud-sdk";
+import { useAuthViewer } from "@proliferate/cloud-sdk-react";
 import {
   deriveClaimState,
   isTeamChat,
@@ -37,6 +39,12 @@ interface NavItem {
   to: string;
   label: string;
   icon: ComponentType<{ size?: number; className?: string }>;
+}
+
+interface AccountSummary {
+  initials: string;
+  name: string;
+  handle: string;
 }
 
 const navItems: NavItem[] = [
@@ -175,6 +183,8 @@ function WorkspaceGroup({ workspace, chats: workspaceChats }: WorkspaceGroupProp
 }
 
 export function AppSidebar() {
+  const viewer = useAuthViewer();
+  const account = accountSummary(viewer.data?.user ?? null);
   const sharedWorkspaces = workspaces.filter((workspace) => workspace.kind === "shared");
   const personalWorkspaces = workspaces.filter((workspace) => workspace.kind !== "shared");
 
@@ -253,14 +263,14 @@ export function AppSidebar() {
 
       <div className="flex items-center gap-2 border-t border-sidebar-border px-3 py-2">
         <div className="flex size-7 items-center justify-center rounded-full bg-info-subtle text-[11px] font-bold text-info">
-          PH
+          {account.initials}
         </div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[12.5px] font-medium text-sidebar-foreground">
-            Pablo Hansen
+            {account.name}
           </div>
           <div className="truncate text-[10.5px] text-sidebar-muted-foreground">
-            pablo@proliferate.ai
+            {account.handle}
           </div>
         </div>
         <NavLink
@@ -277,4 +287,27 @@ export function AppSidebar() {
       </div>
     </aside>
   );
+}
+
+function accountSummary(user: AuthUser | null): AccountSummary {
+  const displayName = user?.display_name?.trim();
+  const email = user?.email?.trim();
+  const fallbackName = email?.split("@")[0] || "Proliferate";
+  const name = displayName || fallbackName;
+  return {
+    initials: initialsForName(name),
+    name,
+    handle: email || "Signed in",
+  };
+}
+
+function initialsForName(name: string): string {
+  const parts = name
+    .split(/\s+/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return (parts[0]?.slice(0, 2) || "P").toUpperCase();
 }

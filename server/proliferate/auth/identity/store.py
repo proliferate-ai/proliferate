@@ -65,6 +65,13 @@ def _legacy_expires_at(value: int | None) -> datetime | None:
     return datetime.fromtimestamp(value, tz=UTC)
 
 
+def _expires_at_is_past(value: datetime | None) -> bool:
+    if value is None:
+        return False
+    expires_at = value if value.tzinfo else value.replace(tzinfo=UTC)
+    return expires_at <= _now()
+
+
 async def get_user_by_id(db: AsyncSession, user_id: UUID) -> User | None:
     return await db.get(User, user_id)
 
@@ -279,6 +286,11 @@ async def get_account_readiness(
             github_identity_id=identity.id,
             github_grant_status=None,
         )
+
+    if _expires_at_is_past(grant.expires_at):
+        grant.status = AuthProviderGrantStatus.EXPIRED.value
+        grant.updated_at = _now()
+        await db.flush()
 
     missing: list[str] = []
     if grant.status != AuthProviderGrantStatus.READY.value:

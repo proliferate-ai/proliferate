@@ -5,6 +5,7 @@ import hashlib
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from fastapi_users.jwt import generate_jwt
 from httpx import AsyncClient
 
 from proliferate.auth.desktop import service as desktop_service
@@ -13,7 +14,7 @@ from proliferate.auth.identity.service import WEB_CSRF_COOKIE
 from proliferate.auth.oauth import github_oauth_client
 from proliferate.auth.oauth import google_oauth_client
 from proliferate.config import settings
-from proliferate.constants.auth import DESKTOP_GITHUB_CSRF_COOKIE
+from proliferate.constants.auth import DESKTOP_GITHUB_CSRF_COOKIE, REFRESH_TOKEN_LIFETIME_SECONDS
 from proliferate.integrations.github import GitHubUserProfile
 
 
@@ -29,8 +30,9 @@ async def _create_user_via_manager(
     email: str,
     *,
     display_name: str | None = None,
+    is_active: bool = True,
 ) -> str:
-    """Create an active test user directly in the current test database."""
+    """Create a test user directly in the current test database."""
     from proliferate.db import engine as engine_module
     from proliferate.db.models.auth import User
 
@@ -38,7 +40,7 @@ async def _create_user_via_manager(
         user = User(
             email=email,
             hashed_password="unused-oauth-only",
-            is_active=True,
+            is_active=is_active,
             is_superuser=False,
             is_verified=True,
             display_name=display_name or "Desktop Tester",
@@ -249,6 +251,63 @@ class TestDesktopPKCEFlow:
             },
         )
         assert resp.status_code == 400
+
+
+class TestWebMobileSessionGuards:
+    @pytest.mark.asyncio
+    async def test_web_token_exchange_rejects_inactive_user(self, client: AsyncClient) -> None:
+        user_id = await _create_user_via_manager(
+            "inactive-web-token@example.com",
+            is_active=False,
+        )
+        verifier, challenge = _make_pkce_pair()
+
+        authorize = await client.post(
+            "/auth/desktop/authorize",
+            params={"user_id": user_id},
+            json={
+                "state": "inactive-web-state",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+                "redirect_uri": "proliferate://auth/callback",
+            },
+        )
+        assert authorize.status_code == 201
+
+        response = await client.post(
+            "/auth/web/token",
+            json={
+                "code": authorize.json()["code"],
+                "code_verifier": verifier,
+                "grant_type": "authorization_code",
+            },
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == "User is inactive."
+
+    @pytest.mark.asyncio
+    async def test_mobile_refresh_rejects_inactive_user(self, client: AsyncClient) -> None:
+        user_id = await _create_user_via_manager(
+            "inactive-mobile-refresh@example.com",
+            is_active=False,
+        )
+        refresh_token = generate_jwt(
+            data={"sub": user_id, "aud": "proliferate:refresh"},
+            secret=settings.jwt_secret,
+            lifetime_seconds=REFRESH_TOKEN_LIFETIME_SECONDS,
+        )
+
+        response = await client.post(
+            "/auth/mobile/session/refresh",
+            json={
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == "User is inactive."
 
 
 class TestDesktopGitHubBrowserFlow:

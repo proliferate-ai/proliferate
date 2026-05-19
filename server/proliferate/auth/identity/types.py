@@ -88,6 +88,9 @@ class AuthSession:
     expires_in: int
     user_id: UUID
     email: str
+    is_active: bool
+    is_superuser: bool
+    is_verified: bool
     display_name: str | None
     github_login: str | None
     avatar_url: str | None

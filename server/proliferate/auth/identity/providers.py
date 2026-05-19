@@ -203,13 +203,13 @@ async def verify_apple_identity_token(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Apple subject is missing.",
         )
-    email = claims.get("email") if isinstance(claims.get("email"), str) else email_hint
+    signed_email = claims.get("email") if isinstance(claims.get("email"), str) else None
     email_verified = claims.get("email_verified")
     return VerifiedProviderIdentity(
         provider="apple",
         provider_subject=subject,
-        email=email,
-        email_verified=email_verified in {True, "true", "1"} or bool(email_hint),
+        email=signed_email,
+        email_verified=signed_email is not None and email_verified in {True, "true", "1"},
         display_name=display_name_hint,
         provider_login=None,
         avatar_url=None,
