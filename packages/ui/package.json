@@ -27,9 +27,17 @@
       "types": "./dist/layout/PageHeader.d.ts",
       "import": "./dist/layout/PageHeader.js"
     },
+    "./layout/PageContentFrame": {
+      "types": "./dist/layout/PageContentFrame.d.ts",
+      "import": "./dist/layout/PageContentFrame.js"
+    },
     "./layout/SectionHeader": {
       "types": "./dist/layout/SectionHeader.d.ts",
       "import": "./dist/layout/SectionHeader.js"
+    },
+    "./layout/AutoHideScrollArea": {
+      "types": "./dist/layout/AutoHideScrollArea.d.ts",
+      "import": "./dist/layout/AutoHideScrollArea.js"
     },
     "./layout/SidebarFrame": {
       "types": "./dist/layout/SidebarFrame.d.ts",
@@ -38,6 +46,14 @@
     "./layout/SidebarNavItem": {
       "types": "./dist/layout/SidebarNavItem.d.ts",
       "import": "./dist/layout/SidebarNavItem.js"
+    },
+    "./layout/SidebarRowSurface": {
+      "types": "./dist/layout/SidebarRowSurface.d.ts",
+      "import": "./dist/layout/SidebarRowSurface.js"
+    },
+    "./layout/ShortcutBadge": {
+      "types": "./dist/layout/ShortcutBadge.d.ts",
+      "import": "./dist/layout/ShortcutBadge.js"
     },
     "./primitives/Badge": {
       "types": "./dist/primitives/Badge.d.ts",

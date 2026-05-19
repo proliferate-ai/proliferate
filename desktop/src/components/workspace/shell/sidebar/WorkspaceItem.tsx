@@ -23,8 +23,8 @@ import {
   SidebarStatusIndicatorView,
 } from "./SidebarIndicators";
 import { SidebarActionButton } from "./SidebarActionButton";
-import { SidebarRowSurface } from "@/components/ui/SidebarRowSurface";
 import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
+import { ProductSidebarWorkspaceRow } from "@proliferate/product-ui/sidebar/ProductSidebar";
 
 interface WorkspaceItemProps {
   workspaceId?: string;
@@ -108,73 +108,54 @@ export function WorkspaceItem({
     onUnarchive: handleUnarchiveCommand,
     onMarkDone: handleMarkDoneCommand,
   });
+  const detail = detailIndicators.length > 0 || cloudStatusDefinition ? (
+    <>
+      <SidebarDetailIndicatorsView
+        indicators={detailIndicators}
+        archived={archived}
+        onAction={onIndicatorAction}
+      />
+      {cloudStatusDefinition && (
+        <span className={`shrink-0 rounded-full border px-1.5 py-0 text-xs uppercase tracking-[0.12em] ${cloudStatusDefinition.className}`}>
+          {cloudStatusDefinition.label}
+        </span>
+      )}
+    </>
+  ) : null;
+  const archiveAction = hasArchiveAction ? (
+    <SidebarActionButton
+      onClick={(e) => {
+        e.stopPropagation();
+        archived ? onUnarchive?.() : onArchive?.();
+      }}
+      title={archived ? "Unarchive workspace" : "Archive workspace"}
+      className="!size-5 !p-0 opacity-50 hover:opacity-100 focus-visible:opacity-100"
+      alwaysVisible
+    >
+      <Archive className="size-3.5" />
+    </SidebarActionButton>
+  ) : null;
 
   const row = (
-    <SidebarRowSurface
+    <ProductSidebarWorkspaceRow
       active={active}
-      onPress={onSelect}
+      archived={archived}
+      status={(
+        <SidebarStatusIndicatorView
+          indicator={statusIndicator}
+          onAction={onIndicatorAction}
+        />
+      )}
+      label={name}
+      detail={detail}
+      trailingLabel={timestampLabel}
+      hoverAction={archiveAction}
+      onSelect={onSelect}
       onContextMenuCapture={onContextMenuCapture}
       onPointerEnter={onHover}
       data-sidebar-workspace-item={workspaceId ?? ""}
       data-sidebar-workspace-variant={variant}
-      className="h-[30px] px-2 py-1 text-sm leading-4 focus-visible:outline-offset-[-2px]"
-    >
-      {hasArchiveAction && (
-        <div className="absolute right-0 top-0 z-10 mr-0.5 flex h-full items-center justify-center pr-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-          <SidebarActionButton
-            onClick={(e) => {
-              e.stopPropagation();
-              archived ? onUnarchive?.() : onArchive?.();
-            }}
-            title={archived ? "Unarchive workspace" : "Archive workspace"}
-            className="!size-5 !p-0 opacity-50 hover:opacity-100 focus-visible:opacity-100"
-            alwaysVisible
-          >
-            <Archive className="size-3.5" />
-          </SidebarActionButton>
-        </div>
-      )}
-      <div className="flex h-full w-full items-center text-sm leading-4">
-        <div className="flex w-4 shrink-0 items-center justify-center">
-          <SidebarStatusIndicatorView
-            indicator={statusIndicator}
-            onAction={onIndicatorAction}
-          />
-        </div>
-
-        <div className="ml-1.5 flex min-w-0 flex-1 items-center gap-2 pl-0.5">
-          <div className={`flex min-w-0 flex-1 self-stretch items-center gap-2 text-base leading-5 ${
-            archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
-          }`}>
-            <span className="min-w-0 flex-1 truncate select-none" draggable={false}>{name}</span>
-          </div>
-          {(detailIndicators.length > 0 || cloudStatusDefinition) && (
-            <div className="flex min-w-[24px] shrink-0 items-center justify-end gap-1 text-sidebar-muted-foreground">
-              <SidebarDetailIndicatorsView
-                indicators={detailIndicators}
-                archived={archived}
-                onAction={onIndicatorAction}
-              />
-              {cloudStatusDefinition && (
-                <span className={`shrink-0 rounded-full border px-1.5 py-0 text-xs uppercase tracking-[0.12em] ${cloudStatusDefinition.className}`}>
-                  {cloudStatusDefinition.label}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-
-        {(timestampLabel || hasArchiveAction) && (
-          <div className="relative ml-[3px] h-5 min-w-[26px] shrink-0">
-            {timestampLabel && (
-              <div className="absolute inset-y-0 right-0 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground transition-opacity duration-150 group-hover:opacity-0 group-focus-within:opacity-0">
-                {timestampLabel}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </SidebarRowSurface>
+    />
   );
 
   // Leave PopoverButton uncontrolled until the confirmation step is active.

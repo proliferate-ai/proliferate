@@ -1,0 +1,84 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { ProductSidebar } from "../src/sidebar/ProductSidebar";
+
+describe("ProductSidebar", () => {
+  afterEach(cleanup);
+
+  it("renders nav, workspace, chat, and account view models", () => {
+    const onNavSelect = vi.fn();
+    const onWorkspaceSelect = vi.fn();
+    const onChatSelect = vi.fn();
+    const onGroupToggle = vi.fn();
+    const onAction = vi.fn();
+
+    render(
+      <ProductSidebar
+        brand={<span>P</span>}
+        title="Proliferate"
+        navItems={[
+          { id: "home", label: "Home", icon: <span>H</span>, active: true },
+          { id: "settings", label: "Settings", icon: <span>S</span>, active: false },
+        ]}
+        workspaceGroups={[
+          {
+            id: "shared",
+            sectionLabel: "Shared",
+            label: "Shared cloud",
+            count: 1,
+            collapsed: false,
+            actions: [{ id: "new", label: "New chat" }],
+            rows: [
+              {
+                id: "chat-1",
+                label: "Investigate worker CI",
+                subtitle: "proliferate-ai/proliferate",
+                active: false,
+                status: <span aria-label="running" />,
+                trailingLabel: "Slack",
+                actions: [{ id: "more", label: "More" }],
+              },
+            ],
+          },
+        ]}
+        chatRows={[
+          {
+            id: "claim-1",
+            label: "Claimable Slack thread",
+            subtitle: "Shared cloud",
+            trailingLabel: "Claimable",
+          },
+        ]}
+        account={{
+          label: "Pablo",
+          detail: "pablo@example.com",
+          initials: "PH",
+          actions: [{ id: "settings", label: "Settings" }],
+        }}
+        onNavSelect={onNavSelect}
+        onWorkspaceSelect={onWorkspaceSelect}
+        onChatSelect={onChatSelect}
+        onGroupToggle={onGroupToggle}
+        onAction={onAction}
+      />,
+    );
+
+    expect(screen.getByText("Proliferate")).toBeTruthy();
+    expect(screen.getByText("Home")).toBeTruthy();
+    expect(screen.getAllByText("Shared cloud").length).toBeGreaterThan(0);
+    expect(screen.getByText("Investigate worker CI")).toBeTruthy();
+    expect(screen.getByText("Claimable Slack thread")).toBeTruthy();
+    expect(screen.getByText("Pablo")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Settings"));
+    expect(onNavSelect).toHaveBeenCalledWith("settings");
+
+    fireEvent.click(screen.getByText("Investigate worker CI"));
+    expect(onWorkspaceSelect).toHaveBeenCalledWith("chat-1");
+
+    fireEvent.click(screen.getByText("Claimable Slack thread"));
+    expect(onChatSelect).toHaveBeenCalledWith("claim-1");
+  });
+});

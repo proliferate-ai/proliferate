@@ -4,7 +4,10 @@ import {
   Grid,
   Home,
 } from "@/components/ui/icons";
-import { SidebarNavRow } from "@/components/ui/SidebarNavRow";
+import {
+  ProductSidebarPrimaryNavigation,
+  type SidebarNavItemView,
+} from "@proliferate/product-ui/sidebar/ProductSidebar";
 import { SHORTCUTS } from "@/config/shortcuts";
 
 interface SidebarPrimaryNavigationProps {
@@ -28,38 +31,60 @@ export function SidebarPrimaryNavigation({
   onGoAutomations,
   onOpenSupport,
 }: SidebarPrimaryNavigationProps) {
+  const navItems: SidebarNavItemView[] = [
+    {
+      id: "home",
+      active: homeActive,
+      icon: <Home className="size-4" />,
+      label: "Home",
+      shortcutLabel: SHORTCUTS.goHome.label,
+    },
+    {
+      id: "plugins",
+      active: pluginsActive,
+      icon: <Grid className="size-4" />,
+      label: "Plugins",
+      shortcutLabel: SHORTCUTS.goPlugins.label,
+    },
+    {
+      id: "automations",
+      active: automationsActive,
+      icon: <Calendar className="size-4" />,
+      label: "Automations",
+      shortcutLabel: SHORTCUTS.goAutomations.label,
+    },
+    {
+      id: "support",
+      active: supportActive,
+      icon: <CircleQuestion className="size-4" />,
+      label: "Support",
+      shortcutLabel: SHORTCUTS.openSupport.label,
+    },
+  ];
+
+  const handleNavSelect = (id: string) => {
+    switch (id) {
+      case "home":
+        onGoHome();
+        break;
+      case "plugins":
+        onGoPlugins();
+        break;
+      case "automations":
+        onGoAutomations();
+        break;
+      case "support":
+        onOpenSupport();
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
-    <div className="px-2">
-      <div className="flex flex-col gap-px">
-        <SidebarNavRow
-          active={homeActive}
-          icon={<Home className="size-4" />}
-          label="Home"
-          shortcutLabel={SHORTCUTS.goHome.label}
-          onPress={onGoHome}
-        />
-        <SidebarNavRow
-          active={pluginsActive}
-          icon={<Grid className="size-4" />}
-          label="Plugins"
-          shortcutLabel={SHORTCUTS.goPlugins.label}
-          onPress={onGoPlugins}
-        />
-        <SidebarNavRow
-          active={automationsActive}
-          icon={<Calendar className="size-4" />}
-          label="Automations"
-          shortcutLabel={SHORTCUTS.goAutomations.label}
-          onPress={onGoAutomations}
-        />
-        <SidebarNavRow
-          active={supportActive}
-          icon={<CircleQuestion className="size-4" />}
-          label="Support"
-          shortcutLabel={SHORTCUTS.openSupport.label}
-          onPress={onOpenSupport}
-        />
-      </div>
-    </div>
+    <ProductSidebarPrimaryNavigation
+      navItems={navItems}
+      onNavSelect={handleNavSelect}
+    />
   );
 }

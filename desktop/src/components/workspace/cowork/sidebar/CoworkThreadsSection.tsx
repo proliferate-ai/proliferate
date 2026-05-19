@@ -9,6 +9,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
 import { CoworkThreadItem } from "./CoworkThreadItem";
+import { ProductSidebarSectionHeader } from "@proliferate/product-ui/sidebar/ProductSidebar";
 
 const DEFAULT_VISIBLE_THREAD_COUNT = 5;
 
@@ -59,9 +60,10 @@ export function CoworkThreadsSection() {
 
   return (
     <div className="pb-2">
-      <div className="flex items-center justify-between gap-2 pl-2 pb-1 pt-3 text-base text-sidebar-muted-foreground">
-        <span>Threads</span>
-        <div className="flex shrink-0 items-center gap-1">
+      <ProductSidebarSectionHeader
+        label="Threads"
+        actions={(
+          <>
           {threads.length > 0 && (
             <SidebarActionButton
               onClick={handleToggleCollapsed}
@@ -83,8 +85,9 @@ export function CoworkThreadsSection() {
           >
             <Plus className="size-3" />
           </SidebarActionButton>
-        </div>
-      </div>
+          </>
+        )}
+      />
 
       {!threadsCollapsed && (
         <div className="flex flex-col gap-px">
