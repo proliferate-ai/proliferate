@@ -135,6 +135,23 @@ async def get_identity_for_user_provider(
     return result.scalar_one_or_none()
 
 
+async def get_identities_for_user_provider(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    provider: AuthProviderName,
+) -> list[AuthIdentity]:
+    result = await db.execute(
+        select(AuthIdentity)
+        .where(
+            AuthIdentity.user_id == user_id,
+            AuthIdentity.provider == provider,
+        )
+        .order_by(AuthIdentity.linked_at.asc(), AuthIdentity.created_at.asc())
+    )
+    return list(result.scalars().all())
+
+
 async def upsert_identity_for_user(
     db: AsyncSession,
     *,
@@ -175,6 +192,61 @@ async def upsert_identity_for_user(
         identity.updated_at = now
     await db.flush()
     return identity
+
+
+async def merge_auth_user_into_user(
+    db: AsyncSession,
+    *,
+    source_user_id: UUID,
+    target_user_id: UUID,
+) -> User:
+    """Move auth ownership from a limited pre-GitHub user onto a GitHub user."""
+    target = await get_user_by_id(db, target_user_id)
+    source = await get_user_by_id(db, source_user_id)
+    if target is None or source is None:
+        raise ValueError("Cannot merge missing auth users.")
+    if source.id == target.id:
+        return target
+
+    now = _now()
+    identities = await db.execute(
+        select(AuthIdentity).where(AuthIdentity.user_id == source_user_id).with_for_update()
+    )
+    for identity in identities.scalars().all():
+        identity.user_id = target_user_id
+        identity.updated_at = now
+
+    grants = await db.execute(
+        select(ProviderGrant).where(ProviderGrant.user_id == source_user_id).with_for_update()
+    )
+    for grant in grants.scalars().all():
+        grant.user_id = target_user_id
+        grant.updated_at = now
+
+    accounts = await db.execute(
+        select(OAuthAccount).where(OAuthAccount.user_id == source_user_id).with_for_update()
+    )
+    for account in accounts.scalars().all():
+        account.user_id = target_user_id
+
+    challenges = await db.execute(
+        select(AuthChallenge).where(AuthChallenge.user_id == source_user_id).with_for_update()
+    )
+    for challenge in challenges.scalars().all():
+        challenge.user_id = target_user_id
+
+    if not target.display_name:
+        target.display_name = source.display_name
+    if not target.avatar_url:
+        target.avatar_url = source.avatar_url
+
+    source.is_active = False
+    source.email = f"merged-{source.id}@auth.proliferate.local"
+    source.display_name = None
+    source.github_login = None
+    source.avatar_url = None
+    await db.flush()
+    return target
 
 
 async def upsert_provider_grant(
@@ -275,8 +347,8 @@ async def get_account_readiness(
     user_id: UUID,
 ) -> AccountReadiness:
     await backfill_legacy_oauth_accounts_for_user(db, user_id=user_id)
-    identity = await get_identity_for_user_provider(db, user_id=user_id, provider="github")
-    if identity is None:
+    identities = await get_identities_for_user_provider(db, user_id=user_id, provider="github")
+    if not identities:
         return AccountReadiness(
             product_ready=False,
             missing_requirements=("github_identity_missing",),
@@ -284,32 +356,46 @@ async def get_account_readiness(
             github_grant_status=None,
         )
 
-    grant = await get_provider_grant(db, identity_id=identity.id, provider="github")
-    if grant is None:
-        return AccountReadiness(
-            product_ready=False,
-            missing_requirements=("github_grant_missing",),
-            github_identity_id=identity.id,
-            github_grant_status=None,
-        )
+    fallback_identity = identities[0]
+    fallback_status: str | None = None
+    fallback_missing: list[str] = []
+    for identity in identities:
+        grant = await get_provider_grant(db, identity_id=identity.id, provider="github")
+        if grant is None:
+            if not fallback_missing:
+                fallback_identity = identity
+                fallback_status = None
+                fallback_missing = ["github_grant_missing"]
+            continue
 
-    if _expires_at_is_past(grant.expires_at):
-        grant.status = AuthProviderGrantStatus.EXPIRED.value
-        grant.updated_at = _now()
-        await db.flush()
+        if _expires_at_is_past(grant.expires_at):
+            grant.status = AuthProviderGrantStatus.EXPIRED.value
+            grant.updated_at = _now()
+            await db.flush()
 
-    missing: list[str] = []
-    if grant.status != AuthProviderGrantStatus.READY.value:
-        missing.append("github_grant_not_ready")
-    scopes = _parse_scopes(grant.scopes_json)
-    if REQUIRED_GITHUB_SCOPES and not REQUIRED_GITHUB_SCOPES.issubset(scopes):
-        missing.append("github_scope_missing")
+        missing: list[str] = []
+        if grant.status != AuthProviderGrantStatus.READY.value:
+            missing.append("github_grant_not_ready")
+        scopes = _parse_scopes(grant.scopes_json)
+        if REQUIRED_GITHUB_SCOPES and not REQUIRED_GITHUB_SCOPES.issubset(scopes):
+            missing.append("github_scope_missing")
+        if not missing:
+            return AccountReadiness(
+                product_ready=True,
+                missing_requirements=(),
+                github_identity_id=identity.id,
+                github_grant_status=grant.status,
+            )
+        if not fallback_missing:
+            fallback_identity = identity
+            fallback_status = grant.status
+            fallback_missing = missing
 
     return AccountReadiness(
-        product_ready=not missing,
-        missing_requirements=tuple(missing),
-        github_identity_id=identity.id,
-        github_grant_status=grant.status,
+        product_ready=False,
+        missing_requirements=tuple(fallback_missing or ["github_grant_missing"]),
+        github_identity_id=fallback_identity.id,
+        github_grant_status=fallback_status,
     )
 
 

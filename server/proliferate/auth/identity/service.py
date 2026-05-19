@@ -22,6 +22,7 @@ from proliferate.auth.identity.store import (
     get_user_by_email,
     get_user_by_id,
     linked_provider_payloads,
+    merge_auth_user_into_user,
     mirror_legacy_oauth_account,
     upsert_identity_for_user,
     upsert_provider_grant,
@@ -317,6 +318,30 @@ async def resolve_provider_user(
         if challenge.user_id is None:
             raise HTTPException(status_code=401, detail="Authentication is required.")
         if existing_identity is not None and existing_identity.user_id != challenge.user_id:
+            current_user = await get_user_by_id(db, challenge.user_id)
+            linked_user = await get_user_by_id(db, existing_identity.user_id)
+            if current_user is None or linked_user is None:
+                raise HTTPException(status_code=400, detail="Linked user not found.")
+            _ensure_active_user(current_user)
+            _ensure_active_user(linked_user)
+            current_readiness = await get_account_readiness(db, user_id=current_user.id)
+            linked_readiness = await get_account_readiness(db, user_id=linked_user.id)
+            if verified.provider == "github":
+                await merge_auth_user_into_user(
+                    db,
+                    source_user_id=current_user.id,
+                    target_user_id=linked_user.id,
+                )
+                await attach_verified_identity(db, user=linked_user, verified=verified)
+                return linked_user
+            if current_readiness.product_ready and not linked_readiness.product_ready:
+                await merge_auth_user_into_user(
+                    db,
+                    source_user_id=linked_user.id,
+                    target_user_id=current_user.id,
+                )
+                await attach_verified_identity(db, user=current_user, verified=verified)
+                return current_user
             raise HTTPException(status_code=409, detail="Provider identity already linked.")
         user = await get_user_by_id(db, challenge.user_id)
         if user is None:
@@ -334,6 +359,12 @@ async def resolve_provider_user(
         return user
 
     email = _email_for_new_user(verified)
+    if verified.provider == "github" and verified.email:
+        existing_email_user = await get_user_by_email(db, verified.email)
+        if existing_email_user is not None:
+            _ensure_active_user(existing_email_user)
+            await attach_verified_identity(db, user=existing_email_user, verified=verified)
+            return existing_email_user
     if verified.email and await get_user_by_email(db, verified.email) is not None:
         raise HTTPException(
             status_code=409,
