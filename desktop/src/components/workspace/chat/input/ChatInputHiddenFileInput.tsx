@@ -1,5 +1,5 @@
 import { forwardRef, type ChangeEvent } from "react";
-import { Input } from "@/components/ui/Input";
+import { Input } from "@proliferate/ui/primitives/Input";
 
 const CHAT_INPUT_ATTACHMENT_ACCEPT =
   "image/*,text/*,.md,.json,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.css,.html,.xml,.yaml,.yml,.toml,.sql,.sh";

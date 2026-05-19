@@ -1,6 +1,6 @@
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 interface CloudWorkspaceSettingsSummaryCardProps {
   repoLabel: string;

@@ -7,7 +7,7 @@ import {
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { HeaderTabs } from "@/components/workspace/shell/topbar/HeaderTabs";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { SplitButton } from "@/components/workspace/open-target/SplitButton";
 import {

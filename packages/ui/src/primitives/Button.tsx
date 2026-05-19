@@ -1,6 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { twMerge } from "tailwind-merge";
-import { Spinner } from "@/components/ui/icons";
+import { Spinner } from "./Spinner";
 
 type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "destructive" | "inverted" | "unstyled";
 type ButtonSize = "sm" | "md" | "pill" | "icon" | "icon-sm" | "unstyled";

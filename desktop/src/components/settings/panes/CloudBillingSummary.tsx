@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Switch } from "@/components/ui/Switch";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import {

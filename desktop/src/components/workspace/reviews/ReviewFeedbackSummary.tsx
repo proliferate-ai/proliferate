@@ -1,7 +1,7 @@
 import type { ReviewAssignmentDetail } from "@anyharness/sdk";
 import { useSessionReviewsQuery } from "@anyharness/sdk-react";
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { FileText } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { DelegatedAgentReceiptName } from "@/components/workspace/chat/transcript/DelegatedAgentReceiptName";

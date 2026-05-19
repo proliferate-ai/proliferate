@@ -1,0 +1,32 @@
+import { forwardRef, type HTMLAttributes } from "react";
+import { twMerge } from "tailwind-merge";
+
+type BadgeTone = "neutral" | "success" | "info" | "warning" | "destructive";
+
+interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
+  tone?: BadgeTone;
+}
+
+const toneClasses: Record<BadgeTone, string> = {
+  neutral: "border-border bg-accent text-muted-foreground",
+  success: "border-success/25 bg-success/10 text-success",
+  info: "border-info/25 bg-info/10 text-info",
+  warning: "border-warning/30 bg-warning/10 text-warning",
+  destructive: "border-destructive/30 bg-destructive/10 text-destructive",
+};
+
+export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
+  function Badge({ tone = "neutral", className = "", ...props }, ref) {
+    return (
+      <span
+        ref={ref}
+        className={twMerge(
+          "inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[11px] font-medium leading-4",
+          toneClasses[tone],
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
+);

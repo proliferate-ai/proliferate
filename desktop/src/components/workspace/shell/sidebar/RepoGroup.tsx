@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from "react";
 import { ChevronRight, CloudIcon, Folder, FolderFilled, GitBranchIcon, Plus, Settings, Trash } from "@/components/ui/icons";
-import { Tooltip } from "@/components/ui/Tooltip";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";

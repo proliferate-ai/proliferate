@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import type { ContentPart } from "@anyharness/sdk";
 import { FileIcon, Link2, Spinner, X } from "@/components/ui/icons";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { FilePathLink } from "@/components/ui/content/FilePathLink";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { PlanReferenceAttachmentCard } from "@/components/workspace/chat/content/PlanReferenceAttachmentCard";

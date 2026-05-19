@@ -2,7 +2,7 @@ import { resolveReasoningEffortPresentation } from "@/lib/domain/chat/session-co
 import { resolveSessionControlTooltip } from "@/lib/domain/chat/session-controls/session-toggle-control";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import { Brain, Check, ChevronDown } from "@/components/ui/icons";
-import { Tooltip } from "@/components/ui/Tooltip";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { ComposerControlButton } from "./ComposerControlButton";

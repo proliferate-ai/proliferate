@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 

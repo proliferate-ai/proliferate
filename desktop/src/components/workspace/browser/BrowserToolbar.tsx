@@ -1,7 +1,7 @@
 import type { FormEvent } from "react";
-import { IconButton } from "@/components/ui/IconButton";
-import { Input } from "@/components/ui/Input";
-import { Tooltip } from "@/components/ui/Tooltip";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { Input } from "@proliferate/ui/primitives/Input";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import {
   ArrowRight,
   ExternalLink,

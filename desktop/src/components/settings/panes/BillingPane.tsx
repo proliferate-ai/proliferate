@@ -3,7 +3,7 @@ import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { CloudBillingSummary } from "@/components/settings/panes/CloudBillingSummary";
 import { OrganizationBillingSection } from "@/components/settings/panes/billing/OrganizationBillingSection";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { useCloudBilling, useCloudBillingActions } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";

@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@/components/ui/Badge";
-import { IconButton } from "@/components/ui/IconButton";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { ComposerAttachedPanel } from "@/components/workspace/chat/input/ComposerAttachedPanel";
 import { WorkspaceArrivalCloudPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
 import { useWorkspaceArrivalActions } from "@/hooks/workspaces/workflows/use-workspace-arrival-actions";

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ErrorItem } from "@anyharness/sdk";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { RefreshCw } from "@/components/ui/icons";
 import { useSessionModelFallbackAction } from "@/hooks/sessions/workflows/use-session-model-fallback-action";
 import { useToastStore } from "@/stores/toast/toast-store";

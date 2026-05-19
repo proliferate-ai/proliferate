@@ -8,6 +8,8 @@
     "mobile:typecheck": "pnpm --filter @proliferate/mobile typecheck",
     "mobile:build:ios": "pnpm --filter @proliferate/mobile build:ios",
     "mobile:submit:ios": "pnpm --filter @proliferate/mobile submit:ios",
+    "shared:build": "pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-model build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build",
+    "shared:typecheck": "pnpm --filter @proliferate/design typecheck && pnpm --filter @proliferate/product-model typecheck && pnpm --filter @proliferate/ui typecheck && pnpm --filter @proliferate/product-ui typecheck",
     "test:agent:setup": "node scripts/setup-agent-runtime-suite.mjs prepare",
     "test:agent:cleanup": "node scripts/setup-agent-runtime-suite.mjs cleanup",
     "test:agent:sdk": "pnpm --filter @anyharness/sdk test",

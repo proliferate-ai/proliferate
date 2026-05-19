@@ -5,6 +5,8 @@ Status: authoritative for frontend code in this repo.
 Scope:
 
 - `desktop/src/**`
+- shared frontend packages under `packages/design/**`, `packages/ui/**`, and
+  `packages/product-model/**` where explicitly noted by the focused guides
 
 Use this doc first to understand the frontend ownership model. Then read the
 layer doc and any surface spec that applies to the code you are changing.
@@ -160,8 +162,8 @@ Use the lowest layer that can own the logic cleanly.
 
 | Concern | Path | Put it here when | Do not put here | Details |
 | --- | --- | --- | --- | --- |
-| Product UI | `components/<domain>/<surface>/<role>/**` | It renders product-specific UI. | Raw access, query invalidation, multi-step workflows, reusable product rules. | [guides/components.md](guides/components.md) |
-| UI primitives | `components/ui/**` | It is reusable without product knowledge. | Product-specific copy, stores, access, or workflow behavior. | [guides/components.md](guides/components.md), [guides/styling.md](guides/styling.md) |
+| Product UI | `components/<domain>/<surface>/<role>/**` or `packages/product-ui/**` | It renders product-specific UI. Use `packages/product-ui/**` only when the component is shared by Desktop and Web and accepts data/callback props instead of calling app access directly. | Raw access, query invalidation, multi-step workflows, reusable product rules. | [guides/components.md](guides/components.md) |
+| UI primitives | `desktop/src/components/ui/**` or `packages/ui/**` | It is reusable without product knowledge. Use `packages/ui/**` only when the primitive is useful to both Desktop and Web and has no Desktop-only runtime dependencies. | Product-specific copy, stores, access, or workflow behavior. | [guides/components.md](guides/components.md), [guides/styling.md](guides/styling.md) |
 | Generic UI hooks | `hooks/ui/<mechanic>/**` | It wraps browser/UI mechanics with no product concepts. | Sessions, workspaces, cloud, agents, billing, or other product concepts. | [guides/hooks.md](guides/hooks.md) |
 | Access hooks | `hooks/access/<system>/**` | It is a React Query/mutation wrapper around cloud, AnyHarness, or Tauri. | Product workflow branching or JSX. | [guides/hooks.md](guides/hooks.md), [guides/access.md](guides/access.md), [guides/state.md](guides/state.md) |
 | Product derived hooks | `hooks/<domain>/derived/**` | It computes UI-ready state from stores, providers, and queries. | Writes, effects, raw access, navigation, or telemetry. | [guides/hooks.md](guides/hooks.md) |

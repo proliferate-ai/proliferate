@@ -1,5 +1,5 @@
 import { forwardRef, type MouseEventHandler, type ReactNode } from "react";
-import { IconButton } from "@/components/ui/IconButton";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
 
 type SidebarActionButtonVariant = "default" | "section";
 

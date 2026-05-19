@@ -4,7 +4,7 @@ import {
   getConnectorAvailabilityLabel,
 } from "@/lib/domain/mcp/display";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ExternalLink } from "@/components/ui/icons";
 
 export function ConnectorAboutTab({ entry }: { entry: ConnectorCatalogEntry }) {

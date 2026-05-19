@@ -1,7 +1,7 @@
 import type { ChangeEvent } from "react";
 import { EnvironmentField } from "@/components/ui/EnvironmentLayout";
 import { RunCommandHelp } from "@/components/settings/shared/RunCommandHelp";
-import { Input } from "@/components/ui/Input";
+import { Input } from "@proliferate/ui/primitives/Input";
 
 interface RepoRunCommandCardProps {
   runCommand: string;

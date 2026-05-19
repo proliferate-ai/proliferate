@@ -143,3 +143,29 @@ jobs:
 
       - name: Typecheck mobile
         run: pnpm --filter @proliferate/mobile typecheck
+
+  shared-frontend-packages:
+    name: Shared frontend packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Typecheck shared packages
+        run: pnpm shared:typecheck
+
+      - name: Build shared packages
+        run: pnpm shared:build
+
+      - name: Test product model
+        run: pnpm --filter @proliferate/product-model test

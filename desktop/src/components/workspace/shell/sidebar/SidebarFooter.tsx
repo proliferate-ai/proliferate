@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { IconButton } from "@/components/ui/IconButton";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Settings } from "@/components/ui/icons";
 
 export function SidebarFooter() {

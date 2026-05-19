@@ -6,7 +6,7 @@ import type { AgentsPaneRowState } from "@/hooks/agents/facade/use-agents-pane-s
 import { useAgentsPaneState } from "@/hooks/agents/facade/use-agents-pane-state";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ProviderIcon } from "@/components/ui/provider-icons";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import {

@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ChevronDown } from "@/components/ui/icons";
 
 interface ComposerAttachedPanelProps {

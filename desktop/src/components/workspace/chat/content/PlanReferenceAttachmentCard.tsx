@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { FileText, X } from "@/components/ui/icons";
 import { CollapsiblePlanCard } from "@/components/workspace/chat/content/CollapsiblePlanCard";
 import { PlanReferencePreviewDialog } from "@/components/workspace/chat/plans/PlanReferencePreviewDialog";

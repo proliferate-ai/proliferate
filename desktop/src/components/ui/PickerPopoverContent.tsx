@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Input } from "@/components/ui/Input";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Search } from "@/components/ui/icons";
 
 interface PickerPopoverContentProps {

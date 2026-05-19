@@ -1,5 +1,5 @@
 import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Check, ChevronDown } from "@/components/ui/icons";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";

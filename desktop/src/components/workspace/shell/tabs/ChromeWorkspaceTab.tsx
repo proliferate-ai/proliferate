@@ -5,7 +5,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { X } from "@/components/ui/icons";
 
 interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> {

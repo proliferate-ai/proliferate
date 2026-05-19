@@ -107,12 +107,23 @@ Folder hygiene:
 
 ## UI Primitives
 
-- Put foundational primitives and shells in `components/ui/**`.
+- Put Desktop-only foundational primitives and shells in
+  `desktop/src/components/ui/**`.
+- Put cross-client DOM primitives in `packages/ui/**` only when they are useful
+  to both Desktop and Web and do not import `@/`, Tauri APIs, stores, product
+  hooks, access helpers, or Desktop overlay/runtime mechanics.
+- Put cross-client Desktop/Web product components in `packages/product-ui/**`
+  only when they accept data and callbacks as props and do not construct SDK
+  clients, call app access helpers, or own query/mutation wiring.
 - Do not promote product-aware components into `components/ui/**`.
 - Do not render raw `<button>`, `<input>`, `<label>`, `<select>`, or
   `<textarea>` outside approved primitives in `components/ui/**`.
 - Reusable icons belong in `components/ui/icons.tsx`, not inline inside
   feature components.
+- `packages/ui/**` exports concrete subpaths such as
+  `@proliferate/ui/primitives/Button`; do not add barrel imports.
+- `packages/product-ui/**` follows the same concrete subpath rule for shared
+  product components, such as `@proliferate/product-ui/auth/AuthLayout`.
 - Preserve UI behavior and layout unless an explicit redesign is requested.
 - Product copy should come from `copy/**` or a domain/presentation helper when
   it is reused or conditional.

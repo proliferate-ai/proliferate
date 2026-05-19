@@ -1,6 +1,6 @@
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { Checkbox } from "@/components/ui/Checkbox";
-import { Input } from "@/components/ui/Input";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@/components/ui/Label";
 import {
   clampRounds,

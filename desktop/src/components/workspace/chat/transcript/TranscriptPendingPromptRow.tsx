@@ -4,7 +4,7 @@ import {
   type ReactNode,
 } from "react";
 import type { PendingPromptEntry } from "@anyharness/sdk";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { SubagentWakeBadge } from "./SubagentWakeBadge";
 import { UserMessage } from "./UserMessage";

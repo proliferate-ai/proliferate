@@ -1,8 +1,8 @@
 import { useConnectorCatalogActions } from "@/hooks/mcp/workflows/use-connector-catalog-actions";
 import { useConnectorsCatalogState } from "@/hooks/mcp/ui/use-connectors-catalog-state";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Search } from "@/components/ui/icons";
 import {
   AvailablePluginPackageRow,

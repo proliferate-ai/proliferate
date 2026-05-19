@@ -2,8 +2,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { getConnectorSecretFields } from "@/lib/domain/mcp/catalog";
 import type { ConnectorCatalogEntry, ConnectorCatalogField } from "@/lib/domain/mcp/types";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@/components/ui/Label";
 import { ExternalLink } from "@/components/ui/icons";
 

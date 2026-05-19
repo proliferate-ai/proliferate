@@ -18,7 +18,7 @@ import { WorkspaceCommandPalette } from "@/components/workspace/shell/command-pa
 import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
-import { IconButton } from "@/components/ui/IconButton";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { SplitPanel } from "@/components/ui/icons";
 import { useMainScreenState } from "@/hooks/main/facade/use-main-screen-state";

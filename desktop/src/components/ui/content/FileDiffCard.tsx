@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowUpRight, ChevronDown, ChevronRight } from "@/components/ui/icons";
 
 interface FileChangeStatsProps {

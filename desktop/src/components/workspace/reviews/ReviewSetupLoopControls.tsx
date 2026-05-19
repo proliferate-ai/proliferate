@@ -1,7 +1,7 @@
 import type { ReviewSetupDraft } from "@/lib/domain/reviews/review-config";
 import { MAX_REVIEW_ROUNDS } from "@/lib/domain/reviews/review-config";
 import { Switch } from "@/components/ui/Switch";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Minus, Plus } from "@/components/ui/icons";
 
 interface ReviewSetupLoopControlsProps {

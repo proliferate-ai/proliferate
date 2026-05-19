@@ -5,7 +5,7 @@ import {
   type FormEvent,
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Select } from "@/components/ui/Select";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";

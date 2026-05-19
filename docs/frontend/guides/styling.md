@@ -22,6 +22,20 @@ Always use semantic theme tokens such as:
 If a new color meaning is truly needed, add a semantic token and update all
 supported themes instead of dropping palette classes into a component.
 
+Shared token ownership:
+
+- `packages/design/src/tokens.ts` owns serializable cross-client token values.
+- `packages/design/dist/theme.css` is generated from those tokens and exposes
+  shared CSS theme variables plus shared non-product animation utilities for
+  Desktop/Web. Do not hand-edit generated theme output. Desktop currently
+  imports this generated CSS while still owning its full product theme presets
+  in `desktop/src/index.css`; moving those presets into generated shared tokens
+  is a later migration, not part of the foundation package.
+- Desktop keeps Desktop-only global CSS, third-party overrides, and theme
+  runtime behavior in `desktop/src/**`.
+- Mobile consumes React Native-safe values from
+  `@proliferate/design/react-native`, not DOM CSS.
+
 ## No Raw Tailwind Palette Classes
 
 Do not use raw palette classes such as:
@@ -144,6 +158,11 @@ Outside `components/ui/**`, do not render raw:
 Use an existing primitive when possible. If the visual treatment is genuinely
 new, extend the primitive cleanly or add a new dedicated primitive in
 `components/ui/**`.
+
+When using primitives from `packages/ui/**` or shared product components from
+`packages/product-ui/**`, importing apps must ensure Tailwind scans the package
+source, for example with `@source "../../packages/ui/src";` and `@source
+"../../packages/product-ui/src";` in the app stylesheet.
 
 Reusable icons belong in `components/ui/icons.tsx`, not inline inside feature
 components.

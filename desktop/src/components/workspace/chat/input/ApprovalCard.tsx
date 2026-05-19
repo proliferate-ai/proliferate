@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 import { useActivePendingApproval } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useChatPermissionActions } from "@/hooks/chat/use-chat-permission-actions";

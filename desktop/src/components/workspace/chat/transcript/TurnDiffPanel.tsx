@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
 import {
   FileChangesCard,

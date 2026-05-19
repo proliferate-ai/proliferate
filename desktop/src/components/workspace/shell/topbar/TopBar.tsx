@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { SplitButton } from "@/components/workspace/open-target/SplitButton";
-import { IconButton } from "@/components/ui/IconButton";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import {
   Copy,
   Check,

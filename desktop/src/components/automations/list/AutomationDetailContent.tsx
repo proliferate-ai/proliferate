@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft } from "@/components/ui/icons";
 import type {
   AutomationRecord,

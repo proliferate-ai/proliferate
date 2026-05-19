@@ -13,7 +13,7 @@ import {
   type Ref,
 } from "react";
 import { createPortal } from "react-dom";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Robot } from "@/components/ui/icons";
 import type { DelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/model";
 

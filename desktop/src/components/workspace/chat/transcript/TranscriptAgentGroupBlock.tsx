@@ -10,7 +10,7 @@ import type {
   ToolResultTextContentPart,
   TranscriptState,
 } from "@anyharness/sdk";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ChevronRight } from "@/components/ui/icons";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";

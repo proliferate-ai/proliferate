@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { RefreshCw } from "@/components/ui/icons";
 import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
 import { useToastStore } from "@/stores/toast/toast-store";

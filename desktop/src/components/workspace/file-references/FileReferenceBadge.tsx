@@ -3,7 +3,7 @@ import {
   type ReactNode,
   useCallback,
 } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { InlinePathMentionIcon } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";

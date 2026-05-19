@@ -1,7 +1,7 @@
 import type { UserInputQuestion, UserInputSubmittedAnswer } from "@anyharness/sdk";
 import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useChatUserInputActions } from "@/hooks/chat/use-chat-user-input-actions";

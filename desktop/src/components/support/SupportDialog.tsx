@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import {
   Archive,
   ChevronDown,

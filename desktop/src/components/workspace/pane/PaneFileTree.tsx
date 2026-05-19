@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
-import { Input } from "@/components/ui/Input";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { ChevronRight, Search } from "@/components/ui/icons";
 

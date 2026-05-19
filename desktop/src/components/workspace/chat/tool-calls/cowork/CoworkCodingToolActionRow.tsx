@@ -1,6 +1,6 @@
 import type { ToolCallItem, ToolResultTextContentPart } from "@anyharness/sdk";
 import { useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
 import {
   ChevronRight,

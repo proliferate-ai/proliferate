@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@/components/ui/Label";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { COMPUTE_COPY } from "@/copy/settings/compute";

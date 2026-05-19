@@ -4,7 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { Switch } from "@/components/ui/Switch";
 import { OpenTargetIcon } from "@/components/ui/OpenTargetIcon";

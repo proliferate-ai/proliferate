@@ -12,7 +12,7 @@ import { ChatComposerActions } from "@/components/workspace/chat/input/ChatCompo
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
 import { ComposerTextarea } from "@/components/workspace/chat/input/ComposerTextarea";
 import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { useHomeNextLaunch } from "@/hooks/home/workflows/use-home-next-launch";
 import { useHomeNextState } from "@/hooks/home/derived/use-home-next-state";
 import { useHomeScreen } from "@/hooks/home/facade/use-home-screen";
