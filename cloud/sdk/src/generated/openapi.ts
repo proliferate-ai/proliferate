@@ -229,6 +229,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/{provider}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Oauth Shared Provider Callback */
+        get: operations["oauth_shared_provider_callback_auth__provider__callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/web/apple/callback": {
         parameters: {
             query?: never;
@@ -6582,6 +6599,41 @@ export interface operations {
             header?: never;
             path: {
                 surface: string;
+                provider: "github" | "google" | "apple";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_shared_provider_callback_auth__provider__callback_get: {
+        parameters: {
+            query?: {
+                state?: string | null;
+                code?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path: {
                 provider: "github" | "google" | "apple";
             };
             cookie?: never;

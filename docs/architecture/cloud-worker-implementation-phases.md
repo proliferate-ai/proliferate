@@ -68,6 +68,10 @@ close_session
 sync_existing_workspace
 ```
 
+`sync_existing_workspace` is the current implementation command name. Treat it
+as the implementation spelling of explicit exposure/projection backfill, not a
+product-level sync-all primitive.
+
 - Automation execution is staged through
   `server/proliferate/server/automations/worker/cloud_execution/`:
 
@@ -191,6 +195,11 @@ Where:
   elicitations, user-input requests, stale/expired requests.
 - `CloudSessionConfigState` stores available config options plus current config
   for the session, as reported by AnyHarness events.
+- `CloudWorkspaceExposure` is the Cloud-owned admission/policy row saying which
+  target-side workspace is visible to Cloud, who can see it, and whether Cloud
+  dispatch is allowed.
+- `CloudSessionProjection` is the Cloud-owned cursor/read-model row saying how
+  much session state Cloud should retain/render and where event upload resumes.
 - `CloudCommand` is the durable queue and status record for a requested
   mutation.
 - `CloudSessionEvent` is the bounded semantic event log used for replay,
@@ -199,11 +208,11 @@ Where:
 - `CloudArtifactRef` points at object-storage payloads when data is too large
   to store inline.
 
-`projection` may still appear as an implementation term, but it is not a
-user-facing product object or a default server folder. The server may keep
-snapshot cache rows for fast reads, but the client-facing model should be
-workspaces, sessions, transcript/messages, requests, config, targets, and
-command status.
+Projection is an architecture/control-plane object, not a user-facing noun.
+Users see "remote access", "read-only", "live", "claim", and "move". The server
+may expose projection status through workspace/session APIs, but product UI
+should still be organized around targets, workspaces, sessions, messages,
+requests, config, command status, and access state.
 
 Live deltas are separate:
 
@@ -1068,6 +1077,9 @@ update_session_config
 cancel_turn
 sync_existing_workspace
 ```
+
+`sync_existing_workspace` should evolve toward `backfill_exposed_workspace` once
+the exposure/projection admission model is implemented.
 
 V1.1 command kinds:
 

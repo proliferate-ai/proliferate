@@ -105,9 +105,22 @@ start of the task, not after implementation has already started.
   - concrete implementation spec for the shared target/workspace/materialization
     launch model used by automations, Slack, web, mobile, and Desktop cloud
     surfaces
+- `docs/architecture/target-runtime-mcp-skills-config.md`
+  - proposed target model for replacing session plugin bundles with
+    target-scoped MCP/skill runtime config, refresh, and lazy artifact/credential
+    resolution
+- `docs/architecture/shared-sandbox-config-admin-ui-spec.md`
+  - proposed shared sandbox configuration model for personal and organization
+    cloud profiles, agent credential sync, public MCP/skill publication, and
+    admin/user configuration UI
+- `docs/architecture/agent-llm-auth-gateway-spec.md`
+  - proposed centralized agent LLM auth gateway model for Proliferate managed
+    credits, BYOK credentials, synced-path auth selections, LiteLLM
+    provisioning, and sandbox runtime grants
 - `docs/architecture/plugins-and-skills.md`
-  - reference architecture for plugin packages, skill bundles, plugin-owned
-    MCP servers, the plugins UI, and the session bundle boundary
+  - legacy/current-state reference for plugin packages, skill bundles,
+    plugin-owned MCP servers, the plugins UI, and the current session bundle
+    boundary
 
 ## Deployment and environment reference
 
