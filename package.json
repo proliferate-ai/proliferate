@@ -12,7 +12,7 @@
     "shared:typecheck": "pnpm --filter @proliferate/design typecheck && pnpm --filter @proliferate/product-model typecheck && pnpm --filter @proliferate/ui typecheck && pnpm --filter @proliferate/product-ui typecheck",
     "web:dev": "pnpm --filter @proliferate/web dev",
     "web:build": "pnpm --filter @proliferate/web build",
-    "web:typecheck": "pnpm shared:build && pnpm --filter @proliferate/web typecheck",
+    "web:typecheck": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm shared:build && pnpm --filter @proliferate/web typecheck",
     "test:agent:setup": "node scripts/setup-agent-runtime-suite.mjs prepare",
     "test:agent:cleanup": "node scripts/setup-agent-runtime-suite.mjs cleanup",
     "test:agent:sdk": "pnpm --filter @anyharness/sdk test",
