@@ -23,6 +23,7 @@ from proliferate.integrations.github import GitHubIntegrationError, get_github_u
 GOOGLE_OAUTH_SCOPES = ["openid", "email", "profile"]
 GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
+GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 APPLE_AUTHORIZE_URL = "https://appleid.apple.com/auth/authorize"
 APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
 APPLE_ISSUER = "https://appleid.apple.com"
@@ -161,7 +162,10 @@ async def verify_oauth_callback(
         access_token = str(token["access_token"])
         id_token = token.get("id_token")
         if isinstance(id_token, str) and id_token:
-            return await _verified_google_identity_from_id_token(token, id_token)
+            try:
+                return await _verified_google_identity_from_id_token(token, id_token)
+            except HTTPException:
+                return await _verified_google_identity_from_userinfo(token)
         try:
             account_id, account_email = await google_oauth_client.get_id_email(access_token)
         except GetIdEmailError as exc:
@@ -202,6 +206,21 @@ async def _verified_google_identity_from_id_token(
     id_token: str,
 ) -> VerifiedProviderIdentity:
     claims = await _decode_google_id_token(id_token)
+    return _verified_google_identity_from_claims(token, claims)
+
+
+async def _verified_google_identity_from_userinfo(
+    token: dict[str, object],
+) -> VerifiedProviderIdentity:
+    access_token = str(token["access_token"])
+    claims = await _fetch_google_userinfo(access_token)
+    return _verified_google_identity_from_claims(token, claims)
+
+
+def _verified_google_identity_from_claims(
+    token: dict[str, object],
+    claims: dict[str, object],
+) -> VerifiedProviderIdentity:
     subject = claims.get("sub")
     if not isinstance(subject, str) or not subject:
         raise HTTPException(
@@ -234,6 +253,29 @@ async def _verified_google_identity_from_id_token(
         expires_at_timestamp=token_expiry_timestamp(token.get("expires_at")),
         scopes=parse_scope_string(token.get("scope")),
     )
+
+
+async def _fetch_google_userinfo(access_token: str) -> dict[str, object]:
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                GOOGLE_USERINFO_URL,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            response.raise_for_status()
+            payload = response.json()
+    except (ValueError, httpx.HTTPError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google did not return a usable account profile.",
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google did not return a usable account profile.",
+        )
+    return payload
 
 
 async def _decode_google_id_token(id_token: str) -> dict[str, object]:

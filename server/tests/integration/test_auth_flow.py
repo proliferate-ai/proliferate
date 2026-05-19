@@ -944,6 +944,111 @@ class TestWebMobileProductAuthFlow:
         assert token.json()["user"]["email"] == "google-id-token@example.com"
 
     @pytest.mark.asyncio
+    async def test_web_google_callback_falls_back_to_userinfo_when_id_token_fails(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        verifier, challenge = _make_pkce_pair()
+        monkeypatch.setattr(settings, "google_oauth_client_id", "google-client-id")
+        monkeypatch.setattr(settings, "google_oauth_client_secret", "google-client-secret")
+
+        async def fake_get_authorization_url(
+            redirect_uri: str,
+            state: str | None = None,
+            scope: list[str] | None = None,
+            code_challenge: str | None = None,
+            code_challenge_method: str | None = None,
+            extras_params: dict[str, str] | None = None,
+        ) -> str:
+            assert redirect_uri.endswith("/auth/web/google/callback")
+            assert scope == ["openid", "email", "profile"]
+            assert code_challenge is None
+            assert code_challenge_method is None
+            assert state is not None
+            return (
+                "https://accounts.google.com/o/oauth2/v2/auth"
+                f"?state={state}&redirect_uri={redirect_uri}"
+            )
+
+        async def fake_get_access_token(code: str, redirect_uri: str) -> dict[str, object]:
+            assert code == "google-code"
+            assert redirect_uri.endswith("/auth/web/google/callback")
+            return {
+                "access_token": "google-access-token",
+                "id_token": "google-id-token",
+                "scope": "openid email profile",
+            }
+
+        async def fake_get_id_email(_token: str) -> tuple[str, str]:
+            raise AssertionError("Google legacy profile endpoint should not be used.")
+
+        async def fake_decode_google_id_token(_id_token: str) -> dict[str, object]:
+            raise identity_providers.HTTPException(
+                status_code=400,
+                detail="Google identity token could not be verified.",
+            )
+
+        async def fake_fetch_google_userinfo(access_token: str) -> dict[str, object]:
+            assert access_token == "google-access-token"
+            return {
+                "sub": "google-subject-from-userinfo",
+                "email": "google-userinfo@example.com",
+                "email_verified": True,
+                "name": "Google Userinfo",
+                "picture": "https://example.com/userinfo-avatar.png",
+            }
+
+        monkeypatch.setattr(
+            google_oauth_client,
+            "get_authorization_url",
+            fake_get_authorization_url,
+        )
+        monkeypatch.setattr(google_oauth_client, "get_access_token", fake_get_access_token)
+        monkeypatch.setattr(google_oauth_client, "get_id_email", fake_get_id_email)
+        monkeypatch.setattr(
+            identity_providers,
+            "_decode_google_id_token",
+            fake_decode_google_id_token,
+        )
+        monkeypatch.setattr(
+            identity_providers,
+            "_fetch_google_userinfo",
+            fake_fetch_google_userinfo,
+        )
+
+        started = await client.post(
+            "/auth/web/google/start",
+            json={
+                "purpose": "login",
+                "clientState": "google-userinfo-client-state",
+                "codeChallenge": challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "http://localhost:5174/auth/callback",
+            },
+        )
+        assert started.status_code == 200
+        oauth_state = parse_qs(urlparse(started.json()["authorizationUrl"]).query)["state"][0]
+
+        callback = await client.get(
+            "/auth/web/google/callback",
+            params={"code": "google-code", "state": oauth_state},
+            follow_redirects=False,
+        )
+        assert callback.status_code == 302
+        callback_query = parse_qs(urlparse(callback.headers["location"]).query)
+        token = await client.post(
+            "/auth/web/token",
+            json={
+                "code": callback_query["code"][0],
+                "codeVerifier": verifier,
+                "grantType": "authorization_code",
+            },
+        )
+        assert token.status_code == 200
+        assert token.json()["user"]["email"] == "google-userinfo@example.com"
+
+    @pytest.mark.asyncio
     async def test_desktop_google_link_uses_desktop_redirect(
         self,
         client: AsyncClient,
