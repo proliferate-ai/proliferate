@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "Proliferate",
+    "slug": "proliferate-mobile",
+    "version": "0.1.0",
+    "scheme": "proliferate",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#181818"
+    },
+    "ios": {
+      "bundleIdentifier": "ai.proliferate.mobile",
+      "buildNumber": "4",
+      "supportsTablet": true,
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "ai.proliferate.mobile",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#181818"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-apple-authentication",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#181818",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "dark": {
+            "backgroundColor": "#181818",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e975a894-8056-4fea-83cd-206709c71dc9"
+      }
+    },
+    "owner": "pablojosecodes"
+  }
+}
