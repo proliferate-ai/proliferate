@@ -56,7 +56,7 @@ endif
         server-db-down server-db-ready db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
-        sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build runtime-build desktop-build rebuild \
+        sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build runtime-build desktop-build rebuild \
         release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
         test-agent-runtime-cloud-e2b test-agent-runtime-cloud-daytona \
@@ -617,10 +617,15 @@ cloud-sdk-build: cloud-client-generate
 cloud-sdk-react-build: cloud-sdk-build
 	cd cloud/sdk-react && pnpm run build
 
+shared-build:
+	pnpm --filter @proliferate/design build
+	pnpm --filter @proliferate/ui build
+	pnpm --filter @proliferate/product-ui build
+
 runtime-build:
 	$(CARGO) build --workspace
 
-desktop-build: cloud-sdk-build cloud-sdk-react-build sdk-build sdk-react-build
+desktop-build: cloud-sdk-build cloud-sdk-react-build sdk-build sdk-react-build shared-build
 	cd desktop && pnpm exec tsc && pnpm exec vite build
 
 test-agent-runtime-cloud-e2b: sdk-generate
