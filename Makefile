@@ -52,7 +52,7 @@ $(error PROFILE is required. Example: make dev PROFILE=main)
 endif
 endif
 
-.PHONY: dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server server-db-up server-db-wait \
+.PHONY: dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth server-db-up server-db-wait \
         server-db-down server-db-ready db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
@@ -202,6 +202,14 @@ serve:
 dev-automation-worker:
 	@$(SERVER_ENV_SOURCE) \
 	cd server && uv run python -m proliferate.server.automations.worker --role all
+
+dev-mobile-auth:
+	@node scripts/dev-mobile-auth.mjs
+
+dev-mobile-tunnel: dev-mobile-auth
+
+dev-web-auth:
+	@node scripts/dev-web-auth.mjs
 
 # --- Server (Python control plane) ---
 

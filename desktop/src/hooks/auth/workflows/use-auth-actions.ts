@@ -6,6 +6,7 @@ import {
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import {
+  linkDesktopProvider,
   signInWithGitHub,
   signOut,
 } from "@/lib/integrations/auth/orchestration";
@@ -55,6 +56,31 @@ export function useAuthActions() {
             action: "sign_out",
             domain: "auth",
           },
+        });
+        throw error;
+      }
+    }, [authEffects]),
+    linkGoogle: useCallback(async () => {
+      try {
+        const result = await linkDesktopProvider("google", authEffects);
+        trackProductEvent("auth_signed_in", {
+          provider: result.provider,
+          source: result.source,
+        });
+        return result;
+      } catch (error) {
+        if (!isTelemetryHandled(error)) {
+          captureTelemetryException(error, {
+            tags: {
+              action: "link_provider",
+              domain: "auth",
+              provider: "google",
+            },
+          });
+        }
+        trackProductEvent("auth_sign_in_failed", {
+          failure_kind: classifyTelemetryFailure(error),
+          provider: "google",
         });
         throw error;
       }

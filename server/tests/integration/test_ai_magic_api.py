@@ -1,12 +1,9 @@
-import base64
-import hashlib
-import uuid
-
 import pytest
 from httpx import AsyncClient
 
 from proliferate.config import settings
 from proliferate.server.ai_magic import service as ai_magic_service
+from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 
 async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
@@ -31,34 +28,12 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
 
     assert user_id is not None
 
-    verifier = "test-code-verifier-that-is-long-enough-for-pkce"
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-
-    response = await client.post(
-        "/auth/desktop/authorize",
-        params={"user_id": user_id},
-        json={
-            "state": f"ai-magic-state-{uuid.uuid4().hex[:8]}",
-            "code_challenge": challenge,
-            "code_challenge_method": "S256",
-            "redirect_uri": "proliferate://auth/callback",
-        },
+    token_data = await mint_desktop_token_payload(
+        client,
+        user_id=user_id,
+        state_prefix="ai-magic-state",
     )
-    assert response.status_code == 201
-    code = response.json()["code"]
-
-    response = await client.post(
-        "/auth/desktop/token",
-        json={
-            "code": code,
-            "code_verifier": verifier,
-            "grant_type": "authorization_code",
-        },
-    )
-    assert response.status_code == 200
-    token_data = response.json()
-    return {"access_token": token_data["access_token"]}
+    return {"access_token": str(token_data["access_token"])}
 
 
 class TestAiMagicApi:

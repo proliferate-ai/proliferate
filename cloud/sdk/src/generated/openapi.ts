@@ -41,43 +41,6 @@ export interface paths {
         patch: operations["users_patch_user_users__id__patch"];
         trace?: never;
     };
-    "/auth/github/authorize": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Oauth:Github.Jwt.Authorize */
-        get: operations["oauth_github_jwt_authorize_auth_github_authorize_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/github/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Oauth:Github.Jwt.Callback
-         * @description The response varies based on the authentication backend used.
-         */
-        get: operations["oauth_github_jwt_callback_auth_github_callback_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/auth/desktop/authorize": {
         parameters: {
             query?: never;
@@ -209,6 +172,193 @@ export interface paths {
          * @description Exchange a refresh token for a new access + refresh token pair.
          */
         post: operations["refresh_access_token_auth_desktop_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/github/link/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Required Github Link */
+        post: operations["start_required_github_link_auth_github_link_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/{surface}/{provider}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Auth */
+        post: operations["start_auth_auth__surface___provider__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/{surface}/{provider}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Oauth Callback */
+        get: operations["oauth_callback_auth__surface___provider__callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/web/apple/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apple Web Callback */
+        post: operations["apple_web_callback_auth_web_apple_callback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mobile/apple/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apple Mobile Complete */
+        post: operations["apple_mobile_complete_auth_mobile_apple_complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/web/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Web Token */
+        post: operations["web_token_auth_web_token_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mobile/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mobile Token */
+        post: operations["mobile_token_auth_mobile_token_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/web/session/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Web Session Bootstrap */
+        post: operations["web_session_bootstrap_auth_web_session_bootstrap_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/web/session/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Web Session Refresh */
+        post: operations["web_session_refresh_auth_web_session_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/web/session/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Web Session Logout */
+        post: operations["web_session_logout_auth_web_session_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mobile/session/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mobile Session Refresh */
+        post: operations["mobile_session_refresh_auth_mobile_session_refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2136,6 +2286,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccountReadinessResponse */
+        AccountReadinessResponse: {
+            /** Productready */
+            productReady: boolean;
+            /** Missingrequirements */
+            missingRequirements: string[];
+            /** Githubidentityid */
+            githubIdentityId: string | null;
+            /** Githubgrantstatus */
+            githubGrantStatus: string | null;
+        };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
             /**
@@ -2388,6 +2549,19 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** AppleMobileCompleteRequest */
+        AppleMobileCompleteRequest: {
+            /** State */
+            state: string;
+            /** Identitytoken */
+            identityToken: string;
+            /** Authorizationcode */
+            authorizationCode?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Displayname */
+            displayName?: string | null;
+        };
         /** ArchiveCloudTargetResponse */
         ArchiveCloudTargetResponse: {
             target: components["schemas"]["CloudTargetDetail"];
@@ -2429,6 +2603,47 @@ export interface components {
             enabled: boolean;
             /** Reason */
             reason?: string | null;
+        };
+        /** AuthRefreshRequest */
+        AuthRefreshRequest: {
+            /** Refreshtoken */
+            refreshToken: string;
+            /**
+             * Granttype
+             * @default refresh_token
+             * @constant
+             */
+            grantType: "refresh_token";
+        };
+        /** AuthSessionResponse */
+        AuthSessionResponse: {
+            /** Accesstoken */
+            accessToken: string;
+            /** Refreshtoken */
+            refreshToken?: string | null;
+            /**
+             * Tokentype
+             * @default bearer
+             * @constant
+             */
+            tokenType: "bearer";
+            /** Expiresin */
+            expiresIn: number;
+            user: components["schemas"]["UserRead"];
+            readiness: components["schemas"]["AccountReadinessResponse"];
+        };
+        /** AuthTokenRequest */
+        AuthTokenRequest: {
+            /** Code */
+            code: string;
+            /** Codeverifier */
+            codeVerifier: string;
+            /**
+             * Granttype
+             * @default authorization_code
+             * @constant
+             */
+            grantType: "authorization_code";
         };
         /** AuthViewerResponse */
         AuthViewerResponse: {
@@ -2680,6 +2895,15 @@ export interface components {
         BillingUrlResponse: {
             /** Url */
             url: string;
+        };
+        /** Body_apple_web_callback_auth_web_apple_callback_post */
+        Body_apple_web_callback_auth_web_apple_callback_post: {
+            /** State */
+            state: string;
+            /** Id Token */
+            id_token: string;
+            /** User */
+            user?: string | null;
         };
         /** CloudCommandResponse */
         CloudCommandResponse: {
@@ -4074,11 +4298,6 @@ export interface components {
             /** Createdat */
             createdAt: string | null;
         };
-        /** OAuth2AuthorizeResponse */
-        OAuth2AuthorizeResponse: {
-            /** Authorization Url */
-            authorization_url: string;
-        };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
             /** Enabled */
@@ -4630,6 +4849,47 @@ export interface components {
         /** SetDesiredVersionsResponse */
         SetDesiredVersionsResponse: {
             target: components["schemas"]["CloudTargetDetail"];
+        };
+        /** StartAuthRequest */
+        StartAuthRequest: {
+            /**
+             * Purpose
+             * @default login
+             * @enum {string}
+             */
+            purpose: "login" | "link" | "required_github_link";
+            /** Clientstate */
+            clientState: string;
+            /** Codechallenge */
+            codeChallenge: string;
+            /**
+             * Codechallengemethod
+             * @default S256
+             */
+            codeChallengeMethod: string;
+            /** Redirecturi */
+            redirectUri: string;
+            /** Prompt */
+            prompt?: "select_account" | null;
+        };
+        /** StartAuthResponse */
+        StartAuthResponse: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "github" | "google" | "apple";
+            /** Authorizationurl */
+            authorizationUrl?: string | null;
+            /** State */
+            state: string;
+            /** Nonce */
+            nonce: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
         };
         /** StartCloudMcpOAuthFlowResponse */
         StartCloudMcpOAuthFlowResponse: {
@@ -6009,80 +6269,6 @@ export interface operations {
             };
         };
     };
-    oauth_github_jwt_authorize_auth_github_authorize_get: {
-        parameters: {
-            query?: {
-                scopes?: string[];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OAuth2AuthorizeResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    oauth_github_jwt_callback_auth_github_callback_get: {
-        parameters: {
-            query?: {
-                code?: string | null;
-                code_verifier?: string | null;
-                state?: string | null;
-                error?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     create_desktop_auth_code_auth_desktop_authorize_post: {
         parameters: {
             query: {
@@ -6304,6 +6490,376 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_required_github_link_auth_github_link_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartAuthRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartAuthResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_auth_auth__surface___provider__start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                surface: string;
+                provider: "github" | "google" | "apple";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartAuthRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartAuthResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_callback_auth__surface___provider__callback_get: {
+        parameters: {
+            query?: {
+                state?: string | null;
+                code?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path: {
+                surface: string;
+                provider: "github" | "google" | "apple";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apple_web_callback_auth_web_apple_callback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["Body_apple_web_callback_auth_web_apple_callback_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apple_mobile_complete_auth_mobile_apple_complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppleMobileCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    web_token_auth_web_token_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mobile_token_auth_mobile_token_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    web_session_bootstrap_auth_web_session_bootstrap_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                proliferate_web_refresh?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    web_session_refresh_auth_web_session_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-proliferate-csrf"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                proliferate_web_refresh?: string | null;
+                proliferate_web_csrf?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    web_session_logout_auth_web_session_logout_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-proliferate-csrf"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                proliferate_web_csrf?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mobile_session_refresh_auth_mobile_session_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthRefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
                 };
             };
             /** @description Validation Error */

@@ -1,31 +1,30 @@
-"""Product identity helpers for linked OAuth accounts."""
+"""Temporary compatibility helpers for legacy OAuthAccount callers."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Literal
 
+from proliferate.auth.identity.types import (
+    AUTH_PROVIDERS,
+    PRODUCT_IDENTITY_PROVIDER,
+    AuthProviderName,
+    OnboardingState,
+)
 from proliferate.db.models.auth import OAuthAccount, User
-
-AuthProvider = Literal["github", "google", "apple"]
-OnboardingState = Literal["needs_github", "active"]
-
-AUTH_PROVIDERS: tuple[AuthProvider, ...] = ("github", "google", "apple")
-PRODUCT_IDENTITY_PROVIDER: AuthProvider = "github"
 
 
 def oauth_accounts_for_user(user: User) -> list[OAuthAccount]:
     return list(user.oauth_accounts or [])
 
 
-def normalize_oauth_name(oauth_name: str) -> AuthProvider | None:
+def normalize_oauth_name(oauth_name: str) -> AuthProviderName | None:
     if oauth_name in AUTH_PROVIDERS:
         return oauth_name
     return None
 
 
-def linked_provider_names(user: User) -> set[AuthProvider]:
-    names: set[AuthProvider] = set()
+def linked_provider_names(user: User) -> set[AuthProviderName]:
+    names: set[AuthProviderName] = set()
     for account in oauth_accounts_for_user(user):
         provider = normalize_oauth_name(account.oauth_name)
         if provider is not None:
@@ -33,7 +32,7 @@ def linked_provider_names(user: User) -> set[AuthProvider]:
     return names
 
 
-def user_has_provider(user: User, provider: AuthProvider) -> bool:
+def user_has_provider(user: User, provider: AuthProviderName) -> bool:
     return provider in linked_provider_names(user)
 
 
@@ -49,7 +48,7 @@ def onboarding_state_for_user(user: User) -> OnboardingState:
 
 def first_account_for_provider(
     accounts: Iterable[OAuthAccount],
-    provider: AuthProvider,
+    provider: AuthProviderName,
 ) -> OAuthAccount | None:
     for account in accounts:
         if account.oauth_name == provider:

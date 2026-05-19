@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
-import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -51,6 +49,7 @@ from proliferate.integrations.billing import stripe as stripe_billing
 from proliferate.integrations.github import GitHubRepoBranches
 from proliferate.server.billing.service import process_pending_seat_adjustments
 from proliferate.server.cloud.workspaces import service as cloud_service
+from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 
 async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
@@ -75,36 +74,14 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
 
     assert user_id is not None
 
-    verifier = "test-code-verifier-that-is-long-enough-for-pkce"
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-
-    resp = await client.post(
-        "/auth/desktop/authorize",
-        params={"user_id": user_id},
-        json={
-            "state": f"billing-state-{uuid.uuid4().hex[:8]}",
-            "code_challenge": challenge,
-            "code_challenge_method": "S256",
-            "redirect_uri": "proliferate://auth/callback",
-        },
+    token_data = await mint_desktop_token_payload(
+        client,
+        user_id=user_id,
+        state_prefix="billing-state",
     )
-    assert resp.status_code == 201
-    code = resp.json()["code"]
-
-    resp = await client.post(
-        "/auth/desktop/token",
-        json={
-            "code": code,
-            "code_verifier": verifier,
-            "grant_type": "authorization_code",
-        },
-    )
-    assert resp.status_code == 200
-    token_data = resp.json()
     return {
         "user_id": user_id,
-        "access_token": token_data["access_token"],
+        "access_token": str(token_data["access_token"]),
     }
 
 

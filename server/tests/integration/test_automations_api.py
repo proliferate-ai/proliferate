@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import uuid
 
 import pytest
@@ -9,6 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import OAuthAccount, User
+from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 
 async def _create_user_and_get_tokens(
@@ -38,32 +37,12 @@ async def _create_user_and_get_tokens(
     )
     await db_session.commit()
 
-    verifier = "test-code-verifier-that-is-long-enough-for-pkce"
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-
-    response = await client.post(
-        "/auth/desktop/authorize",
-        params={"user_id": str(user.id)},
-        json={
-            "state": f"automations-state-{uuid.uuid4().hex[:8]}",
-            "code_challenge": challenge,
-            "code_challenge_method": "S256",
-            "redirect_uri": "proliferate://auth/callback",
-        },
+    token_payload = await mint_desktop_token_payload(
+        client,
+        user_id=user.id,
+        state_prefix="automations-state",
     )
-    assert response.status_code == 201
-
-    response = await client.post(
-        "/auth/desktop/token",
-        json={
-            "code": response.json()["code"],
-            "code_verifier": verifier,
-            "grant_type": "authorization_code",
-        },
-    )
-    assert response.status_code == 200
-    return {"access_token": response.json()["access_token"]}
+    return {"access_token": str(token_payload["access_token"])}
 
 
 @pytest.mark.asyncio

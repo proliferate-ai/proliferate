@@ -170,7 +170,12 @@ function buildProliferateUrl(
   path: string,
   query?: Record<string, string | number | boolean | null | undefined>,
 ): string {
-  const url = new URL(path.startsWith("/") ? path : `/${path}`, `${baseUrl}/`);
+  const url = new URL(baseUrl);
+  const basePath = url.pathname.replace(/\/+$/u, "");
+  const requestPath = path.replace(/^\/+/u, "");
+  url.pathname = [basePath, requestPath].filter(Boolean).join("/");
+  url.search = "";
+  url.hash = "";
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== null && value !== undefined) {
       url.searchParams.set(key, String(value));

@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ExternalLink, GitHub, Mail, RefreshCw } from "@/components/ui/icons";
+import { ExternalLink, GitHub, Link2, Mail, RefreshCw } from "@/components/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
+import { useAuthViewer } from "@/hooks/access/cloud/auth/use-auth-viewer";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
 import {
@@ -26,7 +27,7 @@ export function AccountPane() {
   const navigate = useNavigate();
   const status = useAuthStore((state) => state.status);
   const user = useAuthStore((state) => state.user);
-  const { signOut } = useAuthActions();
+  const { linkGoogle, signOut } = useAuthActions();
   const { openExternal } = useTauriShellActions();
   const {
     signIn: signInWithGitHub,
@@ -37,11 +38,34 @@ export function AccountPane() {
   const { data: githubDesktopAuthAvailability } = useGitHubDesktopAuthAvailability();
   const { cloudSignInAvailable, cloudSignInChecking, cloudUnavailable } = useCloudAvailabilityState();
   const [signingOut, setSigningOut] = useState(false);
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [providerLinkError, setProviderLinkError] = useState<string | null>(null);
   const devAuthBypassed = isDevAuthBypassed();
   const isAuthenticated = status === "authenticated";
+  const authViewerCacheScope = user?.id
+    ? `desktop-account:${user.id}`
+    : "desktop-account:anonymous";
+  const authViewer = useAuthViewer(
+    isAuthenticated && !devAuthBypassed && cloudSignInAvailable,
+    authViewerCacheScope,
+  );
+  const linkedProviders = authViewer.data?.linkedProviders ?? [];
+  const linkedGitHub = linkedProviders.find((provider) => (
+    provider.provider === "github" && provider.connected
+  ));
+  const googleAccounts = linkedProviders.filter((provider) => (
+    provider.provider === "google" && provider.connected
+  ));
+  const googleAvailability = authViewer.data?.providerAvailability.find((provider) => (
+    provider.provider === "google"
+  ));
   const localMode = cloudUnavailable && !devAuthBypassed && !isAuthenticated;
   const canReconnectGitHub = isAuthenticated && cloudSignInAvailable && !cloudSignInChecking;
   const canOpenGitHubSettings = isAuthenticated && !devAuthBypassed;
+  const canLinkGoogle = isAuthenticated
+    && cloudSignInAvailable
+    && !cloudSignInChecking
+    && googleAvailability?.enabled !== false;
   const githubSettingsUrl = buildGitHubOAuthAppSettingsUrl(githubDesktopAuthAvailability?.clientId);
   const signInUnavailable = !cloudUnavailable
     && !cloudSignInChecking
@@ -76,6 +100,19 @@ export function AccountPane() {
       navigate("/login", { replace: true });
     } finally {
       setSigningOut(false);
+    }
+  }
+
+  async function handleLinkGoogle() {
+    setLinkingGoogle(true);
+    setProviderLinkError(null);
+    try {
+      await linkGoogle();
+      await authViewer.refetch();
+    } catch (error) {
+      setProviderLinkError(error instanceof Error ? error.message : "Google linking failed");
+    } finally {
+      setLinkingGoogle(false);
     }
   }
 
@@ -182,8 +219,61 @@ export function AccountPane() {
         </div>
       </SettingsCard>
 
-      {signInError && (
-        <p className="text-sm text-destructive">{signInError}</p>
+      {isAuthenticated && !devAuthBypassed && (
+        <SettingsCard>
+          <div className="space-y-3 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 space-y-1">
+                <div className="text-sm font-medium text-foreground">Connected providers</div>
+                <p className="max-w-xl text-sm text-muted-foreground">
+                  GitHub is required for repository access. Add Google accounts here so web, mobile, and desktop auth resolve to the same Proliferate user.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!canLinkGoogle || linkingGoogle}
+                loading={linkingGoogle}
+                onClick={() => void handleLinkGoogle()}
+              >
+                {!linkingGoogle && <Link2 className="size-3" />}
+                {linkingGoogle ? "Waiting for Google..." : "Add Google"}
+              </Button>
+            </div>
+
+            <div className="divide-y divide-border rounded-lg border border-border">
+              <ConnectedProviderRow
+                label="GitHub"
+                detail={githubLogin ? `@${githubLogin}` : linkedGitHub?.accountEmail ?? "Connected"}
+                connected={Boolean(linkedGitHub) || Boolean(githubLogin)}
+              />
+              {googleAccounts.length > 0 ? (
+                googleAccounts.map((account, index) => (
+                  <ConnectedProviderRow
+                    key={`google-${account.accountId ?? account.accountEmail ?? index}`}
+                    label="Google"
+                    detail={account.accountEmail ?? account.accountId ?? "Connected"}
+                    connected
+                  />
+                ))
+              ) : (
+                <ConnectedProviderRow
+                  label="Google"
+                  detail={
+                    googleAvailability?.enabled === false
+                      ? "Not configured in this environment"
+                      : "Not connected"
+                  }
+                  connected={false}
+                />
+              )}
+            </div>
+          </div>
+        </SettingsCard>
+      )}
+
+      {(signInError || providerLinkError) && (
+        <p className="text-sm text-destructive">{signInError || providerLinkError}</p>
       )}
     </section>
   );
@@ -274,6 +364,28 @@ function AccountProfileRow({
       <span className="text-muted-foreground" aria-hidden="true">{icon}</span>
       <span className="text-muted-foreground">{label}</span>
       <span className="min-w-0 truncate text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function ConnectedProviderRow({
+  label,
+  detail,
+  connected,
+}: {
+  label: string;
+  detail: string;
+  connected: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+      <div className="min-w-0">
+        <div className="font-medium text-foreground">{label}</div>
+        <div className="truncate text-muted-foreground">{detail}</div>
+      </div>
+      <span className={connected ? "text-xs text-foreground" : "text-xs text-muted-foreground"}>
+        {connected ? "Connected" : "Not connected"}
+      </span>
     </div>
   );
 }

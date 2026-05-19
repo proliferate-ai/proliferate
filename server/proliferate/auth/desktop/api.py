@@ -58,9 +58,9 @@ from proliferate.db.engine import get_async_session
 router = APIRouter(prefix="/desktop", tags=["desktop-auth"])
 
 
-# ── Internal endpoint: create an auth code after browser login ──
-# In production this is called server-side after the user authenticates,
-# not directly by the desktop app.
+# ── Debug endpoint: create an auth code after browser login ──
+# Production browser login creates this code server-side in the callback
+# handler. This route is retained only for local/dev tests.
 
 
 @router.post(
@@ -74,6 +74,8 @@ async def create_desktop_auth_code(
     db: AsyncSession = Depends(get_async_session),
 ) -> AuthCodeCreated:
     """Create a short-lived auth code for the desktop PKCE exchange."""
+    if not settings.debug:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     return await create_desktop_auth_code_service(db, params, user_id)
 
 

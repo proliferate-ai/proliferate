@@ -4,12 +4,12 @@ These tests focus on protected-route behavior once the desktop has obtained a
 valid bearer token. Browser redirect wiring is covered separately.
 """
 
-import base64
-import hashlib
 import uuid
 
 import pytest
 from httpx import AsyncClient
+
+from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 PROTECTED_ENDPOINTS = [
     ("GET", "/v1/cloud/workspaces"),
@@ -51,33 +51,12 @@ async def _create_user_and_get_tokens(client: AsyncClient, email: str | None = N
         await session.commit()
         user_id = str(user.id)
 
-    verifier = "test-code-verifier-that-is-long-enough-for-pkce"
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-
-    resp = await client.post(
-        "/auth/desktop/authorize",
-        params={"user_id": user_id},
-        json={
-            "state": f"gate-state-{uuid.uuid4().hex[:8]}",
-            "code_challenge": challenge,
-            "code_challenge_method": "S256",
-            "redirect_uri": "proliferate://auth/callback",
-        },
+    token_payload = await mint_desktop_token_payload(
+        client,
+        user_id=user_id,
+        state_prefix="gate-state",
     )
-    assert resp.status_code == 201
-    code = resp.json()["code"]
-
-    resp = await client.post(
-        "/auth/desktop/token",
-        json={
-            "code": code,
-            "code_verifier": verifier,
-            "grant_type": "authorization_code",
-        },
-    )
-    assert resp.status_code == 200
-    return resp.json()
+    return token_payload
 
 
 class TestDesktopAuthGate:

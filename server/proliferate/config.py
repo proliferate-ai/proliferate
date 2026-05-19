@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     cors_allow_origins: str = (
         "http://localhost:1420,"
         "http://127.0.0.1:1420,"
+        "http://localhost:5174,"
+        "http://127.0.0.1:5174,"
         "http://localhost:3000,"
         "http://127.0.0.1:3000,"
         "http://localhost:5174,"
@@ -56,6 +58,7 @@ class Settings(BaseSettings):
     apple_team_id: str = ""
     apple_key_id: str = ""
     apple_private_key: str = ""
+    mobile_redirect_uri: str = "proliferate://auth/callback"
 
     # Customer.io (optional)
     customerio_site_id: str = ""

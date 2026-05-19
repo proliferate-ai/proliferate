@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileProliferateMark } from "../primitives/MobileProliferateMark";
@@ -7,11 +7,15 @@ import { colors, radius, spacing } from "../../styles/tokens";
 interface MobileConnectGitHubScreenProps {
   onConnect: () => void;
   onSignOut: () => void;
+  loading?: boolean;
+  error?: string | null;
 }
 
 export function MobileConnectGitHubScreen({
   onConnect,
   onSignOut,
+  loading = false,
+  error = null,
 }: MobileConnectGitHubScreenProps) {
   return (
     <View style={styles.root}>
@@ -26,13 +30,21 @@ export function MobileConnectGitHubScreen({
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: true }}
-            disabled
+            accessibilityState={{ disabled: loading }}
+            disabled={loading}
             onPress={onConnect}
-            style={styles.primaryDisabled}
+            style={({ pressed }) => [
+              styles.primary,
+              pressed && !loading && styles.pressed,
+              loading && styles.disabled,
+            ]}
           >
-            <MobileIcon name="github" size={18} color={colors.faint} />
-            <Text style={styles.primaryLabelDisabled}>Continue with GitHub</Text>
+            {loading ? (
+              <ActivityIndicator size="small" color={colors.background} />
+            ) : (
+              <MobileIcon name="github" size={18} color={colors.background} />
+            )}
+            <Text style={styles.primaryLabel}>Continue with GitHub</Text>
           </Pressable>
 
           <Pressable
@@ -43,6 +55,8 @@ export function MobileConnectGitHubScreen({
             <Text style={styles.signOutLabel}>Sign out</Text>
           </Pressable>
         </View>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
 
       <Text style={styles.fineprint}>
@@ -101,21 +115,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
   },
-  primaryDisabled: {
-    minHeight: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing[2],
-    backgroundColor: colors.accent,
-    borderRadius: radius.xl,
-    opacity: 0.72,
-  },
-  primaryLabelDisabled: {
-    color: colors.faint,
-    fontSize: 15,
-    fontWeight: "600",
-  },
   signOut: {
     minHeight: 44,
     alignItems: "center",
@@ -135,5 +134,22 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.78,
+  },
+  disabled: {
+    opacity: 0.55,
+  },
+  error: {
+    alignSelf: "stretch",
+    marginTop: spacing[4],
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(250,66,62,0.35)",
+    backgroundColor: "rgba(250,66,62,0.10)",
+    color: colors.red,
+    fontSize: 13,
+    lineHeight: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    textAlign: "center",
   },
 });

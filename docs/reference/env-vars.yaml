@@ -33,6 +33,12 @@
   description: Canonical public API base URL for absolute auth callback generation
   tags: [local-dev, self-hosted, production]
 
+- name: API_PATH_PREFIX
+  secret: false
+  default: ""
+  description: Optional path prefix where the API is externally mounted, such as /api
+  tags: [local-dev, self-hosted, production]
+
 - name: DATABASE_URL
   secret: true
   default: "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate"
@@ -103,6 +109,12 @@
   secret: true
   default: "CHANGE-ME-IN-PRODUCTION"
   description: JWT signing and OAuth state signing
+  tags: [local-dev, self-hosted, production]
+
+- name: MOBILE_REDIRECT_URI
+  secret: false
+  default: "proliferate://auth/callback"
+  description: Exact mobile OAuth callback URI accepted by the server
   tags: [local-dev, self-hosted, production]
 
 # ═══════════════════════════════════════════════════════════════════════

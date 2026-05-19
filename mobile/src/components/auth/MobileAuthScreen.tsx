@@ -1,48 +1,64 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { MobileIcon } from "../primitives/MobileIcon";
+import type { AuthProviderName } from "@proliferate/cloud-sdk";
+
+import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileProliferateMark } from "../primitives/MobileProliferateMark";
 import { colors, radius, spacing } from "../../styles/tokens";
+import type { MobileAuthAction } from "../../providers/MobileAuthProvider";
 
 interface MobileAuthScreenProps {
-  onApple: () => void;
-  onGitHub: () => void;
+  onProvider: (provider: AuthProviderName) => void;
+  loadingAction: MobileAuthAction;
+  error: string | null;
 }
 
 interface ProviderButtonProps {
   label: string;
-  icon: "github" | "apple";
-  onPress: () => void;
-  primary?: boolean;
+  icon: Extract<MobileIconName, "github" | "apple" | "google">;
+  provider: AuthProviderName;
+  onPress: (provider: AuthProviderName) => void;
+  loading?: boolean;
   disabled?: boolean;
+  primary?: boolean;
 }
 
-function ProviderButton({ label, icon, onPress, primary, disabled }: ProviderButtonProps) {
+function ProviderButton({
+  label,
+  icon,
+  provider,
+  onPress,
+  loading = false,
+  disabled = false,
+  primary = false,
+}: ProviderButtonProps) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityHint={disabled ? "Sign-in is not enabled in this preview." : undefined}
-      accessibilityState={{ disabled: Boolean(disabled) }}
-      disabled={disabled}
-      onPress={onPress}
+      accessibilityState={{ disabled: disabled || loading }}
+      disabled={disabled || loading}
+      onPress={() => onPress(provider)}
       style={({ pressed }) => [
         styles.providerButton,
         primary ? styles.providerPrimary : styles.providerSecondary,
-        disabled && styles.providerDisabled,
-        pressed && styles.pressed,
+        pressed && !disabled && !loading && styles.pressed,
+        (disabled || loading) && styles.disabled,
       ]}
     >
-      <MobileIcon
-        name={icon}
-        size={18}
-        color={primary ? colors.background : colors.fg}
-      />
+      {loading ? (
+        <ActivityIndicator size="small" color={primary ? colors.background : colors.fg} />
+      ) : (
+        <MobileIcon
+          name={icon}
+          size={18}
+          color={primary ? colors.background : colors.fg}
+        />
+      )}
       <Text
         style={[
           styles.providerLabel,
           primary ? styles.providerLabelPrimary : styles.providerLabelSecondary,
-          disabled && styles.providerLabelDisabled,
         ]}
       >
         {label}
@@ -51,7 +67,13 @@ function ProviderButton({ label, icon, onPress, primary, disabled }: ProviderBut
   );
 }
 
-export function MobileAuthScreen({ onApple, onGitHub }: MobileAuthScreenProps) {
+export function MobileAuthScreen({
+  onProvider,
+  loadingAction,
+  error,
+}: MobileAuthScreenProps) {
+  const busy = Boolean(loadingAction);
+
   return (
     <View style={styles.root}>
       <View style={styles.content}>
@@ -61,27 +83,44 @@ export function MobileAuthScreen({ onApple, onGitHub }: MobileAuthScreenProps) {
         </View>
         <Text style={styles.tagline}>
           Run and orchestrate coding agents.
+          {"\n"}
+          Sign in to get started.
         </Text>
 
         <View style={styles.actions}>
           <ProviderButton
             label="Continue with GitHub"
             icon="github"
-            onPress={onGitHub}
+            provider="github"
+            onPress={onProvider}
+            loading={loadingAction === "github"}
+            disabled={busy}
             primary
-            disabled
           />
           <ProviderButton
             label="Continue with Apple"
             icon="apple"
-            onPress={onApple}
-            disabled
+            provider="apple"
+            onPress={onProvider}
+            loading={loadingAction === "apple"}
+            disabled={busy}
+          />
+          <ProviderButton
+            label="Continue with Google"
+            icon="google"
+            provider="google"
+            onPress={onProvider}
+            loading={loadingAction === "google"}
+            disabled={busy}
           />
         </View>
 
         <Text style={styles.note}>
-          A GitHub connection is required to run cloud workspaces and automations.
+          GitHub is required for cloud workspaces and automations. You can link it
+          after signing in with Apple or Google.
         </Text>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
 
       <Text style={styles.legal}>
@@ -143,9 +182,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  providerDisabled: {
-    opacity: 0.48,
-  },
   providerLabel: {
     fontSize: 15,
     fontWeight: "600",
@@ -156,9 +192,6 @@ const styles = StyleSheet.create({
   },
   providerLabelSecondary: {
     color: colors.fg,
-  },
-  providerLabelDisabled: {
-    color: colors.faint,
   },
   note: {
     marginTop: spacing[6],
@@ -176,5 +209,22 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.78,
+  },
+  disabled: {
+    opacity: 0.55,
+  },
+  error: {
+    alignSelf: "stretch",
+    marginTop: spacing[4],
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(250,66,62,0.35)",
+    backgroundColor: "rgba(250,66,62,0.10)",
+    color: colors.red,
+    fontSize: 13,
+    lineHeight: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    textAlign: "center",
   },
 });

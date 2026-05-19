@@ -1,5 +1,6 @@
 export const routes = {
   home: "/",
+  auth: "/auth",
   workspaces: "/workspaces",
   automations: "/automations",
   plugins: "/plugins",

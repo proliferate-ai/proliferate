@@ -7,8 +7,8 @@ interface AuthHandoffScreenProps {
   description: string;
   stateLabel: string;
   tone?: "default" | "error";
-  primaryActionLabel: string;
-  primaryActionHref: string;
+  primaryActionLabel?: string;
+  primaryActionHref?: string;
   secondaryActionLabel?: string;
   secondaryActionHref?: string;
 }
@@ -41,17 +41,19 @@ export function AuthHandoffScreen({
         <p className="text-xs font-medium uppercase text-muted-foreground">{stateLabel}</p>
         <h1 className="mt-2 text-2xl font-semibold">{title}</h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
-        <div className="mt-6 flex flex-wrap gap-2">
-          <Button onClick={() => openHref(primaryActionHref)}>
-            <ExternalLink size={15} />
-            {primaryActionLabel}
-          </Button>
-          {secondaryActionLabel && secondaryActionHref ? (
-            <Button variant="secondary" onClick={() => openHref(secondaryActionHref)}>
-              {secondaryActionLabel}
+        {primaryActionLabel && primaryActionHref ? (
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Button onClick={() => openHref(primaryActionHref)}>
+              <ExternalLink size={15} />
+              {primaryActionLabel}
             </Button>
-          ) : null}
-        </div>
+            {secondaryActionLabel && secondaryActionHref ? (
+              <Button variant="secondary" onClick={() => openHref(secondaryActionHref)}>
+                {secondaryActionLabel}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </section>
     </div>
   );

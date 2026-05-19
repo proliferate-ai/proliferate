@@ -8,16 +8,20 @@ import { AuthScreen } from "./screen/AuthScreen";
 import { ConnectGitHubScreen } from "./screen/ConnectGitHubScreen";
 
 export function AuthGate({ children }: { children: ReactNode }) {
-  const { token, clearToken } = useAuthToken();
-  const viewer = useAuthViewer(Boolean(token));
+  const { token, bootstrapping, clearToken } = useAuthToken();
+  const viewer = useAuthViewer(!bootstrapping && Boolean(token));
   const authError = viewer.error instanceof ProliferateClientError ? viewer.error : null;
-  const invalidToken = authError?.status === 401 || authError?.status === 403;
+  const invalidToken = authError?.status === 401;
 
   useEffect(() => {
     if (invalidToken) {
-      clearToken();
+      void clearToken();
     }
   }, [clearToken, invalidToken]);
+
+  if (bootstrapping) {
+    return <AuthLoadingScreen />;
+  }
 
   if (!token) {
     return <AuthScreen />;

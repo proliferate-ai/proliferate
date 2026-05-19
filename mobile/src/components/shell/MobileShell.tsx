@@ -1,6 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   BackHandler,
   Pressable,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import type { ProductChat } from "@proliferate/product-model/chats/model";
+import type { AuthUser } from "@proliferate/cloud-sdk";
 
 import { MobileAuthScreen } from "../auth/MobileAuthScreen";
 import { MobileConnectGitHubScreen } from "../auth/MobileConnectGitHubScreen";
@@ -26,19 +28,22 @@ import { drawerRoutes, routeTitle, type RouteId } from "../../navigation/navigat
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
 import { colors, radius, shadow, spacing } from "../../styles/tokens";
 
-const ACCOUNT = {
-  initials: "PH",
-  name: "Pablo Hansen",
-  handle: "pablo@proliferate.ai",
-};
-
 export function MobileShell() {
-  const { authState, signInWithApple, signInWithGitHub, signOut } = useMobileAuth();
+  const {
+    authState,
+    user,
+    signInWithProvider,
+    connectGitHub,
+    signOut,
+    loadingAction,
+    error,
+  } = useMobileAuth();
   const [route, setRoute] = useState<RouteId>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<ProductChat | null>(null);
 
   const subtitle = useMemo(() => routeSubtitle(route), [route]);
+  const account = useMemo(() => accountSummary(user), [user]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -78,11 +83,27 @@ export function MobileShell() {
     signOut();
   }
 
+  if (authState === "bootstrapping") {
+    return (
+      <SafeAreaView style={styles.root} edges={["top", "right", "bottom", "left"]}>
+        <StatusBar style="light" />
+        <View style={styles.loadingRoot}>
+          <ActivityIndicator color={colors.fg} />
+          <Text style={styles.loadingText}>Opening Proliferate</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (authState === "signed_out") {
     return (
       <SafeAreaView style={styles.root} edges={["top", "right", "bottom", "left"]}>
         <StatusBar style="light" />
-        <MobileAuthScreen onApple={signInWithApple} onGitHub={signInWithGitHub} />
+        <MobileAuthScreen
+          onProvider={(provider) => void signInWithProvider(provider)}
+          loadingAction={loadingAction}
+          error={error}
+        />
       </SafeAreaView>
     );
   }
@@ -92,8 +113,10 @@ export function MobileShell() {
       <SafeAreaView style={styles.root} edges={["top", "right", "bottom", "left"]}>
         <StatusBar style="light" />
         <MobileConnectGitHubScreen
-          onConnect={signInWithGitHub}
+          onConnect={() => void connectGitHub()}
           onSignOut={handleSignOut}
+          loading={loadingAction === "github_link"}
+          error={error}
         />
       </SafeAreaView>
     );
@@ -129,7 +152,7 @@ export function MobileShell() {
             ) : route === "automations" ? (
               <MobileAutomationsScreen />
             ) : (
-              <MobileSettingsScreen onSignOut={handleSignOut} />
+              <MobileSettingsScreen account={account} onSignOut={handleSignOut} />
             )}
           </View>
 
@@ -152,10 +175,40 @@ export function MobileShell() {
           onNavigate={navigate}
           onClose={() => setDrawerOpen(false)}
           onSignOut={handleSignOut}
+          account={account}
         />
       )}
     </SafeAreaView>
   );
+}
+
+interface AccountSummary {
+  initials: string;
+  name: string;
+  handle: string;
+}
+
+function accountSummary(user: AuthUser | null): AccountSummary {
+  const displayName = user?.display_name?.trim();
+  const email = user?.email?.trim();
+  const fallbackName = email?.split("@")[0] || "Proliferate";
+  const name = displayName || fallbackName;
+  return {
+    initials: initialsForName(name),
+    name,
+    handle: email || "Signed in",
+  };
+}
+
+function initialsForName(name: string): string {
+  const parts = name
+    .split(/\s+/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return (parts[0]?.slice(0, 2) || "P").toUpperCase();
 }
 
 function routeSubtitle(route: RouteId): string | undefined {
@@ -175,12 +228,13 @@ function routeSubtitle(route: RouteId): string | undefined {
 
 interface DrawerProps {
   activeRoute: RouteId;
+  account: AccountSummary;
   onNavigate: (route: RouteId) => void;
   onClose: () => void;
   onSignOut: () => void;
 }
 
-function Drawer({ activeRoute, onNavigate, onClose, onSignOut }: DrawerProps) {
+function Drawer({ activeRoute, account, onNavigate, onClose, onSignOut }: DrawerProps) {
   return (
     <View style={styles.drawerLayer}>
       <Pressable
@@ -230,14 +284,14 @@ function Drawer({ activeRoute, onNavigate, onClose, onSignOut }: DrawerProps) {
 
         <View style={styles.account}>
           <View style={styles.accountAvatar}>
-            <Text style={styles.accountAvatarText}>{ACCOUNT.initials}</Text>
+            <Text style={styles.accountAvatarText}>{account.initials}</Text>
           </View>
           <View style={styles.accountText}>
             <Text style={styles.accountName} numberOfLines={1}>
-              {ACCOUNT.name}
+              {account.name}
             </Text>
             <Text style={styles.accountHandle} numberOfLines={1}>
-              {ACCOUNT.handle}
+              {account.handle}
             </Text>
           </View>
           <Pressable
@@ -258,6 +312,17 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingRoot: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[3],
+    backgroundColor: colors.background,
+  },
+  loadingText: {
+    color: colors.mutedForeground,
+    fontSize: 13,
   },
   body: {
     flex: 1,
