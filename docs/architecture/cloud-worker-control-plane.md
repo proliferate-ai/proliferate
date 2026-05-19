@@ -2,8 +2,8 @@
 
 Status: implementation spec for Cloud-mediated session control, Proliferate
 Worker, target enrollment, command delivery, event ingestion, snapshots,
-compute lifecycle, and cloud sync. Current implementation notes were verified
-against `main` on 2026-05-15.
+compute lifecycle, and Cloud exposure/projection. Current implementation notes
+were verified against `main` on 2026-05-15.
 
 Scope:
 
@@ -29,6 +29,25 @@ Related docs:
 This spec treats plugin and MCP bundles as resolved session launch input.
 Plugin package structure, skills, and bundle composition are owned by
 `docs/architecture/plugins-and-skills.md`.
+
+Terminology note: older implementation paths use `sync_existing_workspace` and
+`cloud_sync` naming. The product/architecture model in this spec is exposure
+and projection:
+
+```text
+exposure
+  Cloud is allowed to know this workspace/session exists.
+
+projection
+  Cloud stores/renders a bounded view of that runtime state.
+
+commandability
+  Cloud-mediated clients may send commands to the runtime.
+```
+
+Do not add new product semantics around "sync workspace" or "copy to cloud."
+Use exposure/projection for visibility/control, and a separate move/migration
+flow for runnable state transfer.
 
 ## Goal
 
@@ -72,6 +91,9 @@ mind:
   `materialize_environment`, `start_session`, `send_prompt`,
   `resolve_interaction`, `update_session_config`, `cancel_turn`,
   `close_session`, and `sync_existing_workspace`.
+- `sync_existing_workspace` is the current implementation name for existing
+  workspace backfill. The target semantic is `backfill_exposed_workspace`:
+  backfill only work covered by active Cloud exposure/projection rows.
 - command leases are stored inline on `cloud_commands`; there is no separate
   lease table.
 - worker command polling currently returns immediately from the server and the
@@ -90,7 +112,7 @@ mind:
 
 ## Non-Goals For V1
 
-Do not implement these in the first worker/cloud-sync pass:
+Do not implement these in the first worker/projection pass:
 
 - full file editing through Cloud
 - full interactive terminal remoting through Cloud
@@ -180,6 +202,95 @@ Every runtime mutation becomes an AnyHarness command:
 Cloud queues and routes commands. AnyHarness accepts, rejects, queues, and
 orders execution.
 
+When the same exposed session is open in Desktop and web/mobile:
+
+```text
+Desktop prompt path
+  Desktop -> AnyHarness directly
+
+Cloud prompt path
+  web/mobile/Slack/API -> CloudCommand -> Worker -> AnyHarness
+
+Projection path
+  AnyHarness events -> Worker cursor -> Cloud projection -> web/mobile/Slack
+```
+
+There is still one runtime session. Desktop and Cloud do not fork or copy the
+conversation. Both prompt paths enter the same AnyHarness session queue, and
+AnyHarness defines ordering by command acceptance. Cloud clients catch up from
+worker event upload; Desktop may render earlier through direct SSE.
+
+## Cloud Exposure And Projection Admission
+
+Workers must not upload every workspace/session they can see. Cloud owns the
+admission policy.
+
+```text
+No active exposure
+  Worker ignores the workspace/session.
+
+Active exposure
+  Worker may map/backfill the workspace/session.
+
+Active session projection
+  Worker tails AnyHarness events after the stored cursor.
+
+Commandable exposure/projection
+  Cloud-mediated clients may enqueue commands, subject to actor authorization.
+```
+
+Exposure and commandability are separate:
+
+```text
+projection_level = transcript
+commandable = false
+```
+
+is a valid read-only Cloud view.
+
+Projection levels:
+
+```text
+index_only
+  workspace appears in Cloud lists; no transcript or commands
+
+session_summaries
+  session title/status/last activity; no full transcript or commands
+
+transcript
+  semantic transcript/pending interactions; usually read-only
+
+live
+  semantic transcript plus live patches; commandable only when policy allows
+```
+
+Default behavior:
+
+```text
+Desktop local-only work
+  no exposure by default
+
+Continue remotely / Open from mobile
+  create exposure
+  create or upgrade session projection to live
+  set commandable according to owner policy
+  worker backfills and tails from cursor
+
+Cloud-created personal work
+  exposure exists by default for the owner
+
+Slack/team/automation work
+  exposure exists by default as shared_unclaimed org work
+
+Claiming
+  changes visibility/control policy
+  does not change projection mechanics
+
+Move/migration
+  separate transfer operation
+  may revoke source exposure and create destination exposure
+```
+
 ## V1 Topology
 
 ```text
@@ -268,6 +379,7 @@ default_workspace_root nullable
 persistence_class: ephemeral | persistent | snapshot_backed | unknown
 direct_attach_policy: disabled | owner_only | team_grant | org_grant
 cloud_sync_enabled
+cloud_exposure_supported
 update_channel: stable | beta | pinned
 desired_anyharness_version nullable
 desired_worker_version nullable
@@ -354,7 +466,7 @@ Session launch asks the same questions for every target:
 - Can this target run the required MCP/plugin bundle?
 - Can this session receive the required credential grants?
 - Can this actor view/control the session?
-- Can this target be cloud-synced?
+- Is this workspace/session exposed, projected, and commandable through Cloud?
 - What stop/prune policy applies after the work completes?
 
 ## Compute Lifecycle Policy
@@ -472,6 +584,10 @@ accepted_at nullable
 rejected_at nullable
 expired_at nullable
 authorization_context json
+exposure_id nullable
+session_projection_id nullable
+exposure_revision nullable
+required_projection_level nullable
 error_code nullable
 error_message nullable
 ```
@@ -489,8 +605,13 @@ resolve_interaction
 update_session_config
 cancel_turn
 close_session
-sync_existing_workspace
+backfill_exposed_workspace
 ```
+
+`sync_existing_workspace` is the current implementation command name on `main`.
+New design and new docs should describe the behavior as
+`backfill_exposed_workspace`: it backfills only Cloud-exposed work, not every
+workspace discovered on the target.
 
 Additional lifecycle commands such as `stop_workspace`,
 `hibernate_workspace`, `resume_workspace`, `prune_workspace`, and
@@ -517,6 +638,10 @@ Precondition examples:
 send_prompt:
   observed_event_seq optional
   append after current accepted queue
+  exposure_id required for Cloud-mediated sessions
+  session_projection_id required for session commands
+  required_projection_level = live
+  commandable = true
 
 update_session_config:
   expected_config_version
@@ -637,7 +762,7 @@ semantic items and references.
 
 ## Large Payload And Retention Policy
 
-Cloud sync must not blindly store every byte produced by the target.
+Cloud projection must not blindly store every byte produced by the target.
 
 Inline payload limits:
 
@@ -716,6 +841,8 @@ Cloud stores:
 - inventory and readiness snapshots
 - workspace records
 - session records
+- workspace exposure records
+- session projection records and cursors
 - commands and command leases
 - normalized durable events
 - ingest cursors
@@ -735,14 +862,14 @@ Cloud does not store:
 - full workspace filesystem contents
 - local desktop tab/layout state as runtime truth
 
-Cloud sync is command routing plus event ingestion plus snapshot building,
-not runtime database replication.
+Cloud exposure/projection is command routing plus event ingestion plus snapshot
+building, not runtime database replication.
 
 ## Server Target File Structure
 
-The Cloud sync implementation lives under the existing `cloud` server domain,
-split by product responsibility. Do not put all worker behavior in
-`cloud/runtime`.
+The Cloud worker/projection implementation lives under the existing `cloud`
+server domain, split by product responsibility. Do not put all worker behavior
+in `cloud/runtime`.
 
 Implementation phase details live in
 `docs/architecture/cloud-worker-implementation-phases.md`. This section defines
@@ -1023,15 +1150,17 @@ identity:
 command_leases:
   command_id, lease_id, status, leased_at, lease_expires_at, last_error
 
-sync_cursors:
-  workspace_id, session_id, last_uploaded_seq, last_ack_seq
+projection_cursors:
+  exposure_id, session_projection_id, workspace_id, session_id,
+  projection_level, last_uploaded_seq, last_ack_seq
 
 event_outbox:
   batch_id, target_id, session_id, seq_start, seq_end, payload, attempt_count
 
-sync_mappings:
+projection_mappings:
   local_workspace_id, cloud_workspace_id
   local_session_id, cloud_session_id
+  exposure_id, session_projection_id
 
 inventory_cache:
   last_report_hash, last_reported_at
@@ -1049,7 +1178,8 @@ runtime main
   -> start heartbeat loop
   -> start inventory loop
   -> start command lease loop
-  -> start event backfill/tail loop for synced sessions
+  -> fetch active exposure/projection list
+  -> start event backfill/tail loop for active projections
   -> start activity/safe-stop reporting loop
   -> start update reconciliation loop
 ```
@@ -1312,7 +1442,7 @@ Managed cloud should preinstall:
 6. Worker starts and enrolls outbound.
 7. Worker reports inventory/readiness.
 8. Cloud shows direct-attach caveat:
-   teammates may control cloud-synced sessions if policy allows, but direct
+   teammates may control cloud-exposed sessions if policy allows, but direct
    Desktop attach requires their own target access or a granted attach path.
 ```
 
@@ -1326,12 +1456,15 @@ fallback.
 1. User enables dispatch for the local desktop runtime.
 2. Desktop starts or installs Proliferate Worker locally.
 3. Worker enrolls as desktop_dispatch target.
-4. User chooses which local workspaces/sessions are sync-enabled.
-5. Worker backfills selected state and tails live events.
-6. Mobile/web/Slack can supervise and send commands while desktop is online.
+4. User chooses which local workspaces/sessions are exposed to Cloud.
+5. Cloud creates exposure/projection rows for those workspaces/sessions.
+6. Worker backfills selected state and tails live events for active projections.
+7. Mobile/web/Slack can supervise and send commands while desktop is online
+   when the exposure is commandable.
 ```
 
-Desktop dispatch should be opt-in per machine and preferably per workspace.
+Desktop dispatch should be opt-in per machine and per workspace/session. It is
+not a sync-all mode.
 
 ## Command Flow: Web Sends Prompt
 
@@ -1346,7 +1479,11 @@ Desktop dispatch should be opt-in per machine and preferably per workspace.
 
 3. commands.service validates:
    session exists in CloudSession snapshot
-   target is cloud-sync addressable
+   target is Cloud-addressable through an active worker
+   workspace exposure exists and is active
+   session projection exists and is active
+   projection level is live
+   exposure/session projection is commandable
    command kind is allowed
    idempotency key is unique or returns existing command
    preconditions are absent until the precondition contract is implemented
@@ -1380,9 +1517,10 @@ Desktop dispatch should be opt-in per machine and preferably per workspace.
 The UI may show the prompt optimistically, but the canonical prompt row comes
 from AnyHarness events.
 
-## Event Upload And Backfill Flow
+## Projection Backfill And Event Upload Flow
 
-Backfill is required when enabling sync for an existing workspace/session.
+Backfill is required when enabling exposure/projection for an existing
+workspace/session.
 
 Current implementation note: worker event sync polls AnyHarness session events
 by sequence and uploads batches directly to Cloud. The explicit local event
@@ -1390,18 +1528,20 @@ outbox steps below describe the target reliability model; they are not a
 separate table in current `main`.
 
 ```text
-1. Cloud enqueues sync_existing_workspace command or worker observes sync flag.
-2. Worker lists workspace/session metadata from AnyHarness.
-3. Worker creates or reconciles cloud id mappings.
-4. Worker reads events after last uploaded seq for each session.
-5. Worker applies payload policy and builds batches.
-6. Worker inserts batches into local outbox.
-7. Worker uploads batches.
-8. Cloud dedupes by target_id/session_id/seq.
-9. Cloud advances ingest cursor only across contiguous sequences.
-10. Cloud rebuilds or updates snapshots.
-11. Worker deletes acknowledged outbox batches.
-12. Worker starts live tail from acknowledged seq.
+1. Cloud creates or updates exposure/projection rows.
+2. Cloud enqueues backfill_exposed_workspace, or worker observes the active
+   exposure/projection list.
+3. Worker lists only the requested workspace/session metadata from AnyHarness.
+4. Worker creates or reconciles cloud id mappings for the exposure/projection.
+5. Worker reads events after last_uploaded_seq for each active projection.
+6. Worker applies payload policy and builds batches.
+7. Worker inserts batches into local outbox.
+8. Worker uploads batches.
+9. Cloud dedupes by target_id/session_id/seq.
+10. Cloud advances ingest cursor only across contiguous sequences.
+11. Cloud rebuilds or updates snapshots.
+12. Worker deletes acknowledged outbox batches.
+13. Worker starts live tail from acknowledged seq.
 ```
 
 Gaps:
@@ -1417,7 +1557,7 @@ Duplicates:
 - Duplicate event insert conflicts on `(target_id, session_id, seq)`.
 - Cloud treats duplicate upload as success if payload hash matches.
 - Payload hash mismatch for same seq is a hard ingest error and should mark
-  target sync degraded.
+  target projection degraded.
 
 ## Live Fanout
 

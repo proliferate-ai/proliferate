@@ -1,8 +1,15 @@
 # Plugins and Skills Architecture
 
-Status: authoritative for plugin packages, plugin skills, plugin-owned MCP
-servers, the Desktop plugins UI, and the `SessionPluginBundle` runtime
-boundary.
+Status: legacy/current-state reference for plugin packages, plugin skills,
+plugin-owned MCP servers, the Desktop plugins UI, and the
+`SessionPluginBundle` runtime boundary.
+
+The future runtime boundary is superseded by
+`docs/architecture/target-runtime-mcp-skills-config.md`: plugins remain a
+Cloud/Desktop catalog and UX packaging concept, while AnyHarness should see
+only flat target-scoped MCP server and skill manifests with lazy artifact and
+credential resolution. Keep this document useful for understanding today's
+session-bundle implementation until that migration is complete.
 
 This document does not define Cloud worker registration, command delivery,
 event upload, target enrollment, or Cloud session sync. Those systems are being

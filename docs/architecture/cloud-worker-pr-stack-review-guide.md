@@ -692,15 +692,20 @@ Existing target workspaces appear in:
 
 Existing sessions become readable through snapshot and stream APIs.
 
-Users can enqueue `sync_existing_workspace`. Only workers advertising that
-capability should lease it.
+Users should not think in terms of "sync this workspace" as the product
+primitive. The current command name is `sync_existing_workspace`, but the target
+semantic is `backfill_exposed_workspace`: Cloud first creates an
+exposure/projection admission row, then the worker backfills only that exposed
+workspace/session. Only workers advertising the current capability should lease
+the implementation command.
 
 ### Architecture Flow
 
 ```text
-Cloud queues sync_existing_workspace
+Cloud creates exposure/projection admission
+  -> Cloud queues sync_existing_workspace / backfill_exposed_workspace
   -> worker leases special command
-  -> worker fetches AnyHarness repo roots/workspaces/sessions
+  -> worker fetches only requested AnyHarness workspace/session metadata
   -> worker uploads chunks to /worker/backfill
   -> Cloud creates/updates CloudWorkspace and mappings
   -> Cloud creates/updates session projections
@@ -748,6 +753,8 @@ AnyHarness dependencies:
 - Workspace/session mapping is target-scoped.
 - Backfill does not over-resolve active pending interactions.
 - Only capable workers lease `sync_existing_workspace`.
+- User-visible flows create exposure/projection first; backfill is scoped to
+  that admission state.
 - Pending command results survive worker restart and stale leases.
 - Chunk ordering and retries are harmless.
 - Backfilled workspaces with `runtime_environment_id = None` do not break
@@ -755,12 +762,13 @@ AnyHarness dependencies:
 
 ### Relationship And Risk
 
-This closes the gap where only Cloud-created sessions were synced. It sits
-between event sync and the later snapshot/live stream surface.
+This closes the gap where only Cloud-created sessions had Cloud projections. It
+sits between event ingest and the later snapshot/live stream surface.
 
-Risk: the worker can backfill all workspaces if no workspace ID is supplied,
-while Cloud validation may require `workspaceId` for user-queued commands.
-Review whether sync-all is internal-only.
+Risk: the worker can backfill too broadly if no workspace/session admission is
+supplied. Cloud validation should require exposure/projection identity for
+user-queued backfill. Any sync-all behavior must remain internal maintenance,
+not a product path.
 
 ## PR #221: Live Snapshot Streams
 
@@ -1157,8 +1165,9 @@ create future drift:
   rotation and credential revocation?
 - Do worker retries preserve command result and materialization status across
   process restarts?
-- Is `sync_existing_workspace` supposed to support sync-all as a product path,
-  or only as an internal maintenance operation?
+- `sync_existing_workspace` should not support sync-all as a product path. It
+  should remain the implementation name for explicit exposure/projection
+  backfill until the command is renamed.
 - What exact production pub/sub backend will replace or back the current
   process-local live fanout?
 - What is the signed update artifact/trust-root plan after supervisor staging?

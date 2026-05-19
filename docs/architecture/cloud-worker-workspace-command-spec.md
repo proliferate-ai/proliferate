@@ -80,6 +80,11 @@ Current caveats:
 - The worker sync loop tails AnyHarness events by polling
   `/v1/sessions/{id}/events?after_seq=...` and uploads batches directly. There
   is no durable local event outbox table yet.
+- `sync_existing_workspace` is the current implementation name for existing
+  workspace backfill. The target architecture should treat this as
+  `backfill_exposed_workspace`: backfill only work covered by active Cloud
+  exposure/projection rows. Do not add product semantics around sync-all or
+  copy-to-cloud.
 - Command preconditions and worker min-version gating are not implemented yet.
 - Fresh SSH targets still need the requested agent installed before
   `start_session`; Git/workspace materialization alone does not install Claude,
@@ -152,7 +157,17 @@ sync_existing_workspace
 
 These cover target Git bootstrap, repo checkout, workspace/worktree
 materialization, target config application, live session control, and existing
-workspace sync.
+workspace projection backfill.
+
+Future naming should prefer:
+
+```text
+backfill_exposed_workspace
+```
+
+over `sync_existing_workspace`. The existing command should not upload every
+workspace/session visible to AnyHarness. It should be driven by Cloud-owned
+exposure/projection admission.
 
 `materialize_environment` currently applies configuration files to a filesystem
 root:
@@ -201,6 +216,38 @@ may either:
 
 The command is still narrowly scoped: it materializes the AnyHarness workspace
 identity, not the full session environment.
+
+## Exposure And Projection Boundary
+
+Workspace materialization and workspace projection are separate.
+
+```text
+materialize_workspace
+  creates/resolves target-side AnyHarness workspace identity
+
+backfill_exposed_workspace / current sync_existing_workspace
+  uploads bounded metadata/events for Cloud-exposed work only
+```
+
+Cloud owns the exposure/projection rows. Worker only applies them:
+
+```text
+No active exposure
+  worker ignores the workspace/session
+
+Active exposure
+  worker may map/backfill the workspace/session
+
+Active session projection
+  worker tails AnyHarness events from the stored cursor
+
+Commandable live projection
+  Cloud may enqueue send_prompt/update/resolve commands after auth checks
+```
+
+This keeps "Continue remotely" as a visibility/control operation, not a copy or
+full migration. Moving runnable state to another target is a different command
+family.
 
 ## Data Model
 
