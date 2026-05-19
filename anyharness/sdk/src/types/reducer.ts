@@ -231,4 +231,5 @@ export type ToolCallSemanticKind =
   | "cowork_artifact_create"
   | "cowork_artifact_update"
   | "cowork_coding"
+  | "review"
   | "other";

@@ -85,6 +85,31 @@ describe("describeToolCallDisplay", () => {
       iconKey: "proliferate",
     });
   });
+
+  it("formats review MCP tool calls as review actions", () => {
+    expect(describeToolCallDisplay(
+      toolCallItem({
+        semanticKind: "review",
+        nativeToolName: "mcp__reviews__submit_review_result",
+      }),
+      "mcp__reviews__submit_review_result",
+    )).toEqual({
+      label: "Submit review result",
+      hint: "Reviews",
+      iconKey: "clipboard-list",
+    });
+
+    expect(describeToolCallDisplay(
+      toolCallItem({
+        nativeToolName: "mcp__reviews__mark_review_revision_ready",
+      }),
+      "mcp__reviews__mark_review_revision_ready",
+    )).toEqual({
+      label: "Mark revision ready",
+      hint: "Reviews",
+      iconKey: "clipboard-list",
+    });
+  });
 });
 
 function toolCallItem(overrides: Partial<ToolCallItem>): ToolCallItem {

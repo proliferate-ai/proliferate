@@ -1329,6 +1329,52 @@ describe("transcript reducer", () => {
     expect(item.nativeToolName).toBe("mcp__cowork__create_cowork_agent");
   });
 
+  it("classifies AnyHarness review MCP calls as review activity", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          turnId: "turn-1",
+          itemId: "tool-review-submit",
+          event: {
+            type: "item_completed",
+            item: {
+              kind: "tool_invocation",
+              status: "completed",
+              sourceAgentKind: "claude",
+              title: "mcp__reviews__submit_review_result",
+              toolCallId: "tool-review-submit",
+              nativeToolName: "mcp__reviews__submit_review_result",
+              rawInput: {
+                pass: false,
+                summary: "Missing rollback coverage.",
+                critiqueMarkdown: "Add a rollback test.",
+              },
+              contentParts: [
+                {
+                  type: "tool_call",
+                  toolCallId: "tool-review-submit",
+                  title: "mcp__reviews__submit_review_result",
+                  toolKind: "other",
+                  nativeToolName: "mcp__reviews__submit_review_result",
+                },
+              ],
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["tool-review-submit"] as ToolCallItem;
+    expect(item.kind).toBe("tool_call");
+    expect(item.semanticKind).toBe("review");
+    expect(item.nativeToolName).toBe("mcp__reviews__submit_review_result");
+  });
+
   it("classifies Claude cowork artifact update tool calls from captured MCP names", () => {
     const state = reduceEvents(
       [

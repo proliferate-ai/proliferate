@@ -4,6 +4,9 @@ use super::context::{ReviewMcpContext, ReviewMcpRole};
 use super::tools::{GetReviewStatusArgs, MarkReviewRevisionReadyArgs, SubmitReviewResultArgs};
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::integrations::mcp::json_rpc::deserialize_args;
+use anyharness_contract::v1::{
+    ReviewAssignmentDetail, ReviewAssignmentStatus, ReviewRunDetail, ReviewRunStatus,
+};
 
 pub async fn call_tool(
     runtime: &ReviewRuntime,
@@ -38,6 +41,7 @@ pub async fn call_tool(
                         "reviewId": review_id.clone(),
                         "reviewRunId": review_id,
                         "reviewerId": reviewer_id,
+                        "pass": args.pass,
                         "status": "submitted",
                         "feedbackJobCreated": job.is_some(),
                     })
@@ -61,7 +65,15 @@ pub async fn call_tool(
                     },
                 )
                 .await
-                .map(|detail| json!({ "review": detail }))
+                .map(|detail| {
+                    json!({
+                        "reviewId": detail.id.clone(),
+                        "reviewRunId": detail.id.clone(),
+                        "status": detail.status,
+                        "round": detail.current_round_number,
+                        "review": detail,
+                    })
+                })
                 .map_err(|error| anyhow::anyhow!(error.to_string()))
         }
         (ReviewMcpRole::Parent { .. }, "get_review_status") => {
@@ -114,12 +126,17 @@ fn resolve_review_id(
         .ok_or_else(|| anyhow::anyhow!("reviewId is required"))
 }
 
-fn review_status_json(review: anyharness_contract::v1::ReviewRunDetail) -> Value {
+fn review_status_json(review: ReviewRunDetail) -> Value {
     let active_round = review
         .active_round_id
         .as_ref()
         .and_then(|round_id| review.rounds.iter().find(|round| round.id == *round_id))
         .or_else(|| review.rounds.iter().max_by_key(|round| round.round_number));
+    let assignments = active_round
+        .map(|round| round.assignments.as_slice())
+        .unwrap_or_default();
+    let result = review_result_json(assignments);
+    let next_actions = review_next_actions(&review);
     let reviewers = active_round
         .map(|round| {
             round
@@ -146,6 +163,8 @@ fn review_status_json(review: anyharness_contract::v1::ReviewRunDetail) -> Value
         "title": review.title,
         "currentRoundNumber": review.current_round_number,
         "maxRounds": review.max_rounds,
+        "result": result,
+        "nextActions": next_actions,
         "autoIterate": review.auto_iterate,
         "parentCanSignalRevisionViaMcp": review.parent_can_signal_revision_via_mcp,
         "targetPlanId": review.target_plan_id,
@@ -155,6 +174,60 @@ fn review_status_json(review: anyharness_contract::v1::ReviewRunDetail) -> Value
         "updatedAt": review.updated_at,
         "reviewers": reviewers,
     })
+}
+
+fn review_result_json(assignments: &[ReviewAssignmentDetail]) -> Value {
+    let approved = assignments
+        .iter()
+        .filter(|assignment| {
+            assignment.status == ReviewAssignmentStatus::Submitted && assignment.pass == Some(true)
+        })
+        .count();
+    let requested_changes = assignments
+        .iter()
+        .filter(|assignment| {
+            assignment.status == ReviewAssignmentStatus::Submitted && assignment.pass == Some(false)
+        })
+        .count();
+    let failed = assignments
+        .iter()
+        .filter(|assignment| {
+            matches!(
+                assignment.status,
+                ReviewAssignmentStatus::Cancelled
+                    | ReviewAssignmentStatus::TimedOut
+                    | ReviewAssignmentStatus::SystemFailed
+                    | ReviewAssignmentStatus::RetryableFailed
+            )
+        })
+        .count();
+    let pending = assignments
+        .len()
+        .saturating_sub(approved + requested_changes + failed);
+    json!({
+        "approved": approved,
+        "requestedChanges": requested_changes,
+        "failed": failed,
+        "pending": pending,
+    })
+}
+
+fn review_next_actions(review: &ReviewRunDetail) -> Vec<&'static str> {
+    match review.status {
+        ReviewRunStatus::FeedbackReady => vec!["inspect_review_feedback", "send_review_feedback"],
+        ReviewRunStatus::ParentRevising | ReviewRunStatus::WaitingForRevision
+            if review.parent_can_signal_revision_via_mcp
+                && review.current_round_number < review.max_rounds =>
+        {
+            vec!["mark_review_revision_ready"]
+        }
+        ReviewRunStatus::Passed => vec!["inspect_review_feedback"],
+        ReviewRunStatus::Reviewing
+        | ReviewRunStatus::ParentRevising
+        | ReviewRunStatus::WaitingForRevision
+        | ReviewRunStatus::Stopped
+        | ReviewRunStatus::SystemFailed => Vec::new(),
+    }
 }
 
 fn validate_tool_for_role(role: ReviewMcpRole, tool_name: &str) -> anyhow::Result<()> {
