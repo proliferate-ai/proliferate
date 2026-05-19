@@ -1,152 +1,161 @@
-import { Cloud, GitBranch, Send, Smartphone, Users } from "lucide-react";
-import { useState, type ComponentType } from "react";
+import { Bot, Cloud, GitBranch, GitPullRequest, Smartphone, Users } from "lucide-react";
+import { useState } from "react";
 
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Select } from "@proliferate/ui/primitives/Select";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import type { NewChatPickerId, PickerView } from "@proliferate/product-ui/new-chat/NewChatSurface";
+import { NewChatSurface } from "@proliferate/product-ui/new-chat/NewChatSurface";
 
 import { workspaces } from "../../../lib/fixtures/web-fixtures";
 
 type ModeId = "dispatch" | "shared" | "personal";
 
-interface ModeOption {
-  id: ModeId;
-  label: string;
-  description: string;
-  icon: ComponentType<{ size?: number; className?: string }>;
-  placeholder: string;
-}
-
-const MODES: ModeOption[] = [
-  {
-    id: "dispatch",
-    label: "Dispatch",
-    description: "Lightweight remote task. No setup.",
-    icon: Smartphone,
-    placeholder: "Describe a quick remote task...",
-  },
-  {
-    id: "shared",
-    label: "Shared chat",
-    description: "Team work in the shared sandbox. Claimable.",
-    icon: Users,
-    placeholder: "Ask the shared sandbox to take this on...",
-  },
-  {
-    id: "personal",
-    label: "Personal cloud",
-    description: "Your repo, your tools, your model.",
-    icon: Cloud,
-    placeholder: "Ask Proliferate to work in your sandbox...",
-  },
-];
+const MODE_PLACEHOLDERS: Record<ModeId, string> = {
+  dispatch: "Describe a quick remote task...",
+  shared: "Ask the shared sandbox to take this on...",
+  personal: "Ask Proliferate to work in your sandbox...",
+};
 
 export function HomeScreen() {
-  const [mode, setMode] = useState<ModeId>("dispatch");
-  const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
   const [draft, setDraft] = useState("");
-  const meta = MODES.find((option) => option.id === mode) ?? MODES[0];
-  const workspace = workspaces.find((item) => item.id === workspaceId);
+  const [targetId, setTargetId] = useState(workspaces[0]?.id ?? "shared-cloud");
+  const [modelId, setModelId] = useState("gpt-5.4");
+  const [modeId, setModeId] = useState<ModeId>("dispatch");
+  const [submitting, setSubmitting] = useState(false);
+
+  function handlePickerSelect(picker: NewChatPickerId, itemId: string) {
+    if (picker === "target") {
+      setTargetId(itemId);
+      return;
+    }
+    if (picker === "model") {
+      setModelId(itemId);
+      return;
+    }
+    setModeId(itemId as ModeId);
+  }
+
+  function handleSubmit() {
+    if (!draft.trim()) return;
+    setSubmitting(true);
+    window.setTimeout(() => {
+      setSubmitting(false);
+      setDraft("");
+    }, 500);
+  }
 
   return (
-    <div className="web-scrollbar h-full overflow-y-auto">
-      <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col px-6 py-16">
-        <header className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">What should we run?</h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            Pick a run shape, then send the task.
-          </p>
-        </header>
-
-        <div className="grid gap-2 rounded-lg border border-border bg-card p-2">
-          {MODES.map((option) => {
-            const Icon = option.icon;
-            const active = option.id === mode;
-            return (
-              <Button
-                key={option.id}
-                type="button"
-                variant="unstyled"
-                size="unstyled"
-                onClick={() => setMode(option.id)}
-                className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors ${
-                  active ? "bg-accent" : "hover:bg-accent/60"
-                }`}
-              >
-                <span
-                  className={`flex size-9 items-center justify-center rounded-md border ${
-                    active
-                      ? "border-border-heavy bg-sidebar text-foreground"
-                      : "border-border bg-background text-muted-foreground"
-                  }`}
-                >
-                  <Icon size={16} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[13.5px] font-medium text-foreground">
-                    {option.label}
-                  </span>
-                  <span className="block text-xs text-muted-foreground">{option.description}</span>
-                </span>
-                <span
-                  className={`flex size-4 items-center justify-center rounded-full border ${
-                    active ? "border-foreground" : "border-border-heavy"
-                  }`}
-                >
-                  {active ? <span className="size-2 rounded-full bg-foreground" /> : null}
-                </span>
-              </Button>
-            );
-          })}
-        </div>
-
-        <div className="mt-3 rounded-lg border border-border bg-card p-3">
-          <Textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            className="min-h-28 w-full resize-none border-0 bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-0"
-            placeholder={meta.placeholder}
-          />
-          <div className="mt-3 flex items-center justify-between gap-3">
-            {mode === "personal" ? (
-              <div className="flex items-center gap-2">
-                <Select
-                  value={workspaceId}
-                  onChange={(event) => setWorkspaceId(event.target.value)}
-                  className="h-7 w-auto rounded-md border-border bg-background px-2 text-xs focus:border-border-heavy"
-                >
-                  {workspaces.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </Select>
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <GitBranch size={12} />
-                  {workspace?.branchLabel ?? "main"}
-                </span>
-              </div>
-            ) : (
-              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {mode === "dispatch" ? "Mobile-first" : "Team"}
-              </span>
-            )}
-            <Button
-              size="sm"
-              variant="inverted"
-              disabled={!draft.trim()}
-              className="rounded-full px-3"
-            >
-              <Send size={13} />
-              {mode === "dispatch" ? "Dispatch" : mode === "shared" ? "Send" : "Run"}
-            </Button>
-          </div>
-        </div>
-
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Configure agents, models, and skills in Settings.
-        </p>
-      </div>
-    </div>
+    <NewChatSurface
+      heading="What should we run?"
+      draft={draft}
+      placeholder={MODE_PLACEHOLDERS[modeId]}
+      canSubmit={Boolean(draft.trim()) && !submitting}
+      submitting={submitting}
+      target={buildTargetPicker(targetId)}
+      model={buildModelPicker(modelId)}
+      mode={buildModePicker(modeId)}
+      notices={[
+        {
+          id: "mock-cloud",
+          tone: "neutral",
+          text: "Cloud API wiring is intentionally light in this PR; this surface is using shared UI and fixture targets.",
+        },
+      ]}
+      actions={[
+        {
+          id: "branch",
+          label: "Open from branch",
+          icon: <GitBranch size={14} />,
+        },
+        {
+          id: "pr",
+          label: "Review pull request",
+          icon: <GitPullRequest size={14} />,
+        },
+        {
+          id: "agent",
+          label: "Use saved agent",
+          icon: <Bot size={14} />,
+        },
+      ]}
+      onDraftChange={setDraft}
+      onSubmit={handleSubmit}
+      onPickerSelect={handlePickerSelect}
+    />
   );
+}
+
+function buildTargetPicker(selectedId: string): PickerView {
+  return {
+    label: "Target",
+    icon: <Cloud size={13} />,
+    groups: [
+      {
+        id: "targets",
+        label: "Cloud targets",
+        items: workspaces.map((workspace) => ({
+          id: workspace.id,
+          label: workspace.name,
+          description: `${workspace.repoLabel} · ${workspace.branchLabel}`,
+          selected: workspace.id === selectedId,
+          icon: workspace.kind === "shared" ? <Users size={13} /> : <Cloud size={13} />,
+        })),
+      },
+    ],
+  };
+}
+
+function buildModelPicker(selectedId: string): PickerView {
+  const models = [
+    { id: "gpt-5.4", label: "GPT-5.4", description: "Balanced cloud work" },
+    { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", description: "Fast lighter tasks" },
+    { id: "gpt-5.3-codex", label: "GPT-5.3 Codex", description: "Coding-heavy work" },
+  ];
+  return {
+    label: "Model",
+    icon: <Bot size={13} />,
+    groups: [
+      {
+        id: "models",
+        items: models.map((model) => ({
+          ...model,
+          selected: model.id === selectedId,
+        })),
+      },
+    ],
+  };
+}
+
+function buildModePicker(selectedId: ModeId): PickerView {
+  const modes = [
+    {
+      id: "dispatch",
+      label: "Dispatch",
+      description: "Lightweight remote task",
+      icon: <Smartphone size={13} />,
+    },
+    {
+      id: "shared",
+      label: "Shared chat",
+      description: "Team sandbox, claimable",
+      icon: <Users size={13} />,
+    },
+    {
+      id: "personal",
+      label: "Personal cloud",
+      description: "Your repos and tools",
+      icon: <Cloud size={13} />,
+    },
+  ];
+  return {
+    label: "Mode",
+    icon: <Smartphone size={13} />,
+    groups: [
+      {
+        id: "modes",
+        items: modes.map((mode) => ({
+          ...mode,
+          selected: mode.id === selectedId,
+        })),
+      },
+    ],
+  };
 }

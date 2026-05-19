@@ -10,6 +10,7 @@ import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
 import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
+import { ProductSidebarSectionHeader } from "@proliferate/product-ui/sidebar/ProductSidebar";
 import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 
 const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
@@ -45,10 +46,10 @@ export function SidebarRepositoriesHeader({
   onAddRepo,
 }: SidebarRepositoriesHeaderProps) {
   return (
-    <div className="pl-2 pt-3 pb-1 text-base leading-5 text-sidebar-muted-foreground opacity-75">
-      <div className="flex items-center justify-between gap-2">
-        <span>Repositories</span>
-        <div className="flex shrink-0 items-center gap-1">
+    <ProductSidebarSectionHeader
+      label="Repositories"
+      actions={(
+        <>
           {hasRepoGroups && (
             <SidebarActionButton
               onClick={onToggleAllRepoGroups}
@@ -114,8 +115,8 @@ export function SidebarRepositoriesHeader({
           >
             <FolderPlusFilled className="size-3" />
           </SidebarActionButton>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    />
   );
 }

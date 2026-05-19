@@ -1,9 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ExternalLink, GitHub, Link2, Mail, RefreshCw } from "@/components/ui/icons";
+import {
+  AccountSettingsPane,
+  type AccountProviderView,
+} from "@proliferate/product-ui/account/AccountSettingsPane";
+import { ExternalLink, Link2, RefreshCw } from "@/components/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useAuthViewer } from "@/hooks/access/cloud/auth/use-auth-viewer";
@@ -12,7 +14,6 @@ import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-
 import {
   getAccountActionDescription,
   getAccountDisplayName,
-  getAccountInitials,
   getAccountProfileSummary,
   getGitHubStatusLabel,
 } from "@/lib/domain/auth/account-profile-presentation";
@@ -129,10 +130,10 @@ export function AccountPane() {
         }
       />
 
-      <AccountProfileHeader
-        avatarUrl={profileAvatarUrl}
+      <AccountSettingsPane
         displayName={displayName}
         email={user?.email ?? "Not signed in"}
+        avatarUrl={profileAvatarUrl}
         githubLabel={githubLogin ? `@${githubLogin}` : getGitHubStatusLabel({
           cloudSignInChecking,
           devAuthBypassed,
@@ -141,251 +142,129 @@ export function AccountPane() {
           signInUnavailable,
         })}
         profileSummary={profileSummary}
-      />
-
-      <SettingsCard>
-        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 space-y-1">
-            <div className="text-sm font-medium text-foreground">Account access</div>
-            <p className="max-w-xl text-sm text-muted-foreground">
-              {getAccountActionDescription({
-                devAuthBypassed,
-                isAuthenticated,
-                localMode,
-                signInUnavailable,
-                signedInWhileCloudUnavailable,
-                githubLogin,
-              })}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {devAuthBypassed ? (
-              <span className="text-sm text-muted-foreground">
-                {AUTH_ACCOUNT_LABELS.localPill}
-              </span>
-            ) : isAuthenticated ? (
-              <>
-                {canReconnectGitHub && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => void signInWithGitHub({ prompt: "select_account" })}
-                    disabled={signingIn || signInChecking}
-                    loading={signingIn}
-                  >
-                    {!signingIn && <RefreshCw className="size-3" />}
-                    {signingIn
-                      ? AUTH_ACCOUNT_LABELS.reconnecting
-                      : AUTH_ACCOUNT_LABELS.reconnect}
-                  </Button>
-                )}
-                {canOpenGitHubSettings && (
-                  <Button
-                    variant="ghost"
-                    onClick={() => { void openExternal(githubSettingsUrl); }}
-                  >
-                    {AUTH_ACCOUNT_LABELS.manageAccess}
-                    <ExternalLink className="size-3" />
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  onClick={() => void handleSignOut()}
-                  disabled={signingOut}
-                  loading={signingOut}
-                  className="text-destructive hover:text-destructive"
-                >
-                  {signingOut ? AUTH_ACCOUNT_LABELS.signingOut : AUTH_ACCOUNT_LABELS.signOut}
-                </Button>
-              </>
-            ) : localMode || signInUnavailable ? (
-              <span className="text-sm text-muted-foreground">Unavailable</span>
-            ) : cloudSignInChecking ? (
-              <span className="text-sm text-muted-foreground">Checking…</span>
-            ) : (
-              <Button
-                variant="secondary"
-                onClick={() => void signInWithGitHub()}
-                disabled={signingIn || signInChecking}
-                loading={signingIn}
-              >
-                {signingIn
+        accessDescription={getAccountActionDescription({
+          devAuthBypassed,
+          isAuthenticated,
+          localMode,
+          signInUnavailable,
+          signedInWhileCloudUnavailable,
+          githubLogin,
+        })}
+        providers={buildAccountProviderViews({
+          githubLogin,
+          linkedGitHub,
+          googleAccounts,
+          googleAvailable: googleAvailability?.enabled !== false,
+          showProviders: isAuthenticated && !devAuthBypassed,
+        })}
+        actions={{
+          signIn: !devAuthBypassed && !isAuthenticated && !localMode && !signInUnavailable && !cloudSignInChecking
+            ? {
+                label: signingIn
                   ? AUTH_ACCOUNT_LABELS.signingIn
                   : signInChecking
                     ? AUTH_ACCOUNT_LABELS.checkingSignIn
-                    : AUTH_ACCOUNT_LABELS.signIn}
-              </Button>
-            )}
-          </div>
-        </div>
-      </SettingsCard>
-
-      {isAuthenticated && !devAuthBypassed && (
-        <SettingsCard>
-          <div className="space-y-3 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0 space-y-1">
-                <div className="text-sm font-medium text-foreground">Connected providers</div>
-                <p className="max-w-xl text-sm text-muted-foreground">
-                  GitHub is required for repository access. Add Google accounts here so web, mobile, and desktop auth resolve to the same Proliferate user.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!canLinkGoogle || linkingGoogle}
-                loading={linkingGoogle}
-                onClick={() => void handleLinkGoogle()}
-              >
-                {!linkingGoogle && <Link2 className="size-3" />}
-                {linkingGoogle ? "Waiting for Google..." : "Add Google"}
-              </Button>
-            </div>
-
-            <div className="divide-y divide-border rounded-lg border border-border">
-              <ConnectedProviderRow
-                label="GitHub"
-                detail={githubLogin ? `@${githubLogin}` : linkedGitHub?.accountEmail ?? "Connected"}
-                connected={Boolean(linkedGitHub) || Boolean(githubLogin)}
-              />
-              {googleAccounts.length > 0 ? (
-                googleAccounts.map((account, index) => (
-                  <ConnectedProviderRow
-                    key={`google-${account.accountId ?? account.accountEmail ?? index}`}
-                    label="Google"
-                    detail={account.accountEmail ?? account.accountId ?? "Connected"}
-                    connected
-                  />
-                ))
-              ) : (
-                <ConnectedProviderRow
-                  label="Google"
-                  detail={
-                    googleAvailability?.enabled === false
-                      ? "Not configured in this environment"
-                      : "Not connected"
-                  }
-                  connected={false}
-                />
-              )}
-            </div>
-          </div>
-        </SettingsCard>
-      )}
-
-      {(signInError || providerLinkError) && (
-        <p className="text-sm text-destructive">{signInError || providerLinkError}</p>
-      )}
+                    : AUTH_ACCOUNT_LABELS.signIn,
+                loading: signingIn,
+                disabled: signingIn || signInChecking,
+                onClick: () => { void signInWithGitHub(); },
+              }
+            : undefined,
+          reconnectGitHub: canReconnectGitHub
+            ? {
+                label: signingIn
+                  ? AUTH_ACCOUNT_LABELS.reconnecting
+                  : AUTH_ACCOUNT_LABELS.reconnect,
+                icon: <RefreshCw className="size-3" />,
+                loading: signingIn,
+                disabled: signingIn || signInChecking,
+                onClick: () => { void signInWithGitHub({ prompt: "select_account" }); },
+              }
+            : undefined,
+          connectGoogle: isAuthenticated && !devAuthBypassed
+            ? {
+                label: linkingGoogle ? "Waiting for Google..." : "Add Google",
+                icon: <Link2 className="size-3" />,
+                loading: linkingGoogle,
+                disabled: !canLinkGoogle || linkingGoogle,
+                onClick: () => { void handleLinkGoogle(); },
+              }
+            : undefined,
+          manageGitHubAccess: canOpenGitHubSettings
+            ? {
+                label: AUTH_ACCOUNT_LABELS.manageAccess,
+                icon: <ExternalLink className="size-3" />,
+                onClick: () => { void openExternal(githubSettingsUrl); },
+              }
+            : undefined,
+          signOut: isAuthenticated && !devAuthBypassed
+            ? {
+                label: signingOut ? AUTH_ACCOUNT_LABELS.signingOut : AUTH_ACCOUNT_LABELS.signOut,
+                loading: signingOut,
+                disabled: signingOut,
+                destructive: true,
+                onClick: () => { void handleSignOut(); },
+              }
+            : undefined,
+        }}
+        error={signInError || providerLinkError}
+      />
     </section>
   );
 }
 
-function AccountProfileHeader({
-  avatarUrl,
-  displayName,
-  email,
-  githubLabel,
-  profileSummary,
+function buildAccountProviderViews({
+  githubLogin,
+  linkedGitHub,
+  googleAccounts,
+  googleAvailable,
+  showProviders,
 }: {
-  avatarUrl: string | null;
-  displayName: string;
-  email: string;
-  githubLabel: string;
-  profileSummary: string;
-}) {
-  return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-      <AccountAvatar
-        key={avatarUrl ?? "account-avatar"}
-        avatarUrl={avatarUrl}
-        displayName={displayName}
-      />
-      <div className="min-w-0 flex-1 space-y-3">
-        <div className="min-w-0 space-y-1">
-          <div className="truncate text-lg font-medium text-foreground">
-            {displayName}
-          </div>
-          <p className="text-sm text-muted-foreground">{profileSummary}</p>
-        </div>
-        <div className="grid gap-2">
-          <AccountProfileRow
-            icon={<Mail className="size-4" />}
-            label="Email"
-            value={email}
-          />
-          <AccountProfileRow
-            icon={<GitHub className="size-4" />}
-            label="GitHub"
-            value={githubLabel}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
+  githubLogin: string | null;
+  linkedGitHub: { accountEmail?: string | null; accountId?: string | null } | undefined;
+  googleAccounts: Array<{ accountEmail?: string | null; accountId?: string | null }>;
+  googleAvailable: boolean;
+  showProviders: boolean;
+}): AccountProviderView[] {
+  if (!showProviders) {
+    return [
+      {
+        provider: "github",
+        label: "GitHub",
+        accountLabel: "Not signed in",
+        connected: false,
+        primary: true,
+      },
+    ];
+  }
 
-function AccountAvatar({
-  avatarUrl,
-  displayName,
-}: {
-  avatarUrl: string | null;
-  displayName: string;
-}) {
-  const [avatarFailed, setAvatarFailed] = useState(false);
-  const showAvatar = avatarUrl && !avatarFailed;
+  const providers: AccountProviderView[] = [
+    {
+      provider: "github",
+      label: "GitHub",
+      accountLabel: githubLogin ? `@${githubLogin}` : linkedGitHub?.accountEmail ?? "Connected",
+      connected: Boolean(linkedGitHub) || Boolean(githubLogin),
+      primary: true,
+    },
+  ];
 
-  return (
-    <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-foreground/5 text-xl font-medium text-muted-foreground">
-      {showAvatar ? (
-        <img
-          src={avatarUrl}
-          alt={`${displayName} GitHub profile`}
-          className="size-full object-cover"
-          referrerPolicy="no-referrer"
-          onError={() => setAvatarFailed(true)}
-        />
-      ) : (
-        <span>{getAccountInitials(displayName)}</span>
-      )}
-    </div>
-  );
-}
+  if (googleAccounts.length > 0) {
+    providers.push(
+      ...googleAccounts.map((account) => ({
+        provider: "google" as const,
+        label: "Google",
+        accountLabel: account.accountEmail ?? account.accountId ?? "Connected",
+        connected: true,
+      })),
+    );
+  } else {
+    providers.push({
+      provider: "google",
+      label: "Google",
+      accountLabel: googleAvailable ? "Not connected" : "Not configured in this environment",
+      connected: false,
+    });
+  }
 
-function AccountProfileRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="grid grid-cols-[1rem_5rem_minmax(0,1fr)] items-center gap-3 text-sm">
-      <span className="text-muted-foreground" aria-hidden="true">{icon}</span>
-      <span className="text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-foreground">{value}</span>
-    </div>
-  );
-}
-
-function ConnectedProviderRow({
-  label,
-  detail,
-  connected,
-}: {
-  label: string;
-  detail: string;
-  connected: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
-      <div className="min-w-0">
-        <div className="font-medium text-foreground">{label}</div>
-        <div className="truncate text-muted-foreground">{detail}</div>
-      </div>
-      <span className={connected ? "text-xs text-foreground" : "text-xs text-muted-foreground"}>
-        {connected ? "Connected" : "Not connected"}
-      </span>
-    </div>
-  );
+  return providers;
 }

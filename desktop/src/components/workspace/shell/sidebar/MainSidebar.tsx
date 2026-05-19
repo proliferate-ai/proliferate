@@ -9,7 +9,11 @@ import { SidebarRepositoriesHeader } from "./SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "./SidebarWorkspaceContent";
 import { WorkspaceCleanupAttentionSection } from "./WorkspaceCleanupAttentionSection";
 import { CoworkThreadsSection } from "@/components/workspace/cowork/sidebar/CoworkThreadsSection";
-import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
+import {
+  ProductSidebarBody,
+  ProductSidebarFrame,
+  ProductSidebarScrollableContent,
+} from "@proliferate/product-ui/sidebar/ProductSidebar";
 import {
   isDefaultSidebarWorkspaceTypes,
 } from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
@@ -151,14 +155,18 @@ export const MainSidebar = memo(function MainSidebar() {
 
   return (
     <DebugProfiler id="workspace-sidebar">
-      <div className="h-full bg-sidebar-background text-sidebar-foreground select-none flex flex-col gap-2 pb-2">
+      <ProductSidebarFrame footer={(
+        <DebugProfiler id="workspace-sidebar-footer">
+          <SidebarFooter />
+        </DebugProfiler>
+      )}>
       {supportOpen && (
         <SupportDialog
           onClose={() => setSupportOpen(false)}
           context={supportContext}
         />
       )}
-      <div className="flex flex-col flex-1 min-h-0 w-full min-w-0">
+      <ProductSidebarBody>
         <DebugProfiler id="workspace-sidebar-primary-nav">
           <SidebarPrimaryNavigation
             homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
@@ -172,12 +180,7 @@ export const MainSidebar = memo(function MainSidebar() {
           />
         </DebugProfiler>
 
-        <div className="relative overflow-hidden flex-1 w-full min-w-0 min-h-0">
-          <AutoHideScrollArea
-            className="h-full"
-            viewportClassName="px-2 pt-0.5 pb-4"
-            contentClassName="w-full min-w-0 flex flex-col gap-px"
-          >
+        <ProductSidebarScrollableContent>
             <CoworkThreadsSection />
             <WorkspaceCleanupAttentionSection
               workspaces={cleanupAttentionWorkspaces}
@@ -224,14 +227,9 @@ export const MainSidebar = memo(function MainSidebar() {
                 onOpenRepoSettings={handleOpenRepoSettings}
               />
             </DebugProfiler>
-          </AutoHideScrollArea>
-        </div>
-      </div>
-
-      <DebugProfiler id="workspace-sidebar-footer">
-        <SidebarFooter />
-      </DebugProfiler>
-      </div>
+        </ProductSidebarScrollableContent>
+      </ProductSidebarBody>
+      </ProductSidebarFrame>
     </DebugProfiler>
   );
 });
