@@ -62,7 +62,12 @@ def _current_credential_freshness() -> CredentialFreshnessSnapshot:
     )
 
 
-async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
+async def _register_and_login(
+    client: AsyncClient,
+    email: str,
+    *,
+    link_github: bool = True,
+) -> dict[str, str]:
     """Create a user via the user manager and obtain tokens via PKCE."""
     from proliferate.auth.models import UserCreate
     from proliferate.auth.users import UserManager
@@ -76,6 +81,16 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
             user = await manager.create(
                 UserCreate(email=email, password="unused-oauth-only", display_name="Cloud Tester"),
             )
+            if link_github:
+                session.add(
+                    OAuthAccount(
+                        user_id=user.id,
+                        oauth_name="github",
+                        access_token="github-access-token",
+                        account_id=f"github-{user.id}",
+                        account_email=email,
+                    )
+                )
             await session.commit()
             user_id = str(user.id)
 
@@ -115,6 +130,21 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
 
 
 async def _link_github_account(db_session: AsyncSession, user_id: str) -> None:
+    existing = (
+        await db_session.execute(
+            select(OAuthAccount).where(
+                OAuthAccount.user_id == uuid.UUID(user_id),
+                OAuthAccount.oauth_name == "github",
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        existing.access_token = "github-access-token"
+        existing.account_id = "12345"
+        existing.account_email = "cloud@example.com"
+        await db_session.commit()
+        return
+
     account = OAuthAccount(
         user_id=uuid.UUID(user_id),
         oauth_name="github",
@@ -1693,7 +1723,11 @@ class TestCloudWorkspaces:
 
         _patch_repo_branches_lookup(monkeypatch, _repo_branches)
 
-        session = await _register_and_login(client, "cloud-create-gating@example.com")
+        session = await _register_and_login(
+            client,
+            "cloud-create-gating@example.com",
+            link_github=False,
+        )
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         request = {
             "gitProvider": "github",
@@ -1705,7 +1739,7 @@ class TestCloudWorkspaces:
         }
 
         no_github = await client.post("/v1/cloud/workspaces", headers=headers, json=request)
-        assert no_github.status_code == 400
+        assert no_github.status_code == 403
         assert no_github.json()["detail"]["code"] == "github_link_required"
 
         await _link_github_account(db_session, session["user_id"])

@@ -11,6 +11,7 @@ import {
 import type { ComponentType } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
+import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { deriveClaimState } from "@proliferate/product-model/chats/claiming";
@@ -54,7 +55,9 @@ function ChatRow({ chat }: { chat: ProductChat }) {
   const claimLabel = claimStateLabel(deriveClaimState(chat, currentUser));
 
   return (
-    <button
+    <Button
+      variant="unstyled"
+      size="unstyled"
       type="button"
       onClick={() => navigate(routes.chat(chat.workspaceId, chat.id))}
       className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-sidebar-foreground hover:bg-sidebar-accent"
@@ -67,7 +70,7 @@ function ChatRow({ chat }: { chat: ProductChat }) {
         </span>
       </span>
       <MoreHorizontal size={14} className="shrink-0 text-sidebar-muted-foreground opacity-0 group-hover:opacity-100" />
-    </button>
+    </Button>
   );
 }
 

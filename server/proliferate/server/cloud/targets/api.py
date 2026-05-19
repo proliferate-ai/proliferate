@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/targets", tags=["cloud-targets"])
 async def create_target_enrollment_endpoint(
     body: CloudTargetEnrollmentRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudTargetEnrollmentResponse:
     try:
         return await create_target_enrollment(db, user=user, body=body)
@@ -45,7 +45,7 @@ async def create_target_enrollment_endpoint(
 @router.get("", response_model=list[CloudTargetSummary])
 async def list_targets_endpoint(
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> list[CloudTargetSummary]:
     values = await list_targets(db, user_id=user.id)
     return [target_summary_payload(value) for value in values]
@@ -55,7 +55,7 @@ async def list_targets_endpoint(
 async def get_target_endpoint(
     target_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudTargetDetail:
     try:
         value = await get_target_detail(db, target_id=target_id, user_id=user.id)
@@ -68,7 +68,7 @@ async def get_target_endpoint(
 async def archive_target_endpoint(
     target_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> ArchiveCloudTargetResponse:
     try:
         value = await archive_target(db, target_id=target_id, user=user)

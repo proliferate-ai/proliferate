@@ -6,10 +6,10 @@ import {
 import { useCloudClient } from "../context/CloudClientProvider.js";
 import { authViewerKey } from "../lib/query-keys.js";
 
-export function useAuthViewer(enabled = true) {
+export function useAuthViewer(enabled = true, authCacheScope = "default") {
   const client = useCloudClient();
   return useQuery<AuthViewerResponse>({
-    queryKey: authViewerKey(client.baseUrl),
+    queryKey: authViewerKey(client.baseUrl, authCacheScope),
     queryFn: () => getAuthViewer(client),
     enabled,
   });

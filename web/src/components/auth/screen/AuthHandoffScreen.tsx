@@ -7,6 +7,10 @@ interface AuthHandoffScreenProps {
   description: string;
   stateLabel: string;
   tone?: "default" | "error";
+  primaryActionLabel: string;
+  primaryActionHref: string;
+  secondaryActionLabel?: string;
+  secondaryActionHref?: string;
 }
 
 export function AuthHandoffScreen({
@@ -14,8 +18,15 @@ export function AuthHandoffScreen({
   description,
   stateLabel,
   tone = "default",
+  primaryActionLabel,
+  primaryActionHref,
+  secondaryActionLabel,
+  secondaryActionHref,
 }: AuthHandoffScreenProps) {
   const Icon = tone === "error" ? AlertTriangle : CheckCircle2;
+  const openHref = (href: string) => {
+    window.location.assign(href);
+  };
 
   return (
     <div className="flex h-full items-center justify-center px-6">
@@ -31,11 +42,15 @@ export function AuthHandoffScreen({
         <h1 className="mt-2 text-2xl font-semibold">{title}</h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
         <div className="mt-6 flex flex-wrap gap-2">
-          <Button>
+          <Button onClick={() => openHref(primaryActionHref)}>
             <ExternalLink size={15} />
-            Open desktop
+            {primaryActionLabel}
           </Button>
-          <Button variant="secondary">Go to dashboard</Button>
+          {secondaryActionLabel && secondaryActionHref ? (
+            <Button variant="secondary" onClick={() => openHref(secondaryActionHref)}>
+              {secondaryActionLabel}
+            </Button>
+          ) : null}
         </div>
       </section>
     </div>

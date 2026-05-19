@@ -15,6 +15,9 @@ import { SupportPage } from "./pages/SupportPage";
 export function App() {
   return (
     <Routes>
+      <Route path="auth/callback" element={<AuthCallbackPage />} />
+      <Route path="auth/desktop/handoff" element={<DesktopHandoffPage />} />
+      <Route path="auth/error" element={<AuthErrorPage />} />
       <Route element={<WebAppShell />}>
         <Route index element={<HomePage />} />
         <Route path="automations" element={<AutomationsPage />} />
@@ -22,9 +25,6 @@ export function App() {
         <Route path="support" element={<SupportPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="workspaces/:workspaceId/chats/:chatId" element={<ChatPage />} />
-        <Route path="auth/callback" element={<AuthCallbackPage />} />
-        <Route path="auth/desktop/handoff" element={<DesktopHandoffPage />} />
-        <Route path="auth/error" element={<AuthErrorPage />} />
         <Route path="*" element={<Navigate to={routes.home} replace />} />
       </Route>
     </Routes>

@@ -2,6 +2,7 @@ import { CircleHelp, Mail, MessageSquare, Send } from "lucide-react";
 
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
 export function SupportScreen() {
   return (
@@ -41,7 +42,7 @@ export function SupportScreen() {
           <div className="grid gap-3">
             <Input placeholder="Email" />
             <Input placeholder="Subject" />
-            <textarea
+            <Textarea
               rows={8}
               className="w-full resize-none rounded-md border border-input bg-surface-control p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring"
               placeholder="What happened?"

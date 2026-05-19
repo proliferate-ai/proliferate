@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Select } from "@proliferate/ui/primitives/Select";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { chatKindPresentation } from "@proliferate/product-model/chats/presentation";
 
 import { routes } from "../../../config/routes";
@@ -46,7 +48,9 @@ export function HomeScreen() {
                 const Icon = option.icon;
                 const active = option.id === mode;
                 return (
-                  <button
+                  <Button
+                    variant="unstyled"
+                    size="unstyled"
                     key={option.id}
                     type="button"
                     onClick={() => setMode(option.id)}
@@ -58,11 +62,11 @@ export function HomeScreen() {
                   >
                     <Icon size={14} />
                     {option.label}
-                  </button>
+                  </Button>
                 );
               })}
             </div>
-            <select
+            <Select
               value={workspaceId}
               onChange={(event) => setWorkspaceId(event.target.value)}
               className="h-9 min-w-56 rounded-md border border-input bg-surface-control px-3 text-xs text-foreground outline-none"
@@ -72,10 +76,10 @@ export function HomeScreen() {
                   {workspace.name} - {workspace.repoLabel}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
-          <textarea
+          <Textarea
             className="min-h-32 w-full resize-none rounded-md border border-input bg-background p-4 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring"
             placeholder={
               mode === "team"
@@ -111,7 +115,9 @@ export function HomeScreen() {
                 const presentation = chatKindPresentation(chat.kind);
                 const workspace = workspaceForChat(chat);
                 return (
-                  <button
+                  <Button
+                    variant="unstyled"
+                    size="unstyled"
                     key={chat.id}
                     type="button"
                     onClick={() => navigate(routes.chat(chat.workspaceId, chat.id))}
@@ -124,7 +130,7 @@ export function HomeScreen() {
                       </span>
                     </span>
                     <ArrowRight size={15} className="shrink-0 text-muted-foreground" />
-                  </button>
+                  </Button>
                 );
               })}
             </div>

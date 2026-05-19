@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { deriveClaimState, getPrimaryChatAction } from "@proliferate/product-model/chats/claiming";
 import { chatKindPresentation, claimStateLabel } from "@proliferate/product-model/chats/presentation";
 
@@ -117,7 +118,7 @@ export function ChatScreen() {
 
       <footer className="shrink-0 border-t border-border p-4">
         <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-lg border border-input bg-card p-2">
-          <textarea
+          <Textarea
             rows={2}
             className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"
             placeholder="Message this session"
