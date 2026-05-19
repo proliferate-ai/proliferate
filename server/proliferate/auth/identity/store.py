@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import secrets
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -25,7 +26,17 @@ from proliferate.db.models.auth import (
     ProviderGrant,
     User,
 )
-from proliferate.utils.crypto import encrypt_text
+from proliferate.utils.crypto import decrypt_text, encrypt_text
+
+
+@dataclass(frozen=True)
+class ReadyGitHubGrant:
+    user_id: UUID
+    identity_id: UUID
+    access_token: str
+    account_email: str | None
+    display_name: str | None
+    avatar_url: str | None
 
 
 def _now() -> datetime:
@@ -45,6 +56,12 @@ def _parse_scopes(value: str | None) -> frozenset[str]:
     return frozenset(item for item in parsed if isinstance(item, str))
 
 
+def _github_scopes_satisfy_requirements(scopes: frozenset[str]) -> bool:
+    if "repo" not in scopes:
+        return False
+    return "user" in scopes or "user:email" in scopes
+
+
 def _provider_grant_status(verified: VerifiedProviderIdentity) -> AuthProviderGrantStatus:
     if verified.expires_at is not None:
         expires_at = (
@@ -54,7 +71,9 @@ def _provider_grant_status(verified: VerifiedProviderIdentity) -> AuthProviderGr
         )
         if expires_at <= _now():
             return AuthProviderGrantStatus.EXPIRED
-    if verified.provider == "github" and not REQUIRED_GITHUB_SCOPES.issubset(verified.scopes):
+    if verified.provider == "github" and not _github_scopes_satisfy_requirements(
+        verified.scopes
+    ):
         return AuthProviderGrantStatus.NEEDS_REAUTH
     return AuthProviderGrantStatus.READY
 
@@ -373,11 +392,23 @@ async def get_account_readiness(
             grant.updated_at = _now()
             await db.flush()
 
+        scopes = _parse_scopes(grant.scopes_json)
+        scopes_satisfy_requirements = _github_scopes_satisfy_requirements(scopes)
+        if (
+            grant.status == AuthProviderGrantStatus.NEEDS_REAUTH.value
+            and scopes_satisfy_requirements
+            and grant.access_token_ciphertext
+        ):
+            grant.status = AuthProviderGrantStatus.READY.value
+            grant.updated_at = _now()
+            await db.flush()
+
         missing: list[str] = []
+        if not grant.access_token_ciphertext:
+            missing.append("github_grant_missing")
         if grant.status != AuthProviderGrantStatus.READY.value:
             missing.append("github_grant_not_ready")
-        scopes = _parse_scopes(grant.scopes_json)
-        if REQUIRED_GITHUB_SCOPES and not REQUIRED_GITHUB_SCOPES.issubset(scopes):
+        if not scopes_satisfy_requirements:
             missing.append("github_scope_missing")
         if not missing:
             return AccountReadiness(
@@ -397,6 +428,42 @@ async def get_account_readiness(
         github_identity_id=fallback_identity.id,
         github_grant_status=fallback_status,
     )
+
+
+async def get_ready_github_grant_for_user(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> ReadyGitHubGrant | None:
+    await backfill_legacy_oauth_accounts_for_user(db, user_id=user_id)
+    identities = await get_identities_for_user_provider(db, user_id=user_id, provider="github")
+    for identity in identities:
+        grant = await get_provider_grant(db, identity_id=identity.id, provider="github")
+        if grant is None:
+            continue
+
+        if _expires_at_is_past(grant.expires_at):
+            grant.status = AuthProviderGrantStatus.EXPIRED.value
+            grant.updated_at = _now()
+            await db.flush()
+            continue
+
+        if grant.status != AuthProviderGrantStatus.READY.value:
+            continue
+        if not _github_scopes_satisfy_requirements(_parse_scopes(grant.scopes_json)):
+            continue
+        if not grant.access_token_ciphertext:
+            continue
+
+        return ReadyGitHubGrant(
+            user_id=user_id,
+            identity_id=identity.id,
+            access_token=decrypt_text(grant.access_token_ciphertext),
+            account_email=identity.email,
+            display_name=identity.display_name,
+            avatar_url=identity.avatar_url,
+        )
+    return None
 
 
 async def create_auth_challenge(
@@ -441,7 +508,8 @@ async def consume_auth_challenge(
     state_hash: str,
 ) -> AuthChallengeSnapshot | None:
     result = await db.execute(
-        select(AuthChallenge).where(
+        select(AuthChallenge)
+        .where(
             AuthChallenge.state_hash == state_hash,
             AuthChallenge.consumed_at.is_(None),
         )
@@ -484,7 +552,8 @@ async def linked_provider_payloads(
 
 async def backfill_legacy_oauth_accounts_for_user(db: AsyncSession, *, user_id: UUID) -> None:
     result = await db.execute(
-        select(OAuthAccount).where(
+        select(OAuthAccount)
+        .where(
             OAuthAccount.user_id == user_id,
             OAuthAccount.oauth_name.in_(("github", "google")),
         )

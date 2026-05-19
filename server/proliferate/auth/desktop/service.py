@@ -51,7 +51,7 @@ from proliferate.auth.pkce import build_code_challenge, verify_pkce
 from proliferate.config import settings
 from proliferate.constants.auth import (
     DESKTOP_DEEP_LINK_LAUNCH_ENABLED,
-    DESKTOP_REDIRECT_SCHEME,
+    DESKTOP_REDIRECT_SCHEMES,
     JWT_LIFETIME_SECONDS,
     REFRESH_TOKEN_LIFETIME_SECONDS,
     SUPPORTED_CODE_CHALLENGE_METHODS,
@@ -141,11 +141,12 @@ def github_csrf_cookie_secure(request: Request) -> bool:
 
 def validate_desktop_redirect_uri(redirect_uri: str) -> None:
     parsed = urlparse(redirect_uri)
-    if parsed.scheme != DESKTOP_REDIRECT_SCHEME:
+    if parsed.scheme not in DESKTOP_REDIRECT_SCHEMES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                f"redirect_uri must use the configured desktop scheme '{DESKTOP_REDIRECT_SCHEME}'"
+                "redirect_uri must use a configured desktop scheme: "
+                f"{', '.join(sorted(DESKTOP_REDIRECT_SCHEMES))}"
             ),
         )
 

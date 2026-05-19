@@ -68,7 +68,7 @@ def test_identity_provider_callback_url_uses_api_prefix_when_base_is_origin(
 
     assert (
         provider_callback_url(_request(), provider="github", surface="web")
-        == "https://app.proliferate.com/api/auth/web/github/callback"
+        == "https://app.proliferate.com/api/auth/github/callback"
     )
 
 
@@ -80,7 +80,7 @@ def test_identity_provider_callback_url_does_not_double_existing_api_prefix(
 
     assert (
         provider_callback_url(_request(), provider="github", surface="web")
-        == "https://app.proliferate.com/api/auth/web/github/callback"
+        == "https://app.proliferate.com/api/auth/github/callback"
     )
 
 

@@ -42,9 +42,12 @@ export function AccountPane() {
   const [providerLinkError, setProviderLinkError] = useState<string | null>(null);
   const devAuthBypassed = isDevAuthBypassed();
   const isAuthenticated = status === "authenticated";
+  const authViewerCacheScope = user?.id
+    ? `desktop-account:${user.id}`
+    : "desktop-account:anonymous";
   const authViewer = useAuthViewer(
     isAuthenticated && !devAuthBypassed && cloudSignInAvailable,
-    "desktop-account",
+    authViewerCacheScope,
   );
   const linkedProviders = authViewer.data?.linkedProviders ?? [];
   const linkedGitHub = linkedProviders.find((provider) => (

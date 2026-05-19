@@ -58,15 +58,32 @@ export interface DesktopProviderAuthOptions {
 
 export interface DesktopAuthCallback {
   url: string
-  code: string
   state: string
+  code: string | null
+  error: string | null
 }
 
 const DESKTOP_REDIRECT_SCHEME = "proliferate"
+const LOCAL_DESKTOP_REDIRECT_SCHEME = "proliferate-local"
+const DESKTOP_REDIRECT_SCHEMES = new Set([
+  DESKTOP_REDIRECT_SCHEME,
+  LOCAL_DESKTOP_REDIRECT_SCHEME,
+])
 const DESKTOP_REDIRECT_HOST = "auth"
 const DESKTOP_REDIRECT_PATH = "/callback"
 const GITHUB_RECOVERY_TIMEOUT_MS = 2 * 60 * 1000
-export const DESKTOP_AUTH_REDIRECT_URI = `${DESKTOP_REDIRECT_SCHEME}://${DESKTOP_REDIRECT_HOST}${DESKTOP_REDIRECT_PATH}`
+function isLocalDesktopHost(): boolean {
+  if (typeof window === "undefined") {
+    return false
+  }
+  return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname)
+}
+
+function desktopRedirectScheme(): string {
+  return isLocalDesktopHost() ? LOCAL_DESKTOP_REDIRECT_SCHEME : DESKTOP_REDIRECT_SCHEME
+}
+
+export const DESKTOP_AUTH_REDIRECT_URI = `${desktopRedirectScheme()}://${DESKTOP_REDIRECT_HOST}${DESKTOP_REDIRECT_PATH}`
 export const PENDING_AUTH_MAX_AGE_MS = 10 * 60 * 1000
 const CLOUD_UNAVAILABLE_MESSAGE =
   "Could not reach the Proliferate cloud. Local workspaces still work; sign-in requires the control plane."
@@ -218,7 +235,7 @@ export function parseDesktopAuthCallback(url: string): DesktopAuthCallback | nul
     return null
   }
 
-  if (parsed.protocol !== `${DESKTOP_REDIRECT_SCHEME}:`) {
+  if (!DESKTOP_REDIRECT_SCHEMES.has(parsed.protocol.replace(/:$/, ""))) {
     return null
   }
 
@@ -231,15 +248,17 @@ export function parseDesktopAuthCallback(url: string): DesktopAuthCallback | nul
   }
 
   const code = parsed.searchParams.get("code")
+  const error = parsed.searchParams.get("error")
   const state = parsed.searchParams.get("state")
-  if (!code || !state) {
+  if (!state || (!code && !error)) {
     return null
   }
 
   return {
     url: parsed.toString(),
-    code,
     state,
+    code,
+    error,
   }
 }
 

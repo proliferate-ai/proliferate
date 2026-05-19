@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import uuid
 
 import httpx
@@ -9,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.models import UserCreate
 from proliferate.auth.users import UserManager
+from tests.helpers.desktop_auth import mint_desktop_token_payload
 from tests.e2e.cloud.helpers.shared import AuthSession, CloudE2ETestError
 
 PKCE_VERIFIER = "cloud-e2e-code-verifier-that-is-long-enough-for-pkce"
@@ -46,35 +45,16 @@ async def mint_auth_session(
     *,
     user_id: str,
 ) -> AuthSession:
-    digest = hashlib.sha256(PKCE_VERIFIER.encode("ascii")).digest()
-    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-    authorize = await client.post(
-        "/auth/desktop/authorize",
-        params={"user_id": user_id},
-        json={
-            "state": f"cloud-state-{uuid.uuid4().hex[:8]}",
-            "code_challenge": challenge,
-            "code_challenge_method": "S256",
-            "redirect_uri": "proliferate://auth/callback",
-        },
+    token_payload = await mint_desktop_token_payload(
+        client,
+        user_id=user_id,
+        state_prefix="cloud-state",
+        verifier=PKCE_VERIFIER,
     )
-    authorize.raise_for_status()
-    code = authorize.json()["code"]
-
-    token = await client.post(
-        "/auth/desktop/token",
-        json={
-            "code": code,
-            "code_verifier": PKCE_VERIFIER,
-            "grant_type": "authorization_code",
-        },
-    )
-    token.raise_for_status()
-    token_payload = token.json()
     return AuthSession(
         user_id=user_id,
-        access_token=token_payload["access_token"],
-        refresh_token=token_payload["refresh_token"],
+        access_token=str(token_payload["access_token"]),
+        refresh_token=str(token_payload["refresh_token"]),
     )
 
 

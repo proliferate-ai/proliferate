@@ -42,7 +42,6 @@ import {
   getGitHubDesktopAuthAvailability,
   isPendingDesktopAuthExpired,
   isSessionExpiring,
-  PENDING_AUTH_MAX_AGE_MS,
   parseDesktopAuthCallback,
   pollGitHubDesktopSession,
   refreshDesktopUserSession,
@@ -477,18 +476,32 @@ export async function linkDesktopProvider(
       },
     );
 
-    const session = await Promise.race([
-      controller.promise,
-      wait(PENDING_AUTH_MAX_AGE_MS).then(() => {
-        throw new AuthRequestError("Provider linking timed out. Start again from Proliferate.", 408);
-      }),
+    const recoverySession = pollGitHubDesktopSession(
+      pending.state,
+      pending.code_verifier,
+      controller.abortController.signal,
+    );
+
+    const { session, source } = await Promise.race([
+      controller.promise.then((session) => ({
+        session,
+        source: "desktop_callback" as const,
+      })),
+      recoverySession.then((session) => ({
+        session,
+        source: "interactive_poll" as const,
+      })),
     ]);
+    const activeSignIn = getActiveGitHubSignIn();
+    if (activeSignIn?.state === pending.state && !activeSignIn.settled) {
+      resolveGitHubSignIn(pending.state, session);
+    }
 
     await clearStoredPendingAuthSession();
     await applyAuthenticatedState(deps, session);
     return {
       provider,
-      source: "desktop_callback",
+      source,
     };
   } catch (error) {
     await clearPendingGitHubAuth(
@@ -559,6 +572,19 @@ export async function handleDesktopCallbackUrl(
   }
 
   await markPendingCallbackUrl(pending, callback.url);
+
+  if (callback.error) {
+    const message = `Authentication failed: ${callback.error}`;
+    await clearPendingGitHubAuth(pending.state, new Error(message));
+    reportBackgroundAuthError(message, deps);
+    return true;
+  }
+
+  if (!callback.code) {
+    reportBackgroundAuthError("Authentication failed: missing authorization code.", deps);
+    await restorePendingCallbackMarker(pending);
+    return false;
+  }
 
   try {
     const session = await exchangeDesktopAuthCode(

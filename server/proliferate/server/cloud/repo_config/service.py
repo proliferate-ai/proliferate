@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.identity.store import get_ready_github_grant_for_user
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
     CloudRepoConfigSummaryValue,
@@ -20,7 +21,6 @@ from proliferate.db.store.cloud_repo_config import (
 )
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.db.store.organizations import load_active_membership
-from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
 from proliferate.integrations.anyharness import CloudRuntimeOperationError
 from proliferate.server.billing.service import (
     get_billing_snapshot,
@@ -43,7 +43,8 @@ from proliferate.server.cloud.repo_config.validation import (
     normalize_repo_file_path,
     validate_tracked_file_content,
 )
-from proliferate.server.cloud.repos.service import get_repo_branches_for_user
+from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
+from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.runtime.repo_config_apply import (
     WorkspaceRepoApplyBusyError,
@@ -207,12 +208,16 @@ async def _validate_default_branch(
     if normalized_default_branch is None:
         return None
 
-    user = await get_user_with_oauth_accounts_by_id(db, user_id)
-    if user is None:
-        raise CloudApiError("user_not_found", "User not found.", status_code=404)
+    github_grant = await get_ready_github_grant_for_user(db, user_id=user_id)
+    if github_grant is None:
+        raise CloudApiError(
+            "github_link_required",
+            "Connect a GitHub account before setting a cloud default branch.",
+            status_code=400,
+        )
 
-    repo_branches = await get_repo_branches_for_user(
-        user,
+    repo_branches = await get_repo_branches_for_credentials(
+        CloudRepoGitHubCredentials(user_id=user_id, access_token=github_grant.access_token),
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         missing_access_message="Connect a GitHub account before setting a cloud default branch.",

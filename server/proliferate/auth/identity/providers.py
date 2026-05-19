@@ -422,8 +422,13 @@ def provider_callback_url(request: Request, *, provider: AuthProviderName, surfa
     base = settings.api_base_url.strip().rstrip("/")
     if not base:
         base = str(request.base_url).rstrip("/")
+    callback_path = (
+        f"/auth/{provider}/callback"
+        if provider == "github"
+        else f"/auth/{surface}/{provider}/callback"
+    )
     path = auth_route_path_for_base(
-        f"/auth/{surface}/{provider}/callback",
+        callback_path,
         base_url=base,
     )
     return f"{base}{path}"

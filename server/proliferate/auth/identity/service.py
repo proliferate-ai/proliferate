@@ -41,7 +41,7 @@ from proliferate.auth.pkce import verify_pkce
 from proliferate.config import settings
 from proliferate.constants.auth import (
     AUTH_CODE_LIFETIME_SECONDS,
-    DESKTOP_REDIRECT_SCHEME,
+    DESKTOP_REDIRECT_SCHEMES,
     JWT_LIFETIME_SECONDS,
     REFRESH_TOKEN_LIFETIME_SECONDS,
     SUPPORTED_CODE_CHALLENGE_METHODS,
@@ -73,12 +73,12 @@ def validate_redirect_uri(surface: str, redirect_uri: str) -> None:
         return
     if surface == "desktop":
         parsed = urlparse(redirect_uri)
-        if parsed.scheme != DESKTOP_REDIRECT_SCHEME:
+        if parsed.scheme not in DESKTOP_REDIRECT_SCHEMES:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Desktop redirect URI must use the configured "
-                    f"'{DESKTOP_REDIRECT_SCHEME}' scheme."
+                    "Desktop redirect URI must use a configured desktop scheme: "
+                    f"{', '.join(sorted(DESKTOP_REDIRECT_SCHEMES))}."
                 ),
             )
         return
@@ -176,7 +176,7 @@ async def complete_oauth_provider_callback(
     request: Request,
     *,
     provider: AuthProviderName,
-    surface: str,
+    surface: str | None,
     state: str,
     code: str,
 ) -> str:
@@ -186,14 +186,15 @@ async def complete_oauth_provider_callback(
         provider=provider,
         surface=surface,
     )
+    callback_surface = surface or challenge.surface
     verified = await providers.verify_oauth_callback(
         provider=provider,
-        surface=surface,
+        surface=callback_surface,
         code=code,
         provider_callback_url=providers.provider_callback_url(
             request,
             provider=provider,
-            surface=surface,
+            surface=callback_surface,
         ),
     )
     user = await resolve_provider_user(db, verified=verified, challenge=challenge)
@@ -212,7 +213,7 @@ async def complete_oauth_provider_error_callback(
     db: AsyncSession,
     *,
     provider: AuthProviderName,
-    surface: str,
+    surface: str | None,
     state: str,
     error: str,
 ) -> str:
@@ -294,10 +295,14 @@ async def _consume_challenge_for_callback(
     *,
     state: str,
     provider: AuthProviderName,
-    surface: str,
+    surface: str | None,
 ) -> AuthChallengeSnapshot:
     challenge = await consume_auth_challenge(db, state_hash=hash_secret(state))
-    if challenge is None or challenge.provider != provider or challenge.surface != surface:
+    if (
+        challenge is None
+        or challenge.provider != provider
+        or (surface is not None and challenge.surface != surface)
+    ):
         raise HTTPException(status_code=400, detail="Invalid or expired auth state.")
     return challenge
 
@@ -326,7 +331,11 @@ async def resolve_provider_user(
             _ensure_active_user(linked_user)
             current_readiness = await get_account_readiness(db, user_id=current_user.id)
             linked_readiness = await get_account_readiness(db, user_id=linked_user.id)
-            if verified.provider == "github":
+            if (
+                verified.provider == "github"
+                and not current_readiness.product_ready
+                and linked_readiness.product_ready
+            ):
                 await merge_auth_user_into_user(
                     db,
                     source_user_id=current_user.id,
@@ -507,9 +516,7 @@ async def auth_viewer_payload(
             provider=provider,  # type: ignore[arg-type]
             enabled=providers.provider_enabled(provider, surface="web"),  # type: ignore[arg-type]
             reason=(
-                None
-                if providers.provider_enabled(provider, surface="web")
-                else "not_configured"
+                None if providers.provider_enabled(provider, surface="web") else "not_configured"
             ),
         )
         for provider in ("github", "google", "apple")

@@ -8,32 +8,30 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const apiPort = Number(process.env.PROLIFERATE_API_PORT || "8000");
-const frontendBaseUrl = process.env.FRONTEND_BASE_URL || "http://localhost:5174";
-const ngrokWebAddr = process.env.NGROK_WEB_ADDR || "127.0.0.1:4041";
+const webPort = Number(process.env.PROLIFERATE_WEB_PORT || "5174");
+const frontendBaseUrl = process.env.FRONTEND_BASE_URL || `http://localhost:${webPort}`;
+const localApiBaseUrl = process.env.VITE_PROLIFERATE_API_BASE_URL || `http://127.0.0.1:${apiPort}`;
+const ngrokWebAddr = process.env.NGROK_WEB_ADDR || "127.0.0.1:4042";
 const ngrokApiUrl = process.env.NGROK_API_URL || `http://${ngrokWebAddr}/api/tunnels`;
-const expoArgs = (process.env.MOBILE_EXPO_ARGS || "--tunnel").split(/\s+/).filter(Boolean);
-const preferredMetroPort = Number(process.env.PROLIFERATE_MOBILE_PORT || "8081");
-const defaultAppleIosBundleId = "ai.proliferate.mobile";
 const children = new Set();
 const tempDirs = new Set();
 let shuttingDown = false;
 
 function usage() {
   console.log(`Usage:
-  make dev-mobile-auth
-  make dev-mobile-tunnel
+  make dev-web-auth
 
 Environment overrides:
   PROLIFERATE_API_PORT=8000
+  PROLIFERATE_WEB_PORT=5174
   FRONTEND_BASE_URL=http://localhost:5174
-  PROLIFERATE_MOBILE_PORT=8081
-  MOBILE_EXPO_ARGS="--tunnel"
-  NGROK_WEB_ADDR=127.0.0.1:4041
-  NGROK_API_URL=http://127.0.0.1:4041/api/tunnels
+  VITE_PROLIFERATE_API_BASE_URL=http://127.0.0.1:8000
+  NGROK_WEB_ADDR=127.0.0.1:4042
+  NGROK_API_URL=http://127.0.0.1:4042/api/tunnels
 
-This starts local Postgres/migrations, ngrok, the server, and Expo mobile.
-Add the printed Google redirect URI to Google Console for the auth flow.
-Use MOBILE_EXPO_ARGS="--lan" when your phone is reliably on the same LAN.`);
+This starts local Postgres/migrations, ngrok for the API OAuth callbacks,
+the server, and Vite web.
+Add the printed provider redirect URI to Google/GitHub if the ngrok URL is new.`);
 }
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -184,8 +182,7 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForLocalServer() {
-  const url = `http://127.0.0.1:${apiPort}/health`;
+async function waitForUrl(url, label) {
   for (let attempt = 0; attempt < 80; attempt += 1) {
     try {
       const response = await fetch(url);
@@ -193,58 +190,83 @@ async function waitForLocalServer() {
         return;
       }
     } catch {
-      // Server is still starting.
+      // Service is still starting.
     }
     await wait(500);
   }
-  throw new Error(`Server did not become healthy at ${url}`);
-}
-
-function canBindPort(port) {
-  return new Promise((resolve) => {
-    const server = createServer();
-    server.once("error", () => resolve(false));
-    server.listen(port, "0.0.0.0", () => {
-      server.close(() => resolve(true));
-    });
-  });
-}
-
-async function findMetroPort() {
-  for (let port = preferredMetroPort; port < preferredMetroPort + 20; port += 1) {
-    if (await canBindPort(port)) {
-      return port;
-    }
-  }
-  throw new Error(`Could not find a free Metro port starting at ${preferredMetroPort}.`);
-}
-
-function argsIncludeOption(args, option) {
-  return args.some((arg) => arg === option || arg.startsWith(`${option}=`));
+  throw new Error(`${label} did not become healthy at ${url}`);
 }
 
 async function pollNgrokTunnel() {
   for (let attempt = 0; attempt < 80; attempt += 1) {
-    try {
-      const response = await fetch(ngrokApiUrl);
-      if (response.ok) {
-        const payload = await response.json();
-        const tunnels = Array.isArray(payload.tunnels) ? payload.tunnels : [];
-        const tunnel = tunnels.find((candidate) => {
-          const publicUrl = String(candidate.public_url || "");
-          const addr = String(candidate.config?.addr || "");
-          return publicUrl.startsWith("https://") && addr.includes(String(apiPort));
-        });
-        if (tunnel?.public_url) {
-          return String(tunnel.public_url).replace(/\/$/, "");
-        }
-      }
-    } catch {
-      // ngrok's local API is not ready yet.
+    const tunnel = await readNgrokTunnel(ngrokApiUrl);
+    if (tunnel) {
+      return tunnel;
     }
     await wait(500);
   }
   return null;
+}
+
+async function readNgrokTunnel(apiUrl) {
+  try {
+    const response = await fetch(apiUrl);
+    if (!response.ok) {
+      return null;
+    }
+    const payload = await response.json();
+    const tunnels = Array.isArray(payload.tunnels) ? payload.tunnels : [];
+    const tunnel = tunnels.find((candidate) => {
+      const publicUrl = String(candidate.public_url || "");
+      const addr = String(candidate.config?.addr || "");
+      return publicUrl.startsWith("https://") && addr.includes(String(apiPort));
+    });
+    return tunnel?.public_url ? String(tunnel.public_url).replace(/\/$/, "") : null;
+  } catch {
+    return null;
+  }
+}
+
+async function findExistingNgrokTunnel() {
+  const candidates = [
+    ngrokApiUrl,
+    "http://127.0.0.1:4040/api/tunnels",
+    "http://127.0.0.1:4041/api/tunnels",
+    "http://127.0.0.1:4042/api/tunnels",
+  ];
+  for (const apiUrl of [...new Set(candidates)]) {
+    const tunnel = await readNgrokTunnel(apiUrl);
+    if (tunnel) {
+      return tunnel;
+    }
+  }
+  return null;
+}
+
+async function startOrReuseNgrokTunnel() {
+  const existing = await findExistingNgrokTunnel();
+  if (existing) {
+    console.log(`Reusing existing ngrok API URL: ${existing}`);
+    return { tunnelUrl: existing, ngrokProcess: null };
+  }
+
+  const ngrokProcess = start(
+    "ngrok",
+    [
+      "http",
+      String(apiPort),
+      ...ngrokConfigArgs(),
+      "--log=stdout",
+      "--log-format=json",
+    ],
+    {
+      stdio: ["ignore", "pipe", "pipe"],
+      critical: true,
+    },
+  );
+  ngrokProcess.stderr?.on("data", (chunk) => process.stderr.write(chunk));
+  const tunnelUrl = await waitForNgrokTunnel(ngrokProcess);
+  return { tunnelUrl, ngrokProcess };
 }
 
 async function waitForNgrokTunnel(ngrokProcess) {
@@ -267,8 +289,7 @@ async function waitForNgrokTunnel(ngrokProcess) {
             resolve(url.replace(/\/$/, ""));
           }
         } catch {
-          // ngrok v3 can emit non-JSON lines in some configurations. The
-          // local API poll below is the reliable fallback for those cases.
+          // ngrok v3 can emit non-JSON lines. The local API poll is fallback.
         }
       }
     };
@@ -295,6 +316,15 @@ function localEnv() {
   };
 }
 
+function corsOrigins() {
+  const origins = new Set([
+    frontendBaseUrl,
+    `http://localhost:${webPort}`,
+    `http://127.0.0.1:${webPort}`,
+  ]);
+  return [...origins].join(",");
+}
+
 async function main() {
   if (!commandExists("ngrok")) {
     throw new Error("ngrok is required. Install it with `brew install ngrok/ngrok/ngrok`.");
@@ -303,36 +333,21 @@ async function main() {
   const baseEnv = localEnv();
   console.log("Preparing local database...");
   run("make", ["server-db-ready"], { env: baseEnv });
-  const ngrokProcess = start(
-    "ngrok",
-    [
-      "http",
-      String(apiPort),
-      ...ngrokConfigArgs(),
-      "--log=stdout",
-      "--log-format=json",
-    ],
-    {
-      stdio: ["ignore", "pipe", "pipe"],
-      critical: true,
-    },
-  );
-  ngrokProcess.stderr?.on("data", (chunk) => process.stderr.write(chunk));
 
-  const tunnelUrl = await waitForNgrokTunnel(ngrokProcess);
+  const { tunnelUrl } = await startOrReuseNgrokTunnel();
   if (typeof tunnelUrl !== "string" || !tunnelUrl.startsWith("https://")) {
     throw new Error("Could not resolve an https ngrok tunnel URL.");
   }
+
   const serverEnv = {
     ...baseEnv,
-    APPLE_SIGN_IN_ENABLED: baseEnv.APPLE_SIGN_IN_ENABLED || "true",
-    APPLE_IOS_BUNDLE_ID: baseEnv.APPLE_IOS_BUNDLE_ID || defaultAppleIosBundleId,
     API_BASE_URL: tunnelUrl,
     FRONTEND_BASE_URL: frontendBaseUrl,
+    CORS_ALLOW_ORIGINS: corsOrigins(),
   };
 
   console.log(`ngrok API URL: ${tunnelUrl}`);
-  console.log(`Google mobile redirect URI: ${tunnelUrl}/auth/mobile/google/callback`);
+  console.log(`Google web redirect URI: ${tunnelUrl}/auth/web/google/callback`);
   console.log(`GitHub redirect URI: ${tunnelUrl}/auth/github/callback`);
   console.log("Add those redirect URIs in provider consoles if this ngrok URL is new.");
   console.log("");
@@ -352,30 +367,37 @@ async function main() {
       critical: true,
     },
   );
-  await waitForLocalServer();
+  await waitForUrl(`http://127.0.0.1:${apiPort}/health`, "API server");
 
-  console.log("Starting Expo mobile...");
-  console.log(`EXPO_PUBLIC_PROLIFERATE_API_BASE_URL=${tunnelUrl}`);
-  const metroPort = await findMetroPort();
-  const resolvedExpoArgs = [...expoArgs];
-  if (!argsIncludeOption(resolvedExpoArgs, "--port")) {
-    resolvedExpoArgs.push("--port", String(metroPort));
-  }
-  console.log(`Metro port: ${metroPort}`);
-  run("pnpm", ["--filter", "@proliferate/mobile", "build:shared"], {
-    env: process.env,
-  });
+  console.log("Starting web...");
+  console.log(`FRONTEND_BASE_URL=${frontendBaseUrl}`);
+  console.log(`VITE_PROLIFERATE_API_BASE_URL=${localApiBaseUrl}`);
   start(
     "pnpm",
-    ["--filter", "@proliferate/mobile", "exec", "expo", "start", ...resolvedExpoArgs],
+    [
+      "--filter",
+      "@proliferate/web",
+      "dev",
+      "--",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(webPort),
+    ],
     {
       env: {
         ...process.env,
-        EXPO_PUBLIC_PROLIFERATE_API_BASE_URL: tunnelUrl,
+        VITE_PROLIFERATE_API_BASE_URL: localApiBaseUrl,
       },
       critical: true,
     },
   );
+  await waitForUrl(`http://127.0.0.1:${webPort}`, "Web app");
+
+  console.log("");
+  console.log(`Web: ${frontendBaseUrl}`);
+  console.log(`API: http://127.0.0.1:${apiPort}`);
+  console.log(`Provider callback base: ${tunnelUrl}`);
 
   await new Promise((resolve) => {
     for (const signal of ["SIGINT", "SIGTERM"]) {

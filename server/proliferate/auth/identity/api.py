@@ -155,6 +155,46 @@ async def oauth_callback(
     return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
 
 
+@router.get("/{provider}/callback")
+async def oauth_shared_provider_callback(
+    provider: AuthProviderName,
+    request: Request,
+    state: str | None = None,
+    code: str | None = None,
+    error: str | None = None,
+    db: AsyncSession = Depends(get_async_session),
+) -> RedirectResponse:
+    if provider != "github":
+        raise HTTPException(status_code=404, detail="Unknown auth callback.")
+    if error is not None:
+        if state is not None:
+            try:
+                redirect_url = await complete_oauth_provider_error_callback(
+                    db,
+                    provider=provider,
+                    surface=None,
+                    state=state,
+                    error=error,
+                )
+                await db.commit()
+                return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
+            except HTTPException:
+                await db.rollback()
+        return RedirectResponse(_auth_error_url(error), status_code=status.HTTP_302_FOUND)
+    if state is None or code is None:
+        return RedirectResponse(_auth_error_url("missing_callback_params"), status_code=302)
+    redirect_url = await complete_oauth_provider_callback(
+        db,
+        request,
+        provider=provider,
+        surface=None,
+        state=state,
+        code=code,
+    )
+    await db.commit()
+    return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
+
+
 @router.post("/web/apple/callback")
 async def apple_web_callback(
     state: Annotated[str, Form()],

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-from typing import cast
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.identity.store import ReadyGitHubGrant, get_ready_github_grant_for_user
 from proliferate.constants.cloud import (
     SUPPORTED_GIT_PROVIDER,
     CloudCommandKind,
@@ -17,14 +17,12 @@ from proliferate.db.models.auth import User
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import target_git_identity as identity_store
 from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
 from proliferate.server.cloud.commands.models import (
     CreateCloudCommandRequest,
     command_response_payload,
 )
 from proliferate.server.cloud.commands.service import enqueue_command
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.repos.service import CloudRepoUserLike, get_linked_github_account
 from proliferate.server.cloud.target_config.domain.rules import resolve_git_identity
 from proliferate.server.cloud.target_git_identity.models import (
     MaterializeTargetGitIdentityResponse,
@@ -96,20 +94,19 @@ async def _require_configure_git_command(
         )
 
 
-def _require_github_account(user_with_oauth: User | None) -> tuple[object, str]:
-    github_account = (
-        get_linked_github_account(cast(CloudRepoUserLike, user_with_oauth))
-        if user_with_oauth is not None
-        else None
-    )
-    token = getattr(github_account, "access_token", None) if github_account else None
-    if not token:
+async def _require_github_grant(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> ReadyGitHubGrant:
+    github_grant = await get_ready_github_grant_for_user(db, user_id=user_id)
+    if github_grant is None:
         raise CloudApiError(
             "github_link_required",
             "Connect GitHub before registering or using a cloud target.",
             status_code=400,
         )
-    return github_account, str(token)
+    return github_grant
 
 
 async def require_user_github_auth(
@@ -117,8 +114,7 @@ async def require_user_github_auth(
     *,
     user_id: UUID,
 ) -> None:
-    user_with_oauth = await get_user_with_oauth_accounts_by_id(db, user_id)
-    _require_github_account(user_with_oauth)
+    await _require_github_grant(db, user_id=user_id)
 
 
 async def materialize_target_git_identity(
@@ -140,11 +136,10 @@ async def materialize_target_git_identity(
             "Target not found.",
             status_code=404,
         )
-    user_with_oauth = await get_user_with_oauth_accounts_by_id(db, user.id)
-    github_account, github_token = _require_github_account(user_with_oauth)
+    github_grant = await _require_github_grant(db, user_id=user.id)
     git_user_name, git_user_email = resolve_git_identity(
-        user_with_oauth or user,
-        github_account,
+        user,
+        github_grant,
     )
     summary = TargetGitIdentitySummaryModel(
         provider=SUPPORTED_GIT_PROVIDER,
@@ -156,7 +151,7 @@ async def materialize_target_git_identity(
         target_id=str(target.id),
         config_version=0,
         provider=SUPPORTED_GIT_PROVIDER,
-        access_token=github_token,
+        access_token=github_grant.access_token,
         username=git_user_name,
         email=git_user_email,
     )
@@ -178,9 +173,7 @@ async def materialize_target_git_identity(
     updated_identity = await identity_store.update_target_git_identity_payload(
         db,
         identity_id=identity.id,
-        payload_ciphertext=encrypt_json(
-            finalized_plan.model_dump(mode="json", by_alias=True)
-        ),
+        payload_ciphertext=encrypt_json(finalized_plan.model_dump(mode="json", by_alias=True)),
         summary_json=summary.model_dump_json(),
     )
     if updated_identity is None:

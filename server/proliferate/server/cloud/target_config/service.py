@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-from typing import cast
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.identity.store import get_ready_github_grant_for_user
 from proliferate.constants.cloud import (
     SUPPORTED_GIT_PROVIDER,
     CloudCommandKind,
@@ -19,7 +19,6 @@ from proliferate.db.store.cloud_repo_config import get_cloud_repo_config
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
 from proliferate.server.cloud.commands.models import (
     CreateCloudCommandRequest,
     command_response_payload,
@@ -29,7 +28,6 @@ from proliferate.server.cloud.credentials.service import load_active_cloud_crede
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_materialization.models import MaterializeCloudMcpRequest
 from proliferate.server.cloud.mcp_materialization.service import materialize_cloud_mcp_servers
-from proliferate.server.cloud.repos.service import CloudRepoUserLike, get_linked_github_account
 from proliferate.server.cloud.target_config.domain.policy import require_target_materializable
 from proliferate.server.cloud.target_config.domain.rules import (
     default_workspace_root,
@@ -254,26 +252,20 @@ async def materialize_target_config(
 
     git_credential: TargetConfigGitCredentialModel | None = None
     if body.include_git_credentials:
-        user_with_oauth = await get_user_with_oauth_accounts_by_id(db, user.id)
-        github_account = (
-            get_linked_github_account(cast(CloudRepoUserLike, user_with_oauth))
-            if user_with_oauth is not None
-            else None
-        )
-        github_token = getattr(github_account, "access_token", None) if github_account else None
-        if not github_token:
+        github_grant = await get_ready_github_grant_for_user(db, user_id=user.id)
+        if github_grant is None:
             raise CloudApiError(
                 "github_link_required",
                 "Linked GitHub account is missing an access token.",
                 status_code=400,
             )
         git_user_name, git_user_email = resolve_git_identity(
-            user_with_oauth or user,
-            github_account,
+            user,
+            github_grant,
         )
         git_credential = TargetConfigGitCredentialModel(
             provider=SUPPORTED_GIT_PROVIDER,
-            access_token=str(github_token),
+            access_token=github_grant.access_token,
             username=git_user_name,
             email=git_user_email,
         )
@@ -357,9 +349,7 @@ async def materialize_target_config(
     updated_config = await target_config_store.update_target_config_payload(
         db,
         config_id=config.id,
-        payload_ciphertext=encrypt_json(
-            finalized_plan.model_dump(mode="json", by_alias=True)
-        ),
+        payload_ciphertext=encrypt_json(finalized_plan.model_dump(mode="json", by_alias=True)),
         summary_json=summary.model_dump_json(),
     )
     if updated_config is None:

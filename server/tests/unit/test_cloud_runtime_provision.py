@@ -66,6 +66,7 @@ def _patched_session_factory(monkeypatch: pytest.MonkeyPatch, test_engine) -> No
         factory,
     )
     monkeypatch.setattr(cloud_workspaces.db_engine, "async_session_factory", factory)
+    monkeypatch.setattr(runtime_provision.db_engine, "async_session_factory", factory)
     monkeypatch.setattr(users.db_engine, "async_session_factory", factory)
 
 
@@ -92,21 +93,11 @@ class TestLoadProvisionInput:
     async def test_raises_when_github_token_missing(
         self,
         db_session,
-        monkeypatch: pytest.MonkeyPatch,
         _patched_session_factory,
     ) -> None:
         user = _make_user(email="missing-gh@example.com")
         db_session.add(user)
         await db_session.commit()
-
-        class _GithubAccount:
-            access_token = None
-
-        monkeypatch.setattr(
-            runtime_provision,
-            "get_linked_github_account",
-            lambda _user: _GithubAccount(),
-        )
 
         workspace = _make_workspace(user.id)
         db_session.add(workspace)

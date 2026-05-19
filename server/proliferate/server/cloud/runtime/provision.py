@@ -9,9 +9,9 @@ import shlex
 import time
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
-from typing import cast
 from uuid import UUID
 
+from proliferate.auth.identity.store import get_ready_github_grant_for_user
 from proliferate.config import settings
 from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
@@ -55,7 +55,6 @@ from proliferate.server.billing.service import authorize_sandbox_start
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.credentials.session_loader import load_cloud_credentials_for_user
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.repos.service import CloudRepoUserLike, get_linked_github_account
 from proliferate.server.cloud.runtime.anyharness_api import (
     prepare_remote_mobility_destination,
     reconcile_remote_agents,
@@ -214,15 +213,15 @@ async def _load_provision_input(
     if user is None:
         return None
 
-    github_account = get_linked_github_account(cast(CloudRepoUserLike, user))
-    github_token = getattr(github_account, "access_token", None) if github_account else None
-    if not github_token:
+    async with db_engine.async_session_factory() as db:
+        github_grant = await get_ready_github_grant_for_user(db, user_id=workspace.user_id)
+    if github_grant is None:
         raise CloudApiError(
             "github_link_required",
             "Linked GitHub account is missing an access token.",
             status_code=400,
         )
-    git_user_name, git_user_email = _resolve_git_identity(user, github_account)
+    git_user_name, git_user_email = _resolve_git_identity(user, github_grant)
 
     credential_records = await load_cloud_credentials_for_user(workspace.user_id)
     credential_revision_state = build_credential_revision_state(credential_records)
@@ -254,7 +253,7 @@ async def _load_provision_input(
         git_repo_name=workspace.git_repo_name,
         git_branch=workspace.git_branch,
         git_base_branch=workspace.git_base_branch or workspace.git_branch,
-        github_token=str(github_token),
+        github_token=github_grant.access_token,
         git_user_name=git_user_name,
         git_user_email=git_user_email,
         anyharness_data_key=decrypt_text(anyharness_data_key_ciphertext),

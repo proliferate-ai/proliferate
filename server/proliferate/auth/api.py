@@ -19,9 +19,12 @@ async def get_auth_viewer(
     user: User = Depends(current_limited_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> AuthViewerResponse:
-    github_connected, onboarding_state, linked_providers, provider_availability = (
-        await auth_viewer_payload(db, user=user)
-    )
+    (
+        github_connected,
+        onboarding_state,
+        linked_providers,
+        provider_availability,
+    ) = await auth_viewer_payload(db, user=user)
     return AuthViewerResponse(
         user=UserRead.model_validate(user),
         github_connected=github_connected,

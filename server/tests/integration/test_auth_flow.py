@@ -7,10 +7,12 @@ from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 from fastapi_users.jwt import generate_jwt
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from proliferate.auth.desktop.models import AuthorizeParams
 from proliferate.auth.desktop import service as desktop_service
 from proliferate.auth.identity import providers as identity_providers
 from proliferate.auth.identity.service import WEB_CSRF_COOKIE
@@ -20,6 +22,7 @@ from proliferate.config import settings
 from proliferate.constants.auth import DESKTOP_GITHUB_CSRF_COOKIE, REFRESH_TOKEN_LIFETIME_SECONDS
 from proliferate.db.models.auth import AuthIdentity, ProviderGrant, User
 from proliferate.integrations.github import GitHubUserProfile
+from proliferate.utils.crypto import encrypt_text
 
 
 def _make_pkce_pair() -> tuple[str, str]:
@@ -77,7 +80,7 @@ async def _link_ready_github_identity(
                 user_id=UUID(user_id),
                 auth_identity_id=identity.id,
                 provider="github",
-                access_token_ciphertext="encrypted-github-access-token",
+                access_token_ciphertext=encrypt_text("github-access-token"),
                 scopes_json='["repo","user","user:email"]',
                 status="ready",
             )
@@ -85,34 +88,53 @@ async def _link_ready_github_identity(
         await session.commit()
 
 
-async def _debug_access_token_for_user(
+async def _access_token_for_user(
     client: AsyncClient,
     *,
     user_id: str,
     state: str,
 ) -> str:
     verifier, challenge = _make_pkce_pair()
-    authorize = await client.post(
-        "/auth/desktop/authorize",
-        params={"user_id": user_id},
-        json={
-            "state": state,
-            "code_challenge": challenge,
-            "code_challenge_method": "S256",
-            "redirect_uri": "proliferate://auth/callback",
-        },
+    code = await _create_desktop_auth_code_for_user(
+        user_id=user_id,
+        state=state,
+        code_challenge=challenge,
     )
-    assert authorize.status_code == 201
     token = await client.post(
         "/auth/desktop/token",
         json={
-            "code": authorize.json()["code"],
+            "code": code,
             "code_verifier": verifier,
             "grant_type": "authorization_code",
         },
     )
     assert token.status_code == 200
     return str(token.json()["access_token"])
+
+
+async def _create_desktop_auth_code_for_user(
+    *,
+    user_id: str,
+    state: str,
+    code_challenge: str,
+    code_challenge_method: str = "S256",
+    redirect_uri: str = "proliferate://auth/callback",
+) -> str:
+    from proliferate.db import engine as engine_module
+
+    async with engine_module.async_session_factory() as session:
+        auth_code = await desktop_service.create_desktop_auth_code(
+            session,
+            AuthorizeParams(
+                state=state,
+                code_challenge=code_challenge,
+                code_challenge_method=code_challenge_method,
+                redirect_uri=redirect_uri,
+            ),
+            UUID(user_id),
+        )
+        await session.commit()
+        return auth_code.code
 
 
 class TestHealthEndpoint:
@@ -179,26 +201,17 @@ class TestDesktopPKCEFlow:
         verifier, challenge = _make_pkce_pair()
 
         # Step 1: Server creates auth code (normally after browser login)
-        resp = await client.post(
-            "/auth/desktop/authorize",
-            params={"user_id": user_id},
-            json={
-                "state": "random-state-string",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-                "redirect_uri": "proliferate://auth/callback",
-            },
+        code = await _create_desktop_auth_code_for_user(
+            user_id=user_id,
+            state="random-state-string",
+            code_challenge=challenge,
         )
-        assert resp.status_code == 201
-        auth_data = resp.json()
-        assert "code" in auth_data
-        assert auth_data["state"] == "random-state-string"
 
         # Step 2: Desktop exchanges code + verifier for JWT
         resp = await client.post(
             "/auth/desktop/token",
             json={
-                "code": auth_data["code"],
+                "code": code,
                 "code_verifier": verifier,
                 "grant_type": "authorization_code",
             },
@@ -225,17 +238,11 @@ class TestDesktopPKCEFlow:
         user_id = await _create_user_via_manager("pkce-wrong@example.com")
         _, challenge = _make_pkce_pair()
 
-        resp = await client.post(
-            "/auth/desktop/authorize",
-            params={"user_id": user_id},
-            json={
-                "state": "state-1",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-                "redirect_uri": "proliferate://auth/callback",
-            },
+        code = await _create_desktop_auth_code_for_user(
+            user_id=user_id,
+            state="state-1",
+            code_challenge=challenge,
         )
-        code = resp.json()["code"]
 
         # Use wrong verifier
         resp = await client.post(
@@ -254,17 +261,11 @@ class TestDesktopPKCEFlow:
         user_id = await _create_user_via_manager("reuse@example.com")
         verifier, challenge = _make_pkce_pair()
 
-        resp = await client.post(
-            "/auth/desktop/authorize",
-            params={"user_id": user_id},
-            json={
-                "state": "state-2",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-                "redirect_uri": "proliferate://auth/callback",
-            },
+        code = await _create_desktop_auth_code_for_user(
+            user_id=user_id,
+            state="state-2",
+            code_challenge=challenge,
         )
-        code = resp.json()["code"]
 
         # First exchange — should work
         resp = await client.post(
@@ -303,17 +304,14 @@ class TestDesktopPKCEFlow:
     @pytest.mark.asyncio
     async def test_unsupported_challenge_method(self, client: AsyncClient) -> None:
         user_id = await _create_user_via_manager("badmethod@example.com")
-        resp = await client.post(
-            "/auth/desktop/authorize",
-            params={"user_id": user_id},
-            json={
-                "state": "state-3",
-                "code_challenge": "whatever",
-                "code_challenge_method": "plain",
-                "redirect_uri": "proliferate://auth/callback",
-            },
-        )
-        assert resp.status_code == 400
+        with pytest.raises(HTTPException) as exc_info:
+            await _create_desktop_auth_code_for_user(
+                user_id=user_id,
+                state="state-3",
+                code_challenge="whatever",
+                code_challenge_method="plain",
+            )
+        assert exc_info.value.status_code == 400
 
     @pytest.mark.asyncio
     async def test_debug_authorize_endpoint_disabled_outside_debug(
@@ -348,22 +346,16 @@ class TestWebMobileSessionGuards:
         )
         verifier, challenge = _make_pkce_pair()
 
-        authorize = await client.post(
-            "/auth/desktop/authorize",
-            params={"user_id": user_id},
-            json={
-                "state": "inactive-web-state",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-                "redirect_uri": "proliferate://auth/callback",
-            },
+        code = await _create_desktop_auth_code_for_user(
+            user_id=user_id,
+            state="inactive-web-state",
+            code_challenge=challenge,
         )
-        assert authorize.status_code == 201
 
         response = await client.post(
             "/auth/web/token",
             json={
-                "code": authorize.json()["code"],
+                "code": code,
                 "code_verifier": verifier,
                 "grant_type": "authorization_code",
             },
@@ -677,9 +669,7 @@ class TestWebMobileProductAuthFlow:
             code_challenge_method: str | None = None,
             extras_params: dict[str, str] | None = None,
         ) -> str:
-            assert redirect_uri.endswith("/auth/web/github/callback") or redirect_uri.endswith(
-                "/auth/mobile/github/callback"
-            )
+            assert redirect_uri.endswith("/auth/github/callback")
             assert scope == ["repo", "user", "user:email"]
             assert code_challenge is None
             assert code_challenge_method is None
@@ -692,7 +682,7 @@ class TestWebMobileProductAuthFlow:
         async def fake_get_access_token(code: str, redirect_uri: str) -> dict[str, object]:
             assert code == "github-code"
             assert "/auth/" in redirect_uri
-            return {"access_token": "github-access-token", "scope": "repo,user,user:email"}
+            return {"access_token": "github-access-token", "scope": "repo,user"}
 
         async def fake_get_id_email(token: str) -> tuple[str, str]:
             assert token == "github-access-token"
@@ -788,7 +778,7 @@ class TestWebMobileProductAuthFlow:
         oauth_state = parse_qs(urlparse(started.json()["authorizationUrl"]).query)["state"][0]
 
         callback = await client.get(
-            "/auth/web/github/callback",
+            "/auth/github/callback",
             params={"code": "github-code", "state": oauth_state},
             follow_redirects=False,
         )
@@ -888,9 +878,9 @@ class TestWebMobileProductAuthFlow:
             },
         )
         assert github_start.status_code == 200
-        github_state = parse_qs(urlparse(github_start.json()["authorizationUrl"]).query)[
-            "state"
-        ][0]
+        github_state = parse_qs(urlparse(github_start.json()["authorizationUrl"]).query)["state"][
+            0
+        ]
         github_callback = await client.get(
             "/auth/web/github/callback",
             params={"code": "github-code", "state": github_state},
@@ -927,9 +917,9 @@ class TestWebMobileProductAuthFlow:
             },
         )
         assert google_start.status_code == 200
-        google_state = parse_qs(urlparse(google_start.json()["authorizationUrl"]).query)[
-            "state"
-        ][0]
+        google_state = parse_qs(urlparse(google_start.json()["authorizationUrl"]).query)["state"][
+            0
+        ]
         google_callback = await client.get(
             "/auth/web/google/callback",
             params={"code": "google-code", "state": google_state},
@@ -961,9 +951,9 @@ class TestWebMobileProductAuthFlow:
             },
         )
         assert github_start.status_code == 200
-        github_state = parse_qs(urlparse(github_start.json()["authorizationUrl"]).query)[
-            "state"
-        ][0]
+        github_state = parse_qs(urlparse(github_start.json()["authorizationUrl"]).query)["state"][
+            0
+        ]
         github_callback = await client.get(
             "/auth/web/github/callback",
             params={"code": "github-code", "state": github_state},
@@ -1010,9 +1000,9 @@ class TestWebMobileProductAuthFlow:
             },
         )
         assert google_start.status_code == 200
-        google_state = parse_qs(urlparse(google_start.json()["authorizationUrl"]).query)[
-            "state"
-        ][0]
+        google_state = parse_qs(urlparse(google_start.json()["authorizationUrl"]).query)["state"][
+            0
+        ]
         google_callback = await client.get(
             "/auth/web/google/callback",
             params={"code": "google-code", "state": google_state},
@@ -1078,8 +1068,7 @@ class TestWebMobileProductAuthFlow:
             for provider in linked
         )
         assert any(
-            provider["provider"] == "github"
-            and provider["accountId"] == existing_github_subject
+            provider["provider"] == "github" and provider["accountId"] == existing_github_subject
             for provider in linked
         )
 
@@ -1113,9 +1102,9 @@ class TestWebMobileProductAuthFlow:
             },
         )
         assert google_start.status_code == 200
-        google_state = parse_qs(urlparse(google_start.json()["authorizationUrl"]).query)[
-            "state"
-        ][0]
+        google_state = parse_qs(urlparse(google_start.json()["authorizationUrl"]).query)["state"][
+            0
+        ]
         google_callback = await client.get(
             "/auth/web/google/callback",
             params={"code": "google-code", "state": google_state},
@@ -1139,7 +1128,7 @@ class TestWebMobileProductAuthFlow:
             subject="github-account-target-github-link@example.com",
             email="target-github-link@example.com",
         )
-        target_access_token = await _debug_access_token_for_user(
+        target_access_token = await _access_token_for_user(
             client,
             user_id=target_user_id,
             state="target-link-google-state",
@@ -1193,6 +1182,64 @@ class TestWebMobileProductAuthFlow:
                 )
             )
             assert google_identity.scalar_one().user_id == UUID(target_user_id)
+
+    @pytest.mark.asyncio
+    async def test_linking_existing_github_between_ready_users_is_rejected(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        source_email = "source-ready-github@example.com"
+        target_email = "target-ready-github@example.com"
+        source_user_id = await _create_user_via_manager(source_email)
+        await _link_ready_github_identity(
+            source_user_id,
+            subject=f"github-account-{source_email}",
+            email=source_email,
+        )
+        target_user_id = await _create_user_via_manager(target_email)
+        await _link_ready_github_identity(
+            target_user_id,
+            subject=f"github-account-{target_email}",
+            email=target_email,
+        )
+        source_access_token = await _access_token_for_user(
+            client,
+            user_id=source_user_id,
+            state="source-ready-link-state",
+        )
+
+        self._enable_identity_github(monkeypatch, target_email)
+        verifier, challenge = _make_pkce_pair()
+        link_start = await client.post(
+            "/auth/web/github/start",
+            headers={"Authorization": f"Bearer {source_access_token}"},
+            json={
+                "purpose": "link",
+                "clientState": "ready-github-collision-state",
+                "codeChallenge": challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "http://localhost:5174/auth/callback",
+            },
+        )
+        assert link_start.status_code == 200
+        link_state = parse_qs(urlparse(link_start.json()["authorizationUrl"]).query)["state"][0]
+        callback = await client.get(
+            "/auth/web/github/callback",
+            params={"code": "github-code", "state": link_state},
+            follow_redirects=False,
+        )
+        assert callback.status_code == 409
+
+        from proliferate.db import engine as engine_module
+
+        async with engine_module.async_session_factory() as session:
+            source_user = await session.get(User, UUID(source_user_id))
+            target_user = await session.get(User, UUID(target_user_id))
+            assert source_user is not None
+            assert target_user is not None
+            assert source_user.is_active is True
+            assert target_user.is_active is True
 
     @pytest.mark.asyncio
     async def test_web_google_callback_uses_id_token_identity(
@@ -1410,20 +1457,15 @@ class TestWebMobileProductAuthFlow:
             expected_surface="desktop",
         )
 
-        authorize = await client.post(
-            "/auth/desktop/authorize",
-            params={"user_id": user_id},
-            json={
-                "state": "desktop-google-existing-session",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-                "redirect_uri": "proliferate://auth/callback",
-            },
+        code = await _create_desktop_auth_code_for_user(
+            user_id=user_id,
+            state="desktop-google-existing-session",
+            code_challenge=challenge,
         )
         session = await client.post(
             "/auth/desktop/token",
             json={
-                "code": authorize.json()["code"],
+                "code": code,
                 "code_verifier": verifier,
                 "grant_type": "authorization_code",
             },
@@ -1513,7 +1555,7 @@ class TestWebMobileProductAuthFlow:
         oauth_state = parse_qs(urlparse(started.json()["authorizationUrl"]).query)["state"][0]
 
         callback = await client.get(
-            "/auth/mobile/github/callback",
+            "/auth/github/callback",
             params={"error": "access_denied", "state": oauth_state},
             follow_redirects=False,
         )
@@ -1535,20 +1577,15 @@ class TestWebMobileProductAuthFlow:
         verifier, challenge = _make_pkce_pair()
         self._enable_identity_github(monkeypatch, "direct-github-link@example.com")
 
-        authorize = await client.post(
-            "/auth/desktop/authorize",
-            params={"user_id": user_id},
-            json={
-                "state": "direct-link-state",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-                "redirect_uri": "proliferate://auth/callback",
-            },
+        code = await _create_desktop_auth_code_for_user(
+            user_id=user_id,
+            state="direct-link-state",
+            code_challenge=challenge,
         )
         token = await client.post(
             "/auth/desktop/token",
             json={
-                "code": authorize.json()["code"],
+                "code": code,
                 "code_verifier": verifier,
                 "grant_type": "authorization_code",
             },
@@ -1578,17 +1615,11 @@ class TestRefreshToken:
 
         # Get tokens via PKCE
         verifier, challenge = _make_pkce_pair()
-        resp = await client.post(
-            "/auth/desktop/authorize",
-            params={"user_id": user_id},
-            json={
-                "state": "refresh-state",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-                "redirect_uri": "proliferate://auth/callback",
-            },
+        code = await _create_desktop_auth_code_for_user(
+            user_id=user_id,
+            state="refresh-state",
+            code_challenge=challenge,
         )
-        code = resp.json()["code"]
 
         resp = await client.post(
             "/auth/desktop/token",

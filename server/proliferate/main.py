@@ -12,11 +12,10 @@ import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
-from proliferate.auth.dependencies import fastapi_users
 from proliferate.auth.api import router as auth_viewer_router
+from proliferate.auth.dependencies import fastapi_users
 from proliferate.auth.desktop.api import router as desktop_router
 from proliferate.auth.identity.api import router as identity_auth_router
-from proliferate.auth.jwt import auth_backend
 from proliferate.auth.models import UserRead, UserUpdate
 from proliferate.config import get_cors_allow_origins, settings
 from proliferate.constants.app import APP_NAME

@@ -10,6 +10,7 @@ AUTH_CODE_LIFETIME_SECONDS = 60
 
 # Desktop auth flow
 DESKTOP_REDIRECT_SCHEME = "proliferate"
+DESKTOP_REDIRECT_SCHEMES = frozenset({DESKTOP_REDIRECT_SCHEME, "proliferate-local"})
 DESKTOP_DEEP_LINK_LAUNCH_ENABLED = True
 DESKTOP_CALLBACK_PATH = "/auth/callback"
 DESKTOP_GITHUB_CSRF_COOKIE = "desktop_github_csrf"
