@@ -83,6 +83,31 @@ OAuth and deep-link login flows are still single-profile-at-a-time in v1 because
 the OS URL scheme is shared. Concurrent git operations against the same checkout
 can still race on git locks.
 
+## Mobile Auth Testing
+
+Use the mobile auth helper when testing Expo Go on a physical phone:
+
+```bash
+make dev-mobile-auth
+```
+
+The helper starts/checks local Postgres, runs server migrations, starts ngrok
+for the API, starts the server with `API_BASE_URL` set to the ngrok URL, and
+starts Expo with `EXPO_PUBLIC_PROLIFERATE_API_BASE_URL` set to the same URL.
+It prints the Google mobile redirect URI to add in Google Console:
+
+```text
+https://<ngrok-host>/auth/mobile/google/callback
+```
+
+By default Expo runs over LAN and picks the first free Metro port at or above
+`8081`. Override with:
+
+```bash
+PROLIFERATE_MOBILE_PORT=8090 make dev-mobile-auth
+MOBILE_EXPO_ARGS="--tunnel" make dev-mobile-auth
+```
+
 ## Bundled Agent Seed Testing
 
 Packaged desktop builds resolve bundled agent seeds from Tauri resources and
