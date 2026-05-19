@@ -1,8 +1,8 @@
 import { Apple, Github, KeyRound } from "lucide-react";
 import { useState } from "react";
 
-import { AuthLayout } from "@proliferate/ui/auth/AuthLayout";
-import { AuthProviderButton } from "@proliferate/ui/auth/AuthProviderButton";
+import { AuthLayout } from "@proliferate/product-ui/auth/AuthLayout";
+import { AuthProviderButton } from "@proliferate/product-ui/auth/AuthProviderButton";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 
@@ -81,13 +81,15 @@ export function AuthScreen() {
             </div>
           </div>
         ) : (
-          <button
+          <Button
             type="button"
+            variant="unstyled"
+            size="unstyled"
             onClick={() => setShowDevAccess(true)}
             className="block w-full text-center text-[11px] text-muted-foreground transition-colors hover:text-foreground"
           >
             Use a development access token
-          </button>
+          </Button>
         )}
       </div>
     </AuthLayout>

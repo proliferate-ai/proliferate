@@ -26,11 +26,13 @@ export function MobileConnectGitHubScreen({
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled: true }}
+            disabled
             onPress={onConnect}
-            style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
+            style={styles.primaryDisabled}
           >
-            <MobileIcon name="github" size={18} color={colors.background} />
-            <Text style={styles.primaryLabel}>Continue with GitHub</Text>
+            <MobileIcon name="github" size={18} color={colors.faint} />
+            <Text style={styles.primaryLabelDisabled}>Continue with GitHub</Text>
           </Pressable>
 
           <Pressable
@@ -96,6 +98,21 @@ const styles = StyleSheet.create({
   },
   primaryLabel: {
     color: colors.background,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  primaryDisabled: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[2],
+    backgroundColor: colors.accent,
+    borderRadius: radius.xl,
+    opacity: 0.72,
+  },
+  primaryLabelDisabled: {
+    color: colors.faint,
     fontSize: 15,
     fontWeight: "600",
   },

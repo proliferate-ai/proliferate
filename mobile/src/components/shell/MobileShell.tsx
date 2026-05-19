@@ -1,12 +1,13 @@
 import { StatusBar } from "expo-status-bar";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  BackHandler,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import type { ProductChat } from "@proliferate/product-model/chats/model";
 
@@ -39,6 +40,26 @@ export function MobileShell() {
 
   const subtitle = useMemo(() => routeSubtitle(route), [route]);
 
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (drawerOpen) {
+        setDrawerOpen(false);
+        return true;
+      }
+      if (selectedChat) {
+        setSelectedChat(null);
+        return true;
+      }
+      if (route !== "home") {
+        setRoute("home");
+        return true;
+      }
+      return false;
+    });
+
+    return () => subscription.remove();
+  }, [drawerOpen, route, selectedChat]);
+
   function navigate(nextRoute: RouteId) {
     setRoute(nextRoute);
     setSelectedChat(null);
@@ -50,9 +71,16 @@ export function MobileShell() {
     setDrawerOpen(false);
   }
 
+  function handleSignOut() {
+    setRoute("home");
+    setDrawerOpen(false);
+    setSelectedChat(null);
+    signOut();
+  }
+
   if (authState === "signed_out") {
     return (
-      <SafeAreaView style={styles.root}>
+      <SafeAreaView style={styles.root} edges={["top", "right", "bottom", "left"]}>
         <StatusBar style="light" />
         <MobileAuthScreen onApple={signInWithApple} onGitHub={signInWithGitHub} />
       </SafeAreaView>
@@ -61,18 +89,18 @@ export function MobileShell() {
 
   if (authState === "needs_github") {
     return (
-      <SafeAreaView style={styles.root}>
+      <SafeAreaView style={styles.root} edges={["top", "right", "bottom", "left"]}>
         <StatusBar style="light" />
         <MobileConnectGitHubScreen
           onConnect={signInWithGitHub}
-          onSignOut={signOut}
+          onSignOut={handleSignOut}
         />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView style={styles.root} edges={["top", "right", "bottom", "left"]}>
       <StatusBar style="light" />
 
       {selectedChat ? (
@@ -101,7 +129,7 @@ export function MobileShell() {
             ) : route === "automations" ? (
               <MobileAutomationsScreen />
             ) : (
-              <MobileSettingsScreen onSignOut={signOut} />
+              <MobileSettingsScreen onSignOut={handleSignOut} />
             )}
           </View>
 
@@ -123,7 +151,7 @@ export function MobileShell() {
           activeRoute={route}
           onNavigate={navigate}
           onClose={() => setDrawerOpen(false)}
-          onSignOut={signOut}
+          onSignOut={handleSignOut}
         />
       )}
     </SafeAreaView>

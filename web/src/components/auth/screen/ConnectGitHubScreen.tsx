@@ -1,7 +1,7 @@
 import { Github } from "lucide-react";
 
-import { AuthLayout } from "@proliferate/ui/auth/AuthLayout";
-import { AuthProviderButton } from "@proliferate/ui/auth/AuthProviderButton";
+import { AuthLayout } from "@proliferate/product-ui/auth/AuthLayout";
+import { AuthProviderButton } from "@proliferate/product-ui/auth/AuthProviderButton";
 import { Button } from "@proliferate/ui/primitives/Button";
 
 import { useAuthToken } from "../../../providers/WebCloudProvider";

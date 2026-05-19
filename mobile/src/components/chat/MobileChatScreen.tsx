@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -25,10 +26,12 @@ interface MobileChatScreenProps {
 }
 
 export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
+  const [draft, setDraft] = useState("");
   const workspace = workspaceForChat(chat);
   const presentation = chatKindPresentation(chat.kind);
   const claimState = deriveClaimState(chat, currentUser);
   const action = getPrimaryChatAction(chat, currentUser);
+  const canSubmit = action.kind === "claim" || Boolean(draft.trim());
 
   return (
     <KeyboardAvoidingView
@@ -91,6 +94,8 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
       <View style={styles.composer}>
         <MobileTextInput
           multiline
+          value={draft}
+          onChangeText={setDraft}
           placeholder={
             action.kind === "claim"
               ? "Claim and reply..."
@@ -101,12 +106,19 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={action.kind === "claim" ? "Claim" : "Send"}
-          style={({ pressed }) => [styles.send, pressed && styles.sendPressed]}
+          accessibilityState={{ disabled: !canSubmit }}
+          disabled={!canSubmit}
+          onPress={() => setDraft("")}
+          style={({ pressed }) => [
+            styles.send,
+            !canSubmit && styles.sendDisabled,
+            pressed && styles.sendPressed,
+          ]}
         >
           <MobileIcon
             name={action.kind === "claim" ? "hand" : "send"}
             size={16}
-            color={colors.background}
+            color={canSubmit ? colors.background : colors.faint}
           />
         </Pressable>
       </View>
@@ -133,7 +145,12 @@ function Message({ role, body }: { role: string; body: string }) {
 
 function ActionChip({ icon, label }: { icon: "git-branch" | "external"; label: string }) {
   return (
-    <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: true }}
+      disabled
+      style={styles.chip}
+    >
       <MobileIcon name={icon} size={13} color={colors.mutedForeground} />
       <Text style={styles.chipText}>{label}</Text>
     </Pressable>
@@ -294,6 +311,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: radius.full,
     backgroundColor: colors.fg,
+  },
+  sendDisabled: {
+    backgroundColor: colors.accent,
   },
   sendPressed: {
     opacity: 0.85,

@@ -14,17 +14,22 @@ interface ProviderButtonProps {
   icon: "github" | "apple";
   onPress: () => void;
   primary?: boolean;
+  disabled?: boolean;
 }
 
-function ProviderButton({ label, icon, onPress, primary }: ProviderButtonProps) {
+function ProviderButton({ label, icon, onPress, primary, disabled }: ProviderButtonProps) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={disabled ? "Sign-in is not enabled in this preview." : undefined}
+      accessibilityState={{ disabled: Boolean(disabled) }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.providerButton,
         primary ? styles.providerPrimary : styles.providerSecondary,
+        disabled && styles.providerDisabled,
         pressed && styles.pressed,
       ]}
     >
@@ -37,6 +42,7 @@ function ProviderButton({ label, icon, onPress, primary }: ProviderButtonProps) 
         style={[
           styles.providerLabel,
           primary ? styles.providerLabelPrimary : styles.providerLabelSecondary,
+          disabled && styles.providerLabelDisabled,
         ]}
       >
         {label}
@@ -58,8 +64,19 @@ export function MobileAuthScreen({ onApple, onGitHub }: MobileAuthScreenProps) {
         </Text>
 
         <View style={styles.actions}>
-          <ProviderButton label="Continue with GitHub" icon="github" onPress={onGitHub} primary />
-          <ProviderButton label="Continue with Apple" icon="apple" onPress={onApple} />
+          <ProviderButton
+            label="Continue with GitHub"
+            icon="github"
+            onPress={onGitHub}
+            primary
+            disabled
+          />
+          <ProviderButton
+            label="Continue with Apple"
+            icon="apple"
+            onPress={onApple}
+            disabled
+          />
         </View>
 
         <Text style={styles.note}>
@@ -126,6 +143,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
+  providerDisabled: {
+    opacity: 0.48,
+  },
   providerLabel: {
     fontSize: 15,
     fontWeight: "600",
@@ -136,6 +156,9 @@ const styles = StyleSheet.create({
   },
   providerLabelSecondary: {
     color: colors.fg,
+  },
+  providerLabelDisabled: {
+    color: colors.faint,
   },
   note: {
     marginTop: spacing[6],

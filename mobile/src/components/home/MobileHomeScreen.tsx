@@ -54,7 +54,7 @@ interface MobileHomeScreenProps {
   onOpenSessions: () => void;
 }
 
-export function MobileHomeScreen({ onOpenSessions: _onOpenSessions }: MobileHomeScreenProps) {
+export function MobileHomeScreen({ onOpenSessions }: MobileHomeScreenProps) {
   const [mode, setMode] = useState<Mode>("dispatch");
   const [draft, setDraft] = useState("");
   const meta = MODES.find((m) => m.id === mode) ?? MODES[0];
@@ -130,6 +130,11 @@ export function MobileHomeScreen({ onOpenSessions: _onOpenSessions }: MobileHome
                 accessibilityRole="button"
                 accessibilityLabel={meta.cta}
                 disabled={!draft.trim()}
+                onPress={() => {
+                  if (!draft.trim()) return;
+                  setDraft("");
+                  onOpenSessions();
+                }}
                 style={({ pressed }) => [
                   styles.send,
                   !draft.trim() && styles.sendDisabled,

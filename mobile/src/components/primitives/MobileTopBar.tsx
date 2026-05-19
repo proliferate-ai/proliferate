@@ -63,8 +63,14 @@ export function MobileTopBarIconButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: !onPress }}
+      disabled={!onPress}
       onPress={onPress}
-      style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.iconButton,
+        !onPress && styles.disabled,
+        pressed && styles.pressed,
+      ]}
       hitSlop={6}
     >
       <MobileIcon name={name} size={20} color={colors.fg} />
@@ -118,5 +124,8 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.55,
     backgroundColor: colors.accent,
+  },
+  disabled: {
+    opacity: 0.42,
   },
 });

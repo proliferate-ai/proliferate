@@ -107,9 +107,11 @@ function UnclaimedSection() {
         {unclaimed.map((chat) => {
           const workspace = workspaceForChat(chat);
           return (
-            <button
+            <Button
               key={chat.id}
               type="button"
+              variant="unstyled"
+              size="unstyled"
               onClick={() => navigate(routes.chat(chat.workspaceId, chat.id))}
               className="group flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[12px] text-sidebar-foreground hover:bg-sidebar-accent"
             >
@@ -120,7 +122,7 @@ function UnclaimedSection() {
                   {workspace?.name ?? "Unknown"}
                 </span>
               </span>
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -138,8 +140,10 @@ function WorkspaceGroup({ workspace, chats: workspaceChats }: WorkspaceGroupProp
 
   return (
     <div className="px-2">
-      <button
+      <Button
         type="button"
+        variant="unstyled"
+        size="unstyled"
         onClick={() => setOpen((prev) => !prev)}
         className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[11.5px] text-sidebar-foreground hover:bg-sidebar-accent"
       >
@@ -155,7 +159,7 @@ function WorkspaceGroup({ workspace, chats: workspaceChats }: WorkspaceGroupProp
         )}
         <span className="min-w-0 flex-1 truncate font-medium">{workspace.name}</span>
         <span className="text-[10px] text-sidebar-muted-foreground">{workspaceChats.length}</span>
-      </button>
+      </Button>
       {open && (
         <div className="space-y-0.5 pb-1 pl-3">
           {workspaceChats.map((chat) => (

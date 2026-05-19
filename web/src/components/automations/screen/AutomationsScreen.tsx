@@ -81,8 +81,10 @@ function AutomationRow({
   isLast,
 }: AutomationRowProps) {
   return (
-    <button
+    <Button
       type="button"
+      variant="unstyled"
+      size="unstyled"
       className={`group flex w-full items-center gap-4 px-4 py-3.5 text-left transition-colors hover:bg-accent ${
         isLast ? "" : "border-b border-border-light"
       }`}
@@ -123,6 +125,6 @@ function AutomationRow({
       >
         {enabled ? "On" : "Paused"}
       </span>
-    </button>
+    </Button>
   );
 }
