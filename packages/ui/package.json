@@ -59,6 +59,10 @@
       "types": "./dist/primitives/Spinner.d.ts",
       "import": "./dist/primitives/Spinner.js"
     },
+    "./primitives/Select": {
+      "types": "./dist/primitives/Select.d.ts",
+      "import": "./dist/primitives/Select.js"
+    },
     "./primitives/Tabs": {
       "types": "./dist/primitives/Tabs.d.ts",
       "import": "./dist/primitives/Tabs.js"

@@ -215,6 +215,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/viewer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Auth Viewer */
+        get: operations["get_auth_viewer_v1_auth_viewer_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -2386,6 +2403,47 @@ export interface components {
             redirect_uri: string;
             /** State */
             state: string;
+        };
+        /** AuthLinkedProvider */
+        AuthLinkedProvider: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "github" | "google" | "apple";
+            /** Connected */
+            connected: boolean;
+            /** Accountemail */
+            accountEmail?: string | null;
+            /** Accountid */
+            accountId?: string | null;
+        };
+        /** AuthProviderAvailability */
+        AuthProviderAvailability: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "github" | "google" | "apple";
+            /** Enabled */
+            enabled: boolean;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** AuthViewerResponse */
+        AuthViewerResponse: {
+            user: components["schemas"]["UserRead"];
+            /** Githubconnected */
+            githubConnected: boolean;
+            /**
+             * Onboardingstate
+             * @enum {string}
+             */
+            onboardingState: "needs_github" | "active";
+            /** Linkedproviders */
+            linkedProviders: components["schemas"]["AuthLinkedProvider"][];
+            /** Provideravailability */
+            providerAvailability: components["schemas"]["AuthProviderAvailability"][];
         };
         /**
          * AuthorizeParams
@@ -6255,6 +6313,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_auth_viewer_v1_auth_viewer_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthViewerResponse"];
                 };
             };
         };

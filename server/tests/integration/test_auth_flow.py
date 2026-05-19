@@ -143,12 +143,14 @@ class TestDesktopPKCEFlow:
         assert token_data["expires_in"] > 0
         assert token_data["user"]["email"] == "desktop@example.com"
 
-        # Step 3: Use the access token
+        # Step 3: A raw desktop token is authenticated but still limited until
+        # the user has linked the GitHub product identity.
         resp = await client.get(
             "/v1/cloud/workspaces",
             headers={"Authorization": f"Bearer {token_data['access_token']}"},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 403
+        assert resp.json()["detail"]["code"] == "github_link_required"
 
     @pytest.mark.asyncio
     async def test_pkce_wrong_verifier(self, client: AsyncClient) -> None:

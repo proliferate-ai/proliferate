@@ -28,6 +28,8 @@ class Settings(BaseSettings):
         "http://127.0.0.1:1420,"
         "http://localhost:3000,"
         "http://127.0.0.1:3000,"
+        "http://localhost:5174,"
+        "http://127.0.0.1:5174,"
         "http://tauri.localhost,"
         "tauri://localhost"
     )
@@ -42,6 +44,18 @@ class Settings(BaseSettings):
     # GitHub OAuth
     github_oauth_client_id: str = ""
     github_oauth_client_secret: str = ""
+
+    # Google OAuth
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+
+    # Apple OAuth / Sign in with Apple
+    apple_sign_in_enabled: bool = False
+    apple_web_service_id: str = ""
+    apple_ios_bundle_id: str = ""
+    apple_team_id: str = ""
+    apple_key_id: str = ""
+    apple_private_key: str = ""
 
     # Customer.io (optional)
     customerio_site_id: str = ""

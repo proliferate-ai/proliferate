@@ -178,6 +178,11 @@ class TestCloudTargetsApi:
             user_id=owner.user_id,
             access_token="gh-cloud-target-owner-token",
         )
+        await seed_linked_github_account(
+            db_session,
+            user_id=member.user_id,
+            access_token="gh-cloud-target-member-token",
+        )
         organization = Organization(name="Cloud Target Org")
         db_session.add(organization)
         await db_session.flush()

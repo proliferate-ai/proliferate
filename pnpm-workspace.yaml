@@ -11,6 +11,7 @@ packages:
   - "packages/product-ui"
   - "packages/ui"
   - "server/artifact-runtime"
+  - "web"
 
 onlyBuiltDependencies:
   - "@sentry/cli"

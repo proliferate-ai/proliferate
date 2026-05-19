@@ -9,7 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.auth import User
+from proliferate.db.models.auth import OAuthAccount, User
 from proliferate.db.models.cloud.credentials import CloudCredential
 
 
@@ -18,6 +18,7 @@ async def _create_user_and_get_tokens(
     db_session: AsyncSession,
     *,
     email: str,
+    link_github: bool = True,
 ) -> dict[str, str]:
     user = User(
         email=email,
@@ -28,6 +29,17 @@ async def _create_user_and_get_tokens(
         display_name="Cloud Credential Tester",
     )
     db_session.add(user)
+    await db_session.flush()
+    if link_github:
+        db_session.add(
+            OAuthAccount(
+                user_id=user.id,
+                oauth_name="github",
+                access_token="github-access-token",
+                account_id=f"github-{user.id}",
+                account_email=email,
+            )
+        )
     await db_session.commit()
 
     verifier = "test-code-verifier-that-is-long-enough-for-pkce"
@@ -128,6 +140,31 @@ async def test_cloud_credential_sync_list_and_delete_thread_request_db(
     assert response.status_code == 200
     claude_status = next(item for item in response.json() if item["provider"] == "claude")
     assert claude_status["synced"] is False
+
+
+@pytest.mark.asyncio
+async def test_cloud_credential_sync_requires_github_identity(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="cloud-credential-limited@example.com",
+        link_github=False,
+    )
+
+    response = await client.put(
+        "/v1/cloud/credentials/claude",
+        headers=_headers(tokens),
+        json={
+            "authMode": "env",
+            "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "github_link_required"
 
 
 @pytest.mark.asyncio

@@ -8,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.auth import User
+from proliferate.db.models.auth import OAuthAccount, User
 
 
 async def _create_user_and_get_tokens(
@@ -26,6 +26,16 @@ async def _create_user_and_get_tokens(
         display_name="Automation Tester",
     )
     db_session.add(user)
+    await db_session.flush()
+    db_session.add(
+        OAuthAccount(
+            user_id=user.id,
+            oauth_name="github",
+            access_token="github-access-token",
+            account_id=f"github-{user.id}",
+            account_email=email,
+        )
+    )
     await db_session.commit()
 
     verifier = "test-code-verifier-that-is-long-enough-for-pkce"

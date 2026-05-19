@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
@@ -52,7 +52,7 @@ def _default_repo_config_response() -> CloudRepoConfigResponse:
 @router.get("/repos/configs", response_model=CloudRepoConfigsListResponse)
 async def list_cloud_repo_configs_endpoint(
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudRepoConfigsListResponse:
     return CloudRepoConfigsListResponse(
         configs=[
@@ -66,7 +66,7 @@ async def get_cloud_repo_config_endpoint(
     git_owner: str,
     git_repo_name: str,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudRepoConfigResponse:
     value = await get_repo_config(
         db,
@@ -83,7 +83,7 @@ async def save_cloud_repo_config_endpoint(
     git_repo_name: str,
     body: SaveCloudRepoConfigRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudRepoConfigResponse:
     try:
         value = await save_repo_config(
@@ -104,7 +104,7 @@ async def save_cloud_repo_file_endpoint(
     git_repo_name: str,
     body: PutCloudRepoFileRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudRepoConfigResponse:
     try:
         value = await save_repo_file(
@@ -126,7 +126,7 @@ async def save_cloud_repo_file_endpoint(
 async def get_cloud_workspace_repo_config_status_endpoint(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudWorkspaceRepoConfigStatusResponse:
     try:
         status = await get_workspace_repo_config_status(db, user.id, workspace_id)
@@ -142,7 +142,7 @@ async def get_cloud_workspace_repo_config_status_endpoint(
 async def resync_cloud_workspace_files_endpoint(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> ResyncCloudWorkspaceFilesResponse:
     try:
         status = await resync_workspace_files(db, user.id, workspace_id)
@@ -158,7 +158,7 @@ async def resync_cloud_workspace_files_endpoint(
 async def run_cloud_workspace_setup_endpoint(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> RunCloudWorkspaceSetupResponse:
     try:
         status = await run_workspace_setup(db, user.id, workspace_id)

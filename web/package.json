@@ -1,0 +1,32 @@
+{
+  "name": "@proliferate/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-model build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && vite",
+    "build": "pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-model build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@proliferate/design": "workspace:*",
+    "@proliferate/product-model": "workspace:*",
+    "@proliferate/product-ui": "workspace:*",
+    "@proliferate/ui": "workspace:*",
+    "lucide-react": "^0.468.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-router-dom": "^7",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4",
+    "@types/react": "~19.1.0",
+    "@types/react-dom": "~19.1.0",
+    "@vitejs/plugin-react": "^4",
+    "tailwindcss": "^4",
+    "typescript": "^5.7",
+    "vite": "^6"
+  }
+}
