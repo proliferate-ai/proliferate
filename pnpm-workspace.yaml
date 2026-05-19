@@ -8,6 +8,7 @@ packages:
   - "mobile"
   - "packages/design"
   - "packages/product-model"
+  - "packages/product-ui"
   - "packages/ui"
   - "server/artifact-runtime"
 

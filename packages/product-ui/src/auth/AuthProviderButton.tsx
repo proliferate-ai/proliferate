@@ -1,6 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
-import { Spinner } from "../primitives/Spinner";
+import { Spinner } from "@proliferate/ui/primitives/Spinner";
 
 interface AuthProviderButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;

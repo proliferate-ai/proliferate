@@ -27,7 +27,10 @@ Shared token ownership:
 - `packages/design/src/tokens.ts` owns serializable cross-client token values.
 - `packages/design/dist/theme.css` is generated from those tokens and exposes
   shared CSS theme variables plus shared non-product animation utilities for
-  Desktop/Web. Do not hand-edit generated theme output.
+  Desktop/Web. Do not hand-edit generated theme output. Desktop currently
+  imports this generated CSS while still owning its full product theme presets
+  in `desktop/src/index.css`; moving those presets into generated shared tokens
+  is a later migration, not part of the foundation package.
 - Desktop keeps Desktop-only global CSS, third-party overrides, and theme
   runtime behavior in `desktop/src/**`.
 - Mobile consumes React Native-safe values from
@@ -156,9 +159,10 @@ Use an existing primitive when possible. If the visual treatment is genuinely
 new, extend the primitive cleanly or add a new dedicated primitive in
 `components/ui/**`.
 
-When using primitives from `packages/ui/**`, importing apps must ensure
-Tailwind scans the package source, for example with `@source
-"../../packages/ui/src";` in the app stylesheet.
+When using primitives from `packages/ui/**` or shared product components from
+`packages/product-ui/**`, importing apps must ensure Tailwind scans the package
+source, for example with `@source "../../packages/ui/src";` and `@source
+"../../packages/product-ui/src";` in the app stylesheet.
 
 Reusable icons belong in `components/ui/icons.tsx`, not inline inside feature
 components.

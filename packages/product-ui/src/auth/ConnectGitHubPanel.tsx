@@ -1,19 +1,19 @@
 import { type HTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
-import { Button } from "../primitives/Button";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 interface ConnectGitHubPanelProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
-  title?: ReactNode;
-  description?: ReactNode;
-  actionLabel?: ReactNode;
+  title: ReactNode;
+  description: ReactNode;
+  actionLabel: ReactNode;
   onConnect?: () => void;
   loading?: boolean;
 }
 
 export function ConnectGitHubPanel({
-  title = "Connect GitHub",
-  description = "A GitHub connection is required before you can use cloud workspaces and automations.",
-  actionLabel = "Continue with GitHub",
+  title,
+  description,
+  actionLabel,
   onConnect,
   loading = false,
   className = "",

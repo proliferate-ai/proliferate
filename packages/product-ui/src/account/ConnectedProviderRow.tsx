@@ -1,6 +1,6 @@
 import { type HTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
-import { Badge } from "../primitives/Badge";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 
 interface ConnectedProviderRowProps extends HTMLAttributes<HTMLDivElement> {
   provider: ReactNode;

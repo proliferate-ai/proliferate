@@ -3,7 +3,10 @@ import { colors, radius, spacing, timing, typography } from "./tokens";
 export const mobileColors = colors;
 export const mobileSpacing = spacing;
 export const mobileRadius = radius;
-export const mobileTypography = typography;
+export const mobileTypography = {
+  size: typography.size,
+  lineHeight: typography.lineHeight,
+} as const;
 export const mobileTiming = timing;
 
 export const mobileShadow = {

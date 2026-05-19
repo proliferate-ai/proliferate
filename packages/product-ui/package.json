@@ -1,0 +1,66 @@
+{
+  "name": "@proliferate/product-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./account/AccountIdentityCard": {
+      "types": "./dist/account/AccountIdentityCard.d.ts",
+      "import": "./dist/account/AccountIdentityCard.js"
+    },
+    "./account/ConnectedProviderRow": {
+      "types": "./dist/account/ConnectedProviderRow.d.ts",
+      "import": "./dist/account/ConnectedProviderRow.js"
+    },
+    "./auth/AuthLayout": {
+      "types": "./dist/auth/AuthLayout.d.ts",
+      "import": "./dist/auth/AuthLayout.js"
+    },
+    "./auth/AuthProviderButton": {
+      "types": "./dist/auth/AuthProviderButton.d.ts",
+      "import": "./dist/auth/AuthProviderButton.js"
+    },
+    "./auth/ConnectGitHubPanel": {
+      "types": "./dist/auth/ConnectGitHubPanel.d.ts",
+      "import": "./dist/auth/ConnectGitHubPanel.js"
+    },
+    "./auth/LegalLinks": {
+      "types": "./dist/auth/LegalLinks.d.ts",
+      "import": "./dist/auth/LegalLinks.js"
+    },
+    "./automations/AutomationRow": {
+      "types": "./dist/automations/AutomationRow.d.ts",
+      "import": "./dist/automations/AutomationRow.js"
+    },
+    "./automations/AutomationStatusBadge": {
+      "types": "./dist/automations/AutomationStatusBadge.d.ts",
+      "import": "./dist/automations/AutomationStatusBadge.js"
+    },
+    "./workspaces/WorkspaceRow": {
+      "types": "./dist/workspaces/WorkspaceRow.d.ts",
+      "import": "./dist/workspaces/WorkspaceRow.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@proliferate/ui": "workspace:*",
+    "tailwind-merge": "^3.5.0"
+  },
+  "peerDependencies": {
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.0",
+    "@types/react-dom": "~19.1.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "typescript": "^5.7"
+  }
+}
