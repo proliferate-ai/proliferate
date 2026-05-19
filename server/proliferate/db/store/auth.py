@@ -56,6 +56,7 @@ async def _get_active_auth_code(
         )
         .order_by(desc(DesktopAuthCode.created_at))
         .limit(1)
+        .with_for_update()
     )
     auth_code = result.scalar_one_or_none()
     if auth_code is None or _is_auth_code_expired(auth_code):

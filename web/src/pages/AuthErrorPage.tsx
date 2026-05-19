@@ -17,8 +17,8 @@ export function AuthErrorPage() {
           : "The sign-in attempt could not be completed. Return to the app and try again."
       }
       stateLabel="Auth error"
-      primaryActionLabel="Open desktop"
-      primaryActionHref="proliferate://auth/callback?error=web_auth_failed"
+      primaryActionLabel="Try again"
+      primaryActionHref={routes.auth}
       secondaryActionLabel="Go to dashboard"
       secondaryActionHref={routes.home}
     />

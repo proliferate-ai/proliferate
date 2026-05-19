@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import time
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -252,6 +253,29 @@ class TestDesktopPKCEFlow:
         )
         assert resp.status_code == 400
 
+    @pytest.mark.asyncio
+    async def test_debug_authorize_endpoint_disabled_outside_debug(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id = await _create_user_via_manager("debug-authorize-off@example.com")
+        _, challenge = _make_pkce_pair()
+        monkeypatch.setattr(settings, "debug", False)
+
+        resp = await client.post(
+            "/auth/desktop/authorize",
+            params={"user_id": user_id},
+            json={
+                "state": "state-debug-off",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+                "redirect_uri": "proliferate://auth/callback",
+            },
+        )
+
+        assert resp.status_code == 404
+
 
 class TestWebMobileSessionGuards:
     @pytest.mark.asyncio
@@ -340,7 +364,11 @@ class TestDesktopGitHubBrowserFlow:
         async def fake_get_access_token(code: str, redirect_uri: str) -> dict[str, object]:
             assert code == "github-code"
             assert redirect_uri.endswith("/auth/desktop/github/callback")
-            return {"access_token": "github-access-token", "expires_at": 3600}
+            return {
+                "access_token": "github-access-token",
+                "expires_at": int(time.time()) + 3600,
+                "scope": "repo,user,user:email",
+            }
 
         async def fake_get_id_email(token: str) -> tuple[str, str]:
             assert token == "github-access-token"

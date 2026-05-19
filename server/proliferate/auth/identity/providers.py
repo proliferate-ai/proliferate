@@ -134,7 +134,6 @@ async def verify_oauth_callback(
             avatar_url = profile.avatar_url
         except GitHubIntegrationError:
             pass
-        scopes = parse_scope_string(token.get("scope")) or frozenset(GITHUB_OAUTH_SCOPES)
         return VerifiedProviderIdentity(
             provider="github",
             provider_subject=account_id,
@@ -149,7 +148,7 @@ async def verify_oauth_callback(
             ),
             expires_at=token_expiry_from_timestamp(token.get("expires_at")),
             expires_at_timestamp=token_expiry_timestamp(token.get("expires_at")),
-            scopes=scopes,
+            scopes=parse_scope_string(token.get("scope")),
         )
 
     if provider == "google":

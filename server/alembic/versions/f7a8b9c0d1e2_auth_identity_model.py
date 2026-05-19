@@ -24,6 +24,8 @@ down_revision: str | Sequence[str] | None = ("f6a7b8c9d0e1", "d5e6f7a8b9c0")
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+LEGACY_GITHUB_OAUTH_SCOPES = ["repo", "user", "user:email"]
+
 
 def _has_table(table_name: str) -> bool:
     return table_name in sa.inspect(op.get_bind()).get_table_names()
@@ -187,15 +189,15 @@ def _backfill_oauth_accounts() -> None:
         ).scalar_one_or_none()
         if grant_exists is not None:
             continue
-        scopes: list[str] = []
+        scopes: list[str] = (
+            LEGACY_GITHUB_OAUTH_SCOPES if row["oauth_name"] == "github" else []
+        )
         expires_at = (
             datetime.fromtimestamp(row["expires_at"], tz=UTC)
             if row["expires_at"] is not None
             else None
         )
         status = "expired" if expires_at is not None and expires_at <= now else "ready"
-        if row["oauth_name"] == "github" and status == "ready":
-            status = "needs_reauth"
         bind.execute(
             sa.text(
                 """

@@ -1,5 +1,6 @@
 from starlette.requests import Request
 
+from proliferate.auth.desktop.service import build_github_callback_url
 from proliferate.auth.identity.api import _web_session_cookie_path
 from proliferate.auth.identity.providers import provider_callback_url
 from proliferate.config import settings
@@ -80,4 +81,28 @@ def test_identity_provider_callback_url_does_not_double_existing_api_prefix(
     assert (
         provider_callback_url(_request(), provider="github", surface="web")
         == "https://app.proliferate.com/api/auth/web/github/callback"
+    )
+
+
+def test_desktop_github_callback_url_uses_api_prefix_when_base_is_origin(
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    monkeypatch.setattr(settings, "api_base_url", "https://app.proliferate.com")
+    monkeypatch.setattr(settings, "api_path_prefix", "/api")
+
+    assert (
+        build_github_callback_url(_request("/api/auth/desktop/github/authorize"))
+        == "https://app.proliferate.com/api/auth/desktop/github/callback"
+    )
+
+
+def test_desktop_github_callback_url_does_not_double_existing_api_prefix(
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    monkeypatch.setattr(settings, "api_base_url", "https://app.proliferate.com/api")
+    monkeypatch.setattr(settings, "api_path_prefix", "/api")
+
+    assert (
+        build_github_callback_url(_request("/api/auth/desktop/github/authorize"))
+        == "https://app.proliferate.com/api/auth/desktop/github/callback"
     )

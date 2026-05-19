@@ -26,6 +26,9 @@ async def assert_current_schema(
         "cloud_worktree_retention_policy",
         "cloud_workspace",
         "desktop_auth_code",
+        "auth_identity",
+        "provider_grant",
+        "auth_challenge",
         "oauth_account",
         "organization",
         "organization_invitation",
@@ -162,6 +165,97 @@ async def assert_current_schema(
         lambda sync_conn: {column["name"] for column in inspect(sync_conn).get_columns("user")}
     )
     assert {"github_login", "avatar_url"} <= user_columns
+
+    auth_identity_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("auth_identity")
+        }
+    )
+    assert {
+        "id",
+        "user_id",
+        "provider",
+        "provider_subject",
+        "email",
+        "email_verified",
+        "last_login_at",
+    } <= auth_identity_columns
+    auth_identity_uniques = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_unique_constraints("auth_identity")
+        }
+    )
+    assert {
+        "uq_auth_identity_provider_subject",
+        "uq_auth_identity_user_provider",
+    } <= auth_identity_uniques
+
+    provider_grant_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("provider_grant")
+        }
+    )
+    assert {
+        "id",
+        "user_id",
+        "auth_identity_id",
+        "provider",
+        "access_token_ciphertext",
+        "refresh_token_ciphertext",
+        "scopes_json",
+        "expires_at",
+        "status",
+        "last_verified_at",
+    } <= provider_grant_columns
+    provider_grant_uniques = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_unique_constraints("provider_grant")
+        }
+    )
+    assert "uq_provider_grant_identity_provider" in provider_grant_uniques
+    provider_grant_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("provider_grant")
+        }
+    )
+    assert "ix_provider_grant_user_provider" in provider_grant_indexes
+
+    auth_challenge_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("auth_challenge")
+        }
+    )
+    assert {
+        "id",
+        "provider",
+        "surface",
+        "purpose",
+        "state_hash",
+        "nonce_hash",
+        "csrf_hash",
+        "user_id",
+        "client_state",
+        "code_challenge",
+        "code_challenge_method",
+        "redirect_uri",
+        "expires_at",
+        "consumed_at",
+    } <= auth_challenge_columns
+    auth_challenge_uniques = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_unique_constraints("auth_challenge")
+        }
+    )
+    assert "uq_auth_challenge_state_hash" in auth_challenge_uniques
+    auth_challenge_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("auth_challenge")
+        }
+    )
+    assert {"ix_auth_challenge_state_hash", "ix_auth_challenge_user_id"} <= auth_challenge_indexes
 
     mcp_connection_columns = await conn.run_sync(
         lambda sync_conn: {

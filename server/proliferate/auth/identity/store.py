@@ -353,6 +353,7 @@ async def consume_auth_challenge(
             AuthChallenge.state_hash == state_hash,
             AuthChallenge.consumed_at.is_(None),
         )
+        .with_for_update()
     )
     challenge = result.scalar_one_or_none()
     if challenge is None:
@@ -391,6 +392,7 @@ async def backfill_legacy_oauth_accounts_for_user(db: AsyncSession, *, user_id: 
             OAuthAccount.user_id == user_id,
             OAuthAccount.oauth_name.in_(("github", "google")),
         )
+        .with_for_update()
     )
     for account in result.scalars().all():
         provider = account.oauth_name
@@ -410,7 +412,9 @@ async def backfill_legacy_oauth_accounts_for_user(db: AsyncSession, *, user_id: 
         )
         if existing_user_provider is not None:
             continue
-        scopes = frozenset()
+        # Legacy GitHub OAuth rows predate canonical grant scopes but were
+        # created by our GitHub flow with the product-required scopes.
+        scopes = frozenset(REQUIRED_GITHUB_SCOPES) if provider == "github" else frozenset()
         verified = VerifiedProviderIdentity(
             provider=provider,  # type: ignore[arg-type]
             provider_subject=account.account_id,

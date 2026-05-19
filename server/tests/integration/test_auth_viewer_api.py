@@ -77,6 +77,7 @@ async def _link_ready_github_identity(
     user_id: str,
     *,
     expires_at: datetime | None = None,
+    scopes_json: str = '["repo","user","user:email"]',
 ) -> uuid.UUID:
     identity = AuthIdentity(
         user_id=uuid.UUID(user_id),
@@ -92,7 +93,7 @@ async def _link_ready_github_identity(
         auth_identity_id=identity.id,
         provider="github",
         access_token_ciphertext="encrypted-github-access-token",
-        scopes_json='["repo","user","user:email"]',
+        scopes_json=scopes_json,
         status="ready",
         expires_at=expires_at,
     )
@@ -179,7 +180,7 @@ async def test_auth_viewer_marks_github_user_as_active(
 
 
 @pytest.mark.asyncio
-async def test_legacy_github_oauth_account_without_scopes_requires_reauth(
+async def test_legacy_github_oauth_account_backfills_as_ready(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -197,10 +198,39 @@ async def test_legacy_github_oauth_account_without_scopes_requires_reauth(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["githubConnected"] is False
-    assert payload["onboardingState"] == "needs_github"
+    assert payload["githubConnected"] is True
+    assert payload["onboardingState"] == "active"
     linked = {provider["provider"]: provider for provider in payload["linkedProviders"]}
     assert linked["github"]["connected"] is True
+
+    allowed = await client.get(
+        "/v1/cloud/workspaces",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert allowed.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_github_grant_without_required_scopes_requires_reauth(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    user_id, access_token = await _create_user_and_get_token(
+        client,
+        db_session,
+        email="viewer-github-missing-scopes@example.com",
+    )
+    await _link_ready_github_identity(db_session, user_id, scopes_json="[]")
+
+    response = await client.get(
+        "/v1/auth/viewer",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["githubConnected"] is False
+    assert payload["onboardingState"] == "needs_github"
 
     blocked = await client.get(
         "/v1/cloud/workspaces",

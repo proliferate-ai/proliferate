@@ -37,7 +37,12 @@ from proliferate.auth.desktop.pages import (
     make_browser_flow_page,
     make_desktop_handoff_page,
 )
-from proliferate.auth.identity.providers import parse_scope_string
+from proliferate.auth.identity.providers import (
+    parse_scope_string,
+    token_expiry_from_timestamp,
+    token_expiry_timestamp,
+)
+from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.auth.identity.service import attach_verified_identity
 from proliferate.auth.identity.types import VerifiedProviderIdentity
 from proliferate.auth.jwt import get_jwt_strategy
@@ -47,7 +52,6 @@ from proliferate.config import settings
 from proliferate.constants.auth import (
     DESKTOP_DEEP_LINK_LAUNCH_ENABLED,
     DESKTOP_REDIRECT_SCHEME,
-    GITHUB_OAUTH_SCOPES,
     JWT_LIFETIME_SECONDS,
     REFRESH_TOKEN_LIFETIME_SECONDS,
     SUPPORTED_CODE_CHALLENGE_METHODS,
@@ -115,9 +119,17 @@ def build_github_callback_url(request: Request) -> str:
         and _is_loopback(api_parsed.hostname)
     ):
         request_origin = f"{request.url.scheme}://{request.url.netloc}"
-        return f"{request_origin}/auth/desktop/github/callback"
+        path = auth_route_path_for_base(
+            "/auth/desktop/github/callback",
+            base_url=request_origin,
+        )
+        return f"{request_origin}{path}"
 
-    return f"{api_base_url}/auth/desktop/github/callback"
+    path = auth_route_path_for_base(
+        "/auth/desktop/github/callback",
+        base_url=api_base_url,
+    )
+    return f"{api_base_url}{path}"
 
 
 def github_csrf_cookie_secure(request: Request) -> bool:
@@ -379,13 +391,9 @@ async def finish_github_desktop_callback(
             refresh_token=(
                 token.get("refresh_token") if isinstance(token.get("refresh_token"), str) else None
             ),
-            expires_at=None,
-            expires_at_timestamp=(
-                int(token["expires_at"])
-                if isinstance(token.get("expires_at"), (int, float))
-                else None
-            ),
-            scopes=parse_scope_string(token.get("scope")) or frozenset(GITHUB_OAUTH_SCOPES),
+            expires_at=token_expiry_from_timestamp(token.get("expires_at")),
+            expires_at_timestamp=token_expiry_timestamp(token.get("expires_at")),
+            scopes=parse_scope_string(token.get("scope")),
         ),
     )
 

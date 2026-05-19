@@ -11,6 +11,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -31,25 +32,27 @@ const queryClient = new QueryClient();
 export function WebCloudProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
+  const authEpochRef = useRef(0);
   const client = useMemo(() => createWebCloudClient(webEnv.apiBaseUrl, token), [token]);
 
   useEffect(() => {
     let cancelled = false;
+    const bootstrapEpoch = authEpochRef.current;
     const bootstrapClient = createWebCloudClient(webEnv.apiBaseUrl, null);
     bootstrapWebSession(bootstrapClient)
       .then((session) => {
-        if (!cancelled) {
+        if (!cancelled && authEpochRef.current === bootstrapEpoch) {
           queryClient.clear();
           setTokenState(session.accessToken);
         }
       })
       .catch(() => {
-        if (!cancelled) {
+        if (!cancelled && authEpochRef.current === bootstrapEpoch) {
           setTokenState(null);
         }
       })
       .finally(() => {
-        if (!cancelled) {
+        if (!cancelled && authEpochRef.current === bootstrapEpoch) {
           setBootstrapping(false);
         }
       });
@@ -63,14 +66,19 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
       token,
       bootstrapping,
       setToken(nextToken) {
+        authEpochRef.current += 1;
         queryClient.clear();
+        setBootstrapping(false);
         setTokenState(nextToken);
       },
       setSession(session) {
+        authEpochRef.current += 1;
         queryClient.clear();
+        setBootstrapping(false);
         setTokenState(session.accessToken);
       },
       async clearToken() {
+        authEpochRef.current += 1;
         const csrfToken = readCookie("proliferate_web_csrf");
         if (csrfToken) {
           const logoutClient = createWebCloudClient(webEnv.apiBaseUrl, null);
@@ -81,6 +89,7 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
           }
         }
         queryClient.clear();
+        setBootstrapping(false);
         setTokenState(null);
       },
     }),

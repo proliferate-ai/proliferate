@@ -1,10 +1,11 @@
-const env = globalThis as typeof globalThis & {
-  process?: { env?: Record<string, string | undefined> };
+declare const process: {
+  env: {
+    EXPO_PUBLIC_PROLIFERATE_API_BASE_URL?: string;
+  };
 };
-
 declare const __DEV__: boolean | undefined;
 
-const configuredApiBaseUrl = env.process?.env?.EXPO_PUBLIC_PROLIFERATE_API_BASE_URL?.trim();
+const configuredApiBaseUrl = process.env.EXPO_PUBLIC_PROLIFERATE_API_BASE_URL?.trim();
 
 function resolveApiBaseUrl() {
   if (configuredApiBaseUrl) return configuredApiBaseUrl;
