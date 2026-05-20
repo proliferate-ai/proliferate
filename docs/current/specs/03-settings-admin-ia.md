@@ -106,7 +106,7 @@ Soft:
 
 ## 4. Current Repo State
 
-Verified against `/home/user/proliferate` on 2026-05-20.
+Verified against the current repository worktree on 2026-05-20.
 
 ### 4.1 What exists
 
@@ -223,7 +223,7 @@ prep section in `docs/current/overall.md`:
 
 ### 5.1 Sidebar groups + pages
 
-After this spec, `SETTINGS_NAV_GROUPS` is:
+Target visible `SETTINGS_NAV_GROUPS` after the owning panes ship:
 
 ```text
 Preferences
@@ -238,16 +238,23 @@ Organization & Account
 
 Workspace
   environments             EnvironmentsPane               (existing; renamed group)
-  shared-environments      SharedEnvironmentsPane         (new; admin-tagged)
+  shared-environments      SharedEnvironmentsPane         (new; admin-tagged;
+                                                           hidden until its
+                                                           owner spec ships a
+                                                           functioning body)
   compute                  ComputePane                    (existing; spec 00 wires content)
 
 Agents
   agents                   AgentsPane                     (existing; "installed on this Mac")
   agent-defaults           AgentDefaultsPane              (existing; moved from Workflows)
-  agent-authentication     AgentAuthenticationPane        (new; spec 02 wires content)
+  agent-authentication     AgentAuthenticationPane        (new; hidden until
+                                                           spec 02 wires
+                                                           content)
   review                   ReviewSettingsPane             (existing)
 
-Slack bot                  SlackBotPane                   (new; spec 07 wires content)
+Slack bot                  SlackBotPane                   (new; hidden until
+                                                           spec 07 wires
+                                                           content)
 
 Help
   support                  action (existing)
@@ -255,6 +262,11 @@ Help
 ```
 
 Section ids (`desktop/src/config/settings.ts`):
+
+```typescript
+SETTINGS_CONTENT_SECTIONS is the registry of valid section ids. The visible
+sidebar filters it through `featureAvailable` / owner-spec readiness; registered
+does not mean visible.
 
 ```typescript
 SETTINGS_CONTENT_SECTIONS = [
@@ -288,9 +300,11 @@ Removed id:
 
 The `?section=<id>` URL scheme is preserved. Old urls that point at
 `?section=repo` redirect to `?section=environments`; old
-`?section=cloud` redirects to `?section=agent-authentication` (the
-most likely user intent). `?section=worktrees` redirects to
-`?section=environments` with a per-repo focus param.
+`?section=worktrees` redirects to `?section=environments` with a per-repo
+focus param. Old `?section=cloud` redirects by focus when available:
+credential/auth focus -> `agent-authentication`, repo/env focus ->
+`environments`, billing/credits focus -> `billing`, target/readiness focus ->
+`compute`, and no focus -> `agent-authentication`.
 
 ### 5.2 Per-page ownership
 
@@ -352,12 +366,12 @@ Help/check-for-updates      spec 03   updater
 
 ### 5.3 Shared vocabulary
 
-These exact strings appear in TS enums, OpenAPI schemas, Python enums,
-and DB CHECK constraints. No synonyms across the stack. Convention:
-snake_case for machine values (DB-friendly, matches existing
-`owner_scope='personal'`, `kind='managed_cloud'`,
-`visibility='shared_unclaimed'` enums). Human-readable labels live in
-copy and convert at render time.
+These strings are the shared presentation vocabulary. Specs that own server
+schema changes must emit the same strings on the wire and in DB CHECKs when
+they add those fields, but spec 03 itself is a frontend IA spec and does not
+add DB/API fields. Convention: snake_case for machine values (DB-friendly,
+matches existing `owner_scope='personal'`, `kind='managed_cloud'`). Human-
+readable labels live in copy and convert at render time.
 
 **WorkspaceType** (where a workspace runs):
 
@@ -397,12 +411,10 @@ claimed              one claiming user has narrowed control
 archived             retained but hidden from active lists
 ```
 
-Note: these are the values already used by the existing
-`cloud_workspace_exposure.visibility` DB enum. Spec 05 (claiming)
-keeps claim as a one-way transition; there is no `admin_managed`
-state. Admins gain audit view via the `useIsAdmin` hook and the
-`scope=org-all` listing endpoint, not via a separate visibility
-state.
+Spec 04/05 add `cloud_workspace_exposure.visibility` using these values.
+Spec 05 (claiming) keeps claim as a one-way transition; there is no
+`admin_managed` state. Admins gain audit view via the `useIsAdmin` hook and
+the `scope=org-all` listing endpoint, not via a separate visibility state.
 
 **SandboxType** (the runtime container the work lives in):
 
@@ -463,14 +475,13 @@ copy/settings/vocabulary-copy.ts          (new)
 Server-side:
 
 ```text
-server emits and accepts the same snake_case strings on the wire and
-in DB enums. OpenAPI schema enums use these values literally so the
-generated TS types match desktop/src/lib/domain/vocabulary.ts at the
-character level.
+Specs that own server migrations emit and accept the same snake_case strings
+on the wire and in DB enums. OpenAPI schema enums use these values literally so
+generated TS types match desktop/src/lib/domain/vocabulary.ts at the character
+level.
 
-Existing DB CHECK enums that already match this convention are left
-in place (cloud_workspace_exposure.visibility, sandbox_profile.status,
-cloud_targets.kind, agent_kind, etc.).
+Existing DB CHECK enums that already match this convention are left in place
+(sandbox_profile.status, cloud_targets.kind, agent_kind, etc.).
 
 Specs that add new enum values (e.g. spec 08 dispatch states) emit
 the same vocabulary; the strings on the wire are exactly the strings
@@ -503,8 +514,8 @@ CredentialPicker
   Renders:
     grouped sections: Proliferate managed credits, Org credentials,
     Personal credentials, Shared personal credentials (with source
-    owner). Items show status (ready / needs_resync / needs_reauth /
-    invalid / revoked) via StatusBadge primitive.
+    owner). Items show status (ready / needs_resync / invalid /
+    revoked) via StatusBadge primitive.
   Used by:
     AgentAuthenticationPane (spec 02)
     ComputeTargetAgentAuthCard (spec 02)
@@ -576,8 +587,7 @@ pending        amber dot, spinning when in flight
 materializing  amber dot, spinning
 applied        green dot
 failed         red dot
-needs-resync   amber outline
-needs-reauth   amber outline
+needs_resync   amber outline
 invalid        red outline
 revoked        muted
 blocked        red outline
@@ -721,8 +731,13 @@ Desktop:
 ```text
 desktop/src/config/settings.ts
   - update SETTINGS_CONTENT_SECTIONS to the new id list
-  - export redirect map: { "repo": "environments", "cloud":
-    "agent-authentication", "worktrees": "environments" }
+  - export redirect/focus map for old ids: repo -> environments,
+    worktrees -> environments, cloud -> focused replacement pane
+
+desktop/src/lib/domain/settings/navigation.ts
+  - normalize/build Settings location for new ids
+  - remove hardcoded cloud/cloudRepo behavior or map it through the new focus
+    model
 
 desktop/src/components/settings/settings-navigation.ts
   - new groups: Preferences | Organization & Account | Workspace |
@@ -735,9 +750,14 @@ desktop/src/components/settings/sidebar/SettingsSidebar.tsx
   - render admin tag pill when item.adminOnly is true
   - disable + tooltip for non-admin user
 
-desktop/src/components/settings/SettingsScreen.tsx
+desktop/src/components/settings/screen/SettingsScreen.tsx
   - route redirects for renamed ids
   - thread focus param to active pane
+
+desktop/src/lib/domain/auth/desktop-navigation.ts
+desktop/src/App.tsx
+  - remove direct section=cloud links; route auth/cloud recovery links through
+    the redirect/focus map
 
 desktop/src/components/settings/panes/
   CloudPane.tsx                       split (see below); content moves out
@@ -788,26 +808,27 @@ desktop/src/components/settings/panes/agent-authentication/
                                             card
 ```
 
-Server (only the small bit this spec needs):
+Server:
 
 ```text
-no DB or API changes
+no DB or API changes in spec 03. Server schema/wire fields that use this
+vocabulary are owned by specs 00, 04, 05, 06, 07, and 08.
 ```
 
 Telemetry:
 
 ```text
-desktop/src/lib/telemetry/events.ts
+desktop/src/lib/domain/telemetry/events.ts
   add settings_pane_opened, settings_pane_closed, admin_gate_blocked
   events. Payload uses 5.3 vocabulary verbatim.
 ```
 
 ## 7. Implementation Chunks
 
-All chunks land in one PR. Spec 03 ships ahead of the feature specs
-that consume its primitives, OR the primitives ship as no-op shells
-that feature specs fill in their own PRs — pick one based on which
-specs land first.
+All chunks land in one PR. Shared primitives may land ahead of the feature
+specs that consume them, but visible settings rows and panes ship only when
+their owning feature spec provides a functioning body. No empty pane shells,
+stub cards, or "coming soon" panels.
 
 ```text
 Chunk A  Sidebar + nav + redirects
@@ -843,41 +864,37 @@ Chunk E  Vocabulary + copy modules
   - vocabulary-copy.ts labels
   - new section copy files
 
-Chunk F  New empty pane shells
-  - AgentAuthenticationPane.tsx       composes spec-02 components
-  - SharedEnvironmentsPane.tsx        empty shell with admin gate; spec
-                                       06/07 fills it
-  - SlackBotPane.tsx                  empty shell with admin gate; spec
-                                       07 fills it
-  - empty shells use SettingsPageHeader and one SettingsCard with a
-    "coming soon / configure via X" stub so they render cleanly until
-    their owning spec ships
+Chunk F  Feature page handoff
+  - AgentAuthenticationPane.tsx composes spec-02 components if spec 02 lands
+    in the same stack; otherwise the nav row stays hidden
+  - SharedEnvironmentsPane.tsx appears only with the shared-environment body
+    owned by the relevant follow-on spec
+  - SlackBotPane.tsx appears only with the Slack configuration body owned by
+    spec 07
 ```
-
-The empty-shell approach lets spec 03 ship without blocking on spec
-06 / 07. Each feature spec replaces the stub content when it lands.
 
 ## 8. Acceptance Criteria
 
-1. `SETTINGS_NAV_GROUPS` matches §5.1 exactly. Group labels read
-   `Preferences`, `Organization & Account`, `Workspace`, `Agents`,
-   `Slack bot`, `Help`.
+1. Registered `SETTINGS_NAV_GROUPS` matches §5.1 exactly, but visible nav rows
+   are filtered by owner-spec readiness. Group labels read `Preferences`,
+   `Organization & Account`, `Workspace`, `Agents`, `Slack bot`, `Help` when
+   their rows are visible.
 2. `SETTINGS_CONTENT_SECTIONS` is the new id list. Old ids `repo`,
    `cloud`, `worktrees` redirect to their new homes.
-3. `AgentAuthenticationPane.tsx`, `SharedEnvironmentsPane.tsx`,
-   `SlackBotPane.tsx` exist as files. Spec 02 owns the body of the
-   first; specs 06/07 own the others. Empty-shell stubs are present
-   until those PRs land.
-4. `useIsAdmin(organizationId)` is the only place admin role is
-   resolved. `OrganizationPane.tsx` and
-   `CloudAgentAuthCredentialForm.tsx` no longer compute role inline.
+3. `AgentAuthenticationPane.tsx`, `SharedEnvironmentsPane.tsx`, and
+   `SlackBotPane.tsx` appear in nav only when their owning spec ships a
+   functioning page body. No empty-shell stubs are present.
+4. `useIsAdmin(organizationId)` is the only settings-layer place admin role is
+   resolved. `OrganizationPane.tsx`, `CloudAgentAuthCredentialForm.tsx`,
+   `CloudAgentAuthLibrary.tsx`, and `BillingPane.tsx` no longer compute role
+   inline.
 5. `AdminOnlyPlaceholder` wraps every admin-only pane and renders for
    non-admin users instead of an empty page.
 6. `CredentialPicker`, `AgentRunConfigSelector`,
    `RuntimeReadinessPanel`, `PublicCapabilityList`,
    `WhereUsedDrawer`, `StatusBadge` exist in
-   `desktop/src/components/settings/shared/` and are exported from
-   the settings shared index.
+   `desktop/src/components/settings/shared/`. Callers import the concrete file
+   directly; spec 03 does not add a shared barrel/index module.
 7. `desktop/src/lib/domain/vocabulary.ts` exports the five enums
    (`WorkspaceType`, `Origin`, `Exposure`, `Access`, `SandboxType`)
    with the exact string values in §5.3. Every other spec that ships
@@ -919,7 +936,7 @@ desktop/src/components/settings/sidebar/SettingsSidebar.test.tsx
 
 desktop/src/components/settings/SettingsScreen.test.tsx
   - ?section=repo redirects to ?section=environments
-  - ?section=cloud redirects to ?section=agent-authentication
+  - ?section=cloud redirects by focus param, defaulting to agent-authentication
   - ?section=worktrees redirects to ?section=environments
 
 desktop/src/components/settings/shared/CredentialPicker.test.tsx
@@ -940,12 +957,11 @@ desktop/src/lib/domain/vocabulary.test.ts
   - enum string values match §5.3 verbatim
 
 desktop/src/components/settings/panes/AgentAuthenticationPane.test.tsx
-  - empty shell renders SettingsPageHeader and a stub card until
-    spec 02 fills the body
+  - renders functioning spec-02 body when the pane is enabled
 desktop/src/components/settings/panes/SharedEnvironmentsPane.test.tsx
-  - admin gate visible to non-admins
+  - admin gate visible to non-admins once the functioning pane ships
 desktop/src/components/settings/panes/SlackBotPane.test.tsx
-  - admin gate visible to non-admins
+  - admin gate visible to non-admins once the functioning pane ships
 ```
 
 Manual smoke:
@@ -962,7 +978,8 @@ Manual smoke:
      -> Slack bot is enabled with "Admin" pill.
 
 3. Open Settings with ?section=cloud.
-     -> redirects to ?section=agent-authentication.
+     -> redirects to the focused replacement pane when a focus param exists;
+        otherwise redirects to ?section=agent-authentication.
 
 4. Open ?section=agent-authentication&target=t_abc&kind=claude.
      -> AgentAuthenticationPane opens with target t_abc focused and
@@ -1001,9 +1018,8 @@ Manual smoke:
 
 4. **Empty shells now or feature specs ship together?**
 
-   Bias: ship empty shells in spec 03. Specs 06/07 fill them in their
-   own PRs. Reduces coupling; lets the IA land cleanly without
-   waiting on every feature.
+   Decision: no empty shells. Shared primitives can land independently, but a
+   sidebar row or pane exists only with a functioning owner-provided body.
 
 5. **Should the per-pane `?target=…` / `?credential=…` focus params
    live in `useSettingsNavigation` or a sibling hook?**

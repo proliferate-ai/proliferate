@@ -1,6 +1,9 @@
 # Cloud / Shared Sandbox Spec Pack
 
-Status: implementation-ready spec pack for the cloud/shared-sandbox architecture.
+Status: active implementation spec pack for the cloud/shared-sandbox
+architecture. Specs `00` through `05` are the current implementation
+contract; specs `06` through `10` are planned follow-on specs and must be
+written before those surfaces are implemented.
 
 Date: 2026-05-20.
 
@@ -20,6 +23,9 @@ spec assumes the foundation is in place.
 03-settings-admin-ia.md           Settings/Admin information architecture and shared UI primitives.
 04-cloud-running-alignment.md     Cloud command queue, worker dispatch, projection, preflight.
 05-claiming.md                    Shared unclaimed work, claim ownership, Desktop direct-attach tokens.
+
+Planned; not yet implementation specs:
+
 06-automations.md                 Scheduled/triggered work that reuses sandbox/auth/command primitives.
 07-slack-bot.md                   Slack bot as a team-automation entrypoint.
 08-web-mobile-dispatch.md         Cloud-mediated web/mobile clients and remote-access UX.
@@ -94,8 +100,9 @@ cloud_command
   Field `workspace_id` is the AnyHarness workspace id (text, nullable until
   known); field `cloud_workspace_id` is the Cloud product row id.
 
-target_runtime_config_revision
-  Compiled MCP/skill/plugin runtime manifest for a sandbox profile target.
+sandbox_profile_runtime_config_revision
+  Compiled MCP/skill/plugin runtime manifest for a sandbox profile. Applied
+  state is target-scoped through sandbox_profile_target_state.
 
 agent_auth_revision
   Selected per-harness auth materialization plan for a sandbox profile.
