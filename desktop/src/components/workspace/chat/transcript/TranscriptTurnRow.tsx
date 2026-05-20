@@ -124,7 +124,7 @@ export function TranscriptTurnRow({
           transcript={transcript}
           isTurnComplete={!!turn.completedAt}
           presentation={renderPresentation}
-          forceExpandedCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
+          autoFollowCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
           tailAssistantProseRootId={tailAssistantProseRootId}
           showCompletedArtifactFallback={row.isLastTurnRow}
           workspaceId={selectedWorkspaceId}

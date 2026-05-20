@@ -16,13 +16,13 @@ const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--te
 interface CollapsedActionsProps {
   itemIds: string[];
   transcript: TranscriptState;
-  forceExpanded?: boolean;
+  autoFollow?: boolean;
 }
 
 export function CollapsedActions({
   itemIds,
   transcript,
-  forceExpanded = false,
+  autoFollow = false,
 }: CollapsedActionsProps) {
   const hasActiveExploration = itemIds.some((itemId) => {
     const item = transcript.itemsById[itemId];
@@ -30,14 +30,11 @@ export function CollapsedActions({
       && item.status !== "completed"
       && item.status !== "failed";
   });
-  const shouldForceExpanded = forceExpanded || hasActiveExploration;
-  const [userExpansionOverride, setUserExpansionOverride] = useState<"expanded" | "collapsed" | null>(null);
-  const expanded = userExpansionOverride === "collapsed"
-    ? false
-    : shouldForceExpanded || userExpansionOverride === "expanded";
+  const [expanded, setExpanded] = useState(false);
   const actionSummary = summarizeCollapsedActions(itemIds, transcript);
   const summary = formatCollapsedActionsSummary(actionSummary);
   const containsEdits = actionSummary.edits > 0;
+  const shouldAutoFollow = autoFollow || hasActiveExploration;
 
   return (
     <div className="min-w-0 text-chat leading-[var(--text-chat--line-height)]">
@@ -47,24 +44,23 @@ export function CollapsedActions({
         size="sm"
         data-chat-transcript-ignore
         aria-expanded={expanded}
-        className={`group/collapsed-actions h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline`}
-        onClick={() => {
-          setUserExpansionOverride(expanded ? "collapsed" : "expanded");
-        }}
+        className={`group/collapsed-actions h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline`}
+        onClick={() => setExpanded((value) => !value)}
       >
-        <span className="min-w-0 truncate">{summary}</span>
         <ChevronRight
-          className={`size-3 shrink-0 text-faint opacity-0 transition-all duration-200 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100 ${
-            expanded ? "rotate-90 opacity-100" : ""
+          aria-hidden="true"
+          className={`size-3 shrink-0 text-faint opacity-75 transition-transform duration-200 group-hover/collapsed-actions:text-muted-foreground group-focus-visible/collapsed-actions:text-muted-foreground ${
+            expanded ? "rotate-90" : ""
           }`}
         />
+        <span className="min-w-0 truncate">{summary}</span>
       </Button>
       {expanded && (
         <div className="mt-1 flex flex-col gap-1">
           <CollapsedActionsLedger
             itemIds={itemIds}
             transcript={transcript}
-            autoFollow={shouldForceExpanded}
+            autoFollow={shouldAutoFollow}
             containsEdits={containsEdits}
           />
         </div>
@@ -107,7 +103,7 @@ function CollapsedActionsLedger({
   transcript,
   autoFollow,
   containsEdits,
-}: CollapsedActionsProps & { autoFollow: boolean; containsEdits: boolean }) {
+}: Pick<CollapsedActionsProps, "itemIds" | "transcript"> & { autoFollow: boolean; containsEdits: boolean }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const itemSignature = itemIds.join("|");
   const shouldScrollLedger = !containsEdits;
@@ -125,8 +121,8 @@ function CollapsedActionsLedger({
         ref={viewportRef}
         data-collapsed-actions-ledger
         className={containsEdits
-          ? "px-2.5"
-          : `overflow-y-auto overflow-x-hidden px-2.5 ${
+          ? "pl-4 pr-2.5"
+          : `overflow-y-auto overflow-x-hidden pl-4 pr-2.5 ${
             autoFollow ? "max-h-[7.5rem]" : "max-h-80"
           }`}
       >

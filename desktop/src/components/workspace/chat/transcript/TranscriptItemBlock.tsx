@@ -15,6 +15,9 @@ import {
   resolveReviewFeedbackPromptReference,
 } from "@/lib/domain/chat/subagents/provenance";
 import {
+  hasProposedPlanForToolCallItem,
+} from "@/lib/domain/chat/transcript/transcript-rendering";
+import {
   resolveUserMessageActionTime,
 } from "@/lib/domain/chat/transcript/transcript-action-time";
 import type { TranscriptOpenSessionRole } from "@/lib/domain/chat/transcript/transcript-open-target";
@@ -192,7 +195,7 @@ export function TranscriptItemBlock({
 
     case "tool_call": {
       if (isClaudeExitPlanModeCall(item)) {
-        if (hasProposedPlanForToolCall(toolCallIdsWithProposedPlan, item.toolCallId)) {
+        if (hasProposedPlanForToolCallItem(toolCallIdsWithProposedPlan, item)) {
           return null;
         }
         const body = extractClaudePlanBody(item) ?? "";
@@ -245,14 +248,4 @@ export function TranscriptItemBlock({
     default:
       return null;
   }
-}
-
-function hasProposedPlanForToolCall(
-  toolCallIdsWithProposedPlan: ReadonlySet<string>,
-  toolCallId: string | null,
-): boolean {
-  if (!toolCallId) {
-    return false;
-  }
-  return toolCallIdsWithProposedPlan.has(toolCallId);
 }

@@ -45,7 +45,7 @@ export function FileReferenceBadge({
     && !actions.reference.workspacePath
     && Boolean(actions.reference.absolutePath);
   const iconShellClassName = variant === "inline"
-    ? "relative mr-[3px] inline-block h-[1lh] w-4 shrink-0 align-bottom"
+    ? "relative mr-px inline-block h-[1lh] w-3.5 shrink-0 align-bottom"
     : "inline-flex shrink-0 items-center justify-center";
 
   const handleClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
@@ -117,7 +117,7 @@ function resolveBadgeClassName(
 ): string {
   if (variant === "chip") {
     return [
-      "inline-flex h-auto min-w-0 max-w-full items-center gap-0.5 rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-[0.625rem] leading-none text-foreground/90 shadow-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border",
+      "inline-flex h-auto min-w-0 max-w-full items-center gap-px rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-[0.625rem] leading-none text-foreground/90 shadow-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border",
       className,
     ].filter(Boolean).join(" ");
   }

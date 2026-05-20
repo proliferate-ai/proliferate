@@ -1,7 +1,10 @@
+// @vitest-environment jsdom
+
 import { createElement } from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createTranscriptState } from "@anyharness/sdk";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { toolItem } from "@/lib/domain/chat/transcript/transcript-presentation-test-fixtures";
 import { CollapsedActions, InlineToolActions } from "./CollapsedActions";
 
@@ -27,21 +30,47 @@ vi.mock("@/hooks/workspaces/files/use-file-reference-actions", () => ({
   }),
 }));
 
+afterEach(() => {
+  cleanup();
+});
+
 describe("CollapsedActions", () => {
+  it("keeps the action ledger hidden until the summary row is clicked", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      read: toolItem("read", "turn-1", 1, "file_read", "in_progress"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["read"]}
+        transcript={transcript}
+        autoFollow
+      />,
+    );
+
+    expect(screen.queryByText("Reading read.ts")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Explored 1 file/i }));
+
+    expect(screen.getByText("Reading read.ts")).toBeTruthy();
+  });
+
   it("does not cap the expanded ledger when it contains edits", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       edit: toolItem("edit", "turn-1", 1, "file_change"),
     };
 
-    const html = renderToStaticMarkup(
-      createElement(CollapsedActions, {
-        itemIds: ["edit"],
-        transcript,
-        forceExpanded: true,
-      }),
+    render(
+      <CollapsedActions
+        itemIds={["edit"]}
+        transcript={transcript}
+      />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /Edited 1 file/i }));
 
+    const html = document.body.innerHTML;
     expect(html).toContain("data-collapsed-actions-ledger");
     expect(html).toContain("Edited");
     expect(html).not.toContain("max-h-80");
@@ -56,14 +85,16 @@ describe("CollapsedActions", () => {
       read: toolItem("read", "turn-1", 1, "file_read"),
     };
 
-    const html = renderToStaticMarkup(
-      createElement(CollapsedActions, {
-        itemIds: ["read"],
-        transcript,
-        forceExpanded: true,
-      }),
+    render(
+      <CollapsedActions
+        itemIds={["read"]}
+        transcript={transcript}
+        autoFollow
+      />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /Explored 1 file/i }));
 
+    const html = document.body.innerHTML;
     expect(html).toContain("data-collapsed-actions-ledger");
     expect(html).toContain("Read read.ts");
     expect(html).toContain("overflow-y-auto overflow-x-hidden");

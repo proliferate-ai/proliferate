@@ -34,7 +34,7 @@ export function TurnItemSequence({
   transcript,
   isTurnComplete,
   presentation,
-  forceExpandedCollapsedActionBlockId,
+  autoFollowCollapsedActionBlockId,
   tailAssistantProseRootId,
   showCompletedArtifactFallback,
   workspaceId,
@@ -45,7 +45,7 @@ export function TurnItemSequence({
   transcript: TranscriptState;
   isTurnComplete: boolean;
   presentation: TurnPresentation;
-  forceExpandedCollapsedActionBlockId?: string | null;
+  autoFollowCollapsedActionBlockId?: string | null;
   tailAssistantProseRootId: string | null;
   showCompletedArtifactFallback: boolean;
   workspaceId: string | null;
@@ -97,7 +97,7 @@ export function TurnItemSequence({
                         key={`history-${getTurnDisplayBlockKey(historyBlock)}`}
                         block={historyBlock}
                         transcript={transcript}
-                        forceExpandedCollapsedActionBlockId={null}
+                        autoFollowCollapsedActionBlockId={null}
                         renderItem={(itemId) => (
                           <FragmentWithArtifacts
                             itemId={itemId}
@@ -122,7 +122,7 @@ export function TurnItemSequence({
             key={getTurnDisplayBlockKey(block)}
             block={block}
             transcript={transcript}
-            forceExpandedCollapsedActionBlockId={forceExpandedCollapsedActionBlockId}
+            autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
             renderItem={(itemId) => (
               <FragmentWithArtifacts
                 itemId={itemId}

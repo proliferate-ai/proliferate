@@ -23,6 +23,7 @@ import {
   getToolCallParsedCommands,
   getToolCallShellCommand,
 } from "@/lib/domain/chat/transcript/transcript-tool-commands";
+import { hasProposedPlanForToolCallItem } from "@/lib/domain/chat/transcript/transcript-rendering";
 
 export function serializeTranscriptItem(
   item: TranscriptItem,
@@ -98,7 +99,7 @@ function serializeToolCall(
   proposedPlanToolCallIds: ReadonlySet<string>,
 ): string[] {
   if (isClaudeExitPlanModeCall(item)) {
-    if (item.toolCallId && proposedPlanToolCallIds.has(item.toolCallId)) {
+    if (hasProposedPlanForToolCallItem(proposedPlanToolCallIds, item)) {
       return [];
     }
     return normalizeCopySections([extractClaudePlanBody(item)]);

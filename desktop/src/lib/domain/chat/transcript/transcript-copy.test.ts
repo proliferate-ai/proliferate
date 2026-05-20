@@ -9,6 +9,7 @@ import {
   type TranscriptState,
 } from "@anyharness/sdk";
 import { buildTranscriptCopyText } from "@/lib/domain/chat/transcript/transcript-copy";
+import { collectToolCallIdsWithProposedPlan } from "@/lib/domain/chat/transcript/transcript-rendering";
 import {
   assistantItem,
   parsedCommandItem,
@@ -225,6 +226,28 @@ describe("buildTranscriptCopyText", () => {
       proposedPlanToolCallIds: new Set(["tool-1"]),
     });
 
+    expect(copied).toContain("Approved plan body");
+    expect(copied).not.toContain("Fallback plan body");
+  });
+
+  it("suppresses duplicate Claude plan fallback when only the source item id matches", () => {
+    const proposed = proposedPlanItem("plan", "tool-1", "Approved plan body");
+    proposed.plan.sourceItemId = "fallback";
+    const fallback: ToolCallItem = {
+      ...toolItem("fallback", "turn-1", 2, "mode_switch"),
+      sourceAgentKind: "claude",
+      nativeToolName: "ExitPlanMode",
+      toolCallId: null,
+      contentParts: [{ type: "tool_result_text", text: "Fallback plan body" }],
+    };
+    const transcript = makeTranscript([proposed, fallback], ["plan", "fallback"]);
+    const proposedPlanToolCallIds = collectToolCallIdsWithProposedPlan(transcript);
+    const copied = copyText({
+      transcript,
+      proposedPlanToolCallIds,
+    });
+
+    expect(proposedPlanToolCallIds.has("fallback")).toBe(true);
     expect(copied).toContain("Approved plan body");
     expect(copied).not.toContain("Fallback plan body");
   });
