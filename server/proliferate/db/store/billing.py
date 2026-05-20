@@ -296,7 +296,24 @@ async def list_cloud_sandboxes_for_subject(
     return list(
         (
             await db.execute(
-                select(CloudSandbox).where(CloudSandbox.billing_subject_id == billing_subject_id)
+                select(CloudSandbox)
+                .outerjoin(
+                    CloudRuntimeEnvironment,
+                    CloudRuntimeEnvironment.id == CloudSandbox.runtime_environment_id,
+                )
+                .outerjoin(CloudWorkspace, CloudWorkspace.id == CloudSandbox.cloud_workspace_id)
+                .where(
+                    or_(
+                        CloudSandbox.billing_subject_id == billing_subject_id,
+                        (
+                            CloudSandbox.billing_subject_id.is_(None)
+                            & or_(
+                                CloudRuntimeEnvironment.billing_subject_id == billing_subject_id,
+                                CloudWorkspace.billing_subject_id == billing_subject_id,
+                            )
+                        ),
+                    )
+                )
             )
         )
         .scalars()
