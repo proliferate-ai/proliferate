@@ -10,12 +10,12 @@ import {
   useAgentAuthMutations,
   useCloudCapabilities,
 } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
-import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";
+import {
+  useTauriCredentialsActions,
+  type AgentAuthProvider,
+  type LocalAgentAuthSource,
+} from "@/hooks/access/tauri/use-credentials-actions";
 import { useOrganizations } from "@/hooks/access/cloud/organizations/use-organizations";
-import type {
-  AgentAuthProvider,
-  LocalAgentAuthSource,
-} from "@/lib/access/tauri/credentials";
 import {
   AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,
