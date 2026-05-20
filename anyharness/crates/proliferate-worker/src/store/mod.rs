@@ -1,6 +1,7 @@
 use std::{path::PathBuf, time::Duration};
 
 use rusqlite::{params, Connection, OptionalExtension};
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::{error::WorkerError, identity::credentials::WorkerIdentity};
@@ -10,10 +11,35 @@ pub struct WorkerStore {
 }
 
 #[derive(Debug, Clone)]
-pub struct SyncSession {
-    pub session_id: String,
-    pub workspace_id: Option<String>,
+pub struct ProjectionCursorUpsert {
+    pub exposure_id: String,
+    pub session_projection_id: Option<String>,
+    pub anyharness_workspace_id: String,
+    pub anyharness_session_id: Option<String>,
+    pub projection_level: String,
+    pub commandable: bool,
     pub last_uploaded_seq: i64,
+    pub status: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProjectionCursor {
+    pub exposure_id: String,
+    pub session_projection_id: Option<String>,
+    pub anyharness_workspace_id: String,
+    pub anyharness_session_id: String,
+    pub projection_level: String,
+    pub commandable: bool,
+    pub last_uploaded_seq: i64,
+    pub last_ack_seq: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectionCursorGap {
+    expected_seq: i64,
+    first_observed_seq: i64,
+    reason: String,
 }
 
 #[derive(Debug, Clone)]
@@ -89,6 +115,21 @@ impl WorkerStore {
                 cloud_workspace_id TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS worker_projection_cursor (
+                exposure_id TEXT PRIMARY KEY,
+                session_projection_id TEXT,
+                anyharness_workspace_id TEXT NOT NULL,
+                anyharness_session_id TEXT,
+                projection_level TEXT NOT NULL,
+                commandable INTEGER NOT NULL CHECK (commandable IN (0, 1)),
+                last_uploaded_seq INTEGER NOT NULL DEFAULT 0,
+                last_ack_seq INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'active',
+                gap_state_json TEXT,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS ix_worker_projection_cursor_active_session
+                ON worker_projection_cursor(status, anyharness_session_id);
             CREATE TABLE IF NOT EXISTS pending_command_results (
                 command_id TEXT PRIMARY KEY,
                 lease_id TEXT NOT NULL,
@@ -138,6 +179,12 @@ impl WorkerStore {
             "pending_command_results",
             "anyharness_workspace_id",
             "anyharness_workspace_id TEXT",
+        )?;
+        add_column_if_missing(
+            &conn,
+            "worker_projection_cursor",
+            "gap_state_json",
+            "gap_state_json TEXT",
         )?;
         Ok(())
     }
@@ -253,39 +300,162 @@ impl WorkerStore {
         Ok(())
     }
 
-    pub fn list_sync_sessions(&self) -> Result<Vec<SyncSession>, WorkerError> {
-        let conn = self.connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT session_id, workspace_id, last_uploaded_seq FROM sync_sessions ORDER BY updated_at DESC",
+    pub fn reconcile_projection_cursors(
+        &self,
+        cursors: &[ProjectionCursorUpsert],
+    ) -> Result<(), WorkerError> {
+        let mut conn = self.connection()?;
+        let tx = conn.transaction()?;
+        tx.execute(
+            r#"
+            UPDATE worker_projection_cursor
+            SET status = 'inactive',
+                updated_at = CURRENT_TIMESTAMP
+            "#,
+            [],
         )?;
-        let rows = stmt.query_map([], |row| {
-            Ok(SyncSession {
-                session_id: row.get(0)?,
-                workspace_id: row.get(1)?,
-                last_uploaded_seq: row.get(2)?,
-            })
-        })?;
-        let mut sessions = Vec::new();
-        for row in rows {
-            sessions.push(row?);
+        for cursor in cursors {
+            tx.execute(
+                r#"
+                INSERT INTO worker_projection_cursor (
+                    exposure_id,
+                    session_projection_id,
+                    anyharness_workspace_id,
+                    anyharness_session_id,
+                    projection_level,
+                    commandable,
+                    last_uploaded_seq,
+                    last_ack_seq,
+                    status,
+                    gap_state_json,
+                    updated_at
+                )
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8, NULL, CURRENT_TIMESTAMP)
+                ON CONFLICT(exposure_id) DO UPDATE SET
+                    session_projection_id = excluded.session_projection_id,
+                    anyharness_workspace_id = excluded.anyharness_workspace_id,
+                    anyharness_session_id = excluded.anyharness_session_id,
+                    projection_level = excluded.projection_level,
+                    commandable = excluded.commandable,
+                    last_uploaded_seq = CASE
+                        WHEN worker_projection_cursor.anyharness_session_id
+                            IS NOT excluded.anyharness_session_id
+                        THEN excluded.last_uploaded_seq
+                        ELSE MAX(worker_projection_cursor.last_uploaded_seq, excluded.last_uploaded_seq)
+                    END,
+                    last_ack_seq = CASE
+                        WHEN worker_projection_cursor.anyharness_session_id
+                            IS NOT excluded.anyharness_session_id
+                        THEN excluded.last_ack_seq
+                        ELSE MAX(worker_projection_cursor.last_ack_seq, excluded.last_ack_seq)
+                    END,
+                    status = excluded.status,
+                    gap_state_json = CASE
+                        WHEN worker_projection_cursor.anyharness_session_id
+                            IS NOT excluded.anyharness_session_id
+                        THEN NULL
+                        WHEN excluded.last_uploaded_seq > worker_projection_cursor.last_uploaded_seq
+                        THEN NULL
+                        ELSE worker_projection_cursor.gap_state_json
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                "#,
+                params![
+                    cursor.exposure_id,
+                    cursor.session_projection_id,
+                    cursor.anyharness_workspace_id,
+                    cursor.anyharness_session_id,
+                    cursor.projection_level,
+                    cursor.commandable,
+                    cursor.last_uploaded_seq,
+                    cursor.status,
+                ],
+            )?;
         }
-        Ok(sessions)
+        tx.commit()?;
+        Ok(())
     }
 
-    pub fn update_sync_cursor(
+    pub fn list_active_projection_cursors(&self) -> Result<Vec<ProjectionCursor>, WorkerError> {
+        let conn = self.connection()?;
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT
+                exposure_id,
+                session_projection_id,
+                anyharness_workspace_id,
+                anyharness_session_id,
+                projection_level,
+                commandable,
+                last_uploaded_seq,
+                last_ack_seq
+            FROM worker_projection_cursor
+            WHERE status = 'active'
+              AND anyharness_session_id IS NOT NULL
+              AND gap_state_json IS NULL
+            ORDER BY updated_at DESC
+            "#,
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ProjectionCursor {
+                exposure_id: row.get(0)?,
+                session_projection_id: row.get(1)?,
+                anyharness_workspace_id: row.get(2)?,
+                anyharness_session_id: row.get(3)?,
+                projection_level: row.get(4)?,
+                commandable: row.get(5)?,
+                last_uploaded_seq: row.get(6)?,
+                last_ack_seq: row.get(7)?,
+            })
+        })?;
+        let mut cursors = Vec::new();
+        for row in rows {
+            cursors.push(row?);
+        }
+        Ok(cursors)
+    }
+
+    pub fn update_projection_cursor_ack(
         &self,
         session_id: &str,
-        last_uploaded_seq: i64,
+        last_contiguous_seq: i64,
     ) -> Result<(), WorkerError> {
         let conn = self.connection()?;
         conn.execute(
             r#"
-            UPDATE sync_sessions
+            UPDATE worker_projection_cursor
             SET last_uploaded_seq = MAX(last_uploaded_seq, ?2),
+                last_ack_seq = MAX(last_ack_seq, ?2),
                 updated_at = CURRENT_TIMESTAMP
-            WHERE session_id = ?1
+            WHERE anyharness_session_id = ?1
+              AND status = 'active'
             "#,
-            params![session_id, last_uploaded_seq],
+            params![session_id, last_contiguous_seq],
+        )?;
+        Ok(())
+    }
+
+    pub fn record_projection_cursor_gap(
+        &self,
+        exposure_id: &str,
+        expected_seq: i64,
+        first_observed_seq: i64,
+    ) -> Result<(), WorkerError> {
+        let conn = self.connection()?;
+        let gap = ProjectionCursorGap {
+            expected_seq,
+            first_observed_seq,
+            reason: "anyharness_event_sequence_gap".to_string(),
+        };
+        let gap_state_json = serde_json::to_string(&gap)?;
+        conn.execute(
+            r#"
+            UPDATE worker_projection_cursor
+            SET gap_state_json = ?2,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE exposure_id = ?1
+            "#,
+            params![exposure_id, gap_state_json],
         )?;
         Ok(())
     }
@@ -417,6 +587,124 @@ fn add_column_if_missing(
         [],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        path::PathBuf,
+        sync::atomic::{AtomicU64, Ordering},
+    };
+
+    use super::{ProjectionCursorUpsert, WorkerStore};
+
+    static NEXT_DB_ID: AtomicU64 = AtomicU64::new(1);
+
+    #[test]
+    fn projection_cursor_reconcile_lists_only_active_sessions() {
+        let store = test_store();
+        store
+            .reconcile_projection_cursors(&[
+                cursor("exposure-active", Some("session-1"), "active", 4),
+                cursor("exposure-workspace-only", None, "active", 0),
+                cursor("exposure-paused", Some("session-2"), "paused", 0),
+            ])
+            .expect("reconcile");
+
+        let cursors = store
+            .list_active_projection_cursors()
+            .expect("active cursors");
+        assert_eq!(cursors.len(), 1);
+        assert_eq!(cursors[0].exposure_id, "exposure-active");
+        assert_eq!(cursors[0].anyharness_session_id, "session-1");
+        assert_eq!(cursors[0].last_uploaded_seq, 4);
+
+        store
+            .reconcile_projection_cursors(&[])
+            .expect("empty reconcile");
+        assert!(store
+            .list_active_projection_cursors()
+            .expect("active cursors")
+            .is_empty());
+    }
+
+    #[test]
+    fn projection_cursor_ack_is_monotonic() {
+        let store = test_store();
+        store
+            .reconcile_projection_cursors(&[cursor("exposure-1", Some("session-1"), "active", 4)])
+            .expect("reconcile");
+
+        store
+            .update_projection_cursor_ack("session-1", 6)
+            .expect("ack");
+        store
+            .update_projection_cursor_ack("session-1", 5)
+            .expect("stale ack");
+
+        let cursors = store
+            .list_active_projection_cursors()
+            .expect("active cursors");
+        assert_eq!(cursors[0].last_uploaded_seq, 6);
+        assert_eq!(cursors[0].last_ack_seq, 6);
+    }
+
+    #[test]
+    fn projection_cursor_gap_removes_cursor_from_active_tail_set_until_repaired() {
+        let store = test_store();
+        store
+            .reconcile_projection_cursors(&[cursor("exposure-1", Some("session-1"), "active", 4)])
+            .expect("reconcile");
+        store
+            .record_projection_cursor_gap("exposure-1", 5, 8)
+            .expect("gap");
+        assert!(store
+            .list_active_projection_cursors()
+            .expect("active cursors")
+            .is_empty());
+
+        store
+            .reconcile_projection_cursors(&[cursor("exposure-1", Some("session-1"), "active", 8)])
+            .expect("repair reconcile");
+        let cursors = store
+            .list_active_projection_cursors()
+            .expect("active cursors");
+        assert_eq!(cursors.len(), 1);
+        assert_eq!(cursors[0].last_uploaded_seq, 8);
+    }
+
+    fn cursor(
+        exposure_id: &str,
+        session_id: Option<&str>,
+        status: &str,
+        last_uploaded_seq: i64,
+    ) -> ProjectionCursorUpsert {
+        ProjectionCursorUpsert {
+            exposure_id: exposure_id.to_string(),
+            session_projection_id: session_id.map(|id| format!("projection-{id}")),
+            anyharness_workspace_id: "workspace-1".to_string(),
+            anyharness_session_id: session_id.map(ToOwned::to_owned),
+            projection_level: "live".to_string(),
+            commandable: true,
+            last_uploaded_seq,
+            status: status.to_string(),
+        }
+    }
+
+    fn test_store() -> WorkerStore {
+        let dir = temp_db_dir();
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("worker.sqlite");
+        WorkerStore::open(path).expect("store")
+    }
+
+    fn temp_db_dir() -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "proliferate-worker-store-test-{}-{}",
+            std::process::id(),
+            NEXT_DB_ID.fetch_add(1, Ordering::Relaxed)
+        ))
+    }
 }
 
 #[cfg(unix)]

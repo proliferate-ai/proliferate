@@ -3,6 +3,7 @@ pub mod auth;
 pub mod backfill;
 pub mod commands;
 pub mod events;
+pub mod exposures;
 pub mod heartbeat;
 pub mod inventory;
 pub mod target_config;
