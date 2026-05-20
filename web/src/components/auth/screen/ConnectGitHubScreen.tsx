@@ -1,13 +1,11 @@
 import { Github } from "lucide-react";
 import { useState } from "react";
 
-import { AuthLayout } from "@proliferate/product-ui/auth/AuthLayout";
-import { AuthProviderButton } from "@proliferate/product-ui/auth/AuthProviderButton";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { ConnectGitHubRequiredPanel } from "@proliferate/product-ui/auth/ConnectGitHubRequiredPanel";
+import { ProliferateMark } from "@proliferate/product-ui/brand/ProliferateMark";
 
 import { startWebAuthFlow } from "../../../lib/access/cloud/auth/web-auth-flow";
 import { useAuthToken } from "../../../providers/WebCloudProvider";
-import { ProliferateMark } from "../../app/navigation/ProliferateMark";
 
 export function ConnectGitHubScreen() {
   const { token, clearToken } = useAuthToken();
@@ -37,7 +35,7 @@ export function ConnectGitHubScreen() {
   }
 
   return (
-    <AuthLayout
+    <ConnectGitHubRequiredPanel
       mark={<ProliferateMark size={32} />}
       title="Connect GitHub"
       subtitle={
@@ -52,27 +50,12 @@ export function ConnectGitHubScreen() {
           push branches.
         </span>
       }
-    >
-      <AuthProviderButton
-        icon={<Github size={18} />}
-        loading={loading}
-        disabled={loading}
-        onClick={() => void connectGitHub()}
-      >
-        Continue with GitHub
-      </AuthProviderButton>
-      {error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm leading-5 text-destructive">
-          {error}
-        </div>
-      )}
-      <Button
-        className="h-10 justify-center text-xs text-muted-foreground"
-        variant="ghost"
-        onClick={() => void clearToken()}
-      >
-        Sign out
-      </Button>
-    </AuthLayout>
+      actionIcon={<Github size={18} />}
+      actionLabel="Continue with GitHub"
+      loading={loading}
+      error={error}
+      onConnect={() => void connectGitHub()}
+      onSignOut={() => void clearToken()}
+    />
   );
 }

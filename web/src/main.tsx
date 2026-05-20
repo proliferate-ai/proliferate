@@ -13,6 +13,8 @@ import { WebCloudProvider } from "./providers/WebCloudProvider";
 import { WebTelemetryProvider } from "./providers/WebTelemetryProvider";
 import "./index.css";
 
+document.documentElement.dataset.proliferateClient = "web";
+
 const telemetryConfig = getWebTelemetryConfig();
 initializeWebSentry({
   environment: telemetryConfig.environment,

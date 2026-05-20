@@ -3,6 +3,9 @@
 Scope:
 
 - `desktop/src/**`
+- `web/src/**`
+- shared DOM styling under `packages/design/**`, `packages/ui/**`, and
+  `packages/product-ui/**`
 
 This file covers styling-only rules. Read
 [README.md](../README.md) for structure, ownership, and data-flow guidance.
@@ -31,8 +34,18 @@ Shared token ownership:
   imports this generated CSS while still owning its full product theme presets
   in `desktop/src/index.css`; moving those presets into generated shared tokens
   is a later migration, not part of the foundation package.
+- `packages/design/src/dom.css` owns the shared Desktop/Web DOM entrypoint:
+  Tailwind setup, shared package `@source` entries, shared reset/root/body
+  defaults, shared scrollbar utilities, and shared Proliferate global classes.
+  Apps import this as `@proliferate/design/dom.css`.
+- Client-specific global selectors are allowed only when explicitly scoped
+  under `[data-proliferate-client="desktop"]` or
+  `[data-proliferate-client="web"]`.
 - Desktop keeps Desktop-only global CSS, third-party overrides, and theme
   runtime behavior in `desktop/src/**`.
+- Third-party dependency CSS, such as `@xterm/xterm/css/xterm.css`, is imported
+  by the owning app directly. Do not put third-party dependency CSS in
+  `packages/design`.
 - Mobile consumes React Native-safe values from
   `@proliferate/design/react-native`, not DOM CSS.
 
@@ -160,9 +173,8 @@ new, extend the primitive cleanly or add a new dedicated primitive in
 `components/ui/**`.
 
 When using primitives from `packages/ui/**` or shared product components from
-`packages/product-ui/**`, importing apps must ensure Tailwind scans the package
-source, for example with `@source "../../packages/ui/src";` and `@source
-"../../packages/product-ui/src";` in the app stylesheet.
+`packages/product-ui/**`, import `@proliferate/design/dom.css`; that shared
+entrypoint owns the Tailwind package source scanning.
 
 Reusable icons belong in `components/ui/icons.tsx`, not inline inside feature
 components.
@@ -198,3 +210,8 @@ Global CSS is for:
 
 Component-specific styling belongs with the component or primitive, not in
 `index.css`.
+
+App stylesheets should be import-only where possible. `web/src/index.css`
+imports only `@proliferate/design/dom.css`. `desktop/src/index.css` imports
+the shared DOM entrypoint plus Desktop-owned third-party CSS and remaining
+legacy Desktop-specific theme/runtime CSS.

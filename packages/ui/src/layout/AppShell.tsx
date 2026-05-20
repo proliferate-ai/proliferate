@@ -9,11 +9,11 @@ interface AppShellProps extends HTMLAttributes<HTMLDivElement> {
 export function AppShell({ sidebar, children, className = "", ...props }: AppShellProps) {
   return (
     <div
-      className={twMerge("flex min-h-screen bg-background text-foreground", className)}
+      className={twMerge("flex h-full min-h-0 bg-background text-foreground", className)}
       {...props}
     >
       {sidebar}
-      <main className="min-w-0 flex-1">{children}</main>
+      <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
     </div>
   );
 }

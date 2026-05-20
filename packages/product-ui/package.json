@@ -31,6 +31,18 @@
       "types": "./dist/auth/ConnectGitHubPanel.d.ts",
       "import": "./dist/auth/ConnectGitHubPanel.js"
     },
+    "./auth/AuthStartPanel": {
+      "types": "./dist/auth/AuthStartPanel.d.ts",
+      "import": "./dist/auth/AuthStartPanel.js"
+    },
+    "./auth/ConnectGitHubRequiredPanel": {
+      "types": "./dist/auth/ConnectGitHubRequiredPanel.d.ts",
+      "import": "./dist/auth/ConnectGitHubRequiredPanel.js"
+    },
+    "./auth/GoogleGlyph": {
+      "types": "./dist/auth/GoogleGlyph.d.ts",
+      "import": "./dist/auth/GoogleGlyph.js"
+    },
     "./auth/LegalLinks": {
       "types": "./dist/auth/LegalLinks.d.ts",
       "import": "./dist/auth/LegalLinks.js"
@@ -46,6 +58,38 @@
     "./automations/AutomationStatusBadge": {
       "types": "./dist/automations/AutomationStatusBadge.d.ts",
       "import": "./dist/automations/AutomationStatusBadge.js"
+    },
+    "./automations/AutomationsList": {
+      "types": "./dist/automations/AutomationsList.d.ts",
+      "import": "./dist/automations/AutomationsList.js"
+    },
+    "./brand/ProliferateMark": {
+      "types": "./dist/brand/ProliferateMark.d.ts",
+      "import": "./dist/brand/ProliferateMark.js"
+    },
+    "./chat/ClaimBanner": {
+      "types": "./dist/chat/ClaimBanner.d.ts",
+      "import": "./dist/chat/ClaimBanner.js"
+    },
+    "./chat/ChatPreviewSurface": {
+      "types": "./dist/chat/ChatPreviewSurface.d.ts",
+      "import": "./dist/chat/ChatPreviewSurface.js"
+    },
+    "./feedback/LoadingState": {
+      "types": "./dist/feedback/LoadingState.d.ts",
+      "import": "./dist/feedback/LoadingState.js"
+    },
+    "./layout/ProductNotice": {
+      "types": "./dist/layout/ProductNotice.d.ts",
+      "import": "./dist/layout/ProductNotice.js"
+    },
+    "./layout/ProductPageShell": {
+      "types": "./dist/layout/ProductPageShell.d.ts",
+      "import": "./dist/layout/ProductPageShell.js"
+    },
+    "./plugins/PluginAccessList": {
+      "types": "./dist/plugins/PluginAccessList.d.ts",
+      "import": "./dist/plugins/PluginAccessList.js"
     },
     "./settings/SettingsCard": {
       "types": "./dist/settings/SettingsCard.d.ts",
@@ -74,6 +118,14 @@
     "./workspaces/WorkspaceRow": {
       "types": "./dist/workspaces/WorkspaceRow.d.ts",
       "import": "./dist/workspaces/WorkspaceRow.js"
+    },
+    "./workspaces/CloudWorkspaceList": {
+      "types": "./dist/workspaces/CloudWorkspaceList.d.ts",
+      "import": "./dist/workspaces/CloudWorkspaceList.js"
+    },
+    "./support/SupportSurface": {
+      "types": "./dist/support/SupportSurface.d.ts",
+      "import": "./dist/support/SupportSurface.js"
     }
   },
   "scripts": {
@@ -83,6 +135,7 @@
   },
   "dependencies": {
     "@proliferate/ui": "workspace:*",
+    "lucide-react": "^0.468.0",
     "tailwind-merge": "^3.5.0"
   },
   "peerDependencies": {

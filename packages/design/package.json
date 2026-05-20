@@ -15,11 +15,15 @@
       "types": "./dist/react-native.d.ts",
       "import": "./dist/react-native.js"
     },
-    "./theme.css": "./dist/theme.css"
+    "./theme.css": "./dist/theme.css",
+    "./dom.css": "./dist/dom.css"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/generate-theme.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/generate-theme.mjs && node scripts/copy-dom-css.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "tailwindcss": "^4"
   },
   "devDependencies": {
     "typescript": "^5.7"

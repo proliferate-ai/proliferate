@@ -1,14 +1,13 @@
 import { Outlet } from "react-router-dom";
 
+import { AppShell } from "@proliferate/ui/layout/AppShell";
+
 import { WebSidebarController } from "../navigation/WebSidebarController";
 
 export function WebAppShell() {
   return (
-    <div className="flex h-full min-h-0 bg-background text-foreground">
-      <WebSidebarController />
-      <main className="min-w-0 flex-1 overflow-hidden">
-        <Outlet />
-      </main>
-    </div>
+    <AppShell sidebar={<WebSidebarController />} data-proliferate-client="web">
+      <Outlet />
+    </AppShell>
   );
 }

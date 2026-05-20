@@ -115,6 +115,15 @@ Folder hygiene:
 - Put cross-client Desktop/Web product components in `packages/product-ui/**`
   only when they accept data and callbacks as props and do not construct SDK
   clients, call app access helpers, or own query/mutation wiring.
+- Web product surfaces should be controllers over `packages/product-ui/**`.
+  `web/src/components/**` may map cloud data, fixture data, route params, auth
+  state, and callbacks into shared view models, but it should not define
+  product visual rows, cards, banners, sidebars, settings panes, or chat
+  surfaces locally.
+- Desktop product surfaces should use the same `packages/product-ui/**`
+  components whenever Web needs the surface too. Desktop keeps the controller:
+  stores, hooks, AnyHarness/Tauri/cloud access, navigation, native menus, and
+  workflow callbacks stay in `desktop/src/**`.
 - Do not promote product-aware components into `components/ui/**`.
 - Do not render raw `<button>`, `<input>`, `<label>`, `<select>`, or
   `<textarea>` outside approved primitives in `components/ui/**`.

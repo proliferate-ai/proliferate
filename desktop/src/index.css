@@ -1,7 +1,4 @@
-@import "tailwindcss";
-@source "../../packages/ui/src";
-@source "../../packages/product-ui/src";
-@import "@proliferate/design/theme.css";
+@import "@proliferate/design/dom.css";
 @import "@xterm/xterm/css/xterm.css";
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/space-grotesk";

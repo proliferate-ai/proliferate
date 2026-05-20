@@ -30,6 +30,8 @@ const IS_TAURI_DESKTOP =
   && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
 const API_CONFIG_STARTUP_BUDGET_MS = 1500;
 
+document.documentElement.dataset.proliferateClient = "desktop";
+
 const rendererStartupStartedAt = startStartupTimer();
 installWebKitPerformanceMeasureDetailGuard();
 installBootStallDiagnostics();

@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen";
+import { ProliferateMark } from "@proliferate/product-ui/brand/ProliferateMark";
 
-import { ProliferateMark } from "../components/app/navigation/ProliferateMark";
 import { routes } from "../config/routes";
 import { completeWebAuthFlow } from "../lib/access/cloud/auth/web-auth-flow";
 import { useAuthToken } from "../providers/WebCloudProvider";

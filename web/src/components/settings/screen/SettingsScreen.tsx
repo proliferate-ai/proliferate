@@ -7,6 +7,7 @@ import type {
   AccountSettingsPaneProps,
 } from "@proliferate/product-ui/account/AccountSettingsPane";
 import { AccountSettingsPane } from "@proliferate/product-ui/account/AccountSettingsPane";
+import { GoogleGlyph } from "@proliferate/product-ui/auth/GoogleGlyph";
 import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
 import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
@@ -192,7 +193,7 @@ function buildAccountSettingsProps({
           },
       connectGoogle: {
         label: "Add Google",
-        icon: <GoogleGlyph />,
+        icon: <GoogleGlyph className="text-[13px]" />,
         loading: loadingProvider === "google",
         disabled: Boolean(loadingProvider) || !providerEnabled(providerAvailability, "google"),
         onClick: connectGoogle,
@@ -270,12 +271,4 @@ function providerEnabled(
   provider: AuthProviderName,
 ) {
   return providers.find((item) => item.provider === provider)?.enabled !== false;
-}
-
-function GoogleGlyph() {
-  return (
-    <span className="text-[13px] font-semibold leading-none text-foreground" aria-hidden="true">
-      G
-    </span>
-  );
 }

@@ -2,15 +2,15 @@ import { Apple, Github, KeyRound } from "lucide-react";
 import { useState } from "react";
 
 import type { AuthProviderName } from "@proliferate/cloud-sdk";
-import { AuthLayout } from "@proliferate/product-ui/auth/AuthLayout";
-import { AuthProviderButton } from "@proliferate/product-ui/auth/AuthProviderButton";
+import { AuthStartPanel } from "@proliferate/product-ui/auth/AuthStartPanel";
+import { GoogleGlyph } from "@proliferate/product-ui/auth/GoogleGlyph";
+import { ProliferateMark } from "@proliferate/product-ui/brand/ProliferateMark";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 
 import { webEnv } from "../../../config/env";
 import { startWebAuthFlow } from "../../../lib/access/cloud/auth/web-auth-flow";
 import { useAuthToken } from "../../../providers/WebCloudProvider";
-import { ProliferateMark } from "../../app/navigation/ProliferateMark";
 
 export function AuthScreen() {
   const { setToken } = useAuthToken();
@@ -34,7 +34,7 @@ export function AuthScreen() {
   }
 
   return (
-    <AuthLayout
+    <AuthStartPanel
       mark={<ProliferateMark size={36} />}
       title={<span className="text-2xl tracking-tight">Proliferate</span>}
       subtitle="Run and orchestrate coding agents."
@@ -45,44 +45,35 @@ export function AuthScreen() {
           Terms and Privacy Policy.
         </span>
       }
-    >
-      <AuthProviderButton
-        icon={<Github size={18} />}
-        loading={loadingProvider === "github"}
-        disabled={Boolean(loadingProvider)}
-        onClick={() => void signIn("github")}
-      >
-        Continue with GitHub
-      </AuthProviderButton>
-      <AuthProviderButton
-        icon={<Apple size={18} />}
-        loading={loadingProvider === "apple"}
-        disabled={Boolean(loadingProvider)}
-        onClick={() => void signIn("apple")}
-      >
-        Continue with Apple
-      </AuthProviderButton>
-      <AuthProviderButton
-        icon={<GoogleGlyph />}
-        loading={loadingProvider === "google"}
-        disabled={Boolean(loadingProvider)}
-        onClick={() => void signIn("google")}
-      >
-        Continue with Google
-      </AuthProviderButton>
-
-      <p className="mt-2 text-center text-xs leading-5 text-muted-foreground">
-        GitHub is required for cloud workspaces and automations. You can link it
-        after signing in with Apple or Google.
-      </p>
-
-      {error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm leading-5 text-destructive">
-          {error}
-        </div>
-      )}
-
-      {webEnv.devAccessTokenLogin && (
+      providers={[
+        {
+          id: "github",
+          label: "Continue with GitHub",
+          icon: <Github size={18} />,
+          loading: loadingProvider === "github",
+          disabled: Boolean(loadingProvider),
+          onClick: () => void signIn("github"),
+        },
+        {
+          id: "apple",
+          label: "Continue with Apple",
+          icon: <Apple size={18} />,
+          loading: loadingProvider === "apple",
+          disabled: Boolean(loadingProvider),
+          onClick: () => void signIn("apple"),
+        },
+        {
+          id: "google",
+          label: "Continue with Google",
+          icon: <GoogleGlyph className="text-[17px]" />,
+          loading: loadingProvider === "google",
+          disabled: Boolean(loadingProvider),
+          onClick: () => void signIn("google"),
+        },
+      ]}
+      note="GitHub is required for cloud workspaces and automations. You can link it after signing in with Apple or Google."
+      error={error}
+      devAccess={webEnv.devAccessTokenLogin ? (
         <div className="mt-2 border-t border-border pt-4">
           {showDevAccess ? (
             <div className="grid gap-2">
@@ -130,15 +121,7 @@ export function AuthScreen() {
             </Button>
           )}
         </div>
-      )}
-    </AuthLayout>
-  );
-}
-
-function GoogleGlyph() {
-  return (
-    <span className="text-[17px] font-semibold leading-none text-foreground" aria-hidden="true">
-      G
-    </span>
+      ) : null}
+    />
   );
 }

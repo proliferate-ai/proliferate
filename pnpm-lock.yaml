@@ -371,6 +371,10 @@ importers:
         version: 5.9.3
 
   packages/design:
+    dependencies:
+      tailwindcss:
+        specifier: ^4
+        version: 4.2.2
     devDependencies:
       typescript:
         specifier: ^5.7
@@ -390,6 +394,9 @@ importers:
       '@proliferate/ui':
         specifier: workspace:*
         version: link:../ui
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.1.0)
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0
