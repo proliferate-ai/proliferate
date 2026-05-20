@@ -269,6 +269,22 @@ def resolve_runtime_config(inputs: ResolverInput) -> ResolvedRuntimeConfigPlan:
     resolved_skills: list[ResolvedSkill] = []
     resolved_artifacts: list[ResolvedArtifactRef] = []
     seen_skill_keys: set[tuple[str, str, str]] = set()
+    suppressed_skill_keys = {
+        (skill.skill_source_kind, skill.plugin_id, skill.skill_id)
+        for skill in inputs.skill_configured_items
+        if not skill.enabled
+        and skill.skill_source_kind == "plugin"
+        and skill.plugin_id in visible_plugin_ids
+        and _is_in_profile_scope(
+            inputs.sandbox_profile,
+            owner_scope=skill.owner_scope,
+            owner_user_id=skill.owner_user_id,
+            organization_id=skill.organization_id,
+            public_to_org=skill.public_to_org,
+            public_organization_id=skill.public_organization_id,
+            public_status=skill.public_status,
+        )
+    }
     visible_skill_items = [
         skill
         for skill in inputs.skill_configured_items
@@ -282,10 +298,7 @@ def resolve_runtime_config(inputs: ResolverInput) -> ResolvedRuntimeConfigPlan:
             public_status=skill.public_status,
             enabled=skill.enabled,
         )
-        and (
-            skill.skill_source_kind != "plugin"
-            or skill.plugin_id in visible_plugin_ids
-        )
+        and (skill.skill_source_kind != "plugin" or skill.plugin_id in visible_plugin_ids)
     ]
     for skill_item in sorted(
         visible_skill_items,
@@ -323,7 +336,11 @@ def resolve_runtime_config(inputs: ResolverInput) -> ResolvedRuntimeConfigPlan:
             continue
         for plugin_skill in package.skills:
             key = ("plugin", package.id, plugin_skill.id)
-            if key in seen_skill_keys or not plugin_skill.default_enabled:
+            if (
+                key in seen_skill_keys
+                or key in suppressed_skill_keys
+                or not plugin_skill.default_enabled
+            ):
                 continue
             synthetic = SkillConfiguredItemSnapshot(
                 id=plugin_item.id,
@@ -380,14 +397,34 @@ def _is_visible_to_profile(
 ) -> bool:
     if not enabled:
         return False
+    return _is_in_profile_scope(
+        profile,
+        owner_scope=owner_scope,
+        owner_user_id=owner_user_id,
+        organization_id=organization_id,
+        public_to_org=public_to_org,
+        public_organization_id=public_organization_id,
+        public_status=public_status,
+    )
+
+
+def _is_in_profile_scope(
+    profile: SandboxProfileResolverSnapshot,
+    *,
+    owner_scope: str,
+    owner_user_id: str | None,
+    organization_id: str | None,
+    public_to_org: bool,
+    public_organization_id: str | None,
+    public_status: str,
+) -> bool:
     if profile.owner_scope == "personal":
         return owner_scope == "personal" and owner_user_id == profile.owner_user_id
     if profile.organization_id is None:
         return False
     return (owner_scope == "organization" and organization_id == profile.organization_id) or (
         owner_scope == "personal"
-        and
-        public_to_org
+        and public_to_org
         and public_organization_id == profile.organization_id
         and public_status == "public"
     )

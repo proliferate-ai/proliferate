@@ -14,6 +14,8 @@ from proliferate.server.cloud.runtime_config.models import (
     RuntimeConfigArtifactResponse,
     RuntimeConfigMaterializationFragment,
     RuntimeConfigStatusResponse,
+    WorkerRuntimeConfigCredentialMaterializationRequest,
+    WorkerRuntimeConfigCredentialMaterializationResponse,
     WorkerRuntimeConfigStatusRequest,
     WorkerRuntimeConfigStatusResponse,
 )
@@ -22,6 +24,7 @@ from proliferate.server.cloud.runtime_config.service import (
     record_worker_runtime_config_status,
     refresh_profile_runtime_config,
     worker_runtime_config_artifact,
+    worker_runtime_config_credentials,
     worker_runtime_config_fragment,
 )
 from proliferate.server.cloud.sandbox_profiles.service import get_profile
@@ -98,6 +101,28 @@ async def worker_runtime_config_status_endpoint(
     try:
         auth = await authenticate_worker(db, authorization=authorization)
         return await record_worker_runtime_config_status(
+            db,
+            auth=auth,
+            revision_id=revision_id,
+            body=body,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@worker_router.post(
+    "/{revision_id}/credentials/materialize",
+    response_model=WorkerRuntimeConfigCredentialMaterializationResponse,
+)
+async def worker_runtime_config_credentials_endpoint(
+    revision_id: UUID,
+    body: WorkerRuntimeConfigCredentialMaterializationRequest,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkerRuntimeConfigCredentialMaterializationResponse:
+    try:
+        auth = await authenticate_worker(db, authorization=authorization)
+        return await worker_runtime_config_credentials(
             db,
             auth=auth,
             revision_id=revision_id,
