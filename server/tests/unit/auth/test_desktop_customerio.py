@@ -65,6 +65,12 @@ def _github_profile() -> SimpleNamespace:
     )
 
 
+def _stub_identity_attachment(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
+    attach_identity_mock = AsyncMock()
+    monkeypatch.setattr(desktop_service, "attach_verified_identity", attach_identity_mock)
+    return attach_identity_mock
+
+
 @pytest.mark.asyncio
 async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
     monkeypatch: pytest.MonkeyPatch,
@@ -80,6 +86,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
     create_auth_code_mock = AsyncMock(return_value=SimpleNamespace(code="auth-code"))
     schedule_mock = Mock()
     sync_profile_mock = AsyncMock(return_value=synced_user)
+    attach_identity_mock = _stub_identity_attachment(monkeypatch)
 
     monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
     monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
@@ -121,6 +128,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
 
     assert response.status_code == 200
     assert "proliferate://auth/callback?code=auth-code" in response.body.decode()
+    attach_identity_mock.assert_awaited_once()
     create_auth_code_mock.assert_awaited_once()
     sync_profile_mock.assert_awaited_once_with(
         db,
@@ -143,6 +151,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_existing_user
     create_auth_code_mock = AsyncMock(return_value=SimpleNamespace(code="auth-code"))
     schedule_mock = Mock()
     sync_profile_mock = AsyncMock(return_value=user)
+    attach_identity_mock = _stub_identity_attachment(monkeypatch)
 
     monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
     monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
@@ -183,6 +192,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_existing_user
     )
 
     assert response.status_code == 200
+    attach_identity_mock.assert_awaited_once()
     sync_profile_mock.assert_awaited_once()
     schedule_mock.assert_called_once_with(user)
 
@@ -237,6 +247,7 @@ async def test_finish_github_desktop_callback_skips_customerio_when_auth_code_cr
     user_manager = SimpleNamespace(oauth_callback=AsyncMock(return_value=user))
     schedule_mock = Mock()
     sync_profile_mock = AsyncMock(return_value=user)
+    attach_identity_mock = _stub_identity_attachment(monkeypatch)
 
     monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
     monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
@@ -282,6 +293,7 @@ async def test_finish_github_desktop_callback_skips_customerio_when_auth_code_cr
         )
 
     schedule_mock.assert_not_called()
+    attach_identity_mock.assert_awaited_once()
 
 
 @pytest.mark.asyncio

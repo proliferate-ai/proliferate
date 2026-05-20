@@ -406,9 +406,7 @@ class TestCloudEventSyncApi:
             assert _sse_event(target_snapshot_frame) == "snapshot"
             assert _mapping(_sse_data(target_snapshot_frame)["target"])["id"] == target_id
 
-            cursor_task: asyncio.Task[str] = asyncio.create_task(
-                _next_stream_frame(target_stream)
-            )
+            cursor_task: asyncio.Task[str] = asyncio.create_task(_next_stream_frame(target_stream))
             bus = get_pubsub_bus()
             await bus.publish(
                 target_channel(target_id=UUID(target_id)),

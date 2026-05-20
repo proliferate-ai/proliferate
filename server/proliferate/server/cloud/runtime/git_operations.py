@@ -47,7 +47,8 @@ async def clone_repository(
         workspace_id=ctx.workspace_id,
         label="ensure_git_available",
         command=(
-            'bash -lc "command -v git >/dev/null 2>&1 || (apt-get update && apt-get install -y git)"'
+            'bash -lc "command -v git >/dev/null 2>&1 || '
+            '(apt-get update && apt-get install -y git)"'
         ),
         user="root",
         timeout_seconds=240,

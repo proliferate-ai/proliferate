@@ -1,0 +1,390 @@
+"""Business logic for the agent model gateway."""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+from collections.abc import Mapping
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from proliferate.config import settings
+from proliferate.constants.cloud import (
+    AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN,
+    AGENT_GATEWAY_TOKEN_HASH_KEY_ID,
+)
+from proliferate.db.store.cloud_agent_auth import store
+from proliferate.db.store.cloud_agent_auth.records import (
+    AgentGatewayPolicyRecord,
+    AgentGatewayRuntimeGrantRecord,
+)
+from proliferate.integrations.litellm import (
+    LiteLLMIntegrationError,
+    LiteLLMRuntimeClient,
+    LiteLLMRuntimeStatusError,
+)
+from proliferate.server.agent_gateway.domain.protocols import (
+    allowed_models_for_agent,
+    litellm_path_for_gateway_path,
+    model_from_body,
+    protocol_for_path,
+    request_wants_stream,
+)
+from proliferate.server.agent_gateway.errors import AgentGatewayError
+from proliferate.server.agent_gateway.models import (
+    AuthorizedGatewayRequest,
+    GatewayForwardResponse,
+    GatewayForwardStream,
+    GatewayModelsResponse,
+)
+from proliferate.utils.crypto import decrypt_text
+from proliferate.utils.time import utcnow
+
+
+async def list_gateway_models(
+    db: AsyncSession,
+    *,
+    raw_token: str,
+    gateway_path: str,
+) -> GatewayModelsResponse:
+    authorized = await authorize_gateway_request(
+        db,
+        raw_token=raw_token,
+        gateway_path=gateway_path,
+        request_model=None,
+    )
+    return GatewayModelsResponse(
+        protocol_facade=authorized.protocol_facade,
+        model_ids=authorized.allowed_model_ids,
+    )
+
+
+async def forward_gateway_request(
+    db: AsyncSession,
+    *,
+    raw_token: str,
+    gateway_path: str,
+    query_string: str,
+    method: str,
+    body: bytes,
+    content_type: str | None,
+    protocol_headers: Mapping[str, str],
+) -> GatewayForwardResponse | GatewayForwardStream:
+    if len(body) > settings.agent_gateway_max_request_bytes:
+        raise AgentGatewayError(
+            "Gateway request body is too large.",
+            code="gateway_request_too_large",
+            status_code=413,
+        )
+    body_json = _json_body(body)
+    request_model = model_from_body(body_json)
+    if request_model is None:
+        raise AgentGatewayError(
+            "Gateway request model is required.",
+            code="invalid_model",
+            status_code=400,
+        )
+    authorized = await authorize_gateway_request(
+        db,
+        raw_token=raw_token,
+        gateway_path=gateway_path,
+        request_model=request_model,
+    )
+    client = LiteLLMRuntimeClient()
+    metadata = _metadata_for_request(authorized)
+    litellm_path = litellm_path_for_gateway_path(gateway_path)
+    try:
+        if request_wants_stream(body_json):
+            response_stream = await client.open_stream(
+                method=method,
+                path=litellm_path,
+                query_string=query_string,
+                body=body,
+                litellm_key=authorized.litellm_key,
+                content_type=content_type,
+                protocol_headers=protocol_headers,
+                metadata=metadata,
+            )
+            return GatewayForwardStream(
+                status_code=response_stream.status_code,
+                headers=response_stream.headers,
+                chunks=response_stream.chunks,
+            )
+        response = await client.forward(
+            method=method,
+            path=litellm_path,
+            query_string=query_string,
+            body=body,
+            litellm_key=authorized.litellm_key,
+            content_type=content_type,
+            protocol_headers=protocol_headers,
+            metadata=metadata,
+        )
+        return GatewayForwardResponse(
+            status_code=response.status_code,
+            headers=response.headers,
+            content=response.content,
+        )
+    except LiteLLMRuntimeStatusError as exc:
+        raise _map_litellm_error(exc) from exc
+    except LiteLLMIntegrationError as exc:
+        raise AgentGatewayError(
+            "LiteLLM is unavailable.",
+            code="litellm_unavailable",
+            status_code=503,
+        ) from exc
+
+
+async def authorize_gateway_request(
+    db: AsyncSession,
+    *,
+    raw_token: str,
+    gateway_path: str,
+    request_model: str | None,
+) -> AuthorizedGatewayRequest:
+    if not settings.agent_gateway_enabled:
+        raise AgentGatewayError(
+            "Agent gateway is disabled.",
+            code="gateway_route_unavailable",
+            status_code=503,
+        )
+    if not raw_token:
+        raise AgentGatewayError(
+            "Missing gateway token.",
+            code="invalid_gateway_token",
+            status_code=401,
+        )
+    grant = await _load_grant(db, raw_token)
+    requested_protocol = protocol_for_path(gateway_path)
+    if requested_protocol == "unknown" or grant.protocol_facade != requested_protocol:
+        raise AgentGatewayError(
+            "Gateway token is not valid for this protocol.",
+            code="protocol_not_supported",
+            status_code=403,
+        )
+    profile = await store.get_sandbox_profile(db, grant.sandbox_profile_id)
+    if profile is None:
+        raise AgentGatewayError(
+            "Agent auth is not configured.",
+            code="agent_auth_not_configured",
+            status_code=403,
+        )
+    if profile.managed_target_id is not None and grant.target_id != profile.managed_target_id:
+        raise AgentGatewayError(
+            "Gateway token is stale.",
+            code="invalid_gateway_token",
+            status_code=401,
+        )
+    if grant.issued_profile_revision != profile.agent_auth_revision:
+        raise AgentGatewayError(
+            "Gateway token is stale.",
+            code="invalid_gateway_token",
+            status_code=401,
+        )
+    selection = await store.get_selection(db, grant.selection_id)
+    if selection is None or selection.status != "active":
+        raise AgentGatewayError(
+            "Agent auth selection is not active.",
+            code="agent_auth_not_configured",
+            status_code=403,
+        )
+    if selection.credential_id != grant.credential_id or selection.agent_kind != grant.agent_kind:
+        raise AgentGatewayError(
+            "Gateway token is stale.",
+            code="invalid_gateway_token",
+            status_code=401,
+        )
+    credential = await store.get_credential(db, grant.credential_id)
+    if (
+        credential is None
+        or credential.status != "ready"
+        or credential.revoked_at is not None
+        or selection.selected_revision != credential.revision
+    ):
+        raise AgentGatewayError(
+            "Agent auth credential is not ready.",
+            code="agent_auth_not_configured",
+            status_code=403,
+        )
+    policy = await store.get_gateway_policy(db, grant.policy_id)
+    if policy is None or policy.credential_id != credential.id:
+        raise AgentGatewayError(
+            "Agent gateway policy is not configured.",
+            code="agent_auth_not_configured",
+            status_code=403,
+        )
+    _require_policy_ready(policy)
+    await _require_budget_ready(db, policy)
+    allowed_models = allowed_models_for_agent(grant.agent_kind)
+    if grant.agent_kind == "opencode" and not settings.agent_gateway_opencode_enabled:
+        allowed_models = ()
+    if not allowed_models:
+        raise AgentGatewayError(
+            "Gateway route is unavailable for this agent.",
+            code="gateway_route_unavailable",
+            status_code=403,
+        )
+    if request_model is not None and request_model not in allowed_models:
+        raise AgentGatewayError(
+            "Model is not available for this gateway policy.",
+            code="model_not_available",
+            status_code=404,
+        )
+    if not policy.litellm_virtual_key_ciphertext:
+        raise AgentGatewayError(
+            "Agent gateway policy is not configured.",
+            code="agent_auth_not_configured",
+            status_code=403,
+        )
+    await store.mark_runtime_grant_used(db, grant.id)
+    return AuthorizedGatewayRequest(
+        litellm_key=decrypt_text(policy.litellm_virtual_key_ciphertext),
+        agent_kind=grant.agent_kind,
+        protocol_facade=grant.protocol_facade,
+        policy_id=policy.id,
+        organization_id=grant.organization_id,
+        user_id=grant.user_id,
+        target_id=grant.target_id,
+        sandbox_profile_id=grant.sandbox_profile_id,
+        allowed_model_ids=allowed_models,
+    )
+
+
+async def _load_grant(
+    db: AsyncSession,
+    raw_token: str,
+) -> AgentGatewayRuntimeGrantRecord:
+    token_hash = _hash_token(raw_token)
+    grant = await store.get_runtime_grant_by_token_hash(db, token_hash)
+    if grant is None or grant.hash_key_id != AGENT_GATEWAY_TOKEN_HASH_KEY_ID:
+        raise AgentGatewayError(
+            "Invalid gateway token.",
+            code="invalid_gateway_token",
+            status_code=401,
+        )
+    now = utcnow()
+    if grant.revoked_at is not None:
+        raise AgentGatewayError(
+            "Invalid gateway token.",
+            code="invalid_gateway_token",
+            status_code=401,
+        )
+    if grant.expires_at <= now:
+        raise AgentGatewayError(
+            "Gateway token expired.",
+            code="gateway_token_expired",
+            status_code=401,
+        )
+    return grant
+
+
+def _require_policy_ready(policy: AgentGatewayPolicyRecord) -> None:
+    if policy.status != "ready" or policy.litellm_sync_status != "synced":
+        raise AgentGatewayError(
+            "Gateway route is unavailable.",
+            code="gateway_route_unavailable",
+            status_code=503,
+        )
+
+
+async def _require_budget_ready(
+    db: AsyncSession,
+    policy: AgentGatewayPolicyRecord,
+) -> None:
+    if policy.budget_subject_id is None:
+        return
+    budget = await store.get_budget_subject(db, policy.budget_subject_id)
+    if budget is None or budget.litellm_sync_status != "synced":
+        raise AgentGatewayError(
+            "Gateway route is unavailable.",
+            code="gateway_route_unavailable",
+            status_code=503,
+        )
+    if budget.status == "exhausted":
+        raise AgentGatewayError(
+            "Managed credits are exhausted.",
+            code="credits_exhausted",
+            status_code=402,
+        )
+    if budget.status != "ready":
+        raise AgentGatewayError(
+            "Gateway route is unavailable.",
+            code="gateway_route_unavailable",
+            status_code=503,
+        )
+
+
+def _json_body(body: bytes) -> dict[str, object]:
+    if not body:
+        return {}
+    try:
+        parsed = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AgentGatewayError(
+            "Gateway request body must be a JSON object.",
+            code="gateway_route_unavailable",
+            status_code=400,
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise AgentGatewayError(
+            "Gateway request body must be a JSON object.",
+            code="gateway_route_unavailable",
+            status_code=400,
+        )
+    return parsed
+
+
+def _metadata_for_request(authorized: AuthorizedGatewayRequest) -> dict[str, str]:
+    metadata = {
+        "target_id": str(authorized.target_id),
+        "sandbox_profile_id": str(authorized.sandbox_profile_id),
+        "agent_kind": authorized.agent_kind,
+        "policy_id": str(authorized.policy_id),
+    }
+    if authorized.organization_id is not None:
+        metadata["org_id"] = str(authorized.organization_id)
+    if authorized.user_id is not None:
+        metadata["user_id"] = str(authorized.user_id)
+    return metadata
+
+
+def _map_litellm_error(error: LiteLLMRuntimeStatusError) -> AgentGatewayError:
+    body_text = error.body.decode("utf-8", errors="replace").lower()
+    if "budget" in body_text or "max_budget" in body_text or "credit" in body_text:
+        return AgentGatewayError(
+            "Managed credits are exhausted.",
+            code="credits_exhausted",
+            status_code=402,
+        )
+    if error.status_code in {401, 403}:
+        return AgentGatewayError(
+            "Provider authentication failed.",
+            code="provider_auth_failed",
+            status_code=502,
+        )
+    if error.status_code == 404:
+        return AgentGatewayError(
+            "Model is not available.",
+            code="model_not_available",
+            status_code=404,
+        )
+    if error.status_code == 429:
+        return AgentGatewayError(
+            "Provider rate limit reached.",
+            code="provider_rate_limited",
+            status_code=429,
+        )
+    return AgentGatewayError(
+        "LiteLLM is unavailable.",
+        code="litellm_unavailable",
+        status_code=503,
+    )
+
+
+def _hash_token(raw_token: str) -> str:
+    return hmac.new(
+        settings.cloud_secret_key.encode("utf-8"),
+        f"{AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN}:{raw_token}".encode(),
+        hashlib.sha256,
+    ).hexdigest()

@@ -20,6 +20,17 @@ def test_cloud_orm_package_registers_all_cloud_tables() -> None:
         "cloud_mcp_oauth_client",
         "cloud_repo_config",
         "cloud_repo_file",
+        "agent_auth_audit_event",
+        "agent_auth_credential",
+        "agent_auth_credential_share",
+        "agent_gateway_budget_subject",
+        "agent_gateway_policy",
+        "agent_gateway_provider_credential",
+        "agent_gateway_runtime_grant",
+        "sandbox_agent_auth_selection",
+        "sandbox_profile",
+        "sandbox_profile_agent_auth_revision",
+        "sandbox_profile_agent_auth_target_state",
     }
 
     assert expected_tables <= set(Base.metadata.tables)

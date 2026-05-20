@@ -83,6 +83,15 @@ start of the task, not after implementation has already started.
 - `docs/architecture/model-catalog-and-dynamic-registries.md`
   - model catalog, target-discovered model registry, user visibility intent,
     and launch-time model resolution boundaries
+- `docs/architecture/target-runtime-mcp-skills-config.md`
+  - target-scoped MCP/skill runtime manifests, lazy artifact/credential
+    resolution, and the Desktop/worker gap-fill boundary
+- `docs/architecture/agent-llm-auth-gateway-spec.md`
+  - centralized agent LLM auth gateway, LiteLLM routing/budget enforcement,
+    runtime grants, synced-path cutover, and sandbox agent-auth selections
+- `docs/architecture/shared-sandbox-config-admin-ui-spec.md`
+  - personal/shared sandbox profile configuration, admin UI ownership, public
+    MCP/skill publication, and shared sandbox consumption of agent auth
 - `docs/architecture/cloud-worker-control-plane.md`
   - reference architecture for target workers, Cloud-mediated session control,
     command delivery, event ingestion, and snapshots
@@ -139,6 +148,12 @@ start of the task, not after implementation has already started.
 - `docs/notes/agent-credentials-sync.md`
   - non-authoritative design/reference note for local agent credentials and
     future credential sync
+- `docs/notes/model-gateway-auth-facts.md`
+  - empirical source-inspection facts for Claude, Codex, OpenCode, Gemini, and
+    LiteLLM gateway auth compatibility
+- `docs/notes/agent-gateway-phase0-compatibility.md`
+  - runnable Phase 0B proof matrix for LiteLLM team routing, Claude streaming,
+    Codex Responses, and OpenCode isolation gates
 - `docs/reference/self-hosted-deploy.md`
   - canonical Docker Compose self-hosted deployment
 - `docs/reference/self-hosted-aws.md`

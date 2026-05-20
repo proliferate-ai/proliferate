@@ -45,11 +45,15 @@ desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts
 desktop/src/lib/infra/measurement/boot-stall-diagnostics.ts
 desktop/src/hooks/workspaces/tabs/use-workspace-shell-activation.ts
 desktop/src/lib/infra/measurement/boot-stall-diagnostics.ts
+desktop/src/lib/integrations/auth/orchestration.ts
 server/tests/integration/test_cloud_api.py
+server/tests/integration/test_auth_flow.py
 server/tests/integration/test_billing_accounting.py
 server/tests/integration/test_billing_api.py
 server/tests/integration/test_stripe_webhooks.py
+server/proliferate/db/models/cloud/agent_auth.py
 server/proliferate/db/store/billing.py
+server/proliferate/db/store/cloud_agent_auth/store.py
 server/proliferate/db/store/cloud_mobility.py
 server/proliferate/db/store/cloud_sync/events.py
 server/tests/unit/test_cloud_runtime_provision.py
@@ -61,6 +65,7 @@ server/proliferate/server/cloud/worker/service.py
 server/proliferate/server/cloud/runtime/bootstrap.py
 server/proliferate/server/cloud/runtime/credential_freshness.py
 server/proliferate/server/cloud/worker/service.py
+server/proliferate/server/cloud/agent_auth/service.py
 server/proliferate/server/cloud/runtime/provision.py
 server/proliferate/server/cloud/workspaces/service.py
 server/tests/integration/test_cloud_commands_api.py

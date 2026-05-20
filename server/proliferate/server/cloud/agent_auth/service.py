@@ -1,0 +1,1539 @@
+"""Service layer for cloud agent auth."""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import ipaddress
+import json
+import secrets
+import socket
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import timedelta
+from decimal import Decimal, InvalidOperation
+from urllib.parse import urlparse
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from proliferate.auth.authorization import PolicyDenied
+from proliferate.config import settings
+from proliferate.constants.cloud import (
+    AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
+    AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN,
+    AGENT_GATEWAY_TOKEN_HASH_KEY_ID,
+    CloudAgentKind,
+)
+from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
+from proliferate.db.store import organizations as organization_store
+from proliferate.db.store.cloud_agent_auth import store
+from proliferate.db.store.cloud_agent_auth.records import (
+    AgentAuthCredentialRecord,
+    AgentAuthCredentialShareRecord,
+    AgentGatewayBudgetSubjectRecord,
+    AgentGatewayPolicyRecord,
+    AgentGatewayProviderCredentialRecord,
+    AgentGatewayRuntimeGrantRecord,
+    SandboxAgentAuthSelectionRecord,
+    SandboxProfileAgentAuthTargetStateRecord,
+    SandboxProfileRecord,
+)
+from proliferate.integrations.aws import (
+    AwsIntegrationError,
+    validate_bedrock_assume_role_payload,
+)
+from proliferate.integrations.litellm import LiteLLMAdminClient, LiteLLMIntegrationError
+from proliferate.server.cloud.agent_auth.domain.desired_state import (
+    LiteLLMModelDeploymentPlan,
+    fingerprint_litellm_policy_state,
+)
+from proliferate.server.cloud.agent_auth.domain.policy import (
+    SelectionPlan,
+    can_select_credential_for_profile,
+    is_supported_agent_kind,
+    selection_plan_for_credential,
+)
+from proliferate.server.cloud.agent_auth.errors import AgentAuthError
+from proliferate.server.cloud.agent_auth.models import (
+    CreateGatewayCredentialRequest,
+    EnsureManagedCreditsRequest,
+    LiteLLMModelDeploymentRequest,
+)
+from proliferate.utils.crypto import encrypt_json, encrypt_text
+from proliferate.utils.time import utcnow
+
+_ORG_ADMIN_ROLES = {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN}
+_GATEWAY_GRANT_TTL = timedelta(days=7)
+
+
+@dataclass(frozen=True)
+class CreateGatewayCredentialResult:
+    credential: AgentAuthCredentialRecord
+    policy: AgentGatewayPolicyRecord
+    provider_credential: AgentGatewayProviderCredentialRecord
+
+
+@dataclass(frozen=True)
+class EnsureManagedCreditsResult:
+    budget_subject: AgentGatewayBudgetSubjectRecord
+    credentials: tuple[AgentAuthCredentialRecord, ...]
+    policies: tuple[AgentGatewayPolicyRecord, ...]
+
+
+@dataclass(frozen=True)
+class RuntimeGrantIssueResult:
+    grant: AgentGatewayRuntimeGrantRecord
+    raw_token: str
+
+
+async def ensure_personal_sandbox_profile(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    managed_target_id: UUID | None,
+) -> SandboxProfileRecord:
+    profile = await store.ensure_personal_sandbox_profile(
+        db,
+        user_id=actor_user_id,
+        managed_target_id=managed_target_id,
+    )
+    return await _backfill_legacy_cloud_credentials(db, actor_user_id, profile)
+
+
+async def reconcile_legacy_cloud_credentials_for_user(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    create_profile: bool,
+) -> SandboxProfileRecord | None:
+    if create_profile:
+        profile = await store.ensure_personal_sandbox_profile(
+            db,
+            user_id=actor_user_id,
+            managed_target_id=None,
+        )
+    else:
+        profile = await store.get_active_personal_sandbox_profile_for_user(db, actor_user_id)
+        if profile is None:
+            return None
+    return await _backfill_legacy_cloud_credentials(db, actor_user_id, profile)
+
+
+async def ensure_organization_sandbox_profile(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    organization_id: UUID,
+    managed_target_id: UUID | None,
+) -> SandboxProfileRecord:
+    await _require_organization_admin(db, actor_user_id, organization_id)
+    return await store.ensure_organization_sandbox_profile(
+        db,
+        organization_id=organization_id,
+        managed_target_id=managed_target_id,
+    )
+
+
+async def list_credentials(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    organization_id: UUID | None,
+    agent_kind: str | None,
+) -> tuple[AgentAuthCredentialRecord, ...]:
+    if organization_id is not None:
+        await _require_organization_member(db, actor_user_id, organization_id)
+    if agent_kind is not None and not is_supported_agent_kind(agent_kind):
+        raise AgentAuthError(
+            "Unsupported agent kind.", code="unsupported_agent_kind", status_code=400
+        )
+    return await store.list_visible_credentials(
+        db,
+        actor_user_id=actor_user_id,
+        organization_id=organization_id,
+        agent_kind=agent_kind,
+    )
+
+
+async def create_gateway_credential(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    body: CreateGatewayCredentialRequest,
+) -> CreateGatewayCredentialResult:
+    if body.owner_scope == "organization":
+        if body.organization_id is None:
+            raise AgentAuthError(
+                "organizationId is required.", code="missing_organization_id", status_code=400
+            )
+        await _require_organization_admin(db, actor_user_id, body.organization_id)
+        owner_user_id = None
+        organization_id = body.organization_id
+    else:
+        if body.organization_id is not None:
+            raise AgentAuthError(
+                "organizationId is not valid for personal credentials.",
+                code="invalid_owner_scope",
+                status_code=400,
+            )
+        owner_user_id = actor_user_id
+        organization_id = None
+
+    if body.agent_kind == "gemini":
+        raise AgentAuthError(
+            "Gateway auth is not supported for Gemini in V1.",
+            code="gateway_not_supported_for_agent",
+            status_code=400,
+        )
+    _validate_policy_owner_scope(body.policy_kind, body.owner_scope)
+
+    validation = _validate_provider_payload(body.provider_kind, body.payload)
+    credential = await store.create_agent_auth_credential(
+        db,
+        owner_scope=body.owner_scope,
+        owner_user_id=owner_user_id,
+        organization_id=organization_id,
+        created_by_user_id=actor_user_id,
+        agent_kind=body.agent_kind,
+        credential_kind="managed_gateway",
+        display_name=_clean_display_name(body.display_name),
+        redacted_summary_json=json.dumps(validation.redacted_summary, sort_keys=True),
+        status="pending",
+    )
+    await store.record_audit_event(
+        db,
+        action="credential.create",
+        actor_user_id=actor_user_id,
+        owner_scope=body.owner_scope,
+        owner_user_id=owner_user_id,
+        organization_id=organization_id,
+        credential_id=credential.id,
+        metadata_json=json.dumps(
+            {
+                "agentKind": body.agent_kind,
+                "credentialKind": "managed_gateway",
+                "providerKind": body.provider_kind,
+            },
+            sort_keys=True,
+        ),
+    )
+    if validation.status != "valid":
+        policy = await store.ensure_gateway_policy(
+            db,
+            credential_id=credential.id,
+            policy_kind=body.policy_kind,
+            owner_scope=body.owner_scope,
+            owner_user_id=owner_user_id,
+            organization_id=organization_id,
+            budget_subject_id=None,
+            litellm_team_id=None,
+            litellm_virtual_key_id=None,
+            litellm_virtual_key_ciphertext=None,
+            litellm_virtual_key_ciphertext_key_id=None,
+            litellm_sync_status="failed",
+            litellm_sync_fingerprint=None,
+            status="invalid",
+            last_error_code=validation.error_code,
+            last_error_message=_safe_error_message(validation.error_message, body.payload),
+        )
+        sync_status = "failed"
+        status = "invalid"
+        error_code = validation.error_code
+        error_message = _safe_error_message(validation.error_message, body.payload)
+    else:
+        policy, sync_status, status, error_code, error_message = await _provision_policy(
+            db,
+            credential=credential,
+            policy_kind=body.policy_kind,
+            owner_scope=body.owner_scope,
+            owner_user_id=owner_user_id,
+            organization_id=organization_id,
+            budget_subject_id=None,
+            provider_kind=body.provider_kind,
+            provider_payload=body.payload,
+            model_deployments=_gateway_deployments_for_credential(
+                agent_kind=body.agent_kind,
+                provider_kind=body.provider_kind,
+            ),
+        )
+    provider_credential = await store.upsert_provider_credential(
+        db,
+        policy_id=policy.id,
+        provider_kind=body.provider_kind,
+        payload_ciphertext=encrypt_json(dict(body.payload)),
+        payload_ciphertext_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
+        redacted_summary_json=json.dumps(validation.redacted_summary, sort_keys=True),
+        validation_status=validation.status,
+        validated_at=utcnow() if validation.status == "valid" else None,
+        validation_error_code=validation.error_code,
+        validation_error_message=_safe_error_message(validation.error_message, body.payload),
+    )
+    credential = await store.update_credential_status(
+        db,
+        credential_id=credential.id,
+        status="ready" if sync_status == "synced" and status == "ready" else "invalid",
+        redacted_summary_json=json.dumps(validation.redacted_summary, sort_keys=True),
+    )
+    if credential is None:
+        raise AgentAuthError("Credential disappeared during creation.", code="credential_missing")
+    if error_code is not None:
+        await store.record_audit_event(
+            db,
+            action="credential.validate",
+            actor_user_id=actor_user_id,
+            owner_scope=body.owner_scope,
+            owner_user_id=owner_user_id,
+            organization_id=organization_id,
+            credential_id=credential.id,
+            metadata_json=json.dumps(
+                {"status": "failed", "errorCode": error_code, "errorMessage": error_message},
+                sort_keys=True,
+            ),
+        )
+    return CreateGatewayCredentialResult(
+        credential=credential,
+        policy=policy,
+        provider_credential=provider_credential,
+    )
+
+
+async def ensure_managed_credits_for_organization(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    organization_id: UUID,
+    body: EnsureManagedCreditsRequest,
+) -> EnsureManagedCreditsResult:
+    await _require_organization_admin(db, actor_user_id, organization_id)
+    # Customer-facing callers never choose managed-credit amounts. The value
+    # comes from Proliferate entitlement/billing state; Phase 1 uses settings as
+    # that entitlement source until billing integration wires this internally.
+    included_budget_usd = _budget_amount(settings.agent_gateway_default_managed_budget_usd)
+    existing_budget = await store.get_managed_budget_subject(db, organization_id)
+    team_id = existing_budget.litellm_team_id if existing_budget else None
+    sync_status = "failed"
+    status = "invalid"
+    fingerprint = None
+    error_code = "litellm_not_configured"
+    error_message = "LiteLLM provisioning is not configured."
+    requested_agent_kinds = tuple(
+        agent_kind for agent_kind in body.agent_kinds if agent_kind != "gemini"
+    )
+    managed_deployments = tuple(
+        deployment
+        for agent_kind in requested_agent_kinds
+        for deployment in _gateway_deployments_for_credential(
+            agent_kind=agent_kind,
+            provider_kind="proliferate_bedrock_pool",
+        )
+    )
+    if not managed_deployments:
+        error_code = "managed_credit_models_not_configured"
+        error_message = "No managed-credit model deployments are configured."
+    if settings.agent_gateway_enabled and settings.agent_gateway_litellm_master_key:
+        try:
+            if not managed_deployments:
+                raise LiteLLMIntegrationError(error_message)
+            client = LiteLLMAdminClient()
+            team = await client.ensure_team(
+                team_alias=f"org-{organization_id}-managed-credits",
+                team_id=team_id,
+                max_budget=included_budget_usd,
+                budget_duration="30d",
+            )
+            team_id = team.team_id
+            for deployment in managed_deployments:
+                await client.create_model_deployment(
+                    public_model_name=deployment.public_model_name,
+                    provider_model=deployment.provider_model,
+                    team_id=team_id,
+                    litellm_params=_provider_litellm_params(
+                        provider_kind="proliferate_bedrock_pool",
+                        provider_payload={},
+                        deployment=deployment,
+                    ),
+                    metadata={
+                        "organizationId": str(organization_id),
+                        "budgetKind": "proliferate_managed",
+                    },
+                )
+            sync_status = "synced"
+            status = "ready"
+            fingerprint = _deployment_fingerprint(
+                policy_kind="proliferate_managed",
+                litellm_team_id=team_id,
+                budget_subject_id=str(existing_budget.id) if existing_budget else None,
+                provider_kind="proliferate_bedrock_pool",
+                deployments=managed_deployments,
+            )
+            error_code = None
+            error_message = None
+        except LiteLLMIntegrationError as exc:
+            error_code = "litellm_provisioning_failed"
+            error_message = _safe_error_message(str(exc), {})
+    budget = await store.ensure_managed_budget_subject(
+        db,
+        organization_id=organization_id,
+        included_budget_usd=included_budget_usd,
+        litellm_team_id=team_id,
+        litellm_sync_status=sync_status,
+        litellm_sync_fingerprint=fingerprint,
+        status=status,
+        last_error_code=error_code,
+        last_error_message=error_message,
+    )
+
+    credentials: list[AgentAuthCredentialRecord] = []
+    policies: list[AgentGatewayPolicyRecord] = []
+    visible = await store.list_visible_credentials(
+        db,
+        actor_user_id=actor_user_id,
+        organization_id=organization_id,
+        agent_kind=None,
+    )
+    for agent_kind in requested_agent_kinds:
+        if not _gateway_deployments_for_credential(
+            agent_kind=agent_kind,
+            provider_kind="proliferate_bedrock_pool",
+        ):
+            continue
+        credential = next(
+            (
+                item
+                for item in visible
+                if item.owner_scope == "organization"
+                and item.organization_id == organization_id
+                and item.agent_kind == agent_kind
+                and item.credential_kind == "managed_gateway"
+                and item.display_name == "Proliferate managed credits"
+            ),
+            None,
+        )
+        if credential is None:
+            credential = await store.create_agent_auth_credential(
+                db,
+                owner_scope="organization",
+                owner_user_id=None,
+                organization_id=organization_id,
+                created_by_user_id=actor_user_id,
+                agent_kind=agent_kind,
+                credential_kind="managed_gateway",
+                display_name="Proliferate managed credits",
+                redacted_summary_json=json.dumps(
+                    {
+                        "providerKind": "proliferate_bedrock_pool",
+                        "budgetSubjectId": str(budget.id),
+                    },
+                    sort_keys=True,
+                ),
+                status="ready" if status == "ready" else "invalid",
+            )
+        policy = await _ensure_managed_policy(
+            db,
+            credential=credential,
+            budget=budget,
+            sync_status=sync_status,
+            status=status,
+            fingerprint=fingerprint,
+            error_code=error_code,
+            error_message=error_message,
+        )
+        credential = (
+            await store.update_credential_status(
+                db,
+                credential_id=credential.id,
+                status="ready" if policy.status == "ready" else "invalid",
+            )
+            or credential
+        )
+        credentials.append(credential)
+        policies.append(policy)
+    await store.record_audit_event(
+        db,
+        action="managed_credits.ensure",
+        actor_user_id=actor_user_id,
+        owner_scope="organization",
+        owner_user_id=None,
+        organization_id=organization_id,
+        metadata_json=json.dumps(
+            {
+                "includedBudgetUsd": included_budget_usd,
+                "agentKinds": list(body.agent_kinds),
+                "litellmSyncStatus": sync_status,
+            },
+            sort_keys=True,
+        ),
+    )
+    return EnsureManagedCreditsResult(
+        budget_subject=budget,
+        credentials=tuple(credentials),
+        policies=tuple(policies),
+    )
+
+
+async def share_personal_credential_with_organization(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    credential_id: UUID,
+    organization_id: UUID,
+) -> AgentAuthCredentialShareRecord:
+    await _require_organization_member(db, actor_user_id, organization_id)
+    credential = await store.get_credential(db, credential_id)
+    if credential is None or credential.revoked_at is not None:
+        raise AgentAuthError("Credential not found.", code="credential_not_found", status_code=404)
+    if credential.owner_scope != "personal" or credential.owner_user_id != actor_user_id:
+        raise AgentAuthError(
+            "Only the credential owner can share this credential.",
+            code="credential_share_forbidden",
+            status_code=403,
+        )
+    if credential.credential_kind != "synced_path":
+        raise AgentAuthError(
+            "Only synced-path credentials can be shared in V1.",
+            code="credential_share_not_supported",
+            status_code=400,
+        )
+    share = await store.create_or_reactivate_credential_share(
+        db,
+        credential_id=credential.id,
+        owner_user_id=actor_user_id,
+        organization_id=organization_id,
+        shared_by_user_id=actor_user_id,
+        allowed_agent_kind=credential.agent_kind,
+    )
+    await store.record_audit_event(
+        db,
+        action="credential.share",
+        actor_user_id=actor_user_id,
+        owner_scope="personal",
+        owner_user_id=actor_user_id,
+        organization_id=organization_id,
+        credential_id=credential.id,
+        metadata_json=json.dumps({"shareId": str(share.id)}, sort_keys=True),
+    )
+    return share
+
+
+async def revoke_credential_share(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    share_id: UUID,
+) -> AgentAuthCredentialShareRecord:
+    existing = await store.get_credential_share(db, share_id)
+    if existing is None:
+        raise AgentAuthError(
+            "Credential share not found.", code="credential_share_not_found", status_code=404
+        )
+    if existing.owner_user_id != actor_user_id:
+        raise AgentAuthError(
+            "Only the credential owner can revoke this share.",
+            code="credential_share_forbidden",
+            status_code=403,
+        )
+    share = await store.revoke_credential_share(
+        db,
+        share_id=share_id,
+        revoked_by_user_id=actor_user_id,
+    )
+    if share is None:
+        raise AgentAuthError(
+            "Credential share not found.", code="credential_share_not_found", status_code=404
+        )
+    affected = await store.list_active_selections_for_credential_or_share(
+        db,
+        credential_share_id=share.id,
+    )
+    for selection in affected:
+        await store.mark_selection_invalid(
+            db,
+            selection_id=selection.id,
+            error_code="credential_share_revoked",
+            error_message="Credential owner revoked the share.",
+        )
+        await _bump_profile_for_selection(
+            db,
+            selection,
+            actor_user_id=actor_user_id,
+            reason="credential_share_revoked",
+            force_restart=True,
+        )
+    await store.record_audit_event(
+        db,
+        action="credential_share.revoke",
+        actor_user_id=actor_user_id,
+        owner_scope="personal",
+        owner_user_id=share.owner_user_id,
+        organization_id=share.organization_id,
+        credential_id=share.credential_id,
+        metadata_json=json.dumps({"shareId": str(share.id)}, sort_keys=True),
+    )
+    return share
+
+
+async def revoke_credential(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    credential_id: UUID,
+) -> AgentAuthCredentialRecord:
+    credential = await store.get_credential(db, credential_id)
+    if credential is None:
+        raise AgentAuthError("Credential not found.", code="credential_not_found", status_code=404)
+    await _require_can_manage_credential(db, actor_user_id, credential)
+    revoked = await store.revoke_credential(db, credential_id=credential_id)
+    if revoked is None:
+        raise AgentAuthError("Credential not found.", code="credential_not_found", status_code=404)
+    affected = await store.list_active_selections_for_credential_or_share(
+        db,
+        credential_id=credential_id,
+    )
+    for selection in affected:
+        await store.mark_selection_invalid(
+            db,
+            selection_id=selection.id,
+            error_code="credential_revoked",
+            error_message="Selected credential was revoked.",
+        )
+        await _bump_profile_for_selection(
+            db,
+            selection,
+            actor_user_id=actor_user_id,
+            reason="credential_revoked",
+            force_restart=True,
+        )
+    await store.record_audit_event(
+        db,
+        action="credential.revoke",
+        actor_user_id=actor_user_id,
+        owner_scope=credential.owner_scope,
+        owner_user_id=credential.owner_user_id,
+        organization_id=credential.organization_id,
+        credential_id=credential.id,
+    )
+    return revoked
+
+
+async def list_selections(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    sandbox_profile_id: UUID,
+) -> tuple[SandboxAgentAuthSelectionRecord, ...]:
+    profile = await _require_profile_access(db, actor_user_id, sandbox_profile_id, admin=False)
+    return await store.list_selections_for_profile(db, profile.id)
+
+
+async def select_credential_for_profile(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    sandbox_profile_id: UUID,
+    agent_kind: CloudAgentKind,
+    credential_id: UUID,
+    credential_share_id: UUID | None,
+    force_restart: bool,
+) -> SandboxAgentAuthSelectionRecord:
+    profile = await _require_profile_access(db, actor_user_id, sandbox_profile_id, admin=True)
+    credential = await store.get_credential(db, credential_id)
+    if credential is None or credential.revoked_at is not None:
+        raise AgentAuthError("Credential not found.", code="credential_not_found", status_code=404)
+    if credential.agent_kind != agent_kind:
+        raise AgentAuthError(
+            "Credential is for a different agent kind.",
+            code="agent_kind_mismatch",
+            status_code=400,
+        )
+    await _require_credential_ready_for_selection(db, credential)
+    share = None
+    if credential_share_id is not None:
+        share = await store.get_active_credential_share(
+            db,
+            credential_id=credential.id,
+            organization_id=profile.organization_id or UUID(int=0),
+        )
+        if share is None or share.id != credential_share_id:
+            raise AgentAuthError(
+                "Credential share is not active.",
+                code="credential_share_required",
+                status_code=403,
+            )
+    has_active_share = share is not None
+    verdict = can_select_credential_for_profile(
+        profile_owner_scope=profile.owner_scope,
+        profile_owner_user_id=profile.owner_user_id,
+        profile_organization_id=profile.organization_id,
+        credential_owner_scope=credential.owner_scope,
+        credential_owner_user_id=credential.owner_user_id,
+        credential_organization_id=credential.organization_id,
+        credential_kind=credential.credential_kind,
+        has_active_share=has_active_share,
+    )
+    if isinstance(verdict, PolicyDenied):
+        raise AgentAuthError(verdict.message, code=verdict.code, status_code=verdict.status_code)
+    plan = selection_plan_for_credential(
+        agent_kind=agent_kind,
+        credential_kind=credential.credential_kind,
+    )
+    if not isinstance(plan, SelectionPlan):
+        raise AgentAuthError(plan.message, code=plan.code, status_code=plan.status_code)
+    if (
+        agent_kind == "opencode"
+        and plan.materialization_mode == "gateway_env"
+        and not settings.agent_gateway_opencode_enabled
+    ):
+        raise AgentAuthError(
+            "Gateway auth for OpenCode is not enabled.",
+            code="gateway_not_supported_for_agent",
+            status_code=400,
+        )
+    selection = await store.upsert_selection(
+        db,
+        sandbox_profile_id=profile.id,
+        owner_scope=profile.owner_scope,
+        agent_kind=agent_kind,
+        credential_id=credential.id,
+        credential_share_id=share.id if share is not None else None,
+        materialization_mode=plan.materialization_mode,
+        selected_revision=credential.revision,
+        status="active",
+        last_error_code=None,
+        last_error_message=None,
+    )
+    updated_profile = await store.bump_sandbox_profile_agent_auth_revision(
+        db,
+        sandbox_profile_id=profile.id,
+        reason="selection_changed",
+        actor_user_id=actor_user_id,
+        force_restart=force_restart,
+    )
+    if updated_profile is None:
+        raise AgentAuthError(
+            "Sandbox profile not found.", code="sandbox_profile_not_found", status_code=404
+        )
+    if profile.managed_target_id is not None:
+        await store.upsert_target_state(
+            db,
+            sandbox_profile_id=profile.id,
+            target_id=profile.managed_target_id,
+            desired_revision=updated_profile.agent_auth_revision,
+            applied_revision=None,
+            status="pending",
+            force_restart_required=force_restart,
+            last_command_id=None,
+            last_worker_id=None,
+            last_error_code=None,
+            last_error_message=None,
+        )
+    await store.record_audit_event(
+        db,
+        action="selection.write",
+        actor_user_id=actor_user_id,
+        owner_scope=profile.owner_scope,
+        owner_user_id=profile.owner_user_id,
+        organization_id=profile.organization_id,
+        credential_id=credential.id,
+        sandbox_profile_id=profile.id,
+        metadata_json=json.dumps(
+            {
+                "agentKind": agent_kind,
+                "credentialShareId": str(share.id) if share else None,
+                "forceRestart": force_restart,
+                "revision": updated_profile.agent_auth_revision,
+            },
+            sort_keys=True,
+        ),
+    )
+    return selection
+
+
+async def list_target_states(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    sandbox_profile_id: UUID,
+) -> tuple[SandboxProfileAgentAuthTargetStateRecord, ...]:
+    profile = await _require_profile_access(db, actor_user_id, sandbox_profile_id, admin=False)
+    return await store.list_target_states_for_profile(db, profile.id)
+
+
+async def issue_runtime_grant_for_selection(
+    db: AsyncSession,
+    *,
+    selection: SandboxAgentAuthSelectionRecord,
+    profile: SandboxProfileRecord,
+    target_id: UUID,
+) -> RuntimeGrantIssueResult:
+    if selection.status != "active":
+        raise AgentAuthError(
+            "Selection is not active.", code="selection_not_active", status_code=409
+        )
+    credential = await store.get_credential(db, selection.credential_id)
+    if credential is None or credential.revoked_at is not None:
+        raise AgentAuthError("Credential not found.", code="credential_not_found", status_code=404)
+    if selection.selected_revision != credential.revision:
+        raise AgentAuthError(
+            "Selection is stale.", code="selection_revision_stale", status_code=409
+        )
+    await _require_credential_ready_for_selection(db, credential)
+    policy = await store.get_gateway_policy_for_credential(db, credential.id)
+    if policy is None or policy.status != "ready" or policy.litellm_sync_status != "synced":
+        raise AgentAuthError(
+            "Gateway policy is not ready.", code="gateway_policy_not_ready", status_code=409
+        )
+    plan = selection_plan_for_credential(
+        agent_kind=selection.agent_kind,
+        credential_kind=credential.credential_kind,
+    )
+    if not isinstance(plan, SelectionPlan) or plan.protocol_facade is None:
+        raise AgentAuthError(
+            "Selection does not use gateway auth.", code="not_gateway_selection", status_code=400
+        )
+    if selection.agent_kind == "opencode" and not settings.agent_gateway_opencode_enabled:
+        raise AgentAuthError(
+            "Gateway auth for OpenCode is not enabled.",
+            code="gateway_not_supported_for_agent",
+            status_code=400,
+        )
+
+    now = utcnow()
+    existing = await store.list_active_runtime_grants_for_route(
+        db,
+        policy_id=policy.id,
+        target_id=target_id,
+        sandbox_profile_id=profile.id,
+        agent_kind=selection.agent_kind,
+        now=now,
+    )
+    # The raw token is intentionally not persisted. Materialization retries get
+    # a fresh overlapping grant, but keep only the newest prior grant as a
+    # short compatibility grace token for already-configured runtimes.
+    stale_grant_ids = {grant.id for grant in existing[1:]}
+    await store.revoke_runtime_grants_by_ids(db, stale_grant_ids)
+
+    raw_token = secrets.token_urlsafe(32)
+    grant = await store.create_runtime_grant(
+        db,
+        token_hash=_hash_token(raw_token),
+        hash_key_id=AGENT_GATEWAY_TOKEN_HASH_KEY_ID,
+        policy_id=policy.id,
+        credential_id=credential.id,
+        selection_id=selection.id,
+        issued_profile_revision=profile.agent_auth_revision,
+        target_id=target_id,
+        sandbox_profile_id=profile.id,
+        organization_id=profile.organization_id,
+        user_id=profile.owner_user_id,
+        agent_kind=selection.agent_kind,
+        protocol_facade=plan.protocol_facade,
+        expires_at=now + _GATEWAY_GRANT_TTL,
+    )
+    return RuntimeGrantIssueResult(grant=grant, raw_token=raw_token)
+
+
+async def _backfill_legacy_cloud_credentials(
+    db: AsyncSession,
+    actor_user_id: UUID,
+    profile: SandboxProfileRecord,
+) -> SandboxProfileRecord:
+    all_legacy_rows = await store.list_legacy_cloud_credentials_for_user(db, actor_user_id)
+    active_legacy_by_id = {row.id: row for row in all_legacy_rows if row.revoked_at is None}
+    imported_legacy_credentials = await store.list_imported_legacy_credentials_for_user(
+        db,
+        actor_user_id,
+    )
+    imported_credential_ids = {credential.id for credential in imported_legacy_credentials}
+    changed = False
+    for imported in imported_legacy_credentials:
+        legacy = next(
+            (row for row in all_legacy_rows if row.id == imported.legacy_cloud_credential_id),
+            None,
+        )
+        if legacy is None or legacy.revoked_at is not None:
+            await store.revoke_credential(db, credential_id=imported.id)
+            replacement_exists = legacy is not None and any(
+                active.provider == legacy.provider and active.id != legacy.id
+                for active in active_legacy_by_id.values()
+            )
+            if replacement_exists:
+                changed = True
+                continue
+            affected = await store.list_active_selections_for_credential_or_share(
+                db,
+                credential_id=imported.id,
+            )
+            for selection in affected:
+                await store.mark_selection_invalid(
+                    db,
+                    selection_id=selection.id,
+                    error_code="legacy_cloud_credential_revoked",
+                    error_message="Synced cloud credential was revoked.",
+                )
+                await _bump_profile_for_selection(
+                    db,
+                    selection,
+                    actor_user_id=actor_user_id,
+                    reason="legacy_cloud_credential_revoked",
+                    force_restart=True,
+                )
+            changed = True
+    if not active_legacy_by_id:
+        return profile
+    existing_selections = {
+        selection.agent_kind: selection
+        for selection in await store.list_selections_for_profile(db, profile.id)
+    }
+    for legacy in active_legacy_by_id.values():
+        credential = await store.find_agent_auth_credential_for_legacy_cloud_credential(
+            db,
+            legacy.id,
+        )
+        if credential is None:
+            credential = await store.create_agent_auth_credential(
+                db,
+                owner_scope="personal",
+                owner_user_id=actor_user_id,
+                organization_id=None,
+                created_by_user_id=actor_user_id,
+                agent_kind=legacy.provider,
+                credential_kind="synced_path",
+                display_name=f"Synced {legacy.provider} auth",
+                redacted_summary_json=json.dumps(
+                    {
+                        "source": "cloud_credential",
+                        "authMode": legacy.auth_mode,
+                    },
+                    sort_keys=True,
+                ),
+                status="ready",
+                legacy_cloud_credential_id=legacy.id,
+            )
+            await store.record_audit_event(
+                db,
+                action="credential.import_legacy",
+                actor_user_id=actor_user_id,
+                owner_scope="personal",
+                owner_user_id=actor_user_id,
+                organization_id=None,
+                credential_id=credential.id,
+                sandbox_profile_id=profile.id,
+                metadata_json=json.dumps(
+                    {"legacyCloudCredentialId": str(legacy.id)}, sort_keys=True
+                ),
+            )
+            imported_credential_ids.add(credential.id)
+        elif (
+            credential.revoked_at is None
+            and legacy.updated_at is not None
+            and legacy.updated_at > credential.updated_at
+        ):
+            credential = (
+                await store.update_credential_status(
+                    db,
+                    credential_id=credential.id,
+                    status="ready",
+                    redacted_summary_json=json.dumps(
+                        {
+                            "source": "cloud_credential",
+                            "authMode": legacy.auth_mode,
+                        },
+                        sort_keys=True,
+                    ),
+                )
+                or credential
+            )
+            imported_credential_ids.add(credential.id)
+            changed = True
+        if credential.revoked_at is not None:
+            continue
+        selection = existing_selections.get(legacy.provider)
+        should_select = False
+        if selection is None:
+            should_select = True
+        elif selection.credential_id in imported_credential_ids:
+            should_select = (
+                selection.status != "active"
+                or selection.credential_id != credential.id
+                or selection.selected_revision != credential.revision
+            )
+        if should_select:
+            await store.upsert_selection(
+                db,
+                sandbox_profile_id=profile.id,
+                owner_scope="personal",
+                agent_kind=legacy.provider,
+                credential_id=credential.id,
+                credential_share_id=None,
+                materialization_mode="synced_files",
+                selected_revision=credential.revision,
+                status="active",
+                last_error_code=None,
+                last_error_message=None,
+            )
+            changed = True
+    if not changed:
+        return profile
+    updated = await store.bump_sandbox_profile_agent_auth_revision(
+        db,
+        sandbox_profile_id=profile.id,
+        reason="legacy_cloud_credential_import",
+        actor_user_id=actor_user_id,
+        force_restart=False,
+    )
+    return updated or profile
+
+
+async def _ensure_managed_policy(
+    db: AsyncSession,
+    *,
+    credential: AgentAuthCredentialRecord,
+    budget: AgentGatewayBudgetSubjectRecord,
+    sync_status: str,
+    status: str,
+    fingerprint: str | None,
+    error_code: str | None,
+    error_message: str | None,
+) -> AgentGatewayPolicyRecord:
+    virtual_key_id = None
+    virtual_key_ciphertext = None
+    if sync_status == "synced" and budget.litellm_team_id:
+        try:
+            key = await LiteLLMAdminClient().generate_key(
+                team_id=budget.litellm_team_id,
+                key_alias=f"credential-{credential.id}",
+            )
+            virtual_key_id = key.key_id
+            virtual_key_ciphertext = encrypt_text(key.key)
+        except LiteLLMIntegrationError as exc:
+            sync_status = "failed"
+            status = "invalid"
+            error_code = "litellm_key_provisioning_failed"
+            error_message = _safe_error_message(str(exc), {})
+    return await store.ensure_gateway_policy(
+        db,
+        credential_id=credential.id,
+        policy_kind="proliferate_managed",
+        owner_scope="organization",
+        owner_user_id=None,
+        organization_id=credential.organization_id,
+        budget_subject_id=budget.id,
+        litellm_team_id=budget.litellm_team_id,
+        litellm_virtual_key_id=virtual_key_id,
+        litellm_virtual_key_ciphertext=virtual_key_ciphertext,
+        litellm_virtual_key_ciphertext_key_id=(
+            AGENT_GATEWAY_CIPHERTEXT_KEY_ID if virtual_key_ciphertext else None
+        ),
+        litellm_sync_status=sync_status,
+        litellm_sync_fingerprint=fingerprint,
+        status=status,
+        last_error_code=error_code,
+        last_error_message=error_message,
+    )
+
+
+async def _provision_policy(
+    db: AsyncSession,
+    *,
+    credential: AgentAuthCredentialRecord,
+    policy_kind: str,
+    owner_scope: str,
+    owner_user_id: UUID | None,
+    organization_id: UUID | None,
+    budget_subject_id: UUID | None,
+    provider_kind: str,
+    provider_payload: dict[str, str],
+    model_deployments: Sequence[LiteLLMModelDeploymentRequest],
+) -> tuple[AgentGatewayPolicyRecord, str, str, str | None, str | None]:
+    sync_status = "failed"
+    status = "invalid"
+    litellm_team_id = None
+    virtual_key_id = None
+    virtual_key_ciphertext = None
+    error_code = "litellm_not_configured"
+    error_message = "LiteLLM provisioning is not configured."
+    if not model_deployments:
+        error_code = "model_deployments_not_configured"
+        error_message = "No gateway model deployments are configured for this credential."
+    fingerprint = _deployment_fingerprint(
+        policy_kind=policy_kind,
+        litellm_team_id=None,
+        budget_subject_id=str(budget_subject_id) if budget_subject_id else None,
+        provider_kind=provider_kind,
+        deployments=model_deployments,
+    )
+    if (
+        model_deployments
+        and settings.agent_gateway_enabled
+        and settings.agent_gateway_litellm_master_key
+    ):
+        try:
+            client = LiteLLMAdminClient()
+            team = await client.ensure_team(team_alias=f"credential-{credential.id}")
+            litellm_team_id = team.team_id
+            key = await client.generate_key(
+                team_id=team.team_id,
+                key_alias=f"credential-{credential.id}",
+            )
+            virtual_key_id = key.key_id
+            virtual_key_ciphertext = encrypt_text(key.key)
+            for deployment in model_deployments:
+                await client.create_model_deployment(
+                    public_model_name=deployment.public_model_name,
+                    provider_model=deployment.provider_model,
+                    team_id=team.team_id,
+                    litellm_params=_provider_litellm_params(
+                        provider_kind=provider_kind,
+                        provider_payload=provider_payload,
+                        deployment=deployment,
+                    ),
+                    metadata={
+                        "credentialId": str(credential.id),
+                        "agentKind": credential.agent_kind,
+                    },
+                )
+            sync_status = "synced"
+            status = "ready"
+            fingerprint = _deployment_fingerprint(
+                policy_kind=policy_kind,
+                litellm_team_id=litellm_team_id,
+                budget_subject_id=str(budget_subject_id) if budget_subject_id else None,
+                provider_kind=provider_kind,
+                deployments=model_deployments,
+            )
+            error_code = None
+            error_message = None
+        except LiteLLMIntegrationError as exc:
+            error_code = "litellm_provisioning_failed"
+            error_message = _safe_error_message(str(exc), provider_payload)
+
+    policy = await store.ensure_gateway_policy(
+        db,
+        credential_id=credential.id,
+        policy_kind=policy_kind,
+        owner_scope=owner_scope,
+        owner_user_id=owner_user_id,
+        organization_id=organization_id,
+        budget_subject_id=budget_subject_id,
+        litellm_team_id=litellm_team_id,
+        litellm_virtual_key_id=virtual_key_id,
+        litellm_virtual_key_ciphertext=virtual_key_ciphertext,
+        litellm_virtual_key_ciphertext_key_id=(
+            AGENT_GATEWAY_CIPHERTEXT_KEY_ID if virtual_key_ciphertext else None
+        ),
+        litellm_sync_status=sync_status,
+        litellm_sync_fingerprint=fingerprint,
+        status=status,
+        last_error_code=error_code,
+        last_error_message=error_message,
+    )
+    return policy, sync_status, status, error_code, error_message
+
+
+def _provider_litellm_params(
+    *,
+    provider_kind: str,
+    provider_payload: dict[str, str],
+    deployment: LiteLLMModelDeploymentRequest,
+) -> dict[str, object]:
+    params: dict[str, object] = {}
+    if provider_kind == "anthropic_api_key":
+        params["api_key"] = provider_payload["apiKey"]
+        params.setdefault("custom_llm_provider", "anthropic")
+    elif provider_kind == "openai_api_key":
+        params["api_key"] = provider_payload["apiKey"]
+        params.setdefault("custom_llm_provider", "openai")
+    elif provider_kind == "openai_compatible":
+        params["api_key"] = provider_payload["apiKey"]
+        params["api_base"] = provider_payload["baseUrl"]
+        params.setdefault("custom_llm_provider", "openai")
+    elif provider_kind == "bedrock_assume_role":
+        params["aws_role_name"] = provider_payload["roleArn"]
+        params["aws_external_id"] = provider_payload["externalId"]
+        params["aws_region_name"] = provider_payload["region"]
+        params.setdefault("custom_llm_provider", "bedrock")
+    elif provider_kind == "proliferate_bedrock_pool":
+        params.setdefault("custom_llm_provider", "bedrock")
+    return params
+
+
+def _gateway_deployments_for_credential(
+    *,
+    agent_kind: str,
+    provider_kind: str,
+) -> tuple[LiteLLMModelDeploymentRequest, ...]:
+    if agent_kind == "claude":
+        if provider_kind in {"bedrock_assume_role", "proliferate_bedrock_pool"}:
+            return (
+                LiteLLMModelDeploymentRequest(
+                    publicModelName="us.anthropic.claude-sonnet-4-6",
+                    providerModel="us.anthropic.claude-sonnet-4-6",
+                ),
+            )
+        if provider_kind == "anthropic_api_key":
+            return (
+                LiteLLMModelDeploymentRequest(
+                    publicModelName="us.anthropic.claude-sonnet-4-6",
+                    providerModel="claude-sonnet-4-6",
+                ),
+            )
+    if agent_kind == "codex" and provider_kind in {"openai_api_key", "openai_compatible"}:
+        return (
+            LiteLLMModelDeploymentRequest(
+                publicModelName="gpt-5.5",
+                providerModel="gpt-5.5",
+            ),
+        )
+    if agent_kind == "opencode" and provider_kind in {"openai_api_key", "openai_compatible"}:
+        return (
+            LiteLLMModelDeploymentRequest(
+                publicModelName="opencode/big-pickle",
+                providerModel="gpt-5.5",
+            ),
+        )
+    return ()
+
+
+async def _require_credential_ready_for_selection(
+    db: AsyncSession,
+    credential: AgentAuthCredentialRecord,
+) -> None:
+    if credential.status != "ready" or credential.revoked_at is not None:
+        raise AgentAuthError(
+            "Credential is not ready.",
+            code="credential_not_ready",
+            status_code=409,
+        )
+    if credential.credential_kind != "managed_gateway":
+        return
+    policy = await store.get_gateway_policy_for_credential(db, credential.id)
+    if policy is None or policy.status != "ready" or policy.litellm_sync_status != "synced":
+        raise AgentAuthError(
+            "Gateway policy is not ready.",
+            code="gateway_policy_not_ready",
+            status_code=409,
+        )
+
+
+def _validate_policy_owner_scope(policy_kind: str, owner_scope: str) -> None:
+    if policy_kind == "personal_byok" and owner_scope != "personal":
+        raise AgentAuthError(
+            "personal_byok can only be used for personal credentials.",
+            code="policy_owner_scope_mismatch",
+            status_code=400,
+        )
+    if policy_kind == "org_byok" and owner_scope != "organization":
+        raise AgentAuthError(
+            "org_byok can only be used for organization credentials.",
+            code="policy_owner_scope_mismatch",
+            status_code=400,
+        )
+
+
+def _safe_error_message(
+    message: str | None,
+    secret_payload: dict[str, str],
+) -> str | None:
+    if message is None:
+        return None
+    safe = message
+    for value in secret_payload.values():
+        if value:
+            safe = safe.replace(value, "[REDACTED]")
+    return safe[:1000]
+
+
+@dataclass(frozen=True)
+class _ProviderValidation:
+    status: str
+    redacted_summary: dict[str, object]
+    error_code: str | None
+    error_message: str | None
+
+
+def _validate_provider_payload(
+    provider_kind: str,
+    payload: dict[str, str],
+) -> _ProviderValidation:
+    try:
+        if provider_kind in {"anthropic_api_key", "openai_api_key"}:
+            api_key = payload.get("apiKey", "").strip()
+            if not api_key:
+                raise AgentAuthError(
+                    "apiKey is required.", code="missing_api_key", status_code=400
+                )
+            return _ProviderValidation(
+                status="unvalidated",
+                redacted_summary={
+                    "providerKind": provider_kind,
+                    "apiKey": _redact_secret(api_key),
+                },
+                error_code="provider_live_validation_deferred",
+                error_message="Provider credentials require live validation before use.",
+            )
+        if provider_kind == "bedrock_assume_role":
+            result = validate_bedrock_assume_role_payload(
+                role_arn=payload.get("roleArn", ""),
+                external_id=payload.get("externalId", ""),
+                region=payload.get("region", ""),
+            )
+            return _ProviderValidation(
+                status="unvalidated",
+                redacted_summary={
+                    "providerKind": provider_kind,
+                    "roleArn": result.role_arn,
+                    "region": result.region,
+                    "accountId": result.account_id,
+                },
+                error_code="provider_live_validation_deferred",
+                error_message="Provider credentials require live validation before use.",
+            )
+        if provider_kind == "openai_compatible":
+            base_url = _validate_openai_compatible_url(payload.get("baseUrl", ""))
+            api_key = payload.get("apiKey", "").strip()
+            if not api_key:
+                raise AgentAuthError(
+                    "apiKey is required.", code="missing_api_key", status_code=400
+                )
+            return _ProviderValidation(
+                status="unvalidated",
+                redacted_summary={
+                    "providerKind": provider_kind,
+                    "baseUrl": base_url,
+                    "apiKey": _redact_secret(api_key),
+                },
+                error_code="provider_live_validation_deferred",
+                error_message="Provider credentials require live validation before use.",
+            )
+    except AwsIntegrationError as exc:
+        return _ProviderValidation(
+            status="invalid",
+            redacted_summary={"providerKind": provider_kind},
+            error_code=exc.code,
+            error_message=str(exc),
+        )
+    raise AgentAuthError(
+        "Unsupported provider kind.", code="unsupported_provider_kind", status_code=400
+    )
+
+
+def _validate_openai_compatible_url(raw_url: str) -> str:
+    parsed = urlparse(raw_url.strip())
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise AgentAuthError(
+            "OpenAI-compatible base URL must be an HTTPS URL.",
+            code="invalid_base_url",
+            status_code=400,
+        )
+    host = parsed.hostname
+    if host is None:
+        raise AgentAuthError(
+            "OpenAI-compatible base URL host is required.",
+            code="invalid_base_url",
+            status_code=400,
+        )
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        raise AgentAuthError(
+            "OpenAI-compatible base URL cannot point to localhost.",
+            code="invalid_base_url",
+            status_code=400,
+        )
+    try:
+        addresses = {item[4][0] for item in socket.getaddrinfo(host, None)}
+    except socket.gaierror as exc:
+        raise AgentAuthError(
+            "OpenAI-compatible base URL host could not be resolved.",
+            code="invalid_base_url",
+            status_code=400,
+        ) from exc
+    for address in addresses:
+        ip = ipaddress.ip_address(address)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
+            raise AgentAuthError(
+                "OpenAI-compatible base URL cannot resolve to a private network.",
+                code="invalid_base_url",
+                status_code=400,
+            )
+    return raw_url.strip().rstrip("/")
+
+
+def _deployment_fingerprint(
+    *,
+    policy_kind: str,
+    litellm_team_id: str | None,
+    budget_subject_id: str | None,
+    provider_kind: str | None,
+    deployments: Sequence[LiteLLMModelDeploymentRequest],
+) -> str:
+    return fingerprint_litellm_policy_state(
+        policy_kind=policy_kind,
+        litellm_team_id=litellm_team_id,
+        budget_subject_id=budget_subject_id,
+        provider_kind=provider_kind,
+        model_deployments=[
+            LiteLLMModelDeploymentPlan(
+                public_model_name=item.public_model_name,
+                provider_model=item.provider_model,
+                litellm_params={},
+            )
+            for item in deployments
+        ],
+    )
+
+
+async def _require_profile_access(
+    db: AsyncSession,
+    actor_user_id: UUID,
+    sandbox_profile_id: UUID,
+    *,
+    admin: bool,
+) -> SandboxProfileRecord:
+    profile = await store.get_sandbox_profile(db, sandbox_profile_id)
+    if profile is None:
+        raise AgentAuthError(
+            "Sandbox profile not found.", code="sandbox_profile_not_found", status_code=404
+        )
+    if profile.owner_scope == "personal":
+        if profile.owner_user_id != actor_user_id:
+            raise AgentAuthError(
+                "Sandbox profile not found.", code="sandbox_profile_not_found", status_code=404
+            )
+        return profile
+    if profile.organization_id is None:
+        raise AgentAuthError("Sandbox profile is invalid.", code="invalid_sandbox_profile")
+    if admin:
+        await _require_organization_admin(db, actor_user_id, profile.organization_id)
+    else:
+        await _require_organization_member(db, actor_user_id, profile.organization_id)
+    return profile
+
+
+async def _require_can_manage_credential(
+    db: AsyncSession,
+    actor_user_id: UUID,
+    credential: AgentAuthCredentialRecord,
+) -> None:
+    if credential.owner_scope == "personal":
+        if credential.owner_user_id != actor_user_id:
+            raise AgentAuthError(
+                "Credential not found.", code="credential_not_found", status_code=404
+            )
+        return
+    if credential.owner_scope == "organization" and credential.organization_id is not None:
+        await _require_organization_admin(db, actor_user_id, credential.organization_id)
+        return
+    raise AgentAuthError(
+        "Credential cannot be modified.", code="credential_modify_forbidden", status_code=403
+    )
+
+
+async def _require_organization_member(
+    db: AsyncSession,
+    actor_user_id: UUID,
+    organization_id: UUID,
+) -> None:
+    membership = await organization_store.get_active_membership(
+        db,
+        organization_id=organization_id,
+        user_id=actor_user_id,
+    )
+    if membership is None:
+        raise AgentAuthError(
+            "Organization not found.", code="organization_not_found", status_code=404
+        )
+
+
+async def _require_organization_admin(
+    db: AsyncSession,
+    actor_user_id: UUID,
+    organization_id: UUID,
+) -> None:
+    membership = await organization_store.get_active_membership(
+        db,
+        organization_id=organization_id,
+        user_id=actor_user_id,
+    )
+    if membership is None:
+        raise AgentAuthError(
+            "Organization not found.", code="organization_not_found", status_code=404
+        )
+    if membership.role not in _ORG_ADMIN_ROLES:
+        raise AgentAuthError(
+            "You do not have permission to manage this organization.",
+            code="organization_permission_denied",
+            status_code=403,
+        )
+
+
+async def _bump_profile_for_selection(
+    db: AsyncSession,
+    selection: SandboxAgentAuthSelectionRecord,
+    *,
+    actor_user_id: UUID,
+    reason: str,
+    force_restart: bool,
+) -> None:
+    updated_profile = await store.bump_sandbox_profile_agent_auth_revision(
+        db,
+        sandbox_profile_id=selection.sandbox_profile_id,
+        reason=reason,
+        actor_user_id=actor_user_id,
+        force_restart=force_restart,
+    )
+    if updated_profile is not None and updated_profile.managed_target_id is not None:
+        await store.upsert_target_state(
+            db,
+            sandbox_profile_id=updated_profile.id,
+            target_id=updated_profile.managed_target_id,
+            desired_revision=updated_profile.agent_auth_revision,
+            applied_revision=None,
+            status="pending",
+            force_restart_required=force_restart,
+            last_command_id=None,
+            last_worker_id=None,
+            last_error_code=None,
+            last_error_message=None,
+        )
+    await store.revoke_runtime_grants_for_selection(db, selection_id=selection.id)
+
+
+def _hash_token(raw_token: str) -> str:
+    return hmac.new(
+        settings.cloud_secret_key.encode("utf-8"),
+        f"{AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN}:{raw_token}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _clean_display_name(value: str) -> str:
+    cleaned = value.strip()
+    if not cleaned:
+        raise AgentAuthError(
+            "displayName is required.", code="missing_display_name", status_code=400
+        )
+    if len(cleaned) > 255:
+        raise AgentAuthError(
+            "displayName is too long.", code="display_name_too_long", status_code=400
+        )
+    return cleaned
+
+
+def _budget_amount(value: str) -> str:
+    try:
+        amount = Decimal(value)
+    except InvalidOperation as exc:
+        raise AgentAuthError(
+            "Included budget must be a decimal string.", code="invalid_budget", status_code=400
+        ) from exc
+    if amount < 0:
+        raise AgentAuthError(
+            "Included budget must be non-negative.", code="invalid_budget", status_code=400
+        )
+    return format(amount, "f")
+
+
+def _redact_secret(value: str) -> str:
+    if len(value) <= 8:
+        return "[REDACTED]"
+    return f"{value[:4]}...{value[-4:]}"

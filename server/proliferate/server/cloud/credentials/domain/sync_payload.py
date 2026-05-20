@@ -107,7 +107,10 @@ def normalize_cloud_credential_payload(
 
 
 def _provider_spec(provider: CloudAgentKind) -> CredentialProviderSpec:
-    return _CREDENTIAL_SPECS[provider]
+    spec = _CREDENTIAL_SPECS.get(provider)
+    if spec is None:
+        _invalid_payload(f"Cloud credential sync is not supported for provider '{provider}'.")
+    return spec
 
 
 def _normalize_env_payload(
