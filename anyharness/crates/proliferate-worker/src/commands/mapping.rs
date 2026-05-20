@@ -134,31 +134,28 @@ fn start_session_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMa
     let mut body = object.clone();
     body.insert("workspaceId".to_string(), Value::String(workspace_id));
     body.insert("agentKind".to_string(), Value::String(agent_kind));
-    if !body.contains_key("agentAuthScope") {
-        if let Some(sandbox_profile_id) =
-            string_field(object, "sandboxProfileId", "sandbox_profile_id")
-        {
-            body.insert(
-                "agentAuthScope".to_string(),
-                json!({
-                    "provider": "proliferate-cloud",
-                    "id": sandbox_profile_id,
-                    "targetId": command.target_id,
-                }),
-            );
-        }
+    if let Some(sandbox_profile_id) = string_field(object, "sandboxProfileId", "sandbox_profile_id")
+    {
+        body.insert(
+            "agentAuthScope".to_string(),
+            json!({
+                "provider": "proliferate-cloud",
+                "id": sandbox_profile_id,
+                "targetId": command.target_id,
+            }),
+        );
+    } else {
+        body.remove("agentAuthScope");
     }
-    if !body.contains_key("requiredAgentAuthRevision") {
-        if let Some(revision) = integer_field(
-            object,
-            "requiredAgentAuthRevision",
-            "required_agent_auth_revision",
-        ) {
-            body.insert(
-                "requiredAgentAuthRevision".to_string(),
-                Value::Number(revision.into()),
-            );
-        }
+    if let Some(revision) = integer_field(
+        object,
+        "requiredAgentAuthRevision",
+        "required_agent_auth_revision",
+    ) {
+        body.insert(
+            "requiredAgentAuthRevision".to_string(),
+            Value::Number(revision.into()),
+        );
     }
     body.entry("origin".to_string())
         .or_insert_with(|| json!({ "kind": "system", "entrypoint": "cloud" }));
@@ -432,6 +429,30 @@ mod tests {
         assert_eq!(body["agentAuthScope"]["id"], "profile-1");
         assert_eq!(body["agentAuthScope"]["targetId"], "target-1");
         assert_eq!(body["requiredAgentAuthRevision"], 9);
+    }
+
+    #[test]
+    fn maps_start_session_overwrites_untrusted_agent_auth_scope() {
+        let mut command = test_command(json!({
+            "workspaceId": "workspace-1",
+            "agentKind": "claude",
+            "sandboxProfileId": "profile-1",
+            "requiredAgentAuthRevision": 9,
+            "agentAuthScope": {
+                "provider": "local",
+                "id": "default",
+                "targetId": "other-target"
+            }
+        }));
+        command.kind = "start_session".to_string();
+
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::StartSession { body } = mapped else {
+            panic!("expected start session");
+        };
+        assert_eq!(body["agentAuthScope"]["provider"], "proliferate-cloud");
+        assert_eq!(body["agentAuthScope"]["id"], "profile-1");
+        assert_eq!(body["agentAuthScope"]["targetId"], "target-1");
     }
 
     #[test]

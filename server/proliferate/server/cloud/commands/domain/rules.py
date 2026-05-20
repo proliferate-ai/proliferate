@@ -306,6 +306,51 @@ def _validate_optional_agent_auth_preflight_payload(
             f"{kind} requiredAgentAuthRevision must be non-negative.",
             status_code=400,
         )
+    _validate_agent_auth_scope(payload, kind)
+
+
+def _validate_agent_auth_scope(payload: dict[str, object], kind: str) -> None:
+    raw_scope = payload.get("agentAuthScope")
+    if raw_scope is None:
+        return
+    if not isinstance(raw_scope, dict):
+        raise CloudApiError(
+            "cloud_command_agent_auth_scope_invalid",
+            f"{kind} agentAuthScope must be an object.",
+            status_code=400,
+        )
+    scope = {str(key): value for key, value in raw_scope.items()}
+    _reject_unknown_fields(
+        scope,
+        {"provider", "id", "targetId"},
+        code="cloud_command_agent_auth_scope_invalid",
+        message_prefix=f"{kind} agentAuthScope contains unsupported field(s): ",
+    )
+    provider = _required_string(
+        scope,
+        "provider",
+        code="cloud_command_agent_auth_scope_invalid",
+        message=f"{kind} agentAuthScope must contain provider.",
+    )
+    scope_id = _required_string(
+        scope,
+        "id",
+        code="cloud_command_agent_auth_scope_invalid",
+        message=f"{kind} agentAuthScope must contain id.",
+    )
+    _required_string(
+        scope,
+        "targetId",
+        code="cloud_command_agent_auth_scope_invalid",
+        message=f"{kind} agentAuthScope must contain targetId.",
+    )
+    sandbox_profile_id = str(payload.get("sandboxProfileId") or "")
+    if provider != "proliferate-cloud" or scope_id != sandbox_profile_id:
+        raise CloudApiError(
+            "cloud_command_agent_auth_scope_invalid",
+            f"{kind} agentAuthScope must match the cloud-owned auth preflight scope.",
+            status_code=400,
+        )
 
 
 def _required_string(

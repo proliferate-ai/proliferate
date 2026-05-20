@@ -1132,6 +1132,46 @@ class TestCloudCommandsApi:
         payload = json.loads(command.payload_json)
         assert payload["sandboxProfileId"] == str(profile.id)
         assert payload["requiredAgentAuthRevision"] == profile.agent_auth_revision
+        assert payload["agentAuthScope"] == {
+            "provider": "proliferate-cloud",
+            "id": str(profile.id),
+            "targetId": target_id,
+        }
+
+        untrusted_scope = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "agent-auth-preflight-untrusted-scope",
+                "targetId": target_id,
+                "kind": "start_session",
+                "payload": {
+                    "workspaceId": "anyharness-workspace-1",
+                    "agentKind": "claude",
+                    "sandboxProfileId": str(UUID(int=1)),
+                    "requiredAgentAuthRevision": 0,
+                    "agentAuthScope": {
+                        "provider": "local",
+                        "id": "default",
+                        "targetId": "wrong-target",
+                    },
+                },
+            },
+        )
+        assert untrusted_scope.status_code == 200
+        command = await db_session.get(
+            CloudCommand,
+            UUID(untrusted_scope.json()["commandId"]),
+        )
+        assert command is not None
+        payload = json.loads(command.payload_json)
+        assert payload["sandboxProfileId"] == str(profile.id)
+        assert payload["requiredAgentAuthRevision"] == profile.agent_auth_revision
+        assert payload["agentAuthScope"] == {
+            "provider": "proliferate-cloud",
+            "id": str(profile.id),
+            "targetId": target_id,
+        }
 
         await agent_auth_store.upsert_target_state(
             db_session,
