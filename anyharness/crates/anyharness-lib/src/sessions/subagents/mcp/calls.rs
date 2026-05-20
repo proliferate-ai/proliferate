@@ -278,6 +278,8 @@ async fn create_subagent(
             None,
             crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             false,
+            parent.agent_auth_scope.clone(),
+            parent.required_agent_auth_revision,
             OriginContext::system_local_runtime(),
         )
         .map_err(|error| anyhow::anyhow!("{error:?}"))?;

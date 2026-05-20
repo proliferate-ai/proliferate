@@ -117,6 +117,8 @@ pub async fn create_session(
             req.mcp_binding_summaries,
             req.plugin_bundle,
             req.subagents_enabled.unwrap_or(true),
+            req.agent_auth_scope,
+            req.required_agent_auth_revision,
             origin,
             latency.as_ref(),
         )

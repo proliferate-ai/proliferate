@@ -9,6 +9,7 @@ use crate::{
         health as anyharness_health, sessions::AnyHarnessCommandResponse, AnyHarnessClient,
     },
     cloud_client::{
+        agent_auth::AgentAuthStatusRequest,
         commands::{
             CloudCommandEnvelope, CommandDeliveryRequest, CommandResultRequest,
             LeaseCommandRequest, SUPPORTED_COMMAND_KINDS,
@@ -20,6 +21,9 @@ use crate::{
     error::WorkerError,
     identity::credentials::WorkerIdentity,
     materialization::{
+        agent_auth::{
+            build_anyharness_agent_auth_request, parse_refresh_agent_auth_config_payload,
+        },
         git_identity::{parse_configure_git_identity_payload, write_target_git_identity},
         materialize_plan, parse_materialize_environment_payload,
         repo_checkout::{ensure_repo_checkout, parse_ensure_repo_checkout_payload},
@@ -33,6 +37,8 @@ const ERROR_LEASE_SLEEP: Duration = Duration::from_secs(5);
 const CONFIGURE_GIT_IDENTITY_KIND: &str = "configure_git_identity";
 const ENSURE_REPO_CHECKOUT_KIND: &str = "ensure_repo_checkout";
 const MATERIALIZE_ENVIRONMENT_KIND: &str = "materialize_environment";
+const REFRESH_AGENT_AUTH_CONFIG_KIND: &str = "refresh_agent_auth_config";
+const SAFE_AGENT_AUTH_REFRESH_ERROR: &str = "Agent auth config refresh failed.";
 
 pub async fn run_loop(
     config: WorkerConfig,
@@ -172,6 +178,17 @@ async fn process_command(
         )
         .await;
     }
+    if command.kind == REFRESH_AGENT_AUTH_CONFIG_KIND {
+        return process_refresh_agent_auth_config_command(
+            cloud,
+            identity,
+            anyharness,
+            store,
+            materialization_root,
+            command,
+        )
+        .await;
+    }
     let mapped = match map_cloud_command(&command) {
         Ok(mapped) => mapped,
         Err(error) => {
@@ -209,6 +226,153 @@ async fn process_command(
         }
     }
     let result = command_result(&command, &mapped, response);
+    report_command_result(cloud, identity, store, &command.command_id, &result).await
+}
+
+async fn process_refresh_agent_auth_config_command(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    anyharness: &AnyHarnessClient,
+    store: &WorkerStore,
+    materialization_root: Option<&Path>,
+    command: CloudCommandEnvelope,
+) -> Result<(), WorkerError> {
+    let payload = match parse_refresh_agent_auth_config_payload(&command.payload) {
+        Ok(payload) => payload,
+        Err(error) => {
+            let result = CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: "rejected".to_string(),
+                error_code: Some("invalid_refresh_agent_auth_config_payload".to_string()),
+                error_message: Some(error.to_string()),
+                result: None,
+            };
+            report_command_result(cloud, identity, store, &command.command_id, &result).await?;
+            return Ok(());
+        }
+    };
+    debug!(
+        sandbox_profile_id = %payload.sandbox_profile_id,
+        revision = payload.revision,
+        reason = %payload.reason,
+        force_restart = payload.force_restart,
+        "refreshing agent auth config"
+    );
+    let _ = cloud
+        .report_agent_auth_status(
+            &identity.worker_token,
+            &payload.sandbox_profile_id,
+            &AgentAuthStatusRequest {
+                status: "materializing".to_string(),
+                command_id: command.command_id.clone(),
+                revision: payload.revision,
+                lease_id: command.lease_id.clone(),
+                applied_revision: None,
+                current_revision: None,
+                error_code: None,
+                error_message: None,
+            },
+        )
+        .await;
+    let response = async {
+        let plan = cloud
+            .fetch_agent_auth_materialization(
+                &identity.worker_token,
+                &payload.sandbox_profile_id,
+                &command.command_id,
+                payload.revision,
+                &command.lease_id,
+            )
+            .await?;
+        let (request, outcome) = build_anyharness_agent_auth_request(
+            materialization_root,
+            &payload.sandbox_profile_id,
+            &command.target_id,
+            payload.revision,
+            &plan,
+        )?;
+        if outcome.applied {
+            anyharness.apply_agent_auth_config(&request).await?;
+            cloud
+                .report_agent_auth_status(
+                    &identity.worker_token,
+                    &payload.sandbox_profile_id,
+                    &AgentAuthStatusRequest {
+                        status: "applied".to_string(),
+                        command_id: command.command_id.clone(),
+                        revision: payload.revision,
+                        lease_id: command.lease_id.clone(),
+                        applied_revision: Some(outcome.revision),
+                        current_revision: outcome.current_revision,
+                        error_code: None,
+                        error_message: None,
+                    },
+                )
+                .await
+                .ok();
+        } else {
+            cloud
+                .report_agent_auth_status(
+                    &identity.worker_token,
+                    &payload.sandbox_profile_id,
+                    &AgentAuthStatusRequest {
+                        status: "superseded".to_string(),
+                        command_id: command.command_id.clone(),
+                        revision: payload.revision,
+                        lease_id: command.lease_id.clone(),
+                        applied_revision: None,
+                        current_revision: outcome.current_revision,
+                        error_code: None,
+                        error_message: None,
+                    },
+                )
+                .await
+                .ok();
+        }
+        Ok::<_, WorkerError>(outcome)
+    }
+    .await;
+    let result = match response {
+        Ok(outcome) => CommandResultRequest {
+            lease_id: command.lease_id.clone(),
+            status: "accepted".to_string(),
+            error_code: None,
+            error_message: None,
+            result: Some(serde_json::to_value(outcome)?),
+        },
+        Err(error) => {
+            warn!(
+                ?error,
+                command_id = %command.command_id,
+                sandbox_profile_id = %payload.sandbox_profile_id,
+                revision = payload.revision,
+                "agent auth config refresh failed"
+            );
+            let _ = cloud
+                .report_agent_auth_status(
+                    &identity.worker_token,
+                    &payload.sandbox_profile_id,
+                    &AgentAuthStatusRequest {
+                        status: "failed".to_string(),
+                        command_id: command.command_id.clone(),
+                        revision: payload.revision,
+                        lease_id: command.lease_id.clone(),
+                        applied_revision: None,
+                        current_revision: None,
+                        error_code: Some("agent_auth_materialization_failed".to_string()),
+                        error_message: Some(SAFE_AGENT_AUTH_REFRESH_ERROR.to_string()),
+                    },
+                )
+                .await;
+            CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: "failed_delivery".to_string(),
+                error_code: Some("agent_auth_materialization_failed".to_string()),
+                error_message: Some(SAFE_AGENT_AUTH_REFRESH_ERROR.to_string()),
+                result: None,
+            }
+        }
+    };
     report_command_result(cloud, identity, store, &command.command_id, &result).await
 }
 

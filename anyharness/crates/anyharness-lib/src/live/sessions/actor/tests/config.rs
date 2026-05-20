@@ -20,6 +20,8 @@ fn load_startup_restore_snapshot_captures_pre_restart_controls_before_overwrite(
             workspace_id: "workspace-1".to_string(),
             agent_kind: AgentKind::Claude.as_str().to_string(),
             native_session_id: Some("native-1".to_string()),
+            agent_auth_scope: None,
+            required_agent_auth_revision: None,
             requested_model_id: None,
             current_model_id: None,
             requested_mode_id: None,

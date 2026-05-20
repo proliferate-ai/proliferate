@@ -53,6 +53,8 @@ pub struct SessionActorConfig {
     pub workspace_path: std::path::PathBuf,
     pub workspace_env: std::collections::BTreeMap<String, String>,
     pub session_launch_env: std::collections::BTreeMap<String, String>,
+    pub agent_auth_env: std::collections::BTreeMap<String, String>,
+    pub protected_agent_auth_env: std::collections::BTreeMap<String, String>,
     pub interaction_broker: Arc<InteractionBroker>,
     pub plan_service: Arc<PlanService>,
     pub review_service: Option<Arc<ReviewService>>,

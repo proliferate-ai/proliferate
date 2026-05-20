@@ -1,6 +1,8 @@
 use std::{collections::HashSet, time::Instant};
 
-use anyharness_contract::v1::{SessionMcpBindingSummary, SessionPluginBundle};
+use anyharness_contract::v1::{
+    AgentAuthExternalScope, SessionMcpBindingSummary, SessionPluginBundle,
+};
 
 use crate::domains::plugins::validation::validate_session_plugin_bundle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
@@ -27,6 +29,8 @@ impl SessionRuntime {
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
         plugin_bundle: Option<SessionPluginBundle>,
         subagents_enabled: bool,
+        agent_auth_scope: Option<AgentAuthExternalScope>,
+        required_agent_auth_revision: Option<i64>,
         origin: OriginContext,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
@@ -67,6 +71,8 @@ impl SessionRuntime {
             mcp_binding_summaries,
             SessionMcpBindingPolicy::InheritWorkspace,
             subagents_enabled,
+            agent_auth_scope,
+            required_agent_auth_revision,
             origin,
         )?;
         let registered_plugin_bundle = if let Some(bundle) = plugin_bundle {
@@ -125,6 +131,8 @@ impl SessionRuntime {
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
         mcp_binding_policy: SessionMcpBindingPolicy,
         subagents_enabled: bool,
+        agent_auth_scope: Option<AgentAuthExternalScope>,
+        required_agent_auth_revision: Option<i64>,
         origin: OriginContext,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         let system_prompt_append = join_system_prompt_append(system_prompt_append);
@@ -144,6 +152,8 @@ impl SessionRuntime {
                 mcp_binding_policy,
                 system_prompt_append,
                 subagents_enabled,
+                agent_auth_scope,
+                required_agent_auth_revision,
                 origin,
             )
             .map_err(map_create_session_service_error)

@@ -66,6 +66,8 @@ pub(in crate::live::sessions::actor) async fn start_actor(
         &config.workspace_path,
         &config.workspace_env,
         &config.session_launch_env,
+        &config.agent_auth_env,
+        &config.protected_agent_auth_env,
         &session_id,
         &workspace_id,
         &source_agent_kind,

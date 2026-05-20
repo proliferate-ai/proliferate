@@ -91,19 +91,9 @@ pub fn encrypt_bindings(
         .context("serialize MCP bindings")
         .map_err(SessionMcpBindingsError::Encrypt)?;
 
-    let nonce = Aes256GcmSiv::generate_nonce(&mut OsRng);
-    let ciphertext = cipher
-        .algorithm()
-        .encrypt(&nonce, plaintext.as_ref())
-        .map_err(|error| anyhow::anyhow!("encrypt MCP bindings: {error}"))
-        .map_err(SessionMcpBindingsError::Encrypt)?;
-
-    let mut encoded = nonce.to_vec();
-    encoded.extend(ciphertext);
-    Ok(Some(format!(
-        "{CIPHERTEXT_PREFIX}{}",
-        STANDARD.encode(encoded)
-    )))
+    encrypt_bytes(cipher, &plaintext)
+        .map(Some)
+        .map_err(SessionMcpBindingsError::Encrypt)
 }
 
 pub fn decrypt_bindings(
@@ -117,29 +107,40 @@ pub fn decrypt_bindings(
         return Err(SessionMcpBindingsError::MissingDataKey);
     };
 
-    let encoded = ciphertext
-        .strip_prefix(CIPHERTEXT_PREFIX)
-        .ok_or_else(|| anyhow::anyhow!("unsupported MCP binding ciphertext version"))
-        .map_err(SessionMcpBindingsError::Decrypt)?;
-    let decoded = STANDARD
-        .decode(encoded)
-        .context("decode MCP binding ciphertext")
-        .map_err(SessionMcpBindingsError::Decrypt)?;
-    if decoded.len() <= NONCE_LEN {
-        return Err(SessionMcpBindingsError::Decrypt(anyhow::anyhow!(
-            "ciphertext payload missing nonce"
-        )));
-    }
-
-    let (nonce_bytes, encrypted) = decoded.split_at(NONCE_LEN);
-    let plaintext = cipher
-        .algorithm()
-        .decrypt(nonce_bytes.into(), encrypted)
-        .map_err(|error| anyhow::anyhow!("decrypt MCP bindings: {error}"))
-        .map_err(SessionMcpBindingsError::Decrypt)?;
+    let plaintext = decrypt_bytes(cipher, ciphertext).map_err(SessionMcpBindingsError::Decrypt)?;
     serde_json::from_slice(&plaintext)
         .context("deserialize MCP bindings")
         .map_err(SessionMcpBindingsError::Decrypt)
+}
+
+pub fn encrypt_bytes(cipher: &SessionDataCipher, plaintext: &[u8]) -> anyhow::Result<String> {
+    let nonce = Aes256GcmSiv::generate_nonce(&mut OsRng);
+    let ciphertext = cipher
+        .algorithm()
+        .encrypt(&nonce, plaintext)
+        .map_err(|error| anyhow::anyhow!("encrypt data: {error}"))?;
+
+    let mut encoded = nonce.to_vec();
+    encoded.extend(ciphertext);
+    Ok(format!("{CIPHERTEXT_PREFIX}{}", STANDARD.encode(encoded)))
+}
+
+pub fn decrypt_bytes(cipher: &SessionDataCipher, ciphertext: &str) -> anyhow::Result<Vec<u8>> {
+    let encoded = ciphertext
+        .strip_prefix(CIPHERTEXT_PREFIX)
+        .ok_or_else(|| anyhow::anyhow!("unsupported ciphertext version"))?;
+    let decoded = STANDARD
+        .decode(encoded)
+        .context("decode ciphertext payload")?;
+    if decoded.len() <= NONCE_LEN {
+        anyhow::bail!("ciphertext payload missing nonce");
+    }
+
+    let (nonce_bytes, encrypted) = decoded.split_at(NONCE_LEN);
+    cipher
+        .algorithm()
+        .decrypt(nonce_bytes.into(), encrypted)
+        .map_err(|error| anyhow::anyhow!("decrypt data: {error}"))
 }
 
 #[cfg(test)]

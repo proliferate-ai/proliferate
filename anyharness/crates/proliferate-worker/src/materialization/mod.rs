@@ -1,3 +1,4 @@
+pub mod agent_auth;
 pub mod env;
 pub mod files;
 pub mod git;

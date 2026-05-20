@@ -29,6 +29,11 @@ pub enum WorkerError {
         status: reqwest::StatusCode,
         body: String,
     },
+    #[error("anyharness rejected request: {status} {body}")]
+    AnyHarness {
+        status: reqwest::StatusCode,
+        body: String,
+    },
     #[error("worker enrollment token is missing")]
     MissingEnrollmentToken,
     #[error("failed to create parent directory for {path}")]

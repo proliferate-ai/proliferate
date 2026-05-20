@@ -355,8 +355,19 @@ impl SessionRuntime {
             .workspace_runtime
             .workspace_env(&workspace)
             .map_err(StartSessionError::Internal)?;
+        let agent_auth_overlay = self
+            .agent_auth_config_service
+            .launch_overlay(
+                &record.agent_kind,
+                record.agent_auth_scope.as_ref(),
+                record.required_agent_auth_revision,
+            )
+            .map_err(StartSessionError::Internal)?;
+        let mut readiness_env = workspace_env.clone();
+        readiness_env.extend(agent_auth_overlay.support_env.clone());
+        readiness_env.extend(agent_auth_overlay.protected_env.clone());
         let agent_resolution_started = Instant::now();
-        let resolved_agent = resolve_agent_with_env(descriptor, &self.runtime_home, &workspace_env);
+        let resolved_agent = resolve_agent_with_env(descriptor, &self.runtime_home, &readiness_env);
         tracing::info!(
             session_id = %record.id,
             agent_kind = %record.agent_kind,
@@ -394,6 +405,8 @@ impl SessionRuntime {
                 workspace_path,
                 workspace_env,
                 session_launch_env,
+                agent_auth_overlay.support_env,
+                agent_auth_overlay.protected_env,
                 session_store,
                 attachment_storage,
                 mcp_launch.mcp_servers,

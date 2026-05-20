@@ -499,6 +499,8 @@ impl CoworkRuntime {
             mcp_binding_summaries,
             crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             false,
+            None,
+            None,
             OriginContext::cowork(),
         ) {
             Ok(session) => session,
@@ -1392,6 +1394,8 @@ impl CoworkRuntime {
             None,
             crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             false,
+            None,
+            None,
             OriginContext::cowork(),
         )
     }
