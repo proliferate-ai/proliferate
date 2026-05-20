@@ -61,7 +61,7 @@ async fn sync_once(
             warn!(
                 ?error,
                 exposure_id = %cursor.exposure_id,
-                session_projection_id = cursor.session_projection_id.as_deref(),
+                session_projection_id = %cursor.session_projection_id,
                 session_id = %cursor.anyharness_session_id,
                 "worker event sync failed for projection cursor"
             );
@@ -92,7 +92,7 @@ async fn reconcile_projection_cursors(
     let cursors = response
         .exposures
         .iter()
-        .map(projection_cursor_upsert)
+        .filter_map(projection_cursor_upsert)
         .collect::<Vec<_>>();
     store.reconcile_projection_cursors(&cursors)?;
     debug!(
@@ -114,7 +114,7 @@ async fn sync_projection_cursor(
 ) -> Result<(), WorkerError> {
     debug!(
         exposure_id = %cursor.exposure_id,
-        session_projection_id = cursor.session_projection_id.as_deref(),
+        session_projection_id = %cursor.session_projection_id,
         session_id = %cursor.anyharness_session_id,
         projection_level = %cursor.projection_level,
         commandable = cursor.commandable,
@@ -134,7 +134,7 @@ async fn sync_projection_cursor(
     }
     if let Some(gap) = first_sequence_gap(cursor.last_uploaded_seq, &events) {
         store.record_projection_cursor_gap(
-            &cursor.exposure_id,
+            &cursor.session_projection_id,
             gap.expected_seq,
             gap.first_observed_seq,
         )?;
@@ -169,17 +169,17 @@ async fn sync_projection_cursor(
     Ok(())
 }
 
-fn projection_cursor_upsert(snapshot: &WorkerExposureSnapshot) -> ProjectionCursorUpsert {
-    ProjectionCursorUpsert {
+fn projection_cursor_upsert(snapshot: &WorkerExposureSnapshot) -> Option<ProjectionCursorUpsert> {
+    Some(ProjectionCursorUpsert {
         exposure_id: snapshot.exposure_id.clone(),
-        session_projection_id: snapshot.session_projection_id.clone(),
+        session_projection_id: snapshot.session_projection_id.clone()?,
         anyharness_workspace_id: snapshot.anyharness_workspace_id.clone(),
-        anyharness_session_id: snapshot.anyharness_session_id.clone(),
+        anyharness_session_id: snapshot.anyharness_session_id.clone()?,
         projection_level: snapshot.projection_level.clone(),
         commandable: snapshot.commandable,
         last_uploaded_seq: snapshot.last_uploaded_seq,
         status: snapshot.status.clone(),
-    }
+    })
 }
 
 fn worker_event(
@@ -300,7 +300,7 @@ mod tests {
     ) -> ProjectionCursor {
         ProjectionCursor {
             exposure_id: "exposure-1".to_string(),
-            session_projection_id: Some("projection-1".to_string()),
+            session_projection_id: "projection-1".to_string(),
             anyharness_workspace_id: workspace_id.to_string(),
             anyharness_session_id: session_id.to_string(),
             projection_level: "live".to_string(),

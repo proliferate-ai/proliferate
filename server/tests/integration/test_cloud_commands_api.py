@@ -300,6 +300,45 @@ async def _create_ready_managed_cloud_workspace(
     return str(workspace.id)
 
 
+async def _seed_managed_session_projection(
+    db_session: AsyncSession,
+    *,
+    target_id: UUID,
+    cloud_workspace_id: str,
+    user_id: UUID,
+    session_id: str,
+) -> None:
+    workspace = await cloud_workspaces.get_cloud_workspace_by_id(
+        db_session,
+        UUID(cloud_workspace_id),
+    )
+    assert workspace is not None
+    assert workspace.anyharness_workspace_id is not None
+    exposure = await exposures_store.upsert_workspace_exposure(
+        db_session,
+        target_id=target_id,
+        cloud_workspace_id=workspace.id,
+        anyharness_workspace_id=workspace.anyharness_workspace_id,
+        owner_scope="personal",
+        owner_user_id=user_id,
+        organization_id=None,
+        visibility="private",
+        default_projection_level="live",
+        commandable=True,
+        origin="manual_web",
+    )
+    await projections_store.upsert_session_projection_metadata(
+        db_session,
+        target_id=target_id,
+        session_id=session_id,
+        exposure_id=exposure.id,
+        cloud_workspace_id=workspace.id,
+        workspace_id=workspace.anyharness_workspace_id,
+        projection_level="live",
+        commandable=True,
+    )
+
+
 class TestCloudCommandsApi:
     @pytest.mark.asyncio
     async def test_user_command_is_leased_delivered_and_accepted_by_worker(
@@ -1010,6 +1049,13 @@ class TestCloudCommandsApi:
             user_id=UUID(auth.user_id),
             suffix="stamp",
         )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-managed-1",
+        )
         await db_session.commit()
 
         wake_calls: list[tuple[UUID, UUID | None]] = []
@@ -1213,6 +1259,20 @@ class TestCloudCommandsApi:
             profile=profile,
             user_id=UUID(auth.user_id),
         )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="delivery-slot",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-slot-delivery",
+        )
         await db_session.commit()
         monkeypatch.setattr(
             command_service,
@@ -1283,6 +1343,20 @@ class TestCloudCommandsApi:
             target_id=target_uuid,
             profile=profile,
             user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="result-slot",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-slot-result",
         )
         await db_session.commit()
         monkeypatch.setattr(
