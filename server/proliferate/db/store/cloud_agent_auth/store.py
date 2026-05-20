@@ -43,6 +43,8 @@ from proliferate.db.store.cloud_agent_auth.records import (
 )
 from proliferate.utils.time import utcnow
 
+_UNSET = object()
+
 
 def _profile_record(
     row: SandboxProfile,
@@ -208,6 +210,7 @@ def _target_state_record(
         last_agent_auth_applied_at=row.last_agent_auth_applied_at,
         last_agent_auth_error_code=row.last_agent_auth_error_code,
         last_agent_auth_error_message=row.last_agent_auth_error_message,
+        pending_agent_auth_cleanup_json=row.pending_agent_auth_cleanup_json,
         applied_runtime_config_sequence=row.applied_runtime_config_sequence,
         applied_runtime_config_revision_id=row.applied_runtime_config_revision_id,
         runtime_config_status=row.runtime_config_status,
@@ -1295,6 +1298,7 @@ async def upsert_target_state(
     last_worker_id: UUID | None,
     last_error_code: str | None,
     last_error_message: str | None,
+    pending_cleanup_json: str | None | object = _UNSET,
 ) -> SandboxProfileAgentAuthTargetStateRecord:
     row = (
         await db.execute(
@@ -1341,6 +1345,9 @@ async def upsert_target_state(
             last_agent_auth_applied_at=applied_at,
             last_agent_auth_error_code=last_error_code,
             last_agent_auth_error_message=last_error_message,
+            pending_agent_auth_cleanup_json=(
+                None if pending_cleanup_json is _UNSET else pending_cleanup_json
+            ),
             applied_runtime_config_sequence=0,
             applied_runtime_config_revision_id=None,
             runtime_config_status="applied",
@@ -1364,6 +1371,10 @@ async def upsert_target_state(
             row.last_agent_auth_applied_at = applied_at
         row.last_agent_auth_error_code = last_error_code
         row.last_agent_auth_error_message = last_error_message
+        if pending_cleanup_json is not _UNSET:
+            row.pending_agent_auth_cleanup_json = pending_cleanup_json
+        elif status == "applied":
+            row.pending_agent_auth_cleanup_json = None
         row.updated_at = now
     await db.flush()
     return _target_state_record(row)

@@ -589,6 +589,7 @@ class SandboxProfileTargetState(Base):
     )
     last_agent_auth_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_agent_auth_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pending_agent_auth_cleanup_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     applied_runtime_config_sequence: Mapped[int] = mapped_column(Integer, default=0)
     applied_runtime_config_revision_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     runtime_config_status: Mapped[str] = mapped_column(String(32), default="applied")

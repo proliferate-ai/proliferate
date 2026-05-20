@@ -816,6 +816,9 @@ async def reconcile_agent_gateway_runtime_grant_freshness(
             if grant.issued_profile_revision != profile.agent_auth_revision:
                 skipped += 1
                 continue
+            if profile.primary_target_id != grant.target_id:
+                skipped += 1
+                continue
             await _mark_target_pending_and_queue_refresh(
                 db,
                 profile=profile,
@@ -1254,8 +1257,9 @@ async def worker_agent_auth_materialization_plan(
         command=command,
     )
     selections = []
+    selections.extend(_worker_cleanup_plans_from_state(target_state))
     for selection in await store.list_selections_for_profile(db, profile.id):
-        cleanup_plan = _worker_cleanup_selection_plan(selection)
+        cleanup_plan = await _worker_cleanup_selection_plan(db, selection)
         if cleanup_plan is not None:
             selections.append(cleanup_plan)
             continue
@@ -1335,6 +1339,7 @@ async def record_worker_agent_auth_status(
         missing_cleanup_paths = await _missing_worker_cleanup_paths(
             db,
             sandbox_profile_id=profile.id,
+            target_id=auth.target_id,
             applied_cleanup_paths=set(body.applied_cleanup_paths),
         )
         if missing_cleanup_paths:
@@ -1409,11 +1414,20 @@ async def _missing_worker_cleanup_paths(
     db: AsyncSession,
     *,
     sandbox_profile_id: UUID,
+    target_id: UUID,
     applied_cleanup_paths: set[str],
 ) -> list[str]:
     expected: set[str] = set()
+    state = await store.get_target_state(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=target_id,
+    )
+    if state is not None:
+        for entry in _pending_cleanup_entries_from_json(state.pending_cleanup_json):
+            expected.update(_cleanup_entry_paths(entry))
     for selection in await store.list_selections_for_profile(db, sandbox_profile_id):
-        expected.update(_cleanup_paths_for_selection(selection))
+        expected.update(await _cleanup_paths_for_selection(db, selection))
     return sorted(path for path in expected if path not in applied_cleanup_paths)
 
 
@@ -1537,7 +1551,8 @@ async def _worker_selection_plan(
     )
 
 
-def _worker_cleanup_selection_plan(
+async def _worker_cleanup_selection_plan(
+    db: AsyncSession,
     selection: SandboxAgentAuthSelectionRecord,
 ) -> WorkerAgentAuthSelectionPlan | None:
     if selection.status != "invalid":
@@ -1546,12 +1561,13 @@ def _worker_cleanup_selection_plan(
         return None
     if selection.last_error_code not in _CLEANUP_SELECTION_ERROR_CODES:
         return None
+    cleanup_paths = await _cleanup_paths_for_selection(db, selection)
     cleanup = [
         {
             "relativePath": relative_path,
             "reason": selection.last_error_code,
         }
-        for relative_path in _cleanup_paths_for_selection(selection)
+        for relative_path in cleanup_paths
     ]
     if not cleanup:
         return None
@@ -1572,14 +1588,154 @@ def _worker_cleanup_selection_plan(
     )
 
 
-def _cleanup_paths_for_selection(selection: SandboxAgentAuthSelectionRecord) -> tuple[str, ...]:
+def _worker_cleanup_plans_from_state(
+    target_state: SandboxProfileAgentAuthTargetStateRecord,
+) -> list[WorkerAgentAuthSelectionPlan]:
+    plans: list[WorkerAgentAuthSelectionPlan] = []
+    for entry in _pending_cleanup_entries_from_json(target_state.pending_cleanup_json):
+        plan = _worker_cleanup_plan_from_entry(entry)
+        if plan is not None:
+            plans.append(plan)
+    return plans
+
+
+def _worker_cleanup_plan_from_entry(
+    entry: dict[str, object],
+) -> WorkerAgentAuthSelectionPlan | None:
+    try:
+        credential_id = UUID(str(entry["credentialId"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+    agent_kind = entry.get("agentKind")
+    materialization_mode = entry.get("materializationMode")
+    credential_revision = entry.get("credentialRevision")
+    if not isinstance(agent_kind, str) or not isinstance(materialization_mode, str):
+        return None
+    if not isinstance(credential_revision, int) or isinstance(credential_revision, bool):
+        return None
+    credential_share_id = _optional_uuid_value(entry.get("credentialShareId"))
+    cleanup = [
+        {"relativePath": path, "reason": entry.get("reason") or "credential_revoked"}
+        for path in _cleanup_entry_paths(entry)
+    ]
+    if not cleanup:
+        return None
+    return WorkerAgentAuthSelectionPlan(
+        agentKind=agent_kind,
+        materializationMode=materialization_mode,
+        credentialId=credential_id,
+        credentialRevision=credential_revision,
+        status="invalid",
+        credentialShareId=credential_share_id,
+        gateway=None,
+        syncedFiles=WorkerAgentAuthSyncedFilesConfig(
+            credentialShareId=credential_share_id,
+            envVars={},
+            files=[],
+            cleanup=cleanup,
+        ),
+    )
+
+
+def _optional_uuid_value(value: object) -> UUID | None:
+    if value is None:
+        return None
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _pending_cleanup_entries_from_json(value: str | None) -> tuple[dict[str, object], ...]:
+    if not value:
+        return ()
+    try:
+        parsed = json.loads(value)
+    except ValueError:
+        return ()
+    if not isinstance(parsed, list):
+        return ()
+    return tuple(entry for entry in parsed if isinstance(entry, dict))
+
+
+def _cleanup_entry_paths(entry: dict[str, object]) -> tuple[str, ...]:
+    paths = entry.get("paths")
+    if not isinstance(paths, list):
+        return ()
+    return tuple(sorted({path for path in paths if isinstance(path, str) and path.strip()}))
+
+
+async def _pending_cleanup_entries_for_selection(
+    db: AsyncSession,
+    selection: SandboxAgentAuthSelectionRecord,
+    *,
+    reason: str,
+) -> list[dict[str, object]]:
+    if reason not in _CLEANUP_SELECTION_ERROR_CODES:
+        return []
+    if selection.materialization_mode != "synced_files":
+        return []
+    paths = await _cleanup_paths_from_credential_payload(db, selection)
+    if not paths:
+        return []
+    return [
+        {
+            "agentKind": selection.agent_kind,
+            "credentialId": str(selection.credential_id),
+            "credentialRevision": selection.selected_revision,
+            "credentialShareId": (
+                str(selection.credential_share_id)
+                if selection.credential_share_id is not None
+                else None
+            ),
+            "materializationMode": selection.materialization_mode,
+            "paths": list(paths),
+            "reason": reason,
+        }
+    ]
+
+
+def _pending_cleanup_json(entries: Sequence[dict[str, object]] | None) -> str | None:
+    if not entries:
+        return None
+    return json.dumps(list(entries), separators=(",", ":"), sort_keys=True)
+
+
+async def _cleanup_paths_for_selection(
+    db: AsyncSession,
+    selection: SandboxAgentAuthSelectionRecord,
+) -> tuple[str, ...]:
     if selection.status != "invalid":
         return ()
     if selection.materialization_mode != "synced_files":
         return ()
     if selection.last_error_code not in _CLEANUP_SELECTION_ERROR_CODES:
         return ()
-    return _native_auth_file_paths(selection.agent_kind)
+    return await _cleanup_paths_from_credential_payload(db, selection)
+
+
+async def _cleanup_paths_from_credential_payload(
+    db: AsyncSession,
+    selection: SandboxAgentAuthSelectionRecord,
+) -> tuple[str, ...]:
+    credential = await store.get_credential(db, selection.credential_id)
+    if credential is None or credential.payload_ciphertext is None:
+        return ()
+    try:
+        payload = _decrypt_synced_payload(credential)
+    except AgentAuthError:
+        return ()
+    files = payload.get("files")
+    if not isinstance(files, dict):
+        return ()
+    allowed_paths = set(_native_auth_file_paths(selection.agent_kind))
+    return tuple(
+        sorted(
+            path
+            for path in files
+            if isinstance(path, str) and path in allowed_paths
+        )
+    )
 
 
 def _native_auth_file_paths(agent_kind: str) -> tuple[str, ...]:
@@ -2576,6 +2732,11 @@ async def _bump_profile_for_selection(
     reason: str,
     force_restart: bool,
 ) -> None:
+    pending_cleanup = await _pending_cleanup_entries_for_selection(
+        db,
+        selection,
+        reason=reason,
+    )
     updated_profile = await store.bump_sandbox_profile_agent_auth_revision(
         db,
         sandbox_profile_id=selection.sandbox_profile_id,
@@ -2590,6 +2751,7 @@ async def _bump_profile_for_selection(
             actor_user_id=actor_user_id,
             reason=reason,
             force_restart=force_restart,
+            pending_cleanup=pending_cleanup,
         )
     await store.revoke_runtime_grants_for_selection(db, selection_id=selection.id)
 
@@ -2601,6 +2763,7 @@ async def _mark_target_pending_and_queue_refresh(
     actor_user_id: UUID | None,
     reason: str,
     force_restart: bool,
+    pending_cleanup: Sequence[dict[str, object]] | None = None,
 ) -> None:
     if profile.primary_target_id is None:
         return
@@ -2612,6 +2775,9 @@ async def _mark_target_pending_and_queue_refresh(
         reason=reason,
         force_restart=force_restart,
     )
+    pending_kwargs: dict[str, object] = {}
+    if pending_cleanup is not None:
+        pending_kwargs["pending_cleanup_json"] = _pending_cleanup_json(pending_cleanup)
     await store.upsert_target_state(
         db,
         sandbox_profile_id=profile.id,
@@ -2624,6 +2790,7 @@ async def _mark_target_pending_and_queue_refresh(
         last_worker_id=None,
         last_error_code=None,
         last_error_message=None,
+        **pending_kwargs,
     )
 
 
