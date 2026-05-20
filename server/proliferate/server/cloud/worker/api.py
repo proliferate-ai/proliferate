@@ -26,6 +26,8 @@ from proliferate.server.cloud.worker.models import (
     WorkerHeartbeatResponse,
     WorkerInventoryRequest,
     WorkerInventoryResponse,
+    WorkerProjectionGapRequest,
+    WorkerProjectionGapResponse,
     WorkerUpdateStatusRequest,
     WorkerUpdateStatusResponse,
 )
@@ -39,6 +41,7 @@ from proliferate.server.cloud.worker.service import (
     record_event_batch,
     record_heartbeat,
     record_inventory,
+    record_projection_gap,
     record_update_status,
 )
 
@@ -167,5 +170,18 @@ async def worker_event_batch_endpoint(
     try:
         auth = await authenticate_worker(db, authorization=authorization)
         return await record_event_batch(db, auth=auth, body=body)
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.post("/events/gaps", response_model=WorkerProjectionGapResponse)
+async def worker_event_gap_endpoint(
+    body: WorkerProjectionGapRequest,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkerProjectionGapResponse:
+    try:
+        auth = await authenticate_worker(db, authorization=authorization)
+        return await record_projection_gap(db, auth=auth, body=body)
     except CloudApiError as error:
         raise_cloud_error(error)

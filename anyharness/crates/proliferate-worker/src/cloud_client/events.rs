@@ -23,6 +23,17 @@ pub struct EventBatchRequest {
     pub events: Vec<WorkerSessionEventEnvelope>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectionGapRequest {
+    pub exposure_id: String,
+    pub session_projection_id: String,
+    pub session_id: String,
+    pub expected_seq: i64,
+    pub first_observed_seq: i64,
+    pub last_uploaded_seq: i64,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EventSessionAck {
@@ -39,6 +50,12 @@ pub struct EventBatchResponse {
     pub session_acks: Vec<EventSessionAck>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectionGapResponse {
+    pub updated: bool,
+}
+
 impl CloudClient {
     pub async fn upload_event_batch(
         &self,
@@ -48,6 +65,24 @@ impl CloudClient {
         let response = self
             .http
             .post(format!("{}/v1/cloud/worker/events/batches", self.base_url))
+            .header(
+                reqwest::header::AUTHORIZATION,
+                auth::bearer_header(worker_token),
+            )
+            .json(request)
+            .send()
+            .await?;
+        parse_json_response(response).await
+    }
+
+    pub async fn report_projection_gap(
+        &self,
+        worker_token: &str,
+        request: &ProjectionGapRequest,
+    ) -> Result<ProjectionGapResponse, WorkerError> {
+        let response = self
+            .http
+            .post(format!("{}/v1/cloud/worker/events/gaps", self.base_url))
             .header(
                 reqwest::header::AUTHORIZATION,
                 auth::bearer_header(worker_token),

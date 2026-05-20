@@ -127,7 +127,7 @@ async def test_cloud_executor_enqueues_idempotent_automation_command(
 
 
 @pytest.mark.asyncio
-async def test_cloud_executor_runtime_config_preflight_rejects_unstamped_managed_target(
+async def test_cloud_executor_preflight_rejects_unapplied_managed_target(
     test_engine: AsyncEngine,
 ) -> None:
     original_factory = engine_module.async_session_factory
@@ -169,7 +169,7 @@ async def test_cloud_executor_runtime_config_preflight_rejects_unstamped_managed
                 payload={"workspaceId": "workspace-1", "agentKind": "proliferate"},
             )
 
-        assert exc.value.code == "cloud_command_target_config_required"
+        assert exc.value.code == "cloud_command_agent_auth_not_ready"
     finally:
         engine_module.async_session_factory = original_factory
 

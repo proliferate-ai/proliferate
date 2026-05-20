@@ -90,9 +90,44 @@ async def _resolve_command_workspace(
             target=target,
             cloud_workspace_id=body.cloud_workspace_id,
         )
+        exposure = await exposures_store.get_active_workspace_exposure(
+            db,
+            target_id=target.id,
+            cloud_workspace_id=UUID(cloud_workspace_id),
+        )
+        if exposure is None or exposure.archived_at is not None or exposure.status != "active":
+            raise CloudApiError(
+                "cloud_command_exposure_not_active",
+                "Workspace is not exposed for Cloud materialization.",
+                status_code=409,
+            )
+        if not exposure.commandable:
+            raise CloudApiError(
+                "cloud_command_exposure_not_commandable",
+                "Workspace exposure is read-only.",
+                status_code=409,
+            )
         return None, body.payload, cloud_workspace_id
     if kind in _MANAGED_SESSION_COMMAND_KINDS and _target_requires_cloud_workspace(target):
         return await _resolve_managed_session_command_workspace(
+            db,
+            target=target,
+            body=body,
+        )
+    if kind == CloudCommandKind.backfill_exposed_workspace.value:
+        return await _resolve_backfill_exposed_workspace_command(
+            db,
+            target=target,
+            body=body,
+        )
+    if kind == CloudCommandKind.start_session.value and _target_requires_cloud_workspace(target):
+        if body.cloud_workspace_id is None and not body.workspace_id:
+            raise CloudApiError(
+                "cloud_command_cloud_workspace_required",
+                "Managed start_session commands require cloudWorkspaceId.",
+                status_code=400,
+            )
+        return await _resolve_managed_start_session_workspace(
             db,
             target=target,
             body=body,
@@ -165,6 +200,119 @@ async def _resolve_command_workspace(
     payload = dict(body.payload)
     payload["workspaceId"] = workspace.anyharness_workspace_id
     return workspace.anyharness_workspace_id, payload, str(workspace.id)
+
+
+async def _resolve_managed_start_session_workspace(
+    db: AsyncSession,
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    body: CreateCloudCommandRequest,
+) -> tuple[str | None, dict[str, object], str | None]:
+    cloud_workspace_id = body.cloud_workspace_id
+    if cloud_workspace_id is None:
+        try:
+            cloud_workspace_id = UUID(body.workspace_id or "")
+        except ValueError as exc:
+            raise CloudApiError(
+                "cloud_command_workspace_not_found",
+                "Managed start-session commands must reference a Cloud workspace.",
+                status_code=404,
+            ) from exc
+
+    workspace = await cloud_workspaces.get_cloud_workspace_by_id(db, cloud_workspace_id)
+    if workspace is None or workspace.archived_at is not None:
+        raise CloudApiError(
+            "cloud_command_workspace_not_found",
+            "Workspace not found.",
+            status_code=404,
+        )
+    if workspace.status != CloudWorkspaceStatus.ready.value:
+        raise CloudApiError(
+            "cloud_command_workspace_not_ready",
+            "Workspace is not ready for cloud commands.",
+            status_code=409,
+        )
+    if (
+        workspace.target_id != target.id
+        or workspace.sandbox_profile_id != target.sandbox_profile_id
+        or workspace.owner_scope != target.owner_scope
+        or workspace.owner_user_id != target.owner_user_id
+        or workspace.organization_id != target.organization_id
+    ):
+        raise CloudApiError(
+            "cloud_command_workspace_target_mismatch",
+            "Workspace is not attached to the requested target.",
+            status_code=409,
+        )
+    exposure = await exposures_store.get_active_workspace_exposure(
+        db,
+        target_id=target.id,
+        cloud_workspace_id=workspace.id,
+    )
+    if (
+        exposure is None
+        or exposure.archived_at is not None
+        or exposure.status != "active"
+        or not exposure.anyharness_workspace_id
+    ):
+        raise CloudApiError(
+            "cloud_command_exposure_not_active",
+            "Workspace is not exposed for Cloud commands.",
+            status_code=409,
+        )
+    if not exposure.commandable:
+        raise CloudApiError(
+            "cloud_command_exposure_not_commandable",
+            "Workspace exposure is read-only.",
+            status_code=409,
+        )
+    payload = dict(body.payload)
+    payload["workspaceId"] = exposure.anyharness_workspace_id
+    return exposure.anyharness_workspace_id, payload, str(workspace.id)
+
+
+async def _resolve_backfill_exposed_workspace_command(
+    db: AsyncSession,
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    body: CreateCloudCommandRequest,
+) -> tuple[str | None, dict[str, object], str | None]:
+    if body.cloud_workspace_id is None:
+        raise CloudApiError(
+            "cloud_command_cloud_workspace_required",
+            "backfill_exposed_workspace commands require cloudWorkspaceId.",
+            status_code=400,
+        )
+    cloud_workspace_id = await _resolve_cloud_workspace_id_for_target(
+        db,
+        target=target,
+        cloud_workspace_id=body.cloud_workspace_id,
+    )
+    exposure = await exposures_store.get_active_workspace_exposure(
+        db,
+        target_id=target.id,
+        cloud_workspace_id=UUID(cloud_workspace_id),
+    )
+    if (
+        exposure is None
+        or exposure.archived_at is not None
+        or exposure.status != "active"
+        or not exposure.anyharness_workspace_id
+    ):
+        raise CloudApiError(
+            "cloud_command_exposure_not_active",
+            "Workspace is not exposed for Cloud backfill.",
+            status_code=409,
+        )
+    if body.workspace_id and body.workspace_id != exposure.anyharness_workspace_id:
+        raise CloudApiError(
+            "cloud_command_workspace_target_mismatch",
+            "Backfill workspace id does not match the active exposure.",
+            status_code=409,
+        )
+    payload = dict(body.payload)
+    payload["workspaceId"] = exposure.anyharness_workspace_id
+    return exposure.anyharness_workspace_id, payload, cloud_workspace_id
 
 
 async def _resolve_managed_session_command_workspace(
@@ -345,7 +493,20 @@ async def enqueue_command(
         )
     validate_command_shape(
         kind=kind,
-        workspace_id=body.workspace_id or _direct_start_session_workspace_id(body.payload),
+        workspace_id=(
+            body.workspace_id
+            or (
+                str(body.cloud_workspace_id)
+                if kind
+                in {
+                    CloudCommandKind.start_session.value,
+                    CloudCommandKind.backfill_exposed_workspace.value,
+                }
+                and body.cloud_workspace_id is not None
+                else None
+            )
+            or _direct_start_session_workspace_id(body.payload)
+        ),
         session_id=body.session_id,
         preconditions=body.preconditions,
     )
@@ -358,7 +519,7 @@ async def enqueue_command(
     validate_command_payload(kind=kind, payload=payload)
     await _validate_agent_auth_preflight(
         db,
-        user=user,
+        actor_user_id=user.id,
         target=target,
         payload=payload,
     )
@@ -452,7 +613,7 @@ async def enqueue_command(
 async def _validate_agent_auth_preflight(
     db: AsyncSession,
     *,
-    user: User,
+    actor_user_id: UUID,
     target: targets_store.CloudTargetSnapshot,
     payload: dict[str, object],
 ) -> None:
@@ -488,7 +649,7 @@ async def _validate_agent_auth_preflight(
             status_code=409,
         )
     if profile.owner_scope == "personal":
-        if profile.owner_user_id != user.id:
+        if profile.owner_user_id != actor_user_id:
             raise CloudApiError(
                 "cloud_command_agent_auth_profile_not_found",
                 "Agent auth sandbox profile not found.",
@@ -675,7 +836,6 @@ async def _validate_managed_runtime_config_current_for_command(
     kind: str,
 ) -> None:
     if kind not in {
-        CloudCommandKind.materialize_workspace.value,
         CloudCommandKind.resolve_interaction.value,
         CloudCommandKind.update_session_config.value,
         CloudCommandKind.cancel_turn.value,
@@ -754,6 +914,8 @@ async def _stamp_managed_runtime_config_preflight(
         return payload
     if target.sandbox_profile_id is None:
         return payload
+    if _runtime_config_preflight_fields_present(payload):
+        return payload
     configs = await target_config_store.list_target_configs(db, target_id=target.id)
     if not configs:
         raise CloudApiError(
@@ -815,6 +977,17 @@ async def _stamp_managed_runtime_config_preflight(
     return stamped
 
 
+def _runtime_config_preflight_fields_present(payload: dict[str, object]) -> bool:
+    return any(
+        key in payload
+        for key in (
+            "requiredRuntimeConfigRevisionId",
+            "requiredRuntimeConfigSequence",
+            "requiredRuntimeConfigContentHash",
+        )
+    )
+
+
 async def stamp_and_validate_runtime_config_preflight(
     db: AsyncSession,
     *,
@@ -844,6 +1017,57 @@ async def stamp_and_validate_runtime_config_preflight(
         payload=stamped,
     )
     return stamped
+
+
+async def stamp_and_validate_command_preflight(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    target_id: UUID,
+    kind: str,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    target = await targets_store.get_target_by_id(db, target_id)
+    if target is None:
+        raise CloudApiError(
+            "cloud_command_target_not_found",
+            "Target not found.",
+            status_code=404,
+        )
+    payload = await _populate_agent_auth_preflight_payload(
+        db,
+        target=target,
+        kind=kind,
+        payload=payload,
+    )
+    validate_command_payload(kind=kind, payload=payload)
+    await _validate_agent_auth_preflight(
+        db,
+        actor_user_id=actor_user_id,
+        target=target,
+        payload=payload,
+    )
+    payload = await _stamp_managed_runtime_config_preflight(
+        db,
+        actor_user_id=actor_user_id,
+        target=target,
+        kind=kind,
+        payload=payload,
+    )
+    validate_command_payload(kind=kind, payload=payload)
+    await _validate_runtime_config_preflight(
+        db,
+        actor_user_id=actor_user_id,
+        target=target,
+        payload=payload,
+    )
+    await _validate_managed_runtime_config_current_for_command(
+        db,
+        actor_user_id=actor_user_id,
+        target=target,
+        kind=kind,
+    )
+    return payload
 
 
 def _raise_runtime_config_blocked_if_needed(
@@ -884,6 +1108,14 @@ def _kick_off_managed_slot_wake_if_required(
     if not command_kind_requires_wake(command.kind):
         return
     kick_off_managed_slot_wake(target.id, command.id)
+
+
+def kick_off_command_wake_if_required(
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    command: commands_store.CloudCommandSnapshot,
+) -> None:
+    _kick_off_managed_slot_wake_if_required(target=target, command=command)
 
 
 def is_terminal_command_status(status: str) -> bool:

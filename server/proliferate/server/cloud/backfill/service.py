@@ -61,9 +61,26 @@ async def record_worker_backfill(
         else await ensure_personal_billing_subject(db, target.owner_user_id)
     )
     workspace_mappings: dict[str, UUID] = {}
-    exposure_mappings: dict[str, exposures_store.CloudWorkspaceExposureSnapshot] = {}
     mapped_workspaces: list[WorkerBackfillWorkspaceMapping] = []
     for workspace in body.workspaces:
+        existing_cloud_workspace_id = await events_store.resolve_cloud_workspace_id(
+            db,
+            target_id=auth.target_id,
+            workspace_id=workspace.workspace_id,
+        )
+        if existing_cloud_workspace_id is None:
+            continue
+        exposure = await exposures_store.get_active_workspace_exposure(
+            db,
+            target_id=auth.target_id,
+            cloud_workspace_id=existing_cloud_workspace_id,
+        )
+        if (
+            exposure is None
+            or exposure.status != "active"
+            or exposure.anyharness_workspace_id != workspace.workspace_id
+        ):
+            continue
         repo = _normalize_repo(workspace)
         mapped = await backfill_store.upsert_synced_workspace(
             db,
@@ -84,20 +101,6 @@ async def record_worker_backfill(
             template_version=CLOUD_BACKFILL_TEMPLATE_VERSION,
         )
         workspace_mappings[workspace.workspace_id] = mapped.id
-        exposure = await exposures_store.upsert_workspace_exposure(
-            db,
-            target_id=auth.target_id,
-            cloud_workspace_id=mapped.id,
-            anyharness_workspace_id=workspace.workspace_id,
-            owner_scope=target.owner_scope,
-            owner_user_id=target.owner_user_id,
-            organization_id=target.organization_id,
-            visibility="shared_unclaimed" if target.owner_scope == "organization" else "private",
-            default_projection_level="live",
-            commandable=True,
-            origin="manual_web",
-        )
-        exposure_mappings[workspace.workspace_id] = exposure
         mapped_workspaces.append(
             WorkerBackfillWorkspaceMapping(
                 workspace_id=workspace.workspace_id,
@@ -114,13 +117,19 @@ async def record_worker_backfill(
                 target_id=auth.target_id,
                 workspace_id=session.workspace_id,
             )
-        exposure = exposure_mappings.get(session.workspace_id or "")
-        if exposure is None and cloud_workspace_id is not None:
+        exposure = None
+        if cloud_workspace_id is not None:
             exposure = await exposures_store.get_active_workspace_exposure(
                 db,
                 target_id=auth.target_id,
                 cloud_workspace_id=cloud_workspace_id,
             )
+        if (
+            exposure is None
+            or exposure.status != "active"
+            or exposure.anyharness_workspace_id != session.workspace_id
+        ):
+            continue
         projection = await events_store.upsert_session_projection(
             db,
             target_id=auth.target_id,
@@ -143,13 +152,11 @@ async def record_worker_backfill(
                 db,
                 target_id=auth.target_id,
                 session_id=session.session_id,
-                exposure_id=exposure.id if exposure is not None else None,
+                exposure_id=exposure.id,
                 cloud_workspace_id=cloud_workspace_id,
                 workspace_id=session.workspace_id,
-                projection_level=(
-                    exposure.default_projection_level if exposure is not None else "live"
-                ),
-                commandable=exposure.commandable if exposure is not None else True,
+                projection_level=exposure.default_projection_level,
+                commandable=exposure.commandable,
                 status=session.status or "running",
             )
         for interaction in session.pending_interactions:
