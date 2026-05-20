@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { AgentAuthCredential } from "@proliferate/cloud-sdk";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { CloudAgentAuthCredentialForm } from "@/components/settings/panes/cloud/CloudAgentAuthCredentialForm";

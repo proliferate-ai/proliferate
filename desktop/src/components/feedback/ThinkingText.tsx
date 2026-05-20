@@ -1,15 +1,23 @@
+import type { HTMLAttributes } from "react";
 import { twMerge } from "tailwind-merge";
+
+interface ThinkingTextProps extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {
+  text?: string;
+}
 
 export function ThinkingText({
   className,
   text = "Thinking",
-}: {
-  className?: string;
-  text?: string;
-}) {
+  ...props
+}: ThinkingTextProps) {
   return (
     <span
-      className={twMerge("thinking-text inline-block text-sm font-medium", className)}
+      {...props}
+      className={twMerge(
+        "thinking-text inline-block text-chat font-medium leading-[var(--text-chat--line-height)]",
+        className,
+      )}
+      data-text={text}
       data-thinking-text
     >
       {text}

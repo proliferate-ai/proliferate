@@ -100,6 +100,8 @@ describe("playground scenarios", () => {
     const html = renderToStaticMarkup(createElement(PlaygroundLoadingStates));
     expect(html).toContain("Checking your session");
     expect(html).toContain("Thinking");
+    expect(html).toContain("Thinking timing lab");
+    expect(html).toContain("Gap between -&gt; and -&gt;");
     expect(html).toContain("Restoring session");
     expect(html).not.toContain("data-jank-canary=\"braille\"");
   });

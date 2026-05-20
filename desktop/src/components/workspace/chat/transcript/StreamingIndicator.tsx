@@ -11,8 +11,8 @@ export function StreamingIndicator({ startedAt: _startedAt }: StreamingIndicator
 
   return (
     <DebugProfiler id="thinking-text">
-      <div className="flex min-h-6 items-end py-1 text-muted-foreground">
-        <ThinkingText className="text-[0.8125rem] leading-[1.125rem]" />
+      <div className="flex min-h-5 items-end py-1 text-muted-foreground">
+        <ThinkingText />
       </div>
     </DebugProfiler>
   );

@@ -2,6 +2,7 @@ import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
 import { SkeletonBlock } from "@/components/feedback/Skeleton";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
+import { PlaygroundThinkingTimingControls } from "@/components/playground/loading/PlaygroundThinkingTimingControls";
 import { renderChatTabIcon } from "@/components/workspace/shell/tabs/tab-rendering";
 
 export function PlaygroundLoadingStates() {
@@ -17,6 +18,8 @@ export function PlaygroundLoadingStates() {
           <ThinkingText />
         </div>
       </section>
+
+      <PlaygroundThinkingTimingControls />
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-foreground">Session tabs</h2>

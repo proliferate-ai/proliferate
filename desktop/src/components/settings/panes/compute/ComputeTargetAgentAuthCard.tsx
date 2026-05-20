@@ -4,8 +4,8 @@ import type {
   AgentAuthCredential,
   SandboxProfile,
 } from "@proliferate/cloud-sdk";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import {
   useAgentAuthCredentials,

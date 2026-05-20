@@ -3,8 +3,8 @@ import type {
   AgentAuthAgentKind,
   CreateGatewayCredentialRequest,
 } from "@proliferate/cloud-sdk";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@/components/ui/Label";
 import { Select } from "@/components/ui/Select";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
