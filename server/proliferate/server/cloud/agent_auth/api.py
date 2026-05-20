@@ -23,6 +23,8 @@ from proliferate.server.cloud.agent_auth.models import (
     SandboxProfileAgentAuthTargetStateResponse,
     SelectAgentAuthCredentialRequest,
     ShareCredentialRequest,
+    SyncSyncedCredentialRequest,
+    SyncSyncedCredentialResponse,
     WorkerAgentAuthMaterializationPlan,
     WorkerAgentAuthStatusRequest,
     WorkerAgentAuthStatusResponse,
@@ -45,6 +47,7 @@ from proliferate.server.cloud.agent_auth.service import (
     revoke_credential_share,
     select_credential_for_profile,
     share_personal_credential_with_organization,
+    sync_synced_credential_for_user,
     worker_agent_auth_materialization_plan,
 )
 from proliferate.server.cloud.worker.service import authenticate_worker
@@ -88,6 +91,29 @@ async def create_gateway_credential_endpoint(
         credential=credential_response(result.credential),
         policy=policy_response(result.policy),
         providerCredential=provider_credential_response(result.provider_credential),
+    )
+
+
+@router.put(
+    "/agent-auth/credentials/synced/{agent_kind}",
+    response_model=SyncSyncedCredentialResponse,
+)
+async def sync_synced_agent_auth_credential_endpoint(
+    agent_kind: CloudAgentKind,
+    body: SyncSyncedCredentialRequest,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> SyncSyncedCredentialResponse:
+    result = await sync_synced_credential_for_user(
+        db,
+        actor_user_id=user.id,
+        agent_kind=agent_kind,
+        body=body,
+    )
+    return SyncSyncedCredentialResponse(
+        changed=result.changed,
+        credential=credential_response(result.credential),
+        selection=selection_response(result.selection),
     )
 
 

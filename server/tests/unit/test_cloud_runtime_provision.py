@@ -8,13 +8,14 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from proliferate.constants.cloud import AGENT_GATEWAY_CIPHERTEXT_KEY_ID
 from proliferate.db.models.auth import OAuthAccount, User
-from proliferate.db.models.cloud.credentials import CloudCredential
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store import cloud_workspaces, users
 from proliferate.integrations.anyharness import ResolvedRemoteWorkspace
 from proliferate.integrations.sandbox import SandboxProviderKind
-from proliferate.server.cloud.credentials import session_loader as cloud_credential_session_loader
+from proliferate.server.cloud.agent_auth import session_loader as agent_auth_session_loader
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime import bootstrap as runtime_bootstrap
 from proliferate.server.cloud.runtime import provision as runtime_provision
@@ -61,7 +62,7 @@ def _make_workspace(user_id: uuid.UUID) -> CloudWorkspace:
 def _patched_session_factory(monkeypatch: pytest.MonkeyPatch, test_engine) -> None:
     factory = async_sessionmaker(test_engine, expire_on_commit=False)
     monkeypatch.setattr(
-        cloud_credential_session_loader.db_engine,
+        agent_auth_session_loader.db_engine,
         "async_session_factory",
         factory,
     )
@@ -160,19 +161,43 @@ class TestLoadProvisionInput:
         )
         workspace = _make_workspace(user.id)
         db_session.add(workspace)
-        db_session.add(
-            CloudCredential(
-                user_id=user.id,
-                provider="claude",
-                auth_mode="env",
-                payload_ciphertext=encrypt_json(
-                    {
-                        "authMode": "env",
-                        "envVars": {"ANTHROPIC_API_KEY": "anthropic-key"},
-                    }
-                ),
-                payload_format="json-v1",
-            )
+        profile = await agent_auth_store.ensure_personal_sandbox_profile(
+            db_session,
+            user_id=user.id,
+            created_by_user_id=user.id,
+        )
+        credential = await agent_auth_store.create_agent_auth_credential(
+            db_session,
+            owner_scope="personal",
+            owner_user_id=user.id,
+            organization_id=None,
+            created_by_user_id=user.id,
+            agent_kind="claude",
+            credential_kind="synced_path",
+            display_name="Synced claude auth",
+            redacted_summary_json='{"authMode":"env"}',
+            status="ready",
+            payload_ciphertext=encrypt_json(
+                {
+                    "provider": "claude",
+                    "authMode": "env",
+                    "envVars": {"ANTHROPIC_API_KEY": "anthropic-key"},
+                }
+            ),
+            payload_ciphertext_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
+        )
+        await agent_auth_store.upsert_selection(
+            db_session,
+            sandbox_profile_id=profile.id,
+            owner_scope="personal",
+            agent_kind="claude",
+            credential_id=credential.id,
+            credential_share_id=None,
+            materialization_mode="synced_files",
+            selected_revision=credential.revision,
+            status="active",
+            last_error_code=None,
+            last_error_message=None,
         )
         await db_session.commit()
 

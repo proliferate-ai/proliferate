@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from proliferate.db.models.cloud.credentials import CloudCredential
+from proliferate.db.store.cloud_agent_auth.records import AgentAuthSyncedCredentialRecord
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.integrations.sandbox import SandboxRuntimeContext
 from proliferate.server.cloud.runtime import credential_freshness
@@ -25,14 +25,17 @@ def _credential(
     provider: str,
     auth_mode: str,
     payload: dict[str, object],
-) -> CloudCredential:
-    return CloudCredential(
+) -> AgentAuthSyncedCredentialRecord:
+    _ = user_id
+    return AgentAuthSyncedCredentialRecord(
         id=uuid4(),
-        user_id=user_id,
         provider=provider,
         auth_mode=auth_mode,
         payload_ciphertext=encrypt_json(payload),
-        payload_format="json-v1",
+        payload_format="agent-auth-json-v1:revision:1",
+        revoked_at=None,
+        last_synced_at=None,
+        updated_at=None,
     )
 
 
@@ -270,7 +273,7 @@ async def test_file_only_apply_reconciles_remote_agents(monkeypatch: pytest.Monk
     )
     monkeypatch.setattr(
         credential_freshness,
-        "load_cloud_credentials_for_user",
+        "load_selected_synced_credentials_for_user",
         _load_credentials,
     )
     monkeypatch.setattr(
@@ -373,7 +376,7 @@ async def test_process_refresh_refuses_restart_when_runtime_has_live_sessions(
     )
     monkeypatch.setattr(
         credential_freshness,
-        "load_cloud_credentials_for_user",
+        "load_selected_synced_credentials_for_user",
         _load_credentials,
     )
     monkeypatch.setattr(
@@ -487,7 +490,7 @@ async def test_credential_apply_is_serialized_per_runtime_environment(
     )
     monkeypatch.setattr(
         credential_freshness,
-        "load_cloud_credentials_for_user",
+        "load_selected_synced_credentials_for_user",
         _load_credentials,
     )
     monkeypatch.setattr(

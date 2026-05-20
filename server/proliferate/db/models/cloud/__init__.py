@@ -7,7 +7,6 @@ Callers should import concrete models from the owning module in this package.
 from . import agent_auth as agent_auth  # noqa: F401
 from . import cloud_target_runtime_access as cloud_target_runtime_access  # noqa: F401
 from . import commands as commands  # noqa: F401
-from . import credentials as credentials  # noqa: F401
 from . import mcp as mcp  # noqa: F401
 from . import mobility as mobility  # noqa: F401
 from . import repo_config as repo_config  # noqa: F401

@@ -72,16 +72,6 @@ async def test_target_config_materialization_command_is_secret_safe(
         },
     )
     assert repo_config.status_code == 200
-    credential = await client.put(
-        "/v1/cloud/credentials/claude",
-        headers=auth.headers,
-        json={
-            "authMode": "env",
-            "envVars": {"ANTHROPIC_API_KEY": "anthropic-secret"},
-        },
-    )
-    assert credential.status_code == 200
-
     created = await client.post(
         f"/v1/cloud/targets/{target_id}/configs/materialize",
         headers=auth.headers,
@@ -97,7 +87,7 @@ async def test_target_config_materialization_command_is_secret_safe(
     assert target_config["summary"]["envVarCount"] == 1
     assert target_config["summary"]["trackedFileCount"] == 1
     assert target_config["summary"]["hasGitCredential"] is True
-    assert target_config["summary"]["agentCredentialProviders"] == ["claude"]
+    assert target_config["summary"]["agentCredentialProviders"] == []
     assert payload["command"]["kind"] == "materialize_environment"
 
     lease = await client.post(
@@ -114,7 +104,6 @@ async def test_target_config_materialization_command_is_secret_safe(
     }
     assert "repo-secret" not in str(command)
     assert "gh-secret-token" not in str(command)
-    assert "anthropic-secret" not in str(command)
 
     materialization = await client.get(
         f"/v1/cloud/worker/target-configs/{target_config['id']}/materialization",
@@ -130,9 +119,7 @@ async def test_target_config_materialization_command_is_secret_safe(
     assert plan["envVars"]["APP_SECRET"] == "repo-secret"
     assert plan["trackedFiles"][0]["content"] == "TOKEN=file-secret\n"
     assert plan["gitCredential"]["accessToken"] == "gh-secret-token"
-    assert plan["agentCredentials"]["claude"]["envVars"]["ANTHROPIC_API_KEY"] == (
-        "anthropic-secret"
-    )
+    assert "agentCredentials" not in plan
 
     status = await client.post(
         f"/v1/cloud/worker/target-configs/{target_config['id']}/status",

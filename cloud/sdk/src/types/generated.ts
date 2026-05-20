@@ -39,7 +39,6 @@ export function isCloudAgentKind(value: string): value is CloudAgentKind {
 
 // Generated type aliases — names preserved so all existing import sites are unchanged.
 export type RepoRef                   = components["schemas"]["RepoRef"];
-export type CloudCredentialStatus     = components["schemas"]["CredentialStatus"];
 export type BillingPlanInfo           = components["schemas"]["CloudPlanInfo"];
 export type BillingUrlResponse        = components["schemas"]["BillingUrlResponse"];
 export type OverageSettingsResponse   = components["schemas"]["OverageSettingsResponse"];
@@ -90,8 +89,6 @@ export type CloudWorkspaceCreatorContext =
 export type CloudWorkspaceDirectTargetContext =
   components["schemas"]["WorkspaceDirectTargetContext"];
 export type CloudConnectionInfo       = components["schemas"]["WorkspaceConnection"];
-export type CloudCredentialMutationResponse =
-  components["schemas"]["CloudCredentialMutationResponse"];
 export type CloudRepoBranchesResponse = components["schemas"]["RepoBranchesResponse"];
 export type CloudRepoConfigSummary    = components["schemas"]["CloudRepoConfigSummary"];
 export type CloudRepoConfigsListResponse = components["schemas"]["CloudRepoConfigsListResponse"];

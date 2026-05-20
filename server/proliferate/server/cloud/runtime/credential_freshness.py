@@ -11,7 +11,7 @@ from pathlib import PurePosixPath
 from uuid import UUID
 
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
-from proliferate.db.store.cloud_credentials import CloudCredentialRecord
+from proliferate.db.store.cloud_agent_auth.records import AgentAuthSyncedCredentialRecord
 from proliferate.db.store.cloud_repo_config import load_cloud_repo_config_for_user
 from proliferate.db.store.cloud_runtime_environments import (
     load_runtime_environment_by_id,
@@ -26,7 +26,9 @@ from proliferate.integrations.sandbox import (
     get_sandbox_provider,
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.credentials.session_loader import load_cloud_credentials_for_user
+from proliferate.server.cloud.agent_auth.session_loader import (
+    load_selected_synced_credentials_for_user,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.anyharness_api import (
     reconcile_remote_agents,
@@ -100,13 +102,13 @@ class CredentialFreshnessSnapshot:
 
 
 def _active_supported_credentials(
-    records: list[CloudCredentialRecord],
-) -> list[CloudCredentialRecord]:
+    records: list[AgentAuthSyncedCredentialRecord],
+) -> list[AgentAuthSyncedCredentialRecord]:
     return filter_active_supported_credentials(records)
 
 
 def build_credential_revision_state(
-    records: list[CloudCredentialRecord],
+    records: list[AgentAuthSyncedCredentialRecord],
 ) -> CredentialRevisionState:
     active_records = _active_supported_credentials(records)
     revision_plan = build_credential_revision_plan(active_records)
@@ -126,7 +128,7 @@ async def build_runtime_credential_freshness_snapshot(
 ) -> CredentialFreshnessSnapshot | None:
     if environment is None:
         return None
-    records = await load_cloud_credentials_for_user(environment.user_id)
+    records = await load_selected_synced_credentials_for_user(environment.user_id)
     revisions = build_credential_revision_state(records)
     return build_credential_freshness_snapshot(environment, revisions)
 
@@ -513,7 +515,7 @@ async def ensure_runtime_environment_credentials_current(
                 "Cloud runtime environment was not found.",
                 status_code=409,
             )
-        records = await load_cloud_credentials_for_user(environment.user_id)
+        records = await load_selected_synced_credentials_for_user(environment.user_id)
         revisions = build_credential_revision_state(records)
         snapshot = build_credential_freshness_snapshot(environment, revisions)
         if credential_apply_is_already_current(snapshot, revisions.plan):

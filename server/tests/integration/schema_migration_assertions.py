@@ -19,7 +19,6 @@ async def assert_current_schema(
         "cloud_mcp_connection_auth",
         "cloud_mcp_oauth_client",
         "cloud_mcp_oauth_flow",
-        "cloud_credential",
         "cloud_workspace_handoff_op",
         "cloud_workspace_mobility",
         "cloud_sandbox",

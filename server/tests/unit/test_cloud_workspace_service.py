@@ -83,7 +83,7 @@ async def test_org_cloud_workspace_create_fails_before_personal_helpers(
     monkeypatch.setattr(workspace_service, "get_linked_github_account", _unexpected)
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _unexpected)
     monkeypatch.setattr(workspace_service, "load_repo_config_value", _unexpected)
-    monkeypatch.setattr(workspace_service, "load_cloud_credential_statuses", _unexpected)
+    monkeypatch.setattr(workspace_service, "load_synced_credential_statuses", _unexpected)
     monkeypatch.setattr(workspace_service, "create_cloud_workspace_for_user", _unexpected)
 
     with pytest.raises(CloudApiError) as exc_info:
@@ -134,7 +134,7 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     monkeypatch.setattr(workspace_service, "load_existing_cloud_workspace", _existing_workspace)
     monkeypatch.setattr(workspace_service, "load_repo_config_value", _repo_config_value)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
-    monkeypatch.setattr(workspace_service, "load_cloud_credential_statuses", _unexpected)
+    monkeypatch.setattr(workspace_service, "load_synced_credential_statuses", _unexpected)
     monkeypatch.setattr(workspace_service, "create_cloud_workspace_for_user", _unexpected)
 
     with pytest.raises(CloudApiError) as exc_info:
@@ -187,7 +187,7 @@ async def test_automation_workspace_requires_selected_agent_credentials(
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(workspace_service, "get_billing_snapshot_for_subject", _billing_snapshot)
     monkeypatch.setattr(workspace_service, "repo_limit_for_billing_snapshot", lambda _snapshot: 4)
-    monkeypatch.setattr(workspace_service, "load_cloud_credential_statuses", _credential_statuses)
+    monkeypatch.setattr(workspace_service, "load_synced_credential_statuses", _credential_statuses)
 
     with pytest.raises(CloudApiError) as exc_info:
         await workspace_service._resolve_new_cloud_workspace_create(
@@ -299,7 +299,7 @@ async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     monkeypatch.setattr(workspace_service, "cloud_workspace_user_can_read", _require_workspace)
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
-    monkeypatch.setattr(workspace_service, "load_cloud_credential_statuses", _unexpected)
+    monkeypatch.setattr(workspace_service, "load_synced_credential_statuses", _unexpected)
     monkeypatch.setattr(workspace_service, "save_workspace", _unexpected)
 
     with pytest.raises(CloudApiError) as exc_info:
@@ -361,7 +361,7 @@ async def test_start_cloud_workspace_requeues_error_workspace(
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(
         workspace_service,
-        "load_cloud_credential_statuses",
+        "load_synced_credential_statuses",
         _credential_statuses,
     )
     monkeypatch.setattr(workspace_service, "save_workspace", _save_workspace)
@@ -433,7 +433,7 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(
         workspace_service,
-        "load_cloud_credential_statuses",
+        "load_synced_credential_statuses",
         _credential_statuses,
     )
     monkeypatch.setattr(
@@ -512,7 +512,7 @@ async def test_start_cloud_workspace_returns_ready_workspace_without_requeue(
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(
         workspace_service,
-        "load_cloud_credential_statuses",
+        "load_synced_credential_statuses",
         _credential_statuses,
     )
     monkeypatch.setattr(workspace_service, "save_workspace", _unexpected)

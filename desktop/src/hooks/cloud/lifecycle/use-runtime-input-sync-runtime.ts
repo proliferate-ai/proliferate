@@ -17,12 +17,12 @@ import { getCloudRepoConfig } from "@proliferate/cloud-sdk/client/repo-configs";
 import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useCloudCredentialCache } from "@/hooks/access/cloud/use-cloud-credential-cache";
+import { useAgentAuthCache } from "@/hooks/access/cloud/use-agent-auth-cache";
 import { useCloudRepoConfigCache } from "@/hooks/access/cloud/use-cloud-repo-config-cache";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { syncLocalCloudCredentialToCloud } from "@/lib/access/cloud/credential-sync";
+import { syncLocalAgentAuthCredentialToCloud } from "@/lib/access/cloud/agent-auth-sync";
 import { subscribeRuntimeInputSyncEvents } from "./runtime-input-sync-events";
 
 const HOURLY_RETRY_MS = 3_600_000;
@@ -83,7 +83,7 @@ function classifyRuntimeInputSyncFailure(error: unknown): RuntimeInputSyncFailur
 }
 
 export function useRuntimeInputSyncRuntime() {
-  const { listSyncableCloudCredentials } = useTauriCredentialsActions();
+  const { listSyncableAgentAuthCredentials } = useTauriCredentialsActions();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const preferencesHydrated = useUserPreferencesStore((state) => state._hydrated);
   const cloudRuntimeInputSyncEnabled = useUserPreferencesStore(
@@ -96,7 +96,7 @@ export function useRuntimeInputSyncRuntime() {
   const runtimeUrlRef = useRef(runtimeUrl);
   const keepFreshActiveRef = useRef(false);
   const previousOnlineRef = useRef(online);
-  const { invalidateCloudCredentials } = useCloudCredentialCache();
+  const { invalidateAgentAuth } = useAgentAuthCache();
   const { invalidateCloudRepoConfigs } = useCloudRepoConfigCache();
   const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
 
@@ -166,9 +166,9 @@ export function useRuntimeInputSyncRuntime() {
   ) => {
     switch (descriptor.kind) {
       case "credential":
-        await syncLocalCloudCredentialToCloud(descriptor.provider);
+        await syncLocalAgentAuthCredentialToCloud(descriptor.provider);
         await Promise.all([
-          invalidateCloudCredentials(),
+          invalidateAgentAuth(),
           invalidateWorkspaceCollections(),
         ]);
         return;
@@ -176,7 +176,7 @@ export function useRuntimeInputSyncRuntime() {
         await syncRepoFile(descriptor);
         return;
     }
-  }, [invalidateCloudCredentials, invalidateWorkspaceCollections, syncRepoFile]);
+  }, [invalidateAgentAuth, invalidateWorkspaceCollections, syncRepoFile]);
 
   const runQueuedDescriptors = useCallback(async (trigger: RuntimeInputSyncTrigger) => {
     if (
@@ -227,7 +227,7 @@ export function useRuntimeInputSyncRuntime() {
 
   const enqueueKeepFreshDescriptors = useCallback(async () => {
     const descriptors: RuntimeInputSyncDescriptor[] = [];
-    const localSources = await listSyncableCloudCredentials().catch(() => []);
+    const localSources = await listSyncableAgentAuthCredentials().catch(() => []);
     for (const source of localSources) {
       if (source.detected) {
         descriptors.push({ kind: "credential", provider: source.provider });
@@ -235,7 +235,7 @@ export function useRuntimeInputSyncRuntime() {
     }
 
     enqueue(descriptors);
-  }, [enqueue, listSyncableCloudCredentials]);
+  }, [enqueue, listSyncableAgentAuthCredentials]);
 
   const runKeepFreshCycle = useCallback(async (trigger: RuntimeInputSyncTrigger) => {
     if (!keepFreshActiveRef.current) {

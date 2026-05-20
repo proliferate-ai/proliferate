@@ -41,7 +41,8 @@ class AgentAuthCredentialRecord:
     redacted_summary_json: str
     status: str
     revision: int
-    legacy_cloud_credential_id: UUID | None
+    payload_ciphertext: str | None
+    payload_ciphertext_key_id: str | None
     created_at: datetime
     updated_at: datetime
     revoked_at: datetime | None
@@ -246,9 +247,12 @@ class AgentAuthAuditEventRecord:
 
 
 @dataclass(frozen=True)
-class LegacyCloudCredentialRecord:
+class AgentAuthSyncedCredentialRecord:
     id: UUID
     provider: str
     auth_mode: str
+    payload_ciphertext: str
+    payload_format: str
     revoked_at: datetime | None
+    last_synced_at: datetime | None
     updated_at: datetime | None

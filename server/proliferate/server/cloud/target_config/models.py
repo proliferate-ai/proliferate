@@ -28,7 +28,6 @@ class MaterializeTargetConfigRequest(BaseModel):
     git_repo_name: str = Field(alias="gitRepoName", min_length=1)
     workspace_root: str | None = Field(default=None, alias="workspaceRoot")
     mcp_connection_ids: list[str] | None = Field(default=None, alias="mcpConnectionIds")
-    include_agent_credentials: bool = Field(default=True, alias="includeAgentCredentials")
     include_git_credentials: bool = Field(default=True, alias="includeGitCredentials")
     source: str | None = None
     idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
@@ -76,11 +75,6 @@ class TargetConfigMaterializationPlan(BaseModel):
     git_credential: TargetConfigGitCredentialModel | None = Field(
         default=None,
         alias="gitCredential",
-        repr=False,
-    )
-    agent_credentials: dict[str, dict[str, Any]] = Field(
-        default_factory=dict,
-        alias="agentCredentials",
         repr=False,
     )
     mcp: dict[str, Any] | None = Field(default=None, repr=False)

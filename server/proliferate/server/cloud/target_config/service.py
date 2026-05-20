@@ -24,7 +24,6 @@ from proliferate.server.cloud.commands.models import (
     command_response_payload,
 )
 from proliferate.server.cloud.commands.service import enqueue_command
-from proliferate.server.cloud.credentials.service import load_active_cloud_credential_payloads
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_materialization.models import MaterializeCloudMcpRequest
 from proliferate.server.cloud.mcp_materialization.service import materialize_cloud_mcp_servers
@@ -65,10 +64,6 @@ def _command_idempotency_key(
     if value:
         return f"target-config:{target_config_id}:v{version}:{value}"
     return f"target-config:{target_config_id}:v{version}"
-
-
-def _credential_snapshot_version(agent_credentials: dict[str, dict[str, object]]) -> int:
-    return len(agent_credentials)
 
 
 def _mcp_materialization_version(binding_count: int, warning_count: int) -> int:
@@ -271,17 +266,6 @@ async def materialize_target_config(
             email=git_user_email,
         )
 
-    raw_agent_credentials = (
-        await load_active_cloud_credential_payloads(user.id)
-        if body.include_agent_credentials
-        else {}
-    )
-    agent_credentials = {
-        provider: payload
-        for provider, payload in raw_agent_credentials.items()
-        if isinstance(provider, str) and isinstance(payload, dict)
-    }
-
     mcp = await materialize_cloud_mcp_servers(
         db,
         user_id=user.id,
@@ -302,7 +286,7 @@ async def materialize_target_config(
         env_var_count=len(env_vars),
         tracked_file_count=len(tracked_files),
         has_git_credential=git_credential is not None,
-        agent_credential_providers=sorted(agent_credentials),
+        agent_credential_providers=[],
         mcp_binding_count=binding_count,
         mcp_warning_count=warning_count,
         required_tools=required_tools,
@@ -319,7 +303,6 @@ async def materialize_target_config(
         setup_script=setup_script,
         run_command=run_command,
         git_credential=git_credential,
-        agent_credentials=agent_credentials,
         mcp=mcp.model_dump(mode="json", by_alias=True),
         skills=[],
         readiness_requirements={tool: True for tool in required_tools},
@@ -337,7 +320,7 @@ async def materialize_target_config(
         summary_json=summary.model_dump_json(),
         env_vars_version=env_vars_version,
         files_version=files_version,
-        credential_snapshot_version=_credential_snapshot_version(agent_credentials),
+        credential_snapshot_version=0,
         mcp_materialization_version=_mcp_materialization_version(binding_count, warning_count),
     )
 

@@ -12,6 +12,7 @@ import {
   getSandboxAgentAuthTargetStates,
   listAgentAuthCredentials,
   putSandboxAgentAuthSelection,
+  syncSyncedAgentAuthCredential,
   type AgentAuthAgentKind,
   type AgentAuthCredential,
   type AgentAuthCredentialListOptions,
@@ -22,6 +23,7 @@ import {
   type SandboxAgentAuthTargetState,
   type SandboxProfile,
   type SelectAgentAuthCredentialInput,
+  type SyncSyncedCredentialRequest,
 } from "@proliferate/cloud-sdk";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 import {
@@ -99,6 +101,14 @@ export function useAgentAuthMutations() {
     onSuccess: invalidateAgentAuth,
   });
 
+  const syncSyncedCredential = useMutation({
+    mutationFn: (input: {
+      agentKind: Extract<AgentAuthAgentKind, "claude" | "codex" | "gemini">;
+      body: SyncSyncedCredentialRequest;
+    }) => syncSyncedAgentAuthCredential(input.agentKind, input.body, client),
+    onSuccess: invalidateAgentAuth,
+  });
+
   const deleteCredential = useMutation({
     mutationFn: (credentialId: string) => deleteAgentAuthCredential(credentialId, client),
     onSuccess: invalidateAgentAuth,
@@ -159,6 +169,8 @@ export function useAgentAuthMutations() {
   return {
     createCredential: createCredential.mutateAsync,
     isCreatingCredential: createCredential.isPending,
+    syncSyncedCredential: syncSyncedCredential.mutateAsync,
+    isSyncingSyncedCredential: syncSyncedCredential.isPending,
     deleteCredential: deleteCredential.mutateAsync,
     isDeletingCredential: deleteCredential.isPending,
     createShare: createShare.mutateAsync,

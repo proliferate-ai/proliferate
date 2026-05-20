@@ -18,6 +18,8 @@ import type {
   SandboxAgentAuthTargetState,
   SandboxProfile,
   SelectAgentAuthCredentialInput,
+  SyncSyncedCredentialRequest,
+  SyncSyncedCredentialResponse,
 } from "../types/index.js";
 
 export async function getCloudCapabilities(
@@ -50,6 +52,19 @@ export async function createGatewayCredential(
   return client.requestJson<CreateGatewayCredentialResponse>({
     method: "POST",
     path: "/v1/cloud/agent-auth/credentials/gateway",
+    body,
+  });
+}
+
+export async function syncSyncedAgentAuthCredential(
+  agentKind: Extract<AgentAuthAgentKind, "claude" | "codex" | "gemini">,
+  body: SyncSyncedCredentialRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<SyncSyncedCredentialResponse> {
+  return client.requestJson<SyncSyncedCredentialResponse>({
+    method: "PUT",
+    path: "/v1/cloud/agent-auth/credentials/synced/{agent_kind}",
+    pathParams: { agent_kind: agentKind },
     body,
   });
 }

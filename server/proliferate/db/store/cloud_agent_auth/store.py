@@ -22,7 +22,6 @@ from proliferate.db.models.cloud.agent_auth import (
     SandboxProfileAgentAuthRevision,
     SandboxProfileTargetState,
 )
-from proliferate.db.models.cloud.credentials import CloudCredential
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.store.billing import (
@@ -37,7 +36,6 @@ from proliferate.db.store.cloud_agent_auth.records import (
     AgentGatewayPolicyRecord,
     AgentGatewayProviderCredentialRecord,
     AgentGatewayRuntimeGrantRecord,
-    LegacyCloudCredentialRecord,
     SandboxAgentAuthSelectionRecord,
     SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
@@ -81,7 +79,8 @@ def _credential_record(row: AgentAuthCredential) -> AgentAuthCredentialRecord:
         redacted_summary_json=row.redacted_summary_json,
         status=row.status,
         revision=row.revision,
-        legacy_cloud_credential_id=row.legacy_cloud_credential_id,
+        payload_ciphertext=row.payload_ciphertext,
+        payload_ciphertext_key_id=row.payload_ciphertext_key_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
         revoked_at=row.revoked_at,
@@ -260,16 +259,6 @@ def _audit_event_record(row: AgentAuthAuditEvent) -> AgentAuthAuditEventRecord:
         target_id=row.target_id,
         metadata_json=row.metadata_json,
         created_at=row.created_at,
-    )
-
-
-def _legacy_cloud_credential_record(row: CloudCredential) -> LegacyCloudCredentialRecord:
-    return LegacyCloudCredentialRecord(
-        id=row.id,
-        provider=row.provider,
-        auth_mode=row.auth_mode,
-        revoked_at=row.revoked_at,
-        updated_at=row.updated_at,
     )
 
 
@@ -537,7 +526,8 @@ async def create_agent_auth_credential(
     display_name: str,
     redacted_summary_json: str,
     status: str,
-    legacy_cloud_credential_id: UUID | None = None,
+    payload_ciphertext: str | None = None,
+    payload_ciphertext_key_id: str | None = None,
 ) -> AgentAuthCredentialRecord:
     now = utcnow()
     row = AgentAuthCredential(
@@ -551,7 +541,8 @@ async def create_agent_auth_credential(
         redacted_summary_json=redacted_summary_json,
         status=status,
         revision=1,
-        legacy_cloud_credential_id=legacy_cloud_credential_id,
+        payload_ciphertext=payload_ciphertext,
+        payload_ciphertext_key_id=payload_ciphertext_key_id,
         created_at=now,
         updated_at=now,
         revoked_at=None,
@@ -603,72 +594,55 @@ async def revoke_credential(
     return _credential_record(row)
 
 
-async def find_agent_auth_credential_for_legacy_cloud_credential(
+async def get_active_personal_synced_credential_for_update(
     db: AsyncSession,
-    legacy_cloud_credential_id: UUID,
+    *,
+    user_id: UUID,
+    agent_kind: str,
 ) -> AgentAuthCredentialRecord | None:
     row = (
         await db.execute(
-            select(AgentAuthCredential).where(
-                AgentAuthCredential.legacy_cloud_credential_id == legacy_cloud_credential_id
+            select(AgentAuthCredential)
+            .where(
+                AgentAuthCredential.owner_scope == "personal",
+                AgentAuthCredential.owner_user_id == user_id,
+                AgentAuthCredential.organization_id.is_(None),
+                AgentAuthCredential.agent_kind == agent_kind,
+                AgentAuthCredential.credential_kind == "synced_path",
+                AgentAuthCredential.revoked_at.is_(None),
+                AgentAuthCredential.status != "revoked",
             )
+            .order_by(AgentAuthCredential.created_at.asc())
+            .with_for_update()
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
     return _credential_record(row) if row is not None else None
 
 
-async def list_active_legacy_cloud_credentials_for_user(
+async def update_synced_credential_payload(
     db: AsyncSession,
-    user_id: UUID,
-) -> tuple[LegacyCloudCredentialRecord, ...]:
-    return tuple(
-        row
-        for row in await list_legacy_cloud_credentials_for_user(db, user_id)
-        if row.revoked_at is None
-    )
-
-
-async def list_legacy_cloud_credentials_for_user(
-    db: AsyncSession,
-    user_id: UUID,
-) -> tuple[LegacyCloudCredentialRecord, ...]:
-    rows = (
-        (
-            await db.execute(
-                select(CloudCredential)
-                .where(
-                    CloudCredential.user_id == user_id,
-                )
-                .order_by(CloudCredential.updated_at.desc())
-            )
-        )
-        .scalars()
-        .all()
-    )
-    return tuple(_legacy_cloud_credential_record(row) for row in rows)
-
-
-async def list_imported_legacy_credentials_for_user(
-    db: AsyncSession,
-    user_id: UUID,
-) -> tuple[AgentAuthCredentialRecord, ...]:
-    rows = (
-        (
-            await db.execute(
-                select(AgentAuthCredential)
-                .where(
-                    AgentAuthCredential.owner_scope == "personal",
-                    AgentAuthCredential.owner_user_id == user_id,
-                    AgentAuthCredential.legacy_cloud_credential_id.is_not(None),
-                    AgentAuthCredential.revoked_at.is_(None),
-                )
-                .order_by(AgentAuthCredential.updated_at.desc())
-            )
-        )
-        .scalars()
-        .all()
-    )
-    return tuple(_credential_record(row) for row in rows)
+    *,
+    credential_id: UUID,
+    display_name: str,
+    redacted_summary_json: str,
+    payload_ciphertext: str,
+    payload_ciphertext_key_id: str,
+    status: str,
+    increment_revision: bool,
+) -> AgentAuthCredentialRecord | None:
+    row = await db.get(AgentAuthCredential, credential_id)
+    if row is None:
+        return None
+    row.display_name = display_name
+    row.redacted_summary_json = redacted_summary_json
+    row.payload_ciphertext = payload_ciphertext
+    row.payload_ciphertext_key_id = payload_ciphertext_key_id
+    row.status = status
+    if increment_revision:
+        row.revision += 1
+    row.updated_at = utcnow()
+    await db.flush()
+    return _credential_record(row)
 
 
 async def create_or_reactivate_credential_share(
@@ -1160,6 +1134,44 @@ async def list_selections_for_profile(
         .all()
     )
     return tuple(_selection_record(row) for row in rows)
+
+
+async def list_selected_personal_synced_credentials_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> tuple[AgentAuthCredentialRecord, ...]:
+    rows = (
+        (
+            await db.execute(
+                select(AgentAuthCredential)
+                .join(
+                    SandboxAgentAuthSelection,
+                    SandboxAgentAuthSelection.credential_id == AgentAuthCredential.id,
+                )
+                .join(
+                    SandboxProfile,
+                    SandboxProfile.id == SandboxAgentAuthSelection.sandbox_profile_id,
+                )
+                .where(
+                    SandboxProfile.owner_scope == "personal",
+                    SandboxProfile.owner_user_id == user_id,
+                    SandboxProfile.archived_at.is_(None),
+                    AgentAuthCredential.owner_scope == "personal",
+                    AgentAuthCredential.owner_user_id == user_id,
+                    AgentAuthCredential.credential_kind == "synced_path",
+                    AgentAuthCredential.status == "ready",
+                    AgentAuthCredential.revoked_at.is_(None),
+                    SandboxAgentAuthSelection.status == "active",
+                    SandboxAgentAuthSelection.materialization_mode == "synced_files",
+                    SandboxAgentAuthSelection.selected_revision == AgentAuthCredential.revision,
+                )
+                .order_by(AgentAuthCredential.agent_kind.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_credential_record(row) for row in rows)
 
 
 async def upsert_selection(

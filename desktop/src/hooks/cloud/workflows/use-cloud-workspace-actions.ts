@@ -8,7 +8,8 @@ import {
   startCloudWorkspace,
   updateCloudWorkspaceBranch,
 } from "@proliferate/cloud-sdk/client/workspaces";
-import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/access/cloud/credential-recovery";
+import { autoSyncDetectedAgentAuthCredentialsIfNeeded } from "@/lib/access/cloud/agent-auth-recovery";
+import { syncLocalAgentAuthCredentialToCloud } from "@/lib/access/cloud/agent-auth-sync";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useInvalidateCloudBillingState } from "@/hooks/access/cloud/use-cloud-billing";
@@ -18,7 +19,6 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { useCloudCredentialActions } from "@/hooks/cloud/workflows/use-cloud-credential-actions";
 import {
   resolveActiveProjectedSessionForPendingWorkspace,
 } from "@/hooks/workspaces/workflows/pending-workspace-projected-session";
@@ -45,7 +45,6 @@ export function useCloudWorkspaceActions() {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
-  const { syncCloudCredential } = useCloudCredentialActions();
   const invalidateCloudBillingState = useInvalidateCloudBillingState();
   const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const { upsertCloudWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
@@ -84,9 +83,9 @@ export function useCloudWorkspaceActions() {
       try {
         return await startCloudWorkspace(cloudWorkspaceId);
       } catch (error) {
-        const didSync = await autoSyncDetectedCloudCredentialsIfNeeded(
+        const didSync = await autoSyncDetectedAgentAuthCredentialsIfNeeded(
           error,
-          syncCloudCredential,
+          syncLocalAgentAuthCredentialToCloud,
         );
         if (!didSync) {
           throw error;

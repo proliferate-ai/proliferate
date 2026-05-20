@@ -26,9 +26,7 @@ SUPPORTED_CLOUD_AGENTS: tuple[CloudAgentKind, ...] = (
     "gemini",
 )
 
-# Legacy native credential sync does not support every catalog agent kind yet.
-# The agent-auth gateway model can refer to OpenCode, but old CloudCredential
-# sync/status APIs must not advertise it until they can materialize its files.
+# Native credential sync does not support every catalog agent kind yet.
 SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS: tuple[CloudAgentKind, ...] = (
     "claude",
     "codex",

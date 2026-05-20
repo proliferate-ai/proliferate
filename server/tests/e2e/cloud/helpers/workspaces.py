@@ -25,7 +25,7 @@ from tests.e2e.cloud.helpers.config import (
     ensure_cloud_runtime_binary_ready,
     ensure_provider_available,
 )
-from tests.e2e.cloud.helpers.credentials import sync_cloud_credential
+from tests.e2e.cloud.helpers.credentials import sync_agent_auth_credential
 from tests.e2e.cloud.helpers.github import link_github_account
 from tests.e2e.cloud.helpers.shared import (
     AuthSession,
@@ -371,7 +371,7 @@ async def provision_workspace_with_credentials(
         access_token=config.github_token or "",
     )
     for provider in synced_providers:
-        await sync_cloud_credential(client, auth, config, provider)
+        await sync_agent_auth_credential(client, auth, config, provider)
 
     _, workspace = await create_ready_cloud_workspace(
         client,

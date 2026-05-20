@@ -9,7 +9,6 @@ export * from "./client/billing.js";
 export * from "./client/commands.js";
 export * from "./client/compute.js";
 export * from "./client/config.js";
-export * from "./client/credentials.js";
 export * from "./client/events.js";
 export * from "./client/live.js";
 export * from "./client/mcp_catalog.js";
