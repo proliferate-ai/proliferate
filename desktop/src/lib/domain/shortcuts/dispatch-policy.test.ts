@@ -340,7 +340,7 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(true);
   });
 
-  it("allows bracket tab cycling from right-panel text inputs even when handled locally", () => {
+  it("allows tab cycling aliases from right-panel text inputs even when handled locally", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.previousTab, {
       key: "{",
       code: "BracketLeft",
@@ -348,6 +348,20 @@ describe("shortcut dispatch policy", () => {
       ctrlKey: false,
       shiftKey: true,
       altKey: false,
+      defaultPrevented: true,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.previousTabAngle, {
+      key: "<",
+      code: "Comma",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: true,
       defaultPrevented: true,
       target: {
         tagName: "TEXTAREA",
@@ -367,6 +381,44 @@ describe("shortcut dispatch policy", () => {
         tagName: "TEXTAREA",
         isContentEditable: false,
       } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTabAngle, {
+      key: ">",
+      code: "Period",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: true,
+      defaultPrevented: true,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+  });
+
+  it("allows close-other-tabs aliases through default-prevented non-input targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.closeOtherTabs, {
+      key: "o",
+      code: "KeyO",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.closeOtherTabsShiftAlias, {
+      key: "O",
+      code: "KeyO",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+      defaultPrevented: true,
+      target: null,
     } as KeyboardEvent)).toBe(true);
   });
 

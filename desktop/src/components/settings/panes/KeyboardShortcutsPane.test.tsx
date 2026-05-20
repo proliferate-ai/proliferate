@@ -28,6 +28,28 @@ describe("KeyboardShortcutsPane", () => {
     }
     expect(within(browserRow).getByText("⌘T").closest("div")?.className).toContain("ml-auto");
 
+    const previousTabRow = screen.getByText("Previous tab").closest("li");
+    if (!(previousTabRow instanceof HTMLElement)) {
+      throw new Error("Expected previous tab shortcut row");
+    }
+    expect(within(previousTabRow).getByText("⌘⇧[")).toBeTruthy();
+    expect(within(previousTabRow).getByText("⌘⌥<")).toBeTruthy();
+
+    const closeOtherTabsRow = screen.getByText("Close other tabs").closest("li");
+    if (!(closeOtherTabsRow instanceof HTMLElement)) {
+      throw new Error("Expected close other tabs shortcut row");
+    }
+    expect(within(closeOtherTabsRow).getByText("⌘⌥O")).toBeTruthy();
+    expect(within(closeOtherTabsRow).getByText("⌘⇧O")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Search keyboard shortcuts"), {
+      target: { value: "⌘⌥<" },
+    });
+
+    expect(screen.getByText("Previous tab")).toBeTruthy();
+    expect(screen.getByText("⌘⌥<")).toBeTruthy();
+    expect(screen.queryByText("Next tab")).toBeNull();
+
     fireEvent.change(screen.getByLabelText("Search keyboard shortcuts"), {
       target: { value: "terminal" },
     });
