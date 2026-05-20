@@ -3,12 +3,12 @@ import type { SessionControlIconKey } from "@/lib/domain/chat/session-controls/p
 import {
   BuildModeFilled,
   CircleQuestion,
+  ClaudeSparkle,
+  ClipboardListFilled,
   EditModeFilled,
   MessageSquareFilled,
-  PlanningIcon,
   ReadModeFilled,
   ShieldCheckFilled,
-  Sparkles,
   Zap,
 } from "@/components/ui/icons";
 
@@ -21,10 +21,10 @@ const SESSION_CONTROL_ICONS: Record<SessionControlIconKey, ComponentType<{ class
   build: BuildModeFilled,
   chat: MessageSquareFilled,
   edit: EditModeFilled,
-  plan: PlanningIcon,
+  plan: ClipboardListFilled,
   read: ReadModeFilled,
   shieldCheck: ShieldCheckFilled,
-  sparkles: Sparkles,
+  sparkles: ClaudeSparkle,
   zap: Zap,
 };
 

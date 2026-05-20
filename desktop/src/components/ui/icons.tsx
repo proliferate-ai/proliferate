@@ -197,6 +197,19 @@ export function ClipboardList({ className, ...props }: IconProps) {
   );
 }
 
+export function ClipboardListFilled({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M9.5 2A1.5 1.5 0 0 0 8 3.5v1A1.5 1.5 0 0 0 9.5 6h5A1.5 1.5 0 0 0 16 4.5v-1A1.5 1.5 0 0 0 14.5 2h-5Z" />
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M6.5 4.04c-1.25.07-2.05.27-2.62.84C3 5.76 3 7.17 3 10v6c0 2.83 0 4.24.88 5.12C4.76 22 6.17 22 9 22h6c2.83 0 4.24 0 5.12-.88C21 20.24 21 18.83 21 16v-6c0-2.83 0-4.24-.88-5.12c-.57-.57-1.37-.77-2.62-.84v.46a3 3 0 0 1-3 3h-5a3 3 0 0 1-3-3v-.46ZM8 11.25a1 1 0 1 1 2 0a1 1 0 0 1-2 0Zm4-.75a.75.75 0 0 0 0 1.5h4a.75.75 0 0 0 0-1.5h-4ZM8 16.25a1 1 0 1 1 2 0a1 1 0 0 1-2 0Zm4-.75a.75.75 0 0 0 0 1.5h4a.75.75 0 0 0 0-1.5h-4Z"
+      />
+    </svg>
+  );
+}
+
 export function CheckCircleFilled({ className, ...props }: IconProps) {
   return (
     <svg className={className} width="20" height="21" viewBox="0 0 20 21" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>

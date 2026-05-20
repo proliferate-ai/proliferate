@@ -22,16 +22,17 @@ describe("SessionControlIcon", () => {
         createElement(SessionControlIcon, { icon, className: "size-4" }),
       );
       expect(html).toContain("<svg");
+      expect(html).not.toContain("stroke=");
     }
   });
 
-  it("uses Claude-specific default and auto mode icons", () => {
+  it("uses distinct Claude mode icons", () => {
     expect(resolveConfiguredSessionControlValue("claude", "mode", "default")).toMatchObject({
       icon: "chat",
       shortLabel: "Default",
     });
     expect(resolveConfiguredSessionControlValue("claude", "mode", "acceptEdits")).toMatchObject({
-      icon: "sparkles",
+      icon: "edit",
       label: "Accept Edits",
       shortLabel: "Edits",
     });
@@ -40,6 +41,10 @@ describe("SessionControlIcon", () => {
       label: "Auto",
       shortLabel: "Auto",
       description: "Use a model classifier to approve or deny permission prompts.",
+    });
+    expect(resolveConfiguredSessionControlValue("claude", "mode", "plan")).toMatchObject({
+      icon: "plan",
+      shortLabel: "Plan",
     });
   });
 });
