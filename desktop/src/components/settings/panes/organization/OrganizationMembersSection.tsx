@@ -31,7 +31,10 @@ export function OrganizationMembersSection({
   onRemove: (membershipId: string) => void;
 }) {
   return (
-    <OrganizationSection title="Members">
+    <OrganizationSection
+      title="Members"
+      description="Review access and adjust roles for everyone in this organization."
+    >
       <SettingsCard>
         {members.map((member) => (
           <MemberRow
@@ -46,7 +49,7 @@ export function OrganizationMembersSection({
           />
         ))}
         {members.length === 0 ? (
-          <div className="p-3 text-sm text-muted-foreground">No members yet.</div>
+          <div className="p-4 text-sm text-muted-foreground">No members yet.</div>
         ) : null}
       </SettingsCard>
     </OrganizationSection>
@@ -76,37 +79,42 @@ function MemberRow({
   const status = membershipStatusBadge(member.status);
 
   return (
-    <div className="flex items-center gap-3 p-3">
-      <Avatar member={member} />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">
-          {member.displayName || member.email}
+    <div className="flex flex-col gap-3 border-b border-border-light px-4 py-3 last:border-b-0 sm:flex-row sm:items-center">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <Avatar member={member} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium text-foreground">
+            {member.displayName || member.email}
+          </div>
+          <div className="truncate text-sm text-muted-foreground">{member.email}</div>
         </div>
-        <div className="truncate text-sm text-muted-foreground">{member.email}</div>
       </div>
-      <Badge tone={status.tone}>{status.label}</Badge>
-      <Select
-        value={member.role}
-        disabled={roleDisabled || updating}
-        onChange={(event) => onRoleChange(event.currentTarget.value as OrganizationRole)}
-        aria-label={`Role for ${member.email}`}
-        className="w-28"
-      >
-        <option value="member">Member</option>
-        <option value="admin">Admin</option>
-        <option value="owner" disabled={!canManageOwners}>Owner</option>
-      </Select>
-      {canManage ? (
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={removeDisabled || updating}
-          onClick={onRemove}
-          aria-label={`Remove ${member.email}`}
-        >
-          <Trash className="size-4" />
-        </Button>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        <Badge tone={status.tone}>{status.label}</Badge>
+        <div className="w-28">
+          <Select
+            value={member.role}
+            disabled={roleDisabled || updating}
+            onChange={(event) => onRoleChange(event.currentTarget.value as OrganizationRole)}
+            aria-label={`Role for ${member.email}`}
+          >
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+            <option value="owner" disabled={!canManageOwners}>Owner</option>
+          </Select>
+        </div>
+        {canManage ? (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={removeDisabled || updating}
+            onClick={onRemove}
+            aria-label={`Remove ${member.email}`}
+          >
+            <Trash className="size-4" />
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

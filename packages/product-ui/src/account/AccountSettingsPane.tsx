@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 
 import { SettingsCard } from "../settings/SettingsCard";
@@ -64,13 +65,15 @@ export function AccountSettingsPane({
 }: AccountSettingsPaneProps) {
   return (
     <div className="space-y-6">
-      <AccountProfileHeader
-        avatarUrl={avatarUrl ?? null}
-        displayName={displayName}
-        email={email}
-        githubLabel={githubLabel}
-        profileSummary={profileSummary}
-      />
+      <SettingsCard>
+        <AccountProfileHeader
+          avatarUrl={avatarUrl ?? null}
+          displayName={displayName}
+          email={email}
+          githubLabel={githubLabel}
+          profileSummary={profileSummary}
+        />
+      </SettingsCard>
 
       <SettingsCard>
         <SettingsCardRow label={accessTitle} description={accessDescription}>
@@ -154,7 +157,7 @@ function AccountProfileHeader({
   profileSummary: string;
 }) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
       <AccountAvatar
         key={avatarUrl ?? "account-avatar"}
         avatarUrl={avatarUrl}
@@ -185,7 +188,7 @@ function AccountAvatar({
   const showAvatar = Boolean(avatarUrl) && !avatarFailed;
 
   return (
-    <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-foreground/5 text-xl font-medium text-muted-foreground">
+    <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border-light bg-foreground/5 text-lg font-medium text-muted-foreground">
       {showAvatar ? (
         <img
           src={avatarUrl ?? ""}
@@ -231,26 +234,31 @@ function ProviderRow({ provider }: { provider: AccountProviderView }) {
         <div className="flex items-center gap-2 font-medium text-foreground">
           <span>{provider.label}</span>
           {provider.primary ? (
-            <span className="rounded-full bg-info-subtle px-1.5 py-0.5 text-[10px] font-medium text-info">
-              Primary
-            </span>
+            <Badge tone="neutral">Primary</Badge>
           ) : null}
         </div>
         <div className="truncate text-muted-foreground">
           {provider.accountLabel || (provider.connected ? "Connected" : "Not connected")}
         </div>
       </div>
-      <span
-        className={
-          provider.connected && provider.status !== "expired"
-            ? "shrink-0 text-xs text-foreground"
-            : "shrink-0 text-xs text-muted-foreground"
-        }
-      >
+      <Badge tone={providerStatusTone(provider)} className="shrink-0">
         {statusLabel}
-      </span>
+      </Badge>
     </div>
   );
+}
+
+function providerStatusTone(provider: AccountProviderView): "neutral" | "success" | "warning" | "destructive" {
+  if (!provider.connected) {
+    return "neutral";
+  }
+  if (provider.status === "expired") {
+    return "destructive";
+  }
+  if (provider.status === "needs_reauth") {
+    return "warning";
+  }
+  return "success";
 }
 
 function initialsForName(name: string): string {

@@ -45,14 +45,17 @@ export function OrganizationSettingsCard({
   }
 
   return (
-    <OrganizationSection title="Organization Settings">
+    <OrganizationSection
+      title="Profile"
+      description="Update how this organization appears in switchers, settings, and shared workspace context."
+    >
       <SettingsCard>
         <form onSubmit={(event) => { void onSubmit(event); }}>
           <SettingsCardRow
-            label="Organization image"
-            description="Used in the organization switcher and settings."
+            label="Logo"
+            description="Upload a square image for the clearest result."
           >
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <OrganizationLogo organization={organization} logoImage={settingsLogoImage} />
               <Input
                 ref={fileInputRef}
@@ -91,19 +94,19 @@ export function OrganizationSettingsCard({
             ) : null}
           </SettingsCardRow>
           <SettingsCardRow
-            label="Organization name"
-            description="Shown in the organization switcher and settings."
+            label="Name"
+            description="Shown anywhere organization context is displayed."
           >
             <Input
               value={settingsName}
               onChange={(event) => onNameChange(event.currentTarget.value)}
               aria-label="Organization name"
               disabled={!canManage}
-              className="w-64"
+              className="w-64 max-w-full"
             />
           </SettingsCardRow>
           {canManage ? (
-            <div className="flex justify-end p-3">
+            <div className="flex justify-end border-t border-border-light p-3">
               <Button type="submit" loading={saving} disabled={!settingsName.trim()}>
                 Save
               </Button>
