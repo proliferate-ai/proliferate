@@ -79,9 +79,8 @@ Resolution direction:
 
 ```text
 config write
-  -> bump sandbox_profile.desired_runtime_config_sequence
   -> compile runtime manifest revision
-  -> store cloud_sandbox_runtime_config_revision + current
+  -> store sandbox_profile_runtime_config_revision + current
   -> enqueue materialize_environment with runtime config payload
   -> worker applies manifest to AnyHarness via PUT /v1/runtime-config
   -> AnyHarness stores compiled manifest
@@ -112,8 +111,8 @@ Hard:
 
 - [`00-sandbox-foundation.md`](00-sandbox-foundation.md) — `sandbox_profile`,
   `cloud_targets` with `profile_target_role`, `sandbox_profile_target_state`
-  with `desired_runtime_config_*` and `applied_runtime_config_*` columns,
-  worker contract carrying `cloud_workspace_id` and `sandbox_profile_id`.
+  with `applied_runtime_config_*` columns, worker contract carrying
+  `cloud_workspace_id` and `sandbox_profile_id`.
 
 Soft:
 
@@ -125,7 +124,7 @@ Soft:
 
 ## 4. Current Repo State
 
-Verified against `/home/user/proliferate` on 2026-05-20.
+Verified against the current repository worktree on 2026-05-20.
 
 ### 4.1 What already exists
 
@@ -406,7 +405,7 @@ Notes:
 - `user_skill_payload_ref` is reserved for future user-authored skills.
   Bytes live in an artifact store, not inline.
 
-### 5.4 `cloud_plugin_configured_item` (new — optional in V1, see Open Questions)
+### 5.4 `cloud_plugin_configured_item` (new)
 
 ```text
 cloud_plugin_configured_item
@@ -457,19 +456,21 @@ cloud_mcp_connection           (one per plugin-required MCP, enabled=true)
 cloud_skill_configured_item    (one per plugin's default-enabled skill)
 ```
 
-If we decide V1 does not need a durable plugin row (because all the state
-is captured by child MCPs and skills), the row is optional and the
-"install plugin" UX writes only the child rows. See Open Questions §10.
+The plugin row is not optional in V1. It is the parent/audit row that lets the
+product show "Pablo enabled GitHub" and re-expand future default child items
+deterministically. Child MCP/skill rows are still the runtime source, but the
+plugin row remains the product source for the package-level toggle.
 
 ### 5.5 Runtime config revision + current + artifact tables (new)
 
 Profile-scoped runtime config storage. **These are different from
 `cloud_target_configs`**, which is the repo/env/files materialization
-bridge. Naming uses `cloud_sandbox_runtime_config_*` to make the
-profile-scoped nature explicit.
+bridge. Naming uses `sandbox_profile_runtime_config_*` because desired
+runtime config is profile-scoped; applied state is target-scoped through
+`sandbox_profile_target_state`.
 
 ```text
-cloud_sandbox_runtime_config_revision
+sandbox_profile_runtime_config_revision
   id                          uuid pk
   sandbox_profile_id          uuid fk sandbox_profile.id NOT NULL
   sequence                    integer NOT NULL                -- monotonic per profile
@@ -483,14 +484,14 @@ cloud_sandbox_runtime_config_revision
   UNIQUE (sandbox_profile_id, sequence)
   UNIQUE (sandbox_profile_id, content_hash)   -- idempotency on repeat compile
 
-cloud_sandbox_runtime_config_current
+sandbox_profile_runtime_config_current
   sandbox_profile_id          uuid PRIMARY KEY fk sandbox_profile.id
   current_sequence            integer NOT NULL default 0
-  current_revision_id         uuid fk cloud_sandbox_runtime_config_revision.id NULL
+  current_revision_id         uuid fk sandbox_profile_runtime_config_revision.id NULL
   updated_at                  timestamptz NOT NULL
 
-cloud_sandbox_runtime_config_artifact
-  revision_id                 uuid fk cloud_sandbox_runtime_config_revision.id NOT NULL
+sandbox_profile_runtime_config_artifact
+  revision_id                 uuid fk sandbox_profile_runtime_config_revision.id NOT NULL
   artifact_hash               text NOT NULL
   content_type                text NOT NULL
   byte_size                   integer NOT NULL
@@ -507,7 +508,7 @@ Notes:
   skill entries with `instruction_artifact` refs, and `artifacts[]`
   metadata. **It does not contain secret credential values or full
   artifact bodies.**
-- `cloud_sandbox_runtime_config_artifact` holds bodies. Worker fetches
+- `sandbox_profile_runtime_config_artifact` holds bodies. Worker fetches
   them on demand. Bodies are encrypted at rest using the existing Cloud
   artifact cipher.
 - `current_revision_id` is the desired revision for **all** primary
@@ -806,8 +807,8 @@ POST /v1/runtime-config/resolution-requests/{request_id}/reject
 GET  /v1/runtime-config/status
 ```
 
-Auth: worker token only. Direct user tokens (claim tokens from spec 05) do
-not have permission to apply runtime config.
+Auth: existing AnyHarness runtime bearer token. Direct user tokens (claim
+tokens from spec 05) do not have permission to apply runtime config.
 
 SQLite durable state:
 
@@ -882,15 +883,16 @@ if expected_runtime_config_revision is present:
   proceed with session creation
 
 if expected_runtime_config_revision is absent:
-  legacy path. Use mcp_servers/plugin_bundle inline if present.
-  This branch is kept only until spec 01 Phase 5 cleanup lands.
+  allowed only for explicitly local/test callers. Managed Cloud and Desktop
+  runtime-config launches fail closed rather than falling back to legacy
+  mcp_servers/plugin_bundle payloads.
 ```
 
 Cloud-side preflight (before enqueueing `start_session` or `send_prompt`):
 
 ```text
 load sandbox_profile_target_state for (profile, target)
-load cloud_sandbox_runtime_config_current for profile
+load sandbox_profile_runtime_config_current for profile
 
 if applied_runtime_config_sequence < current_sequence:
   enqueue materialize_environment with runtime_config fragment
@@ -898,8 +900,9 @@ if applied_runtime_config_sequence < current_sequence:
   RUNTIME_CONFIG_NOT_APPLIED
 
 stamp the command payload with
-  required_runtime_config_revision = current_sequence
-  required_runtime_config_revision_id = current_revision_id
+  requiredRuntimeConfigSequence = current_sequence
+  requiredRuntimeConfigRevisionId = current_revision_id
+  requiredRuntimeConfigContentHash = current content hash
 ```
 
 Desktop-side preflight (for local target):
@@ -953,10 +956,10 @@ Refresh path:
 ```text
 config write commits its transaction
   -> identify affected sandbox profile(s)
-  -> insert a profile_runtime_config_refresh row (pending)
-  -> background handler:
+  -> schedule runtime_config.reconciler for each affected profile
+  -> reconciler handler:
        compile runtime config revision
-       upsert cloud_sandbox_runtime_config_current
+       upsert sandbox_profile_runtime_config_current
        enqueue materialize_environment with runtime_config fragment
        command targets the profile's primary target (or any target if a
          future multi-target world exists)
@@ -966,7 +969,7 @@ Implementation files:
 
 ```text
 server/proliferate/server/cloud/runtime_config/service.py
-  request_profile_runtime_config_refresh(sandbox_profile_id, reason, actor)
+  schedule_profile_runtime_config_refresh(sandbox_profile_id, reason, actor)
   compile_profile_runtime_config(sandbox_profile_id)
   enqueue_runtime_config_materialization(sandbox_profile_id, target_id)
 
@@ -1141,17 +1144,16 @@ server/proliferate/db/models/cloud/skills.py       (new)
 
 server/proliferate/db/models/cloud/plugins.py      (new)
   CloudPluginConfiguredItem
-  (V1 optional; see Open Questions)
 
 server/proliferate/db/models/cloud/runtime_config.py    (new)
-  CloudSandboxRuntimeConfigRevision
-  CloudSandboxRuntimeConfigCurrent
-  CloudSandboxRuntimeConfigArtifact
+  SandboxProfileRuntimeConfigRevision
+  SandboxProfileRuntimeConfigCurrent
+  SandboxProfileRuntimeConfigArtifact
 
 server/proliferate/db/models/cloud/__init__.py
   export new classes
 
-server/proliferate/db/migrations/versions/<NEW>_mcp_skill_plugin_runtime_config.py
+server/alembic/versions/<NEW>_mcp_skill_plugin_runtime_config.py
   alembic migration adding everything above + relaxing/renaming MCP cols
 ```
 
@@ -1184,7 +1186,7 @@ Services / APIs:
 server/proliferate/server/cloud/mcp_connections/
   api.py        add publicize/unpublicize endpoints and public/owner fields
                 in responses
-  service.py    hook write sites to call request_profile_runtime_config_refresh
+  service.py    hook write sites to call schedule_profile_runtime_config_refresh
   models.py     add owner_scope, public_*, runtime_apply_status fields
   access.py     admin gate on publicize for personal-source rows
 
@@ -1236,7 +1238,8 @@ anyharness/crates/anyharness-lib/src/domains/runtime_config/**   (new)
   resolution.rs
 anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs
   if expected_runtime_config_revision present: build mcp_servers from
-  runtime_config_current; else legacy bundle path
+  runtime_config_current; if absent, permit only explicit local/test legacy
+  callers
 anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/assembly.rs
   branch on runtime_config vs legacy bundle
 anyharness/crates/anyharness-lib/src/live/sessions/connection/start.rs
@@ -1244,7 +1247,9 @@ anyharness/crates/anyharness-lib/src/live/sessions/connection/start.rs
 
 anyharness/crates/anyharness-lib/src/domains/plugins/skills.rs
   SKILLS_MCP_SERVER serves from runtime_config skills index when
-  expected_runtime_config_revision is in scope; fall back to legacy bundle
+  expected_runtime_config_revision is in scope; explicit local/test callers
+  without runtime config may use inline test fixtures until the migration is
+  done
 
 anyharness/crates/proliferate-worker/src/materialization/runtime_config.rs (new)
   apply_runtime_config(plan_fragment) handler
@@ -1335,7 +1340,7 @@ Chunk B  Cloud product schema
     rename user_id/org_id, partial unique indexes)
   - migration: cloud_skill_configured_item
   - migration: cloud_plugin_configured_item
-  - migration: cloud_sandbox_runtime_config_revision/_current/_artifact
+  - migration: sandbox_profile_runtime_config_revision/_current/_artifact
   - stores returning frozen dataclass snapshots
 
 Chunk C  Resolver + compiler + write services
@@ -1377,13 +1382,13 @@ OAuth proactive refresh (optional follow-up after this PR)
 2. `cloud_mcp_connection.public_to_org` requires
    `public_organization_id`; the inverse is also true. Enforced by
    CHECK.
-3. `cloud_skill_configured_item` and (if shipped) `cloud_plugin_configured_item`
+3. `cloud_skill_configured_item` and `cloud_plugin_configured_item`
    share the same owner-fields and public CHECKs.
 4. Catalog (MCP + plugin) stays code-backed in
    `server/proliferate/server/cloud/mcp_catalog/` and
    `server/proliferate/server/cloud/plugins/catalog/`. The spec adds no
    catalog DB tables.
-5. `cloud_sandbox_runtime_config_revision` is keyed by
+5. `sandbox_profile_runtime_config_revision` is keyed by
    `(sandbox_profile_id, sequence)` and idempotent on `content_hash`:
    re-compiling the same manifest does not write a new revision row.
 6. The resolver and compiler are pure: their modules import no SQLAlchemy,
@@ -1452,24 +1457,24 @@ uv run pytest -q
 Targeted server tests:
 
 ```text
-tests/server/cloud/mcp_connections/test_owner_scope_publicize.py
-tests/server/cloud/mcp_connections/test_personal_only_check_removed.py
-tests/server/cloud/skills/test_skill_configured_items_crud.py
-tests/server/cloud/skills/test_skill_publicize_admin_gate.py
-tests/server/cloud/plugins/test_install_writes_children.py
-tests/server/cloud/runtime_config/test_resolver_personal_profile.py
-tests/server/cloud/runtime_config/test_resolver_org_profile.py
-tests/server/cloud/runtime_config/test_resolver_duplicate_server_name.py
-tests/server/cloud/runtime_config/test_resolver_missing_required_mcp.py
-tests/server/cloud/runtime_config/test_manifest_content_hash_idempotent.py
-tests/server/cloud/runtime_config/test_revision_upsert_no_duplicate.py
-tests/server/cloud/runtime_config/test_refresh_hooks_mcp.py
-tests/server/cloud/runtime_config/test_refresh_hooks_skill.py
-tests/server/cloud/runtime_config/test_refresh_hooks_plugin.py
-tests/server/cloud/runtime_config/test_worker_runtime_config_endpoints.py
-tests/server/cloud/runtime_config/test_launch_preflight_blocks_stale.py
-tests/server/cloud/runtime_config/test_oauth_refresh_failure_blocks.py
-tests/server/cloud/mcp_materialization/test_legacy_mcp_field_empty_when_runtime_config_set.py
+server/tests/cloud/mcp_connections/test_owner_scope_publicize.py
+server/tests/cloud/mcp_connections/test_personal_only_check_removed.py
+server/tests/cloud/skills/test_skill_configured_items_crud.py
+server/tests/cloud/skills/test_skill_publicize_admin_gate.py
+server/tests/cloud/plugins/test_install_writes_children.py
+server/tests/cloud/runtime_config/test_resolver_personal_profile.py
+server/tests/cloud/runtime_config/test_resolver_org_profile.py
+server/tests/cloud/runtime_config/test_resolver_duplicate_server_name.py
+server/tests/cloud/runtime_config/test_resolver_missing_required_mcp.py
+server/tests/cloud/runtime_config/test_manifest_content_hash_idempotent.py
+server/tests/cloud/runtime_config/test_revision_upsert_no_duplicate.py
+server/tests/cloud/runtime_config/test_refresh_hooks_mcp.py
+server/tests/cloud/runtime_config/test_refresh_hooks_skill.py
+server/tests/cloud/runtime_config/test_refresh_hooks_plugin.py
+server/tests/cloud/runtime_config/test_worker_runtime_config_endpoints.py
+server/tests/cloud/runtime_config/test_launch_preflight_blocks_stale.py
+server/tests/cloud/runtime_config/test_oauth_refresh_failure_blocks.py
+server/tests/cloud/mcp_materialization/test_legacy_mcp_field_empty_when_runtime_config_set.py
 ```
 
 AnyHarness:
@@ -1498,7 +1503,8 @@ anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs#tests
   - expected_runtime_config_revision present + applied -> session launches
     with manifest-built MCP servers
   - expected_runtime_config_revision stale -> RUNTIME_CONFIG_RESOLUTION_REQUIRED
-  - expected_runtime_config_revision absent -> legacy bundle path still works
+  - expected_runtime_config_revision absent on Managed Cloud/Desktop -> fail
+    closed; explicit local/test legacy caller remains allowed
 
 anyharness/crates/proliferate-worker/src/materialization/runtime_config.rs#tests
   - apply_runtime_config fetches missing artifacts
@@ -1532,7 +1538,7 @@ Manual smoke cases:
 ```text
 1. Enable personal MCP
      -> cloud_mcp_connection.enabled=true
-     -> sandbox_profile desired_runtime_config_sequence bumped
+     -> sandbox_profile_runtime_config_current sequence bumped
      -> compile produces a new revision; current updated
      -> worker materializes; sandbox_profile_target_state applied catches up
      -> next session launches with MCP available
@@ -1557,7 +1563,7 @@ Manual smoke cases:
      -> UI shows the blocking reason
 
 6. Install GitHub plugin
-     -> writes cloud_plugin_configured_item (if shipped) plus
+     -> writes cloud_plugin_configured_item plus
         cloud_mcp_connection + cloud_skill_configured_item for default-enabled
         children
      -> single recompile produces one revision with all children

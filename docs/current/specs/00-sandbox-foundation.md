@@ -144,13 +144,11 @@ configuring   profile row exists, no primary target yet
               -- transition: ensure_primary_profile_target succeeds
 
 provisioning  target exists; slot creation is in flight
-              -- transition: provision_profile_slot success -> enabled
+              -- transition: provision_profile_slot success -> active
               --             provision_profile_slot failure -> blocked/error
 
-enabled       at least one slot reached 'running' for the primary target;
+active        at least one slot reached 'running' for the primary target;
               runtime access populated; profile is usable
-              -- aliased to 'active' in V1 to preserve existing partial
-                 unique indexes; new code reads 'enabled'
 
 blocked       billing/policy says no compute is allowed right now;
               cleared by spec 09 / spec 02 reconcilers
@@ -205,7 +203,7 @@ None.
 
 ## 4. Current Repo State
 
-Verified against `/home/user/proliferate` on 2026-05-20.
+Verified against the current repository worktree on 2026-05-20.
 
 ### 4.1 What already exists
 
@@ -353,8 +351,8 @@ target_id`.
 
 Stated as plain facts to fix:
 
-- `sandbox_profile` exists but does not own `billing_subject_id`,
-  `desired_runtime_config_*`, or `created_by_user_id`.
+- `sandbox_profile` exists but does not own `billing_subject_id` or
+  `created_by_user_id`.
 - `cloud_targets` does not point to a profile; managed-cloud target identity
   is derived through `cloud_runtime_environment.target_id`.
 - `cloud_sandbox` is a provider-lifecycle row keyed off of
@@ -417,10 +415,6 @@ billing_subject_id   uuid fk billing_subject.id   not null
                      ensured at profile creation through ensure_personal_billing_subject /
                      ensure_organization_billing_subject
 
-desired_runtime_config_sequence       integer not null default 0
-desired_runtime_config_revision_id    text nullable
-desired_runtime_config_content_hash   text nullable
-
 created_by_user_id   uuid fk user.id set null nullable
 
 archived_at          timestamptz nullable
@@ -449,17 +443,17 @@ Status widening (see §2.1 for the full state machine):
 
 ```text
 SUPPORTED_SANDBOX_PROFILE_STATUSES becomes:
-  configuring | provisioning | enabled | disabled | blocked | error
+  configuring | provisioning | active | disabled | blocked | error
 
   configuring   row exists, no primary target yet (sync ensure succeeded)
   provisioning  primary target exists, slot creation is in flight (background)
-  enabled       at least one slot reached 'running'; profile usable
+  active        at least one slot reached 'running'; profile usable
   disabled      explicit user/admin disable
   blocked       billing/policy block; reactivatable when cleared
   error         provisioning failed in a way the reconciler cannot self-heal
 
-partial unique indexes are updated to key on status='enabled' in this PR.
-existing rows are mapped 'active' -> 'enabled' in the migration.
+Use the shipped enum name `active`; do not introduce a DB value named
+`enabled`. Product copy can still say a sandbox is "enabled".
 ```
 
 Invariants (unchanged):
@@ -492,8 +486,6 @@ CHECK ck_cloud_target_owner_fields:
   (owner_scope='personal'      AND owner_user_id IS NOT NULL AND organization_id IS NULL)
   OR
   (owner_scope='organization'  AND organization_id IS NOT NULL AND owner_user_id IS NULL)
-  OR
-  (owner_scope='personal'      AND kind != 'managed_cloud')   -- local/ssh keep user-only ownership
 
 CHECK ck_cloud_target_profile_role:
   profile_target_role IN ('primary','none')
@@ -642,9 +634,7 @@ sandbox_profile_target_state
   last_agent_auth_error_code      text nullable
   last_agent_auth_error_message   text nullable
 
-  -- runtime-config axis (new columns; spec 01 owns the apply lifecycle)
-  desired_runtime_config_sequence       integer not null default 0
-  desired_runtime_config_revision_id    text nullable
+  -- runtime-config axis (new columns; spec 01 owns desired revisions)
   applied_runtime_config_sequence       integer not null default 0
   applied_runtime_config_revision_id    text nullable
   runtime_config_status                 text default 'pending'
@@ -977,7 +967,7 @@ steps
   6. UPSERT cloud_target_runtime_access with compare-and-set on
      (active_sandbox_id, slot_generation).
   7. cloud_sandbox.status -> 'running'; cloud_targets.status -> 'online';
-     sandbox_profile.status -> 'enabled' if this is the first slot.
+     sandbox_profile.status -> 'active' if this is the first slot.
 
 failure
   on bounded retry exhaustion:
@@ -1013,7 +1003,7 @@ spec 09)**: when a wake-required command targets a paused slot, the spec-09
 billing gate decides whether to resume. The foundation only models the slot
 state and `lifecycle_auto_resume` flag.
 
-Both jobs live in:
+Both jobs live in the existing Cloud runtime scheduler area:
 
 ```text
 server/proliferate/server/cloud/runtime/provision.py
@@ -1022,10 +1012,9 @@ server/proliferate/server/cloud/runtime/provision.py
 server/proliferate/server/cloud/runtime/reconciler.py        (new)
   reconcile_sandbox_profile_target(...) handler
 
-server/proliferate/server/scheduler/*  or  server/proliferate/server/jobs/*
-  (use whatever scheduling/queue mechanism the repo already has;
-   prefer the existing automations/scheduler primitive rather than
-   inventing a parallel one)
+server/proliferate/server/cloud/runtime/scheduler.py
+  schedule_profile_slot_provision(...) uses the same in-process task pattern
+  as the existing workspace provisioning scheduler.
 ```
 
 **Synchronicity rule (enforceable):**
@@ -1104,7 +1093,7 @@ Server (Python):
 ```text
 server/proliferate/db/models/cloud/agent_auth.py
   Broaden SandboxProfile columns (add billing_subject_id,
-    desired_runtime_config_*, created_by_user_id, archived_at).
+    created_by_user_id, archived_at).
   Drop SandboxProfile.managed_target_id.
   Rename SandboxProfileAgentAuthTargetState -> SandboxProfileTargetState and
     add runtime-config + slot-fencing columns.
@@ -1138,7 +1127,7 @@ server/proliferate/db/models/cloud/commands.py
 server/proliferate/db/models/cloud/__init__.py
   Export new classes; remove SandboxProfileAgentAuthTargetState.
 
-server/proliferate/db/migrations/versions/<NEW>_sandbox_profile_foundation.py
+server/alembic/versions/<NEW>_sandbox_profile_foundation.py
   One replacement migration that:
     - extends sandbox_profile;
     - drops sandbox_profile.managed_target_id;
@@ -1176,7 +1165,7 @@ server/proliferate/db/store/cloud_workspaces.py
   Remove managed-cloud creation paths that go through runtime_environment_id.
 
 server/proliferate/db/store/cloud_sync/sandbox_profile_target_state.py  (new file)
-  load_state_for_profile_target, set_desired_runtime_config_sequence,
+  load_state_for_profile_target,
   record_runtime_config_apply_attempt/success/failure,
   record_agent_auth_apply_attempt/success/failure (moved from cloud_agent_auth store),
   invalidate_applied_on_slot_replacement(sandbox_profile_id, target_id).
@@ -1241,13 +1230,14 @@ server/proliferate/server/cloud/repo_config/service.py
 Worker / contract (Rust):
 
 ```text
-anyharness/crates/anyharness-contract/src/v1/commands.rs
-  Extend envelope / result / delivery with cloud_workspace_id,
-  sandbox_profile_id, slot_generation.
+server/proliferate/server/cloud/commands/models.py
+  Extend enqueue payload models with cloudWorkspaceId,
+  sandboxProfileId, slotGeneration, leasedCloudSandboxId.
 
-anyharness/crates/anyharness-contract/src/v1/enrollment.rs
-  Extend EnrollRequest, EnrollResponse, HeartbeatRequest with
-  sandbox_profile_id, cloud_sandbox_id, slot_generation.
+server/proliferate/server/cloud/worker/models.py
+  Extend worker lease / result / delivery / enrollment / heartbeat models
+  with cloud_workspace_id, sandbox_profile_id, cloud_sandbox_id,
+  slot_generation.
 
 anyharness/crates/proliferate-worker/src/cloud_client/commands.rs
   Send/echo new fields.
@@ -1255,6 +1245,9 @@ anyharness/crates/proliferate-worker/src/cloud_client/commands.rs
 anyharness/crates/proliferate-worker/src/cloud_client/mod.rs
   Persist (sandbox_profile_id, cloud_sandbox_id, slot_generation) from
   EnrollResponse and feed them into every subsequent request.
+
+anyharness/crates/proliferate-worker/src/enrollment.rs
+  Consume enrollment response fields and persist slot/profile identity.
 
 anyharness/crates/proliferate-worker/src/commands/dispatcher.rs
   Pass cloud_workspace_id into materialization results; surface
@@ -1318,7 +1311,7 @@ Chunk 1  DB models + Alembic migration
 Chunk 2  Sandbox profile store + service
   - ensure_personal_sandbox_profile, ensure_organization_sandbox_profile
   - billing_subject_id wiring via existing ensure helpers
-  - status state machine: configuring -> enabled
+  - status state machine: configuring -> active
   - sandbox_profile_target_state store split from cloud_agent_auth store
 
 Chunk 3a  Sync target lifecycle around profiles
@@ -1335,7 +1328,7 @@ Chunk 3b  Background slot provisioning + reconciler
   - register handlers with whichever scheduler/queue primitive the repo
     already uses; do not invent a parallel queue
   - manual smoke that a profile transitions configuring -> provisioning ->
-    enabled without the originating API request blocking
+    active without the originating API request blocking
 
 Chunk 4  Worker wire contract
   - extend envelope, result, delivery, enroll, heartbeat
@@ -1442,7 +1435,7 @@ Single-PR acceptance:
     `ensure_primary_profile_target` was also called) before any E2B SDK
     operation runs. Slot provisioning runs in `provision_profile_slot` in
     the background; status transitions `configuring -> provisioning ->
-    enabled` are observable via `GET /v1/cloud/sandbox-profiles/{id}` and
+    active` are observable via `GET /v1/cloud/sandbox-profiles/{id}` and
     `…/target-state`.
 22. **Organization creation does not write `sandbox_profile`.** Existing
     org creation paths (`server/proliferate/server/organizations/**`) are
@@ -1503,10 +1496,6 @@ cargo test -p proliferate-worker
 Targeted Rust tests to add:
 
 ```text
-anyharness/crates/anyharness-contract/src/v1/commands.rs#tests
-  - envelope round-trips with new fields
-  - Option<T> fields hold None for non-managed (SSH, local) targets
-
 anyharness/crates/proliferate-worker/src/cloud_client/commands.rs#tests
   - command result echoes cloud_workspace_id and anyharness_workspace_id
 
@@ -1536,7 +1525,7 @@ Manual smoke:
           worker boots, enrolls, heartbeats
           cloud_target_runtime_access populated
           cloud_sandbox.status='running'
-          sandbox_profile.status='enabled'
+          sandbox_profile.status='active'
      -> GET /sandbox-profiles/{id} observed to transition without the
         original API request blocking
      -> sandbox_profile_target_state shows runtime_config_status='applied'
@@ -1583,7 +1572,7 @@ Manual smoke:
      -> simulate E2B failure during provision_profile_slot
      -> sandbox_profile.status='error' or 'blocked', not 'provisioning'
      -> reconciler retries with bounded backoff; no duplicate slot rows
-     -> on success, status moves to 'enabled'; existing sandbox_profile row
+     -> on success, status moves to 'active'; existing sandbox_profile row
         is reused, not duplicated
 ```
 
@@ -1599,11 +1588,9 @@ Manual smoke:
 
 2. **Which queue/scheduler does `provision_profile_slot` run on?**
 
-   The repo already has automation scheduling (`server/proliferate/server/
-   automations/**`) and runtime scheduling (`server/proliferate/server/cloud/
-   runtime/scheduler.py`). The foundation reuses one of those rather than
-   inventing a new mechanism. Decision needed during implementation: audit
-   both and pick the one that already handles bounded retry + dedupe.
+   Decision: use `server/proliferate/server/cloud/runtime/scheduler.py` and
+   mirror the existing in-process workspace provisioning task pattern. Do not
+   route profile-slot provisioning through automation scheduling.
 
 3. **Does the foundation add a profile-events SSE stream, or just polling?**
 
