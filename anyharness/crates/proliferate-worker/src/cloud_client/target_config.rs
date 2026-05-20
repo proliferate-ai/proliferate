@@ -15,6 +15,16 @@ pub struct TargetConfigStatusRequest {
     pub error_message: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeConfigStatusRequest {
+    pub status: String,
+    pub missing_artifacts: Vec<String>,
+    pub missing_credentials: Vec<String>,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+}
+
 impl CloudClient {
     pub async fn fetch_target_config_materialization(
         &self,
@@ -56,6 +66,28 @@ impl CloudClient {
             .post(format!(
                 "{}/v1/cloud/worker/target-configs/{}/status",
                 self.base_url, target_config_id
+            ))
+            .header(
+                reqwest::header::AUTHORIZATION,
+                auth::bearer_header(worker_token),
+            )
+            .json(request)
+            .send()
+            .await?;
+        parse_empty_response(response).await
+    }
+
+    pub async fn report_runtime_config_status(
+        &self,
+        worker_token: &str,
+        revision_id: &str,
+        request: &RuntimeConfigStatusRequest,
+    ) -> Result<(), WorkerError> {
+        let response = self
+            .http
+            .post(format!(
+                "{}/v1/cloud/worker/runtime-configs/{}/status",
+                self.base_url, revision_id
             ))
             .header(
                 reqwest::header::AUTHORIZATION,

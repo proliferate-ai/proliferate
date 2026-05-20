@@ -23,13 +23,19 @@ class CloudMcpAuthRecord:
 @dataclass(frozen=True)
 class CloudMcpConnectionRecord:
     id: UUID
-    user_id: UUID
-    org_id: UUID | None
+    owner_scope: str
+    owner_user_id: UUID | None
+    organization_id: UUID | None
     connection_id: str
     catalog_entry_id: str
     catalog_entry_version: int
     server_name: str
     enabled: bool
+    public_to_org: bool
+    public_organization_id: UUID | None
+    public_status: str
+    public_updated_at: datetime | None
+    public_updated_by_user_id: UUID | None
     settings_json: str
     config_version: int
     payload_ciphertext: str | None
@@ -38,6 +44,16 @@ class CloudMcpConnectionRecord:
     updated_at: datetime
     last_synced_at: datetime
     auth: CloudMcpAuthRecord | None
+
+    @property
+    def user_id(self) -> UUID:
+        if self.owner_user_id is None:
+            raise ValueError("organization-owned MCP connection has no owner user")
+        return self.owner_user_id
+
+    @property
+    def org_id(self) -> UUID | None:
+        return self.organization_id
 
 
 @dataclass(frozen=True)

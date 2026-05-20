@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from proliferate.db.store.cloud_sync.target_config import CloudTargetConfigSnapshot
 from proliferate.server.cloud.commands.models import CloudCommandResponse
+from proliferate.server.cloud.runtime_config.models import RuntimeConfigMaterializationFragment
 
 
 def _to_iso(value: datetime | None) -> str | None:
@@ -81,6 +82,11 @@ class TargetConfigMaterializationPlan(BaseModel):
     agent_credentials: dict[str, dict[str, Any]] = Field(
         default_factory=dict,
         alias="agentCredentials",
+        repr=False,
+    )
+    runtime_config: RuntimeConfigMaterializationFragment | None = Field(
+        default=None,
+        alias="runtimeConfig",
         repr=False,
     )
     mcp: dict[str, Any] | None = Field(default=None, repr=False)

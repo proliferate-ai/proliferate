@@ -18,6 +18,7 @@ from proliferate.db.models.auth import User
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
+from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.domain.rules import (
@@ -214,6 +215,12 @@ async def enqueue_command(
         target=target,
         payload=body.payload,
     )
+    await _validate_runtime_config_preflight(
+        db,
+        user=user,
+        target=target,
+        payload=body.payload,
+    )
     resolved_workspace_id, payload, cloud_workspace_id = await _resolve_command_workspace(
         db,
         user=user,
@@ -349,6 +356,100 @@ async def _validate_agent_auth_preflight(
         raise CloudApiError(
             "cloud_command_agent_auth_not_ready",
             "Agent auth config has not been applied to this target.",
+            status_code=409,
+        )
+
+
+async def _validate_runtime_config_preflight(
+    db: AsyncSession,
+    *,
+    user: User,
+    target: targets_store.CloudTargetSnapshot,
+    payload: dict[str, object],
+) -> None:
+    sandbox_profile_id = payload.get("sandboxProfileId")
+    required_revision_id = payload.get("requiredRuntimeConfigRevisionId")
+    required_sequence = payload.get("requiredRuntimeConfigSequence")
+    required_content_hash = payload.get("requiredRuntimeConfigContentHash")
+    if (
+        sandbox_profile_id is None
+        and required_revision_id is None
+        and required_sequence is None
+        and required_content_hash is None
+    ):
+        return
+    try:
+        profile_id = UUID(str(sandbox_profile_id))
+    except (TypeError, ValueError) as exc:
+        raise CloudApiError(
+            "cloud_command_runtime_config_profile_invalid",
+            "Runtime config preflight sandboxProfileId is invalid.",
+            status_code=400,
+        ) from exc
+    if target.sandbox_profile_id != profile_id:
+        raise CloudApiError(
+            "cloud_command_runtime_config_target_mismatch",
+            "Runtime config sandbox profile is not attached to this target.",
+            status_code=409,
+        )
+    if target.owner_scope == "personal" and target.owner_user_id != user.id:
+        raise CloudApiError(
+            "cloud_command_runtime_config_profile_not_found",
+            "Runtime config sandbox profile not found.",
+            status_code=404,
+        )
+    if not isinstance(required_revision_id, str) or not required_revision_id.strip():
+        raise CloudApiError(
+            "cloud_command_runtime_config_revision_required",
+            "Runtime config preflight revision id is required.",
+            status_code=400,
+        )
+    if not isinstance(required_sequence, int) or isinstance(required_sequence, bool):
+        raise CloudApiError(
+            "cloud_command_runtime_config_sequence_required",
+            "Runtime config preflight sequence is required.",
+            status_code=400,
+        )
+    if not isinstance(required_content_hash, str) or not required_content_hash.strip():
+        raise CloudApiError(
+            "cloud_command_runtime_config_hash_required",
+            "Runtime config preflight content hash is required.",
+            status_code=400,
+        )
+    _current, current_revision = await runtime_config_store.get_current(
+        db,
+        sandbox_profile_id=profile_id,
+    )
+    if current_revision is None:
+        raise CloudApiError(
+            "cloud_command_runtime_config_missing",
+            "Runtime config has not been compiled for this sandbox profile.",
+            status_code=409,
+        )
+    if (
+        str(current_revision.id) != required_revision_id
+        or current_revision.sequence != required_sequence
+        or current_revision.content_hash != required_content_hash
+    ):
+        raise CloudApiError(
+            "cloud_command_runtime_config_revision_stale",
+            "Runtime config preflight revision is stale.",
+            status_code=409,
+        )
+    state = await agent_auth_store.get_target_state(
+        db,
+        sandbox_profile_id=profile_id,
+        target_id=target.id,
+    )
+    if (
+        state is None
+        or state.runtime_config_status != "applied"
+        or state.applied_runtime_config_revision_id != required_revision_id
+        or state.applied_runtime_config_sequence < required_sequence
+    ):
+        raise CloudApiError(
+            "cloud_command_runtime_config_not_ready",
+            "Runtime config has not been applied to this target.",
             status_code=409,
         )
 

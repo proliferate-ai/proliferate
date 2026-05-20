@@ -593,6 +593,22 @@ async fn process_materialize_environment_command(
                 )
                 .await
                 .ok();
+            if let Some(runtime_config) = outcome.runtime_config.as_ref() {
+                cloud
+                    .report_runtime_config_status(
+                        &identity.worker_token,
+                        &runtime_config.revision_id,
+                        &crate::cloud_client::target_config::RuntimeConfigStatusRequest {
+                            status: "applied".to_string(),
+                            missing_artifacts: Vec::new(),
+                            missing_credentials: Vec::new(),
+                            error_code: None,
+                            error_message: None,
+                        },
+                    )
+                    .await
+                    .ok();
+            }
             command_result_request(
                 &command,
                 "accepted",
