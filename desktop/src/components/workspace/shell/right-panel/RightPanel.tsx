@@ -13,6 +13,7 @@ import { RightPanelFrame } from "@/components/workspace/shell/right-panel/RightP
 import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
 import { useRightPanelHeaderEntries } from "@/hooks/workspaces/derived/use-right-panel-header-entries";
 import { useRightPanelRootFocus } from "@/hooks/workspaces/ui/use-right-panel-root-focus";
+import { useRightPanelShortcutRequests } from "@/hooks/workspaces/ui/use-right-panel-shortcut-requests";
 import { useRightPanelStateUpdater } from "@/hooks/workspaces/ui/use-right-panel-state-updater";
 import {
   parseRightPanelHeaderEntryKey,
@@ -357,6 +358,42 @@ export const RightPanel = memo(function RightPanel({
     }));
   }, [openViewerTargets, setActiveViewerTarget, updateState]);
 
+  const activateRightPanelEntry = useCallback((entryKey: RightPanelHeaderEntryKey) => {
+    const entry = parseRightPanelHeaderEntryKey(entryKey);
+    if (!entry) {
+      return false;
+    }
+
+    if (entry.kind === "tool") {
+      activateTool(entry.tool);
+      return true;
+    }
+    if (entry.kind === "terminal") {
+      selectTerminal(entry.terminalId);
+      return true;
+    }
+    if (entry.kind === "browser") {
+      selectBrowser(entry.browserId);
+      return true;
+    }
+    if (entry.kind === "viewer") {
+      selectViewer(entry.targetKey);
+      return true;
+    }
+    return false;
+  }, [activateTool, selectBrowser, selectTerminal, selectViewer]);
+  const focusRightPanelRoot = useCallback(() => {
+    rootRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  useRightPanelShortcutRequests({
+    activeEntryKey: state.activeEntryKey,
+    entries: headerEntries,
+    isOpen,
+    onActivateEntry: activateRightPanelEntry,
+    onHandledRequest: focusRightPanelRoot,
+  });
+
   const handleRootPointerDownCapture = useRightPanelRootFocus({
     rootRef,
     isOpen,
@@ -400,7 +437,7 @@ export const RightPanel = memo(function RightPanel({
 
   const handleCreateBrowser = useCallback(() => {
     if (!workspaceId || !shouldRenderContent) {
-      return;
+      return false;
     }
     updateState((previous) =>
       createOrActivateBrowserTabInRightPanelState(
@@ -410,6 +447,7 @@ export const RightPanel = memo(function RightPanel({
       ),
     );
     onOpenPanel();
+    return true;
   }, [
     isCloudWorkspaceSelected,
     onOpenPanel,
@@ -419,8 +457,10 @@ export const RightPanel = memo(function RightPanel({
   ]);
 
   useEffect(() => {
-    const handleBrowserTabRequest = () => {
-      handleCreateBrowser();
+    const handleBrowserTabRequest = (event: Event) => {
+      if (handleCreateBrowser()) {
+        event.preventDefault();
+      }
     };
 
     window.addEventListener(RIGHT_PANEL_BROWSER_TAB_EVENT, handleBrowserTabRequest);

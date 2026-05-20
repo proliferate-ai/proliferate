@@ -161,7 +161,10 @@ export function TerminalHeaderIcon({
       onContextMenuCapture={onContextMenuCapture}
       className={HEADER_TERMINAL_TAB_CLASS}
     >
-      <span className="ui-tab-system-tab__content">
+      <span
+        className="ui-tab-system-tab__content"
+        data-shortcut-reveal={shortcutRevealVisible ? true : undefined}
+      >
         <AppShellTerminalIcon className="ui-tab-system-tab__icon" />
         <span className="ui-tab-system-tab__label">
           <span className="ui-tab-system-tab__label-primary">{displayTitle}</span>

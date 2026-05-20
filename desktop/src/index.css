@@ -2286,16 +2286,16 @@ body {
 
 /* ---- Right panel tabs ---- */
 .right-panel-tab-system {
-  --tab-system-height: var(--workspace-shell-header-height);
+  --tab-system-height: 2.5rem; /* Align with the main sidebar header. */
   --tab-max-width: 156px;
   --tab-shell-max-width: 160px;
-  --tab-height: var(--workspace-shell-action-size);
+  --tab-height: 30px;
   --tab-container-padding: calc((var(--tab-system-height) - var(--tab-height) - 2px) / 2);
   --tab-stable-end-margin: 0px;
   --tab-gap: 3px;
   --tab-bar-mask-size: 28px;
   --right-panel-tab-leading-inset: 0px;
-  --right-panel-tab-radius: 10px;
+  --right-panel-tab-radius: 8px;
   --right-panel-tab-overlay-radius: 8px;
   --right-panel-tab-surface: transparent;
   --right-panel-tab-hover-bg: color-mix(
@@ -2329,6 +2329,7 @@ body {
   flex-direction: column;
   width: 100%;
   height: var(--tab-system-height);
+  box-sizing: border-box;
   flex-shrink: 0;
   min-width: 0;
   background-color: var(--right-panel-tab-surface);
@@ -2631,6 +2632,10 @@ body {
   font-weight: var(--right-panel-tab-font-weight);
 }
 
+.right-panel-tab-system .ui-tab-system-tab__content[data-shortcut-reveal="true"] {
+  padding-right: 1.65rem;
+}
+
 .right-panel-tab-system .ui-tab-system-tab[data-stable] .ui-tab-system-tab__content,
 .right-panel-tab-system .ui-tab-system-tab[data-launcher-tab] .ui-tab-system-tab__content {
   flex: 0 0 auto;
@@ -2700,7 +2705,12 @@ body {
 }
 
 .right-panel-tab-system .right-panel-shortcut-badge {
-  flex-shrink: 0;
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  z-index: 2;
+  transform: translateY(-50%);
+  pointer-events: none;
   color: var(--right-panel-tab-text-tertiary);
 }
 

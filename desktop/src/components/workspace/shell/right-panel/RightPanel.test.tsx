@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState, type Dispatch, type SetStateAction } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
@@ -20,6 +20,10 @@ import {
   requestRightPanelBrowserTab,
   requestRightPanelNewTabMenu,
 } from "@/lib/infra/right-panel-new-tab-menu";
+import {
+  requestRightPanelRelativeTab,
+  requestRightPanelTabByIndex,
+} from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 
 const terminalActionsMocks = vi.hoisted(() => ({
@@ -172,8 +176,12 @@ describe("RightPanel terminal activation", () => {
 
     expect(screen.queryByTestId("browser-panel")).toBeNull();
 
-    requestRightPanelBrowserTab();
+    let handled = false;
+    act(() => {
+      handled = requestRightPanelBrowserTab();
+    });
 
+    expect(handled).toBe(true);
     await waitFor(() => {
       expect(screen.getByTestId("browser-panel").dataset.visible).toBe("true");
     });
@@ -189,8 +197,12 @@ describe("RightPanel terminal activation", () => {
       />,
     );
 
-    requestRightPanelBrowserTab();
+    let handled = false;
+    act(() => {
+      handled = requestRightPanelBrowserTab();
+    });
 
+    expect(handled).toBe(true);
     await waitFor(() => expect(onOpenPanel).toHaveBeenCalledTimes(1));
   });
 
@@ -390,6 +402,56 @@ describe("RightPanel viewer routing", () => {
 });
 
 describe("RightPanel tab shortcuts", () => {
+  it("activates right-panel entries by option-number shortcut requests", async () => {
+    const { container } = render(<RightPanelHarness isWorkspaceReady />);
+    const root = container.querySelector("[data-right-panel-root='true']");
+    if (!(root instanceof HTMLElement)) {
+      throw new Error("Expected right panel root");
+    }
+    let handled = false;
+
+    act(() => {
+      handled = requestRightPanelTabByIndex(2);
+    });
+
+    expect(handled).toBe(true);
+    expect(document.activeElement).toBe(root);
+    await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
+  });
+
+  it("cycles right-panel entries by routed tab-cycle shortcut requests", async () => {
+    const { container } = render(<RightPanelHarness isWorkspaceReady />);
+    const root = container.querySelector("[data-right-panel-root='true']");
+    if (!(root instanceof HTMLElement)) {
+      throw new Error("Expected right panel root");
+    }
+
+    fireEvent.pointerDown(root);
+    expect(document.activeElement).toBe(root);
+    expect(root.getAttribute("data-focus-zone")).toBe("right-panel");
+
+    act(() => {
+      requestRightPanelRelativeTab(1);
+    });
+
+    await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
+
+    expect(screen.getByRole("tab", { name: "Changes" }).getAttribute("aria-selected"))
+      .toBe("true");
+  });
+
+  it("leaves routed shortcuts unhandled when the right panel is closed", async () => {
+    render(<RightPanelHarness isWorkspaceReady isOpen={false} />);
+    let handled = true;
+
+    act(() => {
+      handled = requestRightPanelTabByIndex(2);
+    });
+
+    expect(handled).toBe(false);
+    expect(screen.queryByTestId("git-panel")).toBeNull();
+  });
+
   it("does not intercept primary-number shell shortcuts after clicking panel content", async () => {
     const { container } = render(<RightPanelHarness isWorkspaceReady />);
     const root = container.querySelector("[data-right-panel-root='true']");
