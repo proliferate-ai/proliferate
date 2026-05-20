@@ -24,12 +24,12 @@ pub enum WorkerError {
     Http(#[from] reqwest::Error),
     #[error("failed to build http client")]
     BuildHttpClient(reqwest::Error),
-    #[error("cloud rejected request: {status} {body}")]
+    #[error("cloud rejected request: {status}")]
     Cloud {
         status: reqwest::StatusCode,
         body: String,
     },
-    #[error("anyharness rejected request: {status} {body}")]
+    #[error("anyharness rejected request: {status}")]
     AnyHarness {
         status: reqwest::StatusCode,
         body: String,

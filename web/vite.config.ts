@@ -5,6 +5,7 @@ import { defineConfig } from "vite";
 
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN?.trim();
 const sentryOrg = process.env.SENTRY_ORG?.trim();
+const sentryUrl = process.env.SENTRY_URL?.trim();
 const sentryProject =
   process.env.SENTRY_WEB_PROJECT?.trim() || process.env.SENTRY_PROJECT?.trim();
 const sentryRelease = process.env.VITE_PROLIFERATE_RELEASE?.trim();
@@ -24,6 +25,7 @@ export default defineConfig({
           authToken: sentryAuthToken,
           org: sentryOrg!,
           project: sentryProject!,
+          ...(sentryUrl ? { url: sentryUrl } : {}),
           telemetry: false,
           release: {
             name: sentryRelease!,

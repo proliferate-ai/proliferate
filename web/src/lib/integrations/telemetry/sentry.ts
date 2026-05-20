@@ -7,7 +7,11 @@ import {
   useLocation,
   useNavigationType,
 } from "react-router-dom";
-import type { Breadcrumb, ErrorEvent, SeverityLevel } from "@sentry/react";
+import type {
+  Breadcrumb,
+  ErrorEvent,
+  SeverityLevel,
+} from "@sentry/react";
 import {
   scrubTelemetryData,
   scrubTelemetryText,
@@ -24,6 +28,44 @@ export const InstrumentedRoutes = (() => {
 })();
 
 let sentryInitialized = false;
+
+type SentryStackFrame = {
+  filename?: string;
+  abs_path?: string;
+  context_line?: string;
+  pre_context?: string[];
+  post_context?: string[];
+  vars?: Record<string, unknown>;
+};
+
+type SentryExceptionValue = {
+  value?: string;
+  stacktrace?: { frames?: SentryStackFrame[] };
+  raw_stacktrace?: { frames?: SentryStackFrame[] };
+};
+
+type SentryInitOptions = Parameters<typeof Sentry.init>[0];
+type SentryTransactionEvent = Parameters<
+  NonNullable<SentryInitOptions["beforeSendTransaction"]>
+>[0];
+type SentrySpanPayload = Parameters<NonNullable<SentryInitOptions["beforeSendSpan"]>>[0];
+type MutableSentryEvent = {
+  breadcrumbs?: Breadcrumb[];
+  exception?: { values?: SentryExceptionValue[] };
+  request?: {
+    data?: unknown;
+    cookies?: unknown;
+    headers?: unknown;
+    url?: string;
+    [key: string]: unknown;
+  };
+  spans?: SentrySpanPayload[];
+  transaction?: string;
+  user?: {
+    id?: string;
+    [key: string]: unknown;
+  };
+};
 
 function buildTracePropagationTargets(apiBaseUrl: string): Array<string | RegExp> {
   const targets: Array<string | RegExp> = [
@@ -49,20 +91,37 @@ function scrubSentryBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb | null {
   };
 }
 
-function scrubSentryEvent(event: ErrorEvent): ErrorEvent | null {
-  const scrubbed: ErrorEvent = {
-    ...event,
-    message: event.message ? scrubTelemetryText(event.message) : event.message,
-    extra: scrubTelemetryData(event.extra),
-    contexts: scrubTelemetryData(event.contexts),
-    tags: scrubTelemetryData(event.tags),
-  };
+function scrubSentryFrame(frame: SentryStackFrame): void {
+  frame.filename = frame.filename ? scrubTelemetryText(frame.filename) : frame.filename;
+  frame.abs_path = frame.abs_path ? scrubTelemetryText(frame.abs_path) : frame.abs_path;
+  frame.context_line = undefined;
+  frame.pre_context = undefined;
+  frame.post_context = undefined;
+  frame.vars = undefined;
+}
+
+function scrubSentryException(exception: SentryExceptionValue): void {
+  exception.value = exception.value ? scrubTelemetryText(exception.value) : exception.value;
+  exception.stacktrace?.frames?.forEach(scrubSentryFrame);
+  exception.raw_stacktrace?.frames?.forEach(scrubSentryFrame);
+}
+
+function scrubSentrySpan<T extends SentrySpanPayload>(span: T): T {
+  const scrubbed = scrubTelemetryData(span) as T;
+  if (typeof scrubbed.description === "string") {
+    scrubbed.description = scrubTelemetryText(scrubbed.description);
+  }
+  return scrubbed;
+}
+
+function scrubSentryEventPayload(event: MutableSentryEvent): MutableSentryEvent {
+  const scrubbed = scrubTelemetryData(event);
+  scrubbed.transaction = scrubbed.transaction
+    ? scrubTelemetryText(scrubbed.transaction)
+    : scrubbed.transaction;
 
   if (scrubbed.user) {
-    scrubbed.user = {
-      ...scrubbed.user,
-      ip_address: undefined,
-    };
+    scrubbed.user = scrubbed.user.id ? { id: scrubbed.user.id } : undefined;
   }
 
   if (scrubbed.request) {
@@ -81,7 +140,29 @@ function scrubSentryEvent(event: ErrorEvent): ErrorEvent | null {
       .filter((entry: Breadcrumb | null): entry is Breadcrumb => entry !== null);
   }
 
+  if (scrubbed.exception?.values) {
+    (scrubbed.exception.values as unknown as SentryExceptionValue[]).forEach(
+      scrubSentryException,
+    );
+  }
+
+  if (scrubbed.spans) {
+    scrubbed.spans = scrubbed.spans.map(scrubSentrySpan);
+  }
+
   return scrubbed;
+}
+
+function scrubSentryEvent(event: ErrorEvent): ErrorEvent | null {
+  return scrubSentryEventPayload(event as unknown as MutableSentryEvent) as unknown as ErrorEvent;
+}
+
+function scrubSentryTransaction(
+  event: SentryTransactionEvent,
+): SentryTransactionEvent | null {
+  return scrubSentryEventPayload(
+    event as unknown as MutableSentryEvent,
+  ) as unknown as SentryTransactionEvent;
 }
 
 export function initializeWebSentry(config: {
@@ -120,6 +201,8 @@ export function initializeWebSentry(config: {
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
     beforeSend: scrubSentryEvent,
+    beforeSendTransaction: scrubSentryTransaction,
+    beforeSendSpan: (span) => scrubSentrySpan(span),
     beforeBreadcrumb: scrubSentryBreadcrumb,
     initialScope: {
       tags: {

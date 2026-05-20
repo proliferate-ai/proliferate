@@ -18,6 +18,7 @@ use super::shell::{
     configure_compact_prompt, detect_default_shell, detect_posix_shell, detect_shell_kind,
 };
 use super::store::TerminalStore;
+use crate::process_env::remove_runtime_private_pty_env;
 
 const MAX_COMMAND_OUTPUT_BYTES: usize = 64 * 1024;
 const DEFAULT_SETUP_TIMEOUT: Duration = Duration::from_secs(300);
@@ -240,6 +241,7 @@ impl TerminalService {
         }
         cmd.env("TERM", "xterm-256color");
         configure_compact_prompt(&mut cmd, &shell, workspace_path);
+        remove_runtime_private_pty_env(&mut cmd);
 
         let child = pair
             .slave

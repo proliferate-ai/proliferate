@@ -1,11 +1,18 @@
 import posthog from "posthog-js";
-import type { PostHogInterface } from "posthog-js/lib/src/types";
+import type { CaptureResult } from "posthog-js/lib/src/types";
 import type { AuthUser } from "@proliferate/cloud-sdk";
 import { scrubTelemetryData } from "@proliferate/product-model/telemetry/scrub";
 
 import type { WebTelemetryConfig } from "./config";
 
 let posthogInitialized = false;
+const POSTHOG_URL_PROPERTY_KEYS = [
+  "$current_url",
+  "$pathname",
+  "$host",
+  "$referrer",
+  "$referring_domain",
+];
 
 interface WebPostHogInitConfig {
   environment: string;
@@ -28,6 +35,17 @@ export type WebTelemetryRoute =
   | "settings"
   | "unknown";
 
+function scrubPostHogCapture(event: CaptureResult | null): CaptureResult | null {
+  if (!event) return event;
+  const scrubbed = scrubTelemetryData(event, { preservePostHogInternalKeys: true });
+  if (scrubbed.properties) {
+    for (const key of POSTHOG_URL_PROPERTY_KEYS) {
+      delete scrubbed.properties[key];
+    }
+  }
+  return scrubbed;
+}
+
 export function initializeWebPostHog(config: WebPostHogInitConfig): void {
   if (posthogInitialized) return;
 
@@ -43,19 +61,16 @@ export function initializeWebPostHog(config: WebPostHogInitConfig): void {
     capture_pageview: false,
     capture_pageleave: false,
     person_profiles: "identified_only",
-    disable_session_recording: !config.posthog.sessionRecordingEnabled,
-    session_recording: config.posthog.sessionRecordingEnabled
-      ? {
-        maskAllInputs: true,
-        maskTextSelector: "[data-telemetry-mask]",
-        blockSelector: "[data-telemetry-block]",
-      }
-      : undefined,
-    loaded: config.posthog.sessionRecordingEnabled
-      ? (client: PostHogInterface) => {
-        client.startSessionRecording();
-      }
-      : undefined,
+    before_send: scrubPostHogCapture,
+    disable_session_recording: true,
+    session_recording: {
+      maskAllInputs: true,
+      maskTextSelector: "[data-telemetry-mask]",
+      blockSelector: "[data-telemetry-block]",
+      recordHeaders: false,
+      recordBody: false,
+      maskCapturedNetworkRequestFn: () => null,
+    },
   });
 
   posthog.register({

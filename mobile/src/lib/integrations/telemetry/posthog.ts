@@ -1,4 +1,5 @@
 import { PostHog } from "posthog-react-native";
+import type { PostHogOptions } from "posthog-react-native";
 import type { AuthUser } from "@proliferate/cloud-sdk";
 import { scrubTelemetryData } from "@proliferate/product-model/telemetry/scrub";
 
@@ -6,6 +7,8 @@ import type { MobileTelemetryConfig } from "./config";
 
 let posthogClient: PostHog | null = null;
 let posthogInitialized = false;
+
+type MobileBeforeSend = Exclude<PostHogOptions["before_send"], undefined | unknown[]>;
 
 interface MobilePostHogInitConfig {
   environment: string;
@@ -21,6 +24,11 @@ export type MobileTelemetryScreen =
   | "settings"
   | "chat";
 
+const scrubPostHogCapture: MobileBeforeSend = (event) => {
+  if (!event) return event;
+  return scrubTelemetryData(event, { preservePostHogInternalKeys: true });
+};
+
 export function initializeMobilePostHog(config: MobilePostHogInitConfig): void {
   if (posthogInitialized) return;
 
@@ -31,7 +39,8 @@ export function initializeMobilePostHog(config: MobilePostHogInitConfig): void {
   posthogInitialized = true;
   posthogClient = new PostHog(config.posthog.apiKey, {
     host: config.posthog.apiHost,
-    captureAppLifecycleEvents: true,
+    captureAppLifecycleEvents: false,
+    before_send: scrubPostHogCapture,
     enableSessionReplay: config.posthog.sessionReplayEnabled,
     sessionReplayConfig: config.posthog.sessionReplayEnabled
       ? {

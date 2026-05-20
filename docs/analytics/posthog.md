@@ -8,7 +8,8 @@ covers identified hosted-product usage.
 
 PostHog is currently configured for:
 - desktop hosted-product analytics and optional session recording
-- web hosted-product route analytics and optional session recording
+- web hosted-product route analytics; web session recording is kept disabled
+  until URL metadata can be scrubbed safely
 - mobile hosted-product screen analytics; replay startup is guarded behind env
   and requires the optional native replay package in the mobile build
 
@@ -45,10 +46,11 @@ Server/cloud API PostHog is not configured.
       - `capture_pageview=false`
       - `capture_pageleave=false`
       - `person_profiles="identified_only"`
-      - optional session recording when enabled
+      - session recording disabled
+      - `before_send` payload scrubbing, including query-string stripping
   - failure behavior:
     - if `VITE_PROLIFERATE_POSTHOG_KEY` is unset, the adapter is inert
-    - if session recording is disabled, replay never starts
+    - replay never starts in the web adapter
 - Desktop identified-user sync
   - trigger: auth state changes in the telemetry bootstrap flow
   - code path:
@@ -124,14 +126,18 @@ Server/cloud API PostHog is not configured.
     - if telemetry is disabled, the adapter is inert
 - Replay masking and blocking
   - desktop/web:
-    - session recording defaults to disabled
+    - desktop session recording defaults to disabled
     - when enabled, inputs are masked and `[data-telemetry-block]` /
       `[data-telemetry-mask]` selectors are respected
-    - protected web navigation and app surfaces are blocked by default because
-      they can display prompts, repo names, workspace names, support messages,
-      and account details
+  - web:
+    - session recording is disabled in code even if the env toggle is set,
+      because the browser replay SDK can emit URL metadata independently of DOM
+      masking
+    - web event payloads are still scrubbed through `before_send`
   - mobile:
     - session replay defaults to disabled
+    - automatic lifecycle capture is disabled so OAuth callback deep links are
+      not sent as SDK-generated app-open events
     - when enabled, text inputs, images, and sandboxed views are masked; log
       and network telemetry capture are disabled locally
     - this repository does not install the native replay package by default, so

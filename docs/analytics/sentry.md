@@ -45,6 +45,7 @@ Upload targets:
 - `SENTRY_AUTH_TOKEN`
 - `SENTRY_ORG`
 - `SENTRY_PROJECT`
+- `SENTRY_URL` when using a non-Sentry.io host
 - optional overrides: `SENTRY_WEB_PROJECT`, `SENTRY_MOBILE_PROJECT`,
   `SENTRY_DESKTOP_NATIVE_PROJECT`, `SENTRY_ANYHARNESS_PROJECT`
 

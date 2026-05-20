@@ -786,7 +786,7 @@
 - name: VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED
   secret: false
   default: "false"
-  description: Desktop/web PostHog session recording toggle
+  description: Desktop PostHog session recording toggle; reserved for web because web replay is currently disabled in code
   tags: [local-dev, ci, desktop, web]
 
 # ═══════════════════════════════════════════════════════════════════════

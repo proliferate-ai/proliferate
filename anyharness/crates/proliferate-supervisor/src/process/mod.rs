@@ -9,17 +9,10 @@ use crate::{config::SupervisorConfig, error::SupervisorError};
 
 pub async fn run(config: SupervisorConfig) -> Result<(), SupervisorError> {
     loop {
-        let mut anyharness_env: Vec<(&str, &str)> = config
-            .process_env
+        let anyharness_env = config
+            .anyharness_env
             .iter()
-            .map(|(name, value)| (name.as_str(), value.as_str()))
-            .collect();
-        anyharness_env.extend(
-            config
-                .anyharness_env
-                .iter()
-                .map(|(name, value)| (name.as_str(), value.as_str())),
-        );
+            .map(|(name, value)| (name.as_str(), value.as_str()));
         let mut anyharness = match child::spawn_with_env(
             config.anyharness_binary.to_string_lossy().as_ref(),
             &config.anyharness_args,

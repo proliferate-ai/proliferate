@@ -205,6 +205,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_URL: ${{ vars.SENTRY_URL }}
         run: |
           export VITE_PROLIFERATE_RELEASE="proliferate-desktop@${PROLIFERATE_RELEASE_VERSION}"
           pnpm run build
@@ -287,6 +288,7 @@ jobs:
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_URL: ${{ vars.SENTRY_URL }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
           SENTRY_DESKTOP_NATIVE_PROJECT: ${{ vars.SENTRY_DESKTOP_NATIVE_PROJECT }}
           SENTRY_ANYHARNESS_PROJECT: ${{ vars.SENTRY_ANYHARNESS_PROJECT }}

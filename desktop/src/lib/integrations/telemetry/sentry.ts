@@ -11,6 +11,8 @@ import type { SeverityLevel } from "@sentry/react";
 import {
   scrubSentryBreadcrumb,
   scrubSentryEvent,
+  scrubSentrySpan,
+  scrubSentryTransaction,
   scrubTelemetryData,
 } from "./scrub";
 import type { DesktopTelemetryConfig } from "./config";
@@ -79,6 +81,8 @@ export function initializeDesktopSentry(config: DesktopSentryInitConfig): void {
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
     beforeSend: (event) => scrubSentryEvent(event),
+    beforeSendTransaction: (event) => scrubSentryTransaction(event),
+    beforeSendSpan: (span) => scrubSentrySpan(span),
     beforeBreadcrumb: scrubSentryBreadcrumb,
     initialScope: {
       tags: {

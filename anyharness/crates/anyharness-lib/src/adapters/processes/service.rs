@@ -2,6 +2,7 @@ use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
 use super::types::{ProcessServiceError, RunProcessRequest, RunProcessResult};
+use crate::process_env::remove_runtime_private_env;
 
 pub struct ProcessService;
 
@@ -26,14 +27,12 @@ impl ProcessService {
         let program = &request.command[0];
         let args = &request.command[1..];
 
-        let result = tokio::time::timeout(
-            Duration::from_millis(timeout_ms),
-            tokio::process::Command::new(program)
-                .args(args)
-                .current_dir(&cwd)
-                .output(),
-        )
-        .await;
+        let mut command = tokio::process::Command::new(program);
+        command.args(args).current_dir(&cwd);
+        remove_runtime_private_env(&mut command);
+
+        let result =
+            tokio::time::timeout(Duration::from_millis(timeout_ms), command.output()).await;
 
         match result {
             Ok(Ok(output)) => Ok(RunProcessResult {

@@ -389,7 +389,7 @@ production surface for internal reference.
 | `VITE_PROLIFERATE_SENTRY_DSN` | Web Sentry DSN |
 | `VITE_PROLIFERATE_POSTHOG_KEY` | Web PostHog project key |
 | `VITE_PROLIFERATE_POSTHOG_HOST` | PostHog ingest host |
-| `VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED` | Optional web replay toggle |
+| `VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED` | Reserved web replay toggle; current web adapter keeps replay disabled |
 | `SENTRY_ORG` / `SENTRY_WEB_PROJECT` / `SENTRY_PROJECT` | Optional web source map upload target |
 
 #### Mobile build vars
