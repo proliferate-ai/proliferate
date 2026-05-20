@@ -3,7 +3,9 @@ anyharness/crates/anyharness-lib/src/acp/manager.rs
 anyharness/crates/anyharness-lib/src/acp/runtime_client.rs
 anyharness/crates/anyharness-lib/src/adapters/git/diff.rs
 anyharness/crates/anyharness-lib/src/domains/agents/installer.rs
+anyharness/crates/anyharness-lib/src/domains/agents/auth_config.rs
 anyharness/crates/anyharness-lib/src/domains/agents/readiness/resolver.rs
+anyharness/crates/anyharness-lib/src/domains/runtime_config/service.rs
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs
 anyharness/crates/anyharness-lib/src/api/openapi.rs
 anyharness/crates/anyharness-lib/src/api/router_tests.rs
@@ -30,6 +32,7 @@ anyharness/crates/anyharness-lib/src/workspaces/service.rs
 anyharness/crates/anyharness-lib/src/workspaces/runtime.rs
 anyharness/crates/anyharness-lib/src/workspaces/store.rs
 anyharness/crates/proliferate-worker/src/commands/dispatcher.rs
+anyharness/crates/proliferate-worker/src/commands/mapping.rs
 desktop/src/components/workspace/chat/input/ComposerModelConfigSelector.tsx
 desktop/src/components/workspace/shell/right-panel/RightPanel.test.tsx
 desktop/src/components/workspace/shell/right-panel/RightPanel.tsx
@@ -51,6 +54,7 @@ desktop/src/lib/integrations/auth/orchestration.ts
 server/tests/integration/test_cloud_api.py
 server/tests/integration/test_auth_flow.py
 server/tests/integration/test_cloud_agent_auth_api.py
+server/tests/integration/test_agent_gateway_api.py
 server/tests/integration/test_billing_accounting.py
 server/tests/integration/test_billing_api.py
 server/tests/integration/test_stripe_webhooks.py
@@ -58,15 +62,18 @@ server/proliferate/db/models/cloud/agent_auth.py
 server/proliferate/db/store/billing.py
 server/proliferate/db/store/cloud_agent_auth/store.py
 server/proliferate/db/store/cloud_mobility.py
+server/proliferate/db/store/cloud_sync/commands.py
 server/proliferate/db/store/cloud_sync/events.py
+server/proliferate/db/store/cloud_sync/targets.py
 server/tests/unit/test_cloud_runtime_provision.py
 server/tests/integration/test_cloud_commands_api.py
 server/proliferate/server/billing/service.py
-server/proliferate/server/cloud/runtime/credential_freshness.py
 server/proliferate/db/store/cloud_workspaces.py
+server/proliferate/server/cloud/commands/service.py
 server/proliferate/server/cloud/worker/service.py
 server/proliferate/server/cloud/runtime/bootstrap.py
-server/proliferate/server/cloud/runtime/credential_freshness.py
+server/proliferate/server/cloud/runtime_config/domain/resolver.py
+server/proliferate/server/cloud/runtime_config/service.py
 server/proliferate/server/cloud/worker/service.py
 server/proliferate/server/cloud/agent_auth/service.py
 server/proliferate/server/cloud/runtime/provision.py
@@ -77,3 +84,4 @@ server/proliferate/db/models/cloud/agent_auth.py
 server/proliferate/db/store/cloud_agent_auth/store.py
 server/proliferate/server/cloud/agent_auth/service.py
 server/tests/integration/test_cloud_agent_auth_api.py
+server/tests/integration/test_sandbox_profile_foundation.py

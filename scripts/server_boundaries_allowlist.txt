@@ -12,11 +12,13 @@ SERVICE_ORM_IMPORT server/proliferate/server/billing/service.py 2 transitional s
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/commands/service.py 1 transitional cloud command service imports ORM model during worker migration
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/compute/service.py 1 transitional cloud compute service imports ORM model during worker migration
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/runtime/service.py 1 transitional service imports ORM/auth model
+SERVICE_ORM_IMPORT server/proliferate/server/cloud/sandbox_profiles/service.py 1 transitional sandbox profile service imports auth model
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/target_config/service.py 1 transitional target config service imports ORM model during worker migration
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/target_git_identity/service.py 1 transitional target git identity service imports ORM model during worker migration
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/targets/service.py 1 transitional cloud targets service imports ORM model during worker migration
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/workspaces/service.py 2 transitional service imports ORM/auth model
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/live/service.py 1 transitional live service opens DB session during worker migration
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/service.py 1 transitional workspace service opens DB session during managed-cloud migration
 SERVICE_SQLALCHEMY_IMPORT server/proliferate/server/cloud/agent_auth/service.py 1 transitional agent auth service handles SQLAlchemy integrity errors during worker migration
 SERVICE_SQLALCHEMY_IMPORT server/proliferate/server/cloud/commands/service.py 1 transitional cloud command service builds SQLAlchemy query during worker migration
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/target_config/domain/policy.py 1 transitional target config policy imports product config during worker migration
