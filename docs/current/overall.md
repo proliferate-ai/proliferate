@@ -18,6 +18,8 @@
     - old `05-claiming-slack-team-automations.md`
 
 - **Prep: settings/admin IA spec**
+  - Read `docs/current/mockups/settings-sample.html` as the visual/product
+    reference for the settings/admin surfaces before rewriting this spec.
   - Define shared settings shell:
     - Preferences
     - Organization & Account
