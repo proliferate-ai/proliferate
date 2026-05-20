@@ -578,7 +578,6 @@ update_session_config
 cancel_turn       (when the runtime must observe; close_session same)
 close_session
 backfill_exposed_workspace
-sync_existing_workspace
 ```
 
 Non-wake-required:
@@ -589,43 +588,117 @@ configure_git_identity     (idempotent; can run on next wake naturally
 ensure_repo_checkout       (same)
 ```
 
-Wake gate location:
+**Wake is async.** `enqueue_command` does not block on E2B. The
+command row is persisted immediately; if the slot needs to be woken,
+a background wake job is kicked off and the command stays in
+`queued` status until the worker (after the slot resumes) leases it.
+
+Web and mobile callers already poll for command status; the wake
+latency becomes visible as time-in-`queued` without any new polling
+surface. UI can surface "Your cloud is starting up" by reading
+`GET /v1/cloud/sandbox-profiles/{id}/target-state` (existing) which
+includes `slot.status`.
+
+Wake control flow:
 
 ```text
 server/proliferate/server/cloud/commands/service.py
   enqueue_command(...):
-    ... existing preflight ...
+    ... existing preflight (agent_auth + runtime_config) ...
+    persist cloud_commands row (status='queued')
     if kind in WAKE_REQUIRED_KINDS and target.kind == 'managed_cloud':
-        ensure_managed_slot_running(target_id, command_id,
-                                    actor_id, billing_subject_id)
+        kick_off_managed_slot_wake(target_id, command_id)
+    return command_id   # NEVER blocks on E2B
 
-server/proliferate/server/cloud/runtime/wake.py    (new)
-  ensure_managed_slot_running(target_id, ...):
+server/proliferate/server/cloud/runtime/wake.py        (new)
+  kick_off_managed_slot_wake(target_id, command_id):
+    # synchronous portion: just enqueue the background job.
+    # idempotent under concurrent callers via advisory lock per
+    # target id; only one wake job is in-flight per target.
+    advisory_lock_try(target_id)
+    if wake_job_already_running(target_id):
+        return                           # piggy-back on the in-flight job
+    enqueue_wake_job(target_id)
+
+  run_managed_slot_wake_job(target_id):
+    # background worker function
     lock (target_id) advisory
     load active slot for the profile/target
     if slot.status == 'running':
-        return  # nothing to do
-    check spec-09 billing gate via spec-09 hook (deny if blocked)
+        return  # nothing to do (a sibling command already woke it)
+    consult spec-09 billing hook (deny if blocked):
+        if denied:
+            mark all queued wake-required commands for this target as
+              failed_delivery with error_code='sandbox_wake_blocked'
+            return
     if slot.status in ('paused', 'blocked'):
         perform_proliferate_owned_e2b_resume(slot)
         slot.status = 'resuming'
-        record sandbox_pause_request inverse / wake event
+        record wake event for audit
     if slot.status == 'creating':
-        wait bounded for the in-flight create
-    re-load slot; if still not running, fail enqueue with
-      'sandbox_wake_failed' and a typed error code so callers can
-      surface "cloud is starting up" cleanly
+        await bounded for the in-flight create
+    wait_for_worker_heartbeat(target_id, timeout)
+    if slot.status != 'running' after timeout:
+        mark all queued wake-required commands as failed_delivery
+          with error_code='sandbox_wake_failed'
+        return
+    # worker is now polling; it will pick up the queued commands
+    # naturally on its next lease tick.
 ```
 
-Wake is **server-owned**. The worker does not wake itself; it can't,
-because a paused E2B sandbox suspends the worker process.
+The worker side does not change: it polls
+`/v1/cloud/worker/commands/lease`; when the slot is paused, the worker
+process is suspended (no polling); after wake the worker resumes and
+finds the queued commands.
 
-Spec 09 owns the billing gate inside `ensure_managed_slot_running`;
-spec 04 wires the call hook.
+**Fail-fast for terminal wake failures.** If the wake job runs out of
+bounded retries or billing denies, queued wake-required commands for
+that target transition to `failed_delivery` immediately with a typed
+`error_code`. They do not loiter in `queued` waiting for hope:
 
-Idempotency: `ensure_managed_slot_running` is safe to call
-concurrently from multiple enqueues. The advisory lock + slot status
-re-read makes parallel callers converge.
+```text
+sandbox_wake_failed     E2B SDK returned a terminal error,
+                        or worker did not heartbeat after wake.
+
+sandbox_wake_blocked    spec-09 billing/policy denied the wake
+                        (e.g. compute exhausted, billing block).
+
+sandbox_wake_timeout    wake_timeout exceeded without slot reaching
+                        'running'. Same UX as failed; separate code
+                        for diagnostics.
+```
+
+Callers polling `GET /v1/cloud/commands/{id}` see the transition from
+`queued` → `failed_delivery` and surface a typed error. There is no
+"queued forever" state.
+
+**Explicit wake action** (for "warm up my cloud before I type"):
+
+```text
+POST /v1/cloud/sandbox-profiles/{profile_id}/wake
+  body: { target_id? }   (defaults to the primary target)
+  behavior: idempotent kick_off_managed_slot_wake;
+            returns immediately with current slot state
+  response: { sandbox_profile_id, target_id, slot_status,
+              wake_in_flight, last_wake_started_at }
+  errors:
+    sandbox_wake_blocked  if billing denies (no row created)
+    profile_not_enabled   if profile.status not in
+                           ('enabled','provisioning','active')
+```
+
+This is a UX convenience. It does the same work `enqueue_command`
+would, but without persisting a command. Mobile/web's "Resume
+session" or "Wake cloud" button calls it before the user starts
+typing so the latency happens behind a progress affordance.
+
+Idempotency: `kick_off_managed_slot_wake` is safe to call
+concurrently. The advisory lock + slot status re-read makes parallel
+callers converge on one in-flight wake job.
+
+Spec 09 owns the billing gate inside the wake job; spec 04 wires the
+call hook. Spec 04's wake job uses a stub that returns "allow" until
+spec 09 lands.
 
 ### 5.7 Workspace metadata
 
@@ -724,7 +797,7 @@ GET /v1/cloud/sandbox-profiles/{id}/exposures      (new; admin & owner)
 
 These endpoints:
   - read from Cloud DB only
-  - never call ensure_managed_slot_running
+  - never call kick_off_managed_slot_wake
   - never read cloud_target_runtime_access
   - return cached transcript / pending-interaction rows even if the
     sandbox is paused
@@ -786,7 +859,14 @@ GET  /v1/cloud/sandbox-profiles/{id}/exposures
 
 POST /v1/cloud/sessions/{session_id}/projection
        upgrade/downgrade projection_level (or create from a session
-       discovered by sync_existing_workspace)
+       discovered by backfill_exposed_workspace)
+
+POST /v1/cloud/sandbox-profiles/{id}/wake
+       body: { target_id? }
+       idempotent; kicks off the async wake job; returns immediately
+       with current slot state. Used by mobile/web "warm up cloud"
+       affordances and any UX that wants to surface "starting up"
+       before the first command is sent.
 ```
 
 Worker (worker-token-only):
@@ -857,7 +937,8 @@ server/proliferate/server/cloud/commands/service.py
   - thread cloud_workspace_id into every enqueue (already in
     authorization_context_json; promote to column)
   - _validate_runtime_config_preflight()
-  - call ensure_managed_slot_running for wake-required kinds
+  - call kick_off_managed_slot_wake for wake-required kinds (async,
+    fire-and-forget; command is persisted in 'queued' immediately)
   - on lease: stamp leased_cloud_sandbox_id + leased_slot_generation
   - on result/delivery: reject when slot fence mismatches; mark
     superseded; emit observability event
@@ -882,7 +963,9 @@ server/proliferate/server/cloud/workspaces/service.py
   - create or upsert cloud_session_projection on session start
 
 server/proliferate/server/cloud/runtime/wake.py     (new)
-  ensure_managed_slot_running(target_id, ...)
+  kick_off_managed_slot_wake(target_id, command_id?)   (sync; enqueues
+                                                         background job)
+  run_managed_slot_wake_job(target_id)                 (background)
   perform_proliferate_owned_e2b_resume(slot)
 
 server/proliferate/server/cloud/runtime/repo_config_apply.py
@@ -934,10 +1017,10 @@ anyharness/crates/proliferate-worker/src/sync/tailer.rs
   - record gaps via projection cursor; surface to Cloud on next ingest
 
 anyharness/crates/proliferate-worker/src/sync/backfill.rs
-  - sync_existing_workspace becomes the explicit
-    backfill-when-exposure-is-new flow (still triggered by Cloud
-    command; spec 04 ensures the exposure exists before the
-    command is enqueued)
+  - sync_existing_workspace is renamed to backfill_exposed_workspace
+    in the same PR (server enum, worker supported_kinds, DB CHECK,
+    payload type, SDK regen). Becomes the explicit backfill-when-
+    exposure-is-new flow.
 ```
 
 SDK regeneration:
@@ -987,12 +1070,17 @@ Chunk C  Exposure + projection model
   - worker projection cursor + tailer rewrite
   - event ingest gated by projection.status='active'
 
-Chunk D  Wake gate
-  - ensure_managed_slot_running helper
-  - enqueue calls it for wake-required kinds
+Chunk D  Async wake job
+  - kick_off_managed_slot_wake (sync; advisory lock; enqueues job)
+  - run_managed_slot_wake_job (background; consults billing hook;
+    E2B resume; waits for heartbeat)
   - WAKE_REQUIRED_KINDS constant
-  - tests: paused slot + wake-required command -> ensure_managed_slot_running
-           called and slot transitions running before lease
+  - POST /v1/cloud/sandbox-profiles/{id}/wake endpoint
+  - failed wake transitions queued wake-required commands for the
+    target to failed_delivery with typed error_code
+  - tests: enqueue never blocks; wake runs in background; command
+    transitions queued -> leased after wake; wake fail -> queued ->
+    failed_delivery
 
 Chunk E  Workspace metadata + derived fields
   - origin enum column with CHECK
@@ -1038,11 +1126,24 @@ All chunks land in one PR.
    `cloud_session_projection.status = 'active'` AND parent
    exposure is active. Sessions outside the active set are not
    uploaded.
-9. Wake-required commands invoke `ensure_managed_slot_running`
-   before delivery. Paused slots resume through the
-   Proliferate-owned path; worker never wakes itself.
-10. The wake gate consults the spec-09 billing hook (a stub returning
-    true is fine in this spec; spec 09 fills it in).
+9. `enqueue_command` never blocks on E2B. Wake-required commands
+   are persisted in `queued` status; if the slot is not running,
+   `kick_off_managed_slot_wake` is called and the wake job runs in
+   the background. The command transitions to `leased` after the
+   slot reaches `running` and the worker picks it up.
+10. The async wake job consults the spec-09 billing hook (a stub
+    returning "allow" is fine in this spec; spec 09 fills it in).
+    Wake denials transition queued commands to `failed_delivery`
+    with `error_code='sandbox_wake_blocked'` and never let them
+    loiter in `queued`.
+10a. Bounded wake retry exhaustion transitions queued commands to
+    `failed_delivery` with `error_code='sandbox_wake_failed'` (E2B
+    terminal) or `'sandbox_wake_timeout'` (no heartbeat after
+    timeout). Same caller-visible failure surface; separate codes
+    for diagnostics.
+10b. `POST /v1/cloud/sandbox-profiles/{id}/wake` is idempotent.
+    Concurrent callers converge on one in-flight wake job per
+    target via an advisory lock.
 11. `cloud_workspace.origin` is a typed column constrained to the
     spec-03 Origin vocabulary. Every workspace-create caller sets
     it.
@@ -1057,7 +1158,7 @@ All chunks land in one PR.
     returns no matches. Runtime access reads route through
     `cloud_target_runtime_access`.
 15. Passive UI endpoints (§5.9 list) never call
-    `ensure_managed_slot_running` and never trigger a wake event.
+    `kick_off_managed_slot_wake` and never trigger a wake event.
     Integration test asserts this for a paused sandbox.
 16. Cloud event ingest discards (with a per-event ack) events for
     projections whose status is not `active`. The discard is
@@ -1071,10 +1172,10 @@ All chunks land in one PR.
     row (spec 00 acceptance #23 enforced here).
 19. The automation runner and Slack workspace launch (when spec 07
     lands) call the same `managed_profile_launch` helper.
-20. Worker tailer's `backfill_exposed_workspace` (renamed concept
-    of `sync_existing_workspace`) fires only when an exposure is
-    newly active or after a gap is detected. It is not used for
-    routine ingest.
+20. Worker tailer's `backfill_exposed_workspace` (renamed from
+    `sync_existing_workspace` in this PR; same-PR rename, no alias)
+    fires only when an exposure is newly active or after a gap is
+    detected. It is not used for routine ingest.
 
 ## 9. Verification / Tests
 
@@ -1094,9 +1195,13 @@ tests/server/cloud/commands/test_stale_worker_marked_after_mismatch.py
 tests/server/cloud/commands/test_runtime_config_preflight_stale.py
 tests/server/cloud/commands/test_runtime_config_preflight_revision_mismatch.py
 tests/server/cloud/commands/test_runtime_config_preflight_ok.py
-tests/server/cloud/commands/test_wake_gate_on_wake_required_kinds.py
+tests/server/cloud/commands/test_enqueue_does_not_block_on_e2b.py
+tests/server/cloud/commands/test_wake_kicked_off_for_wake_required_kinds.py
 tests/server/cloud/commands/test_no_wake_for_non_wake_required.py
-tests/server/cloud/commands/test_wake_gate_consults_billing_hook.py
+tests/server/cloud/commands/test_wake_job_consults_billing_hook.py
+tests/server/cloud/commands/test_wake_failure_transitions_queued_to_failed.py
+tests/server/cloud/commands/test_wake_idempotent_under_concurrent_kicks.py
+tests/server/cloud/sandbox_profiles/test_wake_action_endpoint.py
 tests/server/cloud/exposures/test_exposure_unique_per_workspace.py
 tests/server/cloud/exposures/test_exposure_visibility_check.py
 tests/server/cloud/exposures/test_exposure_default_for_personal_launch.py
@@ -1142,11 +1247,28 @@ Manual smoke:
 1. Personal workspace launch end-to-end
    - managed_profile_launch creates cloud_workspace + exposure (private)
      + projection
-   - enqueue_command stamps cloud_workspace_id and required_*_revision
-   - wake gate confirms slot running
-   - worker leases, materializes, echoes ids
+   - enqueue_command stamps cloud_workspace_id and required_*_revision;
+     returns command_id immediately (no E2B block)
+   - if slot is paused: kick_off_managed_slot_wake fires in background;
+     UI polls /sandbox-profiles/{id}/target-state for "Cloud starting up"
+   - slot transitions paused -> resuming -> running; worker heartbeats
+   - worker leases the queued command, materializes, echoes ids
    - tailer picks up the new session via /worker/exposures
    - cloud_session_projection becomes active
+
+1a. Mobile "warm up cloud" before typing
+   - mobile calls POST /v1/cloud/sandbox-profiles/{id}/wake
+   - server returns immediately with current slot state
+   - background wake job runs; mobile polls target-state
+   - by the time user finishes typing, slot is running; first
+     send_prompt has no wake latency
+
+1b. Wake failure (billing block)
+   - billing hook denies wake
+   - all queued wake-required commands for the target transition
+     queued -> failed_delivery with error_code='sandbox_wake_blocked'
+   - caller's command-status poll surfaces the typed error
+   - no commands loiter in queued forever
 
 2. Slack-style team launch (preparation for spec 07)
    - managed_profile_launch with origin='slack' and visibility='shared_unclaimed'
@@ -1194,29 +1316,63 @@ Manual smoke:
    is in `result_json.errors[]`. The user-visible "what failed"
    surface is one error per command.
 
-2. **Exposure default for new managed-cloud workspaces?**
+2. **Exposure default for Desktop-originated remote access**
 
-   Bias defaults:
-     personal launch     visibility='private',
-                         default_projection_level='live',
-                         commandable=true
-     automation personal visibility='private',  same
-     automation team     visibility='shared_unclaimed', commandable=true
-     slack team          visibility='shared_unclaimed', commandable=true
-     desktop dispatch    visibility='private', commandable=true
+   When a Desktop user clicks "Continue remotely" on a local
+   workspace, what does the resulting `cloud_workspace_exposure`
+   row look like?
 
-   Spec 05 may adjust these once claim policy is concrete.
+   The user is the same person on both surfaces (Desktop + Web /
+   Mobile). They presumably want full control from the new
+   surface. But two surfaces sending prompts concurrently to one
+   AnyHarness session has surprise potential.
 
-3. **What happens if `ensure_managed_slot_running` returns
-   `sandbox_wake_failed`?**
+   Options:
 
-   Bias: enqueue rejects with a typed error; the command is not
-   persisted; the caller is responsible for retry. Alternative is
-   "persist as `queued` and let a reconciler retry the wake" but
-   that surfaces an "in flight" state to the user even when the
-   sandbox can't currently start.
+   ```text
+   (a) visibility='private', commandable=true,
+       default_projection_level='live'
+         -- full live control from any of the user's surfaces;
+            AnyHarness session loop serializes accepted prompts;
+            transcript fans out to both Desktop SSE and Cloud
+            projection.
 
-4. **Should exposure revisions be append-only history rows or just
+   (b) visibility='private', commandable=false,
+       default_projection_level='live'
+         -- mobile/web can observe, not send. User explicitly
+            promotes to commandable from Desktop UI when ready.
+
+   (c) visibility='private', commandable=true on the surface that
+       last interacted, with the other auto-promoted to read-only
+         -- requires per-surface state on the exposure; overkill
+            for V1.
+   ```
+
+   Bias: (a). The user explicitly clicked "Continue remotely";
+   they want to use it remotely. AnyHarness already serializes
+   the prompt queue. Concurrent send is a documented behaviour
+   (the planning notes call this out). Surprise is mitigated by
+   showing "Desktop session also open" / "Mobile session also
+   open" indicators in the UI — owned by spec 08.
+
+   Other source defaults (recap; not in question for spec 04):
+
+   ```text
+   personal launch                 visibility='private',
+                                   default_projection_level='live',
+                                   commandable=true
+   automation personal             same as personal launch
+   automation team                 visibility='shared_unclaimed',
+                                   commandable=true
+   slack team                      visibility='shared_unclaimed',
+                                   commandable=true
+   ```
+
+   Spec 05 (claiming) and spec 08 (web/mobile/dispatch) may revise
+   these. Spec 04 sets the V1 defaults; later specs override per
+   their UX.
+
+3. **Should exposure revisions be append-only history rows or just
    an integer on the exposure row?**
 
    Bias: integer on the row (`revision` already in §5.3). Spec 05
@@ -1224,20 +1380,130 @@ Manual smoke:
    claim transitions need durable timestamps. Spec 04 keeps the
    shape minimal.
 
-5. **Auto-cascade preflight: when?**
+4. **Auto-cascade preflight: when?**
 
-   The fail-fast V1 is correct because the UI can surface
-   "Configure your sandbox" cleanly. Auto-cascade is useful for
-   Cloud-mediated launches where the UI does not know about
-   runtime config. Bias: ship auto-cascade in spec 07 (Slack) or
-   spec 06 (automation) when their UIs cannot easily route the
-   user back to a configure step.
+   V1 is fail-fast on stale runtime config and stale agent auth.
+   Auto-cascade means: when a launch arrives with stale revisions,
+   the server transparently enqueues `materialize_environment`
+   first, then the requested command, stitched so a retry collapses.
 
-6. **`backfill_exposed_workspace` vs `sync_existing_workspace` —
-   one name or two?**
+   Surface-by-surface analysis:
 
-   Today the worker command kind is `sync_existing_workspace`.
-   The architecture spec calls it `backfill_exposed_workspace`.
-   Bias: rename the command kind to `backfill_exposed_workspace`
-   in this spec. The semantics match the new exposure model.
-   Migration ceremony rule: rename in the same PR; no alias.
+   ```text
+   Desktop / Web (interactive)
+     UI knows about the sandbox; if config is stale, it can route
+     the user to "Apply your changes" and let them click Apply.
+     Fail-fast is the right default here. Auto-cascade would hide
+     the explicit user action behind invisible enqueues.
+
+   Mobile (interactive but lightweight)
+     Same as Desktop / Web but the UI is thinner. The user can
+     still see "Cloud is updating" via target-state poll. Fail-fast
+     is OK; the readiness panel is the affordance.
+
+   Automation (spec 06)
+     No interactive UI between trigger and run. A "stale config"
+     failure mode would show up as a failed automation run, which
+     looks like a bug. Auto-cascade is the right behaviour for
+     automations: run the materialize before the prompt, mark the
+     run as "materialized then ran" in the run log.
+
+   Slack (spec 07)
+     Same constraint as automations. The Slack thread expects a
+     response; "configure your sandbox at this URL" is a bad UX.
+     Auto-cascade is correct.
+
+   Cowork API (programmatic callers)
+     Caller is explicit; can be told either way. Default to
+     fail-fast so the caller's retry loop is responsible. An
+     opt-in `auto_cascade=true` query/body param can request
+     cascade behaviour.
+   ```
+
+   So auto-cascade is a per-source behaviour, not a global toggle.
+   Concretely: spec 06 and spec 07 land their own
+   `_handle_stale_runtime_config_for_<source>(command, state)`
+   helpers that enqueue materialization first and re-enqueue the
+   original command depending on it. Spec 04 lands the fail-fast
+   default and the typed `runtime_config_stale` error code so the
+   per-source handlers have something to catch.
+
+   Two risks:
+
+   ```text
+   - Cascade loop: a "stale runtime config" might actually be a
+     config error (e.g. MCP credential revoked); naive cascade would
+     loop forever. Mitigation: each cascade enqueue increments a
+     `cascade_attempt` counter; after N attempts the run fails with
+     `runtime_config_apply_failed`.
+   - Audit noise: invisible enqueues clutter the audit log.
+     Mitigation: cascade commands carry `parent_command_id` and a
+     `cascade_reason` field; audit views collapse them under the
+     visible parent.
+   ```
+
+   Bias: fail-fast in spec 04 V1. Add auto-cascade in spec 06
+   (`automation`) and spec 07 (`slack`) with the loop guard +
+   parent-command linking above. Cowork API gets opt-in flag in
+   spec 08 if asked for.
+
+5. **Rename `sync_existing_workspace` → `backfill_exposed_workspace`?**
+
+   The worker command kind today is `sync_existing_workspace`.
+   The architecture spec and the new exposure model use
+   `backfill_exposed_workspace`.
+
+   What touches when renaming:
+
+   ```text
+   server constant in CloudCommandKind enum (commands.py)
+   DB CHECK constraint on cloud_commands.kind
+   server-side command validator
+   worker dispatcher's per-kind handler
+   worker supported_kinds advertised at lease time
+   payload type in anyharness-contract (if specific)
+   SDK regen (anyharness/sdk + cloud/sdk)
+   server tests + worker tests
+   ```
+
+   It's wide but mechanical: one find-and-replace, one migration
+   to update the CHECK enum, one regen pass.
+
+   Arguments to rename:
+
+   ```text
+   - "sync" was overloaded; the spec pack explicitly says don't use
+     "sync" as a product primitive (cllloud/3) Cloud Running.md).
+   - The new name aligns with the exposure model: it is a backfill
+     of an exposed workspace.
+   - Spec 08 (dispatch) will reference this command kind heavily;
+     starting with the clean name avoids docs drift.
+   - We have no users; rename cost is purely engineering time.
+   ```
+
+   Arguments to keep:
+
+   ```text
+   - Worker command kinds are stable identifiers; touching them
+     ripples through tests and SDK.
+   - "sync" is shorter and historically used in commit messages
+     and bug reports.
+   ```
+
+   Bias: rename. Same-PR rename per migration posture; no alias.
+   The new name is precise enough that spec 08 can build on it
+   without re-explaining what it does.
+
+6. **The `wake_timeout` value.**
+
+   How long should the async wake job wait for the worker to
+   heartbeat before declaring failure? E2B resume is typically
+   2-15 seconds; first heartbeat after resume is bounded by the
+   worker's heartbeat interval (`heartbeat_interval_seconds`
+   in enrollment response).
+
+   Bias: 60 seconds bounded with 3 retries (so worst-case 3
+   minutes before `sandbox_wake_timeout` fires). Tunable per
+   environment via `settings.sandbox_wake_timeout_seconds` and
+   `settings.sandbox_wake_max_attempts`. Reconsider after we
+   have real wake latency data.
