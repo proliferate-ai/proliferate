@@ -1,0 +1,1243 @@
+# 04 — Cloud Running Alignment
+
+Status: implementation-ready spec.
+
+Date: 2026-05-20.
+
+Depends on: [`00-sandbox-foundation.md`](00-sandbox-foundation.md),
+[`01-mcp-skills-plugins.md`](01-mcp-skills-plugins.md),
+[`02-agent-auth.md`](02-agent-auth.md).
+
+The cloud command queue, worker dispatcher, event tail, and session
+projection substrate is mostly shipped. This spec is cleanup and
+alignment: thread the spec 00 fields through, add the runtime-config
+preflight peer of the existing agent-auth preflight, fill in the
+missing exposure/projection admission model, add a wake gate, and
+strip the direct-access reads from `cloud_workspace`.
+
+## 1. Purpose & Scope
+
+In scope:
+
+- Thread `cloud_workspace_id`, `sandbox_profile_id`, `slot_generation`
+  through cloud_commands, the worker wire contract, command leasing,
+  delivery, result ingest, and event ingest.
+- Slot-fence command leasing and result ingest per spec 00 §5.8.
+- `_validate_runtime_config_preflight()` peer of the existing
+  `_validate_agent_auth_preflight()` (per spec 01).
+- Worker dispatcher synthesizes `AgentAuthExternalScope` from
+  `sandboxProfileId` on `start_session` (per spec 02 §5.2).
+- New `cloud_workspace_exposure` table; existing
+  `cloud_session_projection` (table name: `cloud_sessions`) extended
+  with `exposure_id`, `projection_level`, `commandable`,
+  `gap_state_json`, `last_uploaded_seq`.
+- Worker `worker_projection_cursor` SQLite mirror; worker tail is
+  exposure-gated.
+- Wake gate before delivery for wake-required command kinds. Cloud
+  performs the Proliferate-owned E2B operation; worker never wakes
+  itself.
+- Workspace `origin` made an explicit column (kept narrow to the
+  spec-03 vocabulary). `exposure_state` and `sandbox_type` are
+  derived, not stored.
+- Remove all managed-cloud reads of `cloud_workspace.runtime_url`,
+  `runtime_token_ciphertext`, `active_sandbox_id` (spec 00 dropped
+  the columns; spec 04 closes the call sites at
+  `repo_config_apply.py`, `anyharness_api.py`, and runtime
+  `service.py`).
+- "Passive UI" invariant: list workspace/session/transcript state
+  from Cloud DB without waking the sandbox. Enforced by review +
+  tests.
+
+Out of scope:
+
+- Claim policy and claimable lists (→ spec 05). Spec 04 lays the
+  `cloud_workspace_exposure.visibility = 'shared_unclaimed'`
+  scaffolding but spec 05 owns the claim API and claim tokens.
+- Slack inbound webhook handling (→ spec 07). Spec 04's command
+  source enum already has `'slack'`; spec 07 wires the producer.
+- Automation runner internals (→ spec 06). Spec 04 ensures the
+  existing automation cloud-execution caller carries the new
+  envelope fields, but the automation lifecycle is owned by spec 06.
+- Web/mobile UI shells (→ spec 08).
+- Billing wake-gate decisions (→ spec 09). Spec 04 defines the wake
+  hook; spec 09 owns "is this billing subject allowed to wake right
+  now?".
+- Migration / move (→ spec 10).
+
+## 2. Mental Model
+
+```text
+client (Desktop / Web / Mobile / Slack / Automation / API)
+  -> Cloud control plane
+       enqueue_command (preflight + idempotency + auth gate)
+       persist cloud_workspace + cloud_workspace_exposure +
+       cloud_session_projection rows BEFORE worker dispatch
+       wake the slot if the command requires it
+  -> Proliferate Worker
+       leases command (slot-fenced)
+       preflights local runtime state
+       calls local AnyHarness
+       reports result + echoes cloud_workspace_id / slot identity
+  -> AnyHarness
+       runs session
+  -> Worker tailer (exposure-gated)
+       uploads events for active exposures only
+  -> Cloud event ingest
+       writes cloud_session_event, updates projection rows
+  -> clients
+       read from Cloud DB; no E2B wake required for passive views
+```
+
+The invariant set:
+
+```text
+1. Cloud creates cloud_workspace + (where relevant) exposure +
+   projection rows BEFORE worker dispatch.
+2. Wake-required commands wake the slot through Proliferate, not
+   through raw E2B URLs.
+3. Command leasing, delivery, and result ingest are fenced by active
+   slot id + slot_generation.
+4. Worker results never auto-create cloud_workspace rows (spec 00
+   acceptance #23 echoed here).
+5. Workspace materialization results must echo cloud_workspace_id.
+6. Worker event tailer projects only sessions with active exposure +
+   projection. No exposure -> no upload.
+7. Passive UI reads come from Cloud DB only. Mutation/launch reads go
+   through Cloud commands.
+```
+
+## 3. Dependencies
+
+Hard:
+
+- Spec 00: `sandbox_profile`, `cloud_targets.profile_target_role`,
+  `cloud_sandbox.slot_generation`, `sandbox_profile_target_state`,
+  `cloud_target_runtime_access`, plus the new envelope/result wire
+  fields.
+- Spec 01: `cloud_sandbox_runtime_config_current.current_sequence`
+  and `current_revision_id`; the
+  `applied_runtime_config_sequence`/`applied_runtime_config_revision_id`
+  columns on `sandbox_profile_target_state`. The `materialize_environment`
+  command carrying a `runtime_config` fragment.
+- Spec 02: agent-auth preflight already shipped; spec 04 doesn't
+  redo it, but the dispatcher synthesizes `AgentAuthExternalScope`
+  per spec 02 §5.2.
+
+Soft:
+
+- Spec 05 (claiming) and spec 06 (automations) consume the exposure
+  / projection model defined here.
+- Spec 09 (billing) owns the actual wake-allow check inside the
+  wake hook.
+
+## 4. Current Repo State
+
+Verified against `/home/user/proliferate` on 2026-05-20.
+
+### 4.1 What is shipped
+
+**`cloud_commands` table** (`db/models/cloud/commands.py`):
+
+```text
+id, target_id (fk), organization_id, actor_user_id,
+actor_kind        user | automation | slack | api_key | system
+source            web | mobile | slack | api | automation | desktop_cloud_view
+workspace_id      text (AnyHarness id), nullable
+session_id        text, nullable
+kind              command kind enum
+payload_json
+observed_event_seq
+preconditions_json
+authorization_context_json    { actorUserId, targetOwnerScope,
+                                targetOrganizationId, cloudWorkspaceId }
+status            queued | leased | delivered | accepted |
+                  accepted_but_queued | rejected | expired |
+                  superseded | failed_delivery
+lease_id, leased_by_worker_id, lease_expires_at, attempt_count
+delivered_at, accepted_at, rejected_at, expired_at
+error_code, error_message, result_json
+```
+
+`authorization_context_json` already carries `cloudWorkspaceId`. Spec
+00 promotes it to a first-class column.
+
+**Command service** (`server/proliferate/server/cloud/commands/service.py`):
+
+```text
+enqueue_command(...)
+  - idempotency scope key: org/user : target : workspace : session : kind
+  - validates target status, kind, payload shape
+  - calls _validate_agent_auth_preflight()
+  - stores authorization_context_json
+
+_validate_agent_auth_preflight(...)
+  - reads sandboxProfileId + requiredAgentAuthRevision from payload
+  - loads sandbox_profile_agent_auth_target_state for (profile, target)
+  - rejects if profile missing / belongs to other target / applied <
+    required
+```
+
+**Command API**:
+
+```text
+POST /v1/cloud/commands              enqueue_command_endpoint
+GET  /v1/cloud/commands/{command_id} get_command_status_endpoint
+
+POST /v1/cloud/worker/commands/lease
+POST /v1/cloud/worker/commands/{command_id}/result
+POST /v1/cloud/worker/commands/{command_id}/delivery
+```
+
+**Worker dispatcher**
+(`anyharness/crates/proliferate-worker/src/commands/dispatcher.rs`):
+
+```text
+run_loop()
+  flush_pending_command_results()
+  lease_command(supported_kinds)
+  process_command(envelope)
+
+process_command branches per kind:
+  configure_git_identity, ensure_repo_checkout, materialize_environment,
+  sync_existing_workspace, refresh_agent_auth_config,
+  + everything else routed via dispatch_anyharness() after
+    map_cloud_command(envelope).
+
+Preconditions: validated server-side at enqueue; worker honors
+observed_event_seq if the precondition payload demands it.
+```
+
+**Session projection / event upload** (`db/models/cloud/sync.py`):
+
+```text
+cloud_session_events
+  id, target_id, session_id, anyharness_seq (uniq per session),
+  event_type, payload_json, payload_hash (dedup), payload_ref,
+  payload_size_bytes, created_at
+
+cloud_event_ingest_state
+  target_id, session_id, last_contiguous_seq, updated_at
+
+cloud_synced_workspaces
+  target_id, cloud_workspace_id (fk), workspace_id (AnyHarness)
+
+cloud_sessions       (the table is named cloud_sessions, model
+                      class is CloudSessionProjection)
+  id, target_id, session_id, cloud_workspace_id (nullable),
+  workspace_id (AnyHarness), status, phase, live_config_json,
+  last_event_seq, last_event_at, started_at, ended_at
+
+cloud_transcript_items
+  target_id, session_id, item_id, turn_id, kind, status,
+  first_seq, last_seq, completed_seq, timestamps
+
+cloud_pending_interactions
+  target_id, session_id, request_id, kind, status, requested_seq,
+  resolved_seq, timestamps
+```
+
+**Event upload endpoint**:
+
+```text
+POST /v1/cloud/worker/events/batches    worker_event_batch_endpoint
+  body: WorkerEventBatchRequest with list of WorkerSessionEventEnvelope
+  resp: { accepted_events, duplicate_events, live_only_events,
+          session_acks: [{ session_id, last_contiguous_seq }] }
+  dedup: UNIQUE (target_id, session_id, anyharness_seq) + payload_hash
+```
+
+**Worker tailer**
+(`anyharness/crates/proliferate-worker/src/sync/tailer.rs`):
+
+```text
+run_loop()  every 500ms
+  for each session in store.list_sync_sessions():
+    fetch list_session_events(session_id, last_uploaded_seq)
+    POST /worker/events/batches
+    update local cursor on session_acks
+```
+
+`store.list_sync_sessions()` returns every session the worker knows
+about. **It is not exposure-gated today.**
+
+**`cloud_workspace.origin_json`** is nullable and free-form. Used
+informally by automation runners. There is no enum-typed `origin`
+column today.
+
+**Direct-access reads on `cloud_workspace`** (call sites today):
+
+```text
+cloud_workspace.active_sandbox_id   server/cloud/runtime/repo_config_apply.py
+cloud_workspace.runtime_url         server/cloud/runtime/service.py,
+                                    server/cloud/runtime/anyharness_api.py
+cloud_workspace.runtime_token_ciphertext  server/cloud/runtime/service.py
+```
+
+These columns are dropped by spec 00. Spec 04 closes the call sites
+by routing through `cloud_target_runtime_access`.
+
+**Callers of `POST /v1/cloud/commands`**:
+
+```text
+Desktop                 source = desktop_cloud_view
+Web                     source = web (via cloud-sdk-react useEnqueueCloudCommand)
+Mobile                  source = mobile (same SDK)
+Automation              source = automation (cloud_executor_commands.py)
+API                     source = api (agent_auth service)
+Slack                   no caller in repo yet (spec 07 adds)
+```
+
+### 4.2 Gaps spec 04 closes
+
+- `cloud_commands.cloud_workspace_id` is in
+  `authorization_context_json` but not a column. Spec 00 promotes it.
+  Spec 04 makes every caller stamp it and every reader use it.
+- `leased_cloud_sandbox_id` and `leased_slot_generation` do not exist;
+  spec 00 adds them; spec 04 implements the leasing fence.
+- `_validate_runtime_config_preflight()` does not exist; spec 04 adds
+  it as the peer of `_validate_agent_auth_preflight()`.
+- Worker dispatcher does not synthesize `AgentAuthExternalScope` from
+  `sandboxProfileId`; spec 04 wires it per spec 02 §5.2.
+- `cloud_workspace_exposure` table does not exist; spec 04 creates it.
+- `cloud_sessions` (the projection table) does not carry
+  `exposure_id`, `projection_level`, `commandable`, `gap_state_json`,
+  `last_uploaded_seq`. Spec 04 adds them.
+- `worker_projection_cursor` does not exist locally on the worker.
+  Spec 04 adds it.
+- Worker tailer is not exposure-gated. Spec 04 gates it.
+- Wake-on-command logic does not exist. Spec 04 adds the wake hook
+  inside `enqueue_command` (or a sibling delivery-time gate).
+- No `origin` enum column on `cloud_workspace`. Spec 04 adds one
+  using the spec-03 vocabulary.
+
+## 5. Target Model
+
+### 5.1 Command envelope, result, and lease — wire the spec-00 fields
+
+Server (`cloud_commands` table) — already extended by spec 00:
+
+```text
+cloud_workspace_id        uuid fk cloud_workspace.id   nullable
+leased_cloud_sandbox_id   uuid fk cloud_sandbox.id     nullable
+leased_slot_generation    integer                      nullable
+```
+
+Spec 04 enforces:
+
+```text
+enqueue_command writes:
+  cloud_workspace_id  (always set for managed-cloud commands; null
+                       for non-managed targets like SSH/local)
+
+lease writes:
+  leased_cloud_sandbox_id  = active slot id at lease time
+  leased_slot_generation   = active slot's slot_generation
+
+result/delivery/event ingest reads:
+  leased_cloud_sandbox_id + leased_slot_generation MUST match the
+  current active slot for the target. If they don't:
+    - command is marked superseded (status = 'superseded')
+    - worker is marked stale (a worker that already shows
+      slot_generation < active is unenrolled and forced to re-enroll)
+    - the result is discarded; no projection / workspace / billing
+      state is updated from a stale slot
+```
+
+Worker wire (already added by spec 00 contract change):
+
+```text
+CloudCommandEnvelope:
+  cloud_workspace_id    Option<Uuid>
+  sandbox_profile_id    Option<Uuid>
+  slot_generation       Option<i64>
+
+CommandResultRequest:
+  cloud_workspace_id        Option<Uuid>
+  slot_generation           Option<i64>
+  anyharness_workspace_id   Option<String>    -- echoed on materialize
+
+CommandDeliveryRequest:
+  cloud_workspace_id    Option<Uuid>
+  slot_generation       Option<i64>
+```
+
+Where the worker fills in these fields:
+
+```text
+On materialize_workspace result:
+  - echo cloud_workspace_id from the inbound envelope
+  - on success: set anyharness_workspace_id = the created/resolved
+    AnyHarness workspace id
+  - server verifies cloud_workspace_id resolves to a row + matches
+    the command's cloud_workspace_id; then updates
+    cloud_workspace.anyharness_workspace_id +
+    materialized_slot_generation only if slot fence is correct
+
+On every other command result:
+  - echo cloud_workspace_id when known
+  - echo slot_generation always (so the server can fence)
+```
+
+### 5.2 Runtime config preflight
+
+New peer of `_validate_agent_auth_preflight()`:
+
+```text
+server/proliferate/server/cloud/commands/service.py
+
+_validate_runtime_config_preflight(db, payload, target, profile):
+  required_seq      = payload.get('requiredRuntimeConfigSequence')
+  required_rev_id   = payload.get('requiredRuntimeConfigRevisionId')
+  if both None:
+    return  # caller did not assert any preflight
+  state = load sandbox_profile_target_state(profile.id, target.id)
+  if state is None:
+    reject 'runtime_config_not_applied'
+  if state.applied_runtime_config_sequence < required_seq:
+    reject 'runtime_config_stale'
+  if required_rev_id and state.applied_runtime_config_revision_id != required_rev_id:
+    reject 'runtime_config_revision_mismatch'
+  if state.slot_generation != active_slot.slot_generation:
+    reject 'slot_replaced_runtime_config_invalid'
+```
+
+Called from `enqueue_command` for kinds that require it:
+
+```text
+start_session, send_prompt, resolve_interaction, update_session_config,
+materialize_workspace (target-applied check before re-materializing
+                       on a slot whose runtime config is behind)
+```
+
+`materialize_environment` is the apply command itself, not gated by
+this preflight. It carries the new revision; the preflight gates
+*subsequent* commands.
+
+When preflight fails with `runtime_config_stale` (the common case),
+the caller's choice is either:
+
+```text
+(a) auto-cascade
+    enqueue materialize_environment first with the current revision,
+    and enqueue the requested command after that. The server stitches
+    them with idempotency keys so a retry collapses.
+(b) fail fast
+    return the stale error to the caller; caller re-fetches state and
+    decides what to do.
+```
+
+V1 default: **fail fast**. The "configure your sandbox before launching"
+flow is the user-visible contract. Auto-cascade is added as a follow-up
+once the UI shows the materialize step explicitly.
+
+### 5.3 Exposure model
+
+New table:
+
+```text
+cloud_workspace_exposure
+  id                              uuid pk
+  target_id                       uuid fk cloud_targets.id            not null
+  cloud_workspace_id              uuid fk cloud_workspace.id          not null
+  anyharness_workspace_id         text                                nullable
+
+  owner_scope                     text   'personal' | 'organization'
+  owner_user_id                   uuid fk user.id                     nullable
+  organization_id                 uuid fk organization.id             nullable
+
+  visibility                      text   'private' | 'shared_unclaimed'
+                                          | 'claimed' | 'admin_managed'
+                                          | 'archived'
+  claimed_by_user_id              uuid fk user.id                     nullable
+
+  default_projection_level        text   'index_only' | 'session_summaries'
+                                          | 'transcript' | 'live'
+  commandable                     boolean                             not null default true
+
+  status                          text   'active' | 'paused' | 'stale' | 'revoked'
+  revision                        integer                             not null default 1
+  last_projected_at               timestamptz                         nullable
+
+  origin                          text                                nullable
+                                  (matches spec-03 Origin vocabulary)
+
+  created_at, updated_at, archived_at
+
+  CHECK ck_cloud_workspace_exposure_owner_fields
+  CHECK ck_cloud_workspace_exposure_visibility
+  CHECK ck_cloud_workspace_exposure_projection_level
+  CHECK ck_cloud_workspace_exposure_claimed_user
+    (visibility = 'claimed' <-> claimed_by_user_id IS NOT NULL)
+
+  UNIQUE PARTIAL ux_cloud_workspace_exposure_active
+    (target_id, cloud_workspace_id) WHERE archived_at IS NULL
+```
+
+A workspace has at most one active exposure at a time. Archiving an
+exposure does not delete the workspace; it just stops Cloud from
+projecting/commanding.
+
+### 5.4 Session projection extension
+
+Extend the existing `cloud_sessions` table (model class
+`CloudSessionProjection`):
+
+```text
+ADD COLUMN exposure_id           uuid fk cloud_workspace_exposure.id   nullable
+ADD COLUMN projection_level      text                                  not null default 'live'
+                                 'session_summaries' | 'transcript' | 'live'
+ADD COLUMN commandable           boolean                               not null default true
+ADD COLUMN gap_state_json        text                                  nullable
+                                 { last_gap_seq, last_repair_attempt_at, kind }
+ADD COLUMN last_uploaded_seq     integer                               nullable
+                                 mirror of cloud_event_ingest_state for fast reads
+
+backfill:
+  default projection_level = 'live'
+  default commandable      = true
+  exposure_id              = NULL until exposure rows exist; populated
+                             as exposures are created by spec 04's
+                             managed_profile_launch service
+```
+
+Behavior:
+
+```text
+projection_level = 'session_summaries'
+  -> Cloud lists session, status, title; does not store transcript rows
+  -> commandable = false typically; not enforced by DB
+
+projection_level = 'transcript'
+  -> Cloud stores cloud_transcript_item, cloud_pending_interaction rows
+  -> commandable may be true (read+write) or false (read-only)
+
+projection_level = 'live'
+  -> as transcript, plus live-fanout SSE / websocket feed
+```
+
+`gap_state_json` is set when event ingest detects a sequence gap (a
+missing `anyharness_seq`). The worker tailer's
+`backfill_exposed_workspace` command kind re-fetches the missing seq
+range; on success, `gap_state_json` is cleared.
+
+### 5.5 Worker projection cursor
+
+New worker SQLite table:
+
+```text
+worker_projection_cursor
+  exposure_id              text primary key
+  session_projection_id    text                  nullable
+  anyharness_workspace_id  text                  not null
+  anyharness_session_id    text                  nullable
+  projection_level         text                  not null
+  commandable              boolean               not null
+  last_uploaded_seq        integer               not null default 0
+  last_ack_seq             integer               not null default 0
+  status                   text                  not null default 'active'
+  updated_at               text                  not null
+```
+
+Worker tailer reconciliation:
+
+```text
+worker pulls active exposures + projections from Cloud:
+  GET /v1/cloud/worker/exposures      (worker-token-only)
+  -> list of { exposure_id, target_id, cloud_workspace_id,
+               anyharness_workspace_id, anyharness_session_id,
+               projection_level, commandable, status, revision,
+               last_uploaded_seq }
+
+worker upserts worker_projection_cursor rows for active exposures.
+worker removes rows for revoked/paused exposures (or marks them
+inactive).
+
+tailer.run_loop iterates only over active worker_projection_cursor
+rows. Sessions outside the active set are NOT tailed.
+```
+
+When a new session starts on the worker side (e.g. `start_session`
+arrives, the AnyHarness session id is known after creation), the
+worker reports it back to Cloud via the command result; Cloud
+upserts the corresponding `cloud_session_projection` row and worker
+re-fetches active exposures on the next reconciliation tick.
+
+### 5.6 Wake gate
+
+A wake-required command is one that needs the AnyHarness process to
+be running. Wake-required kinds:
+
+```text
+materialize_workspace
+materialize_environment              (target apply; needs the runtime)
+refresh_agent_auth_config            (needs PUT /v1/agents/auth-config)
+start_session
+send_prompt
+resolve_interaction
+update_session_config
+cancel_turn       (when the runtime must observe; close_session same)
+close_session
+backfill_exposed_workspace
+sync_existing_workspace
+```
+
+Non-wake-required:
+
+```text
+configure_git_identity     (idempotent; can run on next wake naturally
+                            unless caller wants it now)
+ensure_repo_checkout       (same)
+```
+
+Wake gate location:
+
+```text
+server/proliferate/server/cloud/commands/service.py
+  enqueue_command(...):
+    ... existing preflight ...
+    if kind in WAKE_REQUIRED_KINDS and target.kind == 'managed_cloud':
+        ensure_managed_slot_running(target_id, command_id,
+                                    actor_id, billing_subject_id)
+
+server/proliferate/server/cloud/runtime/wake.py    (new)
+  ensure_managed_slot_running(target_id, ...):
+    lock (target_id) advisory
+    load active slot for the profile/target
+    if slot.status == 'running':
+        return  # nothing to do
+    check spec-09 billing gate via spec-09 hook (deny if blocked)
+    if slot.status in ('paused', 'blocked'):
+        perform_proliferate_owned_e2b_resume(slot)
+        slot.status = 'resuming'
+        record sandbox_pause_request inverse / wake event
+    if slot.status == 'creating':
+        wait bounded for the in-flight create
+    re-load slot; if still not running, fail enqueue with
+      'sandbox_wake_failed' and a typed error code so callers can
+      surface "cloud is starting up" cleanly
+```
+
+Wake is **server-owned**. The worker does not wake itself; it can't,
+because a paused E2B sandbox suspends the worker process.
+
+Spec 09 owns the billing gate inside `ensure_managed_slot_running`;
+spec 04 wires the call hook.
+
+Idempotency: `ensure_managed_slot_running` is safe to call
+concurrently from multiple enqueues. The advisory lock + slot status
+re-read makes parallel callers converge.
+
+### 5.7 Workspace metadata
+
+Add a typed `origin` column to `cloud_workspace`:
+
+```text
+ALTER TABLE cloud_workspace
+  ADD COLUMN origin text NOT NULL DEFAULT 'manual_desktop'
+
+CHECK ck_cloud_workspace_origin:
+  origin IN ('manual_desktop','manual_web','manual_mobile',
+             'automation','slack','cowork_api')
+```
+
+Mapping current data:
+
+```text
+existing rows: stamp origin from origin_json.kind where available,
+                else default 'manual_desktop'.
+```
+
+`origin_json` stays for free-form metadata (originator details that
+don't fit the enum) but is no longer the primary key for "where did
+this come from."
+
+`exposure_state` and `sandbox_type` are **derived**, not stored:
+
+```text
+exposure_state
+  derived from cloud_workspace_exposure rows + their status/visibility
+  values defined in spec-03 §5.3 Exposure vocabulary
+  returned from GET /v1/cloud/workspaces/{id} as a computed field
+
+sandbox_type
+  derived from cloud_targets.kind + sandbox_profile.owner_scope:
+    kind='local'                       -> 'local'
+    kind='ssh'                         -> 'ssh'
+    kind='managed_cloud'
+      AND profile.owner_scope='personal'    -> 'managed_personal'
+      AND profile.owner_scope='organization' -> 'managed_shared'
+  returned from GET /v1/cloud/workspaces/{id} as a computed field
+```
+
+Derived fields are read-only on the API; they have no UPDATE path.
+
+### 5.8 Worker dispatcher updates
+
+```text
+anyharness/crates/proliferate-worker/src/commands/dispatcher.rs
+
+process_command(envelope):
+  - if envelope.kind in agent_auth_scoped_kinds:
+      synthesize AgentAuthExternalScope {
+        provider: "proliferate-cloud",
+        id: envelope.sandbox_profile_id?.to_string(),
+        target_id: Some(envelope.target_id.to_string())
+      }
+      attach to AnyHarness CreateSessionRequest /
+      ResumeSessionRequest
+      (per spec 02 §5.2)
+
+  - if envelope.kind in runtime_config_scoped_kinds:
+      attach expected_runtime_config_revision {
+        revision_id, content_hash, external_scope: { provider:
+        "proliferate-cloud", id: sandbox_profile_id, target_id }
+      } from envelope payload to AnyHarness create/resume request
+      (per spec 01 §5.10)
+
+  - on materialize_workspace result success:
+      include anyharness_workspace_id and echo cloud_workspace_id
+
+  - on every result: echo slot_generation
+```
+
+Worker reads new envelope fields from the contract; no version
+gating (spec-03 migration-posture rule).
+
+### 5.9 Passive UI rule
+
+Cloud-mediated lists, summaries, and status reads NEVER trigger a
+sandbox wake. The cloud_workspace + cloud_workspace_exposure +
+cloud_session_projection + cloud_transcript_item rows are the
+authoritative source.
+
+Concretely:
+
+```text
+GET /v1/cloud/workspaces
+GET /v1/cloud/workspaces/{id}
+GET /v1/cloud/workspaces/{id}/sessions
+GET /v1/cloud/sessions/{id}
+GET /v1/cloud/sessions/{id}/transcript
+GET /v1/cloud/sessions/{id}/pending-interactions
+GET /v1/cloud/sandbox-profiles/{id}/target-state
+GET /v1/cloud/sandbox-profiles/{id}/exposures      (new; admin & owner)
+
+These endpoints:
+  - read from Cloud DB only
+  - never call ensure_managed_slot_running
+  - never read cloud_target_runtime_access
+  - return cached transcript / pending-interaction rows even if the
+    sandbox is paused
+```
+
+A test in `server/tests/cloud/test_passive_ui_does_not_wake.py`
+asserts that calling the GET endpoints above on a workspace whose
+sandbox is paused does not mutate `cloud_sandbox.status` and does not
+emit a wake event.
+
+### 5.10 Removing direct-access reads from cloud_workspace
+
+Spec 00 drops `cloud_workspace.active_sandbox_id`, `runtime_url`,
+`runtime_token_ciphertext`. Spec 04 closes the callers:
+
+```text
+server/proliferate/server/cloud/runtime/repo_config_apply.py
+  - read active_sandbox_id from cloud_target_runtime_access
+  - read anyharness_base_url from cloud_target_runtime_access
+  - decrypt runtime_token_ciphertext from cloud_target_runtime_access
+
+server/proliferate/server/cloud/runtime/service.py
+  - same; all direct-access reads route through
+    cloud_target_runtime_access
+
+server/proliferate/server/cloud/runtime/anyharness_api.py
+  - same
+```
+
+Boundary rule (matches spec 00 §5.5):
+
+```text
+cloud_target_runtime_access is for:
+  managed provisioning bootstrap
+  allowlisted health checks
+  diagnostics
+
+Production Cloud -> AnyHarness mutations go through
+cloud_commands -> worker -> AnyHarness.
+```
+
+A grep `rg "cloud_workspace\.(active_sandbox_id|runtime_url|runtime_token_ciphertext|anyharness_data_key_ciphertext)" server/proliferate`
+returns no hits after spec 04 lands.
+
+### 5.11 API surface added by this spec
+
+User/admin:
+
+```text
+GET  /v1/cloud/workspaces/{cloud_workspace_id}/exposure
+POST /v1/cloud/workspaces/{cloud_workspace_id}/exposure
+PATCH /v1/cloud/workspace-exposures/{exposure_id}
+       body: { default_projection_level?, commandable?,
+               visibility?: requires admin/claim policy ok }
+DELETE /v1/cloud/workspace-exposures/{exposure_id}     (archives)
+
+GET  /v1/cloud/sandbox-profiles/{id}/exposures
+       owner/admin view of active exposures across the profile
+
+POST /v1/cloud/sessions/{session_id}/projection
+       upgrade/downgrade projection_level (or create from a session
+       discovered by sync_existing_workspace)
+```
+
+Worker (worker-token-only):
+
+```text
+GET /v1/cloud/worker/exposures
+       returns active exposures + projections for the worker's target
+       plus revision metadata so the worker can detect changes
+```
+
+Existing endpoints:
+
+```text
+POST /v1/cloud/commands                      (existing; payloads gain
+                                              required_runtime_config_*)
+GET  /v1/cloud/commands/{id}                 (existing)
+POST /v1/cloud/worker/commands/lease         (existing; slot-fenced)
+POST /v1/cloud/worker/commands/{id}/result   (existing; echo fields)
+POST /v1/cloud/worker/commands/{id}/delivery (existing)
+POST /v1/cloud/worker/events/batches         (existing; exposure-gated
+                                              by Cloud-side check)
+```
+
+Cloud event ingest accepts batches only for sessions whose
+projection has `status = 'active'`. Batches for revoked/archived
+projections are accepted but discarded with a structured warning
+(useful for diagnostics) — see the per-event ack list.
+
+## 6. Files To Change
+
+Server (Python):
+
+```text
+server/proliferate/db/models/cloud/commands.py
+  - the column adds are owned by spec 00; spec 04 imports the new
+    fields and uses them in service code
+
+server/proliferate/db/models/cloud/workspaces.py
+  - add origin enum column + CHECK
+  - remove direct-access columns (already owned by spec 00; spec 04
+    just confirms removal in migration ordering)
+
+server/proliferate/db/models/cloud/sync.py
+  - CloudSessionProjection (table cloud_sessions):
+      add exposure_id, projection_level, commandable, gap_state_json,
+      last_uploaded_seq columns + CHECKs
+
+server/proliferate/db/models/cloud/exposures.py        (new)
+  CloudWorkspaceExposure
+  CloudWorkspaceExposureRevision (optional audit ring; defer if not
+                                  needed by spec 05)
+
+server/proliferate/db/migrations/versions/<NEW>_exposure_projection_and_wake.py
+  - cloud_workspace_exposure
+  - cloud_sessions projection columns
+  - cloud_workspace.origin column
+
+server/proliferate/db/store/cloud_sync/
+  exposures.py                    (new) snapshot loaders/upserts
+  projections.py                  (new) cloud_sessions projection upserts
+                                        and gap_state writes
+  events.py                       update ingest to set
+                                        last_uploaded_seq on
+                                        cloud_session_projection
+  workspaces.py                   write origin enum
+
+server/proliferate/server/cloud/commands/service.py
+  - thread cloud_workspace_id into every enqueue (already in
+    authorization_context_json; promote to column)
+  - _validate_runtime_config_preflight()
+  - call ensure_managed_slot_running for wake-required kinds
+  - on lease: stamp leased_cloud_sandbox_id + leased_slot_generation
+  - on result/delivery: reject when slot fence mismatches; mark
+    superseded; emit observability event
+
+server/proliferate/server/cloud/commands/access.py
+  - all listing endpoints already filter by org / actor; spec 04
+    adds an exposure-aware check for cross-user reads (claim policy
+    detail lives in spec 05 but the structural check lives here)
+
+server/proliferate/server/cloud/commands/api.py
+  - response shape: include exposure_id, projection_id, slot identity
+    where helpful
+
+server/proliferate/server/cloud/workspaces/service.py
+  - rewrite create_cloud_workspace to write sandbox_profile_id +
+    target_id BEFORE enqueue_command (managed_profile_launch
+    helper)
+  - stamp origin enum from caller (web/desktop/automation/slack)
+  - create or upsert cloud_workspace_exposure with sensible defaults
+    (personal -> 'private' + commandable; automation -> 'private' +
+    commandable; slack/team -> 'shared_unclaimed' + commandable)
+  - create or upsert cloud_session_projection on session start
+
+server/proliferate/server/cloud/runtime/wake.py     (new)
+  ensure_managed_slot_running(target_id, ...)
+  perform_proliferate_owned_e2b_resume(slot)
+
+server/proliferate/server/cloud/runtime/repo_config_apply.py
+server/proliferate/server/cloud/runtime/service.py
+server/proliferate/server/cloud/runtime/anyharness_api.py
+  - read from cloud_target_runtime_access instead of cloud_workspace
+
+server/proliferate/server/cloud/workspaces/api.py
+  - GET /workspaces/{id} returns computed exposure_state + sandbox_type
+  - POST /workspaces/{id}/exposure
+  - PATCH /workspace-exposures/{id}
+  - DELETE /workspace-exposures/{id}
+
+server/proliferate/server/cloud/sandbox_profiles/api.py
+  - GET /sandbox-profiles/{id}/exposures   (admin & owner)
+
+server/proliferate/server/cloud/worker/api.py
+  - GET /worker/exposures
+  - event ingest: discard events for inactive projections with a
+    structured per-event ack
+
+server/proliferate/server/automations/worker/cloud_execution/**
+  - automation runner uses the new managed_profile_launch helper
+  - origin = 'automation' on workspace + exposure
+```
+
+Worker (Rust):
+
+```text
+anyharness/crates/proliferate-worker/src/commands/dispatcher.rs
+  - synthesize AgentAuthExternalScope on agent-auth-scoped kinds
+  - attach expected_runtime_config_revision on runtime-config-scoped kinds
+  - echo cloud_workspace_id + slot_generation on results
+
+anyharness/crates/proliferate-worker/src/commands/mapping.rs
+  - propagate envelope fields through to AnyHarness contract types
+
+anyharness/crates/proliferate-worker/src/cloud_client/exposures.rs   (new)
+  GET /v1/cloud/worker/exposures
+  Snapshot dataclasses
+
+anyharness/crates/proliferate-worker/src/store/
+  worker_projection_cursor schema + DAO
+
+anyharness/crates/proliferate-worker/src/sync/tailer.rs
+  - replace store.list_sync_sessions() with
+    store.list_active_projection_cursors()
+  - on reconcile tick, refresh active exposures from Cloud
+  - record gaps via projection cursor; surface to Cloud on next ingest
+
+anyharness/crates/proliferate-worker/src/sync/backfill.rs
+  - sync_existing_workspace becomes the explicit
+    backfill-when-exposure-is-new flow (still triggered by Cloud
+    command; spec 04 ensures the exposure exists before the
+    command is enqueued)
+```
+
+SDK regeneration:
+
+```text
+anyharness/sdk         (no contract change in spec 04 beyond what
+                        spec 00/01/02 already shipped)
+cloud/sdk              (add exposures/projection clients, new fields
+                        on workspace responses)
+```
+
+Desktop:
+
+```text
+desktop/src/hooks/access/cloud/workspaces/                    extend
+  - returns exposure_state and sandbox_type from server payload
+desktop/src/hooks/access/cloud/exposures/                     (new)
+  use-workspace-exposure.ts, use-exposure-mutations.ts
+desktop/src/hooks/access/cloud/projections/                   (new)
+  use-session-projection.ts
+desktop/src/components/cloud/                                 add passive
+  workspace sidebar row uses exposure_state + sandbox_type from
+  vocabulary.ts (spec 03)
+```
+
+## 7. Implementation Chunks
+
+```text
+Chunk A  cloud_workspace_id + slot fence on commands
+  - command service stamps cloud_workspace_id at enqueue
+  - lease stamps leased_cloud_sandbox_id + leased_slot_generation
+  - result/delivery/event ingest reject stale slots
+  - tests for fence: stale slot result discarded; superseded marker;
+    worker re-enrollment behaviour
+
+Chunk B  Runtime config preflight
+  - _validate_runtime_config_preflight()
+  - enqueue rejects stale; fail-fast V1
+  - test: start_session with stale required_runtime_config_sequence
+    is rejected before reaching the worker
+
+Chunk C  Exposure + projection model
+  - cloud_workspace_exposure table
+  - cloud_sessions projection columns
+  - upsert exposure + projection on managed_profile_launch
+  - worker /worker/exposures endpoint
+  - worker projection cursor + tailer rewrite
+  - event ingest gated by projection.status='active'
+
+Chunk D  Wake gate
+  - ensure_managed_slot_running helper
+  - enqueue calls it for wake-required kinds
+  - WAKE_REQUIRED_KINDS constant
+  - tests: paused slot + wake-required command -> ensure_managed_slot_running
+           called and slot transitions running before lease
+
+Chunk E  Workspace metadata + derived fields
+  - origin enum column with CHECK
+  - origin stamped by every caller (web/desktop/automation/slack)
+  - workspace API computes exposure_state + sandbox_type
+  - desktop reads via use-workspace
+
+Chunk F  Direct-access cleanup
+  - repo_config_apply, runtime service, anyharness_api stop reading
+    cloud_workspace.runtime_*
+  - cloud_target_runtime_access is the only home
+  - grep verifies zero matches
+
+Chunk G  Passive UI invariant tests
+  - integration test that calls every passive GET endpoint with a
+    paused sandbox and asserts no slot mutation, no E2B SDK call
+```
+
+All chunks land in one PR.
+
+## 8. Acceptance Criteria
+
+1. Every managed-cloud `cloud_commands` row carries
+   `cloud_workspace_id`. Non-managed (SSH, local) rows leave it NULL.
+2. Command leasing stamps `leased_cloud_sandbox_id` and
+   `leased_slot_generation` from the active slot at lease time.
+3. Result, delivery, and event ingest reject reports whose
+   `slot_generation` does not match the active slot. Affected
+   commands are marked `superseded`; the reporting worker is marked
+   stale and forced to re-enroll.
+4. `_validate_runtime_config_preflight()` exists in
+   `commands/service.py` and is called from `enqueue_command` for
+   `start_session`, `send_prompt`, `resolve_interaction`,
+   `update_session_config`, and `materialize_workspace`.
+5. V1 preflight behaviour is **fail fast** on stale runtime config.
+   Auto-cascade is a follow-up.
+6. `cloud_workspace_exposure` exists with the schema in §5.3.
+   Active exposure is unique per `(target_id, cloud_workspace_id)`.
+7. `cloud_sessions` (CloudSessionProjection) has `exposure_id`,
+   `projection_level`, `commandable`, `gap_state_json`,
+   `last_uploaded_seq` columns.
+8. Worker tailer is exposure-gated: it tails only sessions whose
+   `cloud_session_projection.status = 'active'` AND parent
+   exposure is active. Sessions outside the active set are not
+   uploaded.
+9. Wake-required commands invoke `ensure_managed_slot_running`
+   before delivery. Paused slots resume through the
+   Proliferate-owned path; worker never wakes itself.
+10. The wake gate consults the spec-09 billing hook (a stub returning
+    true is fine in this spec; spec 09 fills it in).
+11. `cloud_workspace.origin` is a typed column constrained to the
+    spec-03 Origin vocabulary. Every workspace-create caller sets
+    it.
+12. `GET /v1/cloud/workspaces/{id}` returns computed `exposure_state`
+    and `sandbox_type` fields using the spec-03 vocabulary string
+    values. Neither is a stored column.
+13. Worker dispatcher synthesizes `AgentAuthExternalScope` on
+    agent-auth-scoped kinds (spec 02 §5.2) and attaches
+    `expected_runtime_config_revision` on runtime-config-scoped
+    kinds (spec 01 §5.10).
+14. `rg "cloud_workspace\.(active_sandbox_id|runtime_url|runtime_token_ciphertext|anyharness_data_key_ciphertext)" server/proliferate`
+    returns no matches. Runtime access reads route through
+    `cloud_target_runtime_access`.
+15. Passive UI endpoints (§5.9 list) never call
+    `ensure_managed_slot_running` and never trigger a wake event.
+    Integration test asserts this for a paused sandbox.
+16. Cloud event ingest discards (with a per-event ack) events for
+    projections whose status is not `active`. The discard is
+    observable in the ack list but does not mutate transcript or
+    pending-interaction rows.
+17. `GET /v1/cloud/worker/exposures` exists and is worker-token-only.
+    The worker projection cursor table reconciles to its response.
+18. `materialize_workspace` worker result echoes `cloud_workspace_id`
+    and (on success) `anyharness_workspace_id`. The server rejects
+    results whose `cloud_workspace_id` does not match an existing
+    row (spec 00 acceptance #23 enforced here).
+19. The automation runner and Slack workspace launch (when spec 07
+    lands) call the same `managed_profile_launch` helper.
+20. Worker tailer's `backfill_exposed_workspace` (renamed concept
+    of `sync_existing_workspace`) fires only when an exposure is
+    newly active or after a gap is detected. It is not used for
+    routine ingest.
+
+## 9. Verification / Tests
+
+Server:
+
+```bash
+cd server && uv run pytest -q
+```
+
+Targeted tests:
+
+```text
+tests/server/cloud/commands/test_cloud_workspace_id_promoted_to_column.py
+tests/server/cloud/commands/test_slot_fence_lease.py
+tests/server/cloud/commands/test_slot_fence_result_rejection.py
+tests/server/cloud/commands/test_stale_worker_marked_after_mismatch.py
+tests/server/cloud/commands/test_runtime_config_preflight_stale.py
+tests/server/cloud/commands/test_runtime_config_preflight_revision_mismatch.py
+tests/server/cloud/commands/test_runtime_config_preflight_ok.py
+tests/server/cloud/commands/test_wake_gate_on_wake_required_kinds.py
+tests/server/cloud/commands/test_no_wake_for_non_wake_required.py
+tests/server/cloud/commands/test_wake_gate_consults_billing_hook.py
+tests/server/cloud/exposures/test_exposure_unique_per_workspace.py
+tests/server/cloud/exposures/test_exposure_visibility_check.py
+tests/server/cloud/exposures/test_exposure_default_for_personal_launch.py
+tests/server/cloud/exposures/test_exposure_default_for_automation.py
+tests/server/cloud/exposures/test_exposure_default_for_slack_launch.py
+tests/server/cloud/projections/test_projection_columns_present.py
+tests/server/cloud/projections/test_event_ingest_discards_inactive.py
+tests/server/cloud/projections/test_gap_state_repair_flow.py
+tests/server/cloud/workspaces/test_origin_enum_check.py
+tests/server/cloud/workspaces/test_sandbox_type_derivation.py
+tests/server/cloud/workspaces/test_exposure_state_derivation.py
+tests/server/cloud/runtime/test_no_direct_access_reads_cloud_workspace.py
+tests/server/cloud/passive_ui/test_passive_ui_does_not_wake.py
+tests/server/automations/test_automation_uses_managed_profile_launch.py
+```
+
+Worker / AnyHarness:
+
+```bash
+cargo test -p proliferate-worker
+```
+
+Targeted Rust tests:
+
+```text
+anyharness/crates/proliferate-worker/src/sync/tailer.rs#tests
+  - tailer tails only active projection cursors
+  - inactive cursors are skipped
+  - reconciliation refreshes from /worker/exposures
+  - gap detection records gap_state and stops uploads until repair
+
+anyharness/crates/proliferate-worker/src/commands/dispatcher.rs#tests
+  - agent_auth_scope synthesized on start_session
+  - expected_runtime_config_revision attached on start_session/send_prompt
+  - materialize_workspace result echoes cloud_workspace_id
+  - non-wake-required commands proceed even on a paused-status slot
+    (worker side; the server-side wake gate is the policy authority)
+```
+
+Manual smoke:
+
+```text
+1. Personal workspace launch end-to-end
+   - managed_profile_launch creates cloud_workspace + exposure (private)
+     + projection
+   - enqueue_command stamps cloud_workspace_id and required_*_revision
+   - wake gate confirms slot running
+   - worker leases, materializes, echoes ids
+   - tailer picks up the new session via /worker/exposures
+   - cloud_session_projection becomes active
+
+2. Slack-style team launch (preparation for spec 07)
+   - managed_profile_launch with origin='slack' and visibility='shared_unclaimed'
+   - exposure visible to org members
+   - projection active; commandable=true
+   - workspace listing for org members shows it without waking
+
+3. Slot replacement mid-flight
+   - active session running
+   - replace cloud_sandbox; slot_generation bumps
+   - worker on old slot reports a result -> rejected, superseded;
+     old worker re-enrolls
+   - sandbox_profile_target_state applied_* invalidated
+   - cloud_workspace.materialized_slot_generation invalidated
+   - new launches re-materialize before send_prompt
+
+4. Stale runtime config
+   - bump cloud_sandbox_runtime_config_current to N+1
+   - start_session with required_runtime_config_sequence=N is rejected
+     by the preflight as 'runtime_config_stale'
+   - re-enqueue with required_runtime_config_sequence=N+1 after
+     materialize_environment applies; succeeds
+
+5. Passive UI on paused sandbox
+   - pause the slot
+   - GET /workspaces, /sessions, /transcript all succeed without
+     waking; cloud_sandbox.status stays paused
+
+6. Direct-access cleanup
+   - rg returns no cloud_workspace.runtime_* reads
+   - runtime endpoints work via cloud_target_runtime_access
+```
+
+## 10. Open Questions
+
+1. **`materialize_environment` result split: env vs runtime_config?**
+
+   `materialize_environment` carries both repo/env materialization
+   and the runtime_config fragment (spec 01). The worker result
+   structurally has one status. If the env apply succeeds but the
+   runtime_config apply fails, should the command be marked
+   `accepted_but_partial`?
+
+   Bias: report `failed` if either sub-step fails. Sub-step detail
+   is in `result_json.errors[]`. The user-visible "what failed"
+   surface is one error per command.
+
+2. **Exposure default for new managed-cloud workspaces?**
+
+   Bias defaults:
+     personal launch     visibility='private',
+                         default_projection_level='live',
+                         commandable=true
+     automation personal visibility='private',  same
+     automation team     visibility='shared_unclaimed', commandable=true
+     slack team          visibility='shared_unclaimed', commandable=true
+     desktop dispatch    visibility='private', commandable=true
+
+   Spec 05 may adjust these once claim policy is concrete.
+
+3. **What happens if `ensure_managed_slot_running` returns
+   `sandbox_wake_failed`?**
+
+   Bias: enqueue rejects with a typed error; the command is not
+   persisted; the caller is responsible for retry. Alternative is
+   "persist as `queued` and let a reconciler retry the wake" but
+   that surfaces an "in flight" state to the user even when the
+   sandbox can't currently start.
+
+4. **Should exposure revisions be append-only history rows or just
+   an integer on the exposure row?**
+
+   Bias: integer on the row (`revision` already in §5.3). Spec 05
+   may add an audit ring (`cloud_workspace_exposure_audit`) when
+   claim transitions need durable timestamps. Spec 04 keeps the
+   shape minimal.
+
+5. **Auto-cascade preflight: when?**
+
+   The fail-fast V1 is correct because the UI can surface
+   "Configure your sandbox" cleanly. Auto-cascade is useful for
+   Cloud-mediated launches where the UI does not know about
+   runtime config. Bias: ship auto-cascade in spec 07 (Slack) or
+   spec 06 (automation) when their UIs cannot easily route the
+   user back to a configure step.
+
+6. **`backfill_exposed_workspace` vs `sync_existing_workspace` —
+   one name or two?**
+
+   Today the worker command kind is `sync_existing_workspace`.
+   The architecture spec calls it `backfill_exposed_workspace`.
+   Bias: rename the command kind to `backfill_exposed_workspace`
+   in this spec. The semantics match the new exposure model.
+   Migration ceremony rule: rename in the same PR; no alias.
