@@ -833,9 +833,7 @@ desktop/src/lib/domain/telemetry/events.ts
 
 ## 7. Implementation Chunks
 
-All chunks land in one PR. Shared primitives may land ahead of the feature
-specs that consume them, but visible settings rows and panes ship only when
-their owning feature spec provides a functioning body. No empty pane shells,
+Preferred implementation is one PR for the settings IA cleanup. Shared primitives may land ahead of feature specs that consume them, but visible settings rows and panes ship only when their owning feature spec provides a functioning body. No empty pane shells,
 stub cards, or "coming soon" panels.
 
 ```text
@@ -1002,26 +1000,26 @@ Manual smoke:
      -> 300px fixed; no horizontal scroll inside nav.
 ```
 
-## 10. Open Questions
+## 10. Final Decisions / Deferred Questions
 
 1. **Should `agents` and `agent-defaults` be one pane (tabs) or two
    sidebar items?**
 
-   Bias: two sidebar items, matching the mockup. They have different
+   Decision: two sidebar items, matching the mockup. They have different
    conceptual scopes (installed-on-this-Mac vs reusable run config).
    Tabs would compress the IA and lose the mockup's intent.
 
 2. **Should the Workspace > Environments pane keep one row per repo,
    or split local-vs-cloud?**
 
-   Bias: keep one row per repo with both local and cloud config
+   Decision: keep one row per repo with both local and cloud config
    inline (current `EnvironmentsPane` shape). The list grows linearly
    in repo count; splitting doubles the IA without product benefit.
 
 3. **Should `useIsAdmin` accept `null` (e.g. user has no org) and
    return `isAdmin = false` quietly, or throw?**
 
-   Bias: return false quietly. Throwing makes UI-flow code uglier;
+   Decision: return false quietly. Throwing makes UI-flow code uglier;
    the empty-org case is real.
 
 4. **Empty shells now or feature specs ship together?**
@@ -1032,7 +1030,7 @@ Manual smoke:
 5. **Should the per-pane `?target=…` / `?credential=…` focus params
    live in `useSettingsNavigation` or a sibling hook?**
 
-   Bias: extend `useSettingsNavigation()` with a generic
+   Decision: extend `useSettingsNavigation()` with a generic
    `focus: Record<string, string>` so panes don't each invent their
    own param parser.
 
@@ -1046,6 +1044,6 @@ Manual smoke:
    lives) and then naturally crosses into Environments/Agent Auth/
    Plugins as needed.
 
-   Bias: do not invent a "Personal Cloud" pane. The cross-cutting
+   Decision: do not invent a "Personal Cloud" pane. The cross-cutting
    readiness summary lives in the Compute pane via
    `RuntimeReadinessPanel`. Spec 00 owns that landing.

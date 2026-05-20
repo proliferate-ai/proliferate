@@ -1167,7 +1167,7 @@ Chunk G  Passive UI invariant tests
     paused sandbox and asserts no slot mutation, no E2B SDK call
 ```
 
-All chunks land in one PR.
+Preferred implementation is one PR per spec. Chunks are review checkpoints inside that PR and may be split only when the split does not leave duplicate models, dead paths, partially wired security checks, or visible inert UI.
 
 ## 8. Acceptance Criteria
 
@@ -1373,7 +1373,7 @@ Manual smoke:
    - runtime endpoints work via cloud_target_runtime_access
 ```
 
-## 10. Open Questions
+## 10. Final Decisions / Deferred Questions
 
 1. **`materialize_environment` result split: env vs runtime_config?**
 
@@ -1383,7 +1383,7 @@ Manual smoke:
    runtime_config apply fails, should the command be marked
    `accepted_but_partial`?
 
-   Bias: report `failed` if either sub-step fails. Sub-step detail
+   Decision: report `failed` if either sub-step fails. Sub-step detail
    is in `result_json.errors[]`. The user-visible "what failed"
    surface is one error per command.
 
@@ -1419,7 +1419,7 @@ Manual smoke:
             for V1.
    ```
 
-   Bias: (a). The user explicitly clicked "Continue remotely";
+   Decision: (a). The user explicitly clicked "Continue remotely";
    they want to use it remotely. AnyHarness already serializes
    the prompt queue. Concurrent send is a documented behaviour
    (the planning notes call this out). Surprise is mitigated by
@@ -1446,7 +1446,7 @@ Manual smoke:
 3. **Should exposure revisions be append-only history rows or just
    an integer on the exposure row?**
 
-   Bias: integer on the row (`revision` already in §5.3). Spec 05
+   Decision: integer on the row (`revision` already in §5.3). Spec 05
    may add an audit ring (`cloud_workspace_exposure_audit`) when
    claim transitions need durable timestamps. Spec 04 keeps the
    shape minimal.
@@ -1513,7 +1513,7 @@ Manual smoke:
      visible parent.
    ```
 
-   Bias: fail-fast in spec 04 V1. Add auto-cascade in spec 06
+   Decision: fail-fast in spec 04 V1. Add auto-cascade in spec 06
    (`automation`) and spec 07 (`slack`) with the loop guard +
    parent-command linking above. Cowork API gets opt-in flag in
    spec 08 if asked for.
@@ -1561,7 +1561,7 @@ Manual smoke:
      and bug reports.
    ```
 
-   Bias: rename. Same-PR rename per migration posture; no alias.
+   Decision: rename. Same-PR rename per migration posture; no alias.
    The new name is precise enough that spec 08 can build on it
    without re-explaining what it does.
 
@@ -1573,7 +1573,7 @@ Manual smoke:
    worker's heartbeat interval (`heartbeat_interval_seconds`
    in enrollment response).
 
-   Bias: 60 seconds bounded with 3 retries (so worst-case 3
+   Decision: 60 seconds bounded with 3 retries (so worst-case 3
    minutes before `sandbox_wake_timeout` fires). Tunable per
    environment via `settings.sandbox_wake_timeout_seconds` and
    `settings.sandbox_wake_max_attempts`. Reconsider after we

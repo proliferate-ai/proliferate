@@ -131,8 +131,8 @@ Hard:
 - Spec 00: `cloud_target_runtime_access` (Desktop reads
   AnyHarness URL for direct-attach); workspace `sandbox_type`
   derived field (spec 04 §5.7).
-- Spec 03: vocabulary enums, sidebar primitives,
-  `useIsAdmin(org)`.
+- Spec 03: vocabulary enums, sidebar primitives, and UI admin-gate
+  affordances such as `useIsAdmin(org)`.
 - Spec 04: `cloud_workspace_exposure`, `cloud_session_projection`
   with `projection_level` + `commandable`; SSE patches; passive
   UI invariant.
@@ -155,7 +155,7 @@ Verified against the current repository worktree on 2026-05-20.
 
 ### 4.1 What is shipped
 
-**Web app** at `/home/user/proliferate/web/` (Vite + React):
+**Web app** at `web/` (Vite + React):
 
 ```text
 Pages: HomePage, WorkspacesPage, ChatPage, AutomationsPage,
@@ -172,7 +172,7 @@ Web is partially wired: it lists workspaces today. It does NOT
 have a `usePublishedSessionPatches`-style hook over the SSE
 primitives; transcript views are not live.
 
-**Mobile app** at `/home/user/proliferate/mobile/` (React Native /
+**Mobile app** at `mobile/` (React Native /
 Expo, EAS):
 
 ```text
@@ -184,7 +184,7 @@ Workspaces screen: renders from fixture data
                     (`mobile-fixtures.ts`), not Cloud API
 ```
 
-**Cloud SDK** at `/home/user/proliferate/cloud/sdk/`:
+**Cloud SDK** at `cloud/sdk/`:
 
 ```text
 Clients: auth, agent-auth, automations, billing, commands, compute,
@@ -202,7 +202,7 @@ Live wrappers: cloud/sdk/src/client/live.ts
   subscribeTarget    /v1/cloud/targets/{id}/stream
 ```
 
-**SDK-React** at `/home/user/proliferate/cloud/sdk-react/`:
+**SDK-React** at `cloud/sdk-react/`:
 
 ```text
 sessions.ts, workspaces.ts, etc. — useQuery one-shot snapshots
@@ -614,6 +614,9 @@ cloud_api_key                                                  (new)
                                      (e.g. "pk_live_abc") for display
   key_hash                        text                          NOT NULL
   hash_key_id                     text                          NOT NULL
+  scopes_json                     jsonb                         NOT NULL default '[]'
+                                  -- explicit capabilities, never blanket
+                                     org-admin authority
 
   status                          'active' | 'revoked'          NOT NULL
   last_used_at                    timestamptz                   nullable
@@ -631,8 +634,7 @@ cloud_api_key                                                  (new)
 Token format:
 
 ```text
-public_token = pk_<env>_<random>           -- env: 'live' | 'test'
-                                            -- shown ONCE on create; never stored
+public_token = pk_live_<random>            -- shown ONCE on create; never stored
                                             -- key_hash = hmac(cloud_secret_key, token)
                                             -- key_prefix = first 12 chars
 ```
@@ -656,24 +658,35 @@ API endpoints:
 
 ```text
 POST   /v1/cloud/api-keys
-  body: { name, owner_scope, expires_at? }
+  body: { name, owner_scope, expires_at?, scopes? }
   response: { id, public_token, key_prefix, ... }   -- token shown ONCE
 
 GET    /v1/cloud/api-keys                            list keys for caller
 DELETE /v1/cloud/api-keys/{id}                       revoke
 
 POST   /v1/cloud/organizations/{org}/api-keys
-  body: { name, expires_at? }
-  response: same shape; requires useIsAdmin(org)
+  body: { name, expires_at?, scopes? }
+  response: same shape; server requires active org role in
+            organization_admin_roles()
 ```
 
 Authorization:
 
 ```text
 - personal API key: acts as the owner; same scope as their OAuth
-  session
-- org API key: acts as a system actor for the org with admin scope
-  (anything an org admin can do via Cloud)
+  session, bounded by scopes_json
+- org API key: acts as an org-scoped cowork actor, bounded by
+  scopes_json. It is NOT equivalent to an org admin.
+- V1 scopes:
+    cloud.workspaces:read
+    cloud.commands:create
+    cloud.commands:read
+    cloud.exposures:read
+  Future scopes must be explicitly added; API keys never receive
+  billing, organization-settings, agent-auth, MCP/publicization, or
+  direct-attach privileges by default.
+- creating an org API key requires active org role in
+  organization_admin_roles()
 - API keys cannot call the direct-attach endpoint (spec 05) or
   per-token revoke (spec 05); X-Client-Kind: desktop is still
   required
@@ -764,7 +777,7 @@ Server (Python):
 server/proliferate/db/models/cloud/api_keys.py                       (new)
   CloudApiKey
 
-server/proliferate/db/migrations/versions/<NEW>_cowork_api_keys.py
+server/alembic/versions/<NEW>_cowork_api_keys.py
 
 server/proliferate/db/store/cloud_api_keys.py                        (new)
   insert / list_for_owner / lookup_by_hash / revoke
@@ -795,7 +808,7 @@ server/proliferate/server/cloud/live/api.py
   no schema change; spec 08 adds React hook callers
 
 server/proliferate/config.py
-  + cloud_api_key_env: 'live' | 'test'   default 'live'
+  no cloud_api_key_env in V1; token prefix is `pk_live_`
 ```
 
 Cloud SDK + SDK-React:
@@ -993,8 +1006,10 @@ Chunk H  Tests + smoke
     requested command. Cascade attempts capped per
     `settings.cowork_api_cascade_max_attempts`. Failure returns
     a typed error via the command status path.
-16. Web/mobile/Desktop never call the cowork API key minting
-    endpoint without `useIsAdmin(org)` for org-scoped keys.
+16. Org-scoped cowork API key creation is enforced server-side by
+    active org role in `organization_admin_roles()`. Web/mobile/
+    Desktop hide the creation UI unless `useIsAdmin(org)` is true,
+    but UI gating is not the security boundary.
 17. Push notifications are NOT shipped in this spec. The
     post-session-event registry (spec 07 §5.8) remains the
     integration point for a future push spec.
@@ -1020,20 +1035,20 @@ uv run pytest -q
 Targeted server tests:
 
 ```text
-tests/server/cloud/workspaces/test_scope_exposed.py
-tests/server/cloud/workspaces/test_response_includes_exposure.py
-tests/server/cloud/workspaces/test_response_includes_last_session_summary.py
-tests/server/cloud/commands/test_auto_cascade_runtime_config.py
-tests/server/cloud/commands/test_auto_cascade_agent_auth.py
-tests/server/cloud/commands/test_auto_cascade_cap.py
-tests/server/cloud/api_keys/test_create_personal.py
-tests/server/cloud/api_keys/test_create_org_admin_gate.py
-tests/server/cloud/api_keys/test_token_hash_only_stored.py
-tests/server/cloud/api_keys/test_lookup_by_hmac.py
-tests/server/cloud/api_keys/test_revoke.py
-tests/server/auth/test_middleware_classifies_pk_prefix.py
-tests/server/cloud/exposure/test_continue_remotely_creates_exposure.py
-tests/server/cloud/exposure/test_disable_remote_access_pauses.py
+server/tests/cloud/workspaces/test_scope_exposed.py
+server/tests/cloud/workspaces/test_response_includes_exposure.py
+server/tests/cloud/workspaces/test_response_includes_last_session_summary.py
+server/tests/cloud/commands/test_auto_cascade_runtime_config.py
+server/tests/cloud/commands/test_auto_cascade_agent_auth.py
+server/tests/cloud/commands/test_auto_cascade_cap.py
+server/tests/cloud/api_keys/test_create_personal.py
+server/tests/cloud/api_keys/test_create_org_admin_gate.py
+server/tests/cloud/api_keys/test_token_hash_only_stored.py
+server/tests/cloud/api_keys/test_lookup_by_hmac.py
+server/tests/cloud/api_keys/test_revoke.py
+server/tests/auth/test_middleware_classifies_pk_prefix.py
+server/tests/cloud/exposure/test_continue_remotely_creates_exposure.py
+server/tests/cloud/exposure/test_disable_remote_access_pauses.py
 ```
 
 SDK + SDK-React:
@@ -1152,23 +1167,23 @@ Manual smoke:
    - Desktop local view unaffected
 ```
 
-## 10. Open Questions
+## 10. Final Decisions / Deferred Questions
 
 1. **Live token-by-token streaming on web/mobile?**
 
    V1 uses session-patch SSE. Token streaming would be lighter
-   latency but adds reconnect complexity and bandwidth. Bias:
+   latency but adds reconnect complexity and bandwidth. Decision:
    defer until usage data shows the patch cadence is too coarse.
 
 2. **Should mobile keep fixtures around at all?**
 
-   Bias: only for unit tests / Storybook stories. Production
+   Decision: only for unit tests / Storybook stories. Production
    reads always go through the Cloud SDK. Remove
    `mobile-fixtures.ts` from prod bundle paths.
 
 3. **Cowork API key environment (`pk_live_` vs `pk_test_`)?**
 
-   Bias: ship `pk_live_` only in V1. Test-mode keys are useful
+   Decision: ship `pk_live_` only in V1. Test-mode keys are useful
    when there is a sandbox environment to test against; we
    don't have a separated test surface. Add `pk_test_` if and
    when ops needs it.
@@ -1176,7 +1191,7 @@ Manual smoke:
 4. **Should the cowork API auto-cascade query param apply to
    web/mobile?**
 
-   Bias: no. Web/mobile have UI affordances to fix stale state
+   Decision: no. Web/mobile have UI affordances to fix stale state
    (deep-link to Settings → Compute, or "Open in Desktop"). Auto-
    cascade is an opt-in for programmatic callers that can't.
 
@@ -1193,7 +1208,7 @@ Manual smoke:
 7. **Should `Open in web` and `Open on mobile` collapse into one
    "Share link" menu item?**
 
-   Bias: separate items. The QR-for-mobile vs URL-for-web flows
+   Decision: separate items. The QR-for-mobile vs URL-for-web flows
    have different ergonomics; a single dialog with both options
    is fine if UX prefers.
 

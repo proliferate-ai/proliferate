@@ -1576,12 +1576,12 @@ Manual smoke:
         is reused, not duplicated
 ```
 
-## 10. Open Questions
+## 10. Final Decisions / Deferred Questions
 
 1. **Should we model "ssh / desktop_dispatch / self_hosted_cloud" targets as
    also having a profile?**
 
-   Bias: no. The foundation keeps non-managed targets target-first with
+   Decision: no. The foundation keeps non-managed targets target-first with
    `profile_target_role = 'none'`. A later spec can add an explicit
    `cloud_target.policy_profile_id` if non-managed targets need shared
    policy defaults.
@@ -1611,7 +1611,7 @@ Manual smoke:
          immediately ready to receive a slot the first time
          `provision_profile_slot` runs.
 
-   Bias: (b). The target row is free; the slot is the expensive part. (b)
+   Decision: (b). The target row is free; the slot is the expensive part. (b)
    also makes the enrollment-token mint and `cloud_target_runtime_access`
    placeholder available earlier so the background slot job has less to do
    in its critical path.

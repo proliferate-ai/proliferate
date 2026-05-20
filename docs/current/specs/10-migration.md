@@ -399,7 +399,8 @@ shared_to_personal     Desktop    direct-attach JWT   user's personal cloud
 shared_to_local        Desktop    direct-attach JWT   localhost
                                   (spec 05)
 personal_to_shared     Desktop    user's personal     admin's shared cloud
-                                  cloud               (requires useIsAdmin)
+                                  cloud               (server requires org admin;
+                                                       UI hides unless useIsAdmin)
 cloud_to_cloud         Desktop    direct-attach JWT   direct-attach JWT
                        (online)   or SSH tunnel       or SSH tunnel
 ```
@@ -886,7 +887,7 @@ server/proliferate/db/models/cloud/mobility.py
 server/proliferate/db/models/cloud/mobility_cleanup_items.py     (new)
   CloudWorkspaceMoveCleanupItem
 
-server/proliferate/db/migrations/versions/<NEW>_mobility_v2.py
+server/alembic/versions/<NEW>_mobility_v2.py
   - schema additions
   - extend enum CHECK constraints
   - data migration: existing 'cloud' owner values -> 'personal_cloud'
@@ -1024,7 +1025,7 @@ Chunk G  Desktop "Move to another target" verb
 Chunk H  Tests + smoke
 ```
 
-All chunks land in one PR.
+Preferred implementation is one PR per spec. Chunks are review checkpoints inside that PR and may be split only when the split does not leave duplicate models, dead paths, partially wired security checks, or visible inert UI.
 
 ## 8. Acceptance Criteria
 
@@ -1069,8 +1070,10 @@ All chunks land in one PR.
     `origin='manual_desktop'` (the user moved the work).
 11. For `*_to_local` directions, no destination exposure is
     created automatically.
-12. `personal_to_shared` requires `useIsAdmin(org)`. Desktop
-    context menu hides the option for non-admins.
+12. `personal_to_shared` requires active org role in
+    `organization_admin_roles()` on the server. Desktop hides the
+    option for non-admins via `useIsAdmin(org)`, but UI gating is not
+    the security boundary.
 13. Desktop fetches a direct-attach JWT (spec 05) for the
     source workspace when direction is `shared_to_*`.
 14. `MigrationEditorModal` exists with all sections from §5.8.
@@ -1110,26 +1113,26 @@ uv run pytest -q
 Targeted tests:
 
 ```text
-tests/server/cloud/mobility/test_direction_enum_extended.py
-tests/server/cloud/mobility/test_canonical_side_invariant.py
-tests/server/cloud/mobility/test_cutover_committed_atomic.py
+server/tests/cloud/mobility/test_direction_enum_extended.py
+server/tests/cloud/mobility/test_canonical_side_invariant.py
+server/tests/cloud/mobility/test_cutover_committed_atomic.py
   - phase transition writes canonical_side AND cleanup_items
     in a single transaction
-tests/server/cloud/mobility/test_cleanup_item_per_item_status.py
-tests/server/cloud/mobility/test_cleanup_item_retry_cap.py
-tests/server/cloud/mobility/test_cleanup_failed_terminal.py
-tests/server/cloud/mobility/test_repair_required_on_stale_heartbeat.py
-tests/server/cloud/mobility/test_repair_required_only_post_cutover.py
-tests/server/cloud/mobility/test_shared_to_personal_visibility_resets.py
+server/tests/cloud/mobility/test_cleanup_item_per_item_status.py
+server/tests/cloud/mobility/test_cleanup_item_retry_cap.py
+server/tests/cloud/mobility/test_cleanup_failed_terminal.py
+server/tests/cloud/mobility/test_repair_required_on_stale_heartbeat.py
+server/tests/cloud/mobility/test_repair_required_only_post_cutover.py
+server/tests/cloud/mobility/test_shared_to_personal_visibility_resets.py
   - destination exposure.visibility='private' regardless of source
-tests/server/cloud/mobility/test_personal_to_shared_admin_gate.py
-tests/server/cloud/mobility/test_cleanup_items_for_shared_to_personal.py
+server/tests/cloud/mobility/test_personal_to_shared_admin_gate.py
+server/tests/cloud/mobility/test_cleanup_items_for_shared_to_personal.py
   - cleanup includes source exposure archive +
     cloud_session_projection end
-tests/server/cloud/mobility/test_destination_preflight_runs_billing_check.py
-tests/server/cloud/mobility/test_cleanup_executor_archives_exposure.py
-tests/server/cloud/mobility/test_cleanup_reconciler_surfaces_failed.py
-tests/server/cloud/mobility/test_existing_local_cloud_flow_no_regression.py
+server/tests/cloud/mobility/test_destination_preflight_runs_billing_check.py
+server/tests/cloud/mobility/test_cleanup_executor_archives_exposure.py
+server/tests/cloud/mobility/test_cleanup_reconciler_surfaces_failed.py
+server/tests/cloud/mobility/test_existing_local_cloud_flow_no_regression.py
 ```
 
 Desktop:
@@ -1220,12 +1223,12 @@ Manual smoke:
      matches the source
 ```
 
-## 10. Open Questions
+## 10. Final Decisions / Deferred Questions
 
 1. **Should `cleanup_failed` permit "Mark complete" without
    actually running the cleanup?**
 
-   Bias: yes, with audit. Sometimes the source environment is
+   Decision: yes, with audit. Sometimes the source environment is
    permanently unreachable (machine destroyed, account deleted).
    The user attests; the items get marked completed manually
    with `error_code='manual_resolution'` + an audit note. The
@@ -1246,7 +1249,7 @@ Manual smoke:
    V1 supports the model but the UX rarely makes sense (the
    workspace contents are still authored by one person; the
    "share with team" use case is better served by re-running
-   the work in the shared sandbox). Bias: keep the direction
+   the work in the shared sandbox). Decision: keep the direction
    in the enum + admin gate, but do not promote it in the UI
    beyond an advanced "Move to shared cloud" option that
    requires admin.
@@ -1267,7 +1270,7 @@ Manual smoke:
    `moving_to_shared_personal`, `moving_to_shared_local`,
    `moving_personal_to_shared`, `moving_cloud_to_cloud`. Or we
    could collapse to a single `moving` state with phase as the
-   detail. Bias: collapse to `moving` and rely on `phase` +
+   detail. Decision: collapse to `moving` and rely on `phase` +
    `direction` for granularity. Reduces enum sprawl.
 
 6. **Should we worker-drive headless moves?**
@@ -1276,7 +1279,7 @@ Manual smoke:
    move while user is offline), no V1 path. The infrastructure
    exists (Cloud holds state; AnyHarness mobility endpoints work
    over the worker JWT path); but the orchestration logic is
-   complex. Bias: defer to V2; spec 10 explicitly does not add
+   complex. Decision: defer to V2; spec 10 explicitly does not add
    `export_workspace_state` / `import_workspace_state` worker
    command kinds.
 
@@ -1286,7 +1289,7 @@ Manual smoke:
    should happen before `cloud_workspace` archive (the AH side
    needs to confirm the workspace is gone before the Cloud row
    is archived, otherwise lookup-by-anyharness_workspace_id
-   breaks). Bias: cleanup_executor.py runs items in a fixed
+   breaks). Decision: cleanup_executor.py runs items in a fixed
    order:
      1. anyharness_workspace (destroy source AH)
      2. cloud_session_projection (end source projections)
