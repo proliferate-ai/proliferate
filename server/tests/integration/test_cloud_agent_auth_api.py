@@ -63,6 +63,20 @@ def _headers(tokens: dict[str, str]) -> dict[str, str]:
     return {"Authorization": f"Bearer {tokens['access_token']}"}
 
 
+def _claude_file_payload(api_key: str) -> dict[str, object]:
+    return {
+        "authMode": "file",
+        "files": [
+            {
+                "relativePath": ".claude.json",
+                "contentBase64": b64encode(
+                    f'{{"apiKey":"{api_key}"}}'.encode()
+                ).decode("ascii"),
+            }
+        ],
+    }
+
+
 def _enable_anthropic_gateway_byok(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_byok_enabled",
@@ -122,10 +136,7 @@ async def test_personal_profile_backfills_legacy_cloud_credentials(
     response = await client.put(
         "/v1/cloud/credentials/claude",
         headers=_headers(tokens),
-        json={
-            "authMode": "env",
-            "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-        },
+        json=_claude_file_payload("sk-ant-test"),
     )
     assert response.status_code == 200
 
@@ -147,6 +158,61 @@ async def test_personal_profile_backfills_legacy_cloud_credentials(
     selections = response.json()
     assert selections[0]["agentKind"] == "claude"
     assert selections[0]["materializationMode"] == "synced_files"
+    assert selections[0]["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_legacy_claude_env_import_requires_native_auth_files(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-legacy-claude-env@example.com",
+    )
+
+    response = await client.put(
+        "/v1/cloud/credentials/claude",
+        headers=_headers(tokens),
+        json={
+            "authMode": "env",
+            "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+        },
+    )
+    assert response.status_code == 200
+
+    response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert response.status_code == 200
+    profile = response.json()
+    assert profile["desiredAgentAuthRevision"] == 0
+
+    response = await client.get(
+        f"/v1/cloud/sandbox-profiles/{profile['id']}/agent-auth-selections",
+        headers=_headers(tokens),
+    )
+    assert response.status_code == 200
+    assert response.json() == []
+
+    response = await client.get(
+        "/v1/cloud/agent-auth/credentials",
+        headers=_headers(tokens),
+        params={"agentKind": "claude"},
+    )
+    assert response.status_code == 200
+    credential = response.json()[0]
+    assert credential["credentialKind"] == "synced_path"
+    assert credential["status"] == "needs_resync"
+    assert credential["redactedSummary"]["statusReason"] == (
+        "legacy_claude_env_requires_native_files"
+    )
+    assert credential["redactedSummary"]["needsAction"] == (
+        "sync_claude_native_auth_files"
+    )
 
 
 @pytest.mark.asyncio
@@ -163,10 +229,7 @@ async def test_legacy_cloud_credential_update_reconciles_existing_selection(
     response = await client.put(
         "/v1/cloud/credentials/claude",
         headers=_headers(tokens),
-        json={
-            "authMode": "env",
-            "envVars": {"ANTHROPIC_API_KEY": "first-key"},
-        },
+        json=_claude_file_payload("sk-ant-first"),
     )
     assert response.status_code == 200
 
@@ -188,10 +251,7 @@ async def test_legacy_cloud_credential_update_reconciles_existing_selection(
     response = await client.put(
         "/v1/cloud/credentials/claude",
         headers=_headers(tokens),
-        json={
-            "authMode": "env",
-            "envVars": {"ANTHROPIC_API_KEY": "second-key"},
-        },
+        json=_claude_file_payload("sk-ant-second"),
     )
     assert response.status_code == 200
     assert response.json()["changed"] is True
@@ -229,10 +289,7 @@ async def test_legacy_cloud_credential_delete_invalidates_existing_selection(
     response = await client.put(
         "/v1/cloud/credentials/claude",
         headers=_headers(tokens),
-        json={
-            "authMode": "env",
-            "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-        },
+        json=_claude_file_payload("sk-ant-test"),
     )
     assert response.status_code == 200
 
