@@ -150,6 +150,11 @@ class Settings(BaseSettings):
     agent_gateway_default_managed_budget_usd: str = "0"
     agent_gateway_max_request_bytes: int = 4_194_304
     agent_gateway_request_timeout_seconds: float = 120.0
+    agent_gateway_byok_enabled: bool = False
+    agent_gateway_anthropic_byok_enabled: bool = False
+    agent_gateway_openai_byok_enabled: bool = False
+    agent_gateway_bedrock_byok_enabled: bool = False
+    agent_gateway_openai_compatible_byok_enabled: bool = False
     agent_gateway_opencode_enabled: bool = False
     agent_gateway_reconciler_enabled: bool = False
     agent_gateway_reconciler_interval_seconds: float = 300.0

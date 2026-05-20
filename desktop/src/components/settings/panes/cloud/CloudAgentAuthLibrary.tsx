@@ -5,7 +5,11 @@ import { Badge } from "@/components/ui/Badge";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { CloudAgentAuthCredentialForm } from "@/components/settings/panes/cloud/CloudAgentAuthCredentialForm";
-import { useAgentAuthCredentials, useAgentAuthMutations } from "@/hooks/access/cloud/agent-auth/use-agent-auth";
+import { AGENT_GATEWAY_BYOK_ENABLED } from "@/config/agent-auth";
+import {
+  useAgentAuthCredentials,
+  useAgentAuthMutations,
+} from "@/hooks/access/cloud/agent-auth/use-agent-auth";
 import { useOrganizations } from "@/hooks/access/cloud/organizations/use-organizations";
 import {
   AGENT_AUTH_AGENT_ORDER,
@@ -15,6 +19,8 @@ import {
   agentAuthCredentialStatusLabel,
   agentAuthCredentialStatusTone,
   describeAgentAuthCredential,
+  isHostedCloudV1AgentAuthCredential,
+  isProliferateManagedCreditsCredential,
 } from "@/lib/domain/agent-auth/agent-auth-presentation";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
@@ -41,7 +47,14 @@ export function CloudAgentAuthLibrary() {
     [organizations.data?.organizations],
   );
 
-  const grouped = useMemo(() => groupCredentialsByAgent(credentials), [credentials]);
+  const visibleCredentials = useMemo(
+    () =>
+      AGENT_GATEWAY_BYOK_ENABLED
+        ? credentials
+        : credentials.filter(isHostedCloudV1AgentAuthCredential),
+    [credentials],
+  );
+  const grouped = useMemo(() => groupCredentialsByAgent(visibleCredentials), [visibleCredentials]);
 
   async function handleShareCredential(credential: AgentAuthCredential) {
     if (!libraryOrganizationId) {
@@ -89,6 +102,7 @@ export function CloudAgentAuthLibrary() {
         organizations={organizations.data?.organizations ?? []}
         libraryOrganizationId={libraryOrganizationId}
         onLibraryOrganizationChange={setLibraryOrganizationId}
+        gatewayByokEnabled={AGENT_GATEWAY_BYOK_ENABLED}
       />
 
       {feedback && <p className="text-xs text-muted-foreground">{feedback}</p>}
@@ -145,7 +159,7 @@ function AgentCredentialGroup({
           credential,
           currentUserId,
           adminOrganizationIds,
-        );
+        ) && !isProliferateManagedCreditsCredential(credential);
         return (
           <SettingsCardRow
             key={credential.id}

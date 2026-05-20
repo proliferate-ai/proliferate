@@ -15,6 +15,44 @@ services:
       timeout: 3s
       retries: 5
 
+  litellm-db:
+    image: postgres:16-alpine
+    profiles: ["agent-gateway"]
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: litellm
+    volumes:
+      - litellm_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  litellm:
+    image: ${LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-stable}
+    profiles: ["agent-gateway"]
+    ports:
+      - "127.0.0.1:4000:4000"
+    environment:
+      DATABASE_URL: postgresql://litellm:localdev@litellm-db:5432/litellm
+      LITELLM_MASTER_KEY: ${AGENT_GATEWAY_LITELLM_MASTER_KEY:-sk-local-dev-agent-gateway}
+      STORE_MODEL_IN_DB: "True"
+    depends_on:
+      litellm-db:
+        condition: service_healthy
+    command: ["--host", "0.0.0.0", "--port", "4000"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   migrate:
     build:
       context: ..
@@ -44,3 +82,4 @@ services:
 
 volumes:
   pgdata:
+  litellm_pgdata:

@@ -59,6 +59,18 @@ def _headers(tokens: dict[str, str]) -> dict[str, str]:
     return {"Authorization": f"Bearer {tokens['access_token']}"}
 
 
+def _enable_anthropic_gateway_byok(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_byok_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_anthropic_byok_enabled",
+        True,
+    )
+
+
 async def _create_enrolled_target(
     client: AsyncClient,
     headers: dict[str, str],
@@ -243,7 +255,7 @@ async def test_legacy_cloud_credential_delete_invalidates_existing_selection(
 
 
 @pytest.mark.asyncio
-async def test_gateway_credential_fails_closed_without_live_provider_validation(
+async def test_gateway_byok_credential_creation_disabled_by_default(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -251,6 +263,69 @@ async def test_gateway_credential_fails_closed_without_live_provider_validation(
         client,
         db_session,
         email="agent-auth-gateway@example.com",
+    )
+
+    response = await client.post(
+        "/v1/cloud/agent-auth/credentials/gateway",
+        headers=_headers(tokens),
+        json={
+            "ownerScope": "personal",
+            "agentKind": "claude",
+            "displayName": "Personal Anthropic gateway",
+            "policyKind": "personal_byok",
+            "providerKind": "anthropic_api_key",
+            "payload": {"apiKey": "sk-ant-test"},
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "gateway_byok_disabled"
+
+
+@pytest.mark.asyncio
+async def test_gateway_byok_provider_flag_must_be_enabled(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_byok_enabled",
+        True,
+    )
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-provider-flag-disabled@example.com",
+    )
+
+    response = await client.post(
+        "/v1/cloud/agent-auth/credentials/gateway",
+        headers=_headers(tokens),
+        json={
+            "ownerScope": "personal",
+            "agentKind": "claude",
+            "displayName": "Personal Anthropic gateway",
+            "policyKind": "personal_byok",
+            "providerKind": "anthropic_api_key",
+            "payload": {"apiKey": "sk-ant-test"},
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "gateway_byok_disabled"
+
+
+@pytest.mark.asyncio
+async def test_gateway_credential_fails_closed_without_live_provider_validation_when_byok_enabled(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_anthropic_gateway_byok(monkeypatch)
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-gateway-enabled@example.com",
     )
 
     response = await client.post(
@@ -279,7 +354,9 @@ async def test_gateway_credential_fails_closed_without_live_provider_validation(
 async def test_invalid_gateway_credential_cannot_be_selected(
     client: AsyncClient,
     db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _enable_anthropic_gateway_byok(monkeypatch)
     tokens = await _create_user_and_get_tokens(
         client,
         db_session,
@@ -319,10 +396,130 @@ async def test_invalid_gateway_credential_cannot_be_selected(
 
 
 @pytest.mark.asyncio
-async def test_gateway_policy_kind_must_match_owner_scope(
+async def test_existing_byok_gateway_credential_cannot_be_selected_when_disabled(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-select-byok-disabled@example.com",
+    )
+    actor_user_id = UUID(tokens["user_id"])
+    credential = await store.create_agent_auth_credential(
+        db_session,
+        owner_scope="personal",
+        owner_user_id=actor_user_id,
+        organization_id=None,
+        created_by_user_id=actor_user_id,
+        agent_kind="claude",
+        credential_kind="managed_gateway",
+        display_name="Dormant Claude BYOK",
+        redacted_summary_json='{"providerKind":"anthropic_api_key"}',
+        status="ready",
+    )
+    await store.ensure_gateway_policy(
+        db_session,
+        credential_id=credential.id,
+        policy_kind="personal_byok",
+        owner_scope="personal",
+        owner_user_id=actor_user_id,
+        organization_id=None,
+        budget_subject_id=None,
+        litellm_team_id="team-disabled-byok",
+        litellm_virtual_key_id="key-disabled-byok",
+        litellm_virtual_key_ciphertext=encrypt_text("litellm-disabled-byok-key"),
+        litellm_virtual_key_ciphertext_key_id="cloud_secret_key:v1",
+        litellm_sync_status="synced",
+        litellm_sync_fingerprint="fingerprint-disabled-byok",
+        status="ready",
+    )
+    await db_session.commit()
+
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert profile_response.status_code == 200
+
+    select_response = await client.put(
+        f"/v1/cloud/sandbox-profiles/{profile_response.json()['id']}/agent-auth-selections/claude",
+        headers=_headers(tokens),
+        json={"credentialId": str(credential.id)},
+    )
+
+    assert select_response.status_code == 403
+    assert select_response.json()["detail"]["code"] == "gateway_byok_disabled"
+
+
+@pytest.mark.asyncio
+async def test_existing_byok_gateway_credential_without_provider_cannot_be_selected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_anthropic_gateway_byok(monkeypatch)
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-select-byok-missing-provider@example.com",
+    )
+    actor_user_id = UUID(tokens["user_id"])
+    credential = await store.create_agent_auth_credential(
+        db_session,
+        owner_scope="personal",
+        owner_user_id=actor_user_id,
+        organization_id=None,
+        created_by_user_id=actor_user_id,
+        agent_kind="claude",
+        credential_kind="managed_gateway",
+        display_name="Missing Provider Claude BYOK",
+        redacted_summary_json='{"providerKind":"anthropic_api_key"}',
+        status="ready",
+    )
+    await store.ensure_gateway_policy(
+        db_session,
+        credential_id=credential.id,
+        policy_kind="personal_byok",
+        owner_scope="personal",
+        owner_user_id=actor_user_id,
+        organization_id=None,
+        budget_subject_id=None,
+        litellm_team_id="team-missing-provider",
+        litellm_virtual_key_id="key-missing-provider",
+        litellm_virtual_key_ciphertext=encrypt_text("litellm-missing-provider-key"),
+        litellm_virtual_key_ciphertext_key_id="cloud_secret_key:v1",
+        litellm_sync_status="synced",
+        litellm_sync_fingerprint="fingerprint-missing-provider",
+        status="ready",
+    )
+    await db_session.commit()
+
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert profile_response.status_code == 200
+
+    select_response = await client.put(
+        f"/v1/cloud/sandbox-profiles/{profile_response.json()['id']}/agent-auth-selections/claude",
+        headers=_headers(tokens),
+        json={"credentialId": str(credential.id)},
+    )
+
+    assert select_response.status_code == 403
+    assert select_response.json()["detail"]["code"] == "provider_credential_missing"
+
+
+@pytest.mark.asyncio
+async def test_gateway_policy_kind_must_match_owner_scope(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_anthropic_gateway_byok(monkeypatch)
     tokens = await _create_user_and_get_tokens(
         client,
         db_session,
@@ -382,10 +579,78 @@ async def test_managed_credits_route_uses_server_entitlement_budget(
 
 
 @pytest.mark.asyncio
+async def test_managed_credits_use_global_litellm_model_deployment(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_litellm_master_key",
+        "sk-master-test",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_default_managed_budget_usd",
+        "12.50",
+    )
+
+    class _FakeLiteLLMAdminClient:
+        def __init__(self) -> None:
+            self.deployments: list[dict[str, object]] = []
+
+        async def ensure_team(self, **kwargs: object) -> object:
+            assert kwargs["max_budget"] == "12.50"
+            assert kwargs["budget_duration"] == "30d"
+            return SimpleNamespace(team_id="team-managed")
+
+        async def create_model_deployment(self, **kwargs: object) -> object:
+            self.deployments.append(dict(kwargs))
+            return SimpleNamespace(
+                model_id="model-managed",
+                public_model_name=kwargs["public_model_name"],
+                team_id=kwargs.get("team_id"),
+            )
+
+        async def generate_key(self, **_kwargs: object) -> object:
+            return SimpleNamespace(key="litellm-managed-key", key_id="key-managed")
+
+    fake_litellm = _FakeLiteLLMAdminClient()
+    monkeypatch.setattr(agent_auth_service, "LiteLLMAdminClient", lambda: fake_litellm)
+
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-managed-credits-litellm@example.com",
+    )
+
+    organizations = await client.get("/v1/organizations", headers=_headers(tokens))
+    organization_id = organizations.json()["organizations"][0]["id"]
+
+    response = await client.post(
+        f"/v1/cloud/organizations/{organization_id}/agent-auth/managed-credits",
+        headers=_headers(tokens),
+        json={"agentKinds": ["claude"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["budgetSubject"]["status"] == "ready"
+    assert body["budgetSubject"]["litellmTeamId"] == "team-managed"
+    assert body["credentials"][0]["status"] == "ready"
+    assert fake_litellm.deployments
+    assert "team_id" not in fake_litellm.deployments[0]
+
+
+@pytest.mark.asyncio
 async def test_litellm_reconciler_repairs_valid_byok_policy(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _enable_anthropic_gateway_byok(monkeypatch)
     monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_enabled",
         True,
@@ -492,6 +757,99 @@ async def test_litellm_reconciler_repairs_valid_byok_policy(
 
 
 @pytest.mark.asyncio
+async def test_litellm_reconciler_does_not_launch_disabled_byok_policy(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_litellm_master_key",
+        "sk-master-test",
+    )
+    user = User(
+        email=f"agent-auth-reconcile-byok-disabled-{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password="unused",
+        is_active=True,
+        is_superuser=False,
+        is_verified=True,
+        display_name="Agent Auth Reconciler",
+    )
+    db_session.add(user)
+    await db_session.flush()
+    credential = await store.create_agent_auth_credential(
+        db_session,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        created_by_user_id=user.id,
+        agent_kind="claude",
+        credential_kind="managed_gateway",
+        display_name="Disabled Claude BYOK",
+        redacted_summary_json='{"providerKind":"anthropic_api_key"}',
+        status="invalid",
+    )
+    policy = await store.ensure_gateway_policy(
+        db_session,
+        credential_id=credential.id,
+        policy_kind="personal_byok",
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        budget_subject_id=None,
+        litellm_team_id=None,
+        litellm_virtual_key_id=None,
+        litellm_virtual_key_ciphertext=None,
+        litellm_virtual_key_ciphertext_key_id=None,
+        litellm_sync_status="failed",
+        litellm_sync_fingerprint=None,
+        status="invalid",
+        last_error_code="litellm_provisioning_failed",
+        last_error_message="previous failure",
+    )
+    await store.upsert_provider_credential(
+        db_session,
+        policy_id=policy.id,
+        provider_kind="anthropic_api_key",
+        payload_ciphertext=encrypt_json({"apiKey": "sk-provider-secret"}),
+        payload_ciphertext_key_id="cloud_secret_key:v1",
+        redacted_summary_json='{"providerKind":"anthropic_api_key"}',
+        validation_status="valid",
+        validated_at=utcnow(),
+        validation_error_code=None,
+        validation_error_message=None,
+    )
+
+    class _UnexpectedLiteLLMAdminClient:
+        async def ensure_team(self, **_kwargs: object) -> object:
+            raise AssertionError("disabled BYOK policies should not provision LiteLLM")
+
+    monkeypatch.setattr(
+        agent_auth_service,
+        "LiteLLMAdminClient",
+        lambda: _UnexpectedLiteLLMAdminClient(),
+    )
+
+    result = await agent_auth_service.reconcile_agent_gateway_litellm_mirror(
+        db_session,
+        limit=10,
+    )
+
+    assert result.policies_checked == 1
+    assert result.policies_failed == 1
+    repaired_policy = await store.get_gateway_policy(db_session, policy.id)
+    assert repaired_policy is not None
+    assert repaired_policy.status == "invalid"
+    assert repaired_policy.litellm_sync_status == "failed"
+    assert repaired_policy.last_error_code == "gateway_byok_disabled"
+    repaired_credential = await store.get_credential(db_session, credential.id)
+    assert repaired_credential is not None
+    assert repaired_credential.status == "invalid"
+
+
+@pytest.mark.asyncio
 async def test_litellm_reconciler_does_not_replay_synced_policy(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
@@ -568,6 +926,7 @@ async def test_agent_auth_selection_queues_secret_safe_worker_materialization(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _enable_anthropic_gateway_byok(monkeypatch)
     monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_public_base_url",
         "https://gateway.test",
@@ -602,7 +961,7 @@ async def test_agent_auth_selection_queues_secret_safe_worker_materialization(
         redacted_summary_json='{"providerKind":"anthropic_api_key"}',
         status="ready",
     )
-    await store.ensure_gateway_policy(
+    policy = await store.ensure_gateway_policy(
         db_session,
         credential_id=credential.id,
         policy_kind="personal_byok",
@@ -619,6 +978,18 @@ async def test_agent_auth_selection_queues_secret_safe_worker_materialization(
         status="ready",
         last_error_code=None,
         last_error_message=None,
+    )
+    await store.upsert_provider_credential(
+        db_session,
+        policy_id=policy.id,
+        provider_kind="anthropic_api_key",
+        payload_ciphertext=encrypt_json({"apiKey": "sk-provider-secret"}),
+        payload_ciphertext_key_id="cloud_secret_key:v1",
+        redacted_summary_json='{"providerKind":"anthropic_api_key"}',
+        validation_status="valid",
+        validated_at=utcnow(),
+        validation_error_code=None,
+        validation_error_message=None,
     )
     await db_session.commit()
 

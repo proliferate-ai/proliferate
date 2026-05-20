@@ -72,3 +72,8 @@ server/proliferate/server/cloud/agent_auth/service.py
 server/proliferate/server/cloud/runtime/provision.py
 server/proliferate/server/cloud/workspaces/service.py
 server/tests/integration/test_cloud_commands_api.py
+anyharness/crates/anyharness-lib/src/sessions/service.rs
+server/proliferate/db/models/cloud/agent_auth.py
+server/proliferate/db/store/cloud_agent_auth/store.py
+server/proliferate/server/cloud/agent_auth/service.py
+server/tests/integration/test_cloud_agent_auth_api.py

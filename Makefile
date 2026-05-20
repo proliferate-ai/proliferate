@@ -13,6 +13,8 @@ LOCAL_PGDATABASE ?= proliferate
 USE_EXISTING_POSTGRES ?= 0
 STRIPE_FORWARD_TO ?= http://127.0.0.1:8000/v1/billing/webhooks/stripe
 STRIPE_SNAPSHOT_EVENTS ?= checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed
+AGENT_GATEWAY ?= 0
+LOCAL_LITELLM_MASTER_KEY ?= sk-local-dev-agent-gateway
 AWS_REGION ?= us-east-1
 PROD_CLUSTER ?= proliferate-prod
 PROD_SERVICE ?= proliferate-prod-server
@@ -53,7 +55,7 @@ endif
 endif
 
 .PHONY: dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth server-db-up server-db-wait \
-        server-db-down server-db-ready db db-local db-ah server-migrate serve install \
+        server-db-down server-litellm-up server-litellm-down server-db-ready db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build runtime-build desktop-build rebuild \
@@ -132,6 +134,15 @@ dev: sdk-build server-db-ready
 		LOCAL_PGPASSWORD="$(LOCAL_PGPASSWORD)" \
 		USE_EXISTING_POSTGRES="$(USE_EXISTING_POSTGRES)" \
 		node scripts/dev.mjs ensure-db --db-name "$$PROLIFERATE_DEV_DB_NAME"; \
+	fi; \
+	if [ "$(AGENT_GATEWAY)" = "1" ]; then \
+		export AGENT_GATEWAY_ENABLED=true; \
+		export AGENT_GATEWAY_LITELLM_MASTER_KEY="$${AGENT_GATEWAY_LITELLM_MASTER_KEY:-$(LOCAL_LITELLM_MASTER_KEY)}"; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL="$${AGENT_GATEWAY_LITELLM_BASE_URL:-http://127.0.0.1:4000}"; \
+		export AGENT_GATEWAY_PUBLIC_BASE_URL="$${AGENT_GATEWAY_PUBLIC_BASE_URL:-http://127.0.0.1:$$PROLIFERATE_API_PORT}"; \
+		export AGENT_GATEWAY_RECONCILER_ENABLED="$${AGENT_GATEWAY_RECONCILER_ENABLED:-true}"; \
+		AGENT_GATEWAY_LITELLM_MASTER_KEY="$$AGENT_GATEWAY_LITELLM_MASTER_KEY" \
+			docker compose -f server/docker-compose.yml --profile agent-gateway up -d litellm; \
 	fi; \
 	(cd server && DATABASE_URL="$$DATABASE_URL" .venv/bin/alembic upgrade head); \
 	stripe_listener_ready=0; \
@@ -237,6 +248,13 @@ server-db-wait:
 
 server-db-down:
 	@docker compose -f server/docker-compose.yml stop db
+
+server-litellm-up:
+	@AGENT_GATEWAY_LITELLM_MASTER_KEY="$${AGENT_GATEWAY_LITELLM_MASTER_KEY:-$(LOCAL_LITELLM_MASTER_KEY)}" \
+		docker compose -f server/docker-compose.yml --profile agent-gateway up -d litellm
+
+server-litellm-down:
+	@docker compose -f server/docker-compose.yml --profile agent-gateway stop litellm litellm-db
 
 db: server-db-ready
 	@docker compose -f server/docker-compose.yml exec db psql -U proliferate -d proliferate

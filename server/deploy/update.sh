@@ -26,8 +26,16 @@ export PROLIFERATE_ENV_FILE="$RUNTIME_ENV_FILE"
 "$SCRIPT_DIR/registry-login.sh"
 "$SCRIPT_DIR/install-runtime.sh"
 
-docker compose --env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE" pull
-docker compose --env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE" run --rm migrate
-docker compose --env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE" up -d
+COMPOSE_ARGS=(--env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE")
+if grep -Eiq '^AGENT_GATEWAY_ENABLED=(true|1|yes)$' "$RUNTIME_ENV_FILE"; then
+  COMPOSE_ARGS+=(--profile agent-gateway)
+else
+  docker compose --env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE" --profile agent-gateway stop litellm litellm-db || true
+  docker compose --env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE" --profile agent-gateway rm -f litellm litellm-db || true
+fi
+
+docker compose "${COMPOSE_ARGS[@]}" pull
+docker compose "${COMPOSE_ARGS[@]}" run --rm migrate
+docker compose "${COMPOSE_ARGS[@]}" up -d
 
 "$SCRIPT_DIR/wait-for-health.sh"

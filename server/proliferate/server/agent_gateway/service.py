@@ -28,7 +28,10 @@ from proliferate.integrations.litellm import (
 )
 from proliferate.server.agent_gateway.domain.protocols import (
     allowed_models_for_agent,
+    litellm_body_for_gateway_request,
     litellm_path_for_gateway_path,
+    litellm_protocol_headers_for_gateway_request,
+    litellm_query_string_for_gateway_request,
     model_from_body,
     protocol_for_path,
     request_wants_stream,
@@ -104,15 +107,24 @@ async def forward_gateway_request(
         client = LiteLLMRuntimeClient()
         metadata = _metadata_for_request(authorized)
         litellm_path = litellm_path_for_gateway_path(gateway_path)
+        litellm_query_string = litellm_query_string_for_gateway_request(
+            gateway_path,
+            query_string,
+        )
+        litellm_protocol_headers = litellm_protocol_headers_for_gateway_request(
+            gateway_path,
+            protocol_headers,
+        )
+        litellm_body = litellm_body_for_gateway_request(gateway_path, body_json, body)
         if stream:
             response_stream = await client.open_stream(
                 method=method,
                 path=litellm_path,
-                query_string=query_string,
-                body=body,
+                query_string=litellm_query_string,
+                body=litellm_body,
                 litellm_key=authorized.litellm_key,
                 content_type=content_type,
-                protocol_headers=protocol_headers,
+                protocol_headers=litellm_protocol_headers,
                 metadata=metadata,
             )
             _log_gateway_request(
@@ -133,11 +145,11 @@ async def forward_gateway_request(
         response = await client.forward(
             method=method,
             path=litellm_path,
-            query_string=query_string,
-            body=body,
+            query_string=litellm_query_string,
+            body=litellm_body,
             litellm_key=authorized.litellm_key,
             content_type=content_type,
-            protocol_headers=protocol_headers,
+            protocol_headers=litellm_protocol_headers,
             metadata=metadata,
         )
         _log_gateway_request(
@@ -281,6 +293,7 @@ async def authorize_gateway_request(
             status_code=403,
         )
     _require_policy_ready(policy)
+    await _require_gateway_policy_launchable(db, policy)
     await _require_budget_ready(db, policy)
     allowed_models = allowed_models_for_agent(grant.agent_kind)
     if grant.agent_kind == "opencode" and not settings.agent_gateway_opencode_enabled:
@@ -352,6 +365,53 @@ def _require_policy_ready(policy: AgentGatewayPolicyRecord) -> None:
             code="gateway_route_unavailable",
             status_code=503,
         )
+
+
+async def _require_gateway_policy_launchable(
+    db: AsyncSession,
+    policy: AgentGatewayPolicyRecord,
+) -> None:
+    if policy.policy_kind == "proliferate_managed":
+        return
+    if policy.policy_kind not in {"org_byok", "personal_byok"}:
+        raise AgentGatewayError(
+            "Gateway policy kind is not supported.",
+            code="gateway_route_unavailable",
+            status_code=503,
+        )
+    if not settings.agent_gateway_byok_enabled:
+        raise AgentGatewayError(
+            "Gateway BYOK provider credentials are disabled.",
+            code="gateway_byok_disabled",
+            status_code=403,
+        )
+    provider_credential = await store.get_provider_credential_for_policy(db, policy.id)
+    if provider_credential is None:
+        raise AgentGatewayError(
+            "Gateway route is unavailable.",
+            code="gateway_route_unavailable",
+            status_code=503,
+        )
+    if not _gateway_byok_provider_enabled(provider_credential.provider_kind):
+        raise AgentGatewayError(
+            "Gateway BYOK provider credentials are disabled.",
+            code="gateway_byok_disabled",
+            status_code=403,
+        )
+
+
+def _gateway_byok_provider_enabled(provider_kind: str) -> bool:
+    if not settings.agent_gateway_byok_enabled:
+        return False
+    if provider_kind == "anthropic_api_key":
+        return settings.agent_gateway_anthropic_byok_enabled
+    if provider_kind == "openai_api_key":
+        return settings.agent_gateway_openai_byok_enabled
+    if provider_kind == "bedrock_assume_role":
+        return settings.agent_gateway_bedrock_byok_enabled
+    if provider_kind == "openai_compatible":
+        return settings.agent_gateway_openai_compatible_byok_enabled
+    return False
 
 
 async def _require_budget_ready(

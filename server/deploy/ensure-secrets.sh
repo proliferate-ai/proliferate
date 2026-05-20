@@ -4,8 +4,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATIC_ENV_FILE="${PROLIFERATE_STATIC_ENV_FILE:-$SCRIPT_DIR/.env.static}"
+LOCAL_ENV_FILE="${PROLIFERATE_LOCAL_ENV_FILE:-$SCRIPT_DIR/.env.local}"
 LEGACY_ENV_FILE="$SCRIPT_DIR/.env"
-GENERATED_ENV_FILE="$SCRIPT_DIR/.env.generated"
+GENERATED_ENV_FILE="${PROLIFERATE_GENERATED_ENV_FILE:-$SCRIPT_DIR/.env.generated}"
 RUNTIME_ENV_FILE="${PROLIFERATE_ENV_FILE:-$SCRIPT_DIR/.env.runtime}"
 
 if [[ ! -f "$STATIC_ENV_FILE" && -f "$LEGACY_ENV_FILE" ]]; then
@@ -32,6 +33,58 @@ read_env_value() {
   fi
 
   printf '%s' "${line#*=}"
+}
+
+read_config_env_value() {
+  local key="$1"
+  local value
+
+  value="$(read_env_value "$LOCAL_ENV_FILE" "$key")"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+
+  read_env_value "$STATIC_ENV_FILE" "$key"
+}
+
+copy_unmanaged_env_values() {
+  local source_file="$1"
+  local override_file="${2:-}"
+  local managed_pattern
+
+  if [[ ! -f "$source_file" ]]; then
+    return 0
+  fi
+
+  managed_pattern="^(POSTGRES_PASSWORD|DATABASE_URL|JWT_SECRET|CLOUD_SECRET_KEY|LITELLM_POSTGRES_DB|LITELLM_POSTGRES_USER|LITELLM_POSTGRES_PASSWORD|AGENT_GATEWAY_LITELLM_BASE_URL|AGENT_GATEWAY_LITELLM_MASTER_KEY|AGENT_GATEWAY_PUBLIC_BASE_URL|SITE_ADDRESS|PROLIFERATE_PUBLIC_HEALTHCHECK_URL|PROLIFERATE_USE_SSLIP_FALLBACK)$"
+
+  if [[ -n "$override_file" && -f "$override_file" ]]; then
+    awk -F= -v managed_pattern="$managed_pattern" '
+      FNR == NR {
+        if ($0 ~ /^[A-Za-z_][A-Za-z0-9_]*=/) {
+          overrides[$1] = 1
+        }
+        next
+      }
+      $0 ~ /^[A-Za-z_][A-Za-z0-9_]*=/ {
+        if ($1 ~ managed_pattern || $1 in overrides) {
+          next
+        }
+      }
+      { print }
+    ' "$override_file" "$source_file"
+    return 0
+  fi
+
+  awk -F= -v managed_pattern="$managed_pattern" '
+    $0 ~ /^[A-Za-z_][A-Za-z0-9_]*=/ {
+      if ($1 ~ managed_pattern) {
+        next
+      }
+    }
+    { print }
+  ' "$source_file"
 }
 
 resolve_instance_public_ip() {
@@ -100,13 +153,37 @@ resolve_value() {
   random_hex "$random_bytes"
 }
 
-POSTGRES_DB="$(read_env_value "$STATIC_ENV_FILE" POSTGRES_DB)"
-POSTGRES_USER="$(read_env_value "$STATIC_ENV_FILE" POSTGRES_USER)"
+resolve_litellm_master_key() {
+  local generated_value="$1"
+  local static_value="$2"
+
+  if [[ -n "$generated_value" ]]; then
+    printf '%s' "$generated_value"
+    return 0
+  fi
+
+  if [[ -n "$static_value" ]]; then
+    printf '%s' "$static_value"
+    return 0
+  fi
+
+  printf 'sk-proliferate-%s' "$(random_hex 24)"
+}
+
+POSTGRES_DB="$(read_config_env_value POSTGRES_DB)"
+POSTGRES_USER="$(read_config_env_value POSTGRES_USER)"
+LITELLM_POSTGRES_DB="$(read_config_env_value LITELLM_POSTGRES_DB)"
+LITELLM_POSTGRES_USER="$(read_config_env_value LITELLM_POSTGRES_USER)"
 POSTGRES_DB="${POSTGRES_DB:-proliferate}"
 POSTGRES_USER="${POSTGRES_USER:-proliferate}"
-SITE_ADDRESS="$(read_env_value "$STATIC_ENV_FILE" SITE_ADDRESS)"
-PUBLIC_HEALTHCHECK_URL="$(read_env_value "$STATIC_ENV_FILE" PROLIFERATE_PUBLIC_HEALTHCHECK_URL)"
-USE_SSLIP_FALLBACK="$(read_env_value "$STATIC_ENV_FILE" PROLIFERATE_USE_SSLIP_FALLBACK)"
+LITELLM_POSTGRES_DB="${LITELLM_POSTGRES_DB:-litellm}"
+LITELLM_POSTGRES_USER="${LITELLM_POSTGRES_USER:-litellm}"
+SITE_ADDRESS="$(read_config_env_value SITE_ADDRESS)"
+PUBLIC_HEALTHCHECK_URL="$(read_config_env_value PROLIFERATE_PUBLIC_HEALTHCHECK_URL)"
+USE_SSLIP_FALLBACK="$(read_config_env_value PROLIFERATE_USE_SSLIP_FALLBACK)"
+AGENT_GATEWAY_ENABLED="$(read_config_env_value AGENT_GATEWAY_ENABLED)"
+AGENT_GATEWAY_LITELLM_BASE_URL="$(read_config_env_value AGENT_GATEWAY_LITELLM_BASE_URL)"
+AGENT_GATEWAY_PUBLIC_BASE_URL="$(read_config_env_value AGENT_GATEWAY_PUBLIC_BASE_URL)"
 
 if [[ -z "$SITE_ADDRESS" && "$USE_SSLIP_FALLBACK" == "true" ]]; then
   SITE_ADDRESS="$(resolve_instance_public_ip).sslip.io"
@@ -121,38 +198,73 @@ if [[ -z "$PUBLIC_HEALTHCHECK_URL" ]]; then
   PUBLIC_HEALTHCHECK_URL="https://${SITE_ADDRESS}/health"
 fi
 
+if printf '%s' "$AGENT_GATEWAY_ENABLED" | grep -Eiq '^(true|1|yes)$' \
+  && {
+    [[ -z "$AGENT_GATEWAY_LITELLM_BASE_URL" ]] \
+      || [[ "$AGENT_GATEWAY_LITELLM_BASE_URL" == "http://127.0.0.1:4000" ]] \
+      || [[ "$AGENT_GATEWAY_LITELLM_BASE_URL" == "http://localhost:4000" ]]
+  }; then
+  AGENT_GATEWAY_LITELLM_BASE_URL="http://litellm:4000"
+fi
+
+if [[ -z "$AGENT_GATEWAY_PUBLIC_BASE_URL" || "$AGENT_GATEWAY_PUBLIC_BASE_URL" == "https://" ]]; then
+  AGENT_GATEWAY_PUBLIC_BASE_URL="https://${SITE_ADDRESS}"
+fi
+
 POSTGRES_PASSWORD="$(resolve_value \
   POSTGRES_PASSWORD \
   "$(read_env_value "$GENERATED_ENV_FILE" POSTGRES_PASSWORD)" \
-  "$(read_env_value "$STATIC_ENV_FILE" POSTGRES_PASSWORD)" \
+  "$(read_config_env_value POSTGRES_PASSWORD)" \
   24)"
 JWT_SECRET="$(resolve_value \
   JWT_SECRET \
   "$(read_env_value "$GENERATED_ENV_FILE" JWT_SECRET)" \
-  "$(read_env_value "$STATIC_ENV_FILE" JWT_SECRET)" \
+  "$(read_config_env_value JWT_SECRET)" \
   32)"
 CLOUD_SECRET_KEY="$(resolve_value \
   CLOUD_SECRET_KEY \
   "$(read_env_value "$GENERATED_ENV_FILE" CLOUD_SECRET_KEY)" \
-  "$(read_env_value "$STATIC_ENV_FILE" CLOUD_SECRET_KEY)" \
+  "$(read_config_env_value CLOUD_SECRET_KEY)" \
   32)"
+LITELLM_POSTGRES_PASSWORD="$(resolve_value \
+  LITELLM_POSTGRES_PASSWORD \
+  "$(read_env_value "$GENERATED_ENV_FILE" LITELLM_POSTGRES_PASSWORD)" \
+  "$(read_config_env_value LITELLM_POSTGRES_PASSWORD)" \
+  24)"
+AGENT_GATEWAY_LITELLM_MASTER_KEY="$(resolve_litellm_master_key \
+  "$(read_env_value "$GENERATED_ENV_FILE" AGENT_GATEWAY_LITELLM_MASTER_KEY)" \
+  "$(read_config_env_value AGENT_GATEWAY_LITELLM_MASTER_KEY)")"
+
+if [[ "$AGENT_GATEWAY_LITELLM_MASTER_KEY" != sk-* ]]; then
+  echo "AGENT_GATEWAY_LITELLM_MASTER_KEY must start with 'sk-' for LiteLLM." >&2
+  exit 1
+fi
 
 cat >"$GENERATED_ENV_FILE" <<EOF
 # Generated on first bootstrap. Preserve this file to keep stack-managed secrets stable.
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 JWT_SECRET=$JWT_SECRET
 CLOUD_SECRET_KEY=$CLOUD_SECRET_KEY
+LITELLM_POSTGRES_PASSWORD=$LITELLM_POSTGRES_PASSWORD
+AGENT_GATEWAY_LITELLM_MASTER_KEY=$AGENT_GATEWAY_LITELLM_MASTER_KEY
 EOF
 
 {
   printf '# Generated runtime env. Do not edit directly.\n'
-  grep -Ev '^(POSTGRES_PASSWORD|DATABASE_URL|JWT_SECRET|CLOUD_SECRET_KEY|SITE_ADDRESS|PROLIFERATE_PUBLIC_HEALTHCHECK_URL|PROLIFERATE_USE_SSLIP_FALLBACK)=' "$STATIC_ENV_FILE" || true
+  copy_unmanaged_env_values "$STATIC_ENV_FILE" "$LOCAL_ENV_FILE"
+  copy_unmanaged_env_values "$LOCAL_ENV_FILE"
   printf 'SITE_ADDRESS=%s\n' "$SITE_ADDRESS"
   printf 'PROLIFERATE_PUBLIC_HEALTHCHECK_URL=%s\n' "$PUBLIC_HEALTHCHECK_URL"
   printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+  printf 'LITELLM_POSTGRES_DB=%s\n' "$LITELLM_POSTGRES_DB"
+  printf 'LITELLM_POSTGRES_USER=%s\n' "$LITELLM_POSTGRES_USER"
+  printf 'LITELLM_POSTGRES_PASSWORD=%s\n' "$LITELLM_POSTGRES_PASSWORD"
   printf 'DATABASE_URL=postgresql+asyncpg://%s:%s@db:5432/%s\n' "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$POSTGRES_DB"
   printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
   printf 'CLOUD_SECRET_KEY=%s\n' "$CLOUD_SECRET_KEY"
+  printf 'AGENT_GATEWAY_LITELLM_BASE_URL=%s\n' "$AGENT_GATEWAY_LITELLM_BASE_URL"
+  printf 'AGENT_GATEWAY_LITELLM_MASTER_KEY=%s\n' "$AGENT_GATEWAY_LITELLM_MASTER_KEY"
+  printf 'AGENT_GATEWAY_PUBLIC_BASE_URL=%s\n' "$AGENT_GATEWAY_PUBLIC_BASE_URL"
 } >"$RUNTIME_ENV_FILE"
 
 chmod 600 "$GENERATED_ENV_FILE" "$RUNTIME_ENV_FILE"

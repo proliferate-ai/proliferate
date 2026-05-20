@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import base64
-import hashlib
-import uuid
 from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.auth import User
+from proliferate.db.models.auth import OAuthAccount, User
 from proliferate.db.store.cloud_agent_auth import store
+from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 
 async def _create_user_and_get_tokens(
@@ -28,37 +26,26 @@ async def _create_user_and_get_tokens(
         display_name="Agent Auth Tester",
     )
     db_session.add(user)
+    await db_session.flush()
+    db_session.add(
+        OAuthAccount(
+            user_id=user.id,
+            oauth_name="github",
+            access_token="github-access-token",
+            account_id=f"github-{user.id}",
+            account_email=email,
+        )
+    )
     await db_session.commit()
 
-    verifier = "test-code-verifier-that-is-long-enough-for-pkce"
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-
-    response = await client.post(
-        "/auth/desktop/authorize",
-        params={"user_id": str(user.id)},
-        json={
-            "state": f"agent-auth-state-{uuid.uuid4().hex[:8]}",
-            "code_challenge": challenge,
-            "code_challenge_method": "S256",
-            "redirect_uri": "proliferate://auth/callback",
-        },
+    token_data = await mint_desktop_token_payload(
+        client,
+        user_id=user.id,
+        state_prefix="agent-auth-state",
     )
-    assert response.status_code == 201
-
-    response = await client.post(
-        "/auth/desktop/token",
-        json={
-            "code": response.json()["code"],
-            "code_verifier": verifier,
-            "grant_type": "authorization_code",
-        },
-    )
-    assert response.status_code == 200
-    token_data = response.json()
     return {
         "user_id": str(user.id),
-        "access_token": token_data["access_token"],
+        "access_token": str(token_data["access_token"]),
     }
 
 
@@ -136,8 +123,7 @@ async def test_shared_personal_synced_credential_lists_active_share_for_org_sele
     assert profile_response.status_code == 200
 
     select_response = await client.put(
-        "/v1/cloud/sandbox-profiles/"
-        f"{profile_response.json()['id']}/agent-auth-selections/claude",
+        f"/v1/cloud/sandbox-profiles/{profile_response.json()['id']}/agent-auth-selections/claude",
         headers=_headers(tokens),
         json={"credentialId": credential["id"], "credentialShareId": share_id},
     )
@@ -182,6 +168,15 @@ async def test_managed_credits_do_not_reuse_org_byok_credential_with_same_name(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_byok_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_anthropic_byok_enabled",
+        True,
+    )
     monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings."
         "agent_gateway_default_managed_budget_usd",

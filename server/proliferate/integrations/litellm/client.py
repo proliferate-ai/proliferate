@@ -81,22 +81,22 @@ class LiteLLMAdminClient:
         *,
         public_model_name: str,
         provider_model: str,
-        team_id: str,
+        team_id: str | None = None,
         litellm_params: Mapping[str, object],
         metadata: Mapping[str, object] | None = None,
     ) -> LiteLLMModelDeploymentResult:
         params = dict(litellm_params)
         params["model"] = provider_model
+        model_info: dict[str, object] = {"metadata": dict(metadata or {})}
+        if team_id is not None:
+            model_info["team_id"] = team_id
         payload = await self._request(
             "POST",
             "/model/new",
             json={
                 "model_name": public_model_name,
                 "litellm_params": params,
-                "model_info": {
-                    "team_id": team_id,
-                    "metadata": dict(metadata or {}),
-                },
+                "model_info": model_info,
             },
         )
         model_info = payload.get("model_info", {})
