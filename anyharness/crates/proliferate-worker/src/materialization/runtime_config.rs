@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::Path};
 
 use anyharness_contract::v1::{
     RuntimeArtifactRef, RuntimeConfigManifest, RuntimeMcpLaunch, RuntimeMcpNamedValue,
-    RuntimeMcpValue,
+    RuntimeMcpTemplatePart, RuntimeMcpValue,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -140,8 +140,17 @@ fn collect_value_credential_refs(refs: &mut Vec<String>, value: &RuntimeMcpValue
         }
         RuntimeMcpValue::Template { parts } => {
             for part in parts {
-                collect_value_credential_refs(refs, part);
+                collect_template_part_credential_refs(refs, part);
             }
+        }
+    }
+}
+
+fn collect_template_part_credential_refs(refs: &mut Vec<String>, part: &RuntimeMcpTemplatePart) {
+    match part {
+        RuntimeMcpTemplatePart::Literal { .. } => {}
+        RuntimeMcpTemplatePart::Credential { credential_ref } => {
+            push_unique(refs, credential_ref.clone());
         }
     }
 }
@@ -210,23 +219,25 @@ fn materialize_value(
         RuntimeMcpValue::Template { parts } => {
             let mut rendered = String::new();
             for part in parts {
-                rendered.push_str(&materialize_value_to_string(part, credentials)?);
+                rendered.push_str(&materialize_template_part_to_string(part, credentials)?);
             }
             Ok(RuntimeMcpValue::Literal { value: rendered })
         }
     }
 }
 
-fn materialize_value_to_string(
-    value: &RuntimeMcpValue,
+fn materialize_template_part_to_string(
+    part: &RuntimeMcpTemplatePart,
     credentials: &HashMap<String, String>,
 ) -> Result<String, WorkerError> {
-    match materialize_value(value, credentials)? {
-        RuntimeMcpValue::Literal { value } => Ok(value),
-        RuntimeMcpValue::Credential { .. } | RuntimeMcpValue::Template { .. } => {
-            Err(WorkerError::Materialization(
-                "runtime config value could not be materialized".to_string(),
-            ))
+    match part {
+        RuntimeMcpTemplatePart::Literal { value } => Ok(value.clone()),
+        RuntimeMcpTemplatePart::Credential { credential_ref } => {
+            credentials.get(credential_ref).cloned().ok_or_else(|| {
+                WorkerError::Materialization(
+                    "runtime config credential ref could not be materialized".to_string(),
+                )
+            })
         }
     }
 }
