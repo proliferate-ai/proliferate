@@ -160,11 +160,5 @@ async def selected_agent_auth_agent_kinds(
 ) -> tuple[str, ...]:
     selections = await agent_auth_store.list_selections_for_profile(db, sandbox_profile_id)
     return tuple(
-        sorted(
-            {
-                selection.agent_kind
-                for selection in selections
-                if selection.status == "active"
-            }
-        )
+        sorted({selection.agent_kind for selection in selections if selection.status == "active"})
     )

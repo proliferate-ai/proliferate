@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from uuid import UUID
 
@@ -285,7 +286,7 @@ async def worker_runtime_config_fragment(
     revision_id: UUID,
 ) -> RuntimeConfigMaterializationFragment:
     await require_current_managed_worker_slot(db, auth=auth)
-    await _require_worker_revision(db, auth=auth, revision_id=revision_id)
+    await _require_current_worker_revision(db, auth=auth, revision_id=revision_id)
     return await runtime_config_fragment_for_revision(db, revision_id=revision_id)
 
 
@@ -297,7 +298,7 @@ async def worker_runtime_config_artifact(
     artifact_hash: str,
 ) -> RuntimeConfigArtifactResponse:
     await require_current_managed_worker_slot(db, auth=auth)
-    revision = await _require_worker_revision(db, auth=auth, revision_id=revision_id)
+    revision = await _require_current_worker_revision(db, auth=auth, revision_id=revision_id)
     artifact = await artifact_store.get_artifact(
         db,
         revision_id=revision.id,
@@ -317,6 +318,7 @@ async def worker_runtime_config_artifact(
             "Runtime config artifact payload is invalid.",
             status_code=500,
         )
+    _raise_if_artifact_integrity_invalid(artifact, payload=payload, content=content)
     return RuntimeConfigArtifactResponse(
         hash=artifact.artifact_hash,
         content_type=artifact.content_type,
@@ -338,7 +340,7 @@ async def worker_runtime_config_credentials(
     body: WorkerRuntimeConfigCredentialMaterializationRequest,
 ) -> WorkerRuntimeConfigCredentialMaterializationResponse:
     await require_current_managed_worker_slot(db, auth=auth)
-    revision = await _require_worker_revision(db, auth=auth, revision_id=revision_id)
+    revision = await _require_current_worker_revision(db, auth=auth, revision_id=revision_id)
     manifest = parse_json_dict(revision.manifest_json) or {}
     allowed_refs = {
         str(ref["credentialRef"])
@@ -380,6 +382,12 @@ async def record_worker_runtime_config_status(
 ) -> WorkerRuntimeConfigStatusResponse:
     await require_current_managed_worker_slot(db, auth=auth)
     revision = await _require_worker_revision(db, auth=auth, revision_id=revision_id)
+    if not await _worker_revision_is_current(db, revision=revision):
+        return WorkerRuntimeConfigStatusResponse(
+            revision_id=str(revision.id),
+            status="stale",
+            updated=False,
+        )
     row = (
         await db.execute(
             select(SandboxProfileTargetState)
@@ -845,6 +853,61 @@ async def _require_worker_revision(
             status_code=404,
         )
     return revision
+
+
+async def _require_current_worker_revision(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    revision_id: UUID,
+) -> SandboxProfileRuntimeConfigRevisionSnapshot:
+    revision = await _require_worker_revision(db, auth=auth, revision_id=revision_id)
+    if not await _worker_revision_is_current(db, revision=revision):
+        raise CloudApiError(
+            "runtime_config_revision_stale",
+            "Runtime config revision is no longer current for this target.",
+            status_code=409,
+        )
+    return revision
+
+
+async def _worker_revision_is_current(
+    db: AsyncSession,
+    *,
+    revision: SandboxProfileRuntimeConfigRevisionSnapshot,
+) -> bool:
+    _current, current_revision = await revision_store.get_current(
+        db,
+        sandbox_profile_id=revision.sandbox_profile_id,
+    )
+    return current_revision is not None and current_revision.id == revision.id
+
+
+def _raise_if_artifact_integrity_invalid(
+    artifact: artifact_store.SandboxProfileRuntimeConfigArtifactSnapshot,
+    *,
+    payload: dict[str, object],
+    content: str,
+) -> None:
+    expected_hash = artifact.artifact_hash
+    byte_size = len(content.encode("utf-8"))
+    payload_hash = payload.get("hash")
+    payload_content_type = payload.get("contentType")
+    if (
+        byte_size != artifact.byte_size
+        or _artifact_content_hash(content) != expected_hash
+        or (payload_hash is not None and payload_hash != expected_hash)
+        or (payload_content_type is not None and payload_content_type != artifact.content_type)
+    ):
+        raise CloudApiError(
+            "runtime_config_artifact_integrity_mismatch",
+            "Runtime config artifact payload does not match its recorded hash.",
+            status_code=500,
+        )
+
+
+def _artifact_content_hash(content: str) -> str:
+    return f"sha256:{hashlib.sha256(content.encode('utf-8')).hexdigest()}"
 
 
 def _credential_refs_from_manifest(manifest: dict[str, object]) -> list[dict[str, object]]:

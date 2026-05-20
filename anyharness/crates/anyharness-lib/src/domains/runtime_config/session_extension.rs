@@ -113,6 +113,7 @@ mod tests {
         RuntimeSkillSourceKind, SessionMcpBindingOutcome, SessionMcpBindingSummary,
         SessionMcpTransport,
     };
+    use sha2::{Digest, Sha256};
 
     use super::RuntimeConfigSessionLaunchExtension;
     use crate::domains::plugins::mcp::auth::SkillsMcpAuth;
@@ -201,10 +202,12 @@ mod tests {
     }
 
     fn apply_request() -> ApplyRuntimeConfigRequest {
+        let instruction_content = "# Use GitHub\n";
+        let instruction_hash = runtime_artifact_hash(instruction_content);
         let artifact = RuntimeArtifactRef {
-            hash: "sha256:instructions".to_string(),
+            hash: instruction_hash.clone(),
             content_type: "text/markdown".to_string(),
-            byte_size: 13,
+            byte_size: instruction_content.as_bytes().len() as i64,
             source_ref: Some("plugin:github:instructions".to_string()),
             resource_id: None,
             display_name: None,
@@ -258,17 +261,21 @@ mod tests {
                 warnings: Vec::new(),
             },
             artifact_payloads: vec![RuntimeArtifactPayload {
-                hash: "sha256:instructions".to_string(),
+                hash: instruction_hash,
                 content_type: "text/markdown".to_string(),
-                byte_size: 13,
+                byte_size: instruction_content.as_bytes().len() as i64,
                 source_ref: Some("plugin:github:instructions".to_string()),
                 resource_id: None,
                 display_name: None,
-                content: "# Use GitHub\n".to_string(),
+                content: instruction_content.to_string(),
             }],
             credential_values: Vec::new(),
             source: RuntimeConfigSource::Worker,
         }
+    }
+
+    fn runtime_artifact_hash(content: &str) -> String {
+        format!("sha256:{:x}", Sha256::digest(content.as_bytes()))
     }
 
     fn session_record() -> SessionRecord {

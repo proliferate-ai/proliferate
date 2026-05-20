@@ -3,12 +3,13 @@ use std::sync::{Arc, Mutex};
 
 use anyharness_contract::v1::{
     ApplyRuntimeConfigRequest, ApplyRuntimeConfigResponse, RuntimeArtifactPayload,
-    RuntimeArtifactStatus, RuntimeConfigExternalScope, RuntimeConfigManifest,
+    RuntimeArtifactRef, RuntimeArtifactStatus, RuntimeConfigExternalScope, RuntimeConfigManifest,
     RuntimeConfigRevision, RuntimeConfigRevisionExpectation, RuntimeConfigStatusResponse,
     RuntimeCredentialValue, RuntimeMcpLaunch, RuntimeMcpNamedValue, RuntimeMcpServer,
     RuntimeMcpTemplatePart, RuntimeMcpValue, RuntimeSkill, SessionMcpBindingSummary,
 };
 use rusqlite::{params, OptionalExtension, Row};
+use sha2::{Digest, Sha256};
 use url::Url;
 
 use super::model::{
@@ -299,6 +300,8 @@ pub enum RuntimeConfigError {
     InlineSecretLiteral(String),
     #[error("runtime config artifact is missing: {0}")]
     MissingArtifact(String),
+    #[error("runtime config artifact integrity mismatch: {0}")]
+    ArtifactIntegrityMismatch(String),
     #[error("runtime config value is not materialized")]
     UnmaterializedValue,
     #[error("runtime config storage error: {0}")]
@@ -538,6 +541,7 @@ fn session_inputs_from_record(
 
 fn validate_materialized_record(record: &RuntimeConfigRecord) -> Result<(), RuntimeConfigError> {
     validate_no_inline_secret_literals(&record.manifest)?;
+    validate_artifact_payloads(&record.manifest, &record.artifact_payloads)?;
     Ok(())
 }
 
@@ -555,20 +559,46 @@ fn validate_apply_request(request: &ApplyRuntimeConfigRequest) -> Result<(), Run
     if !missing.is_empty() {
         return Err(RuntimeConfigError::MissingCredentials(missing));
     }
-    let payloads = request
-        .artifact_payloads
+    validate_artifact_payloads(&request.manifest, &request.artifact_payloads)?;
+    Ok(())
+}
+
+fn validate_artifact_payloads(
+    manifest: &RuntimeConfigManifest,
+    artifact_payloads: &[RuntimeArtifactPayload],
+) -> Result<(), RuntimeConfigError> {
+    let payloads = artifact_payloads
         .iter()
         .map(|artifact| (artifact.hash.as_str(), artifact))
         .collect::<HashMap<_, _>>();
-    for artifact in &request.manifest.artifacts {
+    for artifact in &manifest.artifacts {
         match payloads.get(artifact.hash.as_str()) {
-            Some(payload)
-                if payload.content_type == artifact.content_type
-                    && payload.byte_size == artifact.byte_size => {}
+            Some(payload) => validate_artifact_payload(artifact, payload)?,
             _ => return Err(RuntimeConfigError::MissingArtifact(artifact.hash.clone())),
         }
     }
     Ok(())
+}
+
+fn validate_artifact_payload(
+    artifact: &RuntimeArtifactRef,
+    payload: &RuntimeArtifactPayload,
+) -> Result<(), RuntimeConfigError> {
+    if payload.hash != artifact.hash
+        || payload.content_type != artifact.content_type
+        || payload.byte_size != artifact.byte_size
+        || payload.content.as_bytes().len() as i64 != artifact.byte_size
+        || runtime_artifact_hash(&payload.content) != artifact.hash
+    {
+        return Err(RuntimeConfigError::ArtifactIntegrityMismatch(
+            artifact.hash.clone(),
+        ));
+    }
+    Ok(())
+}
+
+fn runtime_artifact_hash(content: &str) -> String {
+    format!("sha256:{:x}", Sha256::digest(content.as_bytes()))
 }
 
 fn validate_no_inline_secret_literals(
@@ -986,6 +1016,19 @@ mod tests {
     }
 
     #[test]
+    fn apply_rejects_artifact_hash_mismatch() {
+        let db = Db::open_in_memory().expect("db");
+        let service = RuntimeConfigService::new(RuntimeConfigStore::new(db));
+        let mut request = apply_request();
+        request.artifact_payloads[0].content = "# Use GitLub\n".to_string();
+        assert!(matches!(
+            service.apply_config(request),
+            Err(RuntimeConfigError::ArtifactIntegrityMismatch(hash))
+                if hash == runtime_artifact_hash("# Use GitHub\n")
+        ));
+    }
+
+    #[test]
     fn apply_rejects_unresolved_credentials() {
         let db = Db::open_in_memory().expect("db");
         let service = RuntimeConfigService::new(RuntimeConfigStore::new(db));
@@ -1188,18 +1231,22 @@ mod tests {
     }
 
     fn apply_request() -> ApplyRuntimeConfigRequest {
+        let instruction_content = "# Use GitHub\n";
+        let instruction_hash = runtime_artifact_hash(instruction_content);
+        let guide_content = "Use issues.";
+        let guide_hash = runtime_artifact_hash(guide_content);
         let artifact = RuntimeArtifactRef {
-            hash: "sha256:instructions".to_string(),
+            hash: instruction_hash.clone(),
             content_type: "text/markdown".to_string(),
-            byte_size: 13,
+            byte_size: instruction_content.as_bytes().len() as i64,
             source_ref: Some("plugin:github:instructions".to_string()),
             resource_id: None,
             display_name: None,
         };
         let resource = RuntimeArtifactRef {
-            hash: "sha256:guide".to_string(),
+            hash: guide_hash.clone(),
             content_type: "text/markdown".to_string(),
-            byte_size: 11,
+            byte_size: guide_content.as_bytes().len() as i64,
             source_ref: Some("plugin:github:resource:guide".to_string()),
             resource_id: Some("triage-guide".to_string()),
             display_name: Some("Triage guide".to_string()),
@@ -1259,22 +1306,22 @@ mod tests {
             },
             artifact_payloads: vec![
                 RuntimeArtifactPayload {
-                    hash: "sha256:instructions".to_string(),
+                    hash: instruction_hash,
                     content_type: "text/markdown".to_string(),
-                    byte_size: 13,
+                    byte_size: instruction_content.as_bytes().len() as i64,
                     source_ref: Some("plugin:github:instructions".to_string()),
                     resource_id: None,
                     display_name: None,
-                    content: "# Use GitHub\n".to_string(),
+                    content: instruction_content.to_string(),
                 },
                 RuntimeArtifactPayload {
-                    hash: "sha256:guide".to_string(),
+                    hash: guide_hash,
                     content_type: "text/markdown".to_string(),
-                    byte_size: 11,
+                    byte_size: guide_content.as_bytes().len() as i64,
                     source_ref: Some("plugin:github:resource:guide".to_string()),
                     resource_id: Some("triage-guide".to_string()),
                     display_name: Some("Triage guide".to_string()),
-                    content: "Use issues.".to_string(),
+                    content: guide_content.to_string(),
                 },
             ],
             credential_values: Vec::new(),

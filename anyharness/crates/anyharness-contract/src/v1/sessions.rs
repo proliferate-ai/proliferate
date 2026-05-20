@@ -450,6 +450,8 @@ pub enum PromptAttachmentSource {
 pub struct PromptSessionRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_runtime_config_revision: Option<RuntimeConfigRevisionExpectation>,
     pub blocks: Vec<PromptInputBlock>,
 }
 
