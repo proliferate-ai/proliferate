@@ -328,21 +328,19 @@ cloud_mcp_connection
   UNIQUE (organization_id, connection_id)      WHERE owner_scope='organization'
 ```
 
-**Migration plan from current personal-only shape:**
+**Migration (one PR, no users to preserve):**
 
-1. Add `owner_scope` (default `'personal'`), `public_to_org` (default
-   `false`), `public_organization_id`, `public_status` (default
-   `'private'`), `public_updated_at`, `public_updated_by_user_id`.
-2. Backfill `owner_scope = 'personal'` from `user_id IS NOT NULL`.
-3. Rename `user_id` → `owner_user_id` (or keep `user_id` as alias and
-   double-write through one PR cycle — owner_user_id is the new authoritative
-   read). Decision: rename column outright. There is no production data to
-   preserve; renaming avoids future drift.
-4. Drop `CHECK user_id IS NOT NULL`. Drop `CHECK org_id IS NULL`. Rename
-   `org_id` → `organization_id` if needed.
-5. Add the new check constraints from above.
-6. Replace the old `UNIQUE (user_id, connection_id)` with the two partial
-   unique indexes above.
+```text
+- rename user_id -> owner_user_id, org_id -> organization_id
+- drop CHECK user_id IS NOT NULL and CHECK org_id IS NULL
+- add owner_scope, public_to_org, public_organization_id,
+  public_status, public_updated_at, public_updated_by_user_id
+- add CHECK ck_cloud_mcp_connection_owner_fields
+- add CHECK ck_cloud_mcp_connection_public
+- replace UNIQUE (user_id, connection_id) with the two partial unique
+  indexes above
+- existing rows are mapped owner_scope='personal' in the migration
+```
 
 Important invariants:
 
@@ -675,9 +673,12 @@ runtime_config: RuntimeConfigMaterializationFragment | None
   credential_refs       list of credential reference metadata, no secrets
 ```
 
-`mcp` and `skills` fields stay as raw dicts for one PR cycle for back-compat
-(the worker still writes them to disk). When `runtime_config` is present,
-the worker prefers it and skips the legacy raw writes.
+The raw `mcp` and `skills` dict fields are dropped in this spec. The
+worker handlers `write_mcp_materialization` and `write_skill_refs` are
+removed; AnyHarness reads runtime config via the new
+`/v1/runtime-config` endpoints. `runtime_config` is `Optional` only
+because non-managed targets (SSH, local through Desktop) may apply
+manifests through a different caller path.
 
 Worker materialization handler:
 
@@ -1051,26 +1052,35 @@ Rules:
 
 ### 5.14 Removing the SessionPluginBundle path
 
-The legacy session-plugin-bundle path stays usable through Phase 4 of the
-implementation chunks. Phase 5 (legacy cleanup) removes it:
+The legacy `SessionPluginBundle` path is removed in the same PR that
+ships this spec. No dual-path window.
 
 ```text
 Desktop:
   desktop/src/lib/domain/plugins/session-plugin-bundle.ts          deleted
-  CreateSessionRequest.plugin_bundle / mcp_servers / mcp_binding_summaries
-    -> still in contract for non-Cloud callers, but managed-cloud and
-    Cloud-mediated launches stop sending them.
+  callers of buildSessionPluginBundle                              rewritten
+                                                                   to use
+                                                                   runtime-config
+                                                                   preflight
 
-AnyHarness:
-  contract field plugin_bundle marked deprecated; honored only when
-    expected_runtime_config_revision is absent.
-  PluginBundleRegistry kept for one cycle for non-Cloud callers; removed
-    when no caller sets the field.
+AnyHarness contract (anyharness-contract/src/v1/sessions.rs):
+  CreateSessionRequest.plugin_bundle                               removed
+  CreateSessionRequest.mcp_servers                                 removed
+  CreateSessionRequest.mcp_binding_summaries                       removed
+  same fields on ResumeSessionRequest                              removed
+
+AnyHarness runtime:
+  PluginBundleRegistry                                             deleted
+  PluginSessionLaunchExtension                                     replaced
+                                                                   by
+                                                                   runtime_config
+                                                                   loader
+  proliferate_skills MCP server reads from runtime_config_current
 ```
 
-Cloud must not send both `plugin_bundle` and `expected_runtime_config_revision`
-in the same request. If a caller does, AnyHarness uses the revision and
-rejects the bundle with a structured warning.
+`expected_runtime_config_revision` is the only path. Sessions without
+runtime config (e.g. a target that has no MCPs configured) carry the
+revision but the manifest is empty.
 
 ### 5.15 API surface
 
@@ -1290,7 +1300,7 @@ desktop/src/components/plugins/detail/ConnectorDetailModal.tsx
   show where-used and admin publicize toggle
 
 desktop/src/lib/domain/plugins/session-plugin-bundle.ts
-  deprecated in Phase 4; removed in Phase 5
+  deleted in this PR
 
 desktop/src/lib/access/anyharness/runtime-config.ts              (new)
 desktop/src/lib/access/anyharness/sessions.ts
@@ -1302,63 +1312,61 @@ desktop/src/lib/access/anyharness/sessions.ts
 The runtime substrate must be reliable before product state is layered on.
 Phases are ordered to keep launches fail-closed at each step.
 
+All chunks land in one PR. Phases here describe build-order inside that
+PR, not staged rollout.
+
 ```text
-Phase 0  Runtime substrate hardening
-  - AnyHarness domains/runtime_config skeleton with PUT/GET endpoints
+Chunk A  Runtime substrate
+  - AnyHarness domains/runtime_config domain (model/store/service/
+    artifact_cache/credentials/resolution)
+  - api/http/runtime_config.rs handlers; wire router
   - SQLite tables runtime_config_current, runtime_artifact_cache
-  - resolution requests (in-memory)
-  - worker materialization/runtime_config.rs scaffolding
-  - extend TargetConfigMaterializationPlan with runtime_config fragment
-  - tests against AnyHarness contract end-to-end
+  - resolution requests in-memory
+  - worker materialization/runtime_config.rs handler
+  - extend TargetConfigMaterializationPlan with runtime_config fragment;
+    drop raw mcp/skills dict fields and their write handlers
+  - AnyHarness contract: add expected_runtime_config_revision to
+    CreateSessionRequest/ResumeSessionRequest; remove plugin_bundle,
+    mcp_servers, mcp_binding_summaries from those requests
+  - SDK regen (anyharness/sdk, cloud/sdk)
 
-Phase 1  Cloud product schema and stores
-  - migration: cloud_mcp_connection broaden (owner_scope, public_*,
+Chunk B  Cloud product schema
+  - migration: cloud_mcp_connection broadened (owner_scope, public_*,
     rename user_id/org_id, partial unique indexes)
-  - migration: add cloud_skill_configured_item
-  - migration: add cloud_plugin_configured_item (optional based on §10 Q1)
-  - migration: add cloud_sandbox_runtime_config_revision / _current /
-    _artifact
-  - stores with frozen dataclass snapshots
+  - migration: cloud_skill_configured_item
+  - migration: cloud_plugin_configured_item
+  - migration: cloud_sandbox_runtime_config_revision/_current/_artifact
+  - stores returning frozen dataclass snapshots
 
-Phase 2  Resolver + compiler
-  - domain/resolver.py (pure)
-  - domain/manifest.py (pure)
+Chunk C  Resolver + compiler + write services
+  - domain/resolver.py and domain/manifest.py (pure)
   - service.py compile + idempotent revision upsert by content_hash
-  - tests for personal + org resolution, duplicate-server-name namespacing,
-    blocker emission
+  - hook write sites (MCP create/patch/auth/oauth/delete, skill enable/
+    public, plugin install/enable/public)
+  - reconciler tick
 
-Phase 3  Refresh hooks and worker apply
-  - hook MCP create/patch/auth/oauth/delete
-  - hook skill enable/disable/public
-  - hook plugin install/enable/public
-  - reconciler tick for stale applied
+Chunk D  Worker apply + Cloud-side preflight
   - worker applies runtime_config; reports applied/failed
   - target_config.service builds plans with runtime_config fragment
-
-Phase 4  Launch preflight + Cloud-side gate
-  - add expected_runtime_config_revision to CreateSessionRequest /
-    ResumeSessionRequest
-  - AnyHarness builds session MCP servers from runtime_config when
-    expectation present
-  - Cloud-side preflight before enqueueing start_session
+  - Cloud-side preflight before enqueueing start_session/send_prompt
   - Desktop local target preflight before optimistic session create
-  - SDK regen
 
-Phase 5  Product UI
+Chunk E  Legacy removal
+  - delete desktop/src/lib/domain/plugins/session-plugin-bundle.ts
+  - delete AnyHarness PluginBundleRegistry and
+    PluginSessionLaunchExtension
+  - rewrite all callers of buildSessionPluginBundle to use the new
+    runtime-config preflight workflow
+  - proliferate_skills MCP server reads from runtime_config_current,
+    not from the in-memory bundle registry
+
+Chunk F  Product UI
   - Plugins page rows: enabled, public_to_org, auth_status, runtime apply
   - admin publicize toggle (gated by access.py)
-  - skills page integrated into Plugins page or separate (spec 03 decides)
+  - skills page integrated per spec 03 placement
   - readiness panel reads /sandbox-profiles/{id}/runtime-config
 
-Phase 6  Legacy cleanup
-  - Cloud-mediated session create stops sending plugin_bundle and
-    mcp_servers inline
-  - Desktop session-plugin-bundle.ts removed
-  - AnyHarness deprecates plugin_bundle path; legacy honored only when no
-    expected_runtime_config_revision
-  - PluginBundleRegistry retired
-
-Phase 7  OAuth proactive refresh (optional, can ship later)
+OAuth proactive refresh (optional follow-up after this PR)
   - Cloud reconciler refreshes near-expiry tokens before apply
 ```
 
@@ -1419,10 +1427,12 @@ Phase 7  OAuth proactive refresh (optional, can ship later)
     credentials. AnyHarness reports
     `RUNTIME_CONFIG_RESOLUTION_REQUIRED` with `resolution_request_ids`
     when fulfillment is required.
-19. Phase 6 cleanup removes `session-plugin-bundle.ts` from Desktop and
-    Cloud-mediated launches no longer send `plugin_bundle` or
-    `mcp_servers` inline. AnyHarness honors `plugin_bundle` only when
-    `expected_runtime_config_revision` is absent.
+19. `desktop/src/lib/domain/plugins/session-plugin-bundle.ts` is deleted.
+    `plugin_bundle`, `mcp_servers`, and `mcp_binding_summaries` are
+    removed from `CreateSessionRequest` / `ResumeSessionRequest` in the
+    AnyHarness contract. `PluginBundleRegistry` and
+    `PluginSessionLaunchExtension` are deleted from AnyHarness. There
+    is no dual-path window.
 20. OAuth refresh failures set `auth_status = 'needs_reconnect'` and
     cause the next refresh hook to mark the profile's runtime config
     `blocked` for affected MCPs until reconnected.

@@ -180,6 +180,36 @@ when the spec is responsible for the enforcement point.
   auth UI lands with spec 02. Compute readiness UI lands with spec 00.
   Claim UI lands with spec 05. Dispatch UI lands with spec 08.
 
+## Migration Posture
+
+There are no production users of this product yet. Specs do not carry
+migration ceremony.
+
+Concretely:
+
+- **No dual-write or alias columns.** Renames happen in the same PR that
+  ships the new name. Do not keep old column names "for one PR cycle".
+- **No old + new code paths side by side.** When a new owner replaces an
+  old one, the same PR rewrites callers and deletes the old code. No
+  legacy bundle bridges, no fallback reads.
+- **No additive migrations with backfill.** Replace the schema directly.
+  Dev/test fixtures are updated to the new shape; there is no production
+  backfill path to design around.
+- **No worker version capability gates for "supports the new field".**
+  Worker, server, contract, and SDK ship together in one PR. Workers
+  inside the deploy boundary are not third-party and can be required to
+  match the server version.
+- **No "Phase N legacy cleanup".** If a spec describes both a new path
+  and removing an old one, both happen in the same PR. Phases inside a
+  spec exist only for genuine architectural sequencing (e.g. AnyHarness
+  substrate must compile before Cloud writes against it), not for
+  graceful rollout that we do not need.
+
+Type-system back-compat is different from migration back-compat. Fields
+that are `Option<…>` because they only apply to one of several call sites
+(e.g. `sandbox_profile_id` exists for managed-cloud commands but not for
+local-target commands) are fine and not what this rule restricts.
+
 ## Spec Format
 
 Each spec follows this layout:
