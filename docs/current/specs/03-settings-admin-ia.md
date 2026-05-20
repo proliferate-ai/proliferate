@@ -394,15 +394,15 @@ revoked              exposure was active and is now off
 private              owner only
 shared_unclaimed     org members can view + interact pre-claim
 claimed              one claiming user has narrowed control
-admin_managed        admin audit/manage view only
 archived             retained but hidden from active lists
 ```
 
-Note: `private`/`shared_unclaimed`/`claimed`/`archived` are the values
-already used by the existing `cloud_workspace_exposure.visibility`
-DB enum. `admin_managed` is a new state that spec 05 adds to the enum
-when claiming lands; spec 03 establishes the vocabulary; spec 05 owns
-the migration.
+Note: these are the values already used by the existing
+`cloud_workspace_exposure.visibility` DB enum. Spec 05 (claiming)
+keeps claim as a one-way transition; there is no `admin_managed`
+state. Admins gain audit view via the `useIsAdmin` hook and the
+`scope=org-all` listing endpoint, not via a separate visibility
+state.
 
 **SandboxType** (the runtime container the work lives in):
 
@@ -439,7 +439,6 @@ Exposure       not_tracked     -> "Not tracked"
 Access         private         -> "Private"
                shared_unclaimed -> "Shared (unclaimed)"
                claimed         -> "Claimed"
-               admin_managed   -> "Admin managed"
                archived        -> "Archived"
 
 SandboxType    local           -> "Local"
@@ -473,9 +472,9 @@ Existing DB CHECK enums that already match this convention are left
 in place (cloud_workspace_exposure.visibility, sandbox_profile.status,
 cloud_targets.kind, agent_kind, etc.).
 
-Specs that add new enums (spec 05 admin_managed, spec 08 dispatch
-states) emit the same vocabulary; the strings on the wire are exactly
-the strings in copy/settings/vocabulary-copy.ts keys.
+Specs that add new enum values (e.g. spec 08 dispatch states) emit
+the same vocabulary; the strings on the wire are exactly the strings
+in copy/settings/vocabulary-copy.ts keys.
 ```
 
 ### 5.4 Shared UI primitives
