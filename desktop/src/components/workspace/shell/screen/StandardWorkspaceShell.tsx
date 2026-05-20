@@ -90,8 +90,10 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     () => resolveStandardWorkspaceChromeClasses({
       transparent: transparentChromeEnabled,
       sidebarOpen,
+      showHeaderDivider: hasWorkspaceShell && !hasLaunchIntentOnlyShell,
+      showContentTopBorder: hasWorkspaceShell && !hasLaunchIntentOnlyShell,
     }),
-    [sidebarOpen, transparentChromeEnabled],
+    [hasLaunchIntentOnlyShell, hasWorkspaceShell, sidebarOpen, transparentChromeEnabled],
   );
   const activePublishWorkspaceId = selectedWorkspaceId;
   const publishSourceRootPath = publishDialog.open

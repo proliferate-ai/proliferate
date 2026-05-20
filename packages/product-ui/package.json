@@ -35,6 +35,10 @@
       "types": "./dist/auth/LegalLinks.d.ts",
       "import": "./dist/auth/LegalLinks.js"
     },
+    "./auth/RedirectCallbackScreen": {
+      "types": "./dist/auth/RedirectCallbackScreen.d.ts",
+      "import": "./dist/auth/RedirectCallbackScreen.js"
+    },
     "./automations/AutomationRow": {
       "types": "./dist/automations/AutomationRow.d.ts",
       "import": "./dist/automations/AutomationRow.js"

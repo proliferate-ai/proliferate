@@ -518,7 +518,8 @@ class TestDesktopGitHubBrowserFlow:
             params={"code": "github-code", "state": oauth_state},
         )
         assert callback.status_code == 200
-        assert "Opening Proliferate..." in callback.text
+        assert "GitHub sign-in done" in callback.text
+        assert "Redirecting to desktop app..." in callback.text
         assert "Open Proliferate again" in callback.text
         assert "proliferate://auth/callback?code=" in callback.text
         assert "state=desktop-github-state" in callback.text
@@ -596,7 +597,8 @@ class TestDesktopGitHubBrowserFlow:
             params={"code": "github-code", "state": oauth_state},
         )
         assert callback.status_code == 200
-        assert "Opening Proliferate..." in callback.text
+        assert "GitHub sign-in done" in callback.text
+        assert "Redirecting to desktop app..." in callback.text
 
         exchange = await client.post(
             "/auth/desktop/poll",

@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect } from "react"
 import { Navigate, Route, useLocation } from "react-router-dom"
+import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { AuthRequiredGate } from "@/components/auth/AuthRequiredGate"
 import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
@@ -114,22 +115,16 @@ function StripeReturnHandoff({ deepLinkUrl }: { deepLinkUrl: string }) {
   }, [deepLinkUrl])
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-8 text-foreground">
-      <main className="w-full max-w-sm space-y-4">
-        <div className="space-y-2">
-          <p className="text-base font-medium">Opening Proliferate...</p>
-          <p className="text-sm text-muted-foreground">
-            Stripe is done. Return to the desktop app to continue in Cloud settings.
-          </p>
-        </div>
-        <a
-          className="inline-flex w-full items-center justify-center rounded-md bg-foreground px-3 py-2 text-sm font-medium text-background"
-          href={deepLinkUrl}
-        >
-          Open Proliferate
-        </a>
-      </main>
-    </div>
+    <RedirectCallbackScreen
+      title="Billing done"
+      description="Redirecting to desktop app..."
+      statusLabel="Billing redirect"
+      variant="handoff"
+      primaryAction={{
+        label: "Click here if not redirected",
+        onClick: () => window.location.assign(deepLinkUrl),
+      }}
+    />
   )
 }
 

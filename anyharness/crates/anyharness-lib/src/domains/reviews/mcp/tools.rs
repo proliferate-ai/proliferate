@@ -42,7 +42,10 @@ pub fn reviewer_tool_list() -> Vec<Value> {
             "properties": {
                 "pass": { "type": "boolean" },
                 "summary": { "type": "string" },
-                "critiqueMarkdown": { "type": "string" }
+                "critiqueMarkdown": {
+                    "type": "string",
+                    "description": "Structured Markdown review body with the requested review sections."
+                }
             },
             "required": ["pass", "summary", "critiqueMarkdown"]
         }),

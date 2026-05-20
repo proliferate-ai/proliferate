@@ -2338,7 +2338,6 @@ body {
   color: var(--right-panel-tab-text-secondary);
   font-size: var(--right-panel-tab-font-size);
   line-height: var(--right-panel-tab-line-height);
-  border-top: 1px solid var(--right-panel-tab-outer-border);
   border-bottom: 1px solid var(--right-panel-tab-outer-border);
 }
 
