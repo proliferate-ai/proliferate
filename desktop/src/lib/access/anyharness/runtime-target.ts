@@ -1,4 +1,4 @@
-import type { CloudAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import type { AgentAuthAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import {
   getCloudWorkspace,
   getCloudWorkspaceConnection,
@@ -14,8 +14,8 @@ export interface RuntimeTarget {
   authToken?: string;
   anyharnessWorkspaceId: string;
   runtimeGeneration: number;
-  allowedAgentKinds?: CloudAgentKind[];
-  readyAgentKinds?: CloudAgentKind[];
+  allowedAgentKinds?: AgentAuthAgentKind[];
+  readyAgentKinds?: AgentAuthAgentKind[];
 }
 
 export async function resolveRuntimeTargetForWorkspace(
@@ -70,7 +70,14 @@ export async function resolveRuntimeTargetForWorkspace(
     authToken: connection.accessToken,
     anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
     runtimeGeneration: connection.runtimeGeneration,
-    allowedAgentKinds: connection.allowedAgentKinds,
-    readyAgentKinds: connection.readyAgentKinds as CloudAgentKind[],
+    allowedAgentKinds: connection.allowedAgentKinds.filter(isCloudAgentRuntimeKind),
+    readyAgentKinds: connection.readyAgentKinds.filter(isCloudAgentRuntimeKind),
   };
+}
+
+function isCloudAgentRuntimeKind(value: string): value is AgentAuthAgentKind {
+  return value === "claude"
+    || value === "codex"
+    || value === "opencode"
+    || value === "gemini";
 }

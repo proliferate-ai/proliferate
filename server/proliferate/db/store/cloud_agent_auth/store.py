@@ -913,6 +913,35 @@ async def get_gateway_policy_for_credential(
     return _policy_record(row) if row is not None else None
 
 
+async def get_managed_gateway_credential(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    agent_kind: str,
+) -> AgentAuthCredentialRecord | None:
+    row = (
+        await db.execute(
+            select(AgentAuthCredential)
+            .join(
+                AgentGatewayPolicy,
+                AgentGatewayPolicy.credential_id == AgentAuthCredential.id,
+            )
+            .where(
+                AgentAuthCredential.owner_scope == "organization",
+                AgentAuthCredential.organization_id == organization_id,
+                AgentAuthCredential.agent_kind == agent_kind,
+                AgentAuthCredential.credential_kind == "managed_gateway",
+                AgentAuthCredential.revoked_at.is_(None),
+                AgentAuthCredential.status != "revoked",
+                AgentGatewayPolicy.policy_kind == "proliferate_managed",
+            )
+            .order_by(AgentAuthCredential.created_at.asc())
+            .with_for_update()
+        )
+    ).scalars().first()
+    return _credential_record(row) if row is not None else None
+
+
 async def get_gateway_policy(
     db: AsyncSession,
     policy_id: UUID,

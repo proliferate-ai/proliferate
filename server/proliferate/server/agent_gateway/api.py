@@ -34,7 +34,7 @@ async def agent_gateway_health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.get("/anthropic/v1/models")
+@router.get("/anthropic/v1/models", include_in_schema=False)
 async def anthropic_models(
     request: Request,
     db: AsyncSession = Depends(get_async_session),
@@ -59,7 +59,7 @@ async def anthropic_models(
     )
 
 
-@router.get("/openai/v1/models")
+@router.get("/openai/v1/models", include_in_schema=False)
 async def openai_models(
     request: Request,
     db: AsyncSession = Depends(get_async_session),
@@ -84,10 +84,10 @@ async def openai_models(
     )
 
 
-@router.post("/anthropic/v1/messages")
-@router.post("/anthropic/v1/messages/count_tokens")
-@router.post("/openai/v1/responses")
-@router.post("/openai/v1/chat/completions")
+@router.post("/anthropic/v1/messages", include_in_schema=False)
+@router.post("/anthropic/v1/messages/count_tokens", include_in_schema=False)
+@router.post("/openai/v1/responses", include_in_schema=False)
+@router.post("/openai/v1/chat/completions", include_in_schema=False)
 async def forward_protocol_request(
     request: Request,
     db: AsyncSession = Depends(get_async_session),

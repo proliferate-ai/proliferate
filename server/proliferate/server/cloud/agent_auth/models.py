@@ -37,8 +37,7 @@ class LiteLLMModelDeploymentRequest(BaseModel):
 
 
 class EnsureManagedCreditsRequest(BaseModel):
-    included_budget_usd: str | None = Field(default=None, alias="includedBudgetUsd")
-    agent_kinds: list[AgentKind] = Field(default_factory=lambda: ["claude"], alias="agentKinds")
+    pass
 
 
 class CreateGatewayCredentialRequest(BaseModel):
@@ -94,6 +93,10 @@ class AgentAuthCredentialResponse(BaseModel):
     status: str
     revision: int
     legacy_cloud_credential_id: UUID | None = Field(alias="legacyCloudCredentialId")
+    active_credential_share_id: UUID | None = Field(
+        default=None,
+        alias="activeCredentialShareId",
+    )
     revoked_at: str | None = Field(alias="revokedAt")
 
 
@@ -263,7 +266,11 @@ def sandbox_profile_response(record: SandboxProfileRecord) -> SandboxProfileResp
     )
 
 
-def credential_response(record: AgentAuthCredentialRecord) -> AgentAuthCredentialResponse:
+def credential_response(
+    record: AgentAuthCredentialRecord,
+    *,
+    active_credential_share_id: UUID | None = None,
+) -> AgentAuthCredentialResponse:
     return AgentAuthCredentialResponse(
         id=record.id,
         ownerScope=record.owner_scope,
@@ -277,6 +284,7 @@ def credential_response(record: AgentAuthCredentialRecord) -> AgentAuthCredentia
         status=record.status,
         revision=record.revision,
         legacyCloudCredentialId=record.legacy_cloud_credential_id,
+        activeCredentialShareId=active_credential_share_id,
         revokedAt=_iso(record.revoked_at),
     )
 

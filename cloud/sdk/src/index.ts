@@ -1,6 +1,7 @@
 export * from "./client/core.js";
 export * from "./client/auth.js";
 export * from "./client/viewer.js";
+export * from "./client/agent-auth.js";
 export * from "./client/agent-catalog.js";
 export * from "./client/ai-magic.js";
 export * from "./client/automations.js";
