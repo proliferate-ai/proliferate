@@ -23,7 +23,7 @@ import {
 import {
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
-} from "@/lib/infra/right-panel-shortcuts";
+} from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 
 const terminalActionsMocks = vi.hoisted(() => ({
@@ -396,11 +396,13 @@ describe("RightPanel viewer routing", () => {
 describe("RightPanel tab shortcuts", () => {
   it("activates right-panel entries by option-number shortcut requests", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
+    let handled = false;
 
     act(() => {
-      requestRightPanelTabByIndex(2);
+      handled = requestRightPanelTabByIndex(2);
     });
 
+    expect(handled).toBe(true);
     await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
   });
 
@@ -423,6 +425,18 @@ describe("RightPanel tab shortcuts", () => {
 
     expect(screen.getByRole("tab", { name: "Changes" }).getAttribute("aria-selected"))
       .toBe("true");
+  });
+
+  it("leaves routed shortcuts unhandled when the right panel is closed", async () => {
+    render(<RightPanelHarness isWorkspaceReady isOpen={false} />);
+    let handled = true;
+
+    act(() => {
+      handled = requestRightPanelTabByIndex(2);
+    });
+
+    expect(handled).toBe(false);
+    expect(screen.queryByTestId("git-panel")).toBeNull();
   });
 
   it("does not intercept primary-number shell shortcuts after clicking panel content", async () => {

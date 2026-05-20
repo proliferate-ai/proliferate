@@ -2286,7 +2286,7 @@ body {
 
 /* ---- Right panel tabs ---- */
 .right-panel-tab-system {
-  --tab-system-height: var(--workspace-shell-header-height);
+  --tab-system-height: 2.5rem; /* Align with the main sidebar header. */
   --tab-max-width: 156px;
   --tab-shell-max-width: 160px;
   --tab-height: 30px;
@@ -2329,6 +2329,7 @@ body {
   flex-direction: column;
   width: 100%;
   height: var(--tab-system-height);
+  box-sizing: border-box;
   flex-shrink: 0;
   min-width: 0;
   background-color: var(--right-panel-tab-surface);
@@ -2629,6 +2630,10 @@ body {
   font-size: var(--right-panel-tab-font-size);
   line-height: var(--right-panel-tab-line-height);
   font-weight: var(--right-panel-tab-font-weight);
+}
+
+.right-panel-tab-system .ui-tab-system-tab__content[data-shortcut-reveal="true"] {
+  padding-right: 1.65rem;
 }
 
 .right-panel-tab-system .ui-tab-system-tab[data-stable] .ui-tab-system-tab__content,

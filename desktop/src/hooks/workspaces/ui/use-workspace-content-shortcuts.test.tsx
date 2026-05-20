@@ -10,7 +10,7 @@ import { useWorkspaceContentShortcuts } from "@/hooks/workspaces/ui/use-workspac
 import {
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
-} from "@/lib/infra/right-panel-shortcuts";
+} from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
 
 function createActions(overrides: Partial<{
   activateRelativeTab: ReturnType<typeof vi.fn>;
@@ -38,7 +38,7 @@ vi.mock("@/stores/sessions/session-selection-store", () => ({
     selector(harnessState),
 }));
 
-vi.mock("@/lib/infra/right-panel-shortcuts", () => ({
+vi.mock("@/lib/workflows/workspaces/right-panel-shortcut-requests", () => ({
   requestRightPanelRelativeTab: vi.fn(() => true),
   requestRightPanelTabByIndex: vi.fn(() => true),
 }));

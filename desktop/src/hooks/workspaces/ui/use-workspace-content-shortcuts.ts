@@ -4,7 +4,7 @@ import { getFocusZone, isRightPanelFocusZone } from "@/lib/domain/focus-zone";
 import {
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
-} from "@/lib/infra/right-panel-shortcuts";
+} from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
 import type { WorkspaceTabActions } from "@/hooks/workspaces/tabs/use-workspace-tab-actions";
 
 type WorkspaceContentShortcutActions = Pick<

@@ -13,6 +13,7 @@ import { RightPanelFrame } from "@/components/workspace/shell/right-panel/RightP
 import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
 import { useRightPanelHeaderEntries } from "@/hooks/workspaces/derived/use-right-panel-header-entries";
 import { useRightPanelRootFocus } from "@/hooks/workspaces/ui/use-right-panel-root-focus";
+import { useRightPanelShortcutRequests } from "@/hooks/workspaces/ui/use-right-panel-shortcut-requests";
 import { useRightPanelStateUpdater } from "@/hooks/workspaces/ui/use-right-panel-state-updater";
 import {
   parseRightPanelHeaderEntryKey,
@@ -25,10 +26,6 @@ import {
   type RightPanelTool,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
-import {
-  resolveRelativeRightPanelHeaderEntryKey,
-  resolveRightPanelHeaderEntryKeyByShortcutIndex,
-} from "@/lib/domain/workspaces/shell/right-panel-shortcuts";
 import { createRightPanelBrowserTabId } from "@/lib/domain/workspaces/shell/right-panel-browser-tabs";
 import {
   createOrActivateBrowserTabInRightPanelState,
@@ -49,10 +46,6 @@ import {
   rightPanelNewTabMenuDefaultFromEvent,
   type RightPanelNewTabMenuDefault,
 } from "@/lib/infra/right-panel-new-tab-menu";
-import {
-  RIGHT_PANEL_SHORTCUT_EVENT,
-  rightPanelShortcutRequestFromEvent,
-} from "@/lib/infra/right-panel-shortcuts";
 import {
   viewerTargetEditablePath,
   viewerTargetKey,
@@ -390,41 +383,12 @@ export const RightPanel = memo(function RightPanel({
     return false;
   }, [activateTool, selectBrowser, selectTerminal, selectViewer]);
 
-  useEffect(() => {
-    const handleShortcutRequest = (event: Event) => {
-      if (!isOpen) {
-        return;
-      }
-
-      const request = rightPanelShortcutRequestFromEvent(event);
-      if (!request) {
-        return;
-      }
-
-      const nextEntryKey = request.kind === "relative-tab"
-        ? resolveRelativeRightPanelHeaderEntryKey({
-            entries: headerEntries,
-            activeEntryKey: state.activeEntryKey,
-            delta: request.delta,
-          })
-        : resolveRightPanelHeaderEntryKeyByShortcutIndex(headerEntries, request.digit);
-      if (!nextEntryKey) {
-        return;
-      }
-
-      activateRightPanelEntry(nextEntryKey);
-    };
-
-    window.addEventListener(RIGHT_PANEL_SHORTCUT_EVENT, handleShortcutRequest);
-    return () => {
-      window.removeEventListener(RIGHT_PANEL_SHORTCUT_EVENT, handleShortcutRequest);
-    };
-  }, [
-    activateRightPanelEntry,
-    headerEntries,
+  useRightPanelShortcutRequests({
+    activeEntryKey: state.activeEntryKey,
+    entries: headerEntries,
     isOpen,
-    state.activeEntryKey,
-  ]);
+    onActivateEntry: activateRightPanelEntry,
+  });
 
   const handleRootPointerDownCapture = useRightPanelRootFocus({
     rootRef,

@@ -7,7 +7,7 @@ import {
   resolveAdjacentSidebarShortcutTarget,
   resolveSidebarShortcutDigitTarget,
 } from "@/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
-import { requestRightPanelTabByIndex } from "@/lib/infra/right-panel-shortcuts";
+import { requestRightPanelTabByIndex } from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
@@ -78,7 +78,10 @@ export function useAppShortcuts(actions: AppCommandActions): void {
     }
 
     if (isRightPanelFocusZone(getFocusZone())) {
-      return requestRightPanelTabByIndex(digit);
+      const handled = requestRightPanelTabByIndex(digit);
+      if (handled) {
+        return true;
+      }
     }
 
     const targetId = resolveSidebarShortcutDigitTarget(sidebarShortcutTargetIds, digit);

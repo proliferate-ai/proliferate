@@ -10,7 +10,7 @@ import {
 } from "@/lib/domain/shortcuts/registry";
 import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { requestRightPanelTabByIndex } from "@/lib/infra/right-panel-shortcuts";
+import { requestRightPanelTabByIndex } from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
 
 const navigationMocks = vi.hoisted(() => ({
   selectWorkspaceFromSurface: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock("@/stores/sessions/session-selection-store", () => ({
     }),
 }));
 
-vi.mock("@/lib/infra/right-panel-shortcuts", () => ({
+vi.mock("@/lib/workflows/workspaces/right-panel-shortcut-requests", () => ({
   requestRightPanelTabByIndex: vi.fn(() => true),
 }));
 

@@ -7,19 +7,11 @@ export type RightPanelShortcutRequest =
   | { kind: "tab-by-index"; digit: ShortcutDigit };
 
 export function requestRightPanelRelativeTab(delta: -1 | 1): boolean {
-  window.dispatchEvent(new CustomEvent<RightPanelShortcutRequest>(
-    RIGHT_PANEL_SHORTCUT_EVENT,
-    { detail: { kind: "relative-tab", delta } },
-  ));
-  return true;
+  return dispatchRightPanelShortcutRequest({ kind: "relative-tab", delta });
 }
 
 export function requestRightPanelTabByIndex(digit: ShortcutDigit): boolean {
-  window.dispatchEvent(new CustomEvent<RightPanelShortcutRequest>(
-    RIGHT_PANEL_SHORTCUT_EVENT,
-    { detail: { kind: "tab-by-index", digit } },
-  ));
-  return true;
+  return dispatchRightPanelShortcutRequest({ kind: "tab-by-index", digit });
 }
 
 export function rightPanelShortcutRequestFromEvent(
@@ -50,4 +42,15 @@ function isShortcutDigit(value: unknown): value is ShortcutDigit {
     && Number.isInteger(value)
     && value >= 1
     && value <= 9;
+}
+
+function dispatchRightPanelShortcutRequest(request: RightPanelShortcutRequest): boolean {
+  const event = new CustomEvent<RightPanelShortcutRequest>(
+    RIGHT_PANEL_SHORTCUT_EVENT,
+    {
+      cancelable: true,
+      detail: request,
+    },
+  );
+  return !window.dispatchEvent(event);
 }
