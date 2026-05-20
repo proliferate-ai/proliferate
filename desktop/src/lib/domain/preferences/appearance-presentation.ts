@@ -11,28 +11,28 @@ interface AppearanceSizeOption<T extends string> {
 }
 
 const SIZE_LABELS: Record<UiFontSizeId, string> = {
-  xxsmall: "Extra Extra Small",
+  xxsmall: "Smallest",
   xsmall: "Extra Small",
   small: "Small",
   default: "Default",
   large: "Large",
   xlarge: "Extra Large",
   xxlarge: "Extra Extra Large",
-  xxxlarge: "Extra Extra Extra Large",
+  xxxlarge: "Largest",
 };
 
 export const UI_FONT_SIZE_OPTIONS: AppearanceSizeOption<UiFontSizeId>[] =
   APPEARANCE_SIZE_IDS.map((id) => ({
     id,
     label: SIZE_LABELS[id],
-    detail: id === "default" ? "Current density" : "App and chat text",
+    detail: id === "default" ? "Default app and chat text" : "App and chat text",
   }));
 
 export const READABLE_CODE_FONT_SIZE_OPTIONS: AppearanceSizeOption<ReadableCodeFontSizeId>[] =
   APPEARANCE_SIZE_IDS.map((id) => ({
     id,
     label: SIZE_LABELS[id],
-    detail: id === "default" ? "Current code density" : "Editor, diffs, and code blocks",
+    detail: id === "default" ? "Default editor and code text" : "Editor, diffs, and code blocks",
   }));
 
 export const UI_FONT_SIZE_LABELS: Record<UiFontSizeId, string> = SIZE_LABELS;

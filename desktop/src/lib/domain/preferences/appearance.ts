@@ -53,7 +53,7 @@ export interface ReadableCodeFontScale {
 
 export const DEFAULT_APPEARANCE_SIZE_ID: AppearanceSizeId = "default";
 export const CHAT_LINE_HEIGHTS: Record<UiFontSizeId, string> = {
-  xxsmall: "17px",
+  xxsmall: "17.5px",
   xsmall: "18px",
   small: "19px",
   default: "20px",
@@ -65,12 +65,12 @@ export const CHAT_LINE_HEIGHTS: Record<UiFontSizeId, string> = {
 
 export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
   xxsmall: {
-    xs: { fontSize: "0.40625rem", lineHeight: "0.625rem" },
-    sm: { fontSize: "0.4375rem", lineHeight: "0.75rem" },
-    base: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
-    chat: { fontSize: "9px", lineHeight: CHAT_LINE_HEIGHTS.xxsmall },
-    lg: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
-    xl: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
+    xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
+    sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
+    base: { fontSize: "0.53125rem", lineHeight: "0.84375rem" },
+    chat: { fontSize: "9.5px", lineHeight: CHAT_LINE_HEIGHTS.xxsmall },
+    lg: { fontSize: "0.71875rem", lineHeight: "1.09375rem" },
+    xl: { fontSize: "0.96875rem", lineHeight: "1.4375rem" },
   },
   xsmall: {
     xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
@@ -132,11 +132,11 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
 
 export const READABLE_CODE_FONT_SCALES: Record<ReadableCodeFontSizeId, ReadableCodeFontScale> = {
   xxsmall: {
-    monacoFontSize: 8,
-    monacoLineHeight: 15,
-    diffsFontSize: "8px",
+    monacoFontSize: 8.5,
+    monacoLineHeight: 15.5,
+    diffsFontSize: "8.5px",
     diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-    codeFontSize: "0.5rem",
+    codeFontSize: "0.53125rem",
     codeLineHeight: "1.625",
   },
   xsmall: {
