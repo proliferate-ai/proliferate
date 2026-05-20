@@ -25,6 +25,7 @@ import { MobileSettingsScreen } from "../settings/MobileSettingsScreen";
 import { MobileTopBar, MobileTopBarIconButton } from "../primitives/MobileTopBar";
 import { MobileWorkspacesScreen } from "../workspaces/MobileWorkspacesScreen";
 import { drawerRoutes, routeTitle, type RouteId } from "../../navigation/navigation-model";
+import { useMobileScreenTelemetry } from "../../hooks/telemetry/use-mobile-screen-telemetry";
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
 import { colors, radius, shadow, spacing } from "../../styles/tokens";
 
@@ -44,6 +45,9 @@ export function MobileShell() {
 
   const subtitle = useMemo(() => routeSubtitle(route), [route]);
   const account = useMemo(() => accountSummary(user), [user]);
+  const telemetryScreen = selectedChat ? "chat" : route;
+
+  useMobileScreenTelemetry(authState, telemetryScreen);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {

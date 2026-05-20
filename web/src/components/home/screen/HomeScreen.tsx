@@ -43,43 +43,45 @@ export function HomeScreen() {
   }
 
   return (
-    <NewChatSurface
-      heading="What should we run?"
-      draft={draft}
-      placeholder={MODE_PLACEHOLDERS[modeId]}
-      canSubmit={Boolean(draft.trim()) && !submitting}
-      submitting={submitting}
-      target={buildTargetPicker(targetId)}
-      model={buildModelPicker(modelId)}
-      mode={buildModePicker(modeId)}
-      notices={[
-        {
-          id: "mock-cloud",
-          tone: "neutral",
-          text: "Cloud API wiring is intentionally light in this PR; this surface is using shared UI and fixture targets.",
-        },
-      ]}
-      actions={[
-        {
-          id: "branch",
-          label: "Open from branch",
-          icon: <GitBranch size={14} />,
-        },
-        {
-          id: "pr",
-          label: "Review pull request",
-          icon: <GitPullRequest size={14} />,
-        },
-        {
-          id: "agent",
-          label: "Use saved agent",
-          icon: <Bot size={14} />,
-        },
-      ]}
-      onDraftChange={setDraft}
-      onSubmit={handleSubmit}
-      onPickerSelect={handlePickerSelect}
-    />
+    <div className="h-full" data-telemetry-block>
+      <NewChatSurface
+        heading="What should we run?"
+        draft={draft}
+        placeholder={MODE_PLACEHOLDERS[modeId]}
+        canSubmit={Boolean(draft.trim()) && !submitting}
+        submitting={submitting}
+        target={buildTargetPicker(targetId)}
+        model={buildModelPicker(modelId)}
+        mode={buildModePicker(modeId)}
+        notices={[
+          {
+            id: "mock-cloud",
+            tone: "neutral",
+            text: "Cloud API wiring is intentionally light in this PR; this surface is using shared UI and fixture targets.",
+          },
+        ]}
+        actions={[
+          {
+            id: "branch",
+            label: "Open from branch",
+            icon: <GitBranch size={14} />,
+          },
+          {
+            id: "pr",
+            label: "Review pull request",
+            icon: <GitPullRequest size={14} />,
+          },
+          {
+            id: "agent",
+            label: "Use saved agent",
+            icon: <Bot size={14} />,
+          },
+        ]}
+        onDraftChange={setDraft}
+        onSubmit={handleSubmit}
+        onPickerSelect={handlePickerSelect}
+      />
+    </div>
   );
 }
 

@@ -89,33 +89,35 @@ export function WebSidebarController() {
   }
 
   return (
-    <ProductSidebar
-      navItems={navItems}
-      workspaceGroups={workspaceGroups}
-      chatRows={chatRows}
-      footerActions={[
-        {
-          id: "settings",
-          label: "Settings",
-          icon: <Settings className="size-3.5" />,
-        },
-      ]}
-      onNavSelect={navigateByNavId}
-      onWorkspaceSelect={(chatId) => {
-        const chat = chats.find((item) => item.id === chatId);
-        if (chat) {
-          navigate(routes.chat(chat.workspaceId, chat.id));
-        }
-      }}
-      onChatSelect={(chatId) => {
-        const chat = chats.find((item) => item.id === chatId);
-        if (chat) {
-          navigate(routes.chat(chat.workspaceId, chat.id));
-        }
-      }}
-      onGroupToggle={handleGroupToggle}
-      onAction={handleAction}
-    />
+    <div className="contents" data-telemetry-block>
+      <ProductSidebar
+        navItems={navItems}
+        workspaceGroups={workspaceGroups}
+        chatRows={chatRows}
+        footerActions={[
+          {
+            id: "settings",
+            label: "Settings",
+            icon: <Settings className="size-3.5" />,
+          },
+        ]}
+        onNavSelect={navigateByNavId}
+        onWorkspaceSelect={(chatId) => {
+          const chat = chats.find((item) => item.id === chatId);
+          if (chat) {
+            navigate(routes.chat(chat.workspaceId, chat.id));
+          }
+        }}
+        onChatSelect={(chatId) => {
+          const chat = chats.find((item) => item.id === chatId);
+          if (chat) {
+            navigate(routes.chat(chat.workspaceId, chat.id));
+          }
+        }}
+        onGroupToggle={handleGroupToggle}
+        onAction={handleAction}
+      />
+    </div>
   );
 }
 

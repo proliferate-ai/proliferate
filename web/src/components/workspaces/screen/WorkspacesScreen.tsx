@@ -8,7 +8,7 @@ export function WorkspacesScreen() {
   const workspaces = useCloudWorkspaces();
 
   return (
-    <div className="web-scrollbar h-full overflow-y-auto px-8 py-8">
+    <div className="web-scrollbar h-full overflow-y-auto px-8 py-8" data-telemetry-block>
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-medium uppercase text-muted-foreground">Workspaces</p>

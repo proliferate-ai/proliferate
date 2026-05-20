@@ -54,6 +54,23 @@ def _runtime_sentry_traces_sample_rate() -> float:
     return settings.cloud_runtime_sentry_traces_sample_rate
 
 
+def _target_sentry_env() -> dict[str, str]:
+    if not is_vendor_telemetry_enabled() or not settings.cloud_target_sentry_dsn:
+        return {}
+
+    env = {
+        "PROLIFERATE_TARGET_SENTRY_DSN": settings.cloud_target_sentry_dsn,
+        "PROLIFERATE_TARGET_SENTRY_TRACES_SAMPLE_RATE": str(
+            settings.cloud_target_sentry_traces_sample_rate
+        ),
+    }
+    if settings.cloud_target_sentry_environment:
+        env["PROLIFERATE_TARGET_SENTRY_ENVIRONMENT"] = settings.cloud_target_sentry_environment
+    if settings.cloud_target_sentry_release:
+        env["PROLIFERATE_TARGET_SENTRY_RELEASE"] = settings.cloud_target_sentry_release
+    return env
+
+
 def build_runtime_env(
     credentials: ProvisionCredentials,
     runtime_token: str,
@@ -638,6 +655,7 @@ def build_supervisor_config(
     runtime_env: Mapping[str, str],
 ) -> str:
     anyharness_env = {**runtime_context.base_env, **runtime_env}
+    process_env = _target_sentry_env()
     values = {
         "anyharness_binary": runtime_context.runtime_binary_path,
         "worker_binary": worker_binary_path(runtime_context),
@@ -655,6 +673,11 @@ def build_supervisor_config(
         lines.append("")
         lines.append("[anyharness_env]")
         for key, value in sorted(anyharness_env.items()):
+            lines.append(f"{key} = {json.dumps(value)}")
+    if process_env:
+        lines.append("")
+        lines.append("[process_env]")
+        for key, value in sorted(process_env.items()):
             lines.append(f"{key} = {json.dumps(value)}")
     return "\n".join(lines) + "\n"
 
@@ -696,10 +719,14 @@ def build_detached_supervisor_launch_command(runtime_context: SandboxRuntimeCont
                 "fi",
             ]
         )
+    target_env_lines = [
+        f"export {key}={shlex.quote(value)}" for key, value in sorted(_target_sentry_env().items())
+    ]
     script = "\n".join(
         [
             "set -eu",
             *kill_lines,
+            *target_env_lines,
             (
                 f"nohup {shlex.quote(supervisor_binary)} --config {shlex.quote(config_path)} run "
                 f"> {shlex.quote(log_path)} 2>&1 < /dev/null &"

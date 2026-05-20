@@ -16,14 +16,17 @@
     "@proliferate/product-model": "workspace:*",
     "@proliferate/product-ui": "workspace:*",
     "@proliferate/ui": "workspace:*",
+    "@sentry/react": "^10.45.0",
     "@tanstack/react-query": "^5.95.2",
     "lucide-react": "^0.468.0",
+    "posthog-js": "^1.363.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-router-dom": "^7",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@sentry/vite-plugin": "^5.1.1",
     "@tailwindcss/vite": "^4",
     "@types/react": "~19.1.0",
     "@types/react-dom": "~19.1.0",

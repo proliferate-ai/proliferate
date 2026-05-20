@@ -48,7 +48,7 @@ export function ChatScreen() {
   const primaryAction = getPrimaryChatAction(chat, currentUser);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col" data-telemetry-block>
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
         <IconButton title="Back" onClick={() => navigate(routes.home)}>
           <ArrowLeft size={16} />

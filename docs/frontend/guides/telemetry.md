@@ -1,6 +1,7 @@
 # Frontend Telemetry Standards
 
-Status: authoritative for frontend telemetry in `desktop/src/**`.
+Status: authoritative for frontend telemetry in `desktop/src/**`, `web/src/**`,
+and `mobile/src/**`.
 
 Use this doc for analytics events, exception capture, anonymous telemetry,
 session replay, and telemetry-related provider and hook ownership.
@@ -28,6 +29,9 @@ session replay, and telemetry-related provider and hook ownership.
 - `trackProductEvent(...)` remains the frontend fanout seam. Hooks continue to
   emit typed product events, and the telemetry client decides whether they go to
   vendor telemetry, anonymous telemetry, or both.
+- Web and mobile do not yet use the desktop typed product-event catalog. Their
+  current PostHog telemetry is limited to coarse route/screen events plus
+  hosted authenticated identity sync.
 - Vendor telemetry is enabled only in `hosted_product`.
 - Anonymous telemetry may be enabled in all runtime modes unless explicitly
   disabled.

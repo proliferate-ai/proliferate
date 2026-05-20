@@ -619,6 +619,48 @@ class TestBuildSupervisorConfig:
         assert 'ANYHARNESS_BEARER_TOKEN = "token"' in config
         assert 'HOME = "/home/user"' in config
 
+    def test_supervisor_config_contains_target_sentry_env_when_configured(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(runtime_bootstrap.settings, "telemetry_mode", "hosted_product")
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_dsn",
+            "https://target-sentry.example/123",
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_environment",
+            "production",
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_release",
+            "target@1.2.3",
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_traces_sample_rate",
+            0.5,
+        )
+
+        config = runtime_bootstrap.build_supervisor_config(
+            SimpleNamespace(runtime_port=8457, runtime_endpoint_handles_cors=False),
+            SimpleNamespace(
+                home_dir="/home/user",
+                runtime_binary_path="/home/user/anyharness",
+                base_env={"HOME": "/home/user"},
+            ),
+            {"ANYHARNESS_BEARER_TOKEN": "token"},
+        )
+
+        assert "[process_env]" in config
+        assert 'PROLIFERATE_TARGET_SENTRY_DSN = "https://target-sentry.example/123"' in config
+        assert 'PROLIFERATE_TARGET_SENTRY_ENVIRONMENT = "production"' in config
+        assert 'PROLIFERATE_TARGET_SENTRY_RELEASE = "target@1.2.3"' in config
+        assert 'PROLIFERATE_TARGET_SENTRY_TRACES_SAMPLE_RATE = "0.5"' in config
+
 
 class TestBuildDetachedSupervisorLaunchCommand:
     def test_launch_command_does_not_sleep_before_health_probe(self) -> None:
@@ -632,6 +674,41 @@ class TestBuildDetachedSupervisorLaunchCommand:
         )
         assert expected in command
         assert "sleep 2" not in command
+
+    def test_launch_command_exports_target_sentry_env_when_configured(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(runtime_bootstrap.settings, "telemetry_mode", "hosted_product")
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_dsn",
+            "https://target-sentry.example/123",
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_environment",
+            "production",
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_release",
+            "target@1.2.3",
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_traces_sample_rate",
+            0.5,
+        )
+
+        command = runtime_bootstrap.build_detached_supervisor_launch_command(
+            SimpleNamespace(home_dir="/home/user", runtime_binary_path="/home/user/anyharness")
+        )
+
+        assert "PROLIFERATE_TARGET_SENTRY_DSN=https://target-sentry.example/123" in command
+        assert "PROLIFERATE_TARGET_SENTRY_ENVIRONMENT=production" in command
+        assert "PROLIFERATE_TARGET_SENTRY_RELEASE=target@1.2.3" in command
+        assert "PROLIFERATE_TARGET_SENTRY_TRACES_SAMPLE_RATE=0.5" in command
 
 
 class TestLaunchAndConnectRuntime:

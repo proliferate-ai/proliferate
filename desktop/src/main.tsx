@@ -147,8 +147,6 @@ function startAnonymousTelemetry(): void {
 
 void (async () => {
   recordRendererStartupEvent("startup.start");
-  renderAppOnce();
-
   try {
     recordRendererStartupEvent("api_config.start");
     await bootstrapProliferateApiConfig();
@@ -168,6 +166,7 @@ void (async () => {
     warnStartupFailure("Failed to initialize desktop telemetry", error);
   }
 
+  renderAppOnce();
   recordRendererStartupEvent("anonymous_telemetry.start");
   startAnonymousTelemetry();
   recordRendererStartupEvent("startup.completed");

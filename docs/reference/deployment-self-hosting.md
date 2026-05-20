@@ -189,6 +189,7 @@ RUNTIME_BINARY_SHA256_URL=https://github.com/proliferate-ai/proliferate/releases
 # SENTRY_ENVIRONMENT=self-hosted
 # ANTHROPIC_API_KEY=               # AI session title generation
 # CLOUD_RUNTIME_SENTRY_DSN=       # Hosted-product only; self-managed omits runtime Sentry injection
+# CLOUD_TARGET_SENTRY_DSN=        # Hosted-product only; worker/supervisor target Sentry
 ```
 
 Run the bootstrap:
@@ -375,7 +376,35 @@ production surface for internal reference.
 | `VITE_PROLIFERATE_SENTRY_DSN` | Renderer Sentry DSN |
 | `VITE_PROLIFERATE_POSTHOG_KEY` | Renderer PostHog key |
 | `VITE_PROLIFERATE_POSTHOG_HOST` | PostHog ingest host |
-| `SENTRY_ORG` / `SENTRY_PROJECT` | Source map upload target |
+| `SENTRY_ORG` / `SENTRY_PROJECT` | Renderer source map upload target |
+| `SENTRY_DESKTOP_NATIVE_PROJECT` / `SENTRY_ANYHARNESS_PROJECT` | Optional native debug symbol upload targets |
+
+#### Web build vars
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_PROLIFERATE_API_BASE_URL` | Production API endpoint |
+| `VITE_PROLIFERATE_ENVIRONMENT` | `production` |
+| `VITE_PROLIFERATE_RELEASE` | Web release tag |
+| `VITE_PROLIFERATE_SENTRY_DSN` | Web Sentry DSN |
+| `VITE_PROLIFERATE_POSTHOG_KEY` | Web PostHog project key |
+| `VITE_PROLIFERATE_POSTHOG_HOST` | PostHog ingest host |
+| `VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED` | Optional web replay toggle |
+| `SENTRY_ORG` / `SENTRY_WEB_PROJECT` / `SENTRY_PROJECT` | Optional web source map upload target |
+
+#### Mobile build vars
+
+| Variable | Purpose |
+| --- | --- |
+| `EXPO_PUBLIC_PROLIFERATE_API_BASE_URL` | Production API endpoint |
+| `EXPO_PUBLIC_PROLIFERATE_ENVIRONMENT` | `production` |
+| `EXPO_PUBLIC_PROLIFERATE_RELEASE` | Mobile release tag |
+| `EXPO_PUBLIC_PROLIFERATE_SENTRY_DSN` | Mobile Sentry DSN |
+| `EXPO_PUBLIC_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE` | Mobile Sentry traces sample rate |
+| `EXPO_PUBLIC_PROLIFERATE_POSTHOG_KEY` | Mobile PostHog project key |
+| `EXPO_PUBLIC_PROLIFERATE_POSTHOG_HOST` | PostHog ingest host |
+| `EXPO_PUBLIC_PROLIFERATE_POSTHOG_SESSION_REPLAY_ENABLED` | Optional mobile replay startup toggle |
+| `SENTRY_ORG` / `SENTRY_MOBILE_PROJECT` / `SENTRY_PROJECT` | Optional mobile source map upload target |
 
 ### Production server env vars
 
@@ -396,6 +425,6 @@ All vars from [env-secrets-matrix.md](env-secrets-matrix.md) apply, plus:
 | GitHub OIDC | CI to AWS auth |
 | Apple Developer Program | macOS code signing + notarization |
 | Cloudflare | DNS for `downloads.proliferate.com` |
-| Sentry | Error tracking (server + desktop) |
-| PostHog | Hosted-product desktop analytics + replay |
+| Sentry | Error tracking (server + desktop/web/mobile) |
+| PostHog | Hosted-product desktop/web/mobile analytics + optional replay |
 | Customer.io | User messaging |

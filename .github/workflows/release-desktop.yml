@@ -280,6 +280,33 @@ jobs:
             pnpm tauri build --target ${{ matrix.target }} --bundles msi,nsis
           fi
 
+      - name: Upload native Sentry debug files
+        if: steps.filter.outputs.skip != 'true'
+        working-directory: desktop
+        shell: bash
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_DESKTOP_NATIVE_PROJECT: ${{ vars.SENTRY_DESKTOP_NATIVE_PROJECT }}
+          SENTRY_ANYHARNESS_PROJECT: ${{ vars.SENTRY_ANYHARNESS_PROJECT }}
+        run: |
+          upload_debug_files() {
+            local project="$1"
+            local label="$2"
+            if [[ -z "$SENTRY_AUTH_TOKEN" || -z "$SENTRY_ORG" || -z "$project" ]]; then
+              echo "Skipping $label debug file upload; Sentry upload env is incomplete."
+              return 0
+            fi
+            pnpm exec sentry-cli debug-files upload \
+              --org "$SENTRY_ORG" \
+              --project "$project" \
+              "../target/${{ matrix.target }}/release"
+          }
+
+          upload_debug_files "${SENTRY_DESKTOP_NATIVE_PROJECT:-$SENTRY_PROJECT}" "desktop native"
+          upload_debug_files "${SENTRY_ANYHARNESS_PROJECT:-$SENTRY_PROJECT}" "AnyHarness sidecar"
+
       - name: Verify updater artifacts
         if: steps.filter.outputs.skip != 'true'
         working-directory: desktop

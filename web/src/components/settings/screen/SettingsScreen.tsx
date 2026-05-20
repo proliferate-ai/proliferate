@@ -53,52 +53,54 @@ export function SettingsScreen() {
   }
 
   return (
-    <SettingsShell
-      activeSectionId={activeSection}
-      groups={[
-        {
-          items: [
-            {
-              id: "account",
-              label: "Account",
-              icon: <ShieldCheck size={15} />,
-            },
-            {
-              id: "appearance",
-              label: "Appearance",
-              icon: <Monitor size={15} />,
-            },
-            {
-              id: "cloud",
-              label: "Cloud",
-              icon: <Cloud size={15} />,
-            },
-            {
-              id: "support",
-              label: "Support",
-              icon: <LifeBuoy size={15} />,
-            },
-          ],
-        },
-      ]}
-      onSelectSection={(id) => setActiveSection(id as SettingsSectionId)}
-    >
-      {activeSection === "account" ? (
-        <AccountSection
-          props={buildAccountSettingsProps({
-            viewer: viewer.data,
-            loadingProvider,
-            error,
-            connectGitHub: () => void startProvider("github", "required_github_link"),
-            connectGoogle: () => void startProvider("google"),
-            connectApple: () => void startProvider("apple"),
-            signOut: () => void signOut(),
-          })}
-        />
-      ) : (
-        <PlaceholderSection id={activeSection} />
-      )}
-    </SettingsShell>
+    <div className="h-full" data-telemetry-block>
+      <SettingsShell
+        activeSectionId={activeSection}
+        groups={[
+          {
+            items: [
+              {
+                id: "account",
+                label: "Account",
+                icon: <ShieldCheck size={15} />,
+              },
+              {
+                id: "appearance",
+                label: "Appearance",
+                icon: <Monitor size={15} />,
+              },
+              {
+                id: "cloud",
+                label: "Cloud",
+                icon: <Cloud size={15} />,
+              },
+              {
+                id: "support",
+                label: "Support",
+                icon: <LifeBuoy size={15} />,
+              },
+            ],
+          },
+        ]}
+        onSelectSection={(id) => setActiveSection(id as SettingsSectionId)}
+      >
+        {activeSection === "account" ? (
+          <AccountSection
+            props={buildAccountSettingsProps({
+              viewer: viewer.data,
+              loadingProvider,
+              error,
+              connectGitHub: () => void startProvider("github", "required_github_link"),
+              connectGoogle: () => void startProvider("google"),
+              connectApple: () => void startProvider("apple"),
+              signOut: () => void signOut(),
+            })}
+          />
+        ) : (
+          <PlaceholderSection id={activeSection} />
+        )}
+      </SettingsShell>
+    </div>
   );
 }
 

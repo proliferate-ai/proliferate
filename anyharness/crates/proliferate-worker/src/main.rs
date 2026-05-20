@@ -17,6 +17,7 @@ mod versions;
 use std::path::PathBuf;
 
 use clap::Parser;
+use sentry_anyhow::capture_anyhow;
 
 #[derive(Debug, Parser)]
 #[command(name = "proliferate-worker", version)]
@@ -29,9 +30,18 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    logging::init();
-    let args = Args::parse();
-    let config = config::WorkerConfig::load(args.config)?;
-    runtime::run(config, args.once).await?;
-    Ok(())
+    let _telemetry = logging::init();
+    let result = async {
+        let args = Args::parse();
+        let config = config::WorkerConfig::load(args.config)?;
+        runtime::run(config, args.once).await?;
+        Ok(())
+    }
+    .await;
+
+    if let Err(error) = &result {
+        capture_anyhow(error);
+    }
+
+    result
 }
