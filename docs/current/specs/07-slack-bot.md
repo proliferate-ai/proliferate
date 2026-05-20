@@ -830,7 +830,7 @@ Worker scheduling:
 ```text
 The outbound Slack sender and the post-session processor reuse the
 same scheduler primitive as automations / agent gateway reconciler
-(per spec 00 Open Q #5; decision to be confirmed at impl time).
+(per spec 00 §10 decision #5).
 No new scheduler infrastructure.
 ```
 

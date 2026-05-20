@@ -679,7 +679,7 @@ affected workspaces.
 ### 5.5a `customer.subscription.deleted` refinement
 
 The current handler unconditionally applies a `payment_failed` hold
-on `deleted`. Spec 09 refines the rule (Open Q #2):
+on `deleted`. Spec 09 refines the rule (decision #2):
 
 ```text
 on customer.subscription.deleted:
@@ -807,7 +807,7 @@ doesn't fully — web uses a subset of the design tokens; spec 08
 already wired `useCloudBilling`-style hooks indirectly via
 existing SDK).
 
-Mobile billing UI is deferred (spec 08 Open Q #5).
+Mobile billing UI is deferred (spec 08 §10 decision #5).
 
 ### 5.9 Vocabulary alignment
 

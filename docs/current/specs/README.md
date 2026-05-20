@@ -312,12 +312,12 @@ spec. Implementers should treat these as the open coordination work.
    write it to AnyHarness before any direct-attach JWT is issued for
    that target. Spec 05 should add a one-line acceptance bullet.
 
-10. **`backfill_exposed_workspace` (renamed in spec 04 §10 Open Q #5)
+10. **`backfill_exposed_workspace` (renamed in spec 04 §10 decision #5)
     admission policy is owned by spec 08** per spec 04 §5.10. Spec 08
-    Open Q #6 (workspace move "Continue remotely" admission) references
-    the same command. The admission policy should be written
-    explicitly in spec 08 §5.5 — when does Cloud accept a
-    `backfill_exposed_workspace` from a worker?
+    §10 decision #6 (workspace move "Continue remotely" admission) references
+    the same command. Cloud accepts `backfill_exposed_workspace` only
+    when the workspace has an active, commandable exposure and the
+    enrolled worker owns the source target being backfilled.
 
 These ambiguities are not blockers — each spec is implementable in
 isolation — but the coordination matters at PR-stack assembly time.
