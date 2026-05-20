@@ -1870,6 +1870,7 @@ export interface components {
         };
         ApplyRuntimeConfigRequest: {
             artifactPayloads?: components["schemas"]["RuntimeArtifactPayload"][];
+            credentialValues?: components["schemas"]["RuntimeCredentialValue"][];
             manifest: components["schemas"]["RuntimeConfigManifest"];
             revision: components["schemas"]["RuntimeConfigRevision"];
             source: components["schemas"]["RuntimeConfigSource"];
@@ -3453,6 +3454,16 @@ export interface components {
             resourceId?: string | null;
             sourceRef?: string | null;
         };
+        RuntimeArtifactStatus: {
+            /** Format: int64 */
+            byteSize: number;
+            cached: boolean;
+            contentType: string;
+            displayName?: string | null;
+            hash: string;
+            resourceId?: string | null;
+            sourceRef?: string | null;
+        };
         RuntimeCapabilities: {
             replay: boolean;
         };
@@ -3485,7 +3496,7 @@ export interface components {
         /** @enum {string} */
         RuntimeConfigSource: "desktop" | "worker" | "test";
         RuntimeConfigStatusResponse: {
-            artifactPayloads?: components["schemas"]["RuntimeArtifactPayload"][];
+            artifacts?: components["schemas"]["RuntimeArtifactStatus"][];
             currentRevision?: null | components["schemas"]["RuntimeConfigRevision"];
             manifest?: null | components["schemas"]["RuntimeConfigManifest"];
         };
@@ -3497,6 +3508,10 @@ export interface components {
         };
         /** @enum {string} */
         RuntimeCredentialUse: "mcp_launch" | "mcp_launch_header" | "mcp_launch_query" | "mcp_launch_arg" | "mcp_launch_env" | "skill_binding";
+        RuntimeCredentialValue: {
+            credentialRef: string;
+            value: string;
+        };
         RuntimeMcpLaunch: {
             headers?: components["schemas"]["RuntimeMcpNamedValue"][];
             /** @enum {string} */

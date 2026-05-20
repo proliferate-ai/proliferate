@@ -123,6 +123,17 @@ export function getWorkspaceClientAndId(
   }));
 }
 
+export function assertDirectSessionCreateRuntimeConfigStamped(
+  target: RuntimeTarget,
+): void {
+  if (target.location === "local") {
+    return;
+  }
+  throw new Error(
+    "Remote session creation requires runtime config stamping. Start this session from the cloud command path.",
+  );
+}
+
 export async function fetchWorkspaceSessionSummaries(
   runtimeUrl: string,
   workspaceId: string,

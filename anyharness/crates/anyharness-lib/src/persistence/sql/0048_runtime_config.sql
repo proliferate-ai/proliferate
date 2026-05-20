@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS runtime_config_current (
   sequence INTEGER NOT NULL,
   content_hash TEXT NOT NULL,
   manifest_json TEXT NOT NULL,
-  artifact_payloads_json TEXT NOT NULL DEFAULT '[]',
   source TEXT NOT NULL,
   applied_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -31,7 +30,6 @@ CREATE TABLE IF NOT EXISTS runtime_config_session_context (
   sequence INTEGER NOT NULL,
   content_hash TEXT NOT NULL,
   manifest_json TEXT NOT NULL,
-  artifact_payloads_json TEXT NOT NULL DEFAULT '[]',
   applied_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

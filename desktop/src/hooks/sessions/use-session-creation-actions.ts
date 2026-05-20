@@ -48,6 +48,7 @@ import {
 } from "@/lib/domain/sessions/intents/session-intent-state";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
 import {
+  assertDirectSessionCreateRuntimeConfigStamped,
   createPendingSessionId,
   pruneInactiveSessionStreams,
   type FlushAwareSessionStreamHandle,
@@ -366,6 +367,7 @@ export function useSessionCreationActions() {
 
       const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
       const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId);
+      assertDirectSessionCreateRuntimeConfigStamped(target);
       const targetConnection = {
         runtimeUrl: target.baseUrl,
         authToken: target.authToken,

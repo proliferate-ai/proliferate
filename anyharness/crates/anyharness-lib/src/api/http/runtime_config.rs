@@ -58,6 +58,14 @@ pub fn map_runtime_config_error(error: RuntimeConfigError) -> ApiError {
             "runtime config contains unresolved credentials",
             "RUNTIME_CONFIG_UNRESOLVED_CREDENTIALS",
         ),
+        RuntimeConfigError::MissingCredentials(_) => ApiError::conflict(
+            "runtime config credentials must be fulfilled before launch",
+            "RUNTIME_CONFIG_RESOLUTION_REQUIRED",
+        ),
+        RuntimeConfigError::InlineSecretLiteral(field) => ApiError::bad_request(
+            format!("runtime config contains inline secret-bearing launch value: {field}"),
+            "RUNTIME_CONFIG_INLINE_SECRET_LITERAL",
+        ),
         RuntimeConfigError::MissingArtifact(hash) => ApiError::bad_request(
             format!("runtime config artifact is missing: {hash}"),
             "RUNTIME_CONFIG_ARTIFACT_MISSING",

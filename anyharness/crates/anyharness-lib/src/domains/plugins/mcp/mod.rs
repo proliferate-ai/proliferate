@@ -174,6 +174,7 @@ mod tests {
                     content: "Use issues.".to_string(),
                 },
             ],
+            credential_values: Vec::new(),
             source: RuntimeConfigSource::Worker,
         }
     }

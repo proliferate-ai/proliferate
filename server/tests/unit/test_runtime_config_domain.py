@@ -302,6 +302,12 @@ def test_not_ready_mcp_blocks_skill_that_requires_it() -> None:
         "mcp_auth_not_ready",
         "skill_required_mcp_missing",
     }
+    compiled = compile_runtime_config_manifest(plan, sandbox_profile_id="profile-1")
+    assert {error["code"] for error in compiled.blocking_errors} == {
+        "mcp_auth_not_ready",
+        "skill_required_mcp_missing",
+    }
+    assert compiled.manifest["blockingErrors"] == list(compiled.blocking_errors)
 
 
 def test_plugin_child_skill_is_removed_when_parent_plugin_disabled_or_deleted() -> None:
