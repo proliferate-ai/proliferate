@@ -7,6 +7,8 @@ import { scrubPostHogPayload, scrubTelemetryData } from "./scrub";
 let posthogInitialized = false;
 
 interface DesktopPostHogInitConfig {
+  environment: string;
+  release: string;
   posthog: DesktopTelemetryConfig["posthog"];
 }
 
@@ -39,6 +41,13 @@ export function initializeDesktopPostHog(config: DesktopPostHogInitConfig): void
         client.startSessionRecording();
       }
       : undefined,
+  });
+
+  posthog.register({
+    app: "proliferate-desktop",
+    surface: "desktop",
+    environment: config.environment,
+    release: config.release,
   });
 }
 

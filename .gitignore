@@ -69,3 +69,4 @@ codex/
 
 # Lock files not managed by workspace
 package-lock.json
+.vercel
