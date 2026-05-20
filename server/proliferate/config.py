@@ -126,6 +126,10 @@ class Settings(BaseSettings):
     cloud_runtime_sentry_environment: str = ""
     cloud_runtime_sentry_release: str = ""
     cloud_runtime_sentry_traces_sample_rate: float = 1.0
+    cloud_target_sentry_dsn: str = ""
+    cloud_target_sentry_environment: str = ""
+    cloud_target_sentry_release: str = ""
+    cloud_target_sentry_traces_sample_rate: float = 1.0
     cloud_mcp_enabled: bool = True
     automation_cloud_executor_claim_ttl_seconds: float = 300.0
     automation_cloud_executor_heartbeat_seconds: float = 30.0

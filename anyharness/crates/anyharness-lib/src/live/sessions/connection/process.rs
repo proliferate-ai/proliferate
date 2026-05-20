@@ -4,6 +4,7 @@ use std::path::Path;
 use super::*;
 use crate::live::sessions::connection::stderr::spawn_agent_stderr_logger;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::process_env::remove_runtime_private_env;
 
 pub(in crate::live::sessions) struct SpawnedAgentProcess {
     pub child: tokio::process::Child,
@@ -75,31 +76,32 @@ pub(in crate::live::sessions) fn spawn_agent_process(
     let latency_fields = latency_trace_fields(latency);
 
     let process_spawn_started = std::time::Instant::now();
-    let mut child = tokio::process::Command::new(spawn_program)
+    let mut command = tokio::process::Command::new(spawn_program);
+    command
         .args(spawn_args)
         .envs(&spawn_env)
         .current_dir(spawn_cwd)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| {
-            tracing::warn!(
-                session_id = %session_id,
-                workspace_id = %workspace_id,
-                agent_kind = %source_agent_kind,
-                elapsed_ms = process_spawn_started.elapsed().as_millis(),
-                error = %e,
-                flow_id = latency_fields.flow_id,
-                flow_kind = latency_fields.flow_kind,
-                flow_source = latency_fields.flow_source,
-                prompt_id = latency_fields.prompt_id,
-                "[workspace-latency] session.actor.process_spawn_failed"
-            );
-            let _ = ready_tx.send(Err(anyhow::anyhow!("spawn failed: {e}")));
-            anyhow::anyhow!("spawn agent subprocess: {e}")
-        })?;
+        .kill_on_drop(true);
+    remove_runtime_private_env(&mut command);
+    let mut child = command.spawn().map_err(|e| {
+        tracing::warn!(
+            session_id = %session_id,
+            workspace_id = %workspace_id,
+            agent_kind = %source_agent_kind,
+            elapsed_ms = process_spawn_started.elapsed().as_millis(),
+            error = %e,
+            flow_id = latency_fields.flow_id,
+            flow_kind = latency_fields.flow_kind,
+            flow_source = latency_fields.flow_source,
+            prompt_id = latency_fields.prompt_id,
+            "[workspace-latency] session.actor.process_spawn_failed"
+        );
+        let _ = ready_tx.send(Err(anyhow::anyhow!("spawn failed: {e}")));
+        anyhow::anyhow!("spawn agent subprocess: {e}")
+    })?;
     tracing::info!(
         session_id = %session_id,
         workspace_id = %workspace_id,

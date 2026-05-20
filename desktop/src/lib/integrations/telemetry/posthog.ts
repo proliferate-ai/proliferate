@@ -2,7 +2,7 @@ import posthog from "posthog-js";
 import type { PostHogInterface } from "posthog-js/lib/src/types";
 import type { DesktopTelemetryConfig } from "./config";
 import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
-import { scrubTelemetryData } from "./scrub";
+import { scrubPostHogPayload, scrubTelemetryData } from "./scrub";
 
 let posthogInitialized = false;
 
@@ -25,6 +25,7 @@ export function initializeDesktopPostHog(config: DesktopPostHogInitConfig): void
     capture_pageview: false,
     capture_pageleave: false,
     person_profiles: "identified_only",
+    before_send: scrubPostHogPayload,
     disable_session_recording: !config.posthog.sessionRecordingEnabled,
     session_recording: config.posthog.sessionRecordingEnabled
       ? {

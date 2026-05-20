@@ -25,6 +25,7 @@ import "./index.css";
 const IS_TAURI_DESKTOP =
   typeof window !== "undefined"
   && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
+const API_CONFIG_STARTUP_BUDGET_MS = 1500;
 
 const rendererStartupStartedAt = startStartupTimer();
 installWebKitPerformanceMeasureDetailGuard();
@@ -145,19 +146,13 @@ function startAnonymousTelemetry(): void {
   });
 }
 
-void (async () => {
-  recordRendererStartupEvent("startup.start");
-  renderAppOnce();
+let telemetryStarted = false;
 
-  try {
-    recordRendererStartupEvent("api_config.start");
-    await bootstrapProliferateApiConfig();
-    recordRendererStartupEvent("api_config.completed");
-  } catch (error) {
-    // Fall back to env/default resolution when no runtime override is available.
-    recordRendererStartupEvent("api_config.failed");
-    warnStartupFailure("Failed to bootstrap Proliferate API config", error);
+function startTelemetryOnce(): void {
+  if (telemetryStarted) {
+    return;
   }
+  telemetryStarted = true;
 
   try {
     recordRendererStartupEvent("telemetry.start");
@@ -170,6 +165,47 @@ void (async () => {
 
   recordRendererStartupEvent("anonymous_telemetry.start");
   startAnonymousTelemetry();
+}
+
+async function bootstrapApiConfigForStartup(): Promise<boolean> {
+  recordRendererStartupEvent("api_config.start");
+  const bootstrapPromise = bootstrapProliferateApiConfig()
+    .then(() => {
+      recordRendererStartupEvent("api_config.completed");
+      return true;
+    })
+    .catch((error) => {
+      // Fall back to env/default resolution when no runtime override is available.
+      recordRendererStartupEvent("api_config.failed");
+      warnStartupFailure("Failed to bootstrap Proliferate API config", error);
+      return true;
+    });
+
+  const completedBeforeBudget = await Promise.race([
+    bootstrapPromise,
+    new Promise<false>((resolve) => {
+      window.setTimeout(() => resolve(false), API_CONFIG_STARTUP_BUDGET_MS);
+    }),
+  ]);
+
+  if (!completedBeforeBudget) {
+    recordRendererStartupEvent("api_config.timeout");
+    void bootstrapPromise.then(() => {
+      startTelemetryOnce();
+    });
+  }
+
+  return completedBeforeBudget;
+}
+
+void (async () => {
+  recordRendererStartupEvent("startup.start");
+  const apiConfigReady = await bootstrapApiConfigForStartup();
+  if (apiConfigReady) {
+    startTelemetryOnce();
+  }
+
+  renderAppOnce();
   recordRendererStartupEvent("startup.completed");
 })().catch((error) => {
   recordRendererStartupEvent("startup.failed");

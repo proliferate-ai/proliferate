@@ -200,6 +200,10 @@ env overrides.
 | `CLOUD_RUNTIME_SENTRY_ENVIRONMENT` | No | No | Remote AnyHarness Sentry environment |
 | `CLOUD_RUNTIME_SENTRY_RELEASE` | No | No | Remote AnyHarness Sentry release |
 | `CLOUD_RUNTIME_SENTRY_TRACES_SAMPLE_RATE` | No | No | Remote AnyHarness tracing |
+| `CLOUD_TARGET_SENTRY_DSN` | Yes | No | Remote target worker/supervisor Sentry DSN |
+| `CLOUD_TARGET_SENTRY_ENVIRONMENT` | No | No | Remote target worker/supervisor Sentry environment |
+| `CLOUD_TARGET_SENTRY_RELEASE` | No | No | Remote target worker/supervisor Sentry release |
+| `CLOUD_TARGET_SENTRY_TRACES_SAMPLE_RATE` | No | No | Remote target worker/supervisor tracing |
 
 ## Legacy Compatibility
 

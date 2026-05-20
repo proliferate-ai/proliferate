@@ -95,6 +95,7 @@ export function AuthScreen() {
                 onChange={(event) => setManualToken(event.target.value)}
                 placeholder="Paste a development access token"
                 className="text-sm"
+                data-telemetry-mask
               />
               <div className="flex items-center justify-between gap-2">
                 <Button

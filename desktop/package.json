@@ -4,11 +4,11 @@
   "version": "0.1.29",
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && vite",
-    "build": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && tsc && vite build",
+    "dev": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-model build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && vite",
+    "build": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-model build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "pretest": "pnpm --filter @proliferate/design build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build",
+    "pretest": "pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-model build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -28,6 +28,7 @@
     "@proliferate/cloud-sdk": "workspace:*",
     "@proliferate/cloud-sdk-react": "workspace:*",
     "@proliferate/design": "workspace:*",
+    "@proliferate/product-model": "workspace:*",
     "@proliferate/product-ui": "workspace:*",
     "@proliferate/ui": "workspace:*",
     "@sentry/react": "^10.45.0",
@@ -58,6 +59,7 @@
     "zustand": "^5"
   },
   "devDependencies": {
+    "@sentry/cli": "^2.58.5",
     "@sentry/vite-plugin": "^5.1.1",
     "@tailwindcss/vite": "^4",
     "@tauri-apps/cli": "^2",

@@ -75,6 +75,8 @@ start of the task, not after implementation has already started.
   - first-party install-level analytics records, routing, and storage
 - `docs/analytics/posthog.md`
   - hosted-product desktop vendor analytics and replay
+- `docs/analytics/sentry.md`
+  - exception monitoring, Sentry projects, env vars, and alert ownership
 - `docs/analytics/customerio.md`
   - Customer.io lifecycle messaging integration
 

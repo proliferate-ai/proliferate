@@ -50,6 +50,61 @@ variable "e2b_template_name" {
   default = ""
 }
 
+variable "telemetry_mode" {
+  default = "hosted_product"
+}
+
+variable "sentry_dsn" {
+  sensitive = true
+  default   = ""
+}
+
+variable "sentry_environment" {
+  default = "production"
+}
+
+variable "sentry_release" {
+  default = "proliferate-server@production"
+}
+
+variable "sentry_traces_sample_rate" {
+  default = "1.0"
+}
+
+variable "cloud_runtime_sentry_dsn" {
+  sensitive = true
+  default   = ""
+}
+
+variable "cloud_runtime_sentry_environment" {
+  default = "production"
+}
+
+variable "cloud_runtime_sentry_release" {
+  default = ""
+}
+
+variable "cloud_runtime_sentry_traces_sample_rate" {
+  default = "1.0"
+}
+
+variable "cloud_target_sentry_dsn" {
+  sensitive = true
+  default   = ""
+}
+
+variable "cloud_target_sentry_environment" {
+  default = "production"
+}
+
+variable "cloud_target_sentry_release" {
+  default = ""
+}
+
+variable "cloud_target_sentry_traces_sample_rate" {
+  default = "1.0"
+}
+
 # ── VPC (use default for now, swap for dedicated VPC later) ──
 
 data "aws_vpc" "default" {
@@ -233,6 +288,19 @@ resource "aws_ecs_task_definition" "server" {
         { name = "SANDBOX_PROVIDER", value = var.sandbox_provider },
         { name = "E2B_API_KEY", value = var.e2b_api_key },
         { name = "E2B_TEMPLATE_NAME", value = var.e2b_template_name },
+        { name = "PROLIFERATE_TELEMETRY_MODE", value = var.telemetry_mode },
+        { name = "SENTRY_DSN", value = var.sentry_dsn },
+        { name = "SENTRY_ENVIRONMENT", value = var.sentry_environment },
+        { name = "SENTRY_RELEASE", value = var.sentry_release },
+        { name = "SENTRY_TRACES_SAMPLE_RATE", value = var.sentry_traces_sample_rate },
+        { name = "CLOUD_RUNTIME_SENTRY_DSN", value = var.cloud_runtime_sentry_dsn },
+        { name = "CLOUD_RUNTIME_SENTRY_ENVIRONMENT", value = var.cloud_runtime_sentry_environment },
+        { name = "CLOUD_RUNTIME_SENTRY_RELEASE", value = var.cloud_runtime_sentry_release },
+        { name = "CLOUD_RUNTIME_SENTRY_TRACES_SAMPLE_RATE", value = var.cloud_runtime_sentry_traces_sample_rate },
+        { name = "CLOUD_TARGET_SENTRY_DSN", value = var.cloud_target_sentry_dsn },
+        { name = "CLOUD_TARGET_SENTRY_ENVIRONMENT", value = var.cloud_target_sentry_environment },
+        { name = "CLOUD_TARGET_SENTRY_RELEASE", value = var.cloud_target_sentry_release },
+        { name = "CLOUD_TARGET_SENTRY_TRACES_SAMPLE_RATE", value = var.cloud_target_sentry_traces_sample_rate },
       ]
 
       logConfiguration = {

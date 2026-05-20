@@ -13,6 +13,8 @@ pub struct SupervisorConfig {
     pub anyharness_args: Vec<String>,
     #[serde(default)]
     pub anyharness_env: BTreeMap<String, String>,
+    #[serde(default)]
+    pub process_env: BTreeMap<String, String>,
     #[serde(default = "default_restart_delay_seconds")]
     pub restart_delay_seconds: u64,
 }

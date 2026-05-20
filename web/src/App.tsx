@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route } from "react-router-dom";
 
 import { WebAppShell } from "./components/app/shell/WebAppShell";
 import { AuthGate } from "./components/auth/AuthGate";
@@ -15,10 +15,11 @@ import { PluginsPage } from "./pages/PluginsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SupportPage } from "./pages/SupportPage";
 import { WorkspacesPage } from "./pages/WorkspacesPage";
+import { InstrumentedRoutes } from "./lib/integrations/telemetry/sentry";
 
 export function App() {
   return (
-    <Routes>
+    <InstrumentedRoutes>
       <Route path="auth" element={<AuthScreen />} />
       <Route path="auth/callback" element={<AuthCallbackPage />} />
       <Route path="auth/desktop/handoff" element={<DesktopHandoffPage />} />
@@ -40,6 +41,6 @@ export function App() {
         <Route path="workspaces/:workspaceId/chats/:chatId" element={<ChatPage />} />
         <Route path="*" element={<Navigate to={routes.home} replace />} />
       </Route>
-    </Routes>
+    </InstrumentedRoutes>
   );
 }

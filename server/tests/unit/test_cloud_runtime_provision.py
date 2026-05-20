@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import shlex
+import subprocess
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,6 +20,7 @@ from proliferate.server.cloud.credentials import session_loader as cloud_credent
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime import bootstrap as runtime_bootstrap
 from proliferate.server.cloud.runtime import provision as runtime_provision
+from proliferate.server.cloud.runtime import sandbox_exec as runtime_sandbox_exec
 from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.credentials import (
     ClaudeProvisionCredential,
@@ -619,6 +622,84 @@ class TestBuildSupervisorConfig:
         assert 'ANYHARNESS_BEARER_TOKEN = "token"' in config
         assert 'HOME = "/home/user"' in config
 
+    def test_supervisor_config_contains_target_sentry_env_when_configured(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(runtime_bootstrap.settings, "telemetry_mode", "hosted_product")
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_dsn",
+            "https://target-sentry.example/123",
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_environment",
+            "production",
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_release",
+            "target@1.2.3",
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_traces_sample_rate",
+            0.5,
+        )
+
+        config = runtime_bootstrap.build_supervisor_config(
+            SimpleNamespace(runtime_port=8457, runtime_endpoint_handles_cors=False),
+            SimpleNamespace(
+                home_dir="/home/user",
+                runtime_binary_path="/home/user/anyharness",
+                base_env={"HOME": "/home/user"},
+            ),
+            {"ANYHARNESS_BEARER_TOKEN": "token"},
+        )
+
+        assert "[process_env]" in config
+        assert 'PROLIFERATE_TARGET_SENTRY_DSN = "https://target-sentry.example/123"' in config
+        assert 'PROLIFERATE_TARGET_SENTRY_ENVIRONMENT = "production"' in config
+        assert 'PROLIFERATE_TARGET_SENTRY_RELEASE = "target@1.2.3"' in config
+        assert 'PROLIFERATE_TARGET_SENTRY_TRACES_SAMPLE_RATE = "0.5"' in config
+
+    def test_redacted_supervisor_config_preview_hides_process_env(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            "\n".join(
+                [
+                    'runtime_port = "8457"',
+                    "",
+                    "[anyharness_env]",
+                    'ANYHARNESS_BEARER_TOKEN = "runtime-token"',
+                    "",
+                    "[process_env]",
+                    'PROLIFERATE_TARGET_SENTRY_DSN = "https://target-sentry.example/123"',
+                    'PROLIFERATE_TARGET_SENTRY_RELEASE = "target@1.2.3"',
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        result = subprocess.run(
+            runtime_sandbox_exec._redacted_supervisor_config_command(
+                shlex.quote(str(config_path))
+            ),
+            shell=True,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        assert "runtime-token" not in result.stdout
+        assert "target-sentry.example" not in result.stdout
+        assert 'ANYHARNESS_BEARER_TOKEN = "<redacted>"' in result.stdout
+        assert 'PROLIFERATE_TARGET_SENTRY_DSN = "<redacted>"' in result.stdout
+
 
 class TestBuildDetachedSupervisorLaunchCommand:
     def test_launch_command_does_not_sleep_before_health_probe(self) -> None:
@@ -632,6 +713,41 @@ class TestBuildDetachedSupervisorLaunchCommand:
         )
         assert expected in command
         assert "sleep 2" not in command
+
+    def test_launch_command_exports_target_sentry_env_when_configured(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(runtime_bootstrap.settings, "telemetry_mode", "hosted_product")
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_dsn",
+            "https://target-sentry.example/123",
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_environment",
+            "production",
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_release",
+            "target@1.2.3",
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap.settings,
+            "cloud_target_sentry_traces_sample_rate",
+            0.5,
+        )
+
+        command = runtime_bootstrap.build_detached_supervisor_launch_command(
+            SimpleNamespace(home_dir="/home/user", runtime_binary_path="/home/user/anyharness")
+        )
+
+        assert "PROLIFERATE_TARGET_SENTRY_DSN=https://target-sentry.example/123" in command
+        assert "PROLIFERATE_TARGET_SENTRY_ENVIRONMENT=production" in command
+        assert "PROLIFERATE_TARGET_SENTRY_RELEASE=target@1.2.3" in command
+        assert "PROLIFERATE_TARGET_SENTRY_TRACES_SAMPLE_RATE=0.5" in command
 
 
 class TestLaunchAndConnectRuntime:

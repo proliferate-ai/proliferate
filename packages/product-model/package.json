@@ -43,6 +43,10 @@
       "types": "./dist/chats/fixtures.d.ts",
       "import": "./dist/chats/fixtures.js"
     },
+    "./telemetry/scrub": {
+      "types": "./dist/telemetry/scrub.d.ts",
+      "import": "./dist/telemetry/scrub.js"
+    },
     "./workspaces/model": {
       "types": "./dist/workspaces/model.d.ts",
       "import": "./dist/workspaces/model.js"

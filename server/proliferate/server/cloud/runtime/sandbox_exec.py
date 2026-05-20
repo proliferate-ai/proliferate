@@ -101,7 +101,7 @@ def _redacted_launcher_command(path: str) -> str:
 def _redacted_supervisor_config_command(path: str) -> str:
     return (
         "awk 'BEGIN { in_env = 0 } "
-        "/^\\[anyharness_env\\]/ { in_env = 1; print; next } "
+        "/^\\[(anyharness_env|process_env)\\]/ { in_env = 1; print; next } "
         "/^\\[/ { in_env = 0 } "
         "in_env && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ "
         '{ sub(/=.*/, "= \\"<redacted>\\""); print; next } '

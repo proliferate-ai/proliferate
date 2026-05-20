@@ -32,10 +32,17 @@ pub async fn run(config: SupervisorConfig) -> Result<(), SupervisorError> {
                 config.worker_config.to_string_lossy().to_string(),
             ];
             let supervisor_version = env!("CARGO_PKG_VERSION");
+            let mut worker_env = vec![("PROLIFERATE_SUPERVISOR_VERSION", supervisor_version)];
+            worker_env.extend(
+                config
+                    .process_env
+                    .iter()
+                    .map(|(name, value)| (name.as_str(), value.as_str())),
+            );
             let mut worker = match child::spawn_with_env(
                 config.worker_binary.to_string_lossy().as_ref(),
                 &worker_args,
-                [("PROLIFERATE_SUPERVISOR_VERSION", supervisor_version)],
+                worker_env,
             ) {
                 Ok(child) => child,
                 Err(error) => {

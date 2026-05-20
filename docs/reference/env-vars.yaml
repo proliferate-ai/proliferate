@@ -8,6 +8,8 @@
 #   production    — Mode E (Proliferate Cloud)
 #   ci            — GitHub Actions workflows
 #   desktop       — Desktop renderer (VITE_*) or native Tauri
+#   web           — Hosted web app build (VITE_*)
+#   mobile        — Expo mobile app build (EXPO_PUBLIC_*)
 #
 # Mode A (local desktop only) requires no env vars.
 
@@ -555,6 +557,30 @@
   description: Sentry traces sample rate for remote AnyHarness
   tags: [self-hosted, production]
 
+- name: CLOUD_TARGET_SENTRY_DSN
+  secret: true
+  default: ""
+  description: Sentry DSN for cloud target worker and supervisor processes
+  tags: [self-hosted, production]
+
+- name: CLOUD_TARGET_SENTRY_ENVIRONMENT
+  secret: false
+  default: ""
+  description: Sentry environment for cloud target worker and supervisor processes
+  tags: [self-hosted, production]
+
+- name: CLOUD_TARGET_SENTRY_RELEASE
+  secret: false
+  default: ""
+  description: Sentry release for cloud target worker and supervisor processes
+  tags: [self-hosted, production]
+
+- name: CLOUD_TARGET_SENTRY_TRACES_SAMPLE_RATE
+  secret: false
+  default: "1.0"
+  description: Sentry traces sample rate for cloud target worker and supervisor processes
+  tags: [self-hosted, production]
+
 # ═══════════════════════════════════════════════════════════════════════
 # Server: AI Magic
 # ═══════════════════════════════════════════════════════════════════════
@@ -664,32 +690,32 @@
   tags: [production]
 
 # ═══════════════════════════════════════════════════════════════════════
-# Desktop: Renderer (VITE_*)
+# Desktop/Web: Renderer Build Vars (VITE_*)
 # ═══════════════════════════════════════════════════════════════════════
 
 - name: VITE_PROLIFERATE_API_BASE_URL
   secret: false
   default: "http://127.0.0.1:8000"
-  description: Control-plane base URL (overridden at runtime by ~/.proliferate/config.json)
-  tags: [local-dev, ci]
+  description: Desktop/web control-plane base URL; desktop may override it at runtime through ~/.proliferate/config.json
+  tags: [local-dev, ci, desktop, web]
 
 - name: VITE_PROLIFERATE_ENVIRONMENT
   secret: false
   default: "development"
-  description: Renderer telemetry environment
-  tags: [local-dev, ci]
+  description: Desktop/web telemetry environment
+  tags: [local-dev, ci, desktop, web]
 
 - name: VITE_PROLIFERATE_RELEASE
   secret: false
   default: "proliferate-desktop@dev"
-  description: Renderer telemetry release tag
-  tags: [local-dev, ci]
+  description: Desktop/web telemetry release tag
+  tags: [local-dev, ci, desktop, web]
 
 - name: VITE_PROLIFERATE_TELEMETRY_DISABLED
   secret: false
   default: "false"
-  description: Disable both vendor and anonymous renderer telemetry
-  tags: [local-dev]
+  description: Disable both vendor and anonymous desktop/web telemetry
+  tags: [local-dev, desktop, web]
 
 - name: VITE_PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT
   secret: false
@@ -730,38 +756,96 @@
 - name: VITE_PROLIFERATE_SENTRY_DSN
   secret: false
   default: ""
-  description: Renderer Sentry DSN
-  tags: [local-dev, ci]
+  description: Desktop/web Sentry DSN
+  tags: [local-dev, ci, desktop, web]
 
 - name: VITE_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE
   secret: false
   default: "1.0"
-  description: Renderer Sentry traces sample rate
-  tags: [local-dev, ci]
+  description: Desktop/web Sentry traces sample rate
+  tags: [local-dev, ci, desktop, web]
 
 - name: VITE_PROLIFERATE_SENTRY_ENABLE_LOGS
   secret: false
   default: "true"
-  description: Renderer Sentry log capture
-  tags: [local-dev, ci]
+  description: Desktop/web Sentry log capture
+  tags: [local-dev, ci, desktop, web]
 
 - name: VITE_PROLIFERATE_POSTHOG_KEY
   secret: false
   default: ""
-  description: Renderer PostHog key
-  tags: [local-dev, ci]
+  description: Desktop/web PostHog project key
+  tags: [local-dev, ci, desktop, web]
 
 - name: VITE_PROLIFERATE_POSTHOG_HOST
   secret: false
   default: "https://us.i.posthog.com"
-  description: Renderer PostHog host
-  tags: [local-dev, ci]
+  description: Desktop/web PostHog ingest host
+  tags: [local-dev, ci, desktop, web]
 
 - name: VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED
   secret: false
   default: "false"
-  description: Renderer session recording toggle
-  tags: [local-dev, ci]
+  description: Desktop PostHog session recording toggle; reserved for web because web replay is currently disabled in code
+  tags: [local-dev, ci, desktop, web]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Mobile: Expo Public Build Vars
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: EXPO_PUBLIC_PROLIFERATE_API_BASE_URL
+  secret: false
+  default: ""
+  description: Mobile control-plane base URL
+  tags: [local-dev, production, mobile]
+
+- name: EXPO_PUBLIC_PROLIFERATE_ENVIRONMENT
+  secret: false
+  default: "development"
+  description: Mobile telemetry environment
+  tags: [local-dev, production, mobile]
+
+- name: EXPO_PUBLIC_PROLIFERATE_RELEASE
+  secret: false
+  default: "proliferate-mobile@0.1.0"
+  description: Mobile telemetry release tag
+  tags: [local-dev, production, mobile]
+
+- name: EXPO_PUBLIC_PROLIFERATE_TELEMETRY_DISABLED
+  secret: false
+  default: "false"
+  description: Disable mobile vendor telemetry
+  tags: [local-dev, production, mobile]
+
+- name: EXPO_PUBLIC_PROLIFERATE_SENTRY_DSN
+  secret: false
+  default: ""
+  description: Mobile Sentry DSN
+  tags: [local-dev, production, mobile]
+
+- name: EXPO_PUBLIC_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE
+  secret: false
+  default: "1.0"
+  description: Mobile Sentry traces sample rate
+  tags: [local-dev, production, mobile]
+
+- name: EXPO_PUBLIC_PROLIFERATE_POSTHOG_KEY
+  secret: false
+  default: ""
+  description: Mobile PostHog project key
+  tags: [local-dev, production, mobile]
+
+- name: EXPO_PUBLIC_PROLIFERATE_POSTHOG_HOST
+  secret: false
+  default: "https://us.i.posthog.com"
+  description: Mobile PostHog ingest host
+  tags: [local-dev, production, mobile]
+
+- name: EXPO_PUBLIC_PROLIFERATE_POSTHOG_SESSION_REPLAY_ENABLED
+  secret: false
+  default: "false"
+  description: Mobile PostHog session replay startup toggle
+  tags: [local-dev, production, mobile]
 
 # ═══════════════════════════════════════════════════════════════════════
 # Desktop: Native Tauri (compile-time)
@@ -1019,7 +1103,35 @@
 
 - name: SENTRY_PROJECT
   secret: false
-  description: Sentry project slug
+  description: Default Sentry project slug for upload jobs
+  tags: [ci]
+  ci_type: var
+  workflow: release-desktop
+
+- name: SENTRY_WEB_PROJECT
+  secret: false
+  description: Sentry web project slug; falls back to SENTRY_PROJECT
+  tags: [ci, web]
+  ci_type: var
+  workflow: web/manual builds
+
+- name: SENTRY_MOBILE_PROJECT
+  secret: false
+  description: Sentry mobile project slug; falls back to SENTRY_PROJECT
+  tags: [ci, mobile]
+  ci_type: var
+  workflow: mobile/manual builds
+
+- name: SENTRY_DESKTOP_NATIVE_PROJECT
+  secret: false
+  description: Sentry desktop native project slug; falls back to SENTRY_PROJECT
+  tags: [ci]
+  ci_type: var
+  workflow: release-desktop
+
+- name: SENTRY_ANYHARNESS_PROJECT
+  secret: false
+  description: Sentry AnyHarness/sidecar project slug; falls back to SENTRY_PROJECT
   tags: [ci]
   ci_type: var
   workflow: release-desktop

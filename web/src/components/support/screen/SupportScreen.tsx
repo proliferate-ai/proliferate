@@ -6,7 +6,7 @@ import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
 export function SupportScreen() {
   return (
-    <div className="web-scrollbar h-full overflow-y-auto px-8 py-8">
+    <div className="web-scrollbar h-full overflow-y-auto px-8 py-8" data-telemetry-block>
       <header className="mb-6">
         <p className="text-xs font-medium uppercase text-muted-foreground">Support</p>
         <h1 className="mt-2 text-2xl font-semibold">Get help</h1>

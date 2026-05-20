@@ -9,7 +9,7 @@ export function AutomationsScreen() {
   const automations = useAutomations();
 
   return (
-    <div className="web-scrollbar h-full overflow-y-auto">
+    <div className="web-scrollbar h-full overflow-y-auto" data-telemetry-block>
       <div className="mx-auto w-full max-w-3xl px-8 py-10">
         <header className="mb-6 flex items-end justify-between gap-4">
           <div>
