@@ -508,9 +508,13 @@ server/proliferate/server/cloud/agent_auth/service.py
     plan = snapshot.plan_policy_kind   (free_v2 | pro | unlimited | ...)
 
     return settings.managed_credit_budget_for_plan(plan)
-      free_v2      -> settings.agent_gateway_managed_budget_free_usd      default "0"
-      pro          -> settings.agent_gateway_managed_budget_pro_usd       default e.g. "100"
-      unlimited    -> settings.agent_gateway_managed_budget_unlimited_usd default e.g. "1000"
+      free_v2      -> settings.agent_gateway_managed_budget_free_usd       default "0"
+      pro          -> settings.agent_gateway_managed_budget_pro_usd        default "0"
+      unlimited    -> settings.agent_gateway_managed_budget_unlimited_usd  default "0"
+
+    -- code defaults are fail-closed ($0); hosted production operators
+    -- configure non-zero values via deploy env. Self-hosted operators
+    -- can keep all three at "0" to ship without managed credits at all.
 
     -- if entitlement billing_entitlement(kind='custom_managed_credit_budget')
        is set on the subject, override with that
@@ -622,6 +626,41 @@ server/proliferate/server/billing/service.py
 
 The patch is per-subject; the SSE multiplexer expands it to all
 affected workspaces.
+
+### 5.5a `customer.subscription.deleted` refinement
+
+The current handler unconditionally applies a `payment_failed` hold
+on `deleted`. Spec 09 refines the rule (Open Q #2):
+
+```text
+on customer.subscription.deleted:
+  reason = stripe_subscription.cancellation_details.reason
+  prior_status = stored billing_subscription.status before delete
+
+  case A: reason in ('cancellation_requested', None) AND
+          prior_status in ('active','trialing'):
+    -- clean cancellation reaching period end (or admin cancel)
+    sync subscription record (canceled_at set; cancel_at_period_end true)
+    schedule managed-credit budget downgrade at current_period_end
+    NO payment_failed hold
+    (the existing pro_period grant continues to consume until
+     period end; new grants stop being issued)
+
+  case B: prior_status in ('past_due','unpaid'):
+    -- deletion driven by failed payment
+    apply payment_failed hold (existing behaviour)
+    keep current managed-credit budget until current_period_end
+    enqueue agent_gateway_budget_reconcile at period_end
+
+  case C: stripe-side immediate cancel that wipes paid entitlement
+          before period_end (rare; manual admin action in Stripe):
+    sync; downgrade now; managed-credit budget reconciles immediately
+    payment_failed hold only if also driven by payment problem
+```
+
+The reconciler / subscription sync code already tracks
+`current_period_end`; spec 09 just gates the hold insert and the
+budget downgrade timing on the reason.
 
 ### 5.6 New Stripe webhook events
 
@@ -765,8 +804,8 @@ server/proliferate/server/cloud/live/service.py
 
 server/proliferate/config.py
   + agent_gateway_managed_budget_free_usd       default "0"
-  + agent_gateway_managed_budget_pro_usd        default e.g. "100"
-  + agent_gateway_managed_budget_unlimited_usd  default e.g. "1000"
+  + agent_gateway_managed_budget_pro_usd        default "0"   (set via deploy env)
+  + agent_gateway_managed_budget_unlimited_usd  default "0"   (set via deploy env)
   - retire agent_gateway_default_managed_budget_usd (rename + drop;
     no-users migration posture)
 ```
@@ -878,8 +917,16 @@ All chunks land in one PR.
    team `max_budget` reflects the Pro value within one
    reconciler tick.
 5. Subscription cancellation downgrades the org's managed-credit
-   budget at the **next subscription period boundary** (not
-   immediately), preserving access through the paid period.
+   budget at the **next subscription period boundary** for clean
+   cancellations (the user paid through the period). Immediate
+   downgrade only when no paid entitlement remains.
+5a. `customer.subscription.deleted` is reason-sensitive (§5.5a):
+    clean cancel → no payment_failed hold; payment-driven
+    deletion → apply hold + keep budget until period_end.
+5b. The GitHub-link path runs `ensure_free_cloud_allocation` AFTER
+    linking. A GitHub identity already used elsewhere returns
+    `github_identity_already_used` and the trial grant is denied,
+    but the identity link itself is preserved.
 6. `free_cloud_allocation` exists with UNIQUE
    `(github_provider_user_id, allocation_kind, period_start)`.
 7. Issuing a `free_trial_v2` grant requires a linked GitHub
@@ -948,6 +995,19 @@ tests/server/billing/test_managed_credit_budget_from_plan.py
   - billing_entitlement custom_managed_credit_budget overrides
 tests/server/billing/test_subscription_updated_triggers_reconcile.py
 tests/server/billing/test_cancel_downgrades_at_period_boundary.py
+tests/server/billing/test_subscription_deleted_clean_cancel_no_hold.py
+  - cancellation_details.reason='cancellation_requested',
+    prior_status='active' -> no payment_failed hold; budget
+    schedules downgrade at period_end
+tests/server/billing/test_subscription_deleted_payment_failure_holds.py
+  - prior_status='past_due' -> payment_failed hold; budget
+    preserved until period_end
+tests/server/billing/test_subscription_deleted_immediate_cancel.py
+  - effective_at < current_period_end with no paid entitlement
+    -> immediate downgrade; hold only if payment problem
+tests/server/billing/test_github_link_preserves_link_denies_trial.py
+  - link succeeds even when GitHub id used elsewhere
+  - free_trial_v2 grant denied with github_identity_already_used
 tests/server/billing/test_invoice_upcoming_emits_decision_event.py
 tests/server/billing/test_trial_will_end_emits_decision_event.py
 tests/server/cloud/webhooks/test_e2b_timeout_closes_segment.py
@@ -1056,13 +1116,35 @@ Manual smoke:
    when teams get a trial. Bias: yes, mirror the personal logic
    when team trial ships; same table, different `allocation_kind`.
 
-2. **Should `customer.subscription.deleted` also re-reconcile
-   the managed-credit budget immediately?**
+2. **`customer.subscription.deleted` is reason-sensitive.**
 
-   Current code applies a payment_failed hold on `deleted`.
-   Bias: hold first, then downgrade managed-credit budget at the
-   `current_period_end` for symmetry with `cancel_at_period_end`
-   behaviour. Avoid hard cutoff mid-period.
+   The current handler always applies a payment_failed hold. That's
+   wrong for clean cancellations. Refined rule:
+
+   ```text
+   - Scheduled cancel reaches period end (cancel_at_period_end=true
+     terminating naturally):
+       downgrade now (no managed-credit budget refresh delay; we
+       are at the period boundary anyway). NO payment_failed hold.
+
+   - Payment failure / Stripe deletion driven by unpaid state
+     (subscription.status was 'unpaid' or 'past_due' before
+     deletion):
+       apply payment_failed hold. Keep current managed-credit
+       budget until current_period_end (already paid for).
+       At period_end the budget downgrades anyway.
+
+   - Immediate admin/user cancellation before period end
+     (Stripe effective_at < current_period_end):
+       honor Stripe's effective end. If no paid entitlement
+       remains for the rest of the period, downgrade immediately.
+       Apply payment_failed hold only if the cancellation was
+       driven by a payment problem.
+   ```
+
+   The handler reads `subscription.cancellation_details.reason`
+   from Stripe (when set) plus the prior `subscription.status` to
+   decide.
 
 3. **Mobile billing UI in V1?**
 
@@ -1074,12 +1156,29 @@ Manual smoke:
    to-authenticated transitions (e.g. user signs up email-first
    then links GitHub)?**
 
-   Bias: yes, at link-time. When a user links GitHub for the
-   first time, run the same `ensure_free_cloud_allocation` check
-   and refuse the link if the GitHub identity has already
-   allocated a trial on another account. This protects against
-   "create account with email, exhaust trial, link GitHub later"
-   abuse.
+   Yes, at link-time — but **do not refuse the GitHub link
+   itself**. The dedup check denies the *free trial allocation*,
+   not the identity link.
+
+   Concretely, on the GitHub-link path:
+     1. Link the OAuth identity normally. (Cross-account linking
+        of the same GitHub identity to a second Proliferate user
+        is handled by the auth-identity uniqueness path, which is
+        a separate concern.)
+     2. After linking, run `ensure_free_cloud_allocation` for the
+        user's billing subject.
+     3. If the GitHub identity has already allocated a free trial
+        on a different `billing_subject_id`: do NOT issue a new
+        `free_trial_v2` grant. Surface
+        `github_identity_already_used` in the UI so the user
+        knows why they aren't on the trial. The link itself
+        remains intact.
+
+   This protects against the "create account with email,
+   exhaust trial, link GitHub later" abuse without blocking
+   legitimate identity linking (e.g. a user adopting GitHub
+   sign-in for an account whose trial is already in flight on a
+   matching identity).
 
 5. **Should `invoice.upcoming` and `trial_will_end` immediately
    publish billing patches, or batch?**
