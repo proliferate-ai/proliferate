@@ -425,4 +425,16 @@ async def complete_cloud_mcp_oauth_callback(
         actor_user_id=connection.user_id,
         reason="mcp_oauth_completed",
     )
+    if connection.public_organization_id is not None:
+        org_profile = await sandbox_profile_store.ensure_organization_sandbox_profile(
+            db,
+            organization_id=connection.public_organization_id,
+            created_by_user_id=connection.user_id,
+        )
+        await refresh_profile_runtime_config(
+            db,
+            sandbox_profile_id=org_profile.id,
+            actor_user_id=connection.user_id,
+            reason="mcp_oauth_completed",
+        )
     return CloudMcpOAuthCallbackResult(ok=True, status="completed")
