@@ -391,12 +391,22 @@ new-chat (spec 08), Cowork API. Spec 06 owns the model because
 automations are the first non-interactive consumer; downstream specs
 reference this section.
 
-**The catalog is the source of truth.** `catalog.json` (and adjacent
-code) defines which agent kinds exist, which models exist per kind,
-and what controls each `(agent_kind, model_id)` accepts. A
-`cloud_agent_run_config` row stores a chosen subset of those values
-under a human-readable name. There is no separate "options" or
-"validity" subsystem; the catalog itself answers both questions.
+**The catalog is the source of truth.** `catalogs/agents/v1/catalog.json`
+(and adjacent code) defines which agent kinds exist, which models
+exist per kind, and which launch/session controls each agent kind
+accepts. In the current catalog shape that means:
+
+```text
+catalog.agents[] by kind
+  session.models[]     -- valid model_id values
+  session.controls[]   -- valid controls for settings / start / automation
+```
+
+Controls are agent-kind scoped today, not stored in a
+`controls[agent_kind][model_id]` map. A `cloud_agent_run_config` row
+stores one selected `model_id` plus a chosen subset of non-model
+controls under a human-readable name. There is no separate "options"
+or "validity" subsystem; the catalog itself answers both questions.
 
 Schema:
 
@@ -412,9 +422,17 @@ cloud_agent_run_config
   agent_kind                      text   'claude' | 'codex' | 'opencode' | 'gemini' | 'cursor'
   model_id                        text   NOT NULL
   control_values_json             jsonb  NOT NULL default '{}'
+                                  -- non-model controls only; the catalog
+                                     "model" control is represented by model_id
 
   usable_in_personal_sandboxes    boolean NOT NULL default true
   usable_in_shared_sandboxes      boolean NOT NULL default false
+
+  seed_key                        text NULL
+                                  -- system rows only; stable deploy-time
+                                     identity such as "default" or "fast"
+  system_default_rank             integer NULL
+                                  -- system rows only; lower wins for fallback
 
   status                          text   'active' | 'archived'
   created_at, updated_at, archived_at
@@ -422,6 +440,8 @@ cloud_agent_run_config
   CHECK ck_cloud_agent_run_config_owner_fields
   CHECK ck_cloud_agent_run_config_status
   CHECK ck_cloud_agent_run_config_agent_kind
+  CHECK ck_cloud_agent_run_config_seed_fields
+  UNIQUE(agent_kind, seed_key)           WHERE owner_scope='system'
 ```
 
 No `validation_status`. No `catalog_version_pinned_at`. No
@@ -434,18 +454,26 @@ and at run time (see below). No background reconciler.
 
 ```text
 At write time (POST / PATCH):
-  load catalog entry for (agent_kind, model_id)
+  find catalog_agent = catalog.agents.find(kind == agent_kind)
+  validate model_id is an active catalog_agent.session.models[].id
+  build allowed_controls from catalog_agent.session.controls[] where
+    surfaces.settings or surfaces.automation is true
+  exclude the catalog "model" control from control_values_json because
+    model_id owns that value
   for each key in control_values_json:
-    if key is not in catalog.controls[agent_kind][model_id]: reject
-    if value is not in catalog.controls[agent_kind][model_id][key].allowed_values: reject
-  for each required control in catalog.controls[agent_kind][model_id]:
-    if missing from control_values_json: reject with field-level error
-  agent_kind must be in catalog.agents
-  model_id must be in catalog.models[agent_kind]
+    if key is not in allowed_controls: reject
+    if control.valueSource == "inline" and value is not in control.values[].value:
+      reject
+    if control.valueSource is dynamic, validate with the owning catalog
+      helper for that control; do not hard-code dynamic option rules here
+  for missing controls:
+    fill control.defaultValue when present
+    if the catalog later adds required=true and no defaultValue exists:
+      reject with field-level error
 
 At read time (selector render):
   load current catalog
-  intersect row.control_values_json with catalog.controls[agent_kind][model_id]
+  resolve against catalog_agent.session.models[] and session.controls[]
   render only the intersection; ignore stale keys
   surface a small "Config has unused settings" badge if intersection
     is smaller than the row (purely informational)
@@ -455,7 +483,8 @@ At run time (use the config):
     selector render and dispatch)
   if agent_kind or model_id is no longer in catalog: fail caller with
     typed error agent_run_config_model_unavailable
-  if a required control is missing: fail with
+  fill missing optional controls from current catalog defaults
+  if a required control is missing and has no catalog default: fail with
     agent_run_config_missing_required
   otherwise: build the resolved snapshot and proceed
 ```
@@ -469,46 +498,60 @@ server/proliferate/server/cloud/agent_run_config/domain/resolve.py
   pure function; no I/O
 ```
 
-**Defaults (no new table).** Per-user and per-org defaults live in
-existing preference stores:
+**Defaults.** Do not use desktop-local preferences or a vague
+organization settings blob for this server-side routing decision. Add
+an explicit Cloud table:
 
 ```text
-user_preferences  (existing table; column or jsonb blob)
-  default_agent_run_config_id_by_agent_kind: {
-    "claude": "<uuid>",
-    "codex":  "<uuid>",
-    ...
-  }
+cloud_agent_run_config_default
+  id                              uuid pk
+  owner_scope                     text  'personal' | 'organization'
+  owner_user_id                   uuid fk user.id             NULL
+  organization_id                 uuid fk organization.id     NULL
+  agent_kind                      text NOT NULL
+  config_id                       uuid fk cloud_agent_run_config.id
+  created_by_user_id              uuid fk user.id             NOT NULL
+  created_at, updated_at
 
-organization_settings  (existing; mirror for org defaults)
-  default_agent_run_config_id_by_agent_kind: { ... }
-  scope: applies to new team automations + Slack runs as a
-         pre-selection (user/admin can still pick a different config)
+  CHECK ck_cloud_agent_run_config_default_owner_fields
+  CHECK ck_cloud_agent_run_config_default_agent_kind
+  UNIQUE(owner_user_id, agent_kind)      WHERE owner_scope='personal'
+  UNIQUE(organization_id, agent_kind)    WHERE owner_scope='organization'
 ```
 
-A new table for defaults is not needed; the data is two pointers per
-agent_kind per owner. If `user_preferences` does not exist today as a
-table, the simplest landing is a thin `user_settings` jsonb column
-that other personal preferences can also use later.
+Service invariants:
+
+```text
+- personal defaults may point at system rows or rows owned by that user
+  with usable_in_personal_sandboxes=true
+- organization defaults may point at system rows or rows owned by that
+  organization with usable_in_shared_sandboxes=true
+- archived configs cannot be pinned as new defaults
+- archiving a pinned config must either reject or atomically move the
+  default to the deterministic system fallback
+```
 
 Resolution order when starting a session without an explicit
 config_id:
 
 ```text
 1. caller (e.g. automation) has agent_kind in mind
-2. read user_preferences.default_agent_run_config_id_by_agent_kind[agent_kind]
-   (or org variant when target_mode='shared_cloud')
-3. if missing: fall back to the lowest-id system row for that agent_kind
-   (system rows are seeded at deploy; treat the first one as the
-   product default)
+2. read cloud_agent_run_config_default for the owner:
+   - personal owner when target_mode='personal_cloud'
+   - organization owner when target_mode='shared_cloud'
+3. if missing: fall back to the active system row for that agent_kind
+   ordered by system_default_rank asc, then seed_key asc
 4. if still missing: fail with agent_run_config_missing_default
 ```
 
 **Starter presets** are just `cloud_agent_run_config` rows with
-`owner_scope='system'` seeded at deploy time. No special column. The
-selector displays them in a "Starter presets" group. Operators of
-self-hosted deployments can edit the seed list; hosted deployments
-edit it as part of Proliferate releases.
+`owner_scope='system'` seeded at deploy time. No `is_starter_preset`
+column; all active system rows are starter presets. `seed_key` gives
+each preset stable deploy-time identity and `system_default_rank`
+selects deterministic fallbacks. The selector displays them in a
+"Starter presets" group. Operators of self-hosted deployments can edit
+the seed list; hosted deployments edit it as part of Proliferate
+releases.
 
 **Snapshot pattern (cross-cutting):**
 
@@ -562,6 +605,8 @@ DELETE /v1/cloud/agent-run-configs/{id}           -- soft archive
 GET    /v1/cloud/agent-run-configs/defaults       -- returns user's pinned defaults
 PUT    /v1/cloud/agent-run-configs/defaults/{agent_kind}
        body: { config_id }                         -- pin personal default
+GET    /v1/cloud/organizations/{org}/agent-run-configs/defaults
+                                                    -- returns org pinned defaults
 PUT    /v1/cloud/organizations/{org}/agent-run-configs/defaults/{agent_kind}
        body: { config_id }                         -- admin sets org default
 ```
@@ -570,10 +615,12 @@ Authorization:
 
 ```text
 - create/edit/archive personal config: owner only
-- create/edit/archive org config:      useIsAdmin(org) only
+- create/edit/archive org config:      server requires active org role in
+                                        organization_admin_roles()
 - create/edit/archive system config:   not exposed via API; seed at deploy
 - pin personal default:                user is owner
-- pin org default:                     useIsAdmin(org) only
+- pin org default:                     server requires active org role in
+                                        organization_admin_roles()
 ```
 
 UI integration (spec 03 §5.4 owns the primitive; spec 06 owns the
@@ -600,12 +647,13 @@ sidebar group, sibling to `agent-defaults`. Spec 06 fills both pages:
 - **Agent Run Configs** — the library. Create / edit / archive
   named configs. Filter by owner_scope; show "Starter presets",
   "My configs", "Org configs" groupings. Edit modal shows the
-  current catalog controls for `(agent_kind, model_id)` so the
-  user sees what they're choosing.
+  current catalog model list plus agent-scoped controls so the user
+  sees what they're choosing.
 
 The spec 03 IA update (adding the `agent-run-configs` page slot) is
-documented here so spec 03 doesn't have to re-open; the section
-just confirms the empty shell already exists per spec 03's pattern.
+documented here so spec 03 doesn't have to re-open. The row stays
+hidden until spec 06 ships this functioning body; no empty pane shell,
+stub card, or "coming soon" panel should render.
 
 
 ### 5.4 Scheduler + cursor

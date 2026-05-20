@@ -250,7 +250,8 @@ Agents
                                                            pin one cloud_agent_run_config per
                                                            agent_kind — spec 06 §5.3 owns content)
   agent-run-configs        AgentRunConfigsPane            (new; hidden until
-                                                           spec 06 wires content;
+                                                           spec 06 ships a
+                                                           functioning body;
                                                            library of named configs)
   agent-authentication     AgentAuthenticationPane        (new; hidden until
                                                            spec 02 wires
@@ -268,10 +269,11 @@ Help
 
 Section ids (`desktop/src/config/settings.ts`):
 
-```typescript
+```text
 SETTINGS_CONTENT_SECTIONS is the registry of valid section ids. The visible
 sidebar filters it through `featureAvailable` / owner-spec readiness; registered
 does not mean visible.
+```
 
 ```typescript
 SETTINGS_CONTENT_SECTIONS = [
