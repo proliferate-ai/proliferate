@@ -19,7 +19,6 @@ use super::access::assert_session_mutable;
 use super::error::ApiError;
 use crate::acp::permission_broker::PermissionDecision;
 use crate::app::AppState;
-use crate::domains::plugins::SessionPluginBundle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
 use crate::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
@@ -95,9 +94,6 @@ pub async fn create_session(
         .as_ref()
         .and_then(|inputs| inputs.mcp_binding_summaries.clone())
         .filter(|summaries| !summaries.is_empty());
-    let plugin_bundle = runtime_inputs
-        .as_ref()
-        .and_then(|inputs| inputs.plugin_bundle.clone());
     if let Some(summaries) = mcp_binding_summaries.as_deref() {
         validate_binding_summaries(summaries)
             .map_err(|error| ApiError::bad_request(error.to_string(), "INVALID_MCP_SUMMARY"))?;
@@ -133,9 +129,9 @@ pub async fn create_session(
             model_id.as_deref(),
             mode_id.as_deref(),
             req.system_prompt_append,
-            mcp_servers,
-            mcp_binding_summaries,
-            plugin_bundle,
+            Vec::new(),
+            None,
+            req.expected_runtime_config_revision.clone(),
             req.subagents_enabled.unwrap_or(true),
             req.agent_auth_scope,
             req.required_agent_auth_revision,
@@ -597,16 +593,6 @@ pub async fn resume_session(
 ) -> Result<Json<Session>, ApiError> {
     let latency = LatencyRequestContext::from_headers(&headers);
     let req = parse_optional_resume_request(body)?;
-    let runtime_inputs = if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
-        Some(
-            state
-                .runtime_config_service
-                .session_inputs_for_expected(expected)
-                .map_err(super::runtime_config::map_runtime_config_error)?,
-        )
-    } else {
-        None
-    };
     let has_live_session = state.session_runtime.has_live_session(&session_id).await;
     if req.expected_runtime_config_revision.is_some() && has_live_session {
         return Err(ApiError::conflict(
@@ -614,66 +600,28 @@ pub async fn resume_session(
             "RUNTIME_CONFIG_RESUME_UNSUPPORTED",
         ));
     }
-    let mcp_binding_summaries = runtime_inputs
-        .as_ref()
-        .and_then(|inputs| inputs.mcp_binding_summaries.clone())
-        .filter(|summaries| !summaries.is_empty());
-    if let Some(summaries) = mcp_binding_summaries.as_deref() {
-        validate_binding_summaries(summaries)
-            .map_err(|error| ApiError::bad_request(error.to_string(), "INVALID_MCP_SUMMARY"))?;
+    if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
+        state
+            .runtime_config_service
+            .assert_session_context_matches(&session_id, expected)
+            .map_err(super::runtime_config::map_runtime_config_error)?;
     }
     let mcp_refresh = if has_live_session {
         None
     } else {
         Some(SessionMcpRefresh {
-            mcp_servers: runtime_inputs
-                .as_ref()
-                .map(|inputs| inputs.mcp_servers.clone())
-                .unwrap_or_default(),
-            mcp_binding_summaries,
+            mcp_servers: Vec::new(),
+            mcp_binding_summaries: None,
         })
     };
-    let plugin_bundle = if has_live_session {
-        None
-    } else {
-        Some(
-            runtime_inputs
-                .as_ref()
-                .and_then(|inputs| inputs.plugin_bundle.clone())
-                .unwrap_or_else(|| SessionPluginBundle {
-                    plugins: Vec::new(),
-                }),
-        )
-    };
-    let updated = if let Some(plugin_bundle) = plugin_bundle {
-        let _lease = acquire_session_exclusive_operation_lease(
-            &state,
-            &session_id,
-            WorkspaceOperationKind::SessionResume,
-        )
-        .await?;
-        state
-            .session_runtime
-            .set_session_plugin_bundle(&session_id, plugin_bundle)
-            .map_err(map_ensure_live_session_error)?;
-        state
-            .session_runtime
-            .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
-            .await
-            .map_err(map_ensure_live_session_error)?
-    } else {
-        let _lease = acquire_session_operation_lease(
-            &state,
-            &session_id,
-            WorkspaceOperationKind::SessionResume,
-        )
-        .await?;
-        state
-            .session_runtime
-            .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
-            .await
-            .map_err(map_ensure_live_session_error)?
-    };
+    let _lease =
+        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionResume)
+            .await?;
+    let updated = state
+        .session_runtime
+        .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
+        .await
+        .map_err(map_ensure_live_session_error)?;
 
     Ok(Json(session_to_contract(&state, &updated).await?))
 }

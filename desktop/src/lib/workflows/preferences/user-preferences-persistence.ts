@@ -93,7 +93,6 @@ async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> 
     turnEndSoundEnabled: defaults.turnEndSoundEnabled,
     turnEndSoundId: defaults.turnEndSoundId,
     transparentChromeEnabled: defaults.transparentChromeEnabled,
-    pluginsInCodingSessionsEnabled: defaults.pluginsInCodingSessionsEnabled,
     subagentsEnabled: defaults.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: defaults.cloudRuntimeInputSyncEnabled,

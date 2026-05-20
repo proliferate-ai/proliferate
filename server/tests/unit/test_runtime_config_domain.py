@@ -13,6 +13,7 @@ from proliferate.server.cloud.plugins.catalog.domain.types import (
     PluginPackage,
     PluginSkill,
     PluginSkillProvenance,
+    PluginSkillResource,
 )
 from proliferate.server.cloud.runtime_config.domain.manifest import (
     compile_runtime_config_manifest,
@@ -72,7 +73,14 @@ def _plugin_package(entry_id: str = "github") -> PluginPackage:
         instructions="Use the configured MCP carefully.",
         required_mcp_server_refs=(entry_id,),
         requires_credential_binding=True,
-        resources=(),
+        resources=(
+            PluginSkillResource(
+                resource_id="triage-guide",
+                display_name="Triage guide",
+                content_type="text/markdown",
+                content="Use narrow issue queries.",
+            ),
+        ),
         default_enabled=True,
         provenance=PluginSkillProvenance(
             source_repo_url="https://example.com/repo",
@@ -340,7 +348,27 @@ def test_manifest_hash_is_stable_and_redacts_secret_values() -> None:
     assert "Bearer secret" not in first.manifest_json
     assert "api_key" in first.manifest_json
     assert "Use the configured MCP carefully." not in first.manifest_json
-    assert first.artifact_payloads[0].content == "Use the configured MCP carefully."
+    instruction_payload = next(
+        artifact
+        for artifact in first.artifact_payloads
+        if artifact.source_ref == "plugin:github:triage:instructions"
+    )
+    assert instruction_payload.content == "Use the configured MCP carefully."
+    assert first.manifest["skills"][0]["resources"] == [
+        {
+            "hash": first.manifest["skills"][0]["resources"][0]["hash"],
+            "contentType": "text/markdown",
+            "byteSize": 25,
+            "sourceRef": "plugin:github:triage:resource:triage-guide",
+            "resourceId": "triage-guide",
+            "displayName": "Triage guide",
+        }
+    ]
+    resource_payload = next(
+        artifact for artifact in first.artifact_payloads if artifact.resource_id == "triage-guide"
+    )
+    assert resource_payload.display_name == "Triage guide"
+    assert resource_payload.content == "Use narrow issue queries."
     assert first.manifest["mcpBindingSummaries"] == [
         {
             "id": "mcp:mcp-owned",
@@ -375,6 +403,8 @@ def test_runtime_config_materialization_fragment_alias_round_trips() -> None:
                     content_type="text/markdown",
                     byte_size=13,
                     source_ref="plugin:github:triage:instructions",
+                    resource_id="triage-guide",
+                    display_name="Triage guide",
                 )
             ],
             credential_refs=[{"credentialRef": "mcp:connection-1:api_key"}],
@@ -389,6 +419,8 @@ def test_runtime_config_materialization_fragment_alias_round_trips() -> None:
     assert round_tripped.runtime_config is not None
     assert round_tripped.runtime_config.revision_id == "revision-1"
     assert round_tripped.runtime_config.artifact_refs[0].content_type == "text/markdown"
+    assert round_tripped.runtime_config.artifact_refs[0].resource_id == "triage-guide"
+    assert round_tripped.runtime_config.artifact_refs[0].display_name == "Triage guide"
     assert round_tripped.runtime_config.credential_refs == [
         {"credentialRef": "mcp:connection-1:api_key"}
     ]

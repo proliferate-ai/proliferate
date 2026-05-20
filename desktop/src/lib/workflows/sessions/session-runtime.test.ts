@@ -265,9 +265,7 @@ describe("resumeSession", () => {
     });
     mocks.resume.mockResolvedValue({ id: "session-1" });
 
-    await resumeSession("session-1", {
-      pluginsInCodingSessionsEnabled: false,
-    });
+    await resumeSession("session-1");
 
     expect(mocks.resume).toHaveBeenCalledTimes(1);
     const [sessionId, resumeOptions, requestOptions] = mocks.resume.mock.calls[0]!;

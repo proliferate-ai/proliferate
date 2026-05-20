@@ -3439,14 +3439,18 @@ export interface components {
             byteSize: number;
             content: string;
             contentType: string;
+            displayName?: string | null;
             hash: string;
+            resourceId?: string | null;
             sourceRef?: string | null;
         };
         RuntimeArtifactRef: {
             /** Format: int64 */
             byteSize: number;
             contentType: string;
+            displayName?: string | null;
             hash: string;
+            resourceId?: string | null;
             sourceRef?: string | null;
         };
         RuntimeCapabilities: {

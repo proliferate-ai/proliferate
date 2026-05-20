@@ -104,6 +104,8 @@ async def refresh_profile_runtime_config(
                     "contentType": artifact.content_type,
                     "hash": artifact.hash,
                     "sourceRef": artifact.source_ref,
+                    "resourceId": artifact.resource_id,
+                    "displayName": artifact.display_name,
                 }
             ),
         )
@@ -241,6 +243,10 @@ async def runtime_config_fragment_for_revision(
             content_type=str(item.get("contentType", "")),
             byte_size=int(item.get("byteSize", 0)),
             source_ref=str(item["sourceRef"]) if item.get("sourceRef") is not None else None,
+            resource_id=str(item["resourceId"]) if item.get("resourceId") is not None else None,
+            display_name=(
+                str(item["displayName"]) if item.get("displayName") is not None else None
+            ),
         )
         for item in (artifacts if isinstance(artifacts, list) else [])
         if isinstance(item, dict)
@@ -302,6 +308,10 @@ async def worker_runtime_config_artifact(
         content_type=artifact.content_type,
         byte_size=artifact.byte_size,
         source_ref=str(payload["sourceRef"]) if payload.get("sourceRef") is not None else None,
+        resource_id=str(payload["resourceId"]) if payload.get("resourceId") is not None else None,
+        display_name=(
+            str(payload["displayName"]) if payload.get("displayName") is not None else None
+        ),
         content=content,
     )
 

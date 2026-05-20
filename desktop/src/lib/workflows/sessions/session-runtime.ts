@@ -251,7 +251,6 @@ export async function fetchSessionSummary(
 export async function resumeSession(
   sessionId: string,
   options?: {
-    pluginsInCodingSessionsEnabled: boolean;
     requestHeaders?: HeadersInit;
     measurementOperationId?: MeasurementOperationId | null;
   },

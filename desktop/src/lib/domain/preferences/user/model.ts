@@ -28,7 +28,6 @@ export interface UserPreferences {
   turnEndSoundEnabled: boolean;
   turnEndSoundId: TurnEndSoundId;
   transparentChromeEnabled: boolean;
-  pluginsInCodingSessionsEnabled: boolean;
   subagentsEnabled: boolean;
   coworkWorkspaceDelegationEnabled: boolean;
   cloudRuntimeInputSyncEnabled: boolean;
@@ -53,7 +52,6 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   turnEndSoundEnabled: false,
   turnEndSoundId: "ding",
   transparentChromeEnabled: false,
-  pluginsInCodingSessionsEnabled: false,
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
@@ -80,7 +78,6 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   // Existing persisted records keep the legacy transparent chrome default;
   // only fresh installs use the opaque NEW_USER_DEFAULTS value.
   transparentChromeEnabled: true,
-  pluginsInCodingSessionsEnabled: false,
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
