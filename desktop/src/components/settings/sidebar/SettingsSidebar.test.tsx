@@ -40,9 +40,11 @@ afterEach(() => {
 });
 
 function renderSettingsSidebar({
+  disabledSections,
   onNavigateHome = vi.fn(),
   onSelectSection = vi.fn(),
 }: {
+  disabledSections?: Partial<Record<SettingsSection, boolean>>;
   onNavigateHome?: () => void;
   onSelectSection?: (section: SettingsSection) => void;
 } = {}) {
@@ -58,6 +60,7 @@ function renderSettingsSidebar({
       <MemoryRouter initialEntries={["/settings?section=general"]}>
         <SettingsSidebar
           activeSection="general"
+          disabledSections={disabledSections}
           onNavigateHome={onNavigateHome}
           onSelectSection={onSelectSection}
           onCheckForUpdates={vi.fn()}
@@ -137,19 +140,50 @@ describe("SettingsSidebar layout and shortcuts", () => {
     renderSettingsSidebar({ onSelectSection });
 
     await waitFor(() => {
-      expect(getShortcutHandler("workspace.tab-by-index")).not.toBeNull();
+      expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
     });
 
-    expect(runShortcutHandler("workspace.tab-by-index", {
+    expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
       digit: 2,
     })).toBe(true);
     expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
 
-    expect(runShortcutHandler("workspace.tab-by-index", {
+    expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
       digit: 9,
     })).toBe(true);
     expect(onSelectSection).toHaveBeenLastCalledWith("review");
+  });
+
+  it("keeps disabled sections in numbering but declines their shortcut", async () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    const onSelectSection = vi.fn();
+    renderSettingsSidebar({
+      disabledSections: { appearance: true },
+      onSelectSection,
+    });
+
+    await waitFor(() => {
+      expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
+    });
+
+    expect(screen.getByText("⌘2")).toBeTruthy();
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 2,
+    })).toBe(false);
+    expect(onSelectSection).not.toHaveBeenCalled();
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 3,
+    })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("keyboard");
   });
 });

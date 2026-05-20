@@ -1,26 +1,28 @@
+import { SHORTCUTS } from "@/config/shortcuts";
 import { type SettingsSection } from "@/config/settings";
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import { resolveShortcutRangeDigitTarget } from "@/lib/domain/shortcuts/presentation";
+import { resolveShortcutRangeDigitTarget } from "@/lib/domain/shortcuts/range";
+import type { SettingsShortcutSectionTarget } from "@/lib/domain/settings/shortcut-targets";
 
 interface UseSettingsSectionShortcutsArgs {
-  sections: readonly SettingsSection[];
+  targets: readonly SettingsShortcutSectionTarget[];
   onSelectSection: (section: SettingsSection) => void;
 }
 
 export function useSettingsSectionShortcuts({
-  sections,
+  targets,
   onSelectSection,
 }: UseSettingsSectionShortcutsArgs): void {
-  useShortcutHandler("workspace.tab-by-index", ({ digit }) => {
+  useShortcutHandler(SHORTCUTS.settingsSectionByIndex.id, ({ digit }) => {
     if (!digit) {
       return false;
     }
 
-    const section = resolveShortcutRangeDigitTarget(sections, digit);
-    if (!section) {
+    const target = resolveShortcutRangeDigitTarget(targets, digit);
+    if (!target || target.disabled) {
       return false;
     }
 
-    onSelectSection(section);
-  }, { enabled: sections.length > 0 });
+    onSelectSection(target.section);
+  }, { enabled: targets.length > 0 });
 }

@@ -1,5 +1,5 @@
 import type { ShortcutDigit } from "@/lib/domain/shortcuts/matching";
-import { resolveShortcutRangeDigitTarget } from "@/lib/domain/shortcuts/presentation";
+import { resolveShortcutRangeDigitTarget } from "@/lib/domain/shortcuts/range";
 import type { SidebarGroupState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
 import { visibleSidebarGroupItems } from "@/lib/domain/workspaces/sidebar/sidebar-visible-items";
 

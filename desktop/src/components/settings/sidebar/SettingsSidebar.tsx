@@ -5,7 +5,10 @@ import { SidebarNavRow } from "@/components/ui/SidebarNavRow";
 import { SupportDialog } from "@/components/support/SupportDialog";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
 import { SHORTCUTS } from "@/config/shortcuts";
-import type { SettingsSection } from "@/config/settings";
+import {
+  SETTINGS_SHORTCUT_SECTION_ORDER,
+  type SettingsSection,
+} from "@/config/settings";
 import {
   SETTINGS_NAV_GROUPS,
   type SettingsNavItem,
@@ -14,6 +17,7 @@ import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import { useSettingsSectionShortcuts } from "@/hooks/settings/ui/use-settings-section-shortcuts";
 import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
 import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
+import { buildSettingsShortcutSectionTargets } from "@/lib/domain/settings/shortcut-targets";
 import { subscribeSupportDialogRequest } from "@/lib/infra/support/support-dialog-request";
 import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
@@ -96,18 +100,6 @@ function settingsItemStatus(
   return null;
 }
 
-function settingsShortcutSectionIds(
-  disabledSections: Partial<Record<SettingsSection, boolean>> | undefined,
-): SettingsSection[] {
-  return SETTINGS_NAV_GROUPS.flatMap((group) =>
-    group.items.flatMap((item) =>
-      item.kind === "section" && !disabledSections?.[item.id]
-        ? [item.id]
-        : []
-    )
-  );
-}
-
 export function SettingsSidebar({
   activeSection,
   disabledSections,
@@ -122,16 +114,22 @@ export function SettingsSidebar({
   const [supportOpen, setSupportOpen] = useState(false);
   const appVersion = useAppVersion().data?.trim();
   const shortcutRevealVisible = useShortcutRevealVisible();
-  const shortcutSectionIds = useMemo(
-    () => settingsShortcutSectionIds(disabledSections),
+  const shortcutTargets = useMemo(
+    () => buildSettingsShortcutSectionTargets(
+      SETTINGS_SHORTCUT_SECTION_ORDER,
+      disabledSections,
+    ),
     [disabledSections],
   );
   const shortcutLabelBySection = useMemo(
-    () => buildShortcutRangeLabelById(shortcutSectionIds, SHORTCUTS.tabByIndex),
-    [shortcutSectionIds],
+    () => buildShortcutRangeLabelById(
+      shortcutTargets.map((target) => target.section),
+      SHORTCUTS.settingsSectionByIndex,
+    ),
+    [shortcutTargets],
   );
   useSettingsSectionShortcuts({
-    sections: shortcutSectionIds,
+    targets: shortcutTargets,
     onSelectSection,
   });
   useEffect(() => subscribeSupportDialogRequest(() => setSupportOpen(true)), []);
