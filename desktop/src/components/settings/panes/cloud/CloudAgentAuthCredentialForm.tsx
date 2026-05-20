@@ -82,10 +82,13 @@ export function CloudAgentAuthCredentialForm({
   }, [providerKind, providerOptions]);
 
   useEffect(() => {
-    if (agentKind === "opencode" && agentGatewayCapabilities?.opencodeEnabled !== true) {
+    if (
+      agentKind === "opencode"
+      && agentGatewayCapabilities?.opencodeGatewayEnabled !== true
+    ) {
       setAgentKind("codex");
     }
-  }, [agentGatewayCapabilities?.opencodeEnabled, agentKind]);
+  }, [agentGatewayCapabilities?.opencodeGatewayEnabled, agentKind]);
 
   async function handleCreateCredential() {
     const body = buildCreateCredentialRequest({
@@ -192,7 +195,7 @@ export function CloudAgentAuthCredentialForm({
                     <option value="codex">Codex</option>
                     <option
                       value="opencode"
-                      disabled={agentGatewayCapabilities?.opencodeEnabled !== true}
+                      disabled={agentGatewayCapabilities?.opencodeGatewayEnabled !== true}
                     >
                       OpenCode
                     </option>
@@ -316,16 +319,16 @@ function providerOptionsForCapabilities(
   }
   return PROVIDER_OPTIONS.filter((option) => {
     if (option.value === "anthropic_api_key") {
-      return capabilities.anthropicByokEnabled;
+      return capabilities.byokProviders.anthropicApiKey;
     }
     if (option.value === "openai_api_key") {
-      return capabilities.openaiByokEnabled;
+      return capabilities.byokProviders.openaiApiKey;
     }
     if (option.value === "bedrock_assume_role") {
-      return capabilities.bedrockByokEnabled;
+      return capabilities.byokProviders.bedrockAssumeRole;
     }
     if (option.value === "openai_compatible") {
-      return capabilities.openaiCompatibleByokEnabled;
+      return capabilities.byokProviders.openaiCompatible;
     }
     return false;
   });

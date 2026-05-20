@@ -38,9 +38,7 @@ export interface SyncGeminiFileCredentialRequest {
   }>;
 }
 
-export type SyncClaudeCredentialRequest =
-  | SyncEnvCredentialRequest
-  | SyncClaudeFileCredentialRequest;
+export type SyncClaudeCredentialRequest = SyncClaudeFileCredentialRequest;
 
 export type SyncGeminiCredentialRequest =
   | SyncEnvCredentialRequest

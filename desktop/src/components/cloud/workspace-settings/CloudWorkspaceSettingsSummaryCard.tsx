@@ -12,11 +12,9 @@ interface CloudWorkspaceSettingsSummaryCardProps {
   setupStatusLabel: string;
   errorMessage: string | null;
   isResyncingFiles: boolean;
-  isResyncingCredentials: boolean;
   isRunningSetup: boolean;
   canRunSetup: boolean;
   onResyncFiles: () => void;
-  onResyncCredentials: () => void;
   onRunSetup: () => void;
   onConfigureRepo: () => void;
 }
@@ -31,11 +29,9 @@ export function CloudWorkspaceSettingsSummaryCard({
   setupStatusLabel,
   errorMessage,
   isResyncingFiles,
-  isResyncingCredentials,
   isRunningSetup,
   canRunSetup,
   onResyncFiles,
-  onResyncCredentials,
   onRunSetup,
   onConfigureRepo,
 }: CloudWorkspaceSettingsSummaryCardProps) {
@@ -70,14 +66,6 @@ export function CloudWorkspaceSettingsSummaryCard({
             onClick={onResyncFiles}
           >
             Re-sync files
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            loading={isResyncingCredentials}
-            onClick={onResyncCredentials}
-          >
-            Re-sync credentials
           </Button>
           <Button
             type="button"

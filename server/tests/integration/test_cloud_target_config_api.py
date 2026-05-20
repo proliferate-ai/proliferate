@@ -87,7 +87,6 @@ async def test_target_config_materialization_command_is_secret_safe(
     assert target_config["summary"]["envVarCount"] == 1
     assert target_config["summary"]["trackedFileCount"] == 1
     assert target_config["summary"]["hasGitCredential"] is True
-    assert target_config["summary"]["agentCredentialProviders"] == []
     assert payload["command"]["kind"] == "materialize_environment"
 
     lease = await client.post(

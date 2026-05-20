@@ -18,15 +18,15 @@ export type CloudRuntimeStatus =
   | "error"
   | "disabled";
 
-export type CloudCredentialFreshness =
-  components["schemas"]["WorkspaceCredentialFreshness"];
-export type CloudCredentialFreshnessStatus = CloudCredentialFreshness["status"];
+export type CloudRuntimeAuthState =
+  components["schemas"]["WorkspaceRuntimeAuthState"];
+export type CloudRuntimeAuthStatus = CloudRuntimeAuthState["status"];
 
 export interface CloudWorkspaceRuntimeSummary {
   environmentId: string | null;
   status: CloudRuntimeStatus;
   generation: number;
-  credentialFreshness?: CloudCredentialFreshness | null;
+  runtimeAuth?: CloudRuntimeAuthState | null;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
 }

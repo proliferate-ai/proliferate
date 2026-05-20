@@ -36,7 +36,8 @@ async def test_cloud_capabilities_response_shape(
     assert response.status_code == 200
     agent_gateway = response.json()["agentGateway"]
     assert agent_gateway["enabled"] is True
-    assert agent_gateway["managedCreditsEnabled"] is True
+    assert agent_gateway["managedCreditsPersonalEnabled"] is True
+    assert agent_gateway["managedCreditsOrganizationEnabled"] is True
     assert agent_gateway["defaultManagedBudgetUsd"] == "12.50"
     assert agent_gateway["byokEnabled"] is True
-    assert agent_gateway["anthropicByokEnabled"] is True
+    assert agent_gateway["byokProviders"]["anthropicApiKey"] is True

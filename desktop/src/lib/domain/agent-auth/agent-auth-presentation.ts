@@ -122,16 +122,16 @@ export function gatewayByokCredentialEnabled(
     return false;
   }
   if (providerKind === "anthropic_api_key") {
-    return capabilities.anthropicByokEnabled;
+    return capabilities.byokProviders.anthropicApiKey;
   }
   if (providerKind === "openai_api_key") {
-    return capabilities.openaiByokEnabled;
+    return capabilities.byokProviders.openaiApiKey;
   }
   if (providerKind === "bedrock_assume_role") {
-    return capabilities.bedrockByokEnabled;
+    return capabilities.byokProviders.bedrockAssumeRole;
   }
   if (providerKind === "openai_compatible") {
-    return capabilities.openaiCompatibleByokEnabled;
+    return capabilities.byokProviders.openaiCompatible;
   }
   return false;
 }

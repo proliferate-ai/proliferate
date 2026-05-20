@@ -139,7 +139,6 @@ def upgrade() -> None:
             sa.Column("summary_json", sa.Text(), nullable=False),
             sa.Column("env_vars_version", sa.Integer(), nullable=False),
             sa.Column("files_version", sa.Integer(), nullable=False),
-            sa.Column("credential_snapshot_version", sa.Integer(), nullable=False),
             sa.Column("mcp_materialization_version", sa.Integer(), nullable=False),
             sa.Column("materialization_status", sa.String(length=32), nullable=False),
             sa.Column("last_command_id", sa.Uuid(), nullable=True),

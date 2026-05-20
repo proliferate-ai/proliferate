@@ -33,11 +33,9 @@ export function CloudWorkspaceSettingsPanel() {
           setupStatusLabel={state.setupStatusLabel}
           errorMessage={state.errorMessage}
           isResyncingFiles={state.isResyncingFiles}
-          isResyncingCredentials={state.isResyncingCredentials}
           isRunningSetup={state.isRunningSetup}
           canRunSetup={state.canRunSetup}
           onResyncFiles={state.onResyncFiles}
-          onResyncCredentials={state.onResyncCredentials}
           onRunSetup={state.onRunSetup}
           onConfigureRepo={state.navigateToRepoSettings}
         />

@@ -118,17 +118,6 @@ export async function startCloudWorkspace(workspaceId: string): Promise<CloudWor
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
 }
 
-export async function resyncCloudWorkspaceCredentials(
-  workspaceId: string,
-): Promise<CloudWorkspaceDetail> {
-  const data = (
-    await getProliferateClient().POST("/v1/cloud/workspaces/{workspace_id}/sync-credentials", {
-      params: { path: { workspace_id: workspaceId } },
-    })
-  ).data!;
-  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
-}
-
 export async function updateCloudWorkspaceBranch(
   workspaceId: string,
   branchName: string,

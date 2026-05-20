@@ -286,7 +286,6 @@ async def materialize_target_config(
         env_var_count=len(env_vars),
         tracked_file_count=len(tracked_files),
         has_git_credential=git_credential is not None,
-        agent_credential_providers=[],
         mcp_binding_count=binding_count,
         mcp_warning_count=warning_count,
         required_tools=required_tools,
@@ -320,7 +319,6 @@ async def materialize_target_config(
         summary_json=summary.model_dump_json(),
         env_vars_version=env_vars_version,
         files_version=files_version,
-        credential_snapshot_version=0,
         mcp_materialization_version=_mcp_materialization_version(binding_count, warning_count),
     )
 
