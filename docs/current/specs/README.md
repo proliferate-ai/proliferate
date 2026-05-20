@@ -262,11 +262,11 @@ spec. Implementers should treat these as the open coordination work.
    (doesn't exist yet). Downstream specs must import from there;
    anyone who inlines the role check violates spec 03 acceptance #14.
 
-2. **`desktop/src/lib/domain/vocabulary.ts` is a hard transitive
-   dependency for specs 04-10.** It doesn't exist yet. If any feature
-   spec ships before spec 03's Chunk E, vocabulary imports fail.
-   Recommendation: ship the vocabulary file as its own small PR ahead
-   of every other UI-touching spec.
+2. **`@proliferate/product-model/workspaces/model` vocabulary is a hard
+   transitive dependency for specs 04-10.** The existing product-model
+   workspace types must be extended before UI-touching downstream specs
+   consume the new strings. Recommendation: ship the product-model vocabulary
+   extension as its own small PR ahead of every other UI-touching spec.
 
 3. **`managed_profile_launch` (spec 04 §6) is now formalized with a
    concrete signature.** Specs 06, 07, 08, 10 import it. If any of them

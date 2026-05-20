@@ -19,11 +19,13 @@ In scope:
 
 - Sidebar groups, nav order, page ids, and routing for desktop Settings.
 - Which spec owns which settings page (ownership boundary).
-- Reusable UI primitives every feature spec consumes:
+- Reusable settings/product UI primitives every feature spec consumes:
   `CredentialPicker`, `AgentRunConfigSelector`, `RuntimeReadinessPanel`,
-  `PublicCapabilityList`, `WhereUsedDrawer`. Existing primitives
-  (`SettingsCard`, `SettingsCardRow`, `SettingsPageHeader`) are
-  preserved.
+  `PublicCapabilityList`, `WhereUsedDrawer`. Shared DOM product components
+  live in `packages/product-ui/**` so Desktop and Web use the same rendering
+  code; Desktop wrappers exist only for app-specific routing/access glue.
+  Existing primitives (`SettingsCard`, `SettingsCardRow`,
+  `SettingsPageHeader`) are preserved as shared package components.
 - Shared product vocabulary: workspace type, origin, exposure, access,
   sandbox type. Every spec that mentions these uses the same names.
 - Admin gating model: small `useIsAdmin(organizationId)` hook to replace
@@ -42,8 +44,9 @@ Out of scope:
   page, and Cloud Workspace sidebars are owned by their feature specs.
 - Marketing copy. Section/page titles and short helper sentences are
   in scope; long-form copy lives in feature specs.
-- Web/mobile settings. Spec 08 covers those surfaces; principles may
-  transfer but the shell is desktop-specific.
+- Full web/mobile settings IA. Spec 08 covers those surfaces. This spec still
+  owns the shared package contract used by Desktop and Web settings surfaces;
+  mobile consumes the same product models/design tokens through native screens.
 
 ## 2. Mental Model
 
@@ -180,6 +183,20 @@ General UI primitives in `desktop/src/components/ui/`: `Button`,
 `Input`, `Switch`, `Select`, `Label`, `Textarea`, `Badge`, `Checkbox`,
 `ModalShell`, `ConfirmationDialog`. Layout helpers: `AutoHideScrollArea`,
 `SidebarNavRow`, `EnvironmentLayout` (EnvironmentPanel, ...Row, ...Section).
+
+**Shared frontend package shape**:
+
+```text
+packages/design/        design tokens + DOM/RN theme exports
+packages/ui/            Desktop/Web DOM primitives and layout
+packages/product-ui/    Desktop/Web product components, data/callback props only
+packages/product-model/ pure product models, presentation, rules, fixtures
+```
+
+Desktop and Web should share product visuals through `packages/product-ui/**`.
+Mobile is React Native and cannot import DOM product components directly; it
+uses `packages/design/react-native` plus `packages/product-model/**` and keeps
+thin native wrappers that render the same product view models.
 
 **Admin gating**: ad-hoc inline checks. `OrganizationPane.tsx` line 66
 computes `canManage = role === "owner" || role === "admin"`.
@@ -433,7 +450,7 @@ managed_personal     managed cloud with owner_scope='personal'
 managed_shared       managed cloud with owner_scope='organization'
 ```
 
-**Display labels** (in `copy/settings/vocabulary-copy.ts`):
+**Display labels** (in `packages/product-model/src/workspaces/presentation.ts`):
 
 ```text
 WorkspaceType  personal_cloud  -> "Personal cloud"
@@ -470,14 +487,18 @@ SandboxType    local           -> "Local"
 Reusable files:
 
 ```text
-desktop/src/lib/domain/vocabulary.ts      (new)
+packages/product-model/src/workspaces/model.ts
   WorkspaceType, Origin, Exposure, Access, SandboxType TS enums whose
   string values are the snake_case strings above (so the wire payload,
   the TS literal, and the DB CHECK enum are identical bytes)
+
+packages/product-model/src/workspaces/presentation.ts
   helpers: workspaceTypeLabel(), sandboxTypeLabel(), accessLabel(),
     exposureLabel(), originLabel()
-copy/settings/vocabulary-copy.ts          (new)
-  human-readable labels per locale
+
+desktop/src/copy/settings/vocabulary-copy.ts
+web/src/copy/settings/vocabulary-copy.ts       only if surface-specific copy
+  is needed beyond the shared presentation helpers
 ```
 
 Server-side:
@@ -485,8 +506,8 @@ Server-side:
 ```text
 Specs that own server migrations emit and accept the same snake_case strings
 on the wire and in DB enums. OpenAPI schema enums use these values literally so
-generated TS types match desktop/src/lib/domain/vocabulary.ts at the character
-level.
+generated TS types match `@proliferate/product-model/workspaces/model` at the
+character level.
 
 Existing DB CHECK enums that already match this convention are left in place
 (sandbox_profile.status, cloud_targets.kind, agent_kind, etc.).
@@ -498,19 +519,19 @@ in copy/settings/vocabulary-copy.ts keys.
 
 ### 5.4 Shared UI primitives
 
-Existing (kept; no changes):
+Existing (kept; no behavior changes):
 
 ```text
-SettingsCard                desktop/src/components/settings/shared/SettingsCard.tsx
-SettingsCardRow             desktop/src/components/settings/shared/SettingsCardRow.tsx
-SettingsPageHeader          desktop/src/components/settings/shared/SettingsPageHeader.tsx
+SettingsCard                @proliferate/product-ui/settings/SettingsCard
+SettingsCardRow             @proliferate/product-ui/settings/SettingsCardRow
+SettingsPageHeader          @proliferate/product-ui/settings/SettingsPageHeader
 ```
 
 New (spec 03 introduces; feature specs consume):
 
 ```text
 CredentialPicker
-  desktop/src/components/settings/shared/CredentialPicker.tsx
+  packages/product-ui/src/settings/CredentialPicker.tsx
   Props:
     agentKind          'claude' | 'codex' | 'opencode' | 'gemini'
     ownerContext       'personal' | { kind: 'organization', orgId }
@@ -525,11 +546,12 @@ CredentialPicker
     owner). Items show status (ready / needs_resync / invalid /
     revoked) via StatusBadge primitive.
   Used by:
-    AgentAuthenticationPane (spec 02)
-    ComputeTargetAgentAuthCard (spec 02)
+    Desktop AgentAuthenticationPane controller (spec 02)
+    Web Settings controller when agent auth appears there
+    ComputeTargetAgentAuthCard controller (spec 02)
 
 AgentRunConfigSelector
-  desktop/src/components/settings/shared/AgentRunConfigSelector.tsx
+  packages/product-ui/src/settings/AgentRunConfigSelector.tsx
   Props:
     agentKind?           preselect
     sandboxType?         filters configs by usable_in_*_sandboxes
@@ -540,12 +562,12 @@ AgentRunConfigSelector
     list of agent_run_config rows for the actor + scope, plus
     inline "Create new" CTA. Loads catalog.json for live controls.
   Used by:
-    AgentDefaultsPane (spec 03)
+    Desktop/Web AgentDefaults controllers (spec 03)
     Automation create dialog (spec 06)
     Slack bot config (spec 07)
 
 RuntimeReadinessPanel
-  desktop/src/components/settings/shared/RuntimeReadinessPanel.tsx
+  packages/product-ui/src/settings/RuntimeReadinessPanel.tsx
   Props:
     sandboxProfileId
     targetId?            optional; omit for "summary across all targets"
@@ -556,12 +578,12 @@ RuntimeReadinessPanel
     sandbox slot state (creating / running / paused / blocked / error)
     each with a "fix" CTA that deep-links to the owning pane.
   Used by:
-    ComputePane per-target detail
+    Desktop/Web Compute pane per-target detail
     SharedEnvironmentsPane summary
     PluginsPage detail panes (status badge only)
 
 PublicCapabilityList
-  desktop/src/components/settings/shared/PublicCapabilityList.tsx
+  packages/product-ui/src/settings/PublicCapabilityList.tsx
   Props:
     organizationId
     kind                 'mcp' | 'skill' | 'plugin'
@@ -570,11 +592,11 @@ PublicCapabilityList
     last apply time, link to source detail. Read-only for non-admins;
     admins see "unpublicize" inline.
   Used by:
-    SharedEnvironmentsPane (read-only summary)
+    Desktop/Web SharedEnvironmentsPane (read-only summary)
     PluginsPage admin tab (full controls; spec 01)
 
 WhereUsedDrawer
-  desktop/src/components/settings/shared/WhereUsedDrawer.tsx
+  packages/product-ui/src/settings/WhereUsedDrawer.tsx
   Props:
     subject              { kind: 'mcp' | 'skill' | 'plugin' | 'credential',
                            id }
@@ -584,6 +606,25 @@ WhereUsedDrawer
   Used by:
     PluginsPage detail
     CloudAgentAuthLibrary credential detail
+```
+
+Shared product UI rule:
+
+```text
+packages/product-ui/** components:
+  - accept already-loaded data/view models and callbacks as props
+  - do not call Cloud SDK / AnyHarness / Tauri access directly
+  - do not import Desktop aliases (`@/`), Desktop stores, or Desktop hooks
+  - may import @proliferate/ui primitives and @proliferate/product-model
+
+desktop/src/** and web/src/**:
+  - own route params, access hooks, mutations, navigation, native menus,
+    and controller mapping into product-ui props
+
+mobile/src/**:
+  - does not import packages/product-ui in V1 because it is DOM React
+  - imports packages/design/react-native and packages/product-model
+  - keeps native wrappers visually aligned to the same product view models
 ```
 
 **Status badge convention** (existing `Badge` primitive, new shared
@@ -601,8 +642,8 @@ revoked        muted
 blocked        red outline
 unavailable    muted with strikethrough
 
-desktop/src/components/settings/shared/StatusBadge.tsx   (new wrapper
-  over the existing Badge primitive that maps a status enum value to
+packages/product-ui/src/settings/StatusBadge.tsx   (new wrapper over the
+  existing @proliferate/ui Badge primitive that maps a status enum value to
   variant + label + tooltip)
 ```
 
@@ -783,20 +824,23 @@ desktop/src/components/settings/panes/
                                          AgentAuthenticationPane card)
 
 desktop/src/components/settings/shared/
-  SettingsCard.tsx                    (existing; no change)
-  SettingsCardRow.tsx                 (existing; no change)
-  SettingsPageHeader.tsx              (existing; no change)
-  StatusBadge.tsx                     (new)
-  AdminOnlyPlaceholder.tsx            (new)
-  CredentialPicker.tsx                (new)
-  AgentRunConfigSelector.tsx          (new)
-  RuntimeReadinessPanel.tsx           (new)
-  PublicCapabilityList.tsx            (new)
-  WhereUsedDrawer.tsx                 (new)
+  SettingsCard.tsx                    keep as compatibility re-export only
+  SettingsCardRow.tsx                 keep as compatibility re-export only
+  SettingsPageHeader.tsx              keep as compatibility re-export only
+
+packages/product-ui/src/settings/
+  StatusBadge.tsx                     (new shared Desktop/Web component)
+  AdminOnlyPlaceholder.tsx            (new shared Desktop/Web component)
+  CredentialPicker.tsx                (new shared Desktop/Web component)
+  AgentRunConfigSelector.tsx          (new shared Desktop/Web component)
+  RuntimeReadinessPanel.tsx           (new shared Desktop/Web component)
+  PublicCapabilityList.tsx            (new shared Desktop/Web component)
+  WhereUsedDrawer.tsx                 (new shared Desktop/Web component)
 
 desktop/src/hooks/access/cloud/organizations/use-is-admin.ts   (new)
 
-desktop/src/lib/domain/vocabulary.ts                            (new)
+packages/product-model/src/workspaces/model.ts                  extend shared
+packages/product-model/src/workspaces/presentation.ts           extend shared
 
 desktop/src/copy/settings/vocabulary-copy.ts                    (new)
 desktop/src/copy/settings/admin-gate-copy.ts                    (new)
@@ -899,12 +943,15 @@ Chunk F  Feature page handoff
 6. `CredentialPicker`, `AgentRunConfigSelector`,
    `RuntimeReadinessPanel`, `PublicCapabilityList`,
    `WhereUsedDrawer`, `StatusBadge` exist in
-   `desktop/src/components/settings/shared/`. Callers import the concrete file
-   directly; spec 03 does not add a shared barrel/index module.
-7. `desktop/src/lib/domain/vocabulary.ts` exports the five enums
+   `packages/product-ui/src/settings/` and are exported as concrete subpaths
+   from `packages/product-ui/package.json`. Desktop/Web controllers import
+   those concrete subpaths directly; spec 03 does not add a shared
+   barrel/index module.
+7. `packages/product-model/src/workspaces/model.ts` exports the five enums
    (`WorkspaceType`, `Origin`, `Exposure`, `Access`, `SandboxType`)
    with the exact string values in §5.3. Every other spec that ships
-   UI imports from here.
+   UI imports from `@proliferate/product-model/workspaces/model` and
+   presentation helpers from `@proliferate/product-model/workspaces/presentation`.
 8. Plugins page (`PluginsPage.tsx`) remains top-level. A "Manage
    plugins" card in the `EnvironmentsPane` (or `CloudPane`'s former
    spot) links to it.
@@ -929,6 +976,8 @@ Chunk F  Feature page handoff
 ## 9. Verification / Tests
 
 ```bash
+pnpm --filter @proliferate/product-model test -- --run
+pnpm --filter @proliferate/product-ui test -- --run
 cd desktop && pnpm test -- --run && pnpm typecheck
 ```
 
@@ -945,21 +994,21 @@ desktop/src/components/settings/SettingsScreen.test.tsx
   - ?section=cloud redirects by focus param, defaulting to agent-authentication
   - ?section=worktrees redirects to ?section=environments
 
-desktop/src/components/settings/shared/CredentialPicker.test.tsx
-desktop/src/components/settings/shared/AgentRunConfigSelector.test.tsx
-desktop/src/components/settings/shared/RuntimeReadinessPanel.test.tsx
-desktop/src/components/settings/shared/PublicCapabilityList.test.tsx
-desktop/src/components/settings/shared/WhereUsedDrawer.test.tsx
-desktop/src/components/settings/shared/StatusBadge.test.tsx
-  - each primitive snapshot + behavior tests
-  - status mapping for every enum value in §5.3
+packages/product-ui/test/CredentialPicker.test.tsx
+packages/product-ui/test/AgentRunConfigSelector.test.tsx
+packages/product-ui/test/RuntimeReadinessPanel.test.tsx
+packages/product-ui/test/PublicCapabilityList.test.tsx
+packages/product-ui/test/WhereUsedDrawer.test.tsx
+packages/product-ui/test/StatusBadge.test.tsx
+  - shared component render/behavior tests
+  - no access-client imports; props-only contract
 
 desktop/src/hooks/access/cloud/organizations/use-is-admin.test.ts
   - returns role from useOrganizationMembers
   - returns isAdmin true for owner/admin
   - returns isAdmin false for member or no membership
 
-desktop/src/lib/domain/vocabulary.test.ts
+packages/product-model/src/workspaces/presentation.test.ts
   - enum string values match §5.3 verbatim
 
 desktop/src/components/settings/panes/AgentAuthenticationPane.test.tsx

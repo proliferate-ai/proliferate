@@ -28,6 +28,12 @@ In scope:
 - Web/mobile workspace UI: session list, transcript view, prompt
   input (Cloud command path), claim action, "Open in Desktop" CTA.
 - Mobile cuts over from fixture data to the live Cloud SDK.
+- Shared frontend package alignment: any Desktop/Web product visual
+  component needed by both surfaces is created or extracted into
+  `packages/product-ui/**`; app folders only keep controllers, access
+  hooks, navigation, native menus, and platform glue. Mobile shares
+  `packages/design/react-native` + `packages/product-model/**` and
+  uses native wrappers for React Native rendering.
 - Desktop user verbs: **Continue remotely**, **Open in web**,
   **Open on mobile**, and (for claimed shared cloud work) **Open
   in Desktop (direct)**. Verbs are gated by the access helpers
@@ -59,10 +65,9 @@ Out of scope:
 - Cross-org workspace sharing (out of roadmap).
 - A new web/mobile auth model. Existing OAuth PKCE flows (web
   cookie + CSRF; mobile in-memory) are preserved unchanged.
-- A web/mobile settings shell beyond what `/settings` already
-  has. Spec 03 covers Desktop Settings; web/mobile Settings are
-  thin views of the same data and follow the same admin gating
-  but do not gain new pages in V1.
+- A full mobile settings shell. Spec 03 owns shared Desktop/Web settings
+  package components; spec 08 wires thin Web settings controllers. Mobile
+  settings remain limited native screens in V1.
 - A migration / move flow. Spec 10 owns that surface; the
   "Move to another target" CTA appears only when spec 10 ships.
 
@@ -183,6 +188,33 @@ Auth: PKCE OAuth + Apple Sign-In
 Workspaces screen: renders from fixture data
                     (`mobile-fixtures.ts`), not Cloud API
 ```
+
+**Shared frontend packages**:
+
+```text
+packages/design/
+  tokens.ts, dom.css, react-native.ts
+  Shared color/spacing/radius/type tokens for Desktop/Web/Mobile.
+
+packages/ui/
+  DOM primitives/layout for Desktop + Web only.
+
+packages/product-ui/
+  DOM product components for Desktop + Web. Components accept data/view-model
+  props and callbacks. They do not call Cloud SDK, AnyHarness, Tauri, app
+  stores, or route APIs directly.
+
+packages/product-model/
+  Pure product types, rules, presentation helpers, and fixtures shared across
+  Desktop/Web/Mobile.
+```
+
+Current direction from the shared Web/Desktop UI work: Web pages should be
+controllers over `packages/product-ui/**`, not a second set of product rows,
+cards, banners, sidebars, settings panes, or chat surfaces under
+`web/src/components/**`. When Web already has a local product visual that
+Desktop also needs, extract it into `packages/product-ui/**` instead of
+copying it.
 
 **Cloud SDK** at `cloud/sdk/`:
 
@@ -715,19 +747,20 @@ spec 08 adds the content.
 Mobile workspace screen wiring:
 
 ```text
-mobile/src/screens/MobileWorkspacesScreen.tsx
+mobile/src/components/workspaces/MobileWorkspacesScreen.tsx
   replace mobile-fixtures.ts read with:
-    useCloudWorkspaces({ scope: 'exposed' })
+    live Cloud workspace data
+  import product state/presentation from @proliferate/product-model
   render exposure / origin / sandbox_type indicators
   show "Claim" button for shared_unclaimed
   show "Open in Desktop" deep-link CTA for richer flows
 
-mobile/src/screens/MobileChatScreen.tsx
-  useSessionLive(sessionId)
+mobile/src/components/chat/MobileChatScreen.tsx
+  consume live session state
   prompt input -> POST /v1/cloud/commands (source='mobile')
   show command status from useCommandStatus
 
-mobile/src/screens/MobileSessionsScreen.tsx
+mobile/src/components/sessions/MobileSessionsScreen.tsx
   list sessions for the workspace; useWorkspaceLive
 
 mobile/src/lib/fixtures/                                     keep for tests
@@ -825,6 +858,35 @@ cloud/sdk-react/src/hooks/live/reducer.ts                            (new; pure)
 cloud/sdk-react/src/hooks/api-keys.ts                                (new)
 ```
 
+Shared frontend packages:
+
+```text
+packages/product-model/src/workspaces/model.ts
+  extend ProductWorkspaceSummary with exposure/origin/sandbox/access fields
+  using the vocabulary from spec 03 §5.3
+
+packages/product-model/src/workspaces/presentation.ts
+  labels/tones/icons for exposure, origin, sandbox, claim state
+
+packages/product-model/src/chats/model.ts
+packages/product-model/src/chats/presentation.ts
+  align ChatKind/ClaimState with spec 05/06/07 origin/access states
+
+packages/product-ui/src/workspaces/CloudWorkspaceList.tsx
+  expose view props for claimable/shared/personal/exposed rows
+
+packages/product-ui/src/workspaces/CloudWorkspaceRow.tsx             (new if
+  CloudWorkspaceList needs a reusable row split)
+
+packages/product-ui/src/chat/ChatPreviewSurface.tsx
+packages/product-ui/src/chat/ClaimBanner.tsx
+  support live session status, claim action, and Open in Desktop CTA props
+
+packages/product-ui/src/layout/ProductPageShell.tsx
+packages/product-ui/src/layout/ProductNotice.tsx
+  reused by web pages and any Desktop cloud-mediated surface
+```
+
 Desktop:
 
 ```text
@@ -861,17 +923,18 @@ Web:
 
 ```text
 web/src/pages/WorkspacesPage.tsx
-  list with scope=exposed
-  exposure / claim / origin badges
+  route entrypoint only
 
 web/src/pages/ChatPage.tsx
-  useSessionLive for transcript
-  prompt composer -> POST commands with source='web'
+  route entrypoint only
 
-web/src/components/workspaces/
-  ClaimButton.tsx                                                    (new)
-  RemoteAccessBadge.tsx                                              (new)
-  WorkspaceListItem.tsx                                              extend
+web/src/components/workspaces/screen/WorkspacesScreen.tsx
+  controller: useCloudWorkspaces({ scope: 'exposed' }) -> product-ui
+  CloudWorkspaceList props. No local product row/card/banner components.
+
+web/src/components/chat/screen/ChatScreen.tsx
+  controller: useSessionLive + command mutation -> product-ui
+  ChatPreviewSurface / ClaimBanner props. No local claim banner duplicate.
 
 web/src/pages/SettingsPage.tsx
   Account > API Keys section
@@ -883,15 +946,19 @@ web/src/lib/deep-links.ts                                            (new)
 Mobile:
 
 ```text
-mobile/src/screens/MobileWorkspacesScreen.tsx
-  replace fixtures with useCloudWorkspaces({ scope: 'exposed' })
+mobile/src/components/workspaces/MobileWorkspacesScreen.tsx
+  replace fixtures with live Cloud data
+  import product state/presentation from @proliferate/product-model
 
-mobile/src/screens/MobileChatScreen.tsx
-  useSessionLive
+mobile/src/components/chat/MobileChatScreen.tsx
+  use live Cloud data
   prompt composer
 
-mobile/src/screens/MobileSessionsScreen.tsx
+mobile/src/components/sessions/MobileSessionsScreen.tsx
   live updates
+
+mobile/src/styles/tokens.ts
+  continue to source from @proliferate/design/react-native
 
 mobile/app.json
   associatedDomains: ['applinks:app.proliferate.ai']
@@ -910,16 +977,19 @@ Chunk A  Live React hooks
   - pure reducer
   - React Query interop (snapshot mirror)
   - reconnect + StrictMode safety
+  - platform-neutral module imports; no DOM-only globals at import time
 
 Chunk B  Workspace listing scope=exposed + response extensions
   - server: add scope handler; include exposure +
     last_session_summary in response
   - SDK: extend types
-  - web + mobile + Desktop consume
+  - product-model presentation helpers and product-ui list components updated
+  - web + mobile + Desktop consume the shared model
 
 Chunk C  Web / mobile transcript + prompt + claim
-  - web ChatPage live transcript + composer
-  - mobile MobileChatScreen live + composer
+  - web ChatPage is a controller over product-ui chat components
+  - mobile MobileChatScreen uses the same product-model view state with native
+    rendering
   - claim button calls spec 05 endpoint
   - mobile cuts over from fixtures
 
@@ -970,6 +1040,16 @@ Chunk H  Tests + smoke
 7. Claim button on `shared_unclaimed` workspaces calls
    `POST /v1/cloud/workspaces/{id}/claim` (spec 05). Web and
    mobile do not call `direct-access-token`.
+7a. Web does not introduce duplicate product visual components for workspace
+    rows, claim banners, chat previews, plugin lists, support surfaces,
+    settings cards, or page shells. If a Desktop/Web surface is reused or
+    should be reused, create or extract the component in
+    `packages/product-ui/**`; `web/src/**` and `desktop/src/**` keep
+    controllers/wiring only.
+7b. Mobile imports shared product types/presentation from
+    `@proliferate/product-model/**` and tokens from
+    `@proliferate/design/react-native`; native components stay thin wrappers
+    over the same view state.
 8. Desktop context menu adds **Continue remotely**, **Disable
    remote access**, **Open in web**, **Open on mobile**, and
    **Open in Desktop (direct)** with the visibility gates from
@@ -1054,6 +1134,8 @@ server/tests/cloud/exposure/test_disable_remote_access_pauses.py
 SDK + SDK-React:
 
 ```bash
+pnpm --filter @proliferate/product-model test -- --run
+pnpm --filter @proliferate/product-ui test -- --run
 cd cloud/sdk-react && pnpm test -- --run
 ```
 
@@ -1091,18 +1173,24 @@ desktop/src/lib/domain/workspaces/deep-links.test.ts
 Web:
 
 ```bash
-cd web && pnpm test -- --run && pnpm typecheck
+cd web && pnpm typecheck
 ```
 
 Targeted Web tests:
 
 ```text
-web/src/pages/WorkspacesPage.test.tsx
+packages/product-ui/test/CloudWorkspaceList.test.tsx
+packages/product-ui/test/ChatPreviewSurface.test.tsx
+packages/product-ui/test/ClaimBanner.test.tsx
+
+web/src/components/workspaces/screen/WorkspacesScreen.test.tsx
   - lists from scope=exposed
   - claim button surfaces on shared_unclaimed
-web/src/pages/ChatPage.test.tsx
+web/src/components/chat/screen/ChatScreen.test.tsx
   - useSessionLive transcript renders
   - prompt composer enqueues command source='web'
+  - web screen imports product-ui surfaces instead of defining local visual
+    product rows/cards/banners
 ```
 
 Mobile:
@@ -1114,9 +1202,10 @@ cd mobile && pnpm test -- --run && pnpm typecheck
 Targeted Mobile tests:
 
 ```text
-mobile/src/screens/MobileWorkspacesScreen.test.tsx
+mobile/src/components/workspaces/MobileWorkspacesScreen.test.tsx
   - uses Cloud SDK, not fixtures
-mobile/src/screens/MobileChatScreen.test.tsx
+  - imports @proliferate/product-model presentation helpers
+mobile/src/components/chat/MobileChatScreen.test.tsx
   - live transcript + prompt
 mobile/src/lib/deep-links.test.ts
 ```
