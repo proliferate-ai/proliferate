@@ -50,7 +50,7 @@ export function PageContentFrame({
             <div
               className={`mx-auto flex h-10 w-full ${maxWidthClassName} items-center justify-between gap-3 px-6`}
             >
-              <h2 className="min-w-0 truncate text-sm font-medium text-foreground">
+              <h2 className="min-w-0 truncate text-xl font-medium text-foreground">
                 {stickyTitle}
               </h2>
               {stickyAction && <div className="shrink-0">{stickyAction}</div>}
