@@ -73,6 +73,7 @@ interface RightPanelProps {
   terminalActivationRequest: TerminalActivationRequest | null;
   focusRequestToken?: number;
   nativeOverlaysHidden?: boolean;
+  onOpenPanel: () => void;
   onTogglePanel: () => void;
   onTerminalActivationRequestHandled: (request: TerminalActivationRequest) => void;
 }
@@ -90,6 +91,7 @@ export const RightPanel = memo(function RightPanel({
   terminalActivationRequest,
   focusRequestToken = 0,
   nativeOverlaysHidden = false,
+  onOpenPanel,
   onTogglePanel,
   onTerminalActivationRequestHandled,
 }: RightPanelProps) {
@@ -407,8 +409,10 @@ export const RightPanel = memo(function RightPanel({
         isCloudWorkspaceSelected,
       ),
     );
+    onOpenPanel();
   }, [
     isCloudWorkspaceSelected,
+    onOpenPanel,
     shouldRenderContent,
     updateState,
     workspaceId,
