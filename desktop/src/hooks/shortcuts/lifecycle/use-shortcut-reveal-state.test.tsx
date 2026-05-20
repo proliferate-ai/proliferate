@@ -6,7 +6,7 @@ import {
   SHORTCUT_REVEAL_DELAY_MS,
   SHORTCUT_REVEAL_RESET_EVENT,
   useShortcutRevealState,
-} from "@/hooks/ui/keyboard/use-shortcut-reveal-state";
+} from "@/hooks/shortcuts/lifecycle/use-shortcut-reveal-state";
 
 describe("useShortcutRevealState", () => {
   beforeEach(() => {

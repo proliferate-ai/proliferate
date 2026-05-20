@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/tabs/use-close-active-workspace-tab";
@@ -11,6 +11,9 @@ import {
   resolveWorkspaceShellTabByShortcutIndex,
   type WorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import type {
+  HeaderWorkspaceShellStripRow,
+} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -26,6 +29,7 @@ export interface WorkspaceTabActionsContext {
   visibleChatSessionIds: string[];
   liveChatSessionIds: string[];
   childToParent: Map<string, string>;
+  shellRows: HeaderWorkspaceShellStripRow[];
   orderedTabs: WorkspaceShellTab[];
   activeShellTab: WorkspaceShellTab | null;
 }
@@ -47,6 +51,14 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
   const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
 
   const orderedTabs = headerTabs.orderedTabs;
+  const visibleShortcutTabs = useMemo(
+    () => headerTabs.shellRows.flatMap((shellRow): WorkspaceShellTab[] =>
+      shellRow.kind === "chat" && shellRow.row.kind === "tab"
+        ? [{ kind: "chat", sessionId: shellRow.row.tab.id }]
+        : []
+    ),
+    [headerTabs.shellRows],
+  );
   const activeTab = headerTabs.activeShellTab;
 
   const activateWorkspaceTab = useCallback((tab: WorkspaceShellTab) => {
@@ -96,13 +108,13 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
   ]);
 
   const activateTabByShortcutIndex = useCallback((key: string) => {
-    const nextTab = resolveWorkspaceShellTabByShortcutIndex(orderedTabs, key);
+    const nextTab = resolveWorkspaceShellTabByShortcutIndex(visibleShortcutTabs, key);
     if (!nextTab) {
       return false;
     }
 
     return activateWorkspaceTab(nextTab);
-  }, [activateWorkspaceTab, orderedTabs]);
+  }, [activateWorkspaceTab, visibleShortcutTabs]);
 
   const restoreLastDismissedTab = useCallback(
     () => chatVisibilityActions.restoreHiddenOrDismissedChatTab(),

@@ -17,7 +17,7 @@ import {
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { runShortcutHandler } from "@/lib/domain/shortcuts/registry";
-import { requestRightPanelNewTabMenu } from "@/lib/infra/right-panel-new-tab-menu";
+import { requestRightPanelBrowserTab } from "@/lib/infra/right-panel-new-tab-menu";
 
 interface RunCommandState {
   onRun: () => void;
@@ -246,7 +246,7 @@ export function useWorkspaceCommandPalette({
       shortcut: getShortcutDisplayLabel(SHORTCUTS.openBrowserTab),
       disabledReason: selectedWorkspaceId ? null : "Workspace is still opening.",
       execute: () => {
-        requestRightPanelNewTabMenu("browser");
+        requestRightPanelBrowserTab();
       },
     },
     {

@@ -41,6 +41,7 @@ import {
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
+  RIGHT_PANEL_BROWSER_TAB_EVENT,
   RIGHT_PANEL_NEW_TAB_MENU_EVENT,
   rightPanelNewTabMenuDefaultFromEvent,
   type RightPanelNewTabMenuDefault,
@@ -420,6 +421,17 @@ export const RightPanel = memo(function RightPanel({
     updateState,
     workspaceId,
   ]);
+
+  useEffect(() => {
+    const handleBrowserTabRequest = () => {
+      handleCreateBrowser();
+    };
+
+    window.addEventListener(RIGHT_PANEL_BROWSER_TAB_EVENT, handleBrowserTabRequest);
+    return () => {
+      window.removeEventListener(RIGHT_PANEL_BROWSER_TAB_EVENT, handleBrowserTabRequest);
+    };
+  }, [handleCreateBrowser]);
 
   const handleCloseBrowser = useCallback((browserId: string) => {
     updateState((previous) =>

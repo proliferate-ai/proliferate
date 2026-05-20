@@ -7,7 +7,7 @@ import {
   runShortcutHandler,
 } from "@/lib/domain/shortcuts/registry";
 import { useWorkspaceContentShortcuts } from "@/hooks/workspaces/ui/use-workspace-content-shortcuts";
-import { requestRightPanelNewTabMenu } from "@/lib/infra/right-panel-new-tab-menu";
+import { requestRightPanelBrowserTab } from "@/lib/infra/right-panel-new-tab-menu";
 
 const harnessState = vi.hoisted(() => ({
   selectedWorkspaceId: "workspace-1" as string | null,
@@ -19,7 +19,7 @@ vi.mock("@/stores/sessions/session-selection-store", () => ({
 }));
 
 vi.mock("@/lib/infra/right-panel-new-tab-menu", () => ({
-  requestRightPanelNewTabMenu: vi.fn(() => true),
+  requestRightPanelBrowserTab: vi.fn(() => true),
 }));
 
 describe("useWorkspaceContentShortcuts", () => {
@@ -44,9 +44,9 @@ describe("useWorkspaceContentShortcuts", () => {
 
     renderHook(() => useWorkspaceContentShortcuts(actions));
 
-    expect(requestRightPanelNewTabMenu).not.toHaveBeenCalled();
+    expect(requestRightPanelBrowserTab).not.toHaveBeenCalled();
 
     expect(runShortcutHandler("workspace.open-browser-tab", { source: "keyboard" })).toBe(true);
-    expect(requestRightPanelNewTabMenu).toHaveBeenCalledWith("browser");
+    expect(requestRightPanelBrowserTab).toHaveBeenCalledTimes(1);
   });
 });

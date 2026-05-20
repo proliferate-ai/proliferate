@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react"
-import { useShortcutRevealState } from "@/hooks/ui/keyboard/use-shortcut-reveal-state"
+import { useShortcutRevealState } from "@/hooks/shortcuts/lifecycle/use-shortcut-reveal-state"
 
 const ShortcutRevealContext = createContext(false)
 

@@ -10,7 +10,7 @@ import {
 } from "@/lib/domain/workspaces/tabs/chrome-layout";
 import type { ManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
 import { SHORTCUTS } from "@/config/shortcuts";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
 
 interface HeaderTabsDragControls {
   getRowDragProps: (rowId: string) => { "data-tab-drag-row-id": string };
@@ -95,7 +95,14 @@ export function HeaderTabsStripRows({
   suppressNextSelectClick,
   consumeSuppressedSelectClick,
 }: HeaderTabsStripRowsProps) {
-  let chatShortcutIndex = 0;
+  const shortcutLabelBySessionId = buildShortcutRangeLabelById(
+    shellRows.flatMap((shellRow) =>
+      shellRow.kind === "chat" && shellRow.row.kind === "tab"
+        ? [shellRow.row.tab.id]
+        : []
+    ),
+    SHORTCUTS.tabByIndex,
+  );
 
   return (
     <>
@@ -134,10 +141,7 @@ export function HeaderTabsStripRows({
           );
         }
 
-        chatShortcutIndex += 1;
-        const shortcutLabel = chatShortcutIndex <= 9
-          ? getShortcutDisplayLabel(SHORTCUTS.tabByIndex).replace("1-9", String(chatShortcutIndex))
-          : null;
+        const shortcutLabel = shortcutLabelBySessionId.get(row.tab.id) ?? null;
         const tab = urgentHighlightedChatSessionId
           ? {
             ...row.tab,

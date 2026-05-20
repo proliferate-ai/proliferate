@@ -41,6 +41,7 @@ import {
   buildCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 import { subscribeSupportDialogRequest } from "@/lib/infra/support/support-dialog-request";
 import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
@@ -158,15 +159,10 @@ export const MainSidebar = memo(function MainSidebar() {
       ? `${titleForStartBlockReason(billingPlan?.startBlockReason)}.`
       : CAPABILITY_COPY.cloudSignInTooltip;
   const filtersActive = showArchived || !isDefaultSidebarWorkspaceTypes(workspaceTypes);
-  const sidebarShortcutLabelById = useMemo(() => {
-    const labelPrefix = getShortcutDisplayLabel(SHORTCUTS.workspaceByIndex).replace("1-9", "");
-    return new Map(
-      sidebarShortcutTargetIds.slice(0, 9).map((workspaceId, index) => [
-        workspaceId,
-        `${labelPrefix}${index + 1}`,
-      ]),
-    );
-  }, [sidebarShortcutTargetIds]);
+  const sidebarShortcutLabelById = useMemo(
+    () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
+    [sidebarShortcutTargetIds],
+  );
   const primaryNavShortcutLabels = useMemo(() => ({
     home: getShortcutDisplayLabel(SHORTCUTS.goHome),
     plugins: getShortcutDisplayLabel(SHORTCUTS.goPlugins),

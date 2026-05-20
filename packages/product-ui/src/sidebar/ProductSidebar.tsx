@@ -665,9 +665,9 @@ export function ProductSidebarWorkspaceRow({
         </div>
 
         {(trailingLabel || shortcutLabel || hoverAction) ? (
-          <div className="relative ml-1.5 h-5 min-w-[34px] shrink-0">
+          <div className="ml-1.5 grid h-5 min-w-[26px] shrink-0 items-center justify-items-end">
             {trailingLabel ? (
-              <div className={`absolute inset-y-0 right-0 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground transition-opacity duration-150 ${
+              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground transition-opacity duration-150 ${
                 shortcutLabel && shortcutRevealVisible
                   ? "opacity-0"
                   : "group-hover:opacity-0 group-focus-within:opacity-0"
@@ -678,7 +678,7 @@ export function ProductSidebarWorkspaceRow({
             {shortcutLabel ? (
               <ShortcutBadge
                 label={shortcutLabel}
-                className={`absolute inset-y-0 right-0 my-auto h-fit min-w-[30px] shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity duration-150 ${
+                className={`col-start-1 row-start-1 h-fit min-w-[30px] shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity duration-150 ${
                   shortcutRevealVisible ? "opacity-100" : ""
                 }`}
               />
