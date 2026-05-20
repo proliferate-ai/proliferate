@@ -316,31 +316,47 @@ export function useHomeNextLaunch() {
 
     try {
       if (target.kind === "cowork") {
-        navigate("/");
-        const result = await createThreadFromSelection({
+        const resultPromise = createThreadFromSelection({
           agentKind: modelSelection.kind,
           modelId: modelSelection.modelId,
           modeId,
           draftText: null,
           sourceWorkspaceId: null,
         });
+        const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
+          text: prompt,
+          promptId,
+          launchIntentId,
+          waitUntil: resultPromise,
+        });
+        if (queuedProjectedSessionId) {
+          navigate("/");
+        }
+        const result = await resultPromise;
         if (!result) {
           throw new Error("Cowork thread creation was interrupted.");
         }
+        if (!queuedProjectedSessionId) {
+          navigate("/");
+        }
+        const projectedSessionId = queuedProjectedSessionId ?? result.projectedSessionId ?? null;
         markLaunchIntentMaterialized(launchIntentId, {
           workspaceId: result.workspace.id,
           sessionId: result.session.id,
+          clientSessionId: projectedSessionId,
         });
 
-        await promptSession({
-          sessionId: result.session.id,
-          text: prompt,
-          workspaceId: result.workspace.id,
-          promptId,
-          onBeforeOptimisticPrompt: () => {
-            markLaunchIntentSendAttempted(launchIntentId);
-          },
-        });
+        if (!queuedProjectedSessionId) {
+          await promptSession({
+            sessionId: projectedSessionId ?? result.session.id,
+            text: prompt,
+            workspaceId: result.workspace.id,
+            promptId,
+            onBeforeOptimisticPrompt: () => {
+              markLaunchIntentSendAttempted(launchIntentId);
+            },
+          });
+        }
         clearLaunchIntentIfActive(launchIntentId);
         return true;
       }
