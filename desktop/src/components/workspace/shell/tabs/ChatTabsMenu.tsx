@@ -37,7 +37,7 @@ export function ChatTabsMenu({
   workspaceId: string | null;
   rows: HeaderChatMenuEntry[];
   childrenByParentSessionId: Map<string, HeaderSubagentChildRow[]>;
-  renderIcon: (row: Pick<HeaderChatMenuEntry, "agentKind" | "viewState">) => ReactNode;
+  renderIcon: (row: Pick<HeaderChatMenuEntry, "agentKind" | "viewState" | "isResolvingSession">) => ReactNode;
   renderStatus: (row: Pick<HeaderChatMenuEntry, "viewState" | "isActive" | "hasUnreadActivity">) => ReactNode;
   onOpenSession: (sessionId: string) => void;
 }) {

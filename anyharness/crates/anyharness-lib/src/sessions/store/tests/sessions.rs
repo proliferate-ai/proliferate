@@ -1,5 +1,6 @@
 use super::*;
 use crate::origin::OriginContext;
+use anyharness_contract::v1::AgentAuthExternalScope;
 
 #[test]
 fn stores_and_loads_session_origin() {
@@ -17,6 +18,30 @@ fn stores_and_loads_session_origin() {
         .expect("session record");
 
     assert_eq!(stored.origin, Some(OriginContext::cowork()));
+}
+
+#[test]
+fn stores_and_loads_agent_auth_scope() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    let mut record = session_record();
+    record.agent_auth_scope = Some(AgentAuthExternalScope {
+        provider: "proliferate-cloud".to_string(),
+        id: "profile-1".to_string(),
+        target_id: Some("target-1".to_string()),
+    });
+    record.required_agent_auth_revision = Some(4);
+
+    store.insert(&record).expect("insert session");
+    let stored = store
+        .find_by_id("session-1")
+        .expect("find session")
+        .expect("session record");
+
+    assert_eq!(stored.agent_auth_scope, record.agent_auth_scope);
+    assert_eq!(stored.required_agent_auth_revision, Some(4));
 }
 
 #[test]

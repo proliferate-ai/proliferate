@@ -4,7 +4,7 @@
   "private": true,
   "main": "index.ts",
   "scripts": {
-    "build:shared": "pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-model build",
+    "build:shared": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-model build",
     "start": "pnpm build:shared && expo start",
     "ios": "pnpm build:shared && expo start --ios",
     "android": "pnpm build:shared && expo start --android",

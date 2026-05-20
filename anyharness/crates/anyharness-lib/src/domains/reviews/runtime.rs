@@ -518,6 +518,8 @@ impl ReviewRuntime {
             None,
             SessionMcpBindingPolicy::InternalOnly,
             false,
+            None,
+            None,
             OriginContext::system_local_runtime(),
         ) {
             Ok(child) => child,
@@ -862,7 +864,7 @@ impl ReviewRuntime {
                 self.session_runtime
                     .send_text_prompt_with_provenance(
                         &ctx.session_id,
-                        "Submit your review verdict now with submit_review_result. If you need to fail the review, include the concrete findings in critiqueMarkdown. Do not continue with only prose.".to_string(),
+                        "Submit your review verdict now with submit_review_result. Put a concise structured Markdown review in critiqueMarkdown, including concrete findings when failing. Do not continue with only prose.".to_string(),
                         PromptProvenance::System {
                             label: Some("review_submit_reminder".to_string()),
                         },

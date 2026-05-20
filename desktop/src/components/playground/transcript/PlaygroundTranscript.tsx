@@ -6,6 +6,7 @@ import { renderPlaygroundPlanTranscript } from "@/components/playground/transcri
 import { renderPlaygroundReviewTranscript } from "@/components/playground/transcript/PlaygroundReviewTranscript";
 import { renderPlaygroundStatusTranscript } from "@/components/playground/transcript/PlaygroundStatusTranscript";
 import { renderPlaygroundToolTranscript } from "@/components/playground/transcript/PlaygroundToolTranscript";
+import { PlaygroundLoadingStates } from "@/components/playground/loading/PlaygroundLoadingStates";
 
 interface PlaygroundTranscriptProps {
   stickyBottomInsetPx: number;
@@ -31,6 +32,10 @@ export function PlaygroundTranscript({
   }
 
   const scenario = selection.key;
+  if (scenario === "loading-states") {
+    return <PlaygroundLoadingStates />;
+  }
+
   const planTranscript = renderPlaygroundPlanTranscript(scenario);
   if (planTranscript) {
     return planTranscript;

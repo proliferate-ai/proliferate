@@ -1,4 +1,4 @@
-use anyharness_contract::v1;
+use anyharness_contract::v1::{self, AgentAuthExternalScope};
 
 use crate::origin::OriginContext;
 use crate::sessions::prompt::PromptPayload;
@@ -38,6 +38,8 @@ pub struct SessionRecord {
     pub workspace_id: String,
     pub agent_kind: String,
     pub native_session_id: Option<String>,
+    pub agent_auth_scope: Option<AgentAuthExternalScope>,
+    pub required_agent_auth_revision: Option<i64>,
     pub requested_model_id: Option<String>,
     pub current_model_id: Option<String>,
     pub requested_mode_id: Option<String>,

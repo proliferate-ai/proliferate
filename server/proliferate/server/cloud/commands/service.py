@@ -16,6 +16,7 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db.models.auth import User
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
+from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.domain.rules import (
@@ -143,6 +144,12 @@ async def enqueue_command(
         )
     kind = validate_active_command_kind(body.kind)
     source = validate_command_source(body.source)
+    if kind == CloudCommandKind.refresh_agent_auth_config.value:
+        raise CloudApiError(
+            "cloud_command_internal_only",
+            "Agent auth refresh commands are created by sandbox profile changes.",
+            status_code=400,
+        )
     validate_command_shape(
         kind=kind,
         workspace_id=body.workspace_id or _direct_start_session_workspace_id(body.payload),
@@ -150,6 +157,12 @@ async def enqueue_command(
         preconditions=body.preconditions,
     )
     validate_command_payload(kind=kind, payload=body.payload)
+    await _validate_agent_auth_preflight(
+        db,
+        user=user,
+        target=target,
+        payload=body.payload,
+    )
     resolved_workspace_id, payload, cloud_workspace_id = await _resolve_command_workspace(
         db,
         user=user,
@@ -211,6 +224,81 @@ async def enqueue_command(
         if duplicate is not None:
             return duplicate
         raise
+
+
+async def _validate_agent_auth_preflight(
+    db: AsyncSession,
+    *,
+    user: User,
+    target: targets_store.CloudTargetSnapshot,
+    payload: dict[str, object],
+) -> None:
+    sandbox_profile_id = payload.get("sandboxProfileId")
+    required_revision = payload.get("requiredAgentAuthRevision")
+    if sandbox_profile_id is None and required_revision is None:
+        return
+    try:
+        profile_id = UUID(str(sandbox_profile_id))
+    except (TypeError, ValueError) as exc:
+        raise CloudApiError(
+            "cloud_command_agent_auth_profile_invalid",
+            "Agent auth preflight sandboxProfileId is invalid.",
+            status_code=400,
+        ) from exc
+    if not isinstance(required_revision, int) or isinstance(required_revision, bool):
+        raise CloudApiError(
+            "cloud_command_agent_auth_revision_required",
+            "Agent auth preflight requiredAgentAuthRevision is required.",
+            status_code=400,
+        )
+    profile = await agent_auth_store.get_sandbox_profile(db, profile_id)
+    if profile is None:
+        raise CloudApiError(
+            "cloud_command_agent_auth_profile_not_found",
+            "Agent auth sandbox profile not found.",
+            status_code=404,
+        )
+    if profile.managed_target_id != target.id:
+        raise CloudApiError(
+            "cloud_command_agent_auth_target_mismatch",
+            "Agent auth sandbox profile is not attached to this target.",
+            status_code=409,
+        )
+    if profile.owner_scope == "personal":
+        if profile.owner_user_id != user.id:
+            raise CloudApiError(
+                "cloud_command_agent_auth_profile_not_found",
+                "Agent auth sandbox profile not found.",
+                status_code=404,
+            )
+    elif profile.organization_id != target.organization_id or profile.organization_id is None:
+        raise CloudApiError(
+            "cloud_command_agent_auth_target_mismatch",
+            "Agent auth sandbox profile does not match this target organization.",
+            status_code=409,
+        )
+    if required_revision != profile.agent_auth_revision:
+        raise CloudApiError(
+            "cloud_command_agent_auth_revision_stale",
+            "Agent auth preflight revision is stale.",
+            status_code=409,
+        )
+    state = await agent_auth_store.get_target_state(
+        db,
+        sandbox_profile_id=profile.id,
+        target_id=target.id,
+    )
+    if (
+        state is None
+        or state.status != "applied"
+        or state.applied_revision is None
+        or state.applied_revision < required_revision
+    ):
+        raise CloudApiError(
+            "cloud_command_agent_auth_not_ready",
+            "Agent auth config has not been applied to this target.",
+            status_code=409,
+        )
 
 
 async def get_command_status(

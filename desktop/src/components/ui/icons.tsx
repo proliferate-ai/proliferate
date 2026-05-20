@@ -892,12 +892,7 @@ export function ExpandAll({ className, ...props }: IconProps) {
 
 export { Spinner } from "@proliferate/ui/primitives/Spinner";
 
-/**
- * Animated braille-sweep badge — the diagonal-fill loading vocabulary used
- * across the app (transcript indicator, chat tab badges, sidebar workspace
- * rows). The frames are CSS-driven so loaders do not force React commits while
- * they are visible. Pass `className` for size and color.
- */
+/** CSS-driven braille sweep retained for auth-only brand transitions. */
 export function BrailleSweepBadge({ className }: { className?: string }) {
   return (
     <span

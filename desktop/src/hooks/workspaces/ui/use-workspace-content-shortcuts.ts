@@ -13,9 +13,10 @@ type WorkspaceContentShortcutActions = Pick<
 
 export function useWorkspaceContentShortcuts(
   actions: WorkspaceContentShortcutActions,
+  options: { enabled?: boolean } = {},
 ): void {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const enabled = selectedWorkspaceId !== null;
+  const enabled = (options.enabled ?? true) && selectedWorkspaceId !== null;
   const {
     activateRelativeTab,
     activateTabByShortcutIndex,

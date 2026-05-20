@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { BrailleSweepBadge, CollapseAll, ExpandAll, Plus } from "@/components/ui/icons";
+import { SkeletonBlock } from "@/components/feedback/Skeleton";
+import { CollapseAll, ExpandAll, Plus } from "@/components/ui/icons";
 import { SidebarShowToggleRow } from "@/components/workspace/shell/sidebar/SidebarShowToggleRow";
 import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-status";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
@@ -92,9 +93,10 @@ export function CoworkThreadsSection() {
       {!threadsCollapsed && (
         <div className="flex flex-col gap-px">
           {statusLoading || threadsLoading ? (
-            <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
-              <BrailleSweepBadge className="text-base text-sidebar-foreground" />
-              <p className="text-xs text-sidebar-muted-foreground">Loading threads</p>
+            <div className="flex flex-col gap-1 px-2 py-2" aria-label="Loading threads" role="status">
+              <SkeletonBlock className="h-7 w-full bg-sidebar-accent" />
+              <SkeletonBlock className="h-7 w-[82%] bg-sidebar-accent/80" />
+              <p className="sr-only">Loading threads</p>
             </div>
           ) : threads.length === 0 ? (
             <div className="px-2 py-2 text-xs text-sidebar-muted-foreground">

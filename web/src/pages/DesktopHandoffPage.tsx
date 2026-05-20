@@ -1,16 +1,18 @@
-import { AuthHandoffScreen } from "../components/auth/screen/AuthHandoffScreen";
-import { routes } from "../config/routes";
+import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen";
 
 export function DesktopHandoffPage() {
+  const desktopHref = "proliferate://";
+
   return (
-    <AuthHandoffScreen
-      title="Open Proliferate Desktop"
-      description="Continue in Desktop to attach this cloud session to your local workspace."
-      stateLabel="Desktop handoff"
-      primaryActionLabel="Open desktop"
-      primaryActionHref="proliferate://"
-      secondaryActionLabel="Go to dashboard"
-      secondaryActionHref={routes.home}
+    <RedirectCallbackScreen
+      title="Desktop handoff done"
+      description="Redirecting to desktop app..."
+      statusLabel="Desktop handoff"
+      variant="handoff"
+      primaryAction={{
+        label: "Click here if not redirected",
+        onClick: () => window.location.assign(desktopHref),
+      }}
     />
   );
 }

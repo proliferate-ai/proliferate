@@ -4,6 +4,7 @@ Importing this package registers all cloud ORM tables with SQLAlchemy metadata.
 Callers should import concrete models from the owning module in this package.
 """
 
+from . import agent_auth as agent_auth  # noqa: F401
 from . import commands as commands  # noqa: F401
 from . import credentials as credentials  # noqa: F401
 from . import mcp as mcp  # noqa: F401

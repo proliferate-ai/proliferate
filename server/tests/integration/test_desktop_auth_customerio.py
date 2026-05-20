@@ -141,7 +141,8 @@ class TestDesktopGitHubCustomerIoSync:
         )
 
         assert callback.status_code == 200
-        assert "Opening Proliferate..." in callback.text
+        assert "GitHub sign-in done" in callback.text
+        assert "Redirecting to desktop app..." in callback.text
         schedule_mock.assert_called_once()
         scheduled_user = schedule_mock.call_args.args[0]
         assert scheduled_user.email == "desktop-github@example.com"

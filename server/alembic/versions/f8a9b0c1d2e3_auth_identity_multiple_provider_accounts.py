@@ -27,18 +27,62 @@ depends_on: str | Sequence[str] | None = None
 LEGACY_GITHUB_OAUTH_SCOPES = ["repo", "user", "user:email"]
 
 
+def _has_table(table_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return table_name in inspector.get_table_names()
+
+
+def _has_constraint(table_name: str, constraint_name: str) -> bool:
+    if not _has_table(table_name):
+        return False
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return constraint_name in {
+        constraint["name"] for constraint in inspector.get_unique_constraints(table_name)
+    }
+
+
+def _has_index(table_name: str, index_name: str) -> bool:
+    if not _has_table(table_name):
+        return False
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return index_name in {index["name"] for index in inspector.get_indexes(table_name)}
+
+
+def _drop_constraint_once(constraint_name: str, table_name: str, *, type_: str) -> None:
+    if _has_constraint(table_name, constraint_name):
+        op.drop_constraint(constraint_name, table_name, type_=type_)
+
+
+def _create_index_once(
+    index_name: str,
+    table_name: str,
+    columns: list[str],
+    *,
+    unique: bool = False,
+) -> None:
+    if not _has_index(table_name, index_name):
+        op.create_index(index_name, table_name, columns, unique=unique)
+
+
+def _drop_index_once(index_name: str, table_name: str) -> None:
+    if _has_index(table_name, index_name):
+        op.drop_index(index_name, table_name=table_name)
+
+
 def upgrade() -> None:
     """Upgrade schema."""
-    op.drop_constraint(
+    _drop_constraint_once(
         "uq_auth_identity_user_provider",
         "auth_identity",
         type_="unique",
     )
-    op.create_index(
+    _create_index_once(
         "ix_auth_identity_user_provider",
         "auth_identity",
         ["user_id", "provider"],
-        unique=False,
     )
     _backfill_additional_oauth_accounts()
 
@@ -147,7 +191,7 @@ def _backfill_additional_oauth_accounts() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_index("ix_auth_identity_user_provider", table_name="auth_identity")
+    _drop_index_once("ix_auth_identity_user_provider", "auth_identity")
     op.create_unique_constraint(
         "uq_auth_identity_user_provider",
         "auth_identity",

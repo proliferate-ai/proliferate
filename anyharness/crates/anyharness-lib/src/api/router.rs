@@ -11,9 +11,9 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agents, agents_model_registry, cowork, files, git, health, hosting, mobility, plans, processes,
-    product_mcp, replay, repo_roots, reviews, sessions, subagents, terminals, workspaces,
-    worktrees,
+    agent_auth_config, agents, agents_model_registry, cowork, files, git, health, hosting,
+    mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions, subagents,
+    terminals, workspaces, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -45,6 +45,14 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/agents/{kind}/login/start",
             post(agents::start_agent_login),
+        )
+        .route(
+            "/agents/auth-config",
+            put(agent_auth_config::apply_agent_auth_config),
+        )
+        .route(
+            "/agents/auth-config/status",
+            get(agent_auth_config::get_agent_auth_config_status),
         )
         // Workspaces
         .route(

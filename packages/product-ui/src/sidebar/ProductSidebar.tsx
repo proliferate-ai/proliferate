@@ -229,7 +229,7 @@ export function ProductSidebarFrame({
   className?: string;
 }) {
   return (
-    <div className={`flex h-full flex-col gap-2 bg-sidebar-background pb-2 text-sidebar-foreground select-none ${className}`}>
+    <div className={`flex h-full flex-col gap-2 bg-sidebar pb-2 text-sidebar-foreground select-none ${className}`}>
       {children}
       {footer}
     </div>

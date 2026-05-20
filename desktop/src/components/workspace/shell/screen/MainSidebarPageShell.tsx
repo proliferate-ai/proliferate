@@ -26,6 +26,8 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   const chromeClasses = resolveStandardWorkspaceChromeClasses({
     transparent: transparentChromeEnabled,
     sidebarOpen,
+    showHeaderDivider: false,
+    showContentTopBorder: false,
   });
   const {
     phase: updaterPhase,
@@ -48,7 +50,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
     >
       <div
         id="main-sidebar"
-        className="flex shrink-0 flex-col overflow-hidden bg-sidebar-background transition-[width] duration-150 ease-in-out"
+        className="flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out"
         style={{ width: sidebarOpen ? sidebarWidth : 0 }}
       >
         <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
@@ -110,7 +112,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
           )}
         </div>
 
-        <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
+        <div className="flex min-h-0 flex-1 overflow-hidden bg-sidebar-background">
           {children}
         </div>
       </div>

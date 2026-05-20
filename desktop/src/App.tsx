@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect } from "react"
 import { Navigate, Route, useLocation } from "react-router-dom"
+import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { AuthRequiredGate } from "@/components/auth/AuthRequiredGate"
 import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
@@ -8,7 +9,6 @@ import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { MacWindowControlsSafeArea } from "@/components/ui/MacWindowControlsSafeArea"
 import { applyAppearancePreference, initializeTheme } from "@/config/theme"
-import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes"
 import { useExportRunningAgentCount } from "@/hooks/app/lifecycle/use-export-running-agent-count"
 import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions"
@@ -40,12 +40,8 @@ import { AppErrorBoundary } from "@/components/ui/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
 import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
 import { logRendererEvent } from "@/lib/access/tauri/diagnostics"
-import { AutomationDetailPage } from "@/pages/AutomationDetailPage"
-import { AutomationsPage } from "@/pages/AutomationsPage"
+import { AuthenticatedAppHost } from "@/pages/AuthenticatedAppHost"
 import { LoginPage } from "@/pages/LoginPage"
-import { MainPage } from "@/pages/MainPage"
-import { PluginsPage } from "@/pages/PluginsPage"
-import { SettingsPage } from "@/pages/SettingsPage"
 import { useAuthStore } from "@/stores/auth/auth-store"
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store"
 import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
@@ -120,22 +116,16 @@ function StripeReturnHandoff({ deepLinkUrl }: { deepLinkUrl: string }) {
   }, [deepLinkUrl])
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-8 text-foreground">
-      <main className="w-full max-w-sm space-y-4">
-        <div className="space-y-2">
-          <p className="text-base font-medium">Opening Proliferate...</p>
-          <p className="text-sm text-muted-foreground">
-            Stripe is done. Return to the desktop app to continue in Cloud settings.
-          </p>
-        </div>
-        <a
-          className="inline-flex w-full items-center justify-center rounded-md bg-foreground px-3 py-2 text-sm font-medium text-background"
-          href={deepLinkUrl}
-        >
-          Open Proliferate
-        </a>
-      </main>
-    </div>
+    <RedirectCallbackScreen
+      title="Billing done"
+      description="Redirecting to desktop app..."
+      statusLabel="Billing redirect"
+      variant="handoff"
+      primaryAction={{
+        label: "Click here if not redirected",
+        onClick: () => window.location.assign(deepLinkUrl),
+      }}
+    />
   )
 }
 
@@ -302,15 +292,7 @@ function AppRuntime() {
               <Route element={<AuthRequiredGate />}>
                 <Route path="/setup" element={<Navigate to="/" replace />} />
                 <Route element={<UserPreferencesGate />}>
-                  <Route path={APP_ROUTES.home} element={<MainPage />} />
-                  <Route
-                    path={LEGACY_APP_ROUTES.powers}
-                    element={<Navigate to={APP_ROUTES.plugins} replace />}
-                  />
-                  <Route path={APP_ROUTES.plugins} element={<PluginsPage />} />
-                  <Route path={APP_ROUTES.automations} element={<AutomationsPage />} />
-                  <Route path="/automations/:automationId" element={<AutomationDetailPage />} />
-                  <Route path={APP_ROUTES.settings} element={<SettingsPage />} />
+                  <Route path="*" element={<AuthenticatedAppHost />} />
                 </Route>
               </Route>
             </Route>

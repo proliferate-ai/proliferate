@@ -11,6 +11,7 @@ import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposer
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { WorkspaceMobilityFooterRow } from "@/components/workspace/chat/input/WorkspaceMobilityFooterRow";
 import { ChatLaunchIntentPane } from "@/components/workspace/chat/surface/ChatLaunchIntentPane";
+import { ChatLoadingHero } from "@/components/workspace/chat/surface/ChatLoadingHero";
 import { ChatPreMessageCanvas } from "@/components/workspace/chat/surface/ChatPreMessageCanvas";
 import { ChatReadyHero } from "@/components/workspace/chat/surface/ChatReadyHero";
 import { NoWorkspaceState } from "@/components/workspace/chat/surface/NoWorkspaceState";
@@ -61,7 +62,7 @@ function ChatContent({
     case "session-loading":
       return (
         <ChatPreMessageCanvas bottomInsetPx={dockSafeAreaPx}>
-          <ChatReadyHero />
+          <ChatLoadingHero />
         </ChatPreMessageCanvas>
       );
     case "session-hydrating":

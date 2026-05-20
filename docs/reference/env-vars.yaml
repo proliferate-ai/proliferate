@@ -328,6 +328,76 @@
   tags: [local-dev]
 
 # ═══════════════════════════════════════════════════════════════════════
+# Server: Agent LLM Gateway
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: AGENT_GATEWAY_ENABLED
+  secret: false
+  default: "false"
+  description: Enables Proliferate's agent LLM gateway routes and LiteLLM provisioning paths
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_LITELLM_BASE_URL
+  secret: false
+  default: "http://127.0.0.1:4000"
+  description: Private LiteLLM proxy base URL used by the server and gateway
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_LITELLM_MASTER_KEY
+  secret: true
+  default: ""
+  description: LiteLLM admin key used only by the control plane to provision teams, keys, and model deployments
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_PUBLIC_BASE_URL
+  secret: false
+  default: ""
+  description: Public Proliferate gateway base URL written into sandbox agent auth config
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_DEFAULT_MANAGED_BUDGET_USD
+  secret: false
+  default: "0"
+  description: Included managed-credit budget provisioned to LiteLLM for an organization in V1; zero disables managed credits
+  tags: [local-dev, production]
+
+- name: AGENT_GATEWAY_MAX_REQUEST_BYTES
+  secret: false
+  default: "4194304"
+  description: Maximum protocol request body size accepted by the agent gateway
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS
+  secret: false
+  default: "120.0"
+  description: Timeout for forwarding gateway requests to private LiteLLM
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_OPENCODE_ENABLED
+  secret: false
+  default: "false"
+  description: Enables the experimental OpenCode gateway route and model surface
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_RECONCILER_ENABLED
+  secret: false
+  default: "false"
+  description: Starts the background LiteLLM mirror reconciler when the agent gateway is enabled
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_RECONCILER_INTERVAL_SECONDS
+  secret: false
+  default: "300.0"
+  description: Delay between background LiteLLM mirror reconciliation passes
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_RECONCILER_BATCH_SIZE
+  secret: false
+  default: "50"
+  description: Maximum unsynced, drifted, or failed policy and budget rows checked by one LiteLLM reconciliation pass
+  tags: [local-dev, self-hosted, production]
+
+# ═══════════════════════════════════════════════════════════════════════
 # Server: Cloud MCP
 # ═══════════════════════════════════════════════════════════════════════
 

@@ -15,6 +15,7 @@ use super::model::SessionRecord;
 use super::service::SessionService;
 use crate::acp::manager::AcpManager;
 use crate::acp::permission_broker::PermissionDecision;
+use crate::domains::agents::auth_config::AgentAuthConfigService;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plugins::registry::PluginBundleRegistry;
 use crate::sessions::extensions::SessionExtension;
@@ -47,6 +48,7 @@ pub struct SessionRuntime {
     plugin_bundle_registry: PluginBundleRegistry,
     access_gate: Arc<WorkspaceAccessGate>,
     plan_service: Arc<PlanService>,
+    agent_auth_config_service: Arc<AgentAuthConfigService>,
 }
 
 #[derive(Debug)]
@@ -242,6 +244,7 @@ impl SessionRuntime {
         plugin_bundle_registry: PluginBundleRegistry,
         access_gate: Arc<WorkspaceAccessGate>,
         plan_service: Arc<PlanService>,
+        agent_auth_config_service: Arc<AgentAuthConfigService>,
     ) -> Self {
         Self {
             session_service,
@@ -255,6 +258,7 @@ impl SessionRuntime {
             plugin_bundle_registry,
             access_gate,
             plan_service,
+            agent_auth_config_service,
         }
     }
 }

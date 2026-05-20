@@ -12,7 +12,7 @@ export function ClosedChatTabsMenu({
   onDeleteSession,
 }: {
   rows: HeaderChatMenuEntry[];
-  renderIcon: (row: Pick<HeaderChatMenuEntry, "agentKind" | "viewState">) => ReactNode;
+  renderIcon: (row: Pick<HeaderChatMenuEntry, "agentKind" | "viewState" | "isResolvingSession">) => ReactNode;
   onRestoreSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
 }) {

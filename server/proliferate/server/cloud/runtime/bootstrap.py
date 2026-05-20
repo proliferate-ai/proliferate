@@ -237,10 +237,7 @@ async def _check_component_binary_preinstalled(
         workspace_id=workspace_id,
         label=f"check_{label_prefix}_binary_sha256",
         command=(
-            "bash -lc "
-            + shlex.quote(
-                f"sha256sum {shlex.quote(remote_path)} | cut -d' ' -f1"
-            )
+            "bash -lc " + shlex.quote(f"sha256sum {shlex.quote(remote_path)} | cut -d' ' -f1")
         ),
         runtime_context=runtime_context,
         timeout_seconds=30,

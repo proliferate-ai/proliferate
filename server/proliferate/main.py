@@ -25,6 +25,7 @@ from proliferate.errors import ProliferateError
 from proliferate.integrations.sentry import flush_server_sentry, init_server_sentry
 from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
+from proliferate.server.agent_gateway.api import router as agent_gateway_router
 from proliferate.server.ai_magic.api import router as ai_magic_router
 from proliferate.server.anonymous_telemetry.api import router as anonymous_telemetry_router
 from proliferate.server.anonymous_telemetry.worker import (
@@ -40,6 +41,10 @@ from proliferate.server.billing.reconciler import (
 )
 from proliferate.server.catalogs.api import router as catalogs_router
 from proliferate.server.cloud.api import router as cloud_router
+from proliferate.server.cloud.agent_auth.reconciler import (
+    start_agent_gateway_reconciler,
+    stop_agent_gateway_reconciler,
+)
 from proliferate.server.cloud.runtime.setup_monitor import (
     start_cloud_setup_monitor,
     stop_cloud_setup_monitor,
@@ -128,11 +133,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     }:
         start_billing_reconciler()
     start_cloud_setup_monitor()
+    start_agent_gateway_reconciler()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     try:
         yield
     finally:
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
+        await stop_agent_gateway_reconciler()
         await stop_cloud_setup_monitor()
         await stop_billing_reconciler()
         flush_server_sentry()
@@ -183,6 +190,7 @@ def create_app() -> FastAPI:
     app.include_router(cloud_router, prefix=f"{api_prefix}/v1", tags=["cloud"])
     app.include_router(catalogs_router, prefix=f"{api_prefix}/v1", tags=["catalogs"])
     app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])
+    app.include_router(agent_gateway_router, prefix=api_prefix, tags=["agent_gateway"])
     app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
     app.include_router(billing_router, prefix=f"{api_prefix}/v1", tags=["billing"])
     app.include_router(organizations_router, prefix=f"{api_prefix}/v1", tags=["organizations"])

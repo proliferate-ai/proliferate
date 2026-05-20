@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { AuthHandoffScreen } from "../components/auth/screen/AuthHandoffScreen";
+import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen";
+
+import { ProliferateMark } from "../components/app/navigation/ProliferateMark";
 import { routes } from "../config/routes";
 import { completeWebAuthFlow } from "../lib/access/cloud/auth/web-auth-flow";
 import { useAuthToken } from "../providers/WebCloudProvider";
@@ -36,14 +38,15 @@ export function AuthCallbackPage() {
   }, [navigate, searchParams, setSession]);
 
   return (
-    <AuthHandoffScreen
-      tone={error ? "error" : "default"}
+    <RedirectCallbackScreen
+      tone={error ? "error" : "neutral"}
       title={error ? "Sign in needs attention" : "Finishing sign in"}
       description={
         error ??
         "Your browser session is being created. You will be redirected when it is ready."
       }
-      stateLabel={error ? "Auth error" : "Exchanging auth code"}
+      statusLabel={error ? "Auth error" : "Exchanging auth code"}
+      brandMark={<ProliferateMark size={32} />}
     />
   );
 }

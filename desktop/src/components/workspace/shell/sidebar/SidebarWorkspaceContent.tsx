@@ -9,7 +9,7 @@ import {
 } from "@/lib/domain/workspaces/sidebar/sidebar-model";
 import { visibleSidebarGroupItems } from "@/lib/domain/workspaces/sidebar/sidebar-visible-items";
 import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import { BrailleSweepBadge } from "@/components/ui/icons";
+import { SkeletonBlock } from "@/components/feedback/Skeleton";
 import { RepoGroup } from "./RepoGroup";
 import { SidebarShowToggleRow } from "./SidebarShowToggleRow";
 import { WorkspaceItem } from "./WorkspaceItem";
@@ -51,9 +51,11 @@ interface SidebarWorkspaceContentProps {
 
 function SidebarLoadingState() {
   return (
-    <div className="flex flex-col items-center gap-2 px-3 py-6 text-center">
-      <BrailleSweepBadge className="text-base text-sidebar-muted-foreground" />
-      <p className="text-xs text-sidebar-muted-foreground">Loading workspaces</p>
+    <div className="flex flex-col gap-1 px-3 py-3" aria-label="Loading workspaces" role="status">
+      <SkeletonBlock className="h-7 w-full bg-sidebar-accent" />
+      <SkeletonBlock className="h-7 w-[88%] bg-sidebar-accent/80" />
+      <SkeletonBlock className="h-7 w-[72%] bg-sidebar-accent/70" />
+      <p className="sr-only">Loading workspaces</p>
     </div>
   );
 }

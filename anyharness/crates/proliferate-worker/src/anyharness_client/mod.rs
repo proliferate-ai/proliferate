@@ -1,3 +1,4 @@
+pub mod agent_auth;
 pub mod backfill;
 pub mod events;
 pub mod health;

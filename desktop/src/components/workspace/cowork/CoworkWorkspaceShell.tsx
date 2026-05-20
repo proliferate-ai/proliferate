@@ -25,12 +25,14 @@ import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 interface CoworkWorkspaceShellProps {
   workspaceId: string | null;
   workspacePath: string | null;
+  visible?: boolean;
   fallbackTitle?: string | null;
 }
 
 export function CoworkWorkspaceShell({
   workspaceId,
   workspacePath,
+  visible = true,
   fallbackTitle,
 }: CoworkWorkspaceShellProps) {
   // Cowork keeps its artifact pane width session-local until the shell chrome
@@ -108,10 +110,10 @@ export function CoworkWorkspaceShell({
   }, [rightPanelOpen, setArtifactPanelOpen, workspaceId]);
 
   useShortcutHandler("workspace.toggle-left-sidebar", toggleSidebar, {
-    enabled: workspaceId !== null,
+    enabled: visible && workspaceId !== null,
   });
   useShortcutHandler("workspace.toggle-right-panel", toggleRightPanel, {
-    enabled: workspaceId !== null,
+    enabled: visible && workspaceId !== null,
   });
 
   return (
@@ -194,7 +196,7 @@ export function CoworkWorkspaceShell({
             />
           </div>
 
-          <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
+          <div className="flex min-h-0 flex-1 overflow-hidden bg-sidebar-background">
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <div
                 aria-hidden="true"

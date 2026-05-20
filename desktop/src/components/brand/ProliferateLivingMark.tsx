@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import {
   ProliferateIcon,
@@ -16,9 +16,17 @@ const BRAILLE_END_HOLD_MS = 120;
 
 interface ProliferateLivingMarkProps {
   className?: string;
+  complete?: boolean;
+  onResolved?: () => void;
 }
 
-export function ProliferateLivingMark({ className }: ProliferateLivingMarkProps) {
+export function ProliferateLivingMark({
+  className,
+  complete = false,
+  onResolved,
+}: ProliferateLivingMarkProps) {
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const resolvedRef = useRef(false);
   const [phase, setPhase] = useState<"braille" | "icon-enter" | "icon-hold" | "icon-exit">(
     "braille",
   );
@@ -31,7 +39,7 @@ export function ProliferateLivingMark({ className }: ProliferateLivingMarkProps)
   );
 
   useEffect(() => {
-    if (phase !== "braille") {
+    if (prefersReducedMotion || phase !== "braille") {
       return;
     }
 
@@ -47,9 +55,12 @@ export function ProliferateLivingMark({ className }: ProliferateLivingMarkProps)
     }, BRAILLE_SWEEP_FRAME_INTERVAL_MS);
 
     return () => clearInterval(timer);
-  }, [phase]);
+  }, [phase, prefersReducedMotion]);
 
   useEffect(() => {
+    if (prefersReducedMotion) {
+      return;
+    }
     if (phase !== "braille" || brailleIndex < BRAILLE_SWEEP_FRAMES.length - 1) {
       return;
     }
@@ -60,34 +71,66 @@ export function ProliferateLivingMark({ className }: ProliferateLivingMarkProps)
     }, BRAILLE_END_HOLD_MS);
 
     return () => clearTimeout(timer);
-  }, [brailleIndex, phase]);
+  }, [brailleIndex, phase, prefersReducedMotion]);
 
   useEffect(() => {
-    if (phase !== "icon-enter") {
+    if (prefersReducedMotion || phase !== "icon-enter") {
       return;
     }
 
     const timer = setTimeout(() => setPhase("icon-hold"), ICON_ENTER_MS);
     return () => clearTimeout(timer);
-  }, [phase]);
+  }, [phase, prefersReducedMotion]);
 
   useEffect(() => {
-    if (phase !== "icon-hold") {
+    if (prefersReducedMotion || phase !== "icon-hold") {
       return;
+    }
+
+    if (complete) {
+      if (resolvedRef.current) {
+        return;
+      }
+      resolvedRef.current = true;
+      const frame = window.requestAnimationFrame(() => onResolved?.());
+      return () => window.cancelAnimationFrame(frame);
     }
 
     const timer = setTimeout(() => setPhase("icon-exit"), ICON_HOLD_MS);
     return () => clearTimeout(timer);
-  }, [phase]);
+  }, [complete, onResolved, phase, prefersReducedMotion]);
 
   useEffect(() => {
-    if (phase !== "icon-exit") {
+    if (prefersReducedMotion || phase !== "icon-exit") {
+      return;
+    }
+
+    if (complete) {
+      setPhase("icon-hold");
       return;
     }
 
     const timer = setTimeout(() => setPhase("braille"), ICON_EXIT_MS);
     return () => clearTimeout(timer);
-  }, [phase]);
+  }, [complete, phase, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (!prefersReducedMotion || !complete || resolvedRef.current) {
+      return;
+    }
+
+    resolvedRef.current = true;
+    const frame = window.requestAnimationFrame(() => onResolved?.());
+    return () => window.cancelAnimationFrame(frame);
+  }, [complete, onResolved, prefersReducedMotion]);
+
+  if (prefersReducedMotion) {
+    return (
+      <div className="flex size-12 items-center justify-center">
+        <ProliferateIcon className={iconClassName} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex size-12 items-center justify-center">
@@ -108,6 +151,33 @@ export function ProliferateLivingMark({ className }: ProliferateLivingMarkProps)
       )}
     </div>
   );
+}
+
+function usePrefersReducedMotion(): boolean {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return false;
+    }
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const handleChange = () => setPrefersReducedMotion(mediaQuery.matches);
+    handleChange();
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    }
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
+
+  return prefersReducedMotion;
 }
 
 function LivingBrailleMark({

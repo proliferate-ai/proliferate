@@ -1,35 +1,19 @@
-import { useEffect, useState } from "react";
+import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
-import { BrailleSweepBadge } from "@/components/ui/icons";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 
 interface StreamingIndicatorProps {
   startedAt?: string | null;
 }
 
-export function StreamingIndicator({ startedAt }: StreamingIndicatorProps) {
-  useDebugRenderCount("loading-braille");
-  const [elapsed, setElapsed] = useState(() => computeElapsed(startedAt));
-
-  useEffect(() => {
-    setElapsed(computeElapsed(startedAt));
-    const id = setInterval(() => {
-      setElapsed(computeElapsed(startedAt));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [startedAt]);
+export function StreamingIndicator({ startedAt: _startedAt }: StreamingIndicatorProps) {
+  useDebugRenderCount("thinking-text");
 
   return (
-    <DebugProfiler id="loading-braille">
-      <div className="flex items-end gap-1 py-1 text-muted-foreground">
-      <BrailleSweepBadge className="scale-[.8] w-[1.25em] text-[1.125rem] text-foreground" />
-      <span className="text-[0.5rem] leading-none tabular-nums">{elapsed}s</span>
+    <DebugProfiler id="thinking-text">
+      <div className="flex min-h-5 items-end py-1 text-muted-foreground">
+        <ThinkingText />
       </div>
     </DebugProfiler>
   );
-}
-
-function computeElapsed(startedAt?: string | null): number {
-  if (!startedAt) return 0;
-  return Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
 }

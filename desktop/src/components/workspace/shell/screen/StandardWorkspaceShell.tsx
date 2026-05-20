@@ -44,13 +44,13 @@ import { resolvePendingWorkspacePath } from "@/lib/domain/workspaces/creation/pe
 
 const CHAT_SHELL_RENDER_SURFACE: WorkspaceRenderSurface = { kind: "chat-shell" };
 
-export function StandardWorkspaceShell() {
+export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }) {
   useDebugRenderCount("workspace-shell");
   // Workspace activity is a shell-level read receipt: if the selected workspace
   // is visible, activity in any shell tab is considered consumed. Session error
   // acknowledgement intentionally stays in ChatView because errors are
   // transcript-scoped and need the chat surface for context.
-  useWorkspaceActivityAcknowledgement();
+  useWorkspaceActivityAcknowledgement({ enabled: visible });
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const pendingWorkspacePath = resolvePendingWorkspacePath(pendingWorkspaceEntry);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
@@ -90,8 +90,10 @@ export function StandardWorkspaceShell() {
     () => resolveStandardWorkspaceChromeClasses({
       transparent: transparentChromeEnabled,
       sidebarOpen,
+      showHeaderDivider: hasWorkspaceShell && !hasLaunchIntentOnlyShell,
+      showContentTopBorder: hasWorkspaceShell && !hasLaunchIntentOnlyShell,
     }),
-    [sidebarOpen, transparentChromeEnabled],
+    [hasLaunchIntentOnlyShell, hasWorkspaceShell, sidebarOpen, transparentChromeEnabled],
   );
   const activePublishWorkspaceId = selectedWorkspaceId;
   const publishSourceRootPath = publishDialog.open
@@ -158,6 +160,7 @@ export function StandardWorkspaceShell() {
   );
 
   useMainScreenShortcuts({
+    enabled: visible,
     canOpenCommandPalette: hasWorkspaceShell,
     onOpenCommandPalette: actions.handleCommandPaletteOpen,
     onOpenTerminal: actions.openTerminalPanel,
@@ -242,7 +245,7 @@ export function StandardWorkspaceShell() {
               )}
 
               <div
-                className="flex min-w-0 flex-1 overflow-hidden bg-background"
+                className="flex min-w-0 flex-1 overflow-hidden bg-sidebar"
               >
                 <div
                   className={`flex min-w-0 flex-1 flex-col overflow-hidden ${chromeClasses.contentShell}`}
@@ -288,7 +291,7 @@ export function StandardWorkspaceShell() {
                     </DebugProfiler>
                   </div>
 
-                  <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
+                  <div className="flex min-h-0 flex-1 overflow-hidden bg-sidebar-background">
                     {hasLaunchIntentOnlyShell ? (
                       <DebugProfiler id="workspace-content-frame">
                         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -299,7 +302,7 @@ export function StandardWorkspaceShell() {
                       <>
                         <DebugProfiler id="workspace-content-frame">
                           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                            <WorkspaceContentView />
+                            <WorkspaceContentView visible={visible} />
                           </div>
                         </DebugProfiler>
 

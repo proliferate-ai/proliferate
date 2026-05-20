@@ -60,6 +60,7 @@ pub const SUPPORTED_COMMAND_KINDS: &[&str] = &[
     "ensure_repo_checkout",
     "materialize_workspace",
     "materialize_environment",
+    "refresh_agent_auth_config",
     "send_prompt",
     "resolve_interaction",
     "update_session_config",

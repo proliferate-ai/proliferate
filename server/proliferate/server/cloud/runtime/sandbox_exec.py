@@ -92,7 +92,7 @@ def _redacted_launcher_command(path: str) -> str:
         "awk 'BEGIN { IGNORECASE = 1 } "
         "/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*"
         "(TOKEN|KEY|SECRET|PASSWORD|AUTH|CREDENTIAL|COOKIE)[A-Za-z0-9_]*=/ "
-        "{ sub(/=.*/, \"=<redacted>\"); print; next } "
+        '{ sub(/=.*/, "=<redacted>"); print; next } '
         "{ print }' "
         f"{path} || true"
     )
@@ -104,7 +104,7 @@ def _redacted_supervisor_config_command(path: str) -> str:
         "/^\\[anyharness_env\\]/ { in_env = 1; print; next } "
         "/^\\[/ { in_env = 0 } "
         "in_env && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ "
-        "{ sub(/=.*/, \"= \\\"<redacted>\\\"\"); print; next } "
+        '{ sub(/=.*/, "= \\"<redacted>\\""); print; next } '
         "{ print }' "
         f"{path} || true"
     )

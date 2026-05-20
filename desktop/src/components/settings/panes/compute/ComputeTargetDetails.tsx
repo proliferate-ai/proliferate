@@ -15,6 +15,7 @@ import type {
   ComputeTargetDetail,
   ComputeTargetSummary,
 } from "@/lib/domain/compute/target-types";
+import { ComputeTargetAgentAuthCard } from "./ComputeTargetAgentAuthCard";
 import { ComputeTargetReadiness } from "./ComputeTargetReadiness";
 
 interface ComputeTargetDetailsProps {
@@ -97,6 +98,8 @@ export function ComputeTargetDetails({
         </dl>
 
         <ComputeTargetReadiness inventory={target.inventory} />
+
+        <ComputeTargetAgentAuthCard target={target} />
 
         {target.kind === "ssh" && (
           <div className="space-y-3 border-t border-border/40 pt-3">

@@ -216,7 +216,7 @@ def _patch_repo_branches_lookup(
 ) -> None:
     monkeypatch.setattr(repos_service, "get_github_repo_branches", resolver)
     monkeypatch.setattr(cloud_service, "get_github_repo_branches", resolver)
-    monkeypatch.setattr(repo_config_service, "get_repo_branches_for_user", resolver)
+    monkeypatch.setattr(repo_config_service, "get_repo_branches_for_credentials", resolver)
 
 
 class TestCloudWorktreeRetentionPolicy:
@@ -995,9 +995,8 @@ class TestCloudMcpConnections:
         )
 
         assert response.status_code == 200
-        assert "Authorization complete" in response.text
-        assert "finish using this plugin" in response.text
-        assert "Plugins list" in response.text
+        assert "Authorization done" in response.text
+        assert "Redirecting to desktop app..." in response.text
         assert "Open Proliferate" in response.text
         assert (
             "proliferate://plugins?source=mcp_oauth_callback&amp;status=completed" in response.text

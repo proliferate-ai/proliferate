@@ -85,7 +85,8 @@ export type ScenarioKey =
   | "mobility-out-of-sync-branch"
   | "mobility-cloud-active"
   | "mobility-in-flight"
-  | "mobility-failed";
+  | "mobility-failed"
+  | "loading-states";
 
 interface Scenario {
   label: string;
@@ -179,6 +180,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "mobility-cloud-active": { label: "Mobility (cloud footer)" },
   "mobility-in-flight": { label: "Mobility (in flight)" },
   "mobility-failed": { label: "Mobility (failed)" },
+  "loading-states": { label: "Loading states" },
 };
 
 export const DEFAULT_SCENARIO: ScenarioKey = "clean";

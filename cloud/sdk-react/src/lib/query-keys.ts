@@ -18,6 +18,33 @@ export function cloudCredentialsKey() {
   return [...cloudRootKey(), "credentials"] as const;
 }
 
+export function agentAuthRootKey() {
+  return [...cloudRootKey(), "agent-auth"] as const;
+}
+
+export function agentAuthCredentialsKey(
+  organizationId: string | null = null,
+  agentKind: string | null = null,
+) {
+  return [...agentAuthRootKey(), "credentials", organizationId, agentKind] as const;
+}
+
+export function sandboxProfileKey(sandboxProfileId: string | null) {
+  return [...agentAuthRootKey(), "sandbox-profile", sandboxProfileId] as const;
+}
+
+export function sandboxAgentAuthSelectionsKey(sandboxProfileId: string | null) {
+  return [...sandboxProfileKey(sandboxProfileId), "selections"] as const;
+}
+
+export function sandboxAgentAuthTargetStatesKey(sandboxProfileId: string | null) {
+  return [...sandboxProfileKey(sandboxProfileId), "target-states"] as const;
+}
+
+export function agentAuthManagedCreditsKey(organizationId: string | null) {
+  return [...agentAuthRootKey(), "managed-credits", organizationId] as const;
+}
+
 export type CloudOwnerScope = "personal" | "organization";
 
 export interface CloudOwnerSelectionKey {

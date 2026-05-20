@@ -738,6 +738,8 @@ fn from_contract_session_record(
         workspace_id: workspace_id.to_string(),
         agent_kind: record.agent_kind,
         native_session_id: record.native_session_id,
+        agent_auth_scope: None,
+        required_agent_auth_revision: None,
         requested_model_id: record.requested_model_id,
         current_model_id: record.current_model_id,
         requested_mode_id: record.requested_mode_id,

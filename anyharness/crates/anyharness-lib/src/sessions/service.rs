@@ -1,7 +1,10 @@
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Instant;
 
 use uuid::Uuid;
+
+use anyharness_contract::v1::AgentAuthExternalScope;
 
 use super::attachment_storage::PromptAttachmentStorage;
 use super::live_config::snapshot_from_record;
@@ -11,6 +14,7 @@ use super::model::{
     SessionRecord,
 };
 use super::store::SessionStore;
+use crate::domains::agents::auth_config::AgentAuthConfigService;
 use crate::domains::agents::catalog::projection::models::bundled_create_mode_ids;
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::model_registry::resolution::{
@@ -31,6 +35,7 @@ pub struct SessionService {
     attachment_storage: PromptAttachmentStorage,
     workspace_store: WorkspaceStore,
     dynamic_model_registry_store: DynamicModelRegistryStore,
+    agent_auth_config_service: Arc<AgentAuthConfigService>,
     runtime_home: std::path::PathBuf,
 }
 
@@ -72,6 +77,7 @@ impl SessionService {
         session_store: SessionStore,
         workspace_store: WorkspaceStore,
         dynamic_model_registry_store: DynamicModelRegistryStore,
+        agent_auth_config_service: Arc<AgentAuthConfigService>,
         runtime_home: std::path::PathBuf,
     ) -> Self {
         Self {
@@ -79,6 +85,7 @@ impl SessionService {
             attachment_storage: PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_store,
             dynamic_model_registry_store,
+            agent_auth_config_service,
             runtime_home,
         }
     }
@@ -94,6 +101,8 @@ impl SessionService {
         mcp_binding_policy: SessionMcpBindingPolicy,
         system_prompt_append: Option<String>,
         subagents_enabled: bool,
+        agent_auth_scope: Option<AgentAuthExternalScope>,
+        required_agent_auth_revision: Option<i64>,
         origin: OriginContext,
     ) -> Result<SessionRecord, CreateSessionError> {
         let started = Instant::now();
@@ -149,8 +158,19 @@ impl SessionService {
 
         let workspace_env = read_materialized_session_env(Path::new(&workspace.path))
             .map_err(CreateSessionError::Internal)?;
+        let agent_auth_overlay = self
+            .agent_auth_config_service
+            .launch_overlay(
+                agent_kind,
+                agent_auth_scope.as_ref(),
+                required_agent_auth_revision,
+            )
+            .map_err(|error| CreateSessionError::Invalid(error.to_string()))?;
+        let mut readiness_env = workspace_env.clone();
+        readiness_env.extend(agent_auth_overlay.support_env);
+        readiness_env.extend(agent_auth_overlay.protected_env);
         let agent_resolution_started = Instant::now();
-        let resolved = resolve_agent_with_env(descriptor, &self.runtime_home, &workspace_env);
+        let resolved = resolve_agent_with_env(descriptor, &self.runtime_home, &readiness_env);
         if resolved.status != ResolvedAgentStatus::Ready {
             let detail = resolved.agent_process.message.clone().or_else(|| {
                 resolved
@@ -214,6 +234,8 @@ impl SessionService {
             workspace_id: workspace_id.to_string(),
             agent_kind: agent_kind.to_string(),
             native_session_id: None,
+            agent_auth_scope,
+            required_agent_auth_revision,
             requested_model_id: resolved_model_id.clone(),
             current_model_id: resolved_model_id,
             requested_mode_id: resolved_mode_id.clone(),

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
+import { SkeletonBlock } from "@/components/feedback/Skeleton";
 import {
-  BrailleSweepBadge,
   CircleAlert,
+  Clock,
   MessageSquare,
   Robot,
   Spinner,
@@ -14,11 +15,15 @@ import type {
 } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 export function renderChatTabIcon(
-  tab: Pick<HeaderChatTabEntry, "agentKind" | "viewState" | "delegatedAgent">
-    | (Pick<HeaderChatMenuEntry, "agentKind" | "viewState"> & { delegatedAgent?: null }),
+  tab: Pick<HeaderChatTabEntry, "agentKind" | "viewState" | "delegatedAgent" | "isResolvingSession">
+    | (Pick<HeaderChatMenuEntry, "agentKind" | "viewState" | "isResolvingSession"> & { delegatedAgent?: null }),
 ): ReactNode {
   if (tab.delegatedAgent) {
     return renderDelegatedAgentIcon(tab.delegatedAgent);
+  }
+
+  if (tab.isResolvingSession) {
+    return <SkeletonBlock className="size-3 rounded-sm" />;
   }
 
   if (tab.viewState === "working") {
@@ -87,9 +92,9 @@ function delegatedAgentStatusDotClassName(
 
 function renderChatTabActivityIcon(colorClassName: string): ReactNode {
   return (
-    <BrailleSweepBadge
-      className={`h-3 text-[10px] [line-height:0.75rem] ${colorClassName}`}
-    />
+    <span className="flex size-4 shrink-0 items-center justify-center">
+      <Clock className={`size-3 shrink-0 ${colorClassName}`} />
+    </span>
   );
 }
 

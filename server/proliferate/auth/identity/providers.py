@@ -97,19 +97,16 @@ async def build_authorization_url(
             extras_params=extras,
         )
     if provider == "apple" and surface == "web":
-        return (
-            f"{APPLE_AUTHORIZE_URL}?"
-            + urlencode(
-                {
-                    "client_id": apple_client_id_for_surface(surface),
-                    "redirect_uri": provider_callback_url,
-                    "response_type": "code id_token",
-                    "response_mode": "form_post",
-                    "scope": "name email",
-                    "state": state,
-                    "nonce": nonce,
-                }
-            )
+        return f"{APPLE_AUTHORIZE_URL}?" + urlencode(
+            {
+                "client_id": apple_client_id_for_surface(surface),
+                "redirect_uri": provider_callback_url,
+                "response_type": "code id_token",
+                "response_mode": "form_post",
+                "scope": "name email",
+                "state": state,
+                "nonce": nonce,
+            }
         )
     return None
 

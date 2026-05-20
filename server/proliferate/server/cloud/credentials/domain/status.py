@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS, CloudAgentKind
+from proliferate.constants.cloud import SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS, CloudAgentKind
 from proliferate.server.cloud.credentials.domain.types import CloudCredentialAuthMode
 
 _DEFAULT_AUTH_MODES: dict[CloudAgentKind, CloudCredentialAuthMode] = {
@@ -30,11 +30,14 @@ def build_credential_statuses(
     by_provider: dict[str, object] = {}
     for record in records:
         provider = getattr(record, "provider", None)
-        if provider in SUPPORTED_CLOUD_AGENTS and getattr(record, "revoked_at", None) is None:
+        if (
+            provider in SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS
+            and getattr(record, "revoked_at", None) is None
+        ):
             by_provider[provider] = record
 
     statuses: list[CredentialStatusRecord] = []
-    for provider in SUPPORTED_CLOUD_AGENTS:
+    for provider in SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS:
         record = by_provider.get(provider)
         raw_auth_mode = (
             getattr(record, "auth_mode", None) if record else None
@@ -57,7 +60,7 @@ def build_credential_statuses(
 
 
 def allowed_agent_kinds() -> list[CloudAgentKind]:
-    return list(SUPPORTED_CLOUD_AGENTS)
+    return list(SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS)
 
 
 def ready_agent_kinds(statuses: Sequence[CredentialStatusRecord]) -> list[CloudAgentKind]:

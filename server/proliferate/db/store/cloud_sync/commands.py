@@ -212,22 +212,39 @@ async def lease_next_command(
     lease_expires_at: datetime,
     now: datetime,
 ) -> CloudCommandSnapshot | None:
+    query = (
+        select(CloudCommand)
+        .where(CloudCommand.target_id == target_id)
+        .where(CloudCommand.kind.in_(supported_kinds))
+        .where(
+            or_(
+                CloudCommand.status == CloudCommandStatus.queued.value,
+                and_(
+                    CloudCommand.status == CloudCommandStatus.leased.value,
+                    CloudCommand.lease_expires_at.is_not(None),
+                    CloudCommand.lease_expires_at <= now,
+                ),
+            )
+        )
+    )
+    if CloudCommandKind.refresh_agent_auth_config.value not in supported_kinds:
+        query = query.where(
+            ~and_(
+                CloudCommand.kind.in_(
+                    (
+                        CloudCommandKind.start_session.value,
+                        CloudCommandKind.send_prompt.value,
+                    )
+                ),
+                or_(
+                    CloudCommand.payload_json.contains('"sandboxProfileId"'),
+                    CloudCommand.payload_json.contains('"requiredAgentAuthRevision"'),
+                ),
+            )
+        )
     row = (
         await db.execute(
-            select(CloudCommand)
-            .where(CloudCommand.target_id == target_id)
-            .where(CloudCommand.kind.in_(supported_kinds))
-            .where(
-                or_(
-                    CloudCommand.status == CloudCommandStatus.queued.value,
-                    and_(
-                        CloudCommand.status == CloudCommandStatus.leased.value,
-                        CloudCommand.lease_expires_at.is_not(None),
-                        CloudCommand.lease_expires_at <= now,
-                    ),
-                )
-            )
-            .order_by(CloudCommand.created_at.asc())
+            query.order_by(CloudCommand.created_at.asc())
             .with_for_update(skip_locked=True)
             .limit(1)
         )
@@ -357,7 +374,7 @@ async def record_command_result(
     row.status = effective_status
     row.error_code = effective_error_code
     row.error_message = effective_error_message
-    row.result_json = result_json
+    row.result_json = _safe_result_json(kind=row.kind, result_json=result_json)
     if materialized_workspace_id is not None:
         row.workspace_id = materialized_workspace_id
     row.updated_at = now
@@ -404,6 +421,28 @@ def _materialized_workspace_id(
     if not isinstance(workspace_id, str) or not workspace_id.strip():
         return None
     return workspace_id.strip()
+
+
+def _safe_result_json(*, kind: str, result_json: str | None) -> str | None:
+    if kind != CloudCommandKind.refresh_agent_auth_config.value:
+        return result_json
+    try:
+        result = json.loads(result_json or "{}")
+    except ValueError:
+        return None
+    if not isinstance(result, dict):
+        return None
+    safe: dict[str, object] = {}
+    if isinstance(result.get("applied"), bool):
+        safe["applied"] = result["applied"]
+    if isinstance(result.get("reason"), str):
+        safe["reason"] = str(result["reason"])[:128]
+    if isinstance(result.get("currentRevision"), int) and not isinstance(
+        result.get("currentRevision"),
+        bool,
+    ):
+        safe["currentRevision"] = result["currentRevision"]
+    return json.dumps(safe, separators=(",", ":"), sort_keys=True) if safe else None
 
 
 def _is_terminal_status(status: str) -> bool:

@@ -221,9 +221,7 @@ async def mark_target_config_queued(
 ) -> CloudTargetConfigSnapshot | None:
     row = (
         await db.execute(
-            select(CloudTargetConfig)
-            .where(CloudTargetConfig.id == config_id)
-            .with_for_update()
+            select(CloudTargetConfig).where(CloudTargetConfig.id == config_id).with_for_update()
         )
     ).scalar_one_or_none()
     if row is None:
@@ -246,9 +244,7 @@ async def update_target_config_payload(
 ) -> CloudTargetConfigSnapshot | None:
     row = (
         await db.execute(
-            select(CloudTargetConfig)
-            .where(CloudTargetConfig.id == config_id)
-            .with_for_update()
+            select(CloudTargetConfig).where(CloudTargetConfig.id == config_id).with_for_update()
         )
     ).scalar_one_or_none()
     if row is None:

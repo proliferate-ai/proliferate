@@ -14,16 +14,24 @@ pub(in crate::live::sessions) struct SpawnedAgentProcess {
 pub(in crate::live::sessions) fn merge_spawn_env(
     workspace_env: &BTreeMap<String, String>,
     session_launch_env: &BTreeMap<String, String>,
+    agent_auth_env: &BTreeMap<String, String>,
     override_env: Option<&HashMap<String, String>>,
+    protected_agent_auth_env: &BTreeMap<String, String>,
 ) -> BTreeMap<String, String> {
     let mut merged = workspace_env.clone();
     for (key, value) in session_launch_env {
+        merged.insert(key.clone(), value.clone());
+    }
+    for (key, value) in agent_auth_env {
         merged.insert(key.clone(), value.clone());
     }
     if let Some(override_env) = override_env {
         for (key, value) in override_env {
             merged.insert(key.clone(), value.clone());
         }
+    }
+    for (key, value) in protected_agent_auth_env {
+        merged.insert(key.clone(), value.clone());
     }
     merged
 }
@@ -33,6 +41,8 @@ pub(in crate::live::sessions) fn spawn_agent_process(
     workspace_path: &Path,
     workspace_env: &BTreeMap<String, String>,
     session_launch_env: &BTreeMap<String, String>,
+    agent_auth_env: &BTreeMap<String, String>,
+    protected_agent_auth_env: &BTreeMap<String, String>,
     session_id: &str,
     workspace_id: &str,
     source_agent_kind: &str,
@@ -58,7 +68,9 @@ pub(in crate::live::sessions) fn spawn_agent_process(
     let spawn_env = merge_spawn_env(
         workspace_env,
         session_launch_env,
+        agent_auth_env,
         spawn_spec.map(|spec| &spec.env),
+        protected_agent_auth_env,
     );
     let latency_fields = latency_trace_fields(latency);
 
@@ -137,7 +149,13 @@ mod tests {
             "/managed/bin/claude".to_string(),
         )]);
 
-        let merged = merge_spawn_env(&workspace_env, &session_launch_env, None);
+        let merged = merge_spawn_env(
+            &workspace_env,
+            &session_launch_env,
+            &BTreeMap::new(),
+            None,
+            &BTreeMap::new(),
+        );
 
         assert_eq!(
             merged.get("CLAUDE_CODE_EXECUTABLE").map(String::as_str),
@@ -155,10 +173,51 @@ mod tests {
             ("FOO".to_string(), "bar".to_string()),
         ]);
 
-        let merged = merge_spawn_env(&workspace_env, &session_launch_env, Some(&override_env));
+        let merged = merge_spawn_env(
+            &workspace_env,
+            &session_launch_env,
+            &BTreeMap::new(),
+            Some(&override_env),
+            &BTreeMap::new(),
+        );
 
         assert_eq!(merged.get("PATH").map(String::as_str), Some("/usr/bin"));
         assert_eq!(merged.get("DEBUG").map(String::as_str), Some("1"));
         assert_eq!(merged.get("FOO").map(String::as_str), Some("bar"));
+    }
+
+    #[test]
+    fn merge_spawn_env_applies_protected_agent_auth_last() {
+        let workspace_env = BTreeMap::from([(
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://workspace.example".to_string(),
+        )]);
+        let session_launch_env = BTreeMap::from([(
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://session.example".to_string(),
+        )]);
+        let agent_auth_env = BTreeMap::from([("SUPPORT_FLAG".to_string(), "1".to_string())]);
+        let override_env = std::collections::HashMap::from([(
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://override.example".to_string(),
+        )]);
+        let protected_agent_auth_env = BTreeMap::from([(
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://gateway.example".to_string(),
+        )]);
+
+        let merged = merge_spawn_env(
+            &workspace_env,
+            &session_launch_env,
+            &agent_auth_env,
+            Some(&override_env),
+            &protected_agent_auth_env,
+        );
+
+        assert_eq!(
+            merged.get("ANTHROPIC_BASE_URL").map(String::as_str),
+            Some("https://gateway.example")
+        );
+        assert_eq!(merged.get("SUPPORT_FLAG").map(String::as_str), Some("1"));
     }
 }

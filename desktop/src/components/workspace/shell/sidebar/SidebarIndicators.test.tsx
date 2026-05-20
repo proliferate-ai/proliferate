@@ -4,7 +4,7 @@ import { act, isValidElement, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 import {
-  BrailleSweepBadge,
+  Clock,
   Spinner,
 } from "@/components/ui/icons";
 import type {
@@ -51,14 +51,14 @@ describe("SidebarStatusGlyph", () => {
   it("keeps user-input blockers visually distinct from progress", () => {
     const glyph = renderGlyph("waiting_input");
 
-    expect(countElementsByType(glyph, BrailleSweepBadge)).toBe(1);
+    expect(countElementsByType(glyph, Clock)).toBe(1);
     expect(countElementsByType(glyph, Spinner)).toBe(0);
   });
 
   it("keeps plan-approval blockers visually distinct from progress", () => {
     const glyph = renderGlyph("waiting_plan");
 
-    expect(countElementsByType(glyph, BrailleSweepBadge)).toBe(1);
+    expect(countElementsByType(glyph, Clock)).toBe(1);
     expect(countElementsByType(glyph, Spinner)).toBe(0);
   });
 

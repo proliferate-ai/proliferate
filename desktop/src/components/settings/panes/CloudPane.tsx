@@ -7,6 +7,7 @@ import { ChevronRight } from "@/components/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { CloudAgentAuthLibrary } from "@/components/settings/panes/cloud/CloudAgentAuthLibrary";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CLOUD_CREDENTIAL_PROVIDER_ORDER } from "@/config/cloud-providers";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
@@ -196,6 +197,8 @@ export function CloudPane({ repositories }: CloudPaneProps) {
       {signInError && !canManageCloudCredentials && (
         <p className="text-sm text-destructive">{signInError}</p>
       )}
+
+      <CloudAgentAuthLibrary />
 
       <CloudPaneSection
         title="Cloud environments"

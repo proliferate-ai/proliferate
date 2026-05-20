@@ -1,9 +1,8 @@
 import type { ToolCallItem } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
-import { FileText } from "@/components/ui/icons";
+import { FileText, Spinner } from "@/components/ui/icons";
 import { ToolActionRow } from "./ToolActionRow";
-import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
 import { deriveCoworkArtifactToolPresentation } from "@/lib/domain/chat/tools/cowork-artifact-tool-presentation";
 
 interface CoworkArtifactToolActionRowProps {
@@ -55,14 +54,9 @@ export function CoworkArtifactToolActionRow({
 }
 
 function ArtifactRunningIcon() {
-  const frame = useBrailleFillsweep();
-
   return (
-    <span
-      className="inline-block w-[1em] shrink-0 font-mono leading-none tracking-[-0.18em] opacity-80"
-      style={{ color: ARTIFACT_SPINNER_COLOR }}
-    >
-      {frame}
+    <span className="inline-flex size-3 items-center justify-center" style={{ color: ARTIFACT_SPINNER_COLOR }}>
+      <Spinner className="size-3 opacity-80" />
     </span>
   );
 }
