@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
 import { isApplePlatform } from "@/lib/domain/shortcuts/matching"
+import { useShortcutRevealStore } from "@/stores/shortcuts/shortcut-reveal-store"
 
 export const SHORTCUT_REVEAL_DELAY_MS = 1000
 export const SHORTCUT_REVEAL_RESET_EVENT = "proliferate:shortcut-reveal-reset"
@@ -20,7 +21,8 @@ function primaryModifierPressed(event: KeyboardEvent, isApple: boolean): boolean
 }
 
 export function useShortcutRevealState(): boolean {
-  const [visible, setVisible] = useState(false)
+  const visible = useShortcutRevealStore((state) => state.visible)
+  const setStoreVisible = useShortcutRevealStore((state) => state.setVisible)
   const timerRef = useRef<number | null>(null)
   const primaryDownRef = useRef(false)
 
@@ -31,7 +33,7 @@ export function useShortcutRevealState(): boolean {
         window.clearTimeout(timerRef.current)
         timerRef.current = null
       }
-      setVisible(false)
+      setStoreVisible(false)
     }
 
     const startRevealTimer = () => {
@@ -42,7 +44,7 @@ export function useShortcutRevealState(): boolean {
       timerRef.current = window.setTimeout(() => {
         timerRef.current = null
         if (primaryDownRef.current) {
-          setVisible(true)
+          setStoreVisible(true)
         }
       }, SHORTCUT_REVEAL_DELAY_MS)
     }
@@ -99,7 +101,7 @@ export function useShortcutRevealState(): boolean {
       window.removeEventListener(SHORTCUT_REVEAL_RESET_EVENT, clearReveal)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
     }
-  }, [])
+  }, [setStoreVisible])
 
   return visible
 }
