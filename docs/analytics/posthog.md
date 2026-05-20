@@ -8,8 +8,8 @@ covers identified hosted-product usage.
 
 PostHog is currently configured for:
 - desktop hosted-product analytics and optional session recording
-- web hosted-product route analytics; web session recording is kept disabled
-  until URL metadata can be scrubbed safely
+- web hosted-product route analytics and optional session recording
+  (env-gated; off by default, page-URL metadata is recorded when enabled)
 - mobile hosted-product screen analytics; replay startup is guarded behind env
   and requires the optional native replay package in the mobile build
 
@@ -130,10 +130,18 @@ Server/cloud API PostHog is not configured.
     - when enabled, inputs are masked and `[data-telemetry-block]` /
       `[data-telemetry-mask]` selectors are respected
   - web:
-    - session recording is disabled in code even if the env toggle is set,
-      because the browser replay SDK can emit URL metadata independently of DOM
-      masking
-    - web event payloads are still scrubbed through `before_send`
+    - session recording is gated by
+      `VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED`; off by default
+    - when enabled, inputs are masked, `[data-telemetry-block]` /
+      `[data-telemetry-mask]` selectors are respected, and network request
+      bodies/headers are not recorded
+    - web event payloads are still scrubbed through `before_send`; URL-shaped
+      properties (`$current_url`, `$pathname`, `$host`, `$referrer`,
+      `$referring_domain`) are stripped from capture events
+    - note: the rrweb-side recording still emits the page URL with route IDs
+      visible in workspace/chat paths; consider stopping recording on
+      sensitive routes via `posthog.stopSessionRecording()` if those IDs are
+      sensitive
   - mobile:
     - session replay defaults to disabled
     - automatic lifecycle capture is disabled so OAuth callback deep links are

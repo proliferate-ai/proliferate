@@ -62,7 +62,7 @@ export function initializeWebPostHog(config: WebPostHogInitConfig): void {
     capture_pageleave: false,
     person_profiles: "identified_only",
     before_send: scrubPostHogCapture,
-    disable_session_recording: true,
+    disable_session_recording: !config.posthog.sessionRecordingEnabled,
     session_recording: {
       maskAllInputs: true,
       maskTextSelector: "[data-telemetry-mask]",
