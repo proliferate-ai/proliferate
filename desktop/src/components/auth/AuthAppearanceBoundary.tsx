@@ -1,20 +1,9 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
+import { DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES } from "@/lib/domain/preferences/appearance";
 import { twMerge } from "tailwind-merge";
 
-const DEFAULT_APPEARANCE_TEXT_SCALE_CLASS = [
-  "[--text-xs:0.5rem]",
-  "[--text-xs--line-height:0.75rem]",
-  "[--text-sm:0.625rem]",
-  "[--text-sm--line-height:1rem]",
-  "[--text-base:0.6875rem]",
-  "[--text-base--line-height:1rem]",
-  "[--text-chat:12px]",
-  "[--text-chat--line-height:20px]",
-  "[--text-lg:0.875rem]",
-  "[--text-lg--line-height:1.25rem]",
-  "[--text-xl:1.125rem]",
-  "[--text-xl--line-height:1.75rem]",
-].join(" ");
+const DEFAULT_AUTH_APPEARANCE_STYLE =
+  DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES as CSSProperties;
 
 interface AuthAppearanceBoundaryProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
@@ -23,13 +12,18 @@ interface AuthAppearanceBoundaryProps extends HTMLAttributes<HTMLDivElement> {
 export function AuthAppearanceBoundary({
   children,
   className,
+  style,
   ...props
 }: AuthAppearanceBoundaryProps) {
   return (
     <div
       {...props}
-      className={twMerge(DEFAULT_APPEARANCE_TEXT_SCALE_CLASS, className)}
+      className={twMerge(className)}
       data-auth-default-appearance=""
+      style={{
+        ...DEFAULT_AUTH_APPEARANCE_STYLE,
+        ...style,
+      }}
     >
       {children}
     </div>
