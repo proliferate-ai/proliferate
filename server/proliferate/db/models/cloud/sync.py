@@ -3,7 +3,19 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.db.models.base import Base, utcnow
@@ -113,7 +125,12 @@ class CloudSessionProjection(Base):
         ),
         Index("ix_cloud_sessions_target_status", "target_id", "status"),
         Index("ix_cloud_sessions_cloud_workspace", "cloud_workspace_id"),
+        Index("ix_cloud_sessions_exposure", "exposure_id"),
         Index("ix_cloud_sessions_last_event_seq", "last_event_seq"),
+        CheckConstraint(
+            "projection_level IN ('session_summaries', 'transcript', 'live')",
+            name="ck_cloud_sessions_projection_level",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -125,6 +142,10 @@ class CloudSessionProjection(Base):
         ForeignKey("cloud_workspace.id", ondelete="SET NULL"),
         nullable=True,
     )
+    exposure_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_workspace_exposure.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     workspace_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     session_id: Mapped[str] = mapped_column(String(255), index=True)
     native_session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -133,6 +154,22 @@ class CloudSessionProjection(Base):
     status: Mapped[str] = mapped_column(String(32), default="running", index=True)
     phase: Mapped[str | None] = mapped_column(String(64), nullable=True)
     live_config_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    projection_level: Mapped[str] = mapped_column(
+        String(32),
+        default="live",
+        server_default=text("'live'"),
+    )
+    commandable: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=text("true"),
+    )
+    gap_state_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_uploaded_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    agent_run_config_snapshot_json: Mapped[dict[str, object] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
     last_event_seq: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     last_event_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
     started_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
