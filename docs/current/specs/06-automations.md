@@ -1002,7 +1002,7 @@ cloud/sdk/src/types/generated.ts                                  regen
 
 ## 7. Implementation Chunks
 
-All chunks land in one PR.
+Preferred implementation is one PR per spec. Chunks are review checkpoints inside that PR and may be split only when the split does not leave duplicate models, dead paths, partially wired security checks, or visible inert UI.
 
 ```text
 Chunk A  cloud_agent_run_config table + service + API
@@ -1221,12 +1221,12 @@ Manual smoke:
    - local executor picks up the run; runs against Desktop AnyHarness
 ```
 
-## 10. Open Questions
+## 10. Final Decisions / Deferred Questions
 
 1. **Should `cloud_agent_run_config` live under `db/models/cloud/`
    or alongside automations?**
 
-   Bias: under `db/models/cloud/` because it's consumed by Slack,
+   Decision: under `db/models/cloud/` because it's consumed by Slack,
    automations, web, mobile, and Desktop new-chat. It is not
    automation-specific. Slack reuses it directly.
 
@@ -1236,7 +1236,7 @@ Manual smoke:
    V1 is per run (3 attempts per run). If a config is broken and
    every scheduled run fails immediately, the cap doesn't help.
 
-   Bias: keep per-run for V1. Add a separate
+   Decision: keep per-run for V1. Add a separate
    `automation_failure_backoff` (e.g. pause automation after N
    consecutive failed runs) as a follow-up. Spec 06 does not ship
    the backoff.
@@ -1259,14 +1259,14 @@ Manual smoke:
    `created_by_user_id` AND admin role at trigger time, or only at
    create time?**
 
-   Bias: admin only at create time. Triggering a manual run of an
+   Decision: admin only at create time. Triggering a manual run of an
    existing team automation is open to any org member. Rationale:
    ops folks who aren't admins should be able to fire team
    automations.
 
 5. **Cascade enqueue idempotency key**
 
-   Bias: include `automation_run_id` and `cascade_reason` in the
+   Decision: include `automation_run_id` and `cascade_reason` in the
    idempotency key so a retried tick (executor lease expired and
    re-claimed) collapses with the prior cascade.
 

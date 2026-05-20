@@ -298,9 +298,8 @@ flips status to `reauth_required` and surfaces in the Settings UI.
 ### 5.3 `slack_bot_config` (new)
 
 Per-org bot configuration. Stays narrow to Slack-specific fields
-(repo routing, allowed channels). Cross-cutting per-org defaults
-(like default `cloud_agent_run_config_id`) live in
-`organization_settings` (§5.10).
+(repo routing, allowed channels). Cross-cutting agent-run defaults
+live in spec 06's `cloud_agent_run_config_default`.
 
 ```text
 slack_bot_config
@@ -316,7 +315,7 @@ slack_bot_config
                                                               for repo_mode='auto'
   default_agent_kind              text                       nullable
                                    if null, use per-agent default from
-                                   organization_settings
+                                   cloud_agent_run_config_default
 
   allowed_slack_channel_ids       text                       nullable
                                    comma-separated; if null, bot responds in any
@@ -774,7 +773,7 @@ server/proliferate/db/models/cloud/repo_config.py
   - add owner_scope, organization_id
   - update unique indexes
 
-server/proliferate/db/migrations/versions/<NEW>_slack_bot.py
+server/alembic/versions/<NEW>_slack_bot.py
   all of the above + repo_config owner_scope migration
 
 server/proliferate/db/store/cloud_slack/                             (new)
@@ -839,7 +838,6 @@ SDK regeneration:
 
 ```text
 cloud/sdk/src/client/slack.ts                                        (new)
-cloud/sdk/src/client/organization-settings.ts                        (new)
 cloud/sdk/src/types/generated.ts                                     regen
 ```
 
@@ -860,20 +858,12 @@ desktop/src/hooks/access/cloud/slack/                                (new)
   use-slack-bot-config-mutations.ts
   use-slack-channels.ts
   use-slack-repo-routing-profiles.ts
-
-desktop/src/hooks/access/cloud/organization-settings/                (new)
-  use-organization-settings.ts
-  use-organization-settings-mutations.ts
 ```
 
 ## 7. Implementation Chunks
 
 ```text
-Chunk A  (Removed.) No organization_settings table in V1.
-  Per-org defaults resolved by spec 06's cloud_agent_run_config_default
-  resolver.
-
-Chunk B  Slack DB models
+Chunk A  Slack DB models
   - slack_workspace_connection
   - slack_bot_config
   - slack_thread_work
@@ -883,21 +873,20 @@ Chunk B  Slack DB models
   - cloud_repo_config owner_scope extension
   - one migration
 
-Chunk C  OAuth install flow
+Chunk B  OAuth install flow
   - GET /v1/cloud/slack/oauth/start  -> redirect
   - GET /v1/cloud/slack/oauth/callback -> exchange + persist
   - signed state HMAC; expiry 10m
   - settings additions
 
-Chunk D  Inbound event handler
+Chunk C  Inbound event handler
   - POST /v1/cloud/slack/events
   - signature.py HMAC verify
   - parse + dedupe via slack_event_envelope_seen
-  - enqueue slack_inbound_event_job (lightweight; reuses
-    organization_settings background scheduler)
+  - enqueue slack_inbound_event_job (lightweight background loop)
   - 200 OK fast path
 
-Chunk E  Mention handler + thread follow-up handler
+Chunk D  Mention handler + thread follow-up handler
   - background processor for inbound jobs
   - ensure_organization_sandbox_profile
   - repo router (fixed + auto)
@@ -907,28 +896,28 @@ Chunk E  Mention handler + thread follow-up handler
   - start_session + send_prompt enqueue
   - follow-up: send_prompt on existing session
 
-Chunk F  End-of-turn hook + post-session processor
+Chunk E  End-of-turn hook + post-session processor
   - END_OF_TURN_KINDS in events/service.py
   - enqueue_post_session_processors after _apply_projection
   - PostSessionProcessor registry
   - Slack processor: looks up slack_thread_work; formats reply;
     inserts into outbound queue
 
-Chunk G  Outbound queue + sender
+Chunk F  Outbound queue + sender
   - outbound_worker.py periodic loop
   - Slack chat.postMessage call (httpx)
   - rate-limit/Retry-After handling
   - exponential backoff
   - status transitions
 
-Chunk H  Desktop UI
+Chunk G  Desktop UI
   - SlackBotPane sections (replace stub)
   - hooks
   - use AgentRunConfigSelector + CloudRepoConfigSelector +
     RuntimeReadinessPanel primitives
   - admin gate via useIsAdmin
 
-Chunk I  Tests + smoke
+Chunk H  Tests + smoke
 ```
 
 ## 8. Acceptance Criteria
@@ -1007,29 +996,29 @@ uv run pytest -q
 Targeted tests:
 
 ```text
-tests/server/cloud/slack/test_signature_verification.py
-tests/server/cloud/slack/test_event_dedupe.py
-tests/server/cloud/slack/test_url_verification_challenge.py
-tests/server/cloud/slack/test_oauth_install_flow.py
-tests/server/cloud/slack/test_oauth_state_hmac_expiry.py
-tests/server/cloud/slack/test_mention_routes_through_managed_profile_launch.py
-tests/server/cloud/slack/test_mention_creates_shared_unclaimed_exposure.py
-tests/server/cloud/slack/test_followup_uses_existing_session.py
-tests/server/cloud/slack/test_repo_router_fixed_mode.py
-tests/server/cloud/slack/test_repo_router_auto_mode.py
-tests/server/cloud/slack/test_repo_router_undecidable_clarification.py
-tests/server/cloud/slack/test_thread_work_unique.py
-tests/server/cloud/slack/test_repo_config_owner_scope.py
-tests/server/cloud/slack/test_outbound_retry_after.py
-tests/server/cloud/slack/test_outbound_exponential_backoff.py
-tests/server/cloud/slack/test_outbound_idempotency_key.py
-tests/server/cloud/slack/test_post_session_hook_registers.py
-tests/server/cloud/slack/test_end_of_turn_enqueues_outbound.py
-tests/server/cloud/slack/test_admin_gate_on_settings.py
-tests/server/cloud/slack/test_agent_run_config_inheritance.py
-tests/server/cloud/slack/test_runtime_config_cascade.py
-tests/server/cloud/slack/test_agent_auth_cascade.py
-tests/server/cloud/slack/test_no_organization_settings_table_in_v1.py
+server/tests/cloud/slack/test_signature_verification.py
+server/tests/cloud/slack/test_event_dedupe.py
+server/tests/cloud/slack/test_url_verification_challenge.py
+server/tests/cloud/slack/test_oauth_install_flow.py
+server/tests/cloud/slack/test_oauth_state_hmac_expiry.py
+server/tests/cloud/slack/test_mention_routes_through_managed_profile_launch.py
+server/tests/cloud/slack/test_mention_creates_shared_unclaimed_exposure.py
+server/tests/cloud/slack/test_followup_uses_existing_session.py
+server/tests/cloud/slack/test_repo_router_fixed_mode.py
+server/tests/cloud/slack/test_repo_router_auto_mode.py
+server/tests/cloud/slack/test_repo_router_undecidable_clarification.py
+server/tests/cloud/slack/test_thread_work_unique.py
+server/tests/cloud/slack/test_repo_config_owner_scope.py
+server/tests/cloud/slack/test_outbound_retry_after.py
+server/tests/cloud/slack/test_outbound_exponential_backoff.py
+server/tests/cloud/slack/test_outbound_idempotency_key.py
+server/tests/cloud/slack/test_post_session_hook_registers.py
+server/tests/cloud/slack/test_end_of_turn_enqueues_outbound.py
+server/tests/cloud/slack/test_admin_gate_on_settings.py
+server/tests/cloud/slack/test_agent_run_config_inheritance.py
+server/tests/cloud/slack/test_runtime_config_cascade.py
+server/tests/cloud/slack/test_agent_auth_cascade.py
+server/tests/cloud/slack/test_no_organization_settings_table_in_v1.py
 ```
 
 Desktop:
@@ -1105,7 +1094,7 @@ Manual smoke:
    - inbound events return 200 but skip processing; no work created
 ```
 
-## 10. Open Questions
+## 10. Final Decisions / Deferred Questions
 
 1. **Slack user → Proliferate user identity linking.**
 
@@ -1125,7 +1114,7 @@ Manual smoke:
        check: only act when the Slack team_id matches an
        installed connection AND the channel is allowed.
 
-   Bias: defer identity-linking to a follow-up. V1 explicitly
+   Decision: defer identity-linking to a follow-up. V1 explicitly
    does not resolve Slack -> Proliferate user; the trail in
    `authorization_context_json` is enough for audit.
 
@@ -1134,7 +1123,7 @@ Manual smoke:
    The mention path is enough for V1. Slash commands and buttons
    (e.g. for the auto-router's "which repo?" question) require
    Slack interactive endpoints (`/interactivity` payload format).
-   Bias: defer. The "undecidable" fallback in V1 is a text reply
+   Decision: defer. The "undecidable" fallback in V1 is a text reply
    asking the user to add a `--repo` hint.
 
 3. **One Slack workspace per Proliferate org, or many?**
@@ -1149,14 +1138,14 @@ Manual smoke:
    `allowed_slack_channel_ids` is org-wide. Per-channel routing
    (e.g. #frontend → frontend repo) is a follow-up: add a
    `slack_channel_routing` table referencing `slack_bot_config`
-   and `cloud_repo_config`. Bias: defer; the auto-router covers
+   and `cloud_repo_config`. Decision: defer; the auto-router covers
    the same intent without channel-pinning.
 
 5. **README cache freshness.**
 
    `cloud_repo_routing_profile.cached_at` + a 24h refresh job is
    the V1 plan. If repos change often and the router routes wrong,
-   admins can edit `description` manually. Bias: keep the cache
+   admins can edit `description` manually. Decision: keep the cache
    refresh simple; trust admins for ground truth via the description
    field.
 
@@ -1164,20 +1153,19 @@ Manual smoke:
 
    V1 posts on completed turn boundaries. Live streaming (one
    message per token) is bandwidth-heavy and runs into Slack's
-   chat.update edit limits. Bias: ship turn-boundary posting;
+   chat.update edit limits. Decision: ship turn-boundary posting;
    add live streaming behind a feature flag when usage data
    demands it.
 
 7. **Cascade attempt cap for Slack runs.**
 
    `slack_run_cascade_max_attempts` defaults 3. Same as
-   automations. Bias: keep symmetric.
+   automations. Decision: keep symmetric.
 
-8. **Should `organization_settings` carry the Slack outbound rate
-   override?**
+8. **Should Slack have per-org outbound rate overrides?**
 
    For ops, sometimes one org needs a lower rate (rate-limited by
-   Slack at the app level). Bias: keep the rate global in V1
+   Slack at the app level). Decision: keep the rate global in V1
    (`settings.slack_outbound_rate_per_team_per_sec`). If per-org
    override is needed later, add an `outbound_rate_per_sec`
    column to `slack_bot_config` rather than introducing a generic

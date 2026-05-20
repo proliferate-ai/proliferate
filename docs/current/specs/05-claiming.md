@@ -1030,7 +1030,7 @@ Manual smoke:
    - X-Client-Kind != 'desktop' -> 403 direct_attach_desktop_only
 ```
 
-## 10. Open Questions
+## 10. Final Decisions / Deferred Questions
 
 1. **Token TTL: 20 minutes default, configurable. Right value?**
 
@@ -1039,7 +1039,7 @@ Manual smoke:
      long   fewer refresh, slower per-token revocation (until natural
             expiry); push-cache mitigates
 
-   Bias: 20 minutes. With push-based jti revocation cache,
+   Decision: 20 minutes. With push-based jti revocation cache,
    immediate cutoff is supported anyway.
 
 2. **`X-Client-Kind: desktop` gate hardening**
@@ -1056,21 +1056,21 @@ Manual smoke:
          issued by the Desktop installer)
      (c) Accept the spoofability since attack surface is small
 
-   Bias: (c) for V1. Move to (a) when Desktop OAuth client
+   Decision: (c) for V1. Move to (a) when Desktop OAuth client
    identity exists. Track as a follow-up.
 
 3. **Signing-key rotation operations**
 
    The spec defines the model (active signing key + accepted verification key
    set). Key generation, rotation cadence, and operator runbook live in
-   deployment docs. Bias: don't bloat the spec; reference the deployment doc
+   deployment docs. Decision: don't bloat the spec; reference the deployment doc
    when written.
 
 4. **Admin viewing a claimed workspace's transcript — read or
    read+events?**
 
    Admin gets `can_view` for audit. Should admin also see live
-   event projection or just static transcript? Bias: full live
+   event projection or just static transcript? Decision: full live
    projection (events stream) but no interaction. Implementation
    already supports this via projection_level + commandable; the
    admin path uses the same projection_level=live, commandable=false
@@ -1079,7 +1079,7 @@ Manual smoke:
 5. **What if the claimer's user account is reinstated after
    `claimed_by_user_id` became NULL?**
 
-   Bias: do not auto-restore. If a deleted user is reinstated and
+   Decision: do not auto-restore. If a deleted user is reinstated and
    their claim was orphaned, the workspace remains orphan-claimed
    with NULL claimer. Admin manually archives or the user creates
    new work. Reactivation would require explicit product UX which
@@ -1091,6 +1091,6 @@ Manual smoke:
    "the session at claim time" for UI deep-link convenience. If we
    never use it, we can drop the column.
 
-   Bias: keep. It costs almost nothing and lets the post-claim UI
+   Decision: keep. It costs almost nothing and lets the post-claim UI
    route the user back to the session they were looking at when
    they clicked Claim.
