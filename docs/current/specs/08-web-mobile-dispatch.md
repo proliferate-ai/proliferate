@@ -42,7 +42,7 @@ In scope:
 - Cowork API: per-user and per-org API keys with a tiny new
   `cloud_api_key` table. Auth middleware accepts cowork tokens
   on every existing Cloud API. Programmatic callers pass
-  `auto_cascade=true` on stale-state launches (spec 04 Open Q #4).
+  `auto_cascade=true` on stale-state launches (spec 04 §10 decision #4).
 - Add `ssh` to the `SidebarWorkspaceVariant` enum and surface SSH
   targets in the sidebar.
 
@@ -406,8 +406,8 @@ builds:
 Source values `'web'` and `'mobile'` already exist in
 `cloud_commands.source` (verified in spec 07 probe). The spec 04
 preflight is fail-fast on stale runtime config / agent auth for
-web and mobile, matching the per-source bias from spec 04 Open Q
-#4. Web/mobile UI surfaces the stale-state error with a
+web and mobile, matching the per-source decision from spec 04 §10
+decision #4. Web/mobile UI surfaces the stale-state error with a
 "Configure your sandbox" CTA that deep-links to Settings → Compute
 in Desktop (or shows a "Open in Desktop" affordance if mobile
 can't fix the config locally).
@@ -447,7 +447,7 @@ Two cases:
    worker enrolled (the Desktop runtime acts as a local target).
    The exposure write triggers backfill via
    backfill_exposed_workspace (spec 04 §5.5 rename; spec 04
-   §10 Open Q #5).
+   §10 decision #5).
 
 2. The workspace is local-only and has no cloud_workspace row.
    Desktop first creates a cloud_workspace via
@@ -702,7 +702,7 @@ config / agent auth via a query param on launch commands:
             failure: typed error returned via command status polling
 ```
 
-This matches the per-source posture from spec 04 Open Q #4:
+This matches the per-source posture from spec 04 §10 decision #4:
 fail-fast for Desktop/Web/Mobile by default; auto-cascade as
 opt-in for API callers.
 
@@ -1220,5 +1220,5 @@ Manual smoke:
    `target_id == AppState.target_id`. If the slot was replaced
    and AnyHarness booted with a new target_id, old JWTs fail
    target check and Desktop refreshes via
-   `use-direct-attach-token`. Spec 05 §10 Open Q #4 already
+   `use-direct-attach-token`. Spec 05 §10 decision #4 already
    covered this.
