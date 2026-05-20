@@ -137,7 +137,7 @@ async def test_personal_profile_backfills_legacy_cloud_credentials(
     assert response.status_code == 200
     profile = response.json()
     assert profile["ownerScope"] == "personal"
-    assert profile["agentAuthRevision"] == 1
+    assert profile["desiredAgentAuthRevision"] == 1
 
     response = await client.get(
         f"/v1/cloud/sandbox-profiles/{profile['id']}/agent-auth-selections",
@@ -202,7 +202,7 @@ async def test_legacy_cloud_credential_update_reconciles_existing_selection(
         json={},
     )
     assert response.status_code == 200
-    assert response.json()["agentAuthRevision"] == 2
+    assert response.json()["desiredAgentAuthRevision"] == 2
 
     response = await client.get(
         f"/v1/cloud/sandbox-profiles/{profile['id']}/agent-auth-selections",
