@@ -501,6 +501,32 @@ describe("user preference migration", () => {
     expect(result.preferences.readableCodeFontSizeId).toBe("xxxlarge");
   });
 
+  it("round-trips the appearance font preference bounds", async () => {
+    storeMocks.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      uiFontSizeId: "xxsmall",
+      readableCodeFontSizeId: "xxxlarge",
+    } satisfies UserPreferences);
+
+    await bootstrapUserPreferencesForTest();
+
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.uiFontSizeId).toBe("xxsmall");
+    expect(preferences.readableCodeFontSizeId).toBe("xxxlarge");
+    expect(storeMocks.set).not.toHaveBeenCalled();
+
+    preferences.set("turnEndSoundEnabled", true);
+    await persistUserPreferences(
+      selectPersistedUserPreferencesSlice(useUserPreferencesStore.getState()),
+      useUserPreferencesStore.getState()._persistedMetadata,
+    );
+
+    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(persisted.uiFontSizeId).toBe("xxsmall");
+    expect(persisted.readableCodeFontSizeId).toBe("xxxlarge");
+    expect(persisted.turnEndSoundEnabled).toBe(true);
+  });
+
   it("sanitizes partially present review defaults", () => {
     const result = migrateUserPreferences({
       ...USER_PREFERENCE_DEFAULTS,

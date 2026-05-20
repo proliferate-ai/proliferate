@@ -3,11 +3,44 @@ import {
   APPEARANCE_SIZE_IDS,
   CHAT_LINE_HEIGHTS,
   READABLE_CODE_FONT_SCALES,
+  type TextTokenScale,
   resolveAppearanceSizeId,
   stepAppearanceFontSizes,
   stepAppearanceSizeId,
   UI_FONT_SCALES,
 } from "./appearance";
+
+function cssLengthToPx(value: string): number {
+  if (value.endsWith("rem")) {
+    return Number.parseFloat(value) * 16;
+  }
+  if (value.endsWith("px")) {
+    return Number.parseFloat(value);
+  }
+  return Number.parseFloat(value);
+}
+
+function expectMonotonicTokenScale(token: keyof TextTokenScale) {
+  for (let index = 1; index < APPEARANCE_SIZE_IDS.length; index += 1) {
+    const previousId = APPEARANCE_SIZE_IDS[index - 1];
+    const id = APPEARANCE_SIZE_IDS[index];
+    if (!previousId || !id) {
+      continue;
+    }
+    expect(cssLengthToPx(UI_FONT_SCALES[id].xs[token]))
+      .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId].xs[token]));
+    expect(cssLengthToPx(UI_FONT_SCALES[id].sm[token]))
+      .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId].sm[token]));
+    expect(cssLengthToPx(UI_FONT_SCALES[id].base[token]))
+      .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId].base[token]));
+    expect(cssLengthToPx(UI_FONT_SCALES[id].chat[token]))
+      .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId].chat[token]));
+    expect(cssLengthToPx(UI_FONT_SCALES[id].lg[token]))
+      .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId].lg[token]));
+    expect(cssLengthToPx(UI_FONT_SCALES[id].xl[token]))
+      .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId].xl[token]));
+  }
+}
 
 describe("appearance preferences", () => {
   it("resolves invalid size ids to default", () => {
@@ -59,12 +92,12 @@ describe("appearance preferences", () => {
   it("defines exact UI font preset values", () => {
     expect(UI_FONT_SCALES).toEqual({
       xxsmall: {
-        xs: { fontSize: "0.40625rem", lineHeight: "0.625rem" },
-        sm: { fontSize: "0.46875rem", lineHeight: "0.75rem" },
-        base: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
-        chat: { fontSize: "9px", lineHeight: "17px" },
-        lg: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
-        xl: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
+        xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
+        sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
+        base: { fontSize: "0.53125rem", lineHeight: "0.84375rem" },
+        chat: { fontSize: "9.5px", lineHeight: "17.5px" },
+        lg: { fontSize: "0.71875rem", lineHeight: "1.09375rem" },
+        xl: { fontSize: "0.96875rem", lineHeight: "1.4375rem" },
       },
       xsmall: {
         xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
@@ -139,11 +172,11 @@ describe("appearance preferences", () => {
   it("defines exact readable code preset values", () => {
     expect(READABLE_CODE_FONT_SCALES).toEqual({
       xxsmall: {
-        monacoFontSize: 8,
-        monacoLineHeight: 15,
-        diffsFontSize: "8px",
+        monacoFontSize: 8.5,
+        monacoLineHeight: 15.5,
+        diffsFontSize: "8.5px",
         diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-        codeFontSize: "0.5rem",
+        codeFontSize: "0.53125rem",
         codeLineHeight: "1.625",
       },
       xsmall: {
@@ -211,5 +244,39 @@ describe("appearance preferences", () => {
       const diffPx = Number.parseFloat(READABLE_CODE_FONT_SCALES[id].diffsFontSize);
       expect(diffPx).toBeLessThan(chatPx);
     }
+  });
+
+  it("keeps appearance scales monotonic", () => {
+    expectMonotonicTokenScale("fontSize");
+    expectMonotonicTokenScale("lineHeight");
+
+    for (let index = 1; index < APPEARANCE_SIZE_IDS.length; index += 1) {
+      const previousId = APPEARANCE_SIZE_IDS[index - 1];
+      const id = APPEARANCE_SIZE_IDS[index];
+      if (!previousId || !id) {
+        continue;
+      }
+
+      expect(READABLE_CODE_FONT_SCALES[id].monacoFontSize)
+        .toBeGreaterThanOrEqual(READABLE_CODE_FONT_SCALES[previousId].monacoFontSize);
+      expect(READABLE_CODE_FONT_SCALES[id].monacoLineHeight)
+        .toBeGreaterThanOrEqual(READABLE_CODE_FONT_SCALES[previousId].monacoLineHeight);
+      expect(cssLengthToPx(READABLE_CODE_FONT_SCALES[id].diffsFontSize))
+        .toBeGreaterThanOrEqual(cssLengthToPx(READABLE_CODE_FONT_SCALES[previousId].diffsFontSize));
+      expect(cssLengthToPx(READABLE_CODE_FONT_SCALES[id].codeFontSize))
+        .toBeGreaterThanOrEqual(cssLengthToPx(READABLE_CODE_FONT_SCALES[previousId].codeFontSize));
+    }
+  });
+
+  it("keeps the new lower bound close to the previous smallest size", () => {
+    expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.xs.fontSize)).toBe(7);
+    expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.sm.fontSize)).toBe(8);
+    expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.base.fontSize)).toBeGreaterThanOrEqual(8.5);
+    expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.chat.fontSize)).toBeGreaterThanOrEqual(9.5);
+    expect(READABLE_CODE_FONT_SCALES.xxsmall.monacoFontSize).toBeGreaterThanOrEqual(8.5);
+    expect(cssLengthToPx(READABLE_CODE_FONT_SCALES.xxsmall.diffsFontSize))
+      .toBeGreaterThanOrEqual(8.5);
+    expect(cssLengthToPx(READABLE_CODE_FONT_SCALES.xxsmall.codeFontSize))
+      .toBeGreaterThanOrEqual(8.5);
   });
 });
