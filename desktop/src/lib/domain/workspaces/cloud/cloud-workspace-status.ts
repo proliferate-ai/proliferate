@@ -6,6 +6,7 @@ import type {
 const PENDING_STATUSES = new Set<CloudWorkspaceStatus>([
   "pending",
   "materializing",
+  "needs_rematerialization",
 ]);
 
 const START_BLOCK_REASONS = [

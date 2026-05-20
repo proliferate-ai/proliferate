@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use anyharness_contract::v1::SessionPluginBundle;
+use crate::domains::plugins::SessionPluginBundle;
 
 #[derive(Clone, Default)]
 pub struct PluginBundleRegistry {
@@ -34,9 +34,8 @@ impl PluginBundleRegistry {
 
 #[cfg(test)]
 mod tests {
-    use anyharness_contract::v1::SessionPluginBundle;
-
     use super::PluginBundleRegistry;
+    use crate::domains::plugins::SessionPluginBundle;
 
     #[test]
     fn set_get_and_clear_session_bundle() {

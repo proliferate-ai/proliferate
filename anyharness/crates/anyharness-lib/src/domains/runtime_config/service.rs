@@ -5,14 +5,12 @@ use anyharness_contract::v1::{
     RuntimeConfigExternalScope, RuntimeConfigManifest, RuntimeConfigRevision,
     RuntimeConfigRevisionExpectation, RuntimeConfigStatusResponse, RuntimeMcpLaunch,
     RuntimeMcpServer, RuntimeMcpValue, RuntimeSkill, SessionMcpBindingSummary,
-    SessionMcpEnvVar as ContractSessionMcpEnvVar, SessionMcpHeader as ContractSessionMcpHeader,
-    SessionMcpHttpServer as ContractSessionMcpHttpServer,
-    SessionMcpServer as ContractSessionMcpServer,
-    SessionMcpStdioServer as ContractSessionMcpStdioServer, SessionPlugin, SessionPluginBundle,
-    SessionPluginSkill, SessionPluginSkillResource,
 };
 use rusqlite::{params, OptionalExtension, Row};
 
+use crate::domains::plugins::{
+    SessionPlugin, SessionPluginBundle, SessionPluginSkill, SessionPluginSkillResource,
+};
 use crate::persistence::Db;
 use crate::sessions::mcp_bindings::model::{
     SessionMcpEnvVar, SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
@@ -272,6 +270,7 @@ impl RuntimeConfigService {
             &current.manifest.skills,
             &current.manifest.mcp_servers,
             &mcp_servers,
+            &current.manifest.mcp_binding_summaries,
             &artifacts,
         )?;
         let summaries = if current.manifest.mcp_binding_summaries.is_empty() {
@@ -356,7 +355,7 @@ fn runtime_mcp_to_session_mcp(
     match &server.launch {
         RuntimeMcpLaunch::Http { url, headers, .. } => {
             Ok(SessionMcpServer::Http(SessionMcpHttpServer {
-                connection_id: server.connection_id.clone(),
+                connection_id: server.id.clone(),
                 catalog_entry_id: server.catalog_entry_id.clone(),
                 server_name: server.server_name.clone(),
                 url: literal_runtime_value(url)?,
@@ -373,7 +372,7 @@ fn runtime_mcp_to_session_mcp(
         }
         RuntimeMcpLaunch::Stdio { command, args, env } => {
             Ok(SessionMcpServer::Stdio(SessionMcpStdioServer {
-                connection_id: server.connection_id.clone(),
+                connection_id: server.id.clone(),
                 catalog_entry_id: server.catalog_entry_id.clone(),
                 server_name: server.server_name.clone(),
                 command: literal_runtime_value(command)?,
@@ -399,6 +398,7 @@ fn runtime_skills_to_plugin_bundle(
     skills: &[RuntimeSkill],
     runtime_mcp_servers: &[RuntimeMcpServer],
     mcp_servers: &[SessionMcpServer],
+    mcp_binding_summaries: &[SessionMcpBindingSummary],
     artifacts: &HashMap<&str, &RuntimeArtifactPayload>,
 ) -> Result<Option<SessionPluginBundle>, RuntimeConfigError> {
     if skills.is_empty() {
@@ -428,8 +428,8 @@ fn runtime_skills_to_plugin_bundle(
             plugin_id: "runtime-config".to_string(),
             version: None,
             skills: plugin_skills,
-            mcp_servers: mcp_servers.iter().map(session_mcp_to_contract).collect(),
-            mcp_binding_summaries: Vec::new(),
+            mcp_servers: mcp_servers.to_vec(),
+            mcp_binding_summaries: mcp_binding_summaries.to_vec(),
             credential_bindings: Vec::new(),
         }],
     }))
@@ -477,44 +477,6 @@ fn runtime_skill_to_session_skill(
         required_mcp_servers,
         credential_binding_ids: Vec::new(),
     })
-}
-
-fn session_mcp_to_contract(server: &SessionMcpServer) -> ContractSessionMcpServer {
-    match server {
-        SessionMcpServer::Http(server) => {
-            ContractSessionMcpServer::Http(ContractSessionMcpHttpServer {
-                connection_id: server.connection_id.clone(),
-                catalog_entry_id: server.catalog_entry_id.clone(),
-                server_name: server.server_name.clone(),
-                url: server.url.clone(),
-                headers: server
-                    .headers
-                    .iter()
-                    .map(|header| ContractSessionMcpHeader {
-                        name: header.name.clone(),
-                        value: header.value.clone(),
-                    })
-                    .collect(),
-            })
-        }
-        SessionMcpServer::Stdio(server) => {
-            ContractSessionMcpServer::Stdio(ContractSessionMcpStdioServer {
-                connection_id: server.connection_id.clone(),
-                catalog_entry_id: server.catalog_entry_id.clone(),
-                server_name: server.server_name.clone(),
-                command: server.command.clone(),
-                args: server.args.clone(),
-                env: server
-                    .env
-                    .iter()
-                    .map(|env| ContractSessionMcpEnvVar {
-                        name: env.name.clone(),
-                        value: env.value.clone(),
-                    })
-                    .collect(),
-            })
-        }
-    }
 }
 
 fn default_external_scope() -> RuntimeConfigExternalScope {

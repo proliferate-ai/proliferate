@@ -29,8 +29,6 @@ import {
   type AnyHarnessWorkspaceSessionConnection,
   type ListSessionsOptions,
 } from "@/lib/access/anyharness/sessions";
-import { getWorkspace } from "@/lib/access/anyharness/workspaces";
-import { resolveSessionMcpServersForLaunch } from "@/lib/workflows/sessions/session-mcp-launch";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import {
@@ -83,10 +81,6 @@ function buildConnection(target: RuntimeTarget): AnyHarnessWorkspaceSessionConne
     authToken: target.authToken,
     anyharnessWorkspaceId: target.anyharnessWorkspaceId,
   };
-}
-
-function mcpTargetLocation(target: RuntimeTarget): "local" | "cloud" {
-  return target.location === "local" ? "local" : "cloud";
 }
 
 async function measureSessionWorkflowStep<T>(
@@ -263,77 +257,21 @@ export async function resumeSession(
   },
 ) {
   const measurementOperationId = options?.measurementOperationId;
-  const { connection, target, materializedSessionId } = await measureSessionWorkflowStep(
+  const { connection, materializedSessionId } = await measureSessionWorkflowStep(
     measurementOperationId,
     "session.resume.resolve_target",
     () => getSessionClientAndWorkspace(sessionId),
   );
-  const workspace = await measureSessionWorkflowStep(
-    measurementOperationId,
-    "session.resume.workspace_get",
-    () => getWorkspace(
-      connection,
-      target.anyharnessWorkspaceId,
-      getMeasurementRequestOptions({
-        operationId: measurementOperationId,
-        category: "workspace.get",
-        headers: options?.requestHeaders,
-      }),
-    ),
-  );
-  const isCowork = workspace.surface === "cowork";
-  const shouldResolveLaunchMcp = isCowork || options?.pluginsInCodingSessionsEnabled === true;
-  const mcpLaunch = shouldResolveLaunchMcp
-    ? await measureSessionWorkflowStep(
-      measurementOperationId,
-      "session.resume.resolve_mcp",
-      () => resolveSessionMcpServersForLaunch({
-        targetLocation: mcpTargetLocation(target),
-        workspacePath: workspace.path ?? null,
-        launchId: `${sessionId}:${crypto.randomUUID()}`,
-        policy: {
-          workspaceSurface: isCowork ? "cowork" : "coding",
-          lifecycle: "resume",
-          enabled: shouldResolveLaunchMcp,
-        },
-      }),
-    )
-    : {
-      mcpServers: [],
-      mcpBindingSummaries: [],
-      pluginBundle: { plugins: [] },
-      releaseRuntimeReservations: async () => {},
-    };
-  const { mcpServers, mcpBindingSummaries, pluginBundle } = mcpLaunch;
-  const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
-  if (!shouldResolveLaunchMcp) {
-    recordMeasurementWorkflowStep({
+  return resumeRuntimeSession(
+    connection,
+    materializedSessionId,
+    undefined,
+    getMeasurementRequestOptions({
       operationId: measurementOperationId,
-      step: "session.resume.resolve_mcp",
-      startedAt: performance.now(),
-      outcome: "skipped",
-    });
-  }
-  try {
-    return await resumeRuntimeSession(
-      connection,
-      materializedSessionId,
-      {
-        mcpServers,
-        mcpBindingSummaries: mcpBindingSummaries.length > 0
-          ? mcpBindingSummaries
-          : undefined,
-        pluginBundle,
-      },
-      getMeasurementRequestOptions({
-        operationId: measurementOperationId,
-        category: "session.resume",
-        headers: options?.requestHeaders,
-      }),
-    );
-  } finally {
-    await releaseRuntimeReservations();
-  }
+      category: "session.resume",
+      headers: options?.requestHeaders,
+    }),
+  );
 }
 
 export function collectInactiveSessionStreamIds(

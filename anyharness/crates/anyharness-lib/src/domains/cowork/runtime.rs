@@ -8,7 +8,7 @@ use std::time::Instant;
 use anyharness_contract::v1::{
     ContentPart, CoworkCodingCompletionSummary, CoworkCodingSessionSummary,
     CoworkManagedWorkspaceSummary, CoworkManagedWorkspacesResponse, SessionEvent,
-    SessionLinkTurnCompletedPayload, SessionMcpBindingSummary, SubagentTurnOutcome,
+    SessionLinkTurnCompletedPayload, SubagentTurnOutcome,
 };
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -30,7 +30,6 @@ use crate::sessions::extensions::{
 };
 use crate::sessions::links::completions::LinkCompletionRecord;
 use crate::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
-use crate::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::prompt::{PromptPayload, PromptProvenance};
 use crate::sessions::runtime::{CreateAndStartSessionError, SendPromptOutcome, SessionRuntime};
@@ -124,7 +123,6 @@ pub struct CoworkCodingStatusResult {
     pub latest_completion: Option<LinkCompletionRecord>,
 }
 
-const COWORK_WORKSPACE_PATH_PLACEHOLDER: &str = "__PROLIFERATE_COWORK_WORKSPACE_PATH__";
 const DEFAULT_CODING_WORKSPACE_NAME: &str = "coding-workspace";
 const MAX_CODING_WORKSPACE_NAME_LEN: usize = 64;
 const MAX_CODING_WORKSPACE_NAME_ATTEMPTS: usize = 100;
@@ -134,19 +132,6 @@ struct CodingWorkspaceNamePlan {
     workspace_name: String,
     branch_name: String,
     target_path: PathBuf,
-}
-
-fn materialize_cowork_workspace_path(mcp_servers: &mut [SessionMcpServer], workspace_path: &str) {
-    for server in mcp_servers {
-        let SessionMcpServer::Stdio(server) = server else {
-            continue;
-        };
-        for arg in &mut server.args {
-            if arg == COWORK_WORKSPACE_PATH_PLACEHOLDER {
-                *arg = workspace_path.to_string();
-            }
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -442,17 +427,13 @@ impl CoworkRuntime {
         agent_kind: &str,
         model_id: Option<&str>,
         mode_id: Option<&str>,
-        mut mcp_servers: Vec<SessionMcpServer>,
-        mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
         workspace_delegation_enabled: bool,
     ) -> Result<CreateCoworkThreadResult, CoworkCreateThreadError> {
         let total_started = Instant::now();
-        let mcp_server_count = mcp_servers.len();
         tracing::info!(
             agent_kind = %agent_kind,
             model_id = ?model_id,
             mode_id = ?mode_id,
-            mcp_server_count,
             workspace_delegation_enabled,
             "[workspace-latency] cowork.runtime.create_thread.start"
         );
@@ -487,7 +468,6 @@ impl CoworkRuntime {
             elapsed_ms = worktree_started.elapsed().as_millis(),
             "[workspace-latency] cowork.runtime.create_thread.worktree_created"
         );
-        materialize_cowork_workspace_path(&mut mcp_servers, &worktree.workspace.path);
         let durable_create_started = Instant::now();
         let durable_session = match self.session_runtime.create_durable_session(
             &worktree.workspace.id,
@@ -495,8 +475,8 @@ impl CoworkRuntime {
             model_id,
             mode_id,
             None,
-            mcp_servers,
-            mcp_binding_summaries,
+            Vec::new(),
+            None,
             crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             false,
             None,
@@ -546,104 +526,62 @@ impl CoworkRuntime {
             }
         };
         let start_started = Instant::now();
-        let mut response_session = durable_session.clone();
-        if mcp_server_count > 0 {
+        let response_session = durable_session.clone();
+        let session_runtime = self.session_runtime.clone();
+        let session_for_start = durable_session.clone();
+        let start_thread_id = thread_id.clone();
+        let start_workspace_id = worktree.workspace.id.clone();
+        let start_session_store = self.session_service.store().clone();
+        tokio::spawn(async move {
             tracing::info!(
-                thread_id = %thread_id,
-                workspace_id = %worktree.workspace.id,
-                session_id = %durable_session.id,
+                thread_id = %start_thread_id,
+                workspace_id = %start_workspace_id,
+                session_id = %session_for_start.id,
                 "[workspace-latency] cowork.runtime.create_thread.live_start.start"
             );
-            match self
-                .session_runtime
-                .start_persisted_session(&durable_session, None)
+            match session_runtime
+                .start_persisted_session(&session_for_start, None)
                 .await
             {
                 Ok(started) => {
                     tracing::info!(
-                        thread_id = %thread_id,
-                        workspace_id = %worktree.workspace.id,
+                        thread_id = %start_thread_id,
+                        workspace_id = %start_workspace_id,
                         session_id = %started.id,
                         native_session_id = %started.native_session_id.as_deref().unwrap_or_default(),
                         elapsed_ms = start_started.elapsed().as_millis(),
                         "[workspace-latency] cowork.runtime.create_thread.live_start.completed"
                     );
-                    response_session = started;
                 }
                 Err(error) => {
-                    if let Ok(Some(updated)) = self.session_service.get_session(&durable_session.id)
+                    let now = chrono::Utc::now().to_rfc3339();
+                    if let Err(status_error) =
+                        start_session_store.update_status(&session_for_start.id, "errored", &now)
                     {
-                        response_session = updated;
+                        tracing::warn!(
+                            thread_id = %start_thread_id,
+                            workspace_id = %start_workspace_id,
+                            session_id = %session_for_start.id,
+                            error = %status_error,
+                            "[workspace-latency] cowork.runtime.create_thread.live_start.status_update_failed"
+                        );
                     }
                     tracing::warn!(
-                        thread_id = %thread_id,
-                        workspace_id = %worktree.workspace.id,
-                        session_id = %durable_session.id,
+                        thread_id = %start_thread_id,
+                        workspace_id = %start_workspace_id,
+                        session_id = %session_for_start.id,
                         elapsed_ms = start_started.elapsed().as_millis(),
                         error = ?error,
                         "[workspace-latency] cowork.runtime.create_thread.live_start.failed"
                     );
                 }
             }
-        } else {
-            let session_runtime = self.session_runtime.clone();
-            let session_for_start = durable_session.clone();
-            let start_thread_id = thread_id.clone();
-            let start_workspace_id = worktree.workspace.id.clone();
-            let start_session_store = self.session_service.store().clone();
-            tokio::spawn(async move {
-                tracing::info!(
-                    thread_id = %start_thread_id,
-                    workspace_id = %start_workspace_id,
-                    session_id = %session_for_start.id,
-                    "[workspace-latency] cowork.runtime.create_thread.live_start.start"
-                );
-                match session_runtime
-                    .start_persisted_session(&session_for_start, None)
-                    .await
-                {
-                    Ok(started) => {
-                        tracing::info!(
-                            thread_id = %start_thread_id,
-                            workspace_id = %start_workspace_id,
-                            session_id = %started.id,
-                            native_session_id = %started.native_session_id.as_deref().unwrap_or_default(),
-                            elapsed_ms = start_started.elapsed().as_millis(),
-                            "[workspace-latency] cowork.runtime.create_thread.live_start.completed"
-                        );
-                    }
-                    Err(error) => {
-                        let now = chrono::Utc::now().to_rfc3339();
-                        if let Err(status_error) = start_session_store.update_status(
-                            &session_for_start.id,
-                            "errored",
-                            &now,
-                        ) {
-                            tracing::warn!(
-                                thread_id = %start_thread_id,
-                                workspace_id = %start_workspace_id,
-                                session_id = %session_for_start.id,
-                                error = %status_error,
-                                "[workspace-latency] cowork.runtime.create_thread.live_start.status_update_failed"
-                            );
-                        }
-                        tracing::warn!(
-                            thread_id = %start_thread_id,
-                            workspace_id = %start_workspace_id,
-                            session_id = %session_for_start.id,
-                            elapsed_ms = start_started.elapsed().as_millis(),
-                            error = ?error,
-                            "[workspace-latency] cowork.runtime.create_thread.live_start.failed"
-                        );
-                    }
-                }
-            });
-        }
+        });
         tracing::info!(
             thread_id = %thread_id,
             workspace_id = %worktree.workspace.id,
             session_id = %response_session.id,
-            start_deferred = mcp_server_count == 0,
+            start_deferred = true,
             total_elapsed_ms = total_started.elapsed().as_millis(),
             "[workspace-latency] cowork.runtime.create_thread.completed"
         );
@@ -1815,30 +1753,9 @@ fn git_branch_exists(repo_root_path: &str, branch_name: &str) -> bool {
 mod tests {
     use super::{
         coding_workspace_label, coding_workspace_name_from_branch, coding_workspace_slug,
-        cowork_transcript_search_text, materialize_cowork_workspace_path,
-        workspace_name_with_suffix, COWORK_WORKSPACE_PATH_PLACEHOLDER,
+        cowork_transcript_search_text, workspace_name_with_suffix,
     };
-    use crate::sessions::mcp_bindings::model::{SessionMcpServer, SessionMcpStdioServer};
     use crate::sessions::model::SessionEventRecord;
-
-    #[test]
-    fn materializes_cowork_workspace_path_in_stdio_args() {
-        let mut servers = vec![SessionMcpServer::Stdio(SessionMcpStdioServer {
-            connection_id: "filesystem-1".to_string(),
-            catalog_entry_id: Some("filesystem".to_string()),
-            server_name: "filesystem".to_string(),
-            command: "filesystem".to_string(),
-            args: vec![COWORK_WORKSPACE_PATH_PLACEHOLDER.to_string()],
-            env: vec![],
-        })];
-
-        materialize_cowork_workspace_path(&mut servers, "/tmp/cowork/thread-1");
-
-        let SessionMcpServer::Stdio(server) = &servers[0] else {
-            panic!("expected stdio server");
-        };
-        assert_eq!(server.args, vec!["/tmp/cowork/thread-1"]);
-    }
 
     #[test]
     fn normalizes_coding_workspace_names() {

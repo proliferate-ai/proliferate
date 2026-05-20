@@ -14,7 +14,6 @@ export * from "./client/events.js";
 export * from "./client/live.js";
 export * from "./client/mcp_catalog.js";
 export * from "./client/mcp_connections.js";
-export * from "./client/mcp_materialization.js";
 export * from "./client/mcp_oauth.js";
 export * from "./client/mobility.js";
 export * from "./client/organizations.js";

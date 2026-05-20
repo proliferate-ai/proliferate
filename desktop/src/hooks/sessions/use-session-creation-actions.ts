@@ -3,12 +3,10 @@ import { useCallback } from "react";
 import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
-import { resolveSessionMcpServersForLaunch } from "@/lib/workflows/sessions/session-mcp-launch";
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
 import {
   resolveRuntimeTargetForWorkspace,
-  type RuntimeTarget,
 } from "@/lib/access/anyharness/runtime-target";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import { findCompatibleExistingSession } from "@/lib/domain/sessions/creation/compatible-session";
@@ -75,7 +73,6 @@ import {
   createSession,
   listWorkspaceSessions,
 } from "@/lib/access/anyharness/sessions";
-import { getWorkspace } from "@/lib/access/anyharness/workspaces";
 import type { WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import {
   rememberLastViewedSession,
@@ -86,7 +83,6 @@ import {
   materializeSessionRecord,
   removeSessionRecordAndClearSelection,
 } from "@/hooks/sessions/workflows/session-creation-local-state";
-import { reportConnectorLaunchWarnings } from "@/hooks/sessions/workflows/session-launch-warning-effects";
 import {
   inFlightSessionCreatesByWorkspace,
 } from "@/hooks/sessions/workflows/session-creation-in-flight";
@@ -149,10 +145,6 @@ const sessionStreamPruningDeps: SessionStreamPruningDeps = {
   },
   isPendingSessionId,
 };
-
-function mcpTargetLocation(target: RuntimeTarget): "local" | "cloud" {
-  return target.location === "local" ? "local" : "cloud";
-}
 
 async function ensureRuntimeReadyForSessions(): Promise<string> {
   const state = useHarnessConnectionStore.getState();
@@ -428,50 +420,15 @@ export function useSessionCreationActions() {
           return pendingSessionId;
         }
       }
-      const targetWorkspace = await getWorkspace(
-        targetConnection,
-        target.anyharnessWorkspaceId,
-        requestOptions,
-      ).catch(() => null);
-      const pluginsInCodingSessionsEnabled = useUserPreferencesStore.getState()
-        .pluginsInCodingSessionsEnabled;
       const subagentsEnabled = useUserPreferencesStore.getState().subagentsEnabled;
-      const mcpLaunch = await resolveSessionMcpServersForLaunch({
-        targetLocation: mcpTargetLocation(target),
-        workspacePath: targetWorkspace?.path ?? null,
-        launchId: crypto.randomUUID(),
-        policy: {
-          workspaceSurface: "coding",
-          lifecycle: "create",
-          enabled: pluginsInCodingSessionsEnabled,
-        },
-      });
-      const {
-        mcpServers,
-        mcpBindingSummaries,
-        pluginBundle,
-        warnings: connectorWarnings,
-      } = mcpLaunch;
-      const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
-      const session = await (async () => {
-        try {
-          return await createSession(targetConnection, {
-            workspaceId: target.anyharnessWorkspaceId,
-            agentKind: options.agentKind,
-            modelId: options.modelId,
-            ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
-            mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
-            mcpBindingSummaries: mcpBindingSummaries.length > 0
-              ? mcpBindingSummaries
-              : undefined,
-            pluginBundle,
-            subagentsEnabled,
-            origin: DESKTOP_ORIGIN,
-          }, requestOptions);
-        } finally {
-          await releaseRuntimeReservations();
-        }
-      })();
+      const session = await createSession(targetConnection, {
+        workspaceId: target.anyharnessWorkspaceId,
+        agentKind: options.agentKind,
+        modelId: options.modelId,
+        ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
+        subagentsEnabled,
+        origin: DESKTOP_ORIGIN,
+      }, requestOptions);
 
       annotateLatencyFlow(options.latencyFlowId, {
         targetSessionId: session.id,
@@ -546,7 +503,6 @@ export function useSessionCreationActions() {
         workspace_kind: cloudWorkspaceId ? "cloud" : "local",
         agent_kind: options.agentKind,
       });
-      reportConnectorLaunchWarnings(connectorWarnings, showToast);
 
       if (options.launchIntentId) {
         useChatLaunchIntentStore.getState().markMaterializedIfActive(

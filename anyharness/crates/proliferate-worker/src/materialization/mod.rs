@@ -3,10 +3,8 @@ pub mod env;
 pub mod files;
 pub mod git;
 pub mod git_identity;
-pub mod mcp;
 pub mod repo_checkout;
 pub mod runtime_config;
-pub mod skills;
 
 use std::{
     collections::BTreeMap,
@@ -53,9 +51,6 @@ pub struct TargetConfigMaterializationPlan {
     #[serde(default)]
     pub agent_credentials: BTreeMap<String, Value>,
     pub runtime_config: Option<RuntimeConfigMaterializationFragment>,
-    pub mcp: Option<Value>,
-    #[serde(default)]
-    pub skills: Vec<Value>,
     #[serde(default)]
     pub readiness_requirements: BTreeMap<String, Value>,
 }
@@ -132,17 +127,10 @@ pub fn materialize_plan(
         &workspace_root,
         plan.runtime_config.as_ref(),
     )?;
-    let (mcp_configured, skills_configured) = if runtime_config.is_some() {
-        let summary = runtime_config
-            .as_ref()
-            .expect("runtime config summary exists");
-        (summary.mcp_server_count > 0, summary.skill_count > 0)
-    } else {
-        (
-            mcp::write_mcp_materialization(&workspace_root, plan.mcp.as_ref())?,
-            skills::write_skill_refs(&workspace_root, &plan.skills)?,
-        )
-    };
+    let (mcp_configured, skills_configured) = runtime_config
+        .as_ref()
+        .map(|summary| (summary.mcp_server_count > 0, summary.skill_count > 0))
+        .unwrap_or((false, false));
     write_manifest(&workspace_root, plan)?;
     Ok(MaterializationOutcome {
         target_config_id: plan.target_config_id.clone(),
@@ -357,7 +345,7 @@ mod tests {
     };
 
     #[test]
-    fn materializes_repo_env_git_mcp_and_files() {
+    fn materializes_repo_env_git_and_files() {
         let root = std::env::temp_dir().join(format!(
             "proliferate-worker-materialization-{}",
             std::process::id()
@@ -393,8 +381,6 @@ mod tests {
             }),
             agent_credentials: BTreeMap::new(),
             runtime_config: None,
-            mcp: Some(json!({"mcpServers": []})),
-            skills: vec![],
             readiness_requirements: BTreeMap::new(),
         };
 
@@ -411,7 +397,7 @@ mod tests {
                 .contains("APP_ENV")
         );
         assert!(root.join(".proliferate/git/gitconfig").exists());
-        assert!(root.join(".proliferate/mcp/materialization.json").exists());
+        assert!(!root.join(".proliferate/mcp/materialization.json").exists());
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -493,8 +479,6 @@ mod tests {
                     credential_refs: vec![],
                 },
             ),
-            mcp: Some(json!({"legacy": true})),
-            skills: vec![json!({"legacy": true})],
             readiness_requirements: BTreeMap::new(),
         };
 
@@ -547,8 +531,6 @@ mod tests {
             git_credential: None,
             agent_credentials: BTreeMap::new(),
             runtime_config: None,
-            mcp: None,
-            skills: vec![],
             readiness_requirements: BTreeMap::new(),
         };
 

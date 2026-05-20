@@ -2172,8 +2172,6 @@ export interface components {
         CreateCoworkThreadRequest: {
             agentKind: string;
             coworkWorkspaceDelegationEnabled?: boolean | null;
-            mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
-            mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
             modeId?: string | null;
             modelId?: string | null;
         };
@@ -2205,12 +2203,9 @@ export interface components {
             agentAuthScope?: null | components["schemas"]["AgentAuthExternalScope"];
             agentKind: string;
             expectedRuntimeConfigRevision?: null | components["schemas"]["RuntimeConfigRevisionExpectation"];
-            mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
-            mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
             modeId?: string | null;
             modelId?: string | null;
             origin?: null | components["schemas"]["OriginContext"];
-            pluginBundle?: null | components["schemas"]["SessionPluginBundle"];
             /** Format: int64 */
             requiredAgentAuthRevision?: number | null;
             subagentsEnabled?: boolean | null;
@@ -3290,9 +3285,6 @@ export interface components {
         };
         ResumeSessionRequest: {
             expectedRuntimeConfigRevision?: null | components["schemas"]["RuntimeConfigRevisionExpectation"];
-            mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
-            mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
-            pluginBundle?: null | components["schemas"]["SessionPluginBundle"];
         };
         RetryReviewAssignmentRequest: {
             modelId?: string | null;
@@ -3788,39 +3780,6 @@ export interface components {
         };
         /** @enum {string} */
         SessionMcpTransport: "http" | "stdio";
-        SessionPlugin: {
-            credentialBindings?: components["schemas"]["SessionPluginCredentialBinding"][];
-            mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][];
-            mcpServers?: components["schemas"]["SessionMcpServer"][];
-            pluginId: string;
-            skills?: components["schemas"]["SessionPluginSkill"][];
-            version?: string | null;
-        };
-        SessionPluginBundle: {
-            plugins?: components["schemas"]["SessionPlugin"][];
-        };
-        SessionPluginCredentialBinding: {
-            displayName?: string | null;
-            id: string;
-            status: components["schemas"]["SessionPluginCredentialBindingStatus"];
-        };
-        /** @enum {string} */
-        SessionPluginCredentialBindingStatus: "ready" | "missing" | "needs_reconnect" | "unsupported_target";
-        SessionPluginSkill: {
-            credentialBindingIds?: string[];
-            description: string;
-            displayName: string;
-            instructions: string;
-            requiredMcpServers?: string[];
-            resources?: components["schemas"]["SessionPluginSkillResource"][];
-            skillId: string;
-        };
-        SessionPluginSkillResource: {
-            content: string;
-            contentType: string;
-            displayName?: string | null;
-            resourceId: string;
-        };
         SessionRawNotificationEnvelope: {
             notification: unknown;
             notificationKind: string;
