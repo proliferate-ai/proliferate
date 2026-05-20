@@ -42,6 +42,8 @@ interface HeaderChatTabProps {
   onCloseOthers: (sessionId: string) => void;
   onCloseRight: (sessionId: string) => void;
   onDismiss: (sessionId: string) => void;
+  shortcutLabel: string | null;
+  shortcutRevealVisible: boolean;
   clearSelection: () => void;
   toggleSelection: (sessionId: string) => void;
   suppressNextSelectClick: (sessionId: string) => void;
@@ -76,6 +78,8 @@ export function HeaderChatTab({
   onCloseOthers,
   onCloseRight,
   onDismiss,
+  shortcutLabel,
+  shortcutRevealVisible,
   clearSelection,
   toggleSelection,
   suppressNextSelectClick,
@@ -167,6 +171,8 @@ export function HeaderChatTab({
         onCloseOthers={() => onCloseOthers(tab.id)}
         onCloseRight={() => onCloseRight(tab.id)}
         onDismiss={() => onDismiss(tab.id)}
+        shortcutLabel={shortcutLabel}
+        shortcutRevealVisible={shortcutRevealVisible}
       />
     </div>
   );

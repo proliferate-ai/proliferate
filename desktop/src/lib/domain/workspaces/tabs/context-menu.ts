@@ -45,7 +45,6 @@ const CLOSE_TABS_TO_RIGHT_ACTION: WorkspaceTabContextMenuItem = {
   kind: "action",
   command: "close-right",
   label: "Close Tabs to the Right",
-  shortcutKey: "closeTabsToRight",
 };
 
 export const FILE_TAB_CONTEXT_MENU_ITEMS: readonly WorkspaceTabContextMenuItem[] = [

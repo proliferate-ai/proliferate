@@ -2615,6 +2615,11 @@ body {
   display: block;
 }
 
+.right-panel-tab-system .right-panel-shortcut-badge {
+  flex-shrink: 0;
+  color: var(--right-panel-tab-text-tertiary);
+}
+
 .right-panel-tab-system .right-panel-terminal-tab-shell {
   position: relative;
   display: flex;

@@ -31,7 +31,6 @@ describe("workspace tab context menu", () => {
         kind: "action",
         command: "close-right",
         label: "Close Tabs to the Right",
-        shortcutKey: "closeTabsToRight",
       },
       { kind: "separator", id: "dismiss-separator" },
       { kind: "action", command: "dismiss", label: "Dismiss Session", tone: "destructive" },
@@ -60,7 +59,6 @@ describe("workspace tab context menu", () => {
         kind: "action",
         command: "close-right",
         label: "Close Tabs to the Right",
-        shortcutKey: "closeTabsToRight",
       },
     ]);
   });
@@ -90,7 +88,6 @@ describe("workspace tab context menu", () => {
         kind: "action",
         command: "close-right",
         label: "Close Tabs to the Right",
-        shortcutKey: "closeTabsToRight",
       },
       { kind: "separator", id: "dismiss-separator" },
       { kind: "action", command: "dismiss", label: "Dismiss Session", tone: "destructive" },

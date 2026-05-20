@@ -377,7 +377,7 @@ describe("RightPanel tab shortcuts", () => {
     expect(screen.queryByTestId("git-panel")).toBeNull();
   });
 
-  it("does not intercept angle tab-cycle shell shortcuts after clicking panel content", async () => {
+  it("does not intercept bracket tab-cycle shell shortcuts after clicking panel content", async () => {
     const { container } = render(<RightPanelHarness isWorkspaceReady />);
     const root = container.querySelector("[data-right-panel-root='true']");
     if (!(root instanceof HTMLElement)) {
@@ -387,8 +387,8 @@ describe("RightPanel tab shortcuts", () => {
     fireEvent.pointerDown(root);
     expect(document.activeElement).toBe(root);
 
-    fireEvent.keyDown(window, angleTabEvent("next"));
-    fireEvent.keyDown(window, angleTabEvent("previous"));
+    fireEvent.keyDown(window, bracketTabEvent("next"));
+    fireEvent.keyDown(window, bracketTabEvent("previous"));
 
     await Promise.resolve();
 
@@ -409,15 +409,15 @@ describe("RightPanel tab shortcuts", () => {
     expect(screen.queryByTestId("git-panel")).toBeNull();
   });
 
-  it("does not intercept angle tab-cycle shell shortcuts from right-panel text inputs", async () => {
+  it("does not intercept bracket tab-cycle shell shortcuts from right-panel text inputs", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
     const input = screen.getByTestId("scratch-panel-input");
 
     input.focus();
     expect(document.activeElement).toBe(input);
 
-    fireEvent.keyDown(window, angleTabEvent("next"));
-    fireEvent.keyDown(window, angleTabEvent("previous"));
+    fireEvent.keyDown(window, bracketTabEvent("next"));
+    fireEvent.keyDown(window, bracketTabEvent("previous"));
 
     await Promise.resolve();
 
@@ -563,12 +563,11 @@ function primaryDigitEvent(digit: number) {
   };
 }
 
-function angleTabEvent(direction: "next" | "previous") {
+function bracketTabEvent(direction: "next" | "previous") {
   return {
-    key: direction === "next" ? ">" : "<",
-    code: direction === "next" ? "Period" : "Comma",
+    key: direction === "next" ? "}" : "{",
+    code: direction === "next" ? "BracketRight" : "BracketLeft",
     shiftKey: true,
-    altKey: true,
     ...(isApplePlatform() ? { metaKey: true } : { ctrlKey: true }),
   };
 }

@@ -68,14 +68,14 @@ describe("shortcut matching", () => {
     });
 
     expect(matchShortcutDef(
-      SHORTCUTS.nextTabAngle,
+      SHORTCUTS.nextTab,
       {
-        key: ">",
-        code: "Period",
+        key: "}",
+        code: "BracketRight",
         metaKey: true,
         ctrlKey: false,
         shiftKey: true,
-        altKey: true,
+        altKey: false,
       } as KeyboardEvent,
     )).toEqual({});
   });

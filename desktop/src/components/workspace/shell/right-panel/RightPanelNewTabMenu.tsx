@@ -1,5 +1,6 @@
 import { useCallback, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import {
@@ -8,6 +9,8 @@ import {
   AppShellTerminalIcon,
 } from "@/components/ui/icons";
 import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
+import { SHORTCUTS } from "@/config/shortcuts";
+import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 
 interface RightPanelNewTabMenuProps {
   open: boolean;
@@ -17,6 +20,7 @@ interface RightPanelNewTabMenuProps {
   onOpenChange: (isOpen: boolean) => void;
   onCreateTerminal: () => void;
   onCreateBrowser: () => void;
+  shortcutRevealVisible: boolean;
 }
 
 export function RightPanelNewTabMenu({
@@ -27,7 +31,10 @@ export function RightPanelNewTabMenu({
   onOpenChange,
   onCreateTerminal,
   onCreateBrowser,
+  shortcutRevealVisible,
 }: RightPanelNewTabMenuProps) {
+  const showBrowserShortcut = isWorkspaceReady && canCreateBrowserTab;
+
   return (
     <PopoverButton
       align="end"
@@ -37,9 +44,17 @@ export function RightPanelNewTabMenu({
         <IconButton
           size="xs"
           tone="sidebar"
-          className="ui-icon-button workspace-shell-icon-button workspace-shell-toolbar-button glass-editor-panel-new-tab-menu-trigger"
+          className="ui-icon-button workspace-shell-icon-button workspace-shell-toolbar-button glass-editor-panel-new-tab-menu-trigger relative"
         >
           <AppShellPlusIcon className="ui-icon" />
+          {showBrowserShortcut ? (
+            <ShortcutBadge
+              label={getShortcutDisplayLabel(SHORTCUTS.openBrowserTab)}
+              className={`pointer-events-none absolute -right-1 -bottom-1 z-20 text-muted-foreground opacity-0 transition-opacity duration-150 ${
+                shortcutRevealVisible ? "opacity-100" : ""
+              }`}
+            />
+          ) : null}
           <span className="sr-only">Open new tab menu</span>
         </IconButton>
       }

@@ -1,5 +1,6 @@
 import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
 import { AppShellTerminalIcon } from "@/components/ui/icons";
 import { TerminalHeaderIcon } from "@/components/workspace/shell/right-panel/TerminalHeaderIcon";
 
@@ -14,6 +15,8 @@ interface TerminalHeaderButtonProps {
   isRuntimeReady: boolean;
   isDragging: boolean;
   shouldSuppressClick: () => boolean;
+  shortcutLabel: string | null;
+  shortcutRevealVisible: boolean;
   onSelect: () => void;
   onClose: () => void;
   onRename: (title: string) => Promise<void>;
@@ -28,6 +31,8 @@ export function TerminalHeaderButton({
   isRuntimeReady,
   isDragging,
   shouldSuppressClick,
+  shortcutLabel,
+  shortcutRevealVisible,
   onSelect,
   onClose,
   onRename,
@@ -42,6 +47,8 @@ export function TerminalHeaderButton({
         isRuntimeReady={isRuntimeReady}
         isDragging={isDragging}
         shouldSuppressClick={shouldSuppressClick}
+        shortcutLabel={shortcutLabel}
+        shortcutRevealVisible={shortcutRevealVisible}
         onSelect={onSelect}
         onClose={onClose}
         onRename={onRename}
@@ -81,6 +88,14 @@ export function TerminalHeaderButton({
           data-dirty={unread ? true : undefined}
           aria-hidden="true"
         />
+        {shortcutLabel ? (
+          <ShortcutBadge
+            label={shortcutLabel}
+            className={`right-panel-shortcut-badge opacity-0 transition-opacity duration-150 ${
+              shortcutRevealVisible ? "opacity-100" : ""
+            }`}
+          />
+        ) : null}
       </span>
     </Button>
   );

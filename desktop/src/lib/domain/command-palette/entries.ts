@@ -20,6 +20,7 @@ export type CommandPaletteIconId =
   | "command"
   | "folder-plus"
   | "git-branch"
+  | "keyboard"
   | "panel-bottom"
   | "pencil"
   | "play"

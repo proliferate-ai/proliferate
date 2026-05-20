@@ -3,6 +3,7 @@ import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { useTerminalTabNativeContextMenu } from "@/hooks/terminals/ui/use-terminal-tab-native-context-menu";
@@ -27,6 +28,8 @@ interface TerminalHeaderIconProps {
   isRuntimeReady: boolean;
   isDragging: boolean;
   shouldSuppressClick: () => boolean;
+  shortcutLabel: string | null;
+  shortcutRevealVisible: boolean;
   onSelect: () => void;
   onClose: () => void;
   onRename: (title: string) => Promise<void>;
@@ -40,6 +43,8 @@ export function TerminalHeaderIcon({
   isRuntimeReady,
   isDragging,
   shouldSuppressClick,
+  shortcutLabel,
+  shortcutRevealVisible,
   onSelect,
   onClose,
   onRename,
@@ -166,6 +171,14 @@ export function TerminalHeaderIcon({
           data-dirty={unread ? true : undefined}
           aria-hidden="true"
         />
+        {shortcutLabel ? (
+          <ShortcutBadge
+            label={shortcutLabel}
+            className={`right-panel-shortcut-badge opacity-0 transition-opacity duration-150 ${
+              shortcutRevealVisible ? "opacity-100" : ""
+            }`}
+          />
+        ) : null}
       </span>
     </Button>
   );

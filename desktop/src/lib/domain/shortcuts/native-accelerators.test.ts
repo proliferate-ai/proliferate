@@ -6,18 +6,19 @@ describe("getShortcutNativeAccelerator", () => {
   it("converts fixed primary-modifier shortcuts to Tauri accelerators", () => {
     expect(getShortcutNativeAccelerator(SHORTCUTS.closeActiveTab)).toBe("CmdOrCtrl+W");
     expect(getShortcutNativeAccelerator(SHORTCUTS.openSettings)).toBe("CmdOrCtrl+Comma");
-    expect(getShortcutNativeAccelerator(SHORTCUTS.renameSession)).toBe("CmdOrCtrl+R");
+    expect(getShortcutNativeAccelerator(SHORTCUTS.openBrowserTab)).toBe("CmdOrCtrl+T");
+    expect(getShortcutNativeAccelerator(SHORTCUTS.renameSession)).toBe("CmdOrCtrl+Alt+R");
     expect(getShortcutNativeAccelerator(SHORTCUTS.closeOtherTabs)).toBe("CmdOrCtrl+Alt+O");
-    expect(getShortcutNativeAccelerator(SHORTCUTS.closeTabsToRight)).toBe("CmdOrCtrl+Shift+R");
   });
 
-  it("converts modifier and named-key shortcuts", () => {
-    expect(getShortcutNativeAccelerator(SHORTCUTS.previousTab)).toBe("CmdOrCtrl+Alt+Left");
+  it("does not invent native accelerators for physical-key shortcuts", () => {
+    expect(getShortcutNativeAccelerator(SHORTCUTS.previousTab)).toBeNull();
   });
 
   it("does not invent accelerators for shortcut ranges or platform-specific matches", () => {
     expect(getShortcutNativeAccelerator(SHORTCUTS.tabByIndex)).toBeNull();
     expect(getShortcutNativeAccelerator(SHORTCUTS.increaseTextSize)).toBeNull();
+    expect(getShortcutNativeAccelerator(SHORTCUTS.newWorktree)).toBeNull();
     expect(getShortcutNativeAccelerator(SHORTCUTS.newCloud)).toBeNull();
   });
 });

@@ -19,7 +19,7 @@ describe("ProductSidebar", () => {
         brand={<span>P</span>}
         title="Proliferate"
         navItems={[
-          { id: "home", label: "Home", icon: <span>H</span>, active: true },
+          { id: "home", label: "Home", icon: <span>H</span>, active: true, shortcutLabel: "⌘B" },
           { id: "settings", label: "Settings", icon: <span>S</span>, active: false },
         ]}
         workspaceGroups={[
@@ -38,6 +38,7 @@ describe("ProductSidebar", () => {
                 active: false,
                 status: <span aria-label="running" />,
                 trailingLabel: "Slack",
+                shortcutLabel: "⌥⌘1",
                 actions: [{ id: "more", label: "More" }],
               },
             ],
@@ -62,6 +63,7 @@ describe("ProductSidebar", () => {
         onChatSelect={onChatSelect}
         onGroupToggle={onGroupToggle}
         onAction={onAction}
+        shortcutRevealVisible
       />,
     );
 
@@ -71,6 +73,8 @@ describe("ProductSidebar", () => {
     expect(screen.getByText("Investigate worker CI")).toBeTruthy();
     expect(screen.getByText("Claimable Slack thread")).toBeTruthy();
     expect(screen.getByText("Pablo")).toBeTruthy();
+    expect(screen.getByText("⌘B").className).toContain("opacity-100");
+    expect(screen.getByText("⌥⌘1").className).toContain("opacity-100");
 
     fireEvent.click(screen.getByText("Settings"));
     expect(onNavSelect).toHaveBeenCalledWith("settings");

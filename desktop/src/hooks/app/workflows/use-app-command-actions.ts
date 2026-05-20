@@ -11,7 +11,7 @@ import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import { APP_ROUTES } from "@/config/app-routes";
 import { requestSupportDialog } from "@/lib/infra/support/support-dialog-request";
-import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
+import { buildCloudRepoSettingsHref, buildSettingsHref } from "@/lib/domain/settings/navigation";
 import {
   buildConfiguredCloudRepoKeys,
   resolveCloudRepoActionState,
@@ -39,6 +39,7 @@ export interface AppCommandAction {
 
 export interface AppCommandActions {
   openSettings: AppCommandAction;
+  showKeyboardShortcuts: AppCommandAction;
   goHome: AppCommandAction;
   goPlugins: AppCommandAction;
   goAutomations: AppCommandAction;
@@ -116,6 +117,9 @@ export function useAppCommandActions(): AppCommandActions {
 
   const openSettings = useCallback(() => {
     navigate("/settings");
+  }, [navigate]);
+  const showKeyboardShortcuts = useCallback(() => {
+    navigate(buildSettingsHref({ section: "keyboard" }));
   }, [navigate]);
   const goHome = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.home);
@@ -254,6 +258,10 @@ export function useAppCommandActions(): AppCommandActions {
       execute: openSettings,
       disabledReason: null,
     },
+    showKeyboardShortcuts: {
+      execute: showKeyboardShortcuts,
+      disabledReason: null,
+    },
     goHome: {
       execute: goHome,
       disabledReason: null,
@@ -300,5 +308,6 @@ export function useAppCommandActions(): AppCommandActions {
     goAutomations,
     openSupport,
     openSettings,
+    showKeyboardShortcuts,
   ]);
 }

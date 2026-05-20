@@ -32,28 +32,16 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(true);
   });
 
-  it("allows the reload-blocked rename shortcut through", () => {
+  it("respects defaultPrevented for rename now that reload stays unbound", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.renameSession, {
       key: "r",
       metaKey: true,
       ctrlKey: false,
       shiftKey: false,
-      altKey: false,
+      altKey: true,
       defaultPrevented: true,
       target: null,
-    } as KeyboardEvent)).toBe(true);
-  });
-
-  it("allows the reload-blocked close-tabs-to-right shortcut through", () => {
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.closeTabsToRight, {
-      key: "r",
-      metaKey: true,
-      ctrlKey: false,
-      shiftKey: true,
-      altKey: false,
-      defaultPrevented: true,
-      target: null,
-    } as KeyboardEvent)).toBe(true);
+    } as KeyboardEvent)).toBe(false);
   });
 
   it("still blocks rename in disallowed text-entry targets", () => {
@@ -65,8 +53,8 @@ describe("shortcut dispatch policy", () => {
       metaKey: true,
       ctrlKey: false,
       shiftKey: false,
-      altKey: false,
-      defaultPrevented: true,
+      altKey: true,
+      defaultPrevented: false,
       target: {
         tagName: "TEXTAREA",
         isContentEditable: false,
@@ -84,8 +72,8 @@ describe("shortcut dispatch policy", () => {
     });
 
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.addRepository, {
-      key: "i",
-      code: "KeyI",
+      key: "o",
+      code: "KeyO",
       metaKey: true,
       ctrlKey: false,
       shiftKey: false,
@@ -95,42 +83,26 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(false);
   });
 
-  it("blocks automations shortcut in text-entry targets", () => {
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.goAutomations, {
-      key: "u",
-      code: "KeyU",
-      metaKey: true,
-      ctrlKey: false,
-      shiftKey: false,
-      altKey: false,
-      defaultPrevented: false,
-      target: {
-        tagName: "TEXTAREA",
-        isContentEditable: false,
-      } as unknown as EventTarget,
-    } as KeyboardEvent)).toBe(false);
-  });
-
-  it("blocks support shortcut in text-entry targets", () => {
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.openSupport, {
-      key: "s",
-      code: "KeyS",
-      metaKey: true,
-      ctrlKey: false,
-      shiftKey: false,
-      altKey: false,
-      defaultPrevented: false,
-      target: {
-        tagName: "TEXTAREA",
-        isContentEditable: false,
-      } as unknown as EventTarget,
-    } as KeyboardEvent)).toBe(false);
-  });
-
-  it("blocks the close-other-tabs shift alias in text-entry targets", () => {
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.closeOtherTabsShiftAlias, {
+  it("blocks add repository in text-entry targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.addRepository, {
       key: "o",
       code: "KeyO",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: false,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(false);
+  });
+
+  it("allows the keyboard shortcut sheet from text-entry targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.showKeyboardShortcuts, {
+      key: "?",
+      code: "Slash",
       metaKey: true,
       ctrlKey: false,
       shiftKey: true,
@@ -140,7 +112,20 @@ describe("shortcut dispatch policy", () => {
         tagName: "TEXTAREA",
         isContentEditable: false,
       } as unknown as EventTarget,
-    } as KeyboardEvent)).toBe(false);
+    } as KeyboardEvent)).toBe(true);
+  });
+
+  it("allows the keyboard shortcut sheet through default-prevented targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.showKeyboardShortcuts, {
+      key: "?",
+      code: "Slash",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
   });
 
   it("allows left-sidebar toggle from text-entry and terminal focus targets", () => {
@@ -263,11 +248,12 @@ describe("shortcut dispatch policy", () => {
 
   it("allows tab cycling from text-entry targets", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.previousTab, {
-      key: "ArrowLeft",
+      key: "{",
+      code: "BracketLeft",
       metaKey: true,
       ctrlKey: false,
-      shiftKey: false,
-      altKey: true,
+      shiftKey: true,
+      altKey: false,
       defaultPrevented: false,
       target: {
         tagName: "TEXTAREA",
@@ -276,29 +262,14 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(true);
   });
 
-  it("allows tab cycling when text inputs mark Cmd+Option+Arrow as handled", () => {
+  it("allows tab cycling when text inputs mark Cmd+Shift+Bracket as handled", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTab, {
-      key: "ArrowRight",
-      metaKey: true,
-      ctrlKey: false,
-      shiftKey: false,
-      altKey: true,
-      defaultPrevented: true,
-      target: {
-        tagName: "TEXTAREA",
-        isContentEditable: false,
-      } as unknown as EventTarget,
-    } as KeyboardEvent)).toBe(true);
-  });
-
-  it("allows tab cycling angle aliases when text inputs mark them handled", () => {
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTabAngle, {
-      key: ">",
-      code: "Period",
+      key: "}",
+      code: "BracketRight",
       metaKey: true,
       ctrlKey: false,
       shiftKey: true,
-      altKey: true,
+      altKey: false,
       defaultPrevented: true,
       target: {
         tagName: "TEXTAREA",
@@ -340,6 +311,17 @@ describe("shortcut dispatch policy", () => {
       defaultPrevented: true,
       target: null,
     } as KeyboardEvent)).toBe(true);
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.openBrowserTab, {
+      key: "t",
+      code: "KeyT",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
   });
 
   it("allows tab index shortcuts from right-panel text inputs even when handled locally", () => {
@@ -358,14 +340,14 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(true);
   });
 
-  it("allows angle tab cycling from right-panel text inputs even when handled locally", () => {
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.previousTabAngle, {
-      key: "<",
-      code: "Comma",
+  it("allows bracket tab cycling from right-panel text inputs even when handled locally", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.previousTab, {
+      key: "{",
+      code: "BracketLeft",
       metaKey: true,
       ctrlKey: false,
       shiftKey: true,
-      altKey: true,
+      altKey: false,
       defaultPrevented: true,
       target: {
         tagName: "TEXTAREA",
@@ -373,13 +355,13 @@ describe("shortcut dispatch policy", () => {
       } as unknown as EventTarget,
     } as KeyboardEvent)).toBe(true);
 
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTabAngle, {
-      key: ">",
-      code: "Period",
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTab, {
+      key: "}",
+      code: "BracketRight",
       metaKey: true,
       ctrlKey: false,
       shiftKey: true,
-      altKey: true,
+      altKey: false,
       defaultPrevented: true,
       target: {
         tagName: "TEXTAREA",
@@ -418,13 +400,13 @@ describe("shortcut dispatch policy", () => {
       },
     });
 
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTabAngle, {
-      key: ">",
-      code: "Period",
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTab, {
+      key: "}",
+      code: "BracketRight",
       metaKey: true,
       ctrlKey: false,
       shiftKey: true,
-      altKey: true,
+      altKey: false,
       defaultPrevented: true,
       target: null,
     } as KeyboardEvent)).toBe(true);

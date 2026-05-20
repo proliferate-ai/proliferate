@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
 import { X } from "@/components/ui/icons";
 
 interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> {
@@ -18,6 +19,8 @@ interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "
   onSelectPointerDownCapture?: (event: PointerEvent<HTMLButtonElement>) => void;
   onClose: () => void;
   badge?: ReactNode;
+  shortcutLabel?: string | null;
+  shortcutRevealVisible?: boolean;
   rightAccessory?: ReactNode;
   groupColor?: string | null;
   isChild?: boolean;
@@ -36,6 +39,8 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     onSelectPointerDownCapture,
     onClose,
     badge,
+    shortcutLabel = null,
+    shortcutRevealVisible = false,
     rightAccessory,
     groupColor: _groupColor,
     isChild: _isChild = false,
@@ -51,8 +56,10 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     const isSmall = contentWidth < 84;
     const showTitle = !isMini && !isSmaller;
     const showBadge = !isSmall;
+    const showShortcut = Boolean(shortcutLabel) && !isSmall;
     const showCloseButton = !isMini || isActive;
-    const titleMask = "linear-gradient(90deg, #000 0%, #000 calc(100% - 20px), transparent)";
+    const titleMaskEnd = showShortcut ? 36 : 20;
+    const titleMask = `linear-gradient(90deg, #000 0%, #000 calc(100% - ${titleMaskEnd}px), transparent)`;
 
     return (
       <div
@@ -133,6 +140,14 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             )}
             {showBadge && badge}
           </Button>
+          {showShortcut && shortcutLabel ? (
+            <ShortcutBadge
+              label={shortcutLabel}
+              className={`pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity duration-150 ${
+                shortcutRevealVisible ? "opacity-100" : ""
+              }`}
+            />
+          ) : null}
           {!isMini && rightAccessory}
         </div>
       </div>

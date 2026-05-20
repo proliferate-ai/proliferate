@@ -14,6 +14,7 @@ import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-
 import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
 import type { FileViewerMode } from "@/lib/domain/workspaces/viewer/viewer-target";
 import type { WorkspaceFileBuffer } from "@/stores/editor/workspace-file-buffers-store";
+import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
 
 interface RightPanelHeaderTabsProps {
   entries: readonly RightPanelHeaderEntry[];
@@ -69,6 +70,7 @@ export function RightPanelHeaderTabs({
 }: RightPanelHeaderTabsProps) {
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false);
   const drag = useRightPanelHeaderDrag({ onReorderHeaderEntry });
+  const shortcutRevealVisible = useShortcutRevealVisible();
 
   useEffect(() => {
     if (newTabMenuRequestToken > 0) {
@@ -107,6 +109,7 @@ export function RightPanelHeaderTabs({
                   tabModes={tabModes}
                   isWorkspaceReady={isWorkspaceReady}
                   drag={drag}
+                  shortcutRevealVisible={shortcutRevealVisible}
                   onActivateTool={onActivateTool}
                   onSelectTerminal={onSelectTerminal}
                   onSelectBrowser={onSelectBrowser}
@@ -134,6 +137,7 @@ export function RightPanelHeaderTabs({
                 onOpenChange={setNewTabMenuOpen}
                 onCreateTerminal={onCreateTerminal}
                 onCreateBrowser={onCreateBrowser}
+                shortcutRevealVisible={shortcutRevealVisible}
               />
             </div>
           </div>
@@ -142,6 +146,7 @@ export function RightPanelHeaderTabs({
         <RightPanelHeaderActions
           onOpenRepoSettings={onOpenRepoSettings}
           onTogglePanel={onTogglePanel}
+          shortcutRevealVisible={shortcutRevealVisible}
         />
       </div>
     </div>

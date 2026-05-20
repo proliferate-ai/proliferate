@@ -23,10 +23,12 @@ import {
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { APP_ROUTES } from "@/config/app-routes";
+import { SHORTCUTS } from "@/config/shortcuts";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useSidebarShortcutTargets } from "@/hooks/workspaces/derived/use-sidebar-shortcut-targets";
 import { useSidebarSupportContext } from "@/hooks/support/derived/use-sidebar-support-context";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -38,14 +40,18 @@ import { useSessionActivityReconciler } from "@/hooks/sessions/lifecycle/use-ses
 import {
   buildCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
+import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 import { subscribeSupportDialogRequest } from "@/lib/infra/support/support-dialog-request";
+import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
 
 export const MainSidebar = memo(function MainSidebar() {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
   const actions = useWorkspaceSidebarActions();
   const supportContext = useSidebarSupportContext();
+  const shortcutRevealVisible = useShortcutRevealVisible();
+  const sidebarShortcutTargetIds = useSidebarShortcutTargets();
   const {
     cloudActive,
     cloudUnavailable,
@@ -152,6 +158,21 @@ export const MainSidebar = memo(function MainSidebar() {
       ? `${titleForStartBlockReason(billingPlan?.startBlockReason)}.`
       : CAPABILITY_COPY.cloudSignInTooltip;
   const filtersActive = showArchived || !isDefaultSidebarWorkspaceTypes(workspaceTypes);
+  const sidebarShortcutLabelById = useMemo(() => {
+    const labelPrefix = getShortcutDisplayLabel(SHORTCUTS.workspaceByIndex).replace("1-9", "");
+    return new Map(
+      sidebarShortcutTargetIds.slice(0, 9).map((workspaceId, index) => [
+        workspaceId,
+        `${labelPrefix}${index + 1}`,
+      ]),
+    );
+  }, [sidebarShortcutTargetIds]);
+  const primaryNavShortcutLabels = useMemo(() => ({
+    home: getShortcutDisplayLabel(SHORTCUTS.goHome),
+    plugins: getShortcutDisplayLabel(SHORTCUTS.goPlugins),
+    automations: getShortcutDisplayLabel(SHORTCUTS.goAutomations),
+    support: getShortcutDisplayLabel(SHORTCUTS.openSupport),
+  }), []);
 
   return (
     <DebugProfiler id="workspace-sidebar">
@@ -177,6 +198,8 @@ export const MainSidebar = memo(function MainSidebar() {
             onGoPlugins={actions.handleGoPlugins}
             onGoAutomations={actions.handleGoAutomations}
             onOpenSupport={() => setSupportOpen(true)}
+            shortcutRevealVisible={shortcutRevealVisible}
+            shortcutLabels={primaryNavShortcutLabels}
           />
         </DebugProfiler>
 
@@ -220,6 +243,8 @@ export const MainSidebar = memo(function MainSidebar() {
                 onIndicatorAction={actions.handleSidebarIndicatorAction}
                 onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
                 onWorkspaceHover={handleWorkspaceHover}
+                shortcutRevealVisible={shortcutRevealVisible}
+                shortcutLabelByWorkspaceId={sidebarShortcutLabelById}
                 onArchiveWorkspace={archiveWorkspace}
                 onUnarchiveWorkspace={unarchiveWorkspace}
                 onRenameWorkspace={handleRenameWorkspace}

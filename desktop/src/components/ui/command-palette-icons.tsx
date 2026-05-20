@@ -9,6 +9,7 @@ export type CommandPaletteGlyphName =
   | "command"
   | "folder-plus"
   | "git-branch"
+  | "keyboard"
   | "panel-bottom"
   | "pencil"
   | "play"
@@ -100,6 +101,17 @@ function renderCommandPaletteGlyph(name: CommandPaletteGlyphName) {
           <circle cx="18" cy="6" r="3" />
           <circle cx="6" cy="18" r="3" />
           <path d="M18 9a9 9 0 0 1-9 9" />
+        </>
+      );
+    case "keyboard":
+      return (
+        <>
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="M7 9h.01" />
+          <path d="M11 9h.01" />
+          <path d="M15 9h.01" />
+          <path d="M7 13h.01" />
+          <path d="M11 13h6" />
         </>
       );
     case "panel-bottom":

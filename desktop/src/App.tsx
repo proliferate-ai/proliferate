@@ -49,6 +49,7 @@ import { SettingsPage } from "@/pages/SettingsPage"
 import { useAuthStore } from "@/stores/auth/auth-store"
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store"
 import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
+import { ShortcutRevealProvider } from "@/providers/ShortcutRevealProvider"
 
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"])
 const APP_RUNTIME_RENDER_MILESTONES = new Set([1, 2, 3, 5, 10, 25, 50, 100, 250])
@@ -286,57 +287,59 @@ function AppRuntime() {
   return (
     <>
       <AppCommandActionsProvider value={appCommandActions}>
-        <MacWindowControlsSafeArea />
-        <UpdateRestartDialog />
-        <RuntimeInputSyncGate />
-        <WorktreeCleanupPolicySyncGate />
-        <InstrumentedRoutes>
-          <Route path="/index.html" element={<Navigate to="/" replace />} />
-          <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
-          <Route element={<PublicOnlyRoute />}>
-            <Route path="/login" element={<LoginPage />} />
-          </Route>
-          <Route element={<BootstrappedRoute />}>
-            <Route element={<AuthRequiredGate />}>
-              <Route path="/setup" element={<Navigate to="/" replace />} />
-              <Route element={<UserPreferencesGate />}>
-                <Route path={APP_ROUTES.home} element={<MainPage />} />
-                <Route
-                  path={LEGACY_APP_ROUTES.powers}
-                  element={<Navigate to={APP_ROUTES.plugins} replace />}
-                />
-                <Route path={APP_ROUTES.plugins} element={<PluginsPage />} />
-                <Route path={APP_ROUTES.automations} element={<AutomationsPage />} />
-                <Route path="/automations/:automationId" element={<AutomationDetailPage />} />
-                <Route path={APP_ROUTES.settings} element={<SettingsPage />} />
+        <ShortcutRevealProvider>
+          <MacWindowControlsSafeArea />
+          <UpdateRestartDialog />
+          <RuntimeInputSyncGate />
+          <WorktreeCleanupPolicySyncGate />
+          <InstrumentedRoutes>
+            <Route path="/index.html" element={<Navigate to="/" replace />} />
+            <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
+            <Route element={<PublicOnlyRoute />}>
+              <Route path="/login" element={<LoginPage />} />
+            </Route>
+            <Route element={<BootstrappedRoute />}>
+              <Route element={<AuthRequiredGate />}>
+                <Route path="/setup" element={<Navigate to="/" replace />} />
+                <Route element={<UserPreferencesGate />}>
+                  <Route path={APP_ROUTES.home} element={<MainPage />} />
+                  <Route
+                    path={LEGACY_APP_ROUTES.powers}
+                    element={<Navigate to={APP_ROUTES.plugins} replace />}
+                  />
+                  <Route path={APP_ROUTES.plugins} element={<PluginsPage />} />
+                  <Route path={APP_ROUTES.automations} element={<AutomationsPage />} />
+                  <Route path="/automations/:automationId" element={<AutomationDetailPage />} />
+                  <Route path={APP_ROUTES.settings} element={<SettingsPage />} />
+                </Route>
               </Route>
             </Route>
-          </Route>
-          {import.meta.env.DEV && ChatPlaygroundPage && (
-            <Route
-              path="/playground"
-              element={
-                <Suspense fallback={null}>
-                  <ChatPlaygroundPage />
-                </Suspense>
-              }
-            />
-          )}
-          {import.meta.env.DEV && UpdatePlaygroundPage && (
-            <Route
-              path="/playground/updates"
-              element={
-                <Suspense fallback={null}>
-                  <UpdatePlaygroundPage />
-                </Suspense>
-              }
-            />
-          )}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </InstrumentedRoutes>
-        <RepoSetupModalHost />
-        <ToastContainer />
-        <TurnEndCelebration />
+            {import.meta.env.DEV && ChatPlaygroundPage && (
+              <Route
+                path="/playground"
+                element={
+                  <Suspense fallback={null}>
+                    <ChatPlaygroundPage />
+                  </Suspense>
+                }
+              />
+            )}
+            {import.meta.env.DEV && UpdatePlaygroundPage && (
+              <Route
+                path="/playground/updates"
+                element={
+                  <Suspense fallback={null}>
+                    <UpdatePlaygroundPage />
+                  </Suspense>
+                }
+              />
+            )}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </InstrumentedRoutes>
+          <RepoSetupModalHost />
+          <ToastContainer />
+          <TurnEndCelebration />
+        </ShortcutRevealProvider>
       </AppCommandActionsProvider>
     </>
   )

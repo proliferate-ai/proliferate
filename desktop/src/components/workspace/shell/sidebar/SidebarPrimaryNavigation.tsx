@@ -8,13 +8,19 @@ import {
   ProductSidebarPrimaryNavigation,
   type SidebarNavItemView,
 } from "@proliferate/product-ui/sidebar/ProductSidebar";
-import { SHORTCUTS } from "@/config/shortcuts";
 
 interface SidebarPrimaryNavigationProps {
   homeActive: boolean;
   pluginsActive: boolean;
   automationsActive: boolean;
   supportActive: boolean;
+  shortcutRevealVisible: boolean;
+  shortcutLabels: {
+    home: string;
+    plugins: string;
+    automations: string;
+    support: string;
+  };
   onGoHome: () => void;
   onGoPlugins: () => void;
   onGoAutomations: () => void;
@@ -26,6 +32,8 @@ export function SidebarPrimaryNavigation({
   pluginsActive,
   automationsActive,
   supportActive,
+  shortcutRevealVisible,
+  shortcutLabels,
   onGoHome,
   onGoPlugins,
   onGoAutomations,
@@ -37,28 +45,28 @@ export function SidebarPrimaryNavigation({
       active: homeActive,
       icon: <Home className="size-4" />,
       label: "Home",
-      shortcutLabel: SHORTCUTS.goHome.label,
+      shortcutLabel: shortcutLabels.home,
     },
     {
       id: "plugins",
       active: pluginsActive,
       icon: <Grid className="size-4" />,
       label: "Plugins",
-      shortcutLabel: SHORTCUTS.goPlugins.label,
+      shortcutLabel: shortcutLabels.plugins,
     },
     {
       id: "automations",
       active: automationsActive,
       icon: <Calendar className="size-4" />,
       label: "Automations",
-      shortcutLabel: SHORTCUTS.goAutomations.label,
+      shortcutLabel: shortcutLabels.automations,
     },
     {
       id: "support",
       active: supportActive,
       icon: <CircleQuestion className="size-4" />,
       label: "Support",
-      shortcutLabel: SHORTCUTS.openSupport.label,
+      shortcutLabel: shortcutLabels.support,
     },
   ];
 
@@ -85,6 +93,7 @@ export function SidebarPrimaryNavigation({
     <ProductSidebarPrimaryNavigation
       navItems={navItems}
       onNavSelect={handleNavSelect}
+      shortcutRevealVisible={shortcutRevealVisible}
     />
   );
 }

@@ -191,14 +191,6 @@ export function useHeaderTabsCloseActions({
     return closeOtherWorkspaceTabs(activeShellTab);
   });
 
-  useShortcutHandler("workspace.close-tabs-to-right", () => {
-    if (!activeShellTab) {
-      return false;
-    }
-
-    return closeWorkspaceTabsToRight(activeShellTab);
-  });
-
   return {
     closeFilePaths,
     closeWorkspaceTabs,
