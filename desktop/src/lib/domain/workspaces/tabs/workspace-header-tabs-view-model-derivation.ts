@@ -85,6 +85,7 @@ export function buildHeaderChatTabs(args: {
         visualGroupId: manualGroup?.id ?? (isSubagentGrouped ? grouped.groupRootSessionId : null),
         manualGroupId: manualGroup?.id ?? null,
         isHierarchyResolved: args.resolvedSessionIds.has(grouped.sessionId),
+        isResolvingSession: known?.kind === "placeholder",
         delegatedAgent: hierarchyChild
           ? buildDelegatedWorkTabIdentity({
             id: hierarchyChild.sessionLinkId || hierarchyChild.sessionId,
@@ -152,6 +153,7 @@ export function buildHeaderClosedChatTabs(args: {
         title: hierarchyChild.title,
         agentKind: hierarchyChild.agentKind,
         viewState: getLinkedChildViewState(hierarchyChild),
+        isResolvingSession: false,
         hasUnreadActivity: hasUnreadSessionActivity({
           sessionId: id,
           sessionLastInteracted: args.sessionLastInteracted,
@@ -171,6 +173,7 @@ export function buildHeaderClosedChatTabs(args: {
       title: getKnownSessionTitle(known),
       agentKind: getKnownSessionAgentKind(known),
       viewState: getKnownSessionViewState(known),
+      isResolvingSession: known.kind === "placeholder",
       hasUnreadActivity: hasUnreadSessionActivity({
         sessionId: id,
         sessionLastInteracted: args.sessionLastInteracted,

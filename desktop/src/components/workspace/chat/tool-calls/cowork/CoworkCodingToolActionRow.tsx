@@ -7,12 +7,12 @@ import {
   ExternalLink,
   FolderPlus,
   GitBranch,
+  Spinner,
 } from "@/components/ui/icons";
 import { ProliferateIcon } from "@/components/ui/proliferate-icons";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolActionRow";
-import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
 import {
   deriveCoworkCodingToolPresentation,
   type CoworkCodingAction,
@@ -134,14 +134,9 @@ function CoworkCodingIcon({
 }
 
 function RunningIcon() {
-  const frame = useBrailleFillsweep();
-
   return (
-    <span
-      className="inline-block w-[1em] shrink-0 font-mono leading-none tracking-[-0.18em] opacity-80"
-      style={{ color: SPINNER_COLOR }}
-    >
-      {frame}
+    <span className="inline-flex size-3 items-center justify-center" style={{ color: SPINNER_COLOR }}>
+      <Spinner className="size-3 opacity-80" />
     </span>
   );
 }

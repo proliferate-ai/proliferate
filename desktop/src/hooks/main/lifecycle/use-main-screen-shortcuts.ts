@@ -3,6 +3,7 @@ import { focusChatInput } from "@/lib/domain/focus-zone";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 interface UseMainScreenShortcutsArgs {
+  enabled?: boolean;
   canOpenCommandPalette: boolean;
   onOpenCommandPalette: () => void;
   onOpenTerminal: () => boolean;
@@ -13,6 +14,7 @@ interface UseMainScreenShortcutsArgs {
 // Owns Main screen shortcut registration. The callbacks are supplied by the
 // workflow hook so shortcut bindings stay separate from action behavior.
 export function useMainScreenShortcuts({
+  enabled = true,
   canOpenCommandPalette,
   onOpenCommandPalette,
   onOpenTerminal,
@@ -20,7 +22,7 @@ export function useMainScreenShortcuts({
   onToggleRightPanel,
 }: UseMainScreenShortcutsArgs): void {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const canUseWorkspaceShortcuts = selectedWorkspaceId !== null;
+  const canUseWorkspaceShortcuts = enabled && selectedWorkspaceId !== null;
 
   useShortcutHandler("workspace.focus-chat", () => {
     return focusChatInput();
@@ -32,7 +34,7 @@ export function useMainScreenShortcuts({
 
   useShortcutHandler("workspace.toggle-left-sidebar", () => {
     onToggleLeftSidebar();
-  });
+  }, { enabled });
 
   useShortcutHandler("workspace.toggle-right-panel", () => {
     onToggleRightPanel();
@@ -40,5 +42,5 @@ export function useMainScreenShortcuts({
 
   useShortcutHandler("workspace.open-command-palette", () => {
     onOpenCommandPalette();
-  }, { enabled: canOpenCommandPalette });
+  }, { enabled: enabled && canOpenCommandPalette });
 }

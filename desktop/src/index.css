@@ -1663,6 +1663,96 @@ body {
   animation: streaming-fade 180ms ease-out;
 }
 
+@keyframes thinking-text-sweep {
+  0%,
+  2.806% {
+    opacity: 0;
+    background-position: 145% 0;
+  }
+  4.677% {
+    opacity: 0.95;
+    background-position: 145% 0;
+  }
+  21.983% {
+    opacity: 0.95;
+    background-position: -55% 0;
+  }
+  22.544% {
+    opacity: 0;
+    background-position: -62% 0;
+  }
+  22.568% {
+    opacity: 0;
+    background-position: 145% 0;
+  }
+  23.854% {
+    opacity: 0.95;
+    background-position: 145% 0;
+  }
+  41.16% {
+    opacity: 0.95;
+    background-position: -55% 0;
+  }
+  42.002%,
+  60.711% {
+    opacity: 0;
+    background-position: -62% 0;
+  }
+  62.348% {
+    opacity: 0.78;
+    background-position: -55% 0;
+  }
+  78.485% {
+    opacity: 0.78;
+    background-position: 42% 0;
+  }
+  94.621% {
+    opacity: 0.9;
+    background-position: -42% 0;
+  }
+  97.194%,
+  100% {
+    opacity: 0;
+    background-position: -62% 0;
+  }
+}
+
+.thinking-text {
+  position: relative;
+  color: color-mix(in oklab, var(--color-muted-foreground) 72%, transparent);
+}
+
+.thinking-text::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    color-mix(in oklab, var(--color-foreground) 72%, var(--color-muted-foreground) 28%) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: 160% 100%;
+  background-repeat: no-repeat;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: var(
+    --thinking-text-animation,
+    thinking-text-sweep 4.276s cubic-bezier(0.45, 0, 0.55, 1) infinite
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-text::after {
+    content: none;
+    animation: none;
+  }
+}
+
 /* ---- Loading illustration animations ---- */
 @keyframes loading-line {
   0%, 100% { opacity: 0.15; transform: scaleX(0.7); }
@@ -1757,8 +1847,8 @@ body {
 /* ---- Proliferate icon: one-shot resolve animation ----
    8 orbit nodes fade in clockwise from top, then the center node lands
    last as the punctuation. Each node fades over 0.25s with a 0.05s
-   stagger and holds lit (forwards fill mode). Used as the "braille
-   sweep landed → brand resolves" beat in ChatReadyHero. */
+   stagger and holds lit (forwards fill mode). Used by auth loading surfaces
+   when the brand mark resolves. */
 @keyframes proliferate-resolve {
   0%   { opacity: 0; }
   100% { opacity: 1; }
@@ -1784,8 +1874,7 @@ body {
 }
 
 /* ---- Compact spinner ----
-   Shared current-color spinner for small controls. Keep this separate from
-   the braille/session loading vocabulary below. */
+   Shared current-color spinner for small controls. */
 @keyframes proliferate-spinner-rotate {
   to {
     transform: rotate(360deg);
@@ -1807,8 +1896,7 @@ body {
 }
 
 /* ---- Braille sweep loading text ----
-   This must stay CSS-driven. The previous React ticker updated every 60ms and
-   forced the chat shell to commit continuously while a loader was visible. */
+   Retained as a CSS-driven auth-only mark. */
 @keyframes braille-sweep-content {
   0%,
   6.249% { content: "⠁⠀"; }

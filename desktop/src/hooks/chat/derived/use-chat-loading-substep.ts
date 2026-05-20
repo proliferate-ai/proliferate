@@ -14,7 +14,7 @@ import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/derived/use-active
  * Disambiguates the loading sub-states that feed ChatLoadingHero. The loading
  * hero is reused by both `workspace-status` and `session-loading` while the
  * selected workspace/session is still being prepared, and each sub-state maps
- * to a human-facing caption under the braille sweep.
+ * to a human-facing caption.
  *
  * The four sub-states map roughly to phases of the workspace → session
  * → stream → history → first-turn pipeline:
@@ -27,7 +27,7 @@ import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/derived/use-active
  *   4. loading-history         — slot exists, stream is open, transcript
  *      hasn't been hydrated yet.
  *   5. awaiting-first-turn     — hydrated and empty but the runtime is
- *      already marked running; this is braille-only until the first row lands.
+ *      already marked running; this is agent-thinking UI until the first row lands.
  */
 export interface ChatLoadingSubstepState {
   substep: ChatLoadingSubstep;

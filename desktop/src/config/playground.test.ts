@@ -9,6 +9,7 @@ import { renderActiveSlot } from "@/components/playground/composer-slots/Playgro
 import { renderAttachedSlot } from "@/components/playground/composer-slots/PlaygroundAttachedSlotFixtures";
 import { renderOutboundSlot } from "@/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
 import { renderPlaygroundReviewTranscript } from "@/components/playground/transcript/PlaygroundReviewTranscript";
+import { PlaygroundLoadingStates } from "@/components/playground/loading/PlaygroundLoadingStates";
 import { renderComposerSurfaceForScenario } from "@/components/playground/PlaygroundComposerSurfaces";
 import { PLAYGROUND_SLASH_COMMANDS } from "@/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
 import {
@@ -91,6 +92,18 @@ describe("playground scenarios", () => {
 
   it("includes compact tool-call scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(TOOL_CALL_SCENARIOS));
+  });
+
+  it("includes a loading-states scenario with auth, thinking, and skeleton fixtures", () => {
+    expect(Object.keys(SCENARIOS)).toContain("loading-states");
+
+    const html = renderToStaticMarkup(createElement(PlaygroundLoadingStates));
+    expect(html).toContain("Checking your session");
+    expect(html).toContain("Thinking");
+    expect(html).toContain("Thinking timing lab");
+    expect(html).toContain("Gap between -&gt; and -&gt;");
+    expect(html).toContain("Restoring session");
+    expect(html).not.toContain("data-jank-canary=\"braille\"");
   });
 
   it("includes Codex-style diff scenarios for visual iteration", () => {

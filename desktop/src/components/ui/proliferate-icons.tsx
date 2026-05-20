@@ -1,4 +1,4 @@
-import { BrailleSweepBadge, type IconProps } from "@/components/ui/icons";
+import { type IconProps } from "@/components/ui/icons";
 
 type ProliferateNode = { x: number; y: number; size: number };
 
@@ -82,13 +82,8 @@ export function ProliferateIcon({ className, ...props }: IconProps) {
 
 
 
-/**
- * Proliferate loading mark — uses the shared CSS braille sweep so the loading
- * vocabulary stays consistent across the app. Sized via `className` with a
- * `text-Xl` token (the braille is a glyph, not an SVG).
- */
 export function ProliferateIconLoading({ className }: { className?: string }) {
-  return <BrailleSweepBadge className={className} />;
+  return <ProliferateIcon className={className} />;
 }
 
 /**
@@ -96,8 +91,8 @@ export function ProliferateIconLoading({ className }: { className?: string }) {
  *
  * Orbit nodes fade in first, clockwise from top, and the center node
  * lands last as the punctuation. Each node holds lit once shown
- * (forwards fill mode on the keyframe). Used as the "loaded → brand
- * resolves" beat after the braille loading sweep lands in ChatReadyHero.
+ * (forwards fill mode on the keyframe). Used by auth surfaces when the
+ * loading mark resolves into the brand.
  */
 export function ProliferateIconResolve({ className }: { className?: string }) {
   return (

@@ -12,7 +12,11 @@ import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-wor
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
-export function useWorkspaceActivityAcknowledgement(): void {
+export function useWorkspaceActivityAcknowledgement({
+  enabled = true,
+}: {
+  enabled?: boolean;
+} = {}): void {
   const focusVisibilityNonce = useDocumentFocusVisibilityNonce();
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
@@ -38,7 +42,7 @@ export function useWorkspaceActivityAcknowledgement(): void {
     : null;
 
   useEffect(() => {
-    if (!selectedLogicalWorkspace || !latestActivityAt || !isDocumentVisibleAndFocused()) {
+    if (!enabled || !selectedLogicalWorkspace || !latestActivityAt || !isDocumentVisibleAndFocused()) {
       return;
     }
     if (
@@ -51,6 +55,7 @@ export function useWorkspaceActivityAcknowledgement(): void {
     markWorkspaceViewedAt(selectedLogicalWorkspace.id, latestActivityAt);
   }, [
     focusVisibilityNonce,
+    enabled,
     latestActivityAt,
     latestViewedAt,
     markWorkspaceViewedAt,

@@ -101,4 +101,30 @@ describe("useWorkspaceActivityAcknowledgement", () => {
     expect(useWorkspaceUiStore.getState().lastViewedAt[logicalWorkspace.id])
       .toBe("2026-04-04T00:00:01.000Z");
   });
+
+  it("does not acknowledge activity while the workspace surface is disabled", () => {
+    const logicalWorkspace = makeLocalLogicalWorkspace({
+      id: "logical-workspace-1",
+      repoKey: "/repo",
+      repoName: "repo",
+    });
+    const materializedWorkspaceId = logicalWorkspace.localWorkspace?.id ?? "";
+    mocks.logicalWorkspaces = [logicalWorkspace];
+    useSessionSelectionStore.setState({
+      selectedLogicalWorkspaceId: logicalWorkspace.id,
+    });
+    useWorkspaceUiStore.setState({
+      lastViewedAt: {
+        [logicalWorkspace.id]: "2026-04-04T00:00:01.000Z",
+      },
+      workspaceLastInteracted: {
+        [materializedWorkspaceId]: "2026-04-04T00:00:05.000Z",
+      },
+    });
+
+    renderHook(() => useWorkspaceActivityAcknowledgement({ enabled: false }));
+
+    expect(useWorkspaceUiStore.getState().lastViewedAt[logicalWorkspace.id])
+      .toBe("2026-04-04T00:00:01.000Z");
+  });
 });

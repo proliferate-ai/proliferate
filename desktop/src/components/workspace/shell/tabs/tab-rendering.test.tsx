@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
 import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
 import type { DelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/model";
-import { getChatTabLabel } from "./tab-rendering";
+import { getChatTabLabel, renderChatTabIcon } from "./tab-rendering";
 
 describe("getChatTabLabel", () => {
   it("uses only the generated agent name for delegated header tabs", () => {
@@ -35,5 +36,19 @@ describe("getChatTabLabel", () => {
       title: "Main session",
       delegatedAgent: null,
     })).toBe("Main session");
+  });
+});
+
+describe("renderChatTabIcon", () => {
+  it("renders a skeleton block for resolving chat sessions", () => {
+    const html = renderToStaticMarkup(renderChatTabIcon({
+      agentKind: "",
+      viewState: "idle",
+      isResolvingSession: true,
+      delegatedAgent: null,
+    }));
+
+    expect(html).toContain("bg-muted");
+    expect(html).not.toContain("data-jank-canary=\"braille\"");
   });
 });

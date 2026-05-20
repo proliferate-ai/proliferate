@@ -21,6 +21,7 @@ export interface HeaderChatTabEntry extends GroupedChatTab {
   visualGroupId: string | null;
   manualGroupId: ManualChatGroupId | null;
   isHierarchyResolved: boolean;
+  isResolvingSession: boolean;
   delegatedAgent: DelegatedWorkTabIdentity | null;
 }
 
@@ -29,6 +30,7 @@ export interface HeaderChatMenuEntry {
   title: string;
   agentKind: string;
   viewState: SessionViewState;
+  isResolvingSession: boolean;
   hasUnreadActivity: boolean;
   isActive: boolean;
   isVisible: boolean;

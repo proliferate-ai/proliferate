@@ -71,4 +71,21 @@ describe("useMainScreenShortcuts", () => {
     expect(runShortcutHandler("workspace.toggle-right-panel", { source: "keyboard" })).toBe(true);
     expect(onToggleRightPanel).toHaveBeenCalledTimes(1);
   });
+
+  it("disables workspace shortcuts when the workspace surface is hidden", () => {
+    harnessState.selectedWorkspaceId = "workspace-1";
+    const onToggleLeftSidebar = vi.fn();
+
+    renderHook(() => useMainScreenShortcuts({
+      enabled: false,
+      canOpenCommandPalette: true,
+      onOpenCommandPalette: vi.fn(),
+      onOpenTerminal: vi.fn(() => true),
+      onToggleLeftSidebar,
+      onToggleRightPanel: vi.fn(),
+    }));
+
+    expect(runShortcutHandler("workspace.toggle-left-sidebar", { source: "keyboard" })).toBe(false);
+    expect(onToggleLeftSidebar).not.toHaveBeenCalled();
+  });
 });

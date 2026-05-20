@@ -10,7 +10,7 @@ import { useHotSessionIngest } from "@/hooks/sessions/lifecycle/use-hot-session-
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
-export function MainScreen() {
+export function MainScreen({ visible = true }: { visible?: boolean }) {
   usePersistedLogicalWorkspaceSelection();
   useHotSessionIngest();
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
@@ -35,6 +35,7 @@ export function MainScreen() {
       <CoworkWorkspaceShell
         workspaceId={coworkWorkspace?.id ?? null}
         workspacePath={coworkWorkspace?.path ?? null}
+        visible={visible}
         fallbackTitle={pendingWorkspaceEntry?.source === "cowork-created"
           ? pendingWorkspaceEntry.displayName
           : null}
@@ -42,5 +43,5 @@ export function MainScreen() {
     );
   }
 
-  return <StandardWorkspaceShell />;
+  return <StandardWorkspaceShell visible={visible} />;
 }
