@@ -2,16 +2,12 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SHORTCUTS } from "@/config/shortcuts";
 import { RightPanelNewTabMenu } from "@/components/workspace/shell/right-panel/RightPanelNewTabMenu";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 
 describe("RightPanelNewTabMenu", () => {
   afterEach(cleanup);
 
-  it("reveals the browser-tab shortcut whenever the workspace is ready", () => {
-    const label = getShortcutDisplayLabel(SHORTCUTS.openBrowserTab);
-
+  it("does not advertise a global browser-tab shortcut", () => {
     const rendered = render(
       <RightPanelNewTabMenu
         open={false}
@@ -20,11 +16,10 @@ describe("RightPanelNewTabMenu", () => {
         onOpenChange={vi.fn()}
         onCreateTerminal={vi.fn()}
         onCreateBrowser={vi.fn()}
-        shortcutRevealVisible
       />,
     );
 
-    expect(screen.getByText(label).className).toContain("opacity-100");
+    expect(screen.queryByText("⌘T")).toBeNull();
 
     rendered.rerender(
       <RightPanelNewTabMenu
@@ -34,10 +29,9 @@ describe("RightPanelNewTabMenu", () => {
         onOpenChange={vi.fn()}
         onCreateTerminal={vi.fn()}
         onCreateBrowser={vi.fn()}
-        shortcutRevealVisible
       />,
     );
 
-    expect(screen.queryByText(label)).toBeNull();
+    expect(screen.queryByText("⌘T")).toBeNull();
   });
 });

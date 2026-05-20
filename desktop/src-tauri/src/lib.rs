@@ -31,6 +31,8 @@ const PREVIOUS_TAB_MENU_ID: &str = "workspace.previous-tab";
 #[cfg(target_os = "macos")]
 const NEXT_TAB_MENU_ID: &str = "workspace.next-tab";
 #[cfg(target_os = "macos")]
+const NEW_SESSION_TAB_MENU_ID: &str = "workspace.new-session-tab";
+#[cfg(target_os = "macos")]
 const APP_QUIT_MENU_ID: &str = "app.quit";
 #[cfg(target_os = "macos")]
 const OPEN_SETTINGS_MENU_ID: &str = "app.open-settings";
@@ -47,6 +49,7 @@ const KNOWN_SHORTCUT_IDS: &[&str] = &[
     CLOSE_ACTIVE_TAB_MENU_ID,
     PREVIOUS_TAB_MENU_ID,
     NEXT_TAB_MENU_ID,
+    NEW_SESSION_TAB_MENU_ID,
     OPEN_SETTINGS_MENU_ID,
     SELECT_ALL_MENU_ID,
     UNDO_MENU_ID,
@@ -108,6 +111,9 @@ fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu
     let next_tab_item = MenuItemBuilder::with_id(NEXT_TAB_MENU_ID, "Next Tab")
         .accelerator("CmdOrCtrl+Shift+]")
         .build(app)?;
+    let new_session_tab_item = MenuItemBuilder::with_id(NEW_SESSION_TAB_MENU_ID, "New Chat")
+        .accelerator("CmdOrCtrl+T")
+        .build(app)?;
     let open_settings_item = MenuItemBuilder::with_id(OPEN_SETTINGS_MENU_ID, "Settings...")
         .accelerator("CmdOrCtrl+Comma")
         .build(app)?;
@@ -143,6 +149,7 @@ fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu
         .build()?;
 
     let file_menu = SubmenuBuilder::new(app, "File")
+        .item(&new_session_tab_item)
         .item(&close_tab_item)
         .build()?;
 

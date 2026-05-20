@@ -286,6 +286,19 @@ describe("resolveKeyboardShortcut", () => {
     });
 
     expect(resolveKeyboardShortcut({
+      key: "t",
+      code: "KeyT",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.new-session-tab",
+      shortcut: expect.objectContaining({ id: "workspace.new-session-tab" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
       key: "O",
       code: "KeyO",
       metaKey: true,

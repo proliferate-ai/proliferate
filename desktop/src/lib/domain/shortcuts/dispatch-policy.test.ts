@@ -328,7 +328,7 @@ describe("shortcut dispatch policy", () => {
       target: null,
     } as KeyboardEvent)).toBe(true);
 
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.openBrowserTab, {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.newSessionTab, {
       key: "t",
       code: "KeyT",
       metaKey: true,

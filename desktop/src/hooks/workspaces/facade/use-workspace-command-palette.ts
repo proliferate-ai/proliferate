@@ -196,6 +196,7 @@ export function useWorkspaceCommandPalette({
       group: "tabs",
       label: "New Chat",
       icon: "chat-plus",
+      shortcut: getShortcutDisplayLabel(SHORTCUTS.newSessionTab),
       disabledReason: canOpenNewSessionTab ? null : newSessionDisabledReason,
       execute: () => {
         openNewSessionTab();
@@ -243,7 +244,6 @@ export function useWorkspaceCommandPalette({
       group: "tabs",
       label: "Open Browser Tab",
       icon: "panel-bottom",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.openBrowserTab),
       disabledReason: selectedWorkspaceId ? null : "Workspace is still opening.",
       execute: () => {
         requestRightPanelBrowserTab();

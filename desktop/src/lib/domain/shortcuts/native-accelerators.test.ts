@@ -6,7 +6,7 @@ describe("getShortcutNativeAccelerator", () => {
   it("converts fixed primary-modifier shortcuts to Tauri accelerators", () => {
     expect(getShortcutNativeAccelerator(SHORTCUTS.closeActiveTab)).toBe("CmdOrCtrl+W");
     expect(getShortcutNativeAccelerator(SHORTCUTS.openSettings)).toBe("CmdOrCtrl+Comma");
-    expect(getShortcutNativeAccelerator(SHORTCUTS.openBrowserTab)).toBe("CmdOrCtrl+T");
+    expect(getShortcutNativeAccelerator(SHORTCUTS.newSessionTab)).toBe("CmdOrCtrl+T");
     expect(getShortcutNativeAccelerator(SHORTCUTS.renameSession)).toBe("CmdOrCtrl+Alt+R");
     expect(getShortcutNativeAccelerator(SHORTCUTS.closeOtherTabs)).toBe("CmdOrCtrl+Alt+O");
   });

@@ -134,7 +134,6 @@ export function RightPanelHeaderTabs({
                 onOpenChange={setNewTabMenuOpen}
                 onCreateTerminal={onCreateTerminal}
                 onCreateBrowser={onCreateBrowser}
-                shortcutRevealVisible={shortcutRevealVisible}
               />
             </div>
           </div>
