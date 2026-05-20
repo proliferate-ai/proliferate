@@ -157,7 +157,7 @@ def status_for_provider(
 
 
 _SYNC_PROVIDERS = ("claude", "codex", "gemini")
-_DEFAULT_AUTH_MODES = {"claude": "env", "codex": "file", "gemini": "env"}
+_DEFAULT_AUTH_MODES = {"claude": "file", "codex": "file", "gemini": "env"}
 
 
 def _status_for_synced_credential(
@@ -190,10 +190,8 @@ def require_local_auth(
     cloud_test_config: CloudTestConfig,
     agent_kind: str,
 ) -> None:
-    if agent_kind == "claude" and not (
-        cloud_test_config.anthropic_api_key or cloud_test_config.claude_auth_path
-    ):
-        pytest.skip("Claude auth is not available locally.")
+    if agent_kind == "claude" and cloud_test_config.claude_auth_path is None:
+        pytest.skip("Claude file auth is not available locally.")
     if agent_kind == "codex" and cloud_test_config.codex_auth_path is None:
         pytest.skip("Codex auth is not available locally.")
     if agent_kind == "gemini" and not (

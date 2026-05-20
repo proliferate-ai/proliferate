@@ -485,6 +485,7 @@ def _replace_profile_target_state() -> None:
             sa.Column("last_agent_auth_applied_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("last_agent_auth_error_code", sa.String(length=128), nullable=True),
             sa.Column("last_agent_auth_error_message", sa.Text(), nullable=True),
+            sa.Column("pending_agent_auth_cleanup_json", sa.Text(), nullable=True),
             sa.Column("applied_runtime_config_sequence", sa.Integer(), nullable=False),
             sa.Column("applied_runtime_config_revision_id", sa.Text(), nullable=True),
             sa.Column("runtime_config_status", sa.String(length=32), nullable=False),
@@ -536,6 +537,11 @@ def _replace_profile_target_state() -> None:
             ),
             sa.ForeignKeyConstraint(["target_id"], ["cloud_targets.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
+        )
+    elif not _has_column("sandbox_profile_target_state", "pending_agent_auth_cleanup_json"):
+        op.add_column(
+            "sandbox_profile_target_state",
+            sa.Column("pending_agent_auth_cleanup_json", sa.Text(), nullable=True),
         )
     if _has_table("sandbox_profile_agent_auth_target_state"):
         op.execute(

@@ -400,6 +400,13 @@ async def assert_current_schema(
     )
     assert "ix_cloud_target_runtime_access_target_id" not in runtime_access_indexes
 
+    target_state_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("sandbox_profile_target_state")
+        }
+    )
+    assert "pending_agent_auth_cleanup_json" in target_state_columns
     target_state_indexes = await conn.run_sync(
         lambda sync_conn: {
             index["name"]

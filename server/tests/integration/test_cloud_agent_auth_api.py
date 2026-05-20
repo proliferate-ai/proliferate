@@ -406,7 +406,7 @@ async def test_revoked_synced_selection_materializes_invalid_cleanup_plan(
     assert selection["syncedFiles"]["files"] == []
     assert {
         cleanup["relativePath"] for cleanup in selection["syncedFiles"]["cleanup"]
-    } == {".claude.json", ".claude/.credentials.json"}
+    } == {".claude.json"}
 
 
 @pytest.mark.asyncio
