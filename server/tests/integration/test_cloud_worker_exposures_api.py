@@ -121,6 +121,22 @@ async def test_worker_exposures_returns_active_projection_cursors(
         session_id="session-1",
         last_uploaded_seq=7,
     )
+    second_projection = await projections_store.upsert_session_projection_metadata(
+        db_session,
+        target_id=target_id,
+        session_id="session-2",
+        exposure_id=exposure.id,
+        cloud_workspace_id=workspace.id,
+        workspace_id="workspace-1",
+        projection_level="live",
+        commandable=True,
+    )
+    await projections_store.update_projection_last_uploaded_seq(
+        db_session,
+        target_id=target_id,
+        session_id="session-2",
+        last_uploaded_seq=3,
+    )
     await db_session.commit()
 
     response = await client.get(
@@ -129,20 +145,33 @@ async def test_worker_exposures_returns_active_projection_cursors(
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "exposures": [
-            {
-                "exposureId": str(exposure.id),
-                "targetId": str(target_id),
-                "cloudWorkspaceId": str(workspace.id),
-                "sessionProjectionId": str(projection.id),
-                "anyharnessWorkspaceId": "workspace-1",
-                "anyharnessSessionId": "session-1",
-                "projectionLevel": "live",
-                "commandable": True,
-                "status": "active",
-                "revision": 1,
-                "lastUploadedSeq": 7,
-            }
-        ]
-    }
+    body = response.json()
+    exposures = sorted(body["exposures"], key=lambda row: row["anyharnessSessionId"])
+    assert exposures == [
+        {
+            "exposureId": str(exposure.id),
+            "targetId": str(target_id),
+            "cloudWorkspaceId": str(workspace.id),
+            "sessionProjectionId": str(projection.id),
+            "anyharnessWorkspaceId": "workspace-1",
+            "anyharnessSessionId": "session-1",
+            "projectionLevel": "live",
+            "commandable": True,
+            "status": "active",
+            "revision": 1,
+            "lastUploadedSeq": 7,
+        },
+        {
+            "exposureId": str(exposure.id),
+            "targetId": str(target_id),
+            "cloudWorkspaceId": str(workspace.id),
+            "sessionProjectionId": str(second_projection.id),
+            "anyharnessWorkspaceId": "workspace-1",
+            "anyharnessSessionId": "session-2",
+            "projectionLevel": "live",
+            "commandable": True,
+            "status": "active",
+            "revision": 1,
+            "lastUploadedSeq": 3,
+        },
+    ]

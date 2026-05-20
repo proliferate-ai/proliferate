@@ -862,37 +862,41 @@ async def list_worker_exposures(
         db,
         target_id=auth.target_id,
     )
-    cursor_by_exposure_id = {cursor.exposure_id: cursor for cursor in cursors}
     responses: list[WorkerExposureSnapshotResponse] = []
+    cursor_exposure_ids = set()
+    for cursor in cursors:
+        cursor_exposure_ids.add(cursor.exposure_id)
+        responses.append(
+            WorkerExposureSnapshotResponse(
+                exposure_id=str(cursor.exposure_id),
+                target_id=str(cursor.target_id),
+                cloud_workspace_id=str(cursor.cloud_workspace_id),
+                session_projection_id=str(cursor.session_projection_id),
+                anyharness_workspace_id=cursor.anyharness_workspace_id,
+                anyharness_session_id=cursor.anyharness_session_id,
+                projection_level=cursor.projection_level,
+                commandable=cursor.commandable,
+                status=cursor.exposure_status,
+                revision=cursor.exposure_revision,
+                last_uploaded_seq=cursor.last_uploaded_seq,
+            )
+        )
     for exposure in exposures:
-        if not exposure.anyharness_workspace_id:
+        if not exposure.anyharness_workspace_id or exposure.id in cursor_exposure_ids:
             continue
-        cursor = cursor_by_exposure_id.get(exposure.id)
         responses.append(
             WorkerExposureSnapshotResponse(
                 exposure_id=str(exposure.id),
                 target_id=str(exposure.target_id),
                 cloud_workspace_id=str(exposure.cloud_workspace_id),
-                session_projection_id=(
-                    str(cursor.session_projection_id) if cursor is not None else None
-                ),
-                anyharness_workspace_id=(
-                    cursor.anyharness_workspace_id
-                    if cursor is not None
-                    else exposure.anyharness_workspace_id
-                ),
-                anyharness_session_id=(
-                    cursor.anyharness_session_id if cursor is not None else None
-                ),
-                projection_level=(
-                    cursor.projection_level
-                    if cursor is not None
-                    else exposure.default_projection_level
-                ),
-                commandable=cursor.commandable if cursor is not None else exposure.commandable,
-                status=cursor.exposure_status if cursor is not None else exposure.status,
-                revision=cursor.exposure_revision if cursor is not None else exposure.revision,
-                last_uploaded_seq=cursor.last_uploaded_seq if cursor is not None else 0,
+                session_projection_id=None,
+                anyharness_workspace_id=exposure.anyharness_workspace_id,
+                anyharness_session_id=None,
+                projection_level=exposure.default_projection_level,
+                commandable=exposure.commandable,
+                status=exposure.status,
+                revision=exposure.revision,
+                last_uploaded_seq=0,
             )
         )
     return WorkerExposureListResponse(exposures=responses)

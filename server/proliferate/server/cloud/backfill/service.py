@@ -13,6 +13,8 @@ from proliferate.db.store.billing import (
 )
 from proliferate.db.store.cloud_sync import backfill as backfill_store
 from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import exposures as exposures_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.backfill.models import (
     WorkerBackfillRequest,
@@ -59,6 +61,7 @@ async def record_worker_backfill(
         else await ensure_personal_billing_subject(db, target.owner_user_id)
     )
     workspace_mappings: dict[str, UUID] = {}
+    exposure_mappings: dict[str, exposures_store.CloudWorkspaceExposureSnapshot] = {}
     mapped_workspaces: list[WorkerBackfillWorkspaceMapping] = []
     for workspace in body.workspaces:
         repo = _normalize_repo(workspace)
@@ -81,6 +84,20 @@ async def record_worker_backfill(
             template_version=CLOUD_BACKFILL_TEMPLATE_VERSION,
         )
         workspace_mappings[workspace.workspace_id] = mapped.id
+        exposure = await exposures_store.upsert_workspace_exposure(
+            db,
+            target_id=auth.target_id,
+            cloud_workspace_id=mapped.id,
+            anyharness_workspace_id=workspace.workspace_id,
+            owner_scope=target.owner_scope,
+            owner_user_id=target.owner_user_id,
+            organization_id=target.organization_id,
+            visibility="shared_unclaimed" if target.owner_scope == "organization" else "private",
+            default_projection_level="live",
+            commandable=True,
+            origin="manual_web",
+        )
+        exposure_mappings[workspace.workspace_id] = exposure
         mapped_workspaces.append(
             WorkerBackfillWorkspaceMapping(
                 workspace_id=workspace.workspace_id,
@@ -96,6 +113,13 @@ async def record_worker_backfill(
                 db,
                 target_id=auth.target_id,
                 workspace_id=session.workspace_id,
+            )
+        exposure = exposure_mappings.get(session.workspace_id or "")
+        if exposure is None and cloud_workspace_id is not None:
+            exposure = await exposures_store.get_active_workspace_exposure(
+                db,
+                target_id=auth.target_id,
+                cloud_workspace_id=cloud_workspace_id,
             )
         projection = await events_store.upsert_session_projection(
             db,
@@ -114,6 +138,20 @@ async def record_worker_backfill(
             started_at=session.started_at,
             ended_at=session.ended_at,
         )
+        if cloud_workspace_id is not None:
+            await projections_store.upsert_session_projection_metadata(
+                db,
+                target_id=auth.target_id,
+                session_id=session.session_id,
+                exposure_id=exposure.id if exposure is not None else None,
+                cloud_workspace_id=cloud_workspace_id,
+                workspace_id=session.workspace_id,
+                projection_level=(
+                    exposure.default_projection_level if exposure is not None else "live"
+                ),
+                commandable=exposure.commandable if exposure is not None else True,
+                status=session.status or "running",
+            )
         for interaction in session.pending_interactions:
             await events_store.upsert_pending_interaction(
                 db,

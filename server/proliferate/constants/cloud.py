@@ -449,18 +449,11 @@ class CloudCommandKind(StrEnum):
     materialize_workspace = "materialize_workspace"
     materialize_environment = "materialize_environment"
     refresh_agent_auth_config = "refresh_agent_auth_config"
-    resume_session = "resume_session"
     send_prompt = "send_prompt"
     resolve_interaction = "resolve_interaction"
     update_session_config = "update_session_config"
     cancel_turn = "cancel_turn"
     close_session = "close_session"
-    cancel_session = "cancel_session"
-    stop_workspace = "stop_workspace"
-    hibernate_workspace = "hibernate_workspace"
-    resume_workspace = "resume_workspace"
-    prune_workspace = "prune_workspace"
-    extend_workspace_ttl = "extend_workspace_ttl"
     backfill_exposed_workspace = "backfill_exposed_workspace"
 
 
