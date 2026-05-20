@@ -144,7 +144,8 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     ? null
     : "Repository settings are unavailable.";
   const nativePortalOverlayOpen = useNativeOverlayOpen();
-  const nativeWorkspaceOverlaysHidden = commandPaletteOpen
+  const nativeWorkspaceOverlaysHidden = !visible
+    || commandPaletteOpen
     || publishDialog.open
     || nativePortalOverlayOpen;
   const handleTerminalActivationRequestHandled = useCallback(
