@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{error::WorkerError, materialization::TargetConfigMaterializationPlan};
@@ -43,18 +45,36 @@ pub struct RuntimeConfigCredentialMaterializationRequest {
     pub credential_refs: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeConfigCredentialValue {
     pub credential_ref: String,
     pub value: String,
 }
 
-#[derive(Debug, Deserialize)]
+impl fmt::Debug for RuntimeConfigCredentialValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RuntimeConfigCredentialValue")
+            .field("credential_ref", &self.credential_ref)
+            .field("value", &"<redacted>")
+            .finish()
+    }
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeConfigCredentialMaterializationResponse {
     pub credentials: Vec<RuntimeConfigCredentialValue>,
     pub missing_credential_refs: Vec<String>,
+}
+
+impl fmt::Debug for RuntimeConfigCredentialMaterializationResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RuntimeConfigCredentialMaterializationResponse")
+            .field("credentials", &self.credentials)
+            .field("missing_credential_refs", &self.missing_credential_refs)
+            .finish()
+    }
 }
 
 impl CloudClient {
