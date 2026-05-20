@@ -640,6 +640,8 @@ async def fail_cloud_workspace_handoff_op(
     failure_detail: str,
     status_detail: str | None,
     last_error: str,
+    keep_active_handoff: bool = False,
+    event_type: str = "handoff_failed",
 ) -> CloudWorkspaceHandoffOpValue:
     now = utcnow()
     previous_phase = handoff_op.phase
@@ -649,7 +651,7 @@ async def fail_cloud_workspace_handoff_op(
     handoff_op.heartbeat_at = now
     handoff_op.updated_at = now
 
-    mobility_workspace.active_handoff_op_id = None
+    mobility_workspace.active_handoff_op_id = handoff_op.id if keep_active_handoff else None
     mobility_workspace.lifecycle_state = lifecycle_state
     mobility_workspace.status_detail = status_detail
     mobility_workspace.last_error = last_error
@@ -660,7 +662,7 @@ async def fail_cloud_workspace_handoff_op(
             user_id=handoff_op.user_id,
             cloud_workspace_id=mobility_workspace.cloud_workspace_id,
             handoff_op_id=handoff_op.id,
-            event_type="handoff_failed",
+            event_type=event_type,
             direction=handoff_op.direction,
             source_owner=handoff_op.source_owner,
             target_owner=handoff_op.target_owner,
@@ -979,6 +981,8 @@ async def fail_cloud_workspace_handoff_op_for_user(
     failure_detail: str,
     status_detail: str | None,
     last_error: str,
+    keep_active_handoff: bool = False,
+    event_type: str = "handoff_failed",
 ) -> CloudWorkspaceHandoffOpValue:
     mobility_workspace, handoff_op = _require_handoff_belongs_to_workspace(
         await get_cloud_workspace_mobility(
@@ -1002,6 +1006,8 @@ async def fail_cloud_workspace_handoff_op_for_user(
         failure_detail=failure_detail,
         status_detail=status_detail,
         last_error=last_error,
+        keep_active_handoff=keep_active_handoff,
+        event_type=event_type,
     )
 
 
@@ -1016,6 +1022,8 @@ async def fail_cloud_workspace_handoff_op_checkpoint_for_user(
     failure_detail: str,
     status_detail: str | None,
     last_error: str,
+    keep_active_handoff: bool = False,
+    event_type: str = "handoff_failed",
 ) -> CloudWorkspaceHandoffOpValue:
     async with db_engine.async_session_factory() as db:
         value = await fail_cloud_workspace_handoff_op_for_user(
@@ -1029,71 +1037,8 @@ async def fail_cloud_workspace_handoff_op_checkpoint_for_user(
             failure_detail=failure_detail,
             status_detail=status_detail,
             last_error=last_error,
+            keep_active_handoff=keep_active_handoff,
+            event_type=event_type,
         )
         await db.commit()
         return value
-
-
-async def expire_stale_cloud_workspace_handoff_op_for_user(
-    *,
-    user_id: UUID,
-    mobility_workspace_id: UUID,
-    handoff_op_id: UUID,
-    phase: str,
-    lifecycle_state: str,
-    keep_active_handoff: bool,
-    failure_code: str,
-    failure_detail: str,
-    status_detail: str | None,
-    last_error: str,
-) -> CloudWorkspaceHandoffOpValue:
-    async with db_engine.async_session_factory() as db:
-        mobility_workspace, handoff_op = _require_handoff_belongs_to_workspace(
-            await get_cloud_workspace_mobility(
-                db,
-                user_id=user_id,
-                mobility_workspace_id=mobility_workspace_id,
-            ),
-            await get_cloud_workspace_handoff_op(
-                db,
-                user_id=user_id,
-                handoff_op_id=handoff_op_id,
-            ),
-        )
-
-        now = utcnow()
-        previous_phase = handoff_op.phase
-        handoff_op.failure_code = failure_code
-        handoff_op.failure_detail = failure_detail
-        handoff_op.heartbeat_at = now
-        handoff_op.updated_at = now
-        mobility_workspace.status_detail = status_detail
-        mobility_workspace.last_error = last_error
-        mobility_workspace.updated_at = now
-
-        handoff_op.phase = phase
-        mobility_workspace.lifecycle_state = lifecycle_state
-        if keep_active_handoff:
-            mobility_workspace.active_handoff_op_id = handoff_op.id
-        else:
-            mobility_workspace.active_handoff_op_id = None
-        if previous_phase != phase:
-            _record_mobility_event(
-                db,
-                user_id=handoff_op.user_id,
-                cloud_workspace_id=mobility_workspace.cloud_workspace_id,
-                handoff_op_id=handoff_op.id,
-                event_type="handoff_stale",
-                direction=handoff_op.direction,
-                source_owner=handoff_op.source_owner,
-                target_owner=handoff_op.target_owner,
-                from_phase=previous_phase,
-                to_phase=phase,
-                failure_code=failure_code,
-                occurred_at=now,
-            )
-
-        await db.commit()
-        await db.refresh(handoff_op)
-        await db.refresh(mobility_workspace)
-        return _handoff_value(handoff_op)

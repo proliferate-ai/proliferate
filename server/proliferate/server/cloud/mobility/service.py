@@ -14,7 +14,6 @@ from proliferate.db.store.cloud_mobility import (
     complete_cloud_workspace_handoff_cleanup_for_user,
     create_cloud_workspace_handoff_op_for_user,
     ensure_cloud_workspace_mobility_for_user,
-    expire_stale_cloud_workspace_handoff_op_for_user,
     fail_cloud_workspace_handoff_op_checkpoint_for_user,
     fail_cloud_workspace_handoff_op_for_user,
     finalize_cloud_workspace_handoff_op_for_user,
@@ -84,17 +83,18 @@ async def expire_stale_cloud_workspace_handoffs_for_user(*, user_id: UUID) -> No
             finalized_at=active_handoff.finalized_at,
             cleanup_completed_at=active_handoff.cleanup_completed_at,
         )
-        await expire_stale_cloud_workspace_handoff_op_for_user(
+        await fail_cloud_workspace_handoff_op_checkpoint_for_user(
             user_id=user_id,
             mobility_workspace_id=workspace.id,
             handoff_op_id=active_handoff.id,
             phase=outcome.phase,
             lifecycle_state=outcome.lifecycle_state,
-            keep_active_handoff=outcome.keep_active_handoff,
             failure_code=outcome.failure_code,
             failure_detail=outcome.failure_detail,
             status_detail=visible_failure_status_detail(outcome.failure_detail),
             last_error=visible_failure_last_error(outcome.failure_detail),
+            keep_active_handoff=outcome.keep_active_handoff,
+            event_type="handoff_stale",
         )
 
 
