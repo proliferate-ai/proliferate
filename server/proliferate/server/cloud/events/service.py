@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.events.domain.cursors import advance_contiguous_cursor
@@ -89,6 +90,13 @@ async def ingest_worker_event_batch(
             cloud_workspace_by_session[event.session_id] = cloud_workspace_id
 
         received_by_session[event.session_id].append(event.seq)
+        if not await _projection_allows_ingest(
+            db,
+            target_id=auth.target_id,
+            session_id=event.session_id,
+        ):
+            live_only_events += 1
+            continue
         payload_decision = retained_payload(current_event_type, envelope)
         if not payload_decision.durable:
             live_only_events += 1
@@ -184,6 +192,26 @@ async def ingest_worker_event_batch(
         live_only_events=live_only_events,
         session_acks=session_acks,
     )
+
+
+async def _projection_allows_ingest(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    session_id: str,
+) -> bool:
+    projection = await events_store.get_session_projection(
+        db,
+        target_id=target_id,
+        session_id=session_id,
+    )
+    if projection is None or projection.exposure_id is None:
+        return True
+    exposure = await exposures_store.get_workspace_exposure_by_id(
+        db,
+        projection.exposure_id,
+    )
+    return exposure is not None and exposure.archived_at is None and exposure.status == "active"
 
 
 async def get_session_snapshot(

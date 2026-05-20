@@ -10,6 +10,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store.billing import ensure_personal_billing_subject
+from proliferate.db.store.cloud_sync import exposures as exposures_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.integrations.pubsub.models import PubSubMessage
 from proliferate.integrations.pubsub.redis import get_pubsub_bus
 from proliferate.server.cloud.live.domain.channels import target_channel
@@ -286,6 +290,119 @@ class TestCloudEventSyncApi:
         )
         assert duplicate_mismatch.status_code == 409
         assert duplicate_mismatch.json()["detail"]["code"] == "cloud_event_duplicate_mismatch"
+
+    @pytest.mark.asyncio
+    async def test_worker_event_batch_discards_revoked_exposure_projection(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-event-sync-revoked-exposure",
+        )
+        target_id, worker_headers = await _create_enrolled_target(
+            client,
+            db_session,
+            auth,
+            suffix="revoked-exposure",
+        )
+        target_uuid = UUID(target_id)
+        billing_subject = await ensure_personal_billing_subject(db_session, auth.user_id)
+        workspace = CloudWorkspace(
+            user_id=auth.user_id,
+            owner_scope="personal",
+            owner_user_id=auth.user_id,
+            organization_id=None,
+            created_by_user_id=auth.user_id,
+            billing_subject_id=billing_subject.id,
+            target_id=target_uuid,
+            display_name="acme/revoked",
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="revoked",
+            normalized_repo_key="github/acme/revoked",
+            git_branch="main",
+            git_base_branch="main",
+            worktree_path="/workspace/revoked",
+            origin="manual_web",
+            origin_json='{"kind":"human","entrypoint":"cloud"}',
+            status="ready",
+            status_detail="Ready",
+            template_version="v1",
+            runtime_generation=0,
+            anyharness_workspace_id="workspace-revoked",
+            repo_post_ready_phase="idle",
+            repo_post_ready_files_total=0,
+            repo_post_ready_files_applied=0,
+            cleanup_state="none",
+        )
+        db_session.add(workspace)
+        await db_session.flush()
+        exposure = await exposures_store.upsert_workspace_exposure(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=workspace.id,
+            anyharness_workspace_id="workspace-revoked",
+            owner_scope="personal",
+            owner_user_id=auth.user_id,
+            organization_id=None,
+            visibility="private",
+            default_projection_level="live",
+            commandable=True,
+            origin="manual_web",
+        )
+        await projections_store.upsert_session_projection_metadata(
+            db_session,
+            target_id=target_uuid,
+            session_id="session-revoked",
+            exposure_id=exposure.id,
+            cloud_workspace_id=workspace.id,
+            workspace_id="workspace-revoked",
+            projection_level="live",
+            commandable=True,
+        )
+        await exposures_store.archive_workspace_exposure(db_session, exposure_id=exposure.id)
+        await db_session.commit()
+
+        uploaded = await client.post(
+            "/v1/cloud/worker/events/batches",
+            headers=worker_headers,
+            json={
+                "events": [
+                    {
+                        "workspaceId": "workspace-revoked",
+                        "sessionId": "session-revoked",
+                        "seq": 1,
+                        "timestamp": "2026-05-13T00:00:00Z",
+                        "itemId": "item-revoked",
+                        "event": {
+                            "type": "item_completed",
+                            "item": {
+                                "kind": "assistant_message",
+                                "status": "completed",
+                                "contentParts": [{"type": "text", "text": "should-not-store"}],
+                            },
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert uploaded.status_code == 200
+        assert uploaded.json()["acceptedEvents"] == 0
+        assert uploaded.json()["liveOnlyEvents"] == 1
+        assert uploaded.json()["sessionAcks"] == [
+            {"sessionId": "session-revoked", "lastContiguousSeq": 1}
+        ]
+        snapshot = await client.get(
+            f"/v1/cloud/sessions/session-revoked/snapshot?targetId={target_id}",
+            headers=auth.headers,
+        )
+        assert snapshot.status_code == 200
+        assert snapshot.json()["transcriptItems"] == []
+        assert snapshot.json()["pendingInteractions"] == []
 
     @pytest.mark.asyncio
     async def test_session_stream_emits_snapshot_and_live_projection_patch(
