@@ -1225,7 +1225,7 @@ class TestCloudWorkspaces:
             "baseBranch": "main",
         }
         assert payload["workspaceStatus"] == "pending"
-        assert payload["allowedAgentKinds"] == ["claude", "codex", "gemini"]
+        assert payload["allowedAgentKinds"] == ["claude", "codex", "opencode", "gemini"]
         assert payload["readyAgentKinds"] == ["claude"]
         assert payload["runtime"]["generation"] == 0
         assert payload["origin"] == {"kind": "human", "entrypoint": "cloud"}
