@@ -14,7 +14,7 @@ describe("ProductSidebar", () => {
     const onGroupToggle = vi.fn();
     const onAction = vi.fn();
 
-    render(
+    const { container } = render(
       <ProductSidebar
         brand={<span>P</span>}
         title="Proliferate"
@@ -65,6 +65,8 @@ describe("ProductSidebar", () => {
       />,
     );
 
+    expect(container.innerHTML).toContain("bg-sidebar");
+    expect(container.innerHTML).not.toContain("bg-sidebar-background");
     expect(screen.getByText("Proliferate")).toBeTruthy();
     expect(screen.getByText("Home")).toBeTruthy();
     expect(screen.getAllByText("Shared cloud").length).toBeGreaterThan(0);

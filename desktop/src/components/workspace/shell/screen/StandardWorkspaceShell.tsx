@@ -242,7 +242,7 @@ export function StandardWorkspaceShell() {
               )}
 
               <div
-                className="flex min-w-0 flex-1 overflow-hidden bg-background"
+                className="flex min-w-0 flex-1 overflow-hidden bg-sidebar"
               >
                 <div
                   className={`flex min-w-0 flex-1 flex-col overflow-hidden ${chromeClasses.contentShell}`}
@@ -288,7 +288,7 @@ export function StandardWorkspaceShell() {
                     </DebugProfiler>
                   </div>
 
-                  <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
+                  <div className="flex min-h-0 flex-1 overflow-hidden bg-sidebar-background">
                     {hasLaunchIntentOnlyShell ? (
                       <DebugProfiler id="workspace-content-frame">
                         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
