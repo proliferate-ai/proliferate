@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from proliferate.db.store.cloud_runtime_config.revisions import (
     SandboxProfileRuntimeConfigRevisionSnapshot,
@@ -15,44 +15,52 @@ class RefreshRuntimeConfigRequest(BaseModel):
 
 
 class RuntimeConfigRevisionModel(BaseModel):
-    revision_id: str = Field(serialization_alias="revisionId")
-    sandbox_profile_id: str = Field(serialization_alias="sandboxProfileId")
+    model_config = ConfigDict(populate_by_name=True)
+
+    revision_id: str = Field(alias="revisionId")
+    sandbox_profile_id: str = Field(alias="sandboxProfileId")
     sequence: int
-    content_hash: str = Field(serialization_alias="contentHash")
-    created_at: str = Field(serialization_alias="createdAt")
+    content_hash: str = Field(alias="contentHash")
+    created_at: str = Field(alias="createdAt")
 
 
 class RuntimeConfigStatusResponse(BaseModel):
-    sandbox_profile_id: str = Field(serialization_alias="sandboxProfileId")
+    model_config = ConfigDict(populate_by_name=True)
+
+    sandbox_profile_id: str = Field(alias="sandboxProfileId")
     current_revision: RuntimeConfigRevisionModel | None = Field(
         default=None,
-        serialization_alias="currentRevision",
+        alias="currentRevision",
     )
     manifest: dict[str, object] | None = None
     warnings: dict[str, object] | None = None
 
 
 class RuntimeConfigArtifactRefModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     hash: str
-    content_type: str = Field(serialization_alias="contentType")
-    byte_size: int = Field(serialization_alias="byteSize")
-    source_ref: str | None = Field(default=None, serialization_alias="sourceRef")
+    content_type: str = Field(alias="contentType")
+    byte_size: int = Field(alias="byteSize")
+    source_ref: str | None = Field(default=None, alias="sourceRef")
 
 
 class RuntimeConfigMaterializationFragment(BaseModel):
-    revision_id: str = Field(serialization_alias="revisionId")
-    sandbox_profile_id: str = Field(serialization_alias="sandboxProfileId")
-    target_id: str | None = Field(default=None, serialization_alias="targetId")
+    model_config = ConfigDict(populate_by_name=True)
+
+    revision_id: str = Field(alias="revisionId")
+    sandbox_profile_id: str = Field(alias="sandboxProfileId")
+    target_id: str | None = Field(default=None, alias="targetId")
     sequence: int
-    content_hash: str = Field(serialization_alias="contentHash")
+    content_hash: str = Field(alias="contentHash")
     manifest: dict[str, object]
     artifact_refs: list[RuntimeConfigArtifactRefModel] = Field(
         default_factory=list,
-        serialization_alias="artifactRefs",
+        alias="artifactRefs",
     )
     credential_refs: list[dict[str, object]] = Field(
         default_factory=list,
-        serialization_alias="credentialRefs",
+        alias="credentialRefs",
     )
 
 
@@ -65,17 +73,44 @@ class WorkerRuntimeConfigStatusRequest(BaseModel):
 
 
 class WorkerRuntimeConfigStatusResponse(BaseModel):
-    revision_id: str = Field(serialization_alias="revisionId")
+    model_config = ConfigDict(populate_by_name=True)
+
+    revision_id: str = Field(alias="revisionId")
     status: str
     updated: bool
 
 
 class RuntimeConfigArtifactResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     hash: str
-    content_type: str = Field(serialization_alias="contentType")
-    byte_size: int = Field(serialization_alias="byteSize")
-    source_ref: str | None = Field(default=None, serialization_alias="sourceRef")
+    content_type: str = Field(alias="contentType")
+    byte_size: int = Field(alias="byteSize")
+    source_ref: str | None = Field(default=None, alias="sourceRef")
     content: str
+
+
+class WorkerRuntimeConfigCredentialMaterializationRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    credential_refs: list[str] = Field(default_factory=list, alias="credentialRefs")
+
+
+class RuntimeConfigCredentialValueModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    credential_ref: str = Field(alias="credentialRef")
+    value: str = Field(repr=False)
+
+
+class WorkerRuntimeConfigCredentialMaterializationResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    credentials: list[RuntimeConfigCredentialValueModel] = Field(default_factory=list)
+    missing_credential_refs: list[str] = Field(
+        default_factory=list,
+        alias="missingCredentialRefs",
+    )
 
 
 def runtime_config_revision_model(

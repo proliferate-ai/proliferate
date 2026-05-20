@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use anyharness_contract::v1::{
     ApplyRuntimeConfigRequest, RuntimeArtifactPayload, RuntimeConfigExternalScope,
@@ -31,7 +31,10 @@ use crate::{
         git_identity::{parse_configure_git_identity_payload, write_target_git_identity},
         materialize_plan, parse_materialize_environment_payload,
         repo_checkout::{ensure_repo_checkout, parse_ensure_repo_checkout_payload},
-        runtime_config::RuntimeConfigMaterializationFragment,
+        runtime_config::{
+            manifest_credential_refs, materialize_manifest_credentials,
+            RuntimeConfigMaterializationFragment,
+        },
     },
     store::{PendingCommandResult, WorkerStore},
     sync,
@@ -595,6 +598,16 @@ async fn process_materialize_environment_command(
             )
             .await
             {
+                let missing_credentials = match &error {
+                    WorkerError::MissingRuntimeConfigCredentials(refs) => refs.clone(),
+                    _ => Vec::new(),
+                };
+                let error_code = match &error {
+                    WorkerError::MissingRuntimeConfigCredentials(_) => {
+                        "runtime_config_credentials_missing"
+                    }
+                    _ => "anyharness_runtime_config_apply_failed",
+                };
                 cloud
                     .report_runtime_config_status(
                         &identity.worker_token,
@@ -602,8 +615,8 @@ async fn process_materialize_environment_command(
                         &crate::cloud_client::target_config::RuntimeConfigStatusRequest {
                             status: "failed".to_string(),
                             missing_artifacts: Vec::new(),
-                            missing_credentials: Vec::new(),
-                            error_code: Some("anyharness_runtime_config_apply_failed".to_string()),
+                            missing_credentials,
+                            error_code: Some(error_code.to_string()),
                             error_message: Some(error.to_string()),
                         },
                     )
@@ -690,6 +703,29 @@ async fn apply_runtime_config_to_anyharness(
     worker_token: &str,
     runtime_config: &RuntimeConfigMaterializationFragment,
 ) -> Result<(), WorkerError> {
+    let credential_refs = manifest_credential_refs(&runtime_config.manifest);
+    let credentials = if credential_refs.is_empty() {
+        HashMap::new()
+    } else {
+        let response = cloud
+            .fetch_runtime_config_credentials(
+                worker_token,
+                &runtime_config.revision_id,
+                credential_refs,
+            )
+            .await?;
+        if !response.missing_credential_refs.is_empty() {
+            return Err(WorkerError::MissingRuntimeConfigCredentials(
+                response.missing_credential_refs,
+            ));
+        }
+        response
+            .credentials
+            .into_iter()
+            .map(|credential| (credential.credential_ref, credential.value))
+            .collect::<HashMap<_, _>>()
+    };
+    let manifest = materialize_manifest_credentials(&runtime_config.manifest, &credentials)?;
     let mut artifact_payloads = Vec::with_capacity(runtime_config.artifact_refs.len());
     for artifact in &runtime_config.artifact_refs {
         let payload = cloud
@@ -718,7 +754,7 @@ async fn apply_runtime_config_to_anyharness(
                 target_id: runtime_config.target_id.clone(),
             }),
         },
-        manifest: runtime_config.manifest.clone(),
+        manifest,
         artifact_payloads,
         source: RuntimeConfigSource::Worker,
     };

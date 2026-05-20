@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudCommandActorKind, CloudCommandKind, CloudCommandSource
 from proliferate.db.models.cloud.agent_auth import SandboxProfileTargetState
+from proliferate.db.models.cloud.mcp import CloudMcpConnection
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
+from proliferate.db.store.cloud_mcp import auth as mcp_auth_store
 from proliferate.db.store.cloud_mcp.connections import (
     list_enabled_connections_for_organization_profile,
     list_enabled_connections_for_personal_profile,
@@ -50,8 +52,11 @@ from proliferate.server.cloud.runtime_config.domain.resolver import (
 from proliferate.server.cloud.runtime_config.models import (
     RuntimeConfigArtifactRefModel,
     RuntimeConfigArtifactResponse,
+    RuntimeConfigCredentialValueModel,
     RuntimeConfigMaterializationFragment,
     RuntimeConfigStatusResponse,
+    WorkerRuntimeConfigCredentialMaterializationRequest,
+    WorkerRuntimeConfigCredentialMaterializationResponse,
     WorkerRuntimeConfigStatusRequest,
     WorkerRuntimeConfigStatusResponse,
     parse_json_dict,
@@ -298,6 +303,47 @@ async def worker_runtime_config_artifact(
         byte_size=artifact.byte_size,
         source_ref=str(payload["sourceRef"]) if payload.get("sourceRef") is not None else None,
         content=content,
+    )
+
+
+async def worker_runtime_config_credentials(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    revision_id: UUID,
+    body: WorkerRuntimeConfigCredentialMaterializationRequest,
+) -> WorkerRuntimeConfigCredentialMaterializationResponse:
+    await require_current_managed_worker_slot(db, auth=auth)
+    revision = await _require_worker_revision(db, auth=auth, revision_id=revision_id)
+    manifest = parse_json_dict(revision.manifest_json) or {}
+    allowed_refs = {
+        str(ref["credentialRef"])
+        for ref in _credential_refs_from_manifest(manifest)
+        if isinstance(ref.get("credentialRef"), str)
+    }
+    credentials: list[RuntimeConfigCredentialValueModel] = []
+    missing: list[str] = []
+    seen: set[str] = set()
+    for credential_ref in body.credential_refs:
+        if credential_ref in seen:
+            continue
+        seen.add(credential_ref)
+        if credential_ref not in allowed_refs:
+            missing.append(credential_ref)
+            continue
+        value = await _resolve_runtime_credential_ref(db, credential_ref)
+        if value is None:
+            missing.append(credential_ref)
+            continue
+        credentials.append(
+            RuntimeConfigCredentialValueModel(
+                credential_ref=credential_ref,
+                value=value,
+            )
+        )
+    return WorkerRuntimeConfigCredentialMaterializationResponse(
+        credentials=credentials,
+        missing_credential_refs=missing,
     )
 
 
@@ -728,3 +774,57 @@ def _credential_refs_from_manifest(manifest: dict[str, object]) -> list[dict[str
         if isinstance(server_refs, list):
             refs.extend(item for item in server_refs if isinstance(item, dict))
     return refs
+
+
+async def _resolve_runtime_credential_ref(
+    db: AsyncSession,
+    credential_ref: str,
+) -> str | None:
+    parts = credential_ref.split(":", 2)
+    if len(parts) != 3 or parts[0] != "mcp":
+        return None
+    try:
+        connection_db_id = UUID(parts[1])
+    except ValueError:
+        return None
+    field_name = parts[2]
+    connection = await db.get(CloudMcpConnection, connection_db_id)
+    if connection is None:
+        return None
+    auth = await mcp_auth_store.load_connection_auth(
+        db,
+        connection_db_id=connection_db_id,
+    )
+    payload_ciphertext: str | None = None
+    if auth is not None and auth.auth_status == "ready" and auth.payload_ciphertext:
+        payload_ciphertext = auth.payload_ciphertext
+    elif connection.payload_ciphertext:
+        payload_ciphertext = connection.payload_ciphertext
+    if not payload_ciphertext:
+        return None
+    payload = decrypt_json(payload_ciphertext)
+    if not isinstance(payload, dict):
+        return None
+    return _credential_value_from_payload(payload, field_name)
+
+
+def _credential_value_from_payload(payload: dict[str, object], field_name: str) -> str | None:
+    secret_fields = payload.get("secretFields")
+    if isinstance(secret_fields, dict):
+        value = secret_fields.get(field_name)
+        if isinstance(value, str) and value:
+            return value
+    candidate_keys = [field_name]
+    if "_" in field_name:
+        head, *tail = field_name.split("_")
+        candidate_keys.append(head + "".join(part.title() for part in tail))
+    elif field_name and any(char.isupper() for char in field_name):
+        snake = "".join(
+            f"_{char.lower()}" if char.isupper() else char for char in field_name
+        ).lstrip("_")
+        candidate_keys.append(snake)
+    for key in candidate_keys:
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
