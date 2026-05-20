@@ -232,6 +232,38 @@ describe("resolveKeyboardShortcut", () => {
     });
 
     expect(resolveKeyboardShortcut({
+      key: "<",
+      code: "Comma",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.previous-tab",
+      shortcut: expect.objectContaining({
+        id: "workspace.previous-tab",
+        label: "⌘⌥<",
+      }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: ">",
+      code: "Period",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.next-tab",
+      shortcut: expect.objectContaining({
+        id: "workspace.next-tab",
+        label: "⌘⌥>",
+      }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
       key: "1",
       code: "Digit1",
       metaKey: true,
@@ -242,6 +274,22 @@ describe("resolveKeyboardShortcut", () => {
       id: "workspace.by-index",
       shortcut: expect.objectContaining({ id: "workspace.by-index" }),
       trigger: expect.objectContaining({ source: "keyboard", digit: 1 }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "O",
+      code: "KeyO",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.close-other-tabs",
+      shortcut: expect.objectContaining({
+        id: "workspace.close-other-tabs",
+        label: "⌘⇧O",
+      }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
     });
   });
 

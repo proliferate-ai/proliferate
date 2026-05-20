@@ -17,7 +17,7 @@ import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 interface ShortcutEntryView {
   id: string;
   command: string;
-  label: string;
+  labels: string[];
 }
 
 interface ShortcutSectionView {
@@ -33,12 +33,14 @@ function ShortcutBadge({ label }: { label: string }) {
   );
 }
 
-function ShortcutRow({ command, label }: ShortcutEntryView) {
+function ShortcutRow({ command, labels }: ShortcutEntryView) {
   return (
     <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-2.5 hover:bg-foreground/5">
       <span className="min-w-0 truncate text-sm text-foreground">{command}</span>
-      <div className="ml-auto flex min-h-7 items-center justify-end text-muted-foreground">
-        <ShortcutBadge label={label} />
+      <div className="ml-auto flex min-h-7 flex-wrap items-center justify-end gap-1.5 text-muted-foreground">
+        {labels.map((label) => (
+          <ShortcutBadge key={label} label={label} />
+        ))}
       </div>
     </li>
   );
@@ -109,6 +111,32 @@ function matchesQuery(terms: readonly string[], query: string): boolean {
   return terms.some((term) => term.toLowerCase().includes(query));
 }
 
+function buildShortcutEntries(shortcutKeys: readonly ShortcutKey[]): ShortcutEntryView[] {
+  const entriesById = new Map<string, ShortcutEntryView>();
+
+  for (const shortcutKey of shortcutKeys) {
+    const shortcut = SHORTCUTS[shortcutKey];
+    const entryId = `${shortcut.id}:${shortcut.description}`;
+    const label = getShortcutDisplayLabel(shortcut);
+    const existingEntry = entriesById.get(entryId);
+
+    if (existingEntry) {
+      if (!existingEntry.labels.includes(label)) {
+        existingEntry.labels.push(label);
+      }
+      continue;
+    }
+
+    entriesById.set(entryId, {
+      id: entryId,
+      command: shortcut.description,
+      labels: [label],
+    });
+  }
+
+  return [...entriesById.values()];
+}
+
 export function KeyboardShortcutsPane() {
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
@@ -150,14 +178,7 @@ export function KeyboardShortcutsPane() {
   const sections = useMemo<ShortcutSectionView[]>(() => [
     ...shortcutGroups.map((group) => ({
       title: group.title,
-      entries: group.shortcutKeys.map((shortcutKey) => {
-        const shortcut = SHORTCUTS[shortcutKey];
-        return {
-          id: shortcut.id,
-          command: shortcut.description,
-          label: getShortcutDisplayLabel(shortcut),
-        };
-      }),
+      entries: buildShortcutEntries(group.shortcutKeys),
     })),
     ...composerShortcutGroups.map((group) => ({
       title: group.title,
@@ -166,7 +187,7 @@ export function KeyboardShortcutsPane() {
         return {
           id: `${group.title}:${shortcut.key}:${shortcutKey}`,
           command: shortcut.description,
-          label: getShortcutDisplayLabel(shortcut),
+          labels: [getShortcutDisplayLabel(shortcut)],
         };
       }),
     })),

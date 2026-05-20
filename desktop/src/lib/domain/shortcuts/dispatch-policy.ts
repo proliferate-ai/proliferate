@@ -93,8 +93,10 @@ function canBypassDefaultPrevented(
     shortcut.id === SHORTCUTS.closeOtherTabs.id
     && (event.metaKey || event.ctrlKey)
     && event.key.toLowerCase() === "o"
-    && event.altKey
-    && !event.shiftKey
+    && (
+      (event.altKey && !event.shiftKey)
+      || (!event.altKey && event.shiftKey)
+    )
   ) {
     return true;
   }
@@ -131,16 +133,22 @@ function isTabCyclingShortcut(
   shortcut: Pick<ShortcutDef, "id">,
   event: KeyboardShortcutEventLike,
 ): boolean {
-  if (!(event.metaKey || event.ctrlKey) || event.altKey || !event.shiftKey) {
+  if (!(event.metaKey || event.ctrlKey) || !event.shiftKey) {
     return false;
   }
 
   return (
     shortcut.id === SHORTCUTS.previousTab.id
-    && event.code === "BracketLeft"
+    && (
+      (!event.altKey && event.code === "BracketLeft")
+      || (event.altKey && event.code === "Comma")
+    )
   ) || (
     shortcut.id === SHORTCUTS.nextTab.id
-    && event.code === "BracketRight"
+    && (
+      (!event.altKey && event.code === "BracketRight")
+      || (event.altKey && event.code === "Period")
+    )
   );
 }
 
