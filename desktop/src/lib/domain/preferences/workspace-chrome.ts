@@ -1,7 +1,11 @@
+const WORKSPACE_GLASS_HEADER_BASE_CLASS =
+  "flex h-16 shrink-0 items-center bg-card/30 backdrop-blur-xl supports-[backdrop-filter]:bg-card/20";
 const WORKSPACE_GLASS_HEADER_CLASS =
-  "flex h-16 shrink-0 items-center border-b border-foreground/10 bg-card/30 backdrop-blur-xl supports-[backdrop-filter]:bg-card/20";
+  `${WORKSPACE_GLASS_HEADER_BASE_CLASS} border-b border-foreground/10`;
+const WORKSPACE_SOLID_HEADER_BASE_CLASS =
+  "flex h-12 shrink-0 items-center bg-background";
 const WORKSPACE_SOLID_HEADER_CLASS =
-  "flex h-12 shrink-0 items-center border-b border-border/70 bg-background";
+  `${WORKSPACE_SOLID_HEADER_BASE_CLASS} border-b border-border/70`;
 
 const EDITOR_GLASS_TABLIST_CLASS =
   "flex h-9 shrink-0 items-end gap-1 overflow-x-auto border-b border-foreground/10 bg-card/25 px-1 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-card/20";
@@ -40,17 +44,26 @@ export interface TerminalTabChromeClasses {
 export function resolveStandardWorkspaceChromeClasses({
   transparent,
   sidebarOpen,
+  showHeaderDivider = true,
+  showContentTopBorder = true,
 }: {
   transparent: boolean;
   sidebarOpen: boolean;
+  showHeaderDivider?: boolean;
+  showContentTopBorder?: boolean;
 }): StandardWorkspaceChromeClasses {
+  const header = transparent
+    ? (showHeaderDivider ? WORKSPACE_GLASS_HEADER_CLASS : WORKSPACE_GLASS_HEADER_BASE_CLASS)
+    : (showHeaderDivider ? WORKSPACE_SOLID_HEADER_CLASS : WORKSPACE_SOLID_HEADER_BASE_CLASS);
+
   return {
     root: transparent ? "bg-transparent" : "bg-sidebar",
     contentShell: [
       transparent ? "bg-transparent" : "bg-background",
-      sidebarOpen && !transparent ? "rounded-tl-[22px] border-l border-t border-sidebar-border" : "",
+      sidebarOpen && !transparent ? "rounded-tl-[22px] border-l border-sidebar-border" : "",
+      sidebarOpen && !transparent && showContentTopBorder ? "border-t" : "",
     ].filter(Boolean).join(" "),
-    header: transparent ? WORKSPACE_GLASS_HEADER_CLASS : WORKSPACE_SOLID_HEADER_CLASS,
+    header,
   };
 }
 

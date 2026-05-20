@@ -26,6 +26,8 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   const chromeClasses = resolveStandardWorkspaceChromeClasses({
     transparent: transparentChromeEnabled,
     sidebarOpen,
+    showHeaderDivider: false,
+    showContentTopBorder: false,
   });
   const {
     phase: updaterPhase,
