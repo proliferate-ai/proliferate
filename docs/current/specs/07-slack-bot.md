@@ -37,9 +37,10 @@ In scope:
   thread response on completion.
 - Outbound posting with retry + rate-limit awareness (bounded
   in-process queue).
-- New small `organization_settings` table to hold cross-cutting
-  per-org config (referenced by spec 06 for org defaults; spec 07
-  is the first concrete user).
+- (Removed) No `organization_settings` table. Spec 06's
+  `cloud_agent_run_config_default` covers per-org agent defaults
+  with explicit constraints. Spec 07's per-org Slack config lives
+  in `slack_bot_config` (§5.3). See §5.10.
 - Settings → Slack bot admin page (spec 03 §5.1 slot).
 
 Out of scope:
@@ -129,11 +130,10 @@ Hard:
   exposure-gated event ingest, runtime config + agent auth
   preflight (auto-cascade per spec 06 §5.5 pattern reused).
 - Spec 05: `shared_unclaimed` claim flow.
-- Spec 06: `cloud_agent_run_config` model + per-org default
-  via `organization_settings`. Spec 07 introduces the
-  `organization_settings` table as the cross-cutting home for
-  per-org cross-cutting config; spec 06's reference resolves to
-  the same table.
+- Spec 06: `cloud_agent_run_config` model + per-org default via
+  the `cloud_agent_run_config_default` table (spec 06 §5.3).
+  Spec 07 reads org-default by calling spec 06's resolver, not by
+  reading any jsonb config bag.
 
 Soft:
 
@@ -365,6 +365,11 @@ slack_thread_work
                                   -- the bot's ack reply ts
   initial_repo_id                 uuid fk cloud_repo_config.id   NOT NULL
 
+  agent_run_config_snapshot_json  jsonb                          nullable
+                                  -- resolved cloud_agent_run_config
+                                     values at thread-creation time;
+                                     spec 06 §5.3 snapshot pattern
+
   status                          text   'active' | 'archived'
   created_at                      timestamptz                    NOT NULL
   archived_at                     timestamptz                    nullable
@@ -524,7 +529,7 @@ Happy path (background processor):
    workspace
 6. resolve agent_run_config:
    slack_bot_config.default_agent_run_config_id ??
-   organization_settings.default_agent_run_config_id_by_agent_kind[default_agent_kind] ??
+   cloud_agent_run_config_default(org, default_agent_kind) (spec 06 §5.3) ??
    system starter preset for default_agent_kind
 7. preflight runtime config (spec 01) + agent auth (spec 02)
    auto-cascade per spec 06's mechanism (same helper);
@@ -681,51 +686,31 @@ rate limit envelope:
 The outbound queue is per-org; rate limits are enforced per Slack
 team.
 
-### 5.10 `organization_settings` (new, cross-cutting)
+### 5.10 No `organization_settings` table in V1
 
-This is the home for per-org cross-cutting settings that don't
-warrant a dedicated table. Spec 06 §5.3 referenced it for org
-agent defaults; spec 07 introduces it formally.
+Earlier drafts proposed an `organization_settings` jsonb table as a
+cross-cutting home for per-org config. Spec 06 §5.3 ultimately
+chose a dedicated `cloud_agent_run_config_default` table for
+per-org agent defaults (cleaner relational constraints; explicit
+admin-write endpoints). Spec 07's V1 needs are covered by
+`slack_bot_config` (§5.3): repo mode, allowed repos, allowed
+channels, default agent kind. No additional org-cross-cutting
+keys are required in V1.
 
-```text
-organization_settings
-  organization_id   uuid PRIMARY KEY fk organization.id
-  settings_json     jsonb NOT NULL default '{}'
-  created_at, updated_at
+If a future spec genuinely needs a jsonb bag of per-org config
+that doesn't justify its own table, introduce
+`organization_settings` then. Spec 07 does not ship it.
 
-initial settings_json shape (extensible):
-  {
-    "default_agent_run_config_id_by_agent_kind": {
-      "claude": "<uuid>",
-      "codex":  "<uuid>",
-      ...
-    },
-    "slack": {
-      -- placeholder for future Slack-level cross-cutting prefs
-      -- not used in V1; slack_bot_config covers V1 needs
-    }
-  }
-```
-
-Reads:
+Resolution order for org-level agent defaults (Slack, automations,
+new-chat) is owned by spec 06:
 
 ```text
-load_org_settings(organization_id) -> OrgSettings
-  inserts default row on first access
-  returns frozen dataclass over the jsonb
+1. SlackBotConfig.default_agent_kind (Slack only, optional)
+2. cloud_agent_run_config_default rows for the org +
+   the desired agent_kind (spec 06 §5.3)
+3. system starter preset for the agent_kind (spec 06 §5.3)
+4. else fail with agent_run_config_missing_default
 ```
-
-Writes:
-
-```text
-update_org_settings(organization_id, **patches)
-  partial update; settings.update(patches); bump updated_at
-  validate known keys at the store boundary
-```
-
-Spec 06 §5.3 uses
-`load_org_settings(org).default_agent_run_config_id_by_agent_kind`
-to resolve org defaults. Spec 07 uses the same accessor.
 
 ### 5.11 UI: Settings → Slack bot
 
@@ -750,8 +735,9 @@ sections:
     - default_agent_kind selector (catalog)
     - inline "Default config for <agent_kind>" via AgentRunConfigSelector
       (filtered to usable_in_shared_sandboxes=true)
-    - if no per-agent default is set, falls back to
-      organization_settings.default_agent_run_config_id_by_agent_kind
+    - if no per-agent default is set, falls back to spec 06's
+      cloud_agent_run_config_default lookup, then the system
+      starter preset for the agent_kind
 
   Repo routing
     - repo_mode toggle: Fixed | Auto
@@ -784,9 +770,6 @@ server/proliferate/db/models/cloud/slack.py                          (new)
   SlackOutboundMessageQueue
   CloudRepoRoutingProfile
 
-server/proliferate/db/models/organization_settings.py                (new)
-  OrganizationSettings
-
 server/proliferate/db/models/cloud/repo_config.py
   - add owner_scope, organization_id
   - update unique indexes
@@ -801,9 +784,6 @@ server/proliferate/db/store/cloud_slack/                             (new)
   events_seen.py
   outbound.py
   repo_routing_profiles.py
-
-server/proliferate/db/store/organization_settings.py                 (new)
-  load_org_settings, update_org_settings
 
 server/proliferate/server/cloud/slack/                               (new)
   api.py                  POST /v1/cloud/slack/events
@@ -889,10 +869,9 @@ desktop/src/hooks/access/cloud/organization-settings/                (new)
 ## 7. Implementation Chunks
 
 ```text
-Chunk A  organization_settings table + spec 06 backfill
-  - migration creates organization_settings
-  - load/update store helpers
-  - spec 06's reference to org defaults resolves here
+Chunk A  (Removed.) No organization_settings table in V1.
+  Per-org defaults resolved by spec 06's cloud_agent_run_config_default
+  resolver.
 
 Chunk B  Slack DB models
   - slack_workspace_connection
@@ -995,9 +974,11 @@ Chunk I  Tests + smoke
     backoff up to `slack_outbound_max_attempts`.
 14. Outbound queue is idempotent on `source_event_id` per
     connection.
-15. `organization_settings` table exists with `settings_json`
-    jsonb. Spec 06's
-    `default_agent_run_config_id_by_agent_kind` reads/writes here.
+15. No `organization_settings` table is created. Slack's per-org
+    config lives in `slack_bot_config`; per-org agent defaults
+    live in `cloud_agent_run_config_default` (spec 06 §5.3). The
+    Slack mention handler resolves the default via spec 06's
+    resolver chain.
 16. Slack runs use the same runtime config + agent auth preflight
     as other sources, with auto-cascade (per spec 06 §5.5 reuse).
     Cascade attempts capped via
@@ -1048,7 +1029,7 @@ tests/server/cloud/slack/test_admin_gate_on_settings.py
 tests/server/cloud/slack/test_agent_run_config_inheritance.py
 tests/server/cloud/slack/test_runtime_config_cascade.py
 tests/server/cloud/slack/test_agent_auth_cascade.py
-tests/server/organization_settings/test_load_and_update.py
+tests/server/cloud/slack/test_no_organization_settings_table_in_v1.py
 ```
 
 Desktop:
@@ -1197,6 +1178,7 @@ Manual smoke:
 
    For ops, sometimes one org needs a lower rate (rate-limited by
    Slack at the app level). Bias: keep the rate global in V1
-   (`settings.slack_outbound_rate_per_team_per_sec`); add a
-   per-org override via `organization_settings.slack.outbound_rate_per_sec`
-   when needed. Schema is forward-compatible (jsonb).
+   (`settings.slack_outbound_rate_per_team_per_sec`). If per-org
+   override is needed later, add an `outbound_rate_per_sec`
+   column to `slack_bot_config` rather than introducing a generic
+   jsonb table just for that one field.
