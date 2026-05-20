@@ -218,6 +218,8 @@ class AgentGatewayRuntimeGrantRecord:
     issued_profile_revision: int
     target_id: UUID
     sandbox_profile_id: UUID
+    cloud_sandbox_id: UUID | None
+    slot_generation: int | None
     organization_id: UUID | None
     user_id: UUID | None
     agent_kind: str

@@ -181,7 +181,7 @@ async def _populate_agent_auth_preflight_payload(
     )
     if state is None:
         profile = await agent_auth_store.get_sandbox_profile(db, target.sandbox_profile_id)
-        if profile is None or profile.agent_auth_revision <= 0:
+        if profile is None:
             return payload
         required_revision = profile.agent_auth_revision
     else:
@@ -407,6 +407,12 @@ async def _validate_agent_auth_preflight(
         raise CloudApiError(
             "cloud_command_agent_auth_not_ready",
             "Agent auth config has not been applied to this target.",
+            status_code=409,
+        )
+    if state.force_restart_required:
+        raise CloudApiError(
+            "cloud_command_agent_auth_restart_required",
+            "Agent auth changes require the session to restart before this command can run.",
             status_code=409,
         )
 

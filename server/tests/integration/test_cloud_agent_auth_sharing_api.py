@@ -121,14 +121,30 @@ async def test_shared_personal_synced_credential_lists_active_share_for_org_sele
         json={},
     )
     assert profile_response.status_code == 200
+    profile_id = profile_response.json()["id"]
 
     select_response = await client.put(
-        f"/v1/cloud/sandbox-profiles/{profile_response.json()['id']}/agent-auth-selections/claude",
+        f"/v1/cloud/sandbox-profiles/{profile_id}/agent-auth-selections/claude",
         headers=_headers(tokens),
         json={"credentialId": credential["id"], "credentialShareId": share_id},
     )
     assert select_response.status_code == 200
     assert select_response.json()["credentialShareId"] == share_id
+
+    revoke_response = await client.delete(
+        f"/v1/cloud/agent-auth/credential-shares/{share_id}",
+        headers=_headers(tokens),
+    )
+    assert revoke_response.status_code == 200
+
+    selections_response = await client.get(
+        f"/v1/cloud/sandbox-profiles/{profile_id}/agent-auth-selections",
+        headers=_headers(tokens),
+    )
+    assert selections_response.status_code == 200
+    selection = selections_response.json()[0]
+    assert selection["status"] == "invalid"
+    assert selection["lastErrorCode"] == "credential_share_revoked"
 
 
 @pytest.mark.asyncio

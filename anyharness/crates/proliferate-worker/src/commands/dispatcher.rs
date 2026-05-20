@@ -1,10 +1,10 @@
-use std::path::Path;
-
 use anyharness_contract::v1::{
     ApplyRuntimeConfigRequest, RuntimeArtifactPayload, RuntimeConfigExternalScope,
     RuntimeConfigRevision, RuntimeConfigSource, RuntimeCredentialValue,
 };
+use reqwest::StatusCode;
 use serde_json::{json, Value};
+use std::path::Path;
 use tokio::time::{sleep, Duration};
 use tracing::{debug, info, warn};
 
@@ -298,25 +298,57 @@ async fn process_refresh_agent_auth_config_command(
             &plan,
         )?;
         if outcome.applied {
-            anyharness.apply_agent_auth_config(&request).await?;
-            cloud
-                .report_agent_auth_status(
-                    &identity.worker_token,
-                    &payload.sandbox_profile_id,
-                    &AgentAuthStatusRequest {
-                        status: "applied".to_string(),
-                        command_id: command.command_id.clone(),
-                        revision: payload.revision,
-                        lease_id: command.lease_id.clone(),
-                        applied_revision: Some(outcome.revision),
-                        current_revision: outcome.current_revision,
-                        error_code: None,
-                        error_message: None,
-                        applied_cleanup_paths: outcome.applied_cleanup_paths.clone(),
-                    },
-                )
-                .await
-                .ok();
+            let apply_response = anyharness.apply_agent_auth_config(&request).await?;
+            if apply_response.applied && apply_response.revision == outcome.revision {
+                cloud
+                    .report_agent_auth_status(
+                        &identity.worker_token,
+                        &payload.sandbox_profile_id,
+                        &AgentAuthStatusRequest {
+                            status: "applied".to_string(),
+                            command_id: command.command_id.clone(),
+                            revision: payload.revision,
+                            lease_id: command.lease_id.clone(),
+                            applied_revision: Some(outcome.revision),
+                            current_revision: outcome.current_revision,
+                            error_code: None,
+                            error_message: None,
+                            applied_cleanup_paths: outcome.applied_cleanup_paths.clone(),
+                        },
+                    )
+                    .await
+                    .ok();
+            } else if !apply_response.applied && apply_response.status == "stale" {
+                cloud
+                    .report_agent_auth_status(
+                        &identity.worker_token,
+                        &payload.sandbox_profile_id,
+                        &AgentAuthStatusRequest {
+                            status: "superseded".to_string(),
+                            command_id: command.command_id.clone(),
+                            revision: payload.revision,
+                            lease_id: command.lease_id.clone(),
+                            applied_revision: None,
+                            current_revision: Some(apply_response.revision),
+                            error_code: None,
+                            error_message: None,
+                            applied_cleanup_paths: Vec::new(),
+                        },
+                    )
+                    .await
+                    .ok();
+            } else {
+                return Err(WorkerError::AnyHarness {
+                    status: StatusCode::CONFLICT,
+                    body: format!(
+                        "agent auth apply did not accept revision {}: applied={}, revision={}, status={}",
+                        outcome.revision,
+                        apply_response.applied,
+                        apply_response.revision,
+                        apply_response.status
+                    ),
+                });
+            }
         } else {
             cloud
                 .report_agent_auth_status(

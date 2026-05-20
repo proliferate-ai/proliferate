@@ -19,7 +19,7 @@ const CLAUDE_GATEWAY_PROTECTED_ENV: &[&str] = &[
 ];
 const CODEX_GATEWAY_PROTECTED_ENV: &[&str] = &["CODEX_API_KEY", "CODEX_HOME"];
 const OPENCODE_GATEWAY_PROTECTED_ENV: &[&str] = &["OPENAI_API_KEY", "OPENAI_BASE_URL"];
-const CLAUDE_SYNCED_PROTECTED_ENV: &[&str] = &["ANTHROPIC_API_KEY"];
+const CLAUDE_SYNCED_PROTECTED_ENV: &[&str] = &[];
 const GEMINI_SYNCED_PROTECTED_ENV: &[&str] = &[
     "GEMINI_API_KEY",
     "GOOGLE_API_KEY",
@@ -57,6 +57,7 @@ pub struct AgentAuthSelectionPlan {
     pub materialization_mode: String,
     pub credential_id: String,
     pub credential_revision: i64,
+    pub status: Option<String>,
     pub credential_share_id: Option<String>,
     pub gateway: Option<AgentAuthGatewayConfig>,
     pub synced_files: Option<AgentAuthSyncedFilesConfig>,
@@ -247,6 +248,7 @@ pub fn build_anyharness_agent_auth_request(
             "materializationMode": selection.materialization_mode,
             "credentialId": selection.credential_id,
             "credentialRevision": selection.credential_revision,
+            "status": selection.status,
             "credentialShareId": selection.credential_share_id,
             "expiresAt": expires_at,
             "protectedEnv": protected_env,
@@ -526,6 +528,7 @@ mod tests {
                 "materializationMode": "synced_files",
                 "credentialId": "credential-1",
                 "credentialRevision": 3,
+                "status": "invalid",
                 "credentialShareId": null,
                 "syncedFiles": {
                     "credentialShareId": null,
@@ -540,7 +543,7 @@ mod tests {
         }))
         .expect("plan");
 
-        let (_request, outcome) = build_anyharness_agent_auth_request(
+        let (request, outcome) = build_anyharness_agent_auth_request(
             Some(&root),
             "profile-1",
             "target-1",
@@ -550,6 +553,37 @@ mod tests {
         )
         .expect("request");
         assert_eq!(outcome.applied_cleanup_paths, vec![".codex/auth.json"]);
+        assert_eq!(outcome.selection_count, 1);
+        assert_eq!(request["selections"][0]["status"], "invalid");
         assert!(!root.join(".codex/auth.json").exists());
+    }
+
+    #[test]
+    fn rejects_claude_synced_protected_env() {
+        let plan: AgentAuthMaterializationPlan = serde_json::from_value(json!({
+            "applied": true,
+            "targetId": "target-1",
+            "sandboxProfileId": "profile-1",
+            "revision": 7,
+            "selections": [{
+                "agentKind": "claude",
+                "materializationMode": "synced_files",
+                "credentialId": "credential-1",
+                "credentialRevision": 3,
+                "credentialShareId": null,
+                "syncedFiles": {
+                    "credentialShareId": null,
+                    "envVars": { "ANTHROPIC_API_KEY": "secret" },
+                    "files": [],
+                    "cleanup": []
+                }
+            }]
+        }))
+        .expect("plan");
+
+        let error =
+            build_anyharness_agent_auth_request(None, "profile-1", "target-1", None, 7, &plan)
+                .expect_err("disallowed synced env");
+        assert!(error.to_string().contains("ANTHROPIC_API_KEY"));
     }
 }

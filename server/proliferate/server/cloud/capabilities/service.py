@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 from proliferate.config import settings
 from proliferate.server.cloud.capabilities.models import (
     AgentGatewayCapabilities,
@@ -11,9 +13,15 @@ from proliferate.server.cloud.capabilities.models import (
 
 def cloud_capabilities() -> CloudCapabilitiesResponse:
     gateway_enabled = bool(settings.agent_gateway_enabled)
+    default_managed_budget = settings.agent_gateway_default_managed_budget_usd.strip()
+    managed_credits_enabled = gateway_enabled and _positive_decimal_string(default_managed_budget)
     return CloudCapabilitiesResponse(
         agentGateway=AgentGatewayCapabilities(
             enabled=gateway_enabled,
+            managedCreditsEnabled=managed_credits_enabled,
+            defaultManagedBudgetUsd=(
+                default_managed_budget if managed_credits_enabled else None
+            ),
             byokEnabled=gateway_enabled and settings.agent_gateway_byok_enabled,
             anthropicByokEnabled=(
                 gateway_enabled
@@ -38,3 +46,11 @@ def cloud_capabilities() -> CloudCapabilitiesResponse:
             opencodeEnabled=gateway_enabled and settings.agent_gateway_opencode_enabled,
         )
     )
+
+
+def _positive_decimal_string(value: str) -> bool:
+    try:
+        parsed = Decimal(value)
+        return parsed.is_finite() and parsed > 0
+    except (InvalidOperation, ValueError):
+        return False
