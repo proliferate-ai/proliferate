@@ -2660,6 +2660,51 @@ async def _ensure_profile_target_refresh_if_needed(
     )
 
 
+async def request_agent_auth_refresh_for_profile_target(
+    db: AsyncSession,
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+    actor_user_id: UUID | None,
+    reason: str,
+    force_restart: bool,
+) -> None:
+    profile = await store.get_sandbox_profile(db, sandbox_profile_id)
+    if profile is None:
+        raise AgentAuthError(
+            "Sandbox profile not found.",
+            code="sandbox_profile_not_found",
+            status_code=404,
+        )
+    if profile.primary_target_id != target_id:
+        raise AgentAuthError(
+            "Sandbox profile target does not match the requested target.",
+            code="sandbox_profile_target_mismatch",
+            status_code=409,
+        )
+    command = await _queue_agent_auth_refresh_command(
+        db,
+        profile=profile,
+        target_id=target_id,
+        actor_user_id=actor_user_id,
+        reason=reason,
+        force_restart=force_restart,
+    )
+    await store.upsert_target_state(
+        db,
+        sandbox_profile_id=profile.id,
+        target_id=target_id,
+        desired_revision=profile.agent_auth_revision,
+        applied_revision=None,
+        status="pending",
+        force_restart_required=force_restart,
+        last_command_id=command.id,
+        last_worker_id=None,
+        last_error_code=None,
+        last_error_message=None,
+    )
+
+
 async def _queue_agent_auth_refresh_command(
     db: AsyncSession,
     *,

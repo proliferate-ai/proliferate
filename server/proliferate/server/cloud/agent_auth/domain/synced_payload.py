@@ -47,9 +47,8 @@ class NormalizedSyncedCredentialPayload:
 _CREDENTIAL_SPECS: dict[CloudAgentKind, SyncedCredentialProviderSpec] = {
     "claude": SyncedCredentialProviderSpec(
         provider="claude",
-        allowed_env_vars=frozenset({"ANTHROPIC_API_KEY"}),
+        allowed_env_vars=frozenset(),
         allowed_file_paths=CLAUDE_ALLOWED_AUTH_FILES,
-        env_normalizer=lambda env_vars: _normalize_claude_env_payload(env_vars),
         file_validator=has_portable_claude_file,
     ),
     "codex": SyncedCredentialProviderSpec(
@@ -194,13 +193,6 @@ def _normalize_file_payload(
         decoded_files[relative_path] = decoded
 
     return decoded_files
-
-
-def _normalize_claude_env_payload(env_vars: Mapping[str, str]) -> dict[str, str]:
-    api_key = env_vars.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        _invalid_payload("Claude sync requires ANTHROPIC_API_KEY.")
-    return {"ANTHROPIC_API_KEY": api_key}
 
 
 def _normalize_gemini_env_payload(env_vars: Mapping[str, str]) -> dict[str, str]:

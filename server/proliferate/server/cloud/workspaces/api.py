@@ -28,7 +28,6 @@ from proliferate.server.cloud.workspaces.service import (
     start_cloud_workspace,
     stop_cloud_workspace,
     sync_cloud_workspace_branch,
-    sync_cloud_workspace_credentials,
     sync_cloud_workspace_display_name,
 )
 
@@ -162,19 +161,6 @@ async def update_cloud_workspace_display_name_endpoint(
             workspace_id,
             display_name=body.display_name,
         )
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return payload
-
-
-@router.post("/workspaces/{workspace_id}/sync-credentials", response_model=WorkspaceDetail)
-async def sync_cloud_workspace_credentials_endpoint(
-    workspace_id: UUID,
-    user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> WorkspaceDetail:
-    try:
-        payload = await sync_cloud_workspace_credentials(db, user.id, workspace_id)
     except CloudApiError as error:
         raise_cloud_error(error)
     return payload

@@ -67,9 +67,6 @@ def upgrade() -> None:
             sa.Column("root_anyharness_repo_root_id", sa.String(length=255), nullable=True),
             sa.Column("runtime_generation", sa.Integer(), nullable=False, server_default="0"),
             sa.Column(
-                "credential_snapshot_version", sa.Integer(), nullable=False, server_default="0"
-            ),
-            sa.Column(
                 "repo_env_applied_version", sa.Integer(), nullable=False, server_default="0"
             ),
             sa.Column("last_error", sa.Text(), nullable=True),

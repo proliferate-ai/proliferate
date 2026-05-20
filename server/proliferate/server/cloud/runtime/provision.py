@@ -27,8 +27,10 @@ from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
     open_usage_segment_for_sandbox,
 )
+from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_repo_config import load_cloud_repo_config_for_user
 from proliferate.db.store.cloud_runtime_environments import (
+    attach_target_to_runtime_environment,
     ensure_runtime_environment_for_workspace_id,
     load_runtime_environment_with_sandbox,
     reserve_and_attach_sandbox_for_environment,
@@ -53,8 +55,8 @@ from proliferate.integrations.sandbox import (
 )
 from proliferate.server.billing.service import authorize_sandbox_start
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.agent_auth.session_loader import (
-    load_selected_synced_credentials_for_user,
+from proliferate.server.cloud.agent_auth.service import (
+    request_agent_auth_refresh_for_profile_target,
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.anyharness_api import (
@@ -64,6 +66,7 @@ from proliferate.server.cloud.runtime.anyharness_api import (
     verify_runtime_auth_enforced,
     wait_for_runtime_health,
 )
+from proliferate.server.cloud.runtime.auth_status import selected_agent_auth_agent_kinds
 from proliferate.server.cloud.runtime.bootstrap import (
     build_detached_supervisor_launch_command,
     build_runtime_env,
@@ -76,13 +79,6 @@ from proliferate.server.cloud.runtime.bootstrap import (
     stage_runtime_bundle,
     supervisor_config_path,
     worker_config_path,
-)
-from proliferate.server.cloud.runtime.credential_freshness import (
-    build_credential_revision_state,
-    ensure_runtime_environment_credentials_current,
-)
-from proliferate.server.cloud.runtime.credentials import (
-    write_credential_files,
 )
 from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.domain.reconnect_policy import (
@@ -225,12 +221,44 @@ async def _load_provision_input(
         )
     git_user_name, git_user_email = _resolve_git_identity(user, github_grant)
 
-    credential_records = await load_selected_synced_credentials_for_user(workspace.user_id)
-    credential_revision_state = build_credential_revision_state(credential_records)
-    if credential_revision_state.missing_credentials:
+    async with db_engine.async_session_factory() as db, db.begin():
+        profile = await agent_auth_store.ensure_personal_sandbox_profile(
+            db,
+            user_id=workspace.user_id,
+            created_by_user_id=workspace.user_id,
+        )
+        target = await targets_store.ensure_primary_profile_target(
+            db,
+            sandbox_profile_id=profile.id,
+            created_by_user_id=workspace.user_id,
+        )
+        profile = await agent_auth_store.get_sandbox_profile(db, profile.id)
+        if profile is None:
+            raise CloudApiError(
+                "sandbox_profile_not_found",
+                "Cloud sandbox profile could not be prepared.",
+                status_code=500,
+            )
+        await attach_target_to_runtime_environment(
+            db,
+            runtime_environment_id=runtime_environment.id,
+            target_id=target.id,
+        )
+        workspace_row = await db.get(type(workspace), workspace.id)
+        if workspace_row is not None:
+            workspace_row.sandbox_profile_id = profile.id
+            workspace_row.target_id = target.id
+            workspace_row.billing_subject_id = profile.billing_subject_id
+            workspace_row.updated_at = utcnow()
+        agent_auth_agent_kinds = await selected_agent_auth_agent_kinds(
+            db,
+            sandbox_profile_id=profile.id,
+        )
+
+    if not agent_auth_agent_kinds:
         raise CloudApiError(
             "missing_supported_credentials",
-            "No synced cloud credentials were found for this user.",
+            "No agent authentication credentials were selected for this user.",
             status_code=400,
         )
 
@@ -259,9 +287,10 @@ async def _load_provision_input(
         git_user_name=git_user_name,
         git_user_email=git_user_email,
         anyharness_data_key=decrypt_text(anyharness_data_key_ciphertext),
-        credentials=credential_revision_state.credentials,
-        credential_files_revision=credential_revision_state.files_revision,
-        credential_process_revision=credential_revision_state.process_revision,
+        sandbox_profile_id=profile.id,
+        target_id=target.id,
+        required_agent_auth_revision=profile.agent_auth_revision,
+        agent_auth_agent_kinds=agent_auth_agent_kinds,
         repo_env_vars=repo_env_vars,
         repo_env_version=repo_env_version,
         requested_base_sha=requested_base_sha,
@@ -387,7 +416,7 @@ async def _connect_existing_environment_sandbox(
     tracker: _StepTracker,
     ctx: CloudProvisionInput,
     provider: SandboxProvider,
-) -> tuple[ConnectedSandbox, UUID, str] | None:
+) -> tuple[ConnectedSandbox, UUID, int, str] | None:
     runtime = await load_runtime_environment_with_sandbox(ctx.runtime_environment_id)
     sandbox_record = runtime.sandbox if runtime is not None else None
     if sandbox_record is None or not sandbox_record.external_sandbox_id:
@@ -395,6 +424,12 @@ async def _connect_existing_environment_sandbox(
     if runtime is None or not runtime.environment.runtime_token_ciphertext:
         return None
     if sandbox_record.provider != provider.kind.value:
+        return None
+    if (
+        sandbox_record.sandbox_profile_id != ctx.sandbox_profile_id
+        or sandbox_record.target_id != ctx.target_id
+        or sandbox_record.slot_generation is None
+    ):
         return None
 
     tracker.begin(
@@ -459,6 +494,7 @@ async def _connect_existing_environment_sandbox(
             runtime_context=runtime_context,
         ),
         sandbox_record.id,
+        sandbox_record.slot_generation,
         decrypt_text(runtime.environment.runtime_token_ciphertext),
     )
 
@@ -542,37 +578,6 @@ async def _prepare_runtime_template(
         )
         tracker.complete(node_version=installed_version)
 
-    # if ctx.credentials.codex is not None:
-    #     await _set_workspace_status(
-    #         ctx.workspace_id,
-    #         WorkspaceStatus.provisioning,
-    #         detail="Checking Rust toolchain",
-    #     )
-    #     tracker.begin(ProvisionStep.check_rust_runtime)
-    #     rust_version = await check_rust_runtime(
-    #         provider,
-    #         connected.sandbox,
-    #         workspace_id=ctx.workspace_id,
-    #         runtime_context=connected.runtime_context,
-    #     )
-    #     tracker.complete(rust_version=rust_version or "missing")
-
-    #     if rust_version is None:
-    #         await _set_workspace_status(
-    #             ctx.workspace_id,
-    #             WorkspaceStatus.provisioning,
-    #             detail="Installing Rust toolchain",
-    #         )
-    #         tracker.begin(ProvisionStep.install_rust_runtime)
-    #         installed_rust_version = await install_rust_runtime(
-    #             provider,
-    #             connected.sandbox,
-    #             workspace_id=ctx.workspace_id,
-    #             runtime_context=connected.runtime_context,
-    #         )
-    #         tracker.complete(rust_version=installed_rust_version)
-
-
 async def _launch_supervised_runtime_bundle(
     tracker: _StepTracker,
     ctx: CloudProvisionInput,
@@ -581,11 +586,17 @@ async def _launch_supervised_runtime_bundle(
     *,
     runtime_env: dict[str, str],
     runtime_token: str,
+    cloud_sandbox_id: UUID,
+    slot_generation: int,
 ) -> UUID:
     enrollment = await ensure_runtime_target_enrollment(
         runtime_environment_id=ctx.runtime_environment_id,
         user_id=ctx.user_id,
         display_name=f"Managed cloud: {ctx.repo_label}",
+        sandbox_profile_id=ctx.sandbox_profile_id,
+        target_id=ctx.target_id,
+        cloud_sandbox_id=cloud_sandbox_id,
+        slot_generation=slot_generation,
     )
     if enrollment is None:
         raise RuntimeError("Cloud runtime environment disappeared before worker enrollment.")
@@ -697,15 +708,91 @@ async def _wait_for_worker_target_online(
     )
 
 
+async def _wait_for_agent_auth_target_current(
+    ctx: CloudProvisionInput,
+    *,
+    total_attempts: int = 120,
+    delay_seconds: float = 0.5,
+) -> None:
+    last_status = "missing"
+    last_applied_revision: int | None = None
+    last_error: str | None = None
+    for _attempt in range(max(1, total_attempts)):
+        async with db_engine.async_session_factory() as db:
+            state = await agent_auth_store.get_target_state(
+                db,
+                sandbox_profile_id=ctx.sandbox_profile_id,
+                target_id=ctx.target_id,
+            )
+        if state is not None:
+            last_status = state.status
+            last_applied_revision = state.applied_revision
+            last_error = state.last_error_message
+            if state.status == "failed":
+                raise CloudApiError(
+                    "agent_auth_apply_failed",
+                    state.last_error_message or "Agent authentication failed to apply.",
+                    status_code=409,
+                )
+            if (
+                state.status == "applied"
+                and state.applied_revision is not None
+                and state.applied_revision >= ctx.required_agent_auth_revision
+                and not state.force_restart_required
+            ):
+                return
+        await asyncio.sleep(delay_seconds)
+
+    raise RuntimeError(
+        "Agent auth target state did not become current "
+        f"for target {ctx.target_id}; last_status={last_status}; "
+        f"last_applied_revision={last_applied_revision}; "
+        f"required_revision={ctx.required_agent_auth_revision}; "
+        f"last_error={last_error or '<none>'}."
+    )
+
+
+async def _request_agent_auth_refresh_and_wait(
+    tracker: _StepTracker,
+    ctx: CloudProvisionInput,
+    *,
+    reason: str,
+    force_restart: bool,
+) -> None:
+    await _set_workspace_status(
+        ctx.workspace_id,
+        CloudWorkspaceStatus.materializing,
+        detail="Applying agent authentication",
+    )
+    tracker.begin(
+        ProvisionStep.apply_agent_auth,
+        target_id=str(ctx.target_id),
+        revision=ctx.required_agent_auth_revision,
+    )
+    async with db_engine.async_session_factory() as db, db.begin():
+        await request_agent_auth_refresh_for_profile_target(
+            db,
+            sandbox_profile_id=ctx.sandbox_profile_id,
+            target_id=ctx.target_id,
+            actor_user_id=ctx.user_id,
+            reason=reason,
+            force_restart=force_restart,
+        )
+    await _wait_for_agent_auth_target_current(ctx)
+    tracker.complete(target_id=str(ctx.target_id), revision=ctx.required_agent_auth_revision)
+
+
 async def _launch_and_connect_runtime(
     tracker: _StepTracker,
     ctx: CloudProvisionInput,
     provider: SandboxProvider,
     connected: ConnectedSandbox,
+    *,
+    cloud_sandbox_id: UUID,
+    slot_generation: int,
 ) -> tuple[ConnectedSandbox, RuntimeHandshake]:
     runtime_token = secrets.token_urlsafe(32)
     runtime_env = build_runtime_env(
-        ctx.credentials,
         runtime_token,
         anyharness_data_key=ctx.anyharness_data_key,
         repo_env_vars=ctx.repo_env_vars,
@@ -718,6 +805,8 @@ async def _launch_and_connect_runtime(
         connected,
         runtime_env=runtime_env,
         runtime_token=runtime_token,
+        cloud_sandbox_id=cloud_sandbox_id,
+        slot_generation=slot_generation,
     )
 
     connected = ConnectedSandbox(
@@ -779,6 +868,12 @@ async def _launch_and_connect_runtime(
     tracker.begin(ProvisionStep.start_worker_process, target_id=str(target_id))
     await _wait_for_worker_target_online(target_id, workspace_id=ctx.workspace_id)
     tracker.complete(target_id=str(target_id))
+    await _request_agent_auth_refresh_and_wait(
+        tracker,
+        ctx,
+        reason="workspace_provision",
+        force_restart=False,
+    )
     await sync_cloud_worktree_policy_to_runtime(
         user_id=ctx.user_id,
         runtime_url=connected.endpoint.runtime_url,
@@ -855,7 +950,7 @@ async def _prepare_workspace_in_runtime(
     *,
     runtime_token: str,
 ) -> RuntimeHandshake:
-    synced_providers = ctx.credentials.synced_providers
+    required_agent_kinds = ctx.agent_auth_agent_kinds
     await _set_workspace_status(
         ctx.workspace_id,
         CloudWorkspaceStatus.materializing,
@@ -863,13 +958,13 @@ async def _prepare_workspace_in_runtime(
     )
     tracker.begin(
         ProvisionStep.reconcile_agents,
-        synced_providers=",".join(synced_providers),
+        required_agents=",".join(required_agent_kinds),
     )
     ready_agents = await reconcile_remote_agents(
         connected.endpoint.runtime_url,
         runtime_token,
         workspace_id=ctx.workspace_id,
-        synced_providers=synced_providers,
+        required_agent_kinds=required_agent_kinds,
     )
     tracker.complete(ready_agents=",".join(ready_agents))
 
@@ -969,7 +1064,7 @@ async def provision_workspace(
 
         reused_runtime = await _connect_existing_environment_sandbox(tracker, ctx, provider)
         if reused_runtime is not None:
-            connected, sandbox_record_id, runtime_token = reused_runtime
+            connected, sandbox_record_id, slot_generation, runtime_token = reused_runtime
         else:
             await _set_workspace_status(
                 workspace_id,
@@ -992,6 +1087,8 @@ async def provision_workspace(
                     if settings.cloud_billing_mode == BILLING_MODE_ENFORCE
                     else None
                 ),
+                sandbox_profile_id=ctx.sandbox_profile_id,
+                target_id=ctx.target_id,
             )
             if sandbox_record is None:
                 raise CloudApiError(
@@ -1003,6 +1100,9 @@ async def provision_workspace(
                     status_code=403,
                 )
             sandbox_record_id = sandbox_record.id
+            if sandbox_record.slot_generation is None:
+                raise RuntimeError("Managed cloud sandbox slot is missing slot generation.")
+            slot_generation = sandbox_record.slot_generation
             allocated_sandbox_this_attempt = True
             connected = await _create_and_connect_sandbox(
                 tracker,
@@ -1017,28 +1117,6 @@ async def provision_workspace(
                 detail="Checking prebuilt runtime template",
             )
             await _prepare_runtime_template(tracker, ctx, provider, connected)
-
-            await _set_workspace_status(
-                workspace_id,
-                CloudWorkspaceStatus.materializing,
-                detail="Syncing cloud credentials",
-            )
-            tracker.begin(ProvisionStep.sync_credentials)
-            await write_credential_files(
-                provider,
-                connected.sandbox,
-                workspace_id=ctx.workspace_id,
-                credentials=ctx.credentials,
-                runtime_context=connected.runtime_context,
-            )
-            await save_runtime_environment_state(
-                ctx.runtime_environment_id,
-                credential_files_applied_revision=ctx.credential_files_revision,
-                credential_files_applied_at=utcnow(),
-                credential_last_error=None,
-                credential_last_error_at=None,
-            )
-            tracker.complete()
 
             await _set_workspace_status(
                 workspace_id,
@@ -1083,17 +1161,21 @@ async def provision_workspace(
             tracker.complete()
 
         if reused_runtime is not None:
-            credential_freshness = await ensure_runtime_environment_credentials_current(
-                ctx.runtime_environment_id,
-                workspace_id=workspace_id,
-                allow_process_restart=True,
+            connected, sandbox_record_id, slot_generation, runtime_token = reused_runtime
+            await _set_workspace_status(
+                workspace_id,
+                CloudWorkspaceStatus.materializing,
+                detail="Waiting for Proliferate Worker enrollment",
             )
-            if credential_freshness.status != "current":
-                raise CloudApiError(
-                    "runtime_credentials_not_current",
-                    "Cloud runtime credentials must refresh before reusing this runtime.",
-                    status_code=409,
-                )
+            tracker.begin(ProvisionStep.start_worker_process, target_id=str(ctx.target_id))
+            await _wait_for_worker_target_online(ctx.target_id, workspace_id=ctx.workspace_id)
+            tracker.complete(target_id=str(ctx.target_id), reused_runtime=True)
+            await _request_agent_auth_refresh_and_wait(
+                tracker,
+                ctx,
+                reason="workspace_reuse",
+                force_restart=False,
+            )
             await _set_workspace_status(
                 workspace_id,
                 CloudWorkspaceStatus.materializing,
@@ -1117,6 +1199,8 @@ async def provision_workspace(
                 ctx,
                 provider,
                 connected,
+                cloud_sandbox_id=sandbox_record_id,
+                slot_generation=slot_generation,
             )
             launched_runtime_this_attempt = True
 
@@ -1136,15 +1220,6 @@ async def provision_workspace(
             launched_runtime=launched_runtime_this_attempt,
             repo_env_applied_version=ctx.repo_env_version,
         )
-        if launched_runtime_this_attempt:
-            runtime_state_updates.update(
-                {
-                    "credential_process_applied_revision": ctx.credential_process_revision,
-                    "credential_process_applied_at": utcnow(),
-                    "credential_last_error": None,
-                    "credential_last_error_at": None,
-                }
-            )
         await save_runtime_environment_state(
             ctx.runtime_environment_id,
             **runtime_state_updates,

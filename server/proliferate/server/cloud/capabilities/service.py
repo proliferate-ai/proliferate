@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 
 from proliferate.config import settings
 from proliferate.server.cloud.capabilities.models import (
+    AgentGatewayByokProviderCapabilities,
     AgentGatewayCapabilities,
     CloudCapabilitiesResponse,
 )
@@ -18,32 +19,35 @@ def cloud_capabilities() -> CloudCapabilitiesResponse:
     return CloudCapabilitiesResponse(
         agentGateway=AgentGatewayCapabilities(
             enabled=gateway_enabled,
-            managedCreditsEnabled=managed_credits_enabled,
+            managedCreditsPersonalEnabled=managed_credits_enabled,
+            managedCreditsOrganizationEnabled=managed_credits_enabled,
             defaultManagedBudgetUsd=(
                 default_managed_budget if managed_credits_enabled else None
             ),
             byokEnabled=gateway_enabled and settings.agent_gateway_byok_enabled,
-            anthropicByokEnabled=(
-                gateway_enabled
-                and settings.agent_gateway_byok_enabled
-                and settings.agent_gateway_anthropic_byok_enabled
+            byokProviders=AgentGatewayByokProviderCapabilities(
+                anthropicApiKey=(
+                    gateway_enabled
+                    and settings.agent_gateway_byok_enabled
+                    and settings.agent_gateway_anthropic_byok_enabled
+                ),
+                openaiApiKey=(
+                    gateway_enabled
+                    and settings.agent_gateway_byok_enabled
+                    and settings.agent_gateway_openai_byok_enabled
+                ),
+                bedrockAssumeRole=(
+                    gateway_enabled
+                    and settings.agent_gateway_byok_enabled
+                    and settings.agent_gateway_bedrock_byok_enabled
+                ),
+                openaiCompatible=(
+                    gateway_enabled
+                    and settings.agent_gateway_byok_enabled
+                    and settings.agent_gateway_openai_compatible_byok_enabled
+                ),
             ),
-            openaiByokEnabled=(
-                gateway_enabled
-                and settings.agent_gateway_byok_enabled
-                and settings.agent_gateway_openai_byok_enabled
-            ),
-            bedrockByokEnabled=(
-                gateway_enabled
-                and settings.agent_gateway_byok_enabled
-                and settings.agent_gateway_bedrock_byok_enabled
-            ),
-            openaiCompatibleByokEnabled=(
-                gateway_enabled
-                and settings.agent_gateway_byok_enabled
-                and settings.agent_gateway_openai_compatible_byok_enabled
-            ),
-            opencodeEnabled=gateway_enabled and settings.agent_gateway_opencode_enabled,
+            opencodeGatewayEnabled=gateway_enabled and settings.agent_gateway_opencode_enabled,
         )
     )
 

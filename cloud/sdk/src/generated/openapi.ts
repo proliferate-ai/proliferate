@@ -709,23 +709,6 @@ export interface paths {
         patch: operations["update_cloud_workspace_display_name_endpoint_v1_cloud_workspaces__workspace_id__display_name_patch"];
         trace?: never;
     };
-    "/v1/cloud/workspaces/{workspace_id}/sync-credentials": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Sync Cloud Workspace Credentials Endpoint */
-        post: operations["sync_cloud_workspace_credentials_endpoint_v1_cloud_workspaces__workspace_id__sync_credentials_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/cloud/mobility/workspaces": {
         parameters: {
             query?: never;
@@ -3105,26 +3088,32 @@ export interface components {
             /** Lasterrormessage */
             lastErrorMessage: string | null;
         };
+        /** AgentGatewayByokProviderCapabilities */
+        AgentGatewayByokProviderCapabilities: {
+            /** Anthropicapikey */
+            anthropicApiKey: boolean;
+            /** Openaiapikey */
+            openaiApiKey: boolean;
+            /** Bedrockassumerole */
+            bedrockAssumeRole: boolean;
+            /** Openaicompatible */
+            openaiCompatible: boolean;
+        };
         /** AgentGatewayCapabilities */
         AgentGatewayCapabilities: {
             /** Enabled */
             enabled: boolean;
-            /** Managedcreditsenabled */
-            managedCreditsEnabled: boolean;
+            /** Managedcreditspersonalenabled */
+            managedCreditsPersonalEnabled: boolean;
+            /** Managedcreditsorganizationenabled */
+            managedCreditsOrganizationEnabled: boolean;
             /** Defaultmanagedbudgetusd */
             defaultManagedBudgetUsd: string | null;
             /** Byokenabled */
             byokEnabled: boolean;
-            /** Anthropicbyokenabled */
-            anthropicByokEnabled: boolean;
-            /** Openaibyokenabled */
-            openaiByokEnabled: boolean;
-            /** Bedrockbyokenabled */
-            bedrockByokEnabled: boolean;
-            /** Openaicompatiblebyokenabled */
-            openaiCompatibleByokEnabled: boolean;
-            /** Opencodeenabled */
-            opencodeEnabled: boolean;
+            byokProviders: components["schemas"]["AgentGatewayByokProviderCapabilities"];
+            /** Opencodegatewayenabled */
+            opencodeGatewayEnabled: boolean;
         };
         /** AgentGatewayPolicyResponse */
         AgentGatewayPolicyResponse: {
@@ -3941,8 +3930,6 @@ export interface components {
             envVarsVersion: number;
             /** Filesversion */
             filesVersion: number;
-            /** Credentialsnapshotversion */
-            credentialSnapshotVersion: number;
             /** Mcpmaterializationversion */
             mcpMaterializationVersion: number;
             /** Materializationstatus */
@@ -6897,7 +6884,7 @@ export interface components {
             allowedAgentKinds: ("claude" | "codex" | "opencode" | "gemini")[];
             /** Readyagentkinds */
             readyAgentKinds: string[];
-            credentialFreshness: components["schemas"]["WorkspaceCredentialFreshness"];
+            runtimeAuth: components["schemas"]["WorkspaceRuntimeAuthState"];
         };
         /**
          * WorkspaceCreatorContext
@@ -6923,28 +6910,6 @@ export interface components {
             sourceWorkspaceId?: string | null;
             /** Label */
             label?: string | null;
-        };
-        /** WorkspaceCredentialFreshness */
-        WorkspaceCredentialFreshness: {
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "current" | "stale" | "restart_required" | "apply_failed" | "missing_credentials";
-            /** Filescurrent */
-            filesCurrent: boolean;
-            /** Processcurrent */
-            processCurrent: boolean;
-            /** Requiresrestart */
-            requiresRestart: boolean;
-            /** Lasterror */
-            lastError?: string | null;
-            /** Lasterrorat */
-            lastErrorAt?: string | null;
-            /** Filesappliedat */
-            filesAppliedAt?: string | null;
-            /** Processappliedat */
-            processAppliedAt?: string | null;
         };
         /** WorkspaceDetail */
         WorkspaceDetail: {
@@ -7026,6 +6991,32 @@ export interface components {
             excludedPaths: string[];
             workspace: components["schemas"]["MobilityWorkspaceDetail"];
         };
+        /** WorkspaceRuntimeAuthState */
+        WorkspaceRuntimeAuthState: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "current" | "stale" | "restart_required" | "apply_failed" | "missing_credentials";
+            /** Configcurrent */
+            configCurrent: boolean;
+            /** Targetcurrent */
+            targetCurrent: boolean;
+            /** Requiresrestart */
+            requiresRestart: boolean;
+            /** Desiredrevision */
+            desiredRevision?: number | null;
+            /** Appliedrevision */
+            appliedRevision?: number | null;
+            /** Lasterror */
+            lastError?: string | null;
+            /** Lasterrorat */
+            lastErrorAt?: string | null;
+            /** Lastattemptedat */
+            lastAttemptedAt?: string | null;
+            /** Lastappliedat */
+            lastAppliedAt?: string | null;
+        };
         /** WorkspaceRuntimeSummary */
         WorkspaceRuntimeSummary: {
             /** Environmentid */
@@ -7037,7 +7028,7 @@ export interface components {
             status: "pending" | "provisioning" | "running" | "paused" | "error" | "disabled";
             /** Generation */
             generation: number;
-            credentialFreshness?: components["schemas"]["WorkspaceCredentialFreshness"] | null;
+            runtimeAuth?: components["schemas"]["WorkspaceRuntimeAuthState"] | null;
             /** Actionblockkind */
             actionBlockKind?: string | null;
             /** Actionblockreason */
@@ -8643,37 +8634,6 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateCloudWorkspaceDisplayNameRequest"];
             };
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    sync_cloud_workspace_credentials_endpoint_v1_cloud_workspaces__workspace_id__sync_credentials_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

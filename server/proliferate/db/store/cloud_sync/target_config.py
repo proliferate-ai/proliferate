@@ -30,7 +30,6 @@ class CloudTargetConfigSnapshot:
     summary_json: str
     env_vars_version: int
     files_version: int
-    credential_snapshot_version: int
     mcp_materialization_version: int
     materialization_status: str
     last_command_id: UUID | None
@@ -56,7 +55,6 @@ def _snapshot(row: CloudTargetConfig) -> CloudTargetConfigSnapshot:
         summary_json=row.summary_json,
         env_vars_version=row.env_vars_version,
         files_version=row.files_version,
-        credential_snapshot_version=row.credential_snapshot_version,
         mcp_materialization_version=row.mcp_materialization_version,
         materialization_status=row.materialization_status,
         last_command_id=row.last_command_id,
@@ -82,7 +80,6 @@ async def upsert_target_config(
     summary_json: str,
     env_vars_version: int,
     files_version: int,
-    credential_snapshot_version: int,
     mcp_materialization_version: int,
 ) -> CloudTargetConfigSnapshot:
     now = utcnow()
@@ -101,7 +98,6 @@ async def upsert_target_config(
             summary_json=summary_json,
             env_vars_version=env_vars_version,
             files_version=files_version,
-            credential_snapshot_version=credential_snapshot_version,
             mcp_materialization_version=mcp_materialization_version,
             materialization_status=CloudTargetConfigStatus.pending.value,
             created_at=now,
@@ -134,7 +130,6 @@ async def upsert_target_config(
     row.summary_json = summary_json
     row.env_vars_version = env_vars_version
     row.files_version = files_version
-    row.credential_snapshot_version = credential_snapshot_version
     row.mcp_materialization_version = mcp_materialization_version
     row.materialization_status = CloudTargetConfigStatus.pending.value
     row.last_command_id = None
