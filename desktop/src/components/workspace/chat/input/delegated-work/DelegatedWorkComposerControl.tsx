@@ -42,10 +42,10 @@ export function DelegatedWorkComposerControl({
     >
       {(close) => (
         <ComposerPopoverSurface
-          className="w-[min(20rem,calc(100vw-1rem))] p-1"
+          className="w-[min(23rem,calc(100vw-1rem))] p-1.5"
           data-telemetry-mask
         >
-          <div className="max-h-[min(20rem,calc(100vh-10rem))] overflow-y-auto">
+          <div className="max-h-[min(22rem,calc(100vh-10rem))] space-y-1 overflow-y-auto">
             {viewModel.review && (
               <AgentsPopoverReviewSection
                 review={viewModel.review}

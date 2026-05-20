@@ -46,6 +46,17 @@ export function TranscriptPendingPromptRow({
   optimisticTrailingStatus: ReactNode;
   outboxActions: OutboxActionHandlers;
 }) {
+  if (outboxEntry?.deliveryState === "failed_before_dispatch") {
+    return (
+      <TurnShell isFirst={rowIndex === 0}>
+        <OutboxPromptFailureLine
+          entry={outboxEntry}
+          outboxActions={outboxActions}
+        />
+      </TurnShell>
+    );
+  }
+
   const trailingStatus = outboxEntry
     ? <OutboxPromptTrailingStatus entry={outboxEntry} />
     : optimisticTrailingStatus;
@@ -146,7 +157,7 @@ function resolveOutboxPromptTrailingStatus(
   }
   switch (entry.deliveryState) {
     case "failed_before_dispatch":
-      return entry.errorMessage ? `Not sent: ${entry.errorMessage}` : "Not sent";
+      return formatOutboxPromptFailureLabel(entry);
     case "unknown_after_dispatch":
       return "Waiting for confirmation…";
     case "preparing":
@@ -161,6 +172,65 @@ function resolveOutboxPromptTrailingStatus(
     default:
       return null;
   }
+}
+
+function OutboxPromptFailureLine({
+  entry,
+  outboxActions,
+}: {
+  entry: PromptOutboxEntry;
+  outboxActions: OutboxActionHandlers;
+}) {
+  const canRetry = !isSessionClosedFailure(entry.errorMessage);
+
+  return (
+    <div className="flex justify-end">
+      <div
+        data-chat-transcript-ignore
+        className="inline-flex max-w-[77%] items-center gap-2 overflow-hidden whitespace-nowrap text-[length:var(--text-chat)] font-normal leading-[var(--text-chat--line-height)] text-muted-foreground/80"
+      >
+        <span className="min-w-0 truncate" title={formatOutboxPromptFailureLabel(entry)}>
+          <span className="text-destructive/80">Not sent</span>
+          {entry.errorMessage ? (
+            <span>: {entry.errorMessage}</span>
+          ) : null}
+        </span>
+        <span className="inline-flex shrink-0 items-center gap-1">
+          {canRetry && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-auto rounded-none px-1 py-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
+              onClick={() => outboxActions.retryPrompt(entry.clientPromptId)}
+            >
+              Retry
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-auto rounded-none px-1 py-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
+            onClick={() => outboxActions.dismissPrompt(entry.clientPromptId)}
+          >
+            Dismiss
+          </Button>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function formatOutboxPromptFailureLabel(entry: PromptOutboxEntry): string {
+  return entry.errorMessage ? `Not sent: ${entry.errorMessage}` : "Not sent";
+}
+
+function isSessionClosedFailure(message: string | null): boolean {
+  return message
+    ?.replace(/\s+/gu, " ")
+    .trim()
+    .toLowerCase() === "session is closed";
 }
 
 function hasAcceptedRunningOutboxEntryExceededEchoGrace(

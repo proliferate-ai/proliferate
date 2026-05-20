@@ -594,12 +594,14 @@ Required skill:
 ```text
 skill id: proliferate.subagents.workflow
 display name: Subagent workflow
-description: Use subagents for bounded parallel work, read their results, and
-  close them when done.
+description: Use Proliferate subagent MCP tools for bounded parallel work,
+  result reads, wake scheduling, and cleanup.
 ```
 
 The skill should teach:
 
+- why Proliferate `subagents` MCP tools are preferred for same-workspace
+  delegation when provider-native or internal subagent tools overlap
 - when to delegate
 - how to choose labels
 - when to call `get_subagent_launch_options`

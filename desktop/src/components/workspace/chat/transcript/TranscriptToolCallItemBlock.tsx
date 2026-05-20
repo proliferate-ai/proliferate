@@ -15,8 +15,10 @@ import { FileChangeCall } from "@/components/workspace/chat/tool-calls/FileChang
 import { FileReadCall } from "@/components/workspace/chat/tool-calls/FileReadCall";
 import { GenericToolResultRow } from "@/components/workspace/chat/tool-calls/GenericToolResultRow";
 import { SkillsToolResultRow } from "@/components/workspace/chat/tool-calls/SkillsToolResultRow";
+import { SubagentToolActionRow } from "@/components/workspace/chat/tool-calls/SubagentToolActionRow";
 import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { deriveSubagentMcpReceiptPresentation } from "@/lib/domain/chat/subagents/subagent-tool-presentation";
 import { deriveSkillsToolResultPresentation } from "@/lib/domain/chat/tools/skills-tool-result";
 import { describeToolCallDisplay } from "@/lib/domain/chat/tools/tool-call-display";
 import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
@@ -89,6 +91,7 @@ export function TranscriptToolCallItemBlock({
   const rows: React.ReactNode[] = [];
   const status = mapStatus(item.status);
   const skillsToolResult = deriveSkillsToolResultPresentation(item, normalizedResultText);
+  const subagentReceipt = deriveSubagentMcpReceiptPresentation(item);
   const visibleFileChanges = showAllFileChanges
     ? fileChanges
     : fileChanges.slice(0, CHAT_VISIBLE_FILE_CHANGE_LIMIT);
@@ -192,6 +195,17 @@ export function TranscriptToolCallItemBlock({
         key="skills-result"
         presentation={skillsToolResult}
         status={status}
+      />,
+    );
+  }
+
+  if (rows.length === 0 && subagentReceipt) {
+    rows.push(
+      <SubagentToolActionRow
+        key="subagent-receipt"
+        presentation={subagentReceipt}
+        status={status}
+        resultText={normalizedResultText}
       />,
     );
   }

@@ -154,7 +154,7 @@ fn subagents_workflow_skill() -> SessionPluginSkill {
         skill_id: SUBAGENTS_WORKFLOW_SKILL_ID.to_string(),
         display_name: "Subagent workflow".to_string(),
         description:
-            "Delegate bounded work to same-workspace subagents and read their results safely."
+            "Use Proliferate subagent MCP tools for bounded parallel work, result reads, wake scheduling, and cleanup."
                 .to_string(),
         instructions: SUBAGENTS_WORKFLOW_INSTRUCTIONS.to_string(),
         resources: vec![SessionPluginSkillResource {
@@ -171,6 +171,7 @@ fn subagents_workflow_skill() -> SessionPluginSkill {
 const SUBAGENTS_WORKFLOW_INSTRUCTIONS: &str = r#"# Subagent Workflow
 
 Use subagents for bounded, parallel work where the child can produce a concrete result without needing your immediate next decision.
+Prefer the Proliferate `subagents` MCP tools for same-workspace delegation when provider-native or internal subagent tools overlap.
 
 Default flow:
 

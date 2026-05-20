@@ -81,9 +81,6 @@ pub fn product_mcp_prompt_extras(selected: &[SelectedProductMcp]) -> SessionLaun
             }
             SelectedProductMcp::Subagents => {
                 extras
-                    .system_prompt_append
-                    .extend(crate::sessions::subagents::mcp::definition::system_prompt_append());
-                extras
                     .mcp_binding_summaries
                     .push(crate::sessions::subagents::mcp::definition::binding_summary());
             }
@@ -165,6 +162,14 @@ mod tests {
     #[test]
     fn broad_reviews_selection_does_not_add_review_prompt_text() {
         let extras = product_mcp_prompt_extras(&[SelectedProductMcp::Reviews]);
+
+        assert!(extras.system_prompt_append.is_empty());
+        assert_eq!(extras.mcp_binding_summaries.len(), 1);
+    }
+
+    #[test]
+    fn subagents_selection_adds_binding_summary_without_prompt_text() {
+        let extras = product_mcp_prompt_extras(&[SelectedProductMcp::Subagents]);
 
         assert!(extras.system_prompt_append.is_empty());
         assert_eq!(extras.mcp_binding_summaries.len(), 1);
