@@ -123,6 +123,7 @@ describe("session selection store invariants", () => {
       },
       activeSessionId: "session-a",
       activeSessionVersion: 7,
+      sessionActivationIntentEpochByWorkspace: { "workspace-a": 3 },
       hotPaintGate: hotGate({ workspaceId: "workspace-a", sessionId: "session-a", nonce: 12 }),
     });
 
@@ -136,6 +137,7 @@ describe("session selection store invariants", () => {
       workspaceArrivalEvent: null,
       activeSessionId: null,
       activeSessionVersion: 8,
+      sessionActivationIntentEpochByWorkspace: { "workspace-a": 3 },
       hotPaintGate: null,
     });
   });

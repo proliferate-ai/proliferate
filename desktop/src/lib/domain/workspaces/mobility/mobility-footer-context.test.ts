@@ -311,7 +311,7 @@ describe("buildMobilityFooterContext", () => {
   });
 
   it("does not build a footer context for pending cowork threads", () => {
-    const cowork = buildPendingMobilityFooterContext(buildSubmittingPendingWorkspaceEntry({
+    const entry = buildSubmittingPendingWorkspaceEntry({
       attemptId: "cowork-attempt",
       selectedWorkspaceId: null,
       source: "cowork-created",
@@ -326,9 +326,14 @@ describe("buildMobilityFooterContext", () => {
           sourceWorkspaceId: null,
         },
       },
-    }));
+    });
 
-    expect(cowork).toBeNull();
+    expect(buildPendingMobilityFooterContext(entry)).toBeNull();
+    expect(buildPendingMobilityFooterContext({
+      ...entry,
+      workspaceId: "workspace-cowork",
+      request: { kind: "select-existing", workspaceId: "workspace-cowork" },
+    })).toBeNull();
   });
 
   it.each<{

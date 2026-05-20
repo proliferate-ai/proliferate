@@ -176,7 +176,7 @@ export function buildMobilityFooterContext(args: {
 export function buildPendingMobilityFooterContext(
   entry: PendingWorkspaceEntry,
 ): MobilityFooterContext | null {
-  if (entry.request.kind === "cowork") {
+  if (entry.source === "cowork-created") {
     return null;
   }
 
