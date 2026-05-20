@@ -1,5 +1,8 @@
 export type CloudCommandKind =
   | "start_session"
+  | "configure_git_identity"
+  | "ensure_repo_checkout"
+  | "materialize_workspace"
   | "materialize_environment"
   | "resume_session"
   | "send_prompt"
@@ -30,6 +33,7 @@ export interface CloudCommandEnvelope<TPayload = unknown> {
   idempotencyKey: string;
   targetId: string;
   workspaceId?: string | null;
+  cloudWorkspaceId?: string | null;
   sessionId?: string | null;
   kind: CloudCommandKind;
   payload: TPayload;
@@ -45,6 +49,7 @@ export interface CloudCommandResponse {
   status: CloudCommandStatus;
   targetId: string;
   workspaceId?: string | null;
+  cloudWorkspaceId?: string | null;
   sessionId?: string | null;
   kind?: CloudCommandKind | string;
   source?: string;
@@ -57,4 +62,5 @@ export interface CloudCommandResponse {
   rejectedAt?: string | null;
   errorCode?: string | null;
   errorMessage?: string | null;
+  result?: Record<string, unknown> | null;
 }

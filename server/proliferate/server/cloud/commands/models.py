@@ -21,6 +21,7 @@ class CreateCloudCommandRequest(BaseModel):
     idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=255)
     target_id: UUID = Field(alias="targetId")
     workspace_id: str | None = Field(default=None, alias="workspaceId")
+    cloud_workspace_id: UUID | None = Field(default=None, alias="cloudWorkspaceId")
     session_id: str | None = Field(default=None, alias="sessionId")
     kind: str
     payload: dict[str, object] = Field(default_factory=dict)

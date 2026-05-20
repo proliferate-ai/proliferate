@@ -114,9 +114,10 @@ def _schema_already_upgraded() -> bool:
 
 
 def downgrade() -> None:
-    op.drop_table("cloud_target_runtime_access")
-    if _has_table("sandbox_profile_target_state"):
-        op.drop_table("sandbox_profile_target_state")
+    raise RuntimeError(
+        "Downgrade for sandbox profile foundation is unsupported; restore from backup "
+        "or migrate forward."
+    )
 
 
 def _upgrade_sandbox_profile() -> None:

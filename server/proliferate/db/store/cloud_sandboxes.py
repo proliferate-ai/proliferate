@@ -9,8 +9,11 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.agent_auth import SandboxProfile
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.store.cloud_profile_target_guard import require_primary_managed_profile_target
+from proliferate.db.store.cloud_sync.sandbox_profile_target_state import (
+    invalidate_applied_on_slot_replacement,
+)
 from proliferate.utils.time import utcnow
 
 ACTIVE_SLOT_STATUSES: tuple[str, ...] = ("creating", "running", "paused", "blocked")
@@ -88,18 +91,12 @@ async def ensure_profile_slot(
     status: str = "creating",
     provider_timeout_seconds: int | None = None,
 ) -> SlotSnapshot:
-    profile = (
-        await db.execute(
-            select(SandboxProfile)
-            .where(
-                SandboxProfile.id == sandbox_profile_id,
-                SandboxProfile.archived_at.is_(None),
-            )
-            .with_for_update()
-        )
-    ).scalar_one_or_none()
-    if profile is None:
-        raise RuntimeError("Sandbox profile not found.")
+    profile, _target = await require_primary_managed_profile_target(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=target_id,
+        lock_rows=True,
+    )
     existing = await load_active_slot_for_profile_target(
         db,
         sandbox_profile_id=sandbox_profile_id,
@@ -155,4 +152,10 @@ async def supersede_slot(
         row.status = status
     row.updated_at = utcnow()
     await db.flush()
+    if row.sandbox_profile_id is not None and row.target_id is not None:
+        await invalidate_applied_on_slot_replacement(
+            db,
+            sandbox_profile_id=row.sandbox_profile_id,
+            target_id=row.target_id,
+        )
     return _slot_snapshot(row)

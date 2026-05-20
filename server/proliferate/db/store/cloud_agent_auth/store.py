@@ -23,6 +23,7 @@ from proliferate.db.models.cloud.agent_auth import (
     SandboxProfileTargetState,
 )
 from proliferate.db.models.cloud.credentials import CloudCredential
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.store.billing import (
     ensure_organization_billing_subject,
@@ -1294,10 +1295,28 @@ async def upsert_target_state(
     now = utcnow()
     attempted_at = now if status in {"materializing", "failed", "applied"} else None
     applied_at = now if status == "applied" else None
+    active_sandbox_id: UUID | None = None
+    slot_generation: int | None = None
+    if status == "applied":
+        active_slot = (
+            await db.execute(
+                select(CloudSandbox).where(
+                    CloudSandbox.sandbox_profile_id == sandbox_profile_id,
+                    CloudSandbox.target_id == target_id,
+                    CloudSandbox.superseded_at.is_(None),
+                    CloudSandbox.status.in_(("creating", "running", "paused", "blocked")),
+                )
+            )
+        ).scalar_one_or_none()
+        if active_slot is not None:
+            active_sandbox_id = active_slot.id
+            slot_generation = active_slot.slot_generation
     if row is None:
         row = SandboxProfileTargetState(
             sandbox_profile_id=sandbox_profile_id,
             target_id=target_id,
+            active_sandbox_id=active_sandbox_id,
+            slot_generation=slot_generation,
             desired_agent_auth_revision=desired_revision,
             applied_agent_auth_revision=applied_revision,
             agent_auth_status=status,
@@ -1318,6 +1337,9 @@ async def upsert_target_state(
     else:
         row.desired_agent_auth_revision = desired_revision
         row.applied_agent_auth_revision = applied_revision
+        if status == "applied":
+            row.active_sandbox_id = active_sandbox_id
+            row.slot_generation = slot_generation
         row.agent_auth_status = status
         row.agent_auth_force_restart_required = force_restart_required
         row.last_agent_auth_command_id = last_command_id
