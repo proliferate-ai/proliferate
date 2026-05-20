@@ -23,7 +23,9 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db.store.cloud_sandboxes import load_active_slot_for_profile_target
 from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import inventory as inventory_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
@@ -69,6 +71,8 @@ from proliferate.server.cloud.worker.models import (
     WorkerDesiredVersionsResponse,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
+    WorkerExposureListResponse,
+    WorkerExposureSnapshotResponse,
     WorkerHeartbeatRequest,
     WorkerHeartbeatResponse,
     WorkerInventoryPayload,
@@ -843,6 +847,55 @@ async def record_command_result(
         status=command.status,
         updated=True,
     )
+
+
+async def list_worker_exposures(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+) -> WorkerExposureListResponse:
+    exposures = await exposures_store.list_active_workspace_exposures_for_target(
+        db,
+        target_id=auth.target_id,
+    )
+    cursors = await projections_store.list_active_projection_cursors_for_target(
+        db,
+        target_id=auth.target_id,
+    )
+    cursor_by_exposure_id = {cursor.exposure_id: cursor for cursor in cursors}
+    responses: list[WorkerExposureSnapshotResponse] = []
+    for exposure in exposures:
+        if not exposure.anyharness_workspace_id:
+            continue
+        cursor = cursor_by_exposure_id.get(exposure.id)
+        responses.append(
+            WorkerExposureSnapshotResponse(
+                exposure_id=str(exposure.id),
+                target_id=str(exposure.target_id),
+                cloud_workspace_id=str(exposure.cloud_workspace_id),
+                session_projection_id=(
+                    str(cursor.session_projection_id) if cursor is not None else None
+                ),
+                anyharness_workspace_id=(
+                    cursor.anyharness_workspace_id
+                    if cursor is not None
+                    else exposure.anyharness_workspace_id
+                ),
+                anyharness_session_id=(
+                    cursor.anyharness_session_id if cursor is not None else None
+                ),
+                projection_level=(
+                    cursor.projection_level
+                    if cursor is not None
+                    else exposure.default_projection_level
+                ),
+                commandable=cursor.commandable if cursor is not None else exposure.commandable,
+                status=cursor.exposure_status if cursor is not None else exposure.status,
+                revision=cursor.exposure_revision if cursor is not None else exposure.revision,
+                last_uploaded_seq=cursor.last_uploaded_seq if cursor is not None else 0,
+            )
+        )
+    return WorkerExposureListResponse(exposures=responses)
 
 
 async def record_event_batch(

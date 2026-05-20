@@ -21,6 +21,7 @@ from proliferate.server.cloud.worker.models import (
     WorkerCommandStatusResponse,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
+    WorkerExposureListResponse,
     WorkerHeartbeatRequest,
     WorkerHeartbeatResponse,
     WorkerInventoryRequest,
@@ -32,6 +33,7 @@ from proliferate.server.cloud.worker.service import (
     authenticate_worker,
     enroll_worker,
     lease_worker_command,
+    list_worker_exposures,
     record_command_delivery,
     record_command_result,
     record_event_batch,
@@ -140,6 +142,18 @@ async def worker_command_result_endpoint(
             command_id=command_id,
             body=body,
         )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.get("/exposures", response_model=WorkerExposureListResponse)
+async def worker_exposures_endpoint(
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkerExposureListResponse:
+    try:
+        auth = await authenticate_worker(db, authorization=authorization)
+        return await list_worker_exposures(db, auth=auth)
     except CloudApiError as error:
         raise_cloud_error(error)
 

@@ -15,7 +15,7 @@ WAKE_REQUIRED_CLOUD_COMMAND_KINDS: frozenset[str] = frozenset(
         CloudCommandKind.update_session_config.value,
         CloudCommandKind.cancel_turn.value,
         CloudCommandKind.close_session.value,
-        CloudCommandKind.sync_existing_workspace.value,
+        CloudCommandKind.backfill_exposed_workspace.value,
     }
 )
 

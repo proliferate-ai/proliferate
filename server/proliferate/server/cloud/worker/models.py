@@ -161,3 +161,27 @@ class WorkerCommandStatusResponse(BaseModel):
     command_id: str = Field(serialization_alias="commandId")
     status: str
     updated: bool
+
+
+class WorkerExposureSnapshotResponse(BaseModel):
+    exposure_id: str = Field(serialization_alias="exposureId")
+    target_id: str = Field(serialization_alias="targetId")
+    cloud_workspace_id: str = Field(serialization_alias="cloudWorkspaceId")
+    session_projection_id: str | None = Field(
+        default=None,
+        serialization_alias="sessionProjectionId",
+    )
+    anyharness_workspace_id: str = Field(serialization_alias="anyharnessWorkspaceId")
+    anyharness_session_id: str | None = Field(
+        default=None,
+        serialization_alias="anyharnessSessionId",
+    )
+    projection_level: str = Field(serialization_alias="projectionLevel")
+    commandable: bool
+    status: str
+    revision: int | None = None
+    last_uploaded_seq: int = Field(serialization_alias="lastUploadedSeq")
+
+
+class WorkerExposureListResponse(BaseModel):
+    exposures: list[WorkerExposureSnapshotResponse]

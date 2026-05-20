@@ -20,6 +20,8 @@ from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
 from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
+from proliferate.db.store.cloud_sync import exposures as exposures_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.commands import service as command_service
@@ -1042,6 +1044,149 @@ class TestCloudCommandsApi:
         assert command_payload["requiredRuntimeConfigSequence"] == 1
         assert command_payload["requiredRuntimeConfigRevisionId"]
         assert command_payload["requiredRuntimeConfigContentHash"]
+
+    @pytest.mark.asyncio
+    async def test_managed_materialize_and_start_session_create_exposure_cursor(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-exposure-cursor",
+        )
+        target_id, worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="exposure-cursor",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="exposure-cursor",
+        )
+        await db_session.commit()
+        monkeypatch.setattr(
+            command_service,
+            "kick_off_managed_slot_wake",
+            lambda _target_id, _command_id=None: None,
+        )
+
+        materialize = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-materialize-exposure-cursor",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "kind": "materialize_workspace",
+                "payload": {
+                    "mode": "worktree",
+                    "repoRootId": "repo-root-1",
+                    "targetPath": "/workspace/proliferate",
+                    "newBranchName": "command/exposure-cursor",
+                    "baseBranch": "main",
+                },
+            },
+        )
+        assert materialize.status_code == 200
+        materialize_id = materialize.json()["commandId"]
+        materialize_lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["materialize_workspace", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert materialize_lease.status_code == 200
+        leased_materialize = materialize_lease.json()["command"]
+        assert leased_materialize["commandId"] == materialize_id
+        materialize_result = await client.post(
+            f"/v1/cloud/worker/commands/{materialize_id}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": leased_materialize["leaseId"],
+                "slotGeneration": leased_materialize["slotGeneration"],
+                "cloudWorkspaceId": cloud_workspace_id,
+                "anyharnessWorkspaceId": "workspace-exposure-cursor",
+                "status": "accepted",
+                "result": {
+                    "mode": "worktree",
+                    "repoRootId": "repo-root-1",
+                    "path": "/workspace/proliferate",
+                    "kind": "worktree",
+                    "anyharnessWorkspaceId": "workspace-exposure-cursor",
+                    "cloudWorkspaceId": cloud_workspace_id,
+                },
+            },
+        )
+        assert materialize_result.status_code == 200
+        exposure = await exposures_store.get_active_workspace_exposure(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=UUID(cloud_workspace_id),
+        )
+        assert exposure is not None
+        assert exposure.anyharness_workspace_id == "workspace-exposure-cursor"
+
+        start = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-start-session-exposure-cursor",
+                "targetId": target_id,
+                "workspaceId": cloud_workspace_id,
+                "kind": "start_session",
+                "payload": {"agentKind": "claude"},
+            },
+        )
+        assert start.status_code == 200
+        start_id = start.json()["commandId"]
+        start_lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["start_session", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert start_lease.status_code == 200
+        leased_start = start_lease.json()["command"]
+        assert leased_start["commandId"] == start_id
+        start_result = await client.post(
+            f"/v1/cloud/worker/commands/{start_id}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": leased_start["leaseId"],
+                "slotGeneration": leased_start["slotGeneration"],
+                "cloudWorkspaceId": cloud_workspace_id,
+                "status": "accepted",
+                "result": {"body": {"sessionId": "session-exposure-cursor"}},
+            },
+        )
+        assert start_result.status_code == 200
+
+        cursors = await projections_store.list_active_projection_cursors_for_target(
+            db_session,
+            target_id=target_uuid,
+        )
+        assert len(cursors) == 1
+        assert cursors[0].exposure_id == exposure.id
+        assert cursors[0].anyharness_workspace_id == "workspace-exposure-cursor"
+        assert cursors[0].anyharness_session_id == "session-exposure-cursor"
 
     @pytest.mark.asyncio
     async def test_managed_slot_fence_rejects_delivery_generation_mismatch(
