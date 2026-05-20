@@ -36,30 +36,30 @@ def _ready_cloud_agents_from_summaries(
     return sorted(set(ready))
 
 
-def _install_required_synced_providers(
+def _install_required_agent_kinds(
     agent_summaries: Sequence[RemoteAgentSummary],
-    synced_providers: Sequence[str],
+    required_agent_kinds: Sequence[str],
 ) -> list[str]:
     summaries_by_kind = {item.kind: item for item in agent_summaries}
     install_required: list[str] = []
-    for provider in synced_providers:
-        if provider not in SUPPORTED_CLOUD_AGENTS:
+    for agent_kind in required_agent_kinds:
+        if agent_kind not in SUPPORTED_CLOUD_AGENTS:
             continue
-        summary = summaries_by_kind.get(provider)
+        summary = summaries_by_kind.get(agent_kind)
         if summary is None or summary.readiness == "install_required":
-            install_required.append(provider)
+            install_required.append(agent_kind)
     return install_required
 
 
-def _synced_ready_providers(
+def _ready_required_agent_kinds(
     agent_summaries: Sequence[RemoteAgentSummary],
-    synced_providers: Sequence[str],
+    required_agent_kinds: Sequence[str],
 ) -> list[str]:
     ready = set(_ready_cloud_agents_from_summaries(agent_summaries))
     return sorted(
-        provider
-        for provider in synced_providers
-        if provider in SUPPORTED_CLOUD_AGENTS and provider in ready
+        agent_kind
+        for agent_kind in required_agent_kinds
+        if agent_kind in SUPPORTED_CLOUD_AGENTS and agent_kind in ready
     )
 
 
@@ -261,48 +261,54 @@ async def reconcile_remote_agents(
     access_token: str,
     *,
     workspace_id: UUID | None = None,
-    synced_providers: Sequence[str],
+    required_agent_kinds: Sequence[str],
 ) -> list[str]:
     reconcile_started = time.perf_counter()
     log_cloud_event(
         "cloud runtime reconcile started",
         workspace_id=workspace_id,
         runtime_url=runtime_url,
-        synced_providers=",".join(synced_providers) or "none",
+        required_agents=",".join(required_agent_kinds) or "none",
     )
     initial_summaries = await _list_remote_agents(
         runtime_url,
         access_token,
         workspace_id=workspace_id,
     )
-    providers_to_install = _install_required_synced_providers(initial_summaries, synced_providers)
-    providers_ready_from_template = _synced_ready_providers(initial_summaries, synced_providers)
+    agent_kinds_to_install = _install_required_agent_kinds(
+        initial_summaries,
+        required_agent_kinds,
+    )
+    agent_kinds_ready_from_template = _ready_required_agent_kinds(
+        initial_summaries,
+        required_agent_kinds,
+    )
     log_cloud_event(
         "cloud runtime reconcile assessed",
         workspace_id=workspace_id,
         runtime_url=runtime_url,
-        synced_providers=",".join(synced_providers) or "none",
-        ready_from_template=",".join(providers_ready_from_template) or "none",
-        install_required=",".join(providers_to_install) or "none",
+        required_agents=",".join(required_agent_kinds) or "none",
+        ready_from_template=",".join(agent_kinds_ready_from_template) or "none",
+        install_required=",".join(agent_kinds_to_install) or "none",
         agents=_agent_readiness_summary(initial_summaries),
     )
     install_summaries: list[RemoteAgentSummary] = []
-    for provider in providers_to_install:
+    for agent_kind in agent_kinds_to_install:
         install_summaries.append(
             await _install_remote_agent(
                 runtime_url,
                 access_token,
-                provider,
+                agent_kind,
                 workspace_id=workspace_id,
             )
         )
     agent_summaries = (
         await _list_remote_agents(
             runtime_url,
-            access_token,
-            workspace_id=workspace_id,
-        )
-        if providers_to_install
+        access_token,
+        workspace_id=workspace_id,
+    )
+        if agent_kinds_to_install
         else initial_summaries
     )
     ready_agent_kinds = _ready_cloud_agents_from_summaries(agent_summaries)
@@ -314,13 +320,13 @@ async def reconcile_remote_agents(
         ready_agents=",".join(ready_agent_kinds) or "none",
         agents=_agent_readiness_summary(agent_summaries),
         prepared_agents=_agent_readiness_summary(install_summaries),
-        ready_from_template=",".join(providers_ready_from_template) or "none",
-        install_required=",".join(providers_to_install) or "none",
+        ready_from_template=",".join(agent_kinds_ready_from_template) or "none",
+        install_required=",".join(agent_kinds_to_install) or "none",
         installed_count=len(install_summaries),
     )
-    if not any(provider in ready_agent_kinds for provider in synced_providers):
+    if not any(agent_kind in ready_agent_kinds for agent_kind in required_agent_kinds):
         raise CloudRuntimeReconnectError(
-            "No synced cloud agents became ready in the cloud sandbox runtime."
+            "No configured cloud agents became ready in the cloud sandbox runtime."
         )
     return ready_agent_kinds
 

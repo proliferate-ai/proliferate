@@ -83,7 +83,7 @@ async def test_org_cloud_workspace_create_fails_before_personal_helpers(
     monkeypatch.setattr(workspace_service, "get_linked_github_account", _unexpected)
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _unexpected)
     monkeypatch.setattr(workspace_service, "load_repo_config_value", _unexpected)
-    monkeypatch.setattr(workspace_service, "load_synced_credential_statuses", _unexpected)
+    monkeypatch.setattr(workspace_service, "_load_personal_agent_auth_agent_kinds", _unexpected)
     monkeypatch.setattr(workspace_service, "create_cloud_workspace_for_user", _unexpected)
 
     with pytest.raises(CloudApiError) as exc_info:
@@ -134,7 +134,7 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     monkeypatch.setattr(workspace_service, "load_existing_cloud_workspace", _existing_workspace)
     monkeypatch.setattr(workspace_service, "load_repo_config_value", _repo_config_value)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
-    monkeypatch.setattr(workspace_service, "load_synced_credential_statuses", _unexpected)
+    monkeypatch.setattr(workspace_service, "_load_personal_agent_auth_agent_kinds", _unexpected)
     monkeypatch.setattr(workspace_service, "create_cloud_workspace_for_user", _unexpected)
 
     with pytest.raises(CloudApiError) as exc_info:
@@ -174,11 +174,8 @@ async def test_automation_workspace_requires_selected_agent_credentials(
     async def _repo_config_value(**_kwargs):
         return SimpleNamespace(configured=True, default_branch="main")
 
-    async def _credential_statuses(_user_id):
-        return [
-            SimpleNamespace(provider="claude", synced=True),
-            SimpleNamespace(provider="codex", synced=False),
-        ]
+    async def _agent_auth_agent_kinds(_user_id):
+        return ("claude",)
 
     monkeypatch.setattr(workspace_service, "get_linked_github_account", lambda _user: object())
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
@@ -187,7 +184,11 @@ async def test_automation_workspace_requires_selected_agent_credentials(
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(workspace_service, "get_billing_snapshot_for_subject", _billing_snapshot)
     monkeypatch.setattr(workspace_service, "repo_limit_for_billing_snapshot", lambda _snapshot: 4)
-    monkeypatch.setattr(workspace_service, "load_synced_credential_statuses", _credential_statuses)
+    monkeypatch.setattr(
+        workspace_service,
+        "_load_personal_agent_auth_agent_kinds",
+        _agent_auth_agent_kinds,
+    )
 
     with pytest.raises(CloudApiError) as exc_info:
         await workspace_service._resolve_new_cloud_workspace_create(
@@ -222,7 +223,7 @@ async def test_create_cloud_workspace_returns_pending_after_queueing_provision(
             git_base_branch="main",
             display_name=None,
             active_sandbox_count=0,
-            synced_providers=("claude",),
+            selected_agent_kinds=("claude",),
             cloud_repo_limit=4,
         )
 
@@ -299,7 +300,7 @@ async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     monkeypatch.setattr(workspace_service, "cloud_workspace_user_can_read", _require_workspace)
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
-    monkeypatch.setattr(workspace_service, "load_synced_credential_statuses", _unexpected)
+    monkeypatch.setattr(workspace_service, "_load_personal_agent_auth_agent_kinds", _unexpected)
     monkeypatch.setattr(workspace_service, "save_workspace", _unexpected)
 
     with pytest.raises(CloudApiError) as exc_info:
@@ -343,8 +344,8 @@ async def test_start_cloud_workspace_requeues_error_workspace(
     async def _authorization(**_kwargs) -> SandboxStartAuthorization:
         return _allowed_start_authorization()
 
-    async def _credential_statuses(_user_id):
-        return [SimpleNamespace(provider="claude", synced=True)]
+    async def _agent_auth_agent_kinds(_user_id):
+        return ("claude",)
 
     async def _save_workspace(_workspace):
         saved_statuses.append((_workspace.status, _workspace.last_error))
@@ -361,8 +362,8 @@ async def test_start_cloud_workspace_requeues_error_workspace(
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(
         workspace_service,
-        "load_synced_credential_statuses",
-        _credential_statuses,
+        "_load_personal_agent_auth_agent_kinds",
+        _agent_auth_agent_kinds,
     )
     monkeypatch.setattr(workspace_service, "save_workspace", _save_workspace)
     monkeypatch.setattr(workspace_service, "_build_workspace_detail", _build_workspace_detail)
@@ -410,8 +411,8 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
     async def _authorization(**_kwargs) -> SandboxStartAuthorization:
         return _allowed_start_authorization()
 
-    async def _credential_statuses(_user_id):
-        return [SimpleNamespace(provider="claude", synced=True)]
+    async def _agent_auth_agent_kinds(_user_id):
+        return ("claude",)
 
     async def _refresh_repo_env_snapshot_for_workspace(_workspace):
         refreshed_env_snapshots.append(_workspace.id)
@@ -433,8 +434,8 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(
         workspace_service,
-        "load_synced_credential_statuses",
-        _credential_statuses,
+        "_load_personal_agent_auth_agent_kinds",
+        _agent_auth_agent_kinds,
     )
     monkeypatch.setattr(
         workspace_service,
@@ -494,8 +495,8 @@ async def test_start_cloud_workspace_returns_ready_workspace_without_requeue(
     async def _authorization(**_kwargs) -> SandboxStartAuthorization:
         return _allowed_start_authorization()
 
-    async def _credential_statuses(_user_id):
-        return [SimpleNamespace(provider="claude", synced=True)]
+    async def _agent_auth_agent_kinds(_user_id):
+        return ("claude",)
 
     async def _unexpected(*_args, **_kwargs) -> None:
         raise AssertionError("ready workspace should not schedule provisioning work")
@@ -512,8 +513,8 @@ async def test_start_cloud_workspace_returns_ready_workspace_without_requeue(
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(
         workspace_service,
-        "load_synced_credential_statuses",
-        _credential_statuses,
+        "_load_personal_agent_auth_agent_kinds",
+        _agent_auth_agent_kinds,
     )
     monkeypatch.setattr(workspace_service, "save_workspace", _unexpected)
     monkeypatch.setattr(workspace_service, "schedule_workspace_provision", _unexpected)

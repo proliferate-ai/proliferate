@@ -167,7 +167,7 @@ async def test_synced_credential_sync_creates_personal_profile_selection(
 
 
 @pytest.mark.asyncio
-async def test_synced_claude_env_payload_stores_ready_agent_auth_credential(
+async def test_synced_claude_env_payload_is_rejected(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -185,31 +185,8 @@ async def test_synced_claude_env_payload_stores_ready_agent_auth_credential(
             "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
         },
     )
-    assert response.status_code == 200
-    result = response.json()
-    assert result["changed"] is True
-    assert result["credential"]["credentialKind"] == "synced_path"
-    assert result["credential"]["status"] == "ready"
-    assert result["credential"]["redactedSummary"]["source"] == "agent_auth_synced"
-    assert result["credential"]["redactedSummary"]["authMode"] == "env"
-
-    response = await client.post(
-        "/v1/cloud/sandbox-profiles/personal",
-        headers=_headers(tokens),
-        json={},
-    )
-    assert response.status_code == 200
-    profile = response.json()
-    assert profile["desiredAgentAuthRevision"] == 1
-
-    response = await client.get(
-        f"/v1/cloud/sandbox-profiles/{profile['id']}/agent-auth-selections",
-        headers=_headers(tokens),
-    )
-    assert response.status_code == 200
-    selection = response.json()[0]
-    assert selection["status"] == "active"
-    assert selection["credentialId"] == result["credential"]["id"]
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "invalid_payload"
 
 
 @pytest.mark.asyncio

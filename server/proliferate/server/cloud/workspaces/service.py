@@ -23,6 +23,7 @@ from proliferate.constants.cloud import (
     SUPPORTED_GIT_PROVIDER,
     CloudWorkspaceStatus,
 )
+from proliferate.db import engine as db_engine
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.automation_cloud_workspace_claims import (
@@ -35,6 +36,7 @@ from proliferate.db.store.automations import (
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
 )
+from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_runtime_environments import (
     get_runtime_environment_for_workspace,
     load_runtime_environment_for_workspace,
@@ -71,14 +73,7 @@ from proliferate.server.billing.service import (
     repo_limit_for_billing_snapshot,
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.agent_auth.domain.status import (
-    allowed_agent_kinds,
-    build_credential_statuses,
-)
-from proliferate.server.cloud.agent_auth.session_loader import (
-    list_selected_synced_credentials_for_request,
-    load_synced_credential_statuses,
-)
+from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config.service import (
     bootstrap_repo_config,
@@ -90,15 +85,14 @@ from proliferate.server.cloud.repos.service import (
 from proliferate.server.cloud.repos.service import (
     get_repo_branches_for_user as get_github_repo_branches,
 )
-from proliferate.server.cloud.runtime.credential_freshness import (
-    build_credential_freshness_snapshot,
-    build_credential_revision_state,
-    build_runtime_credential_freshness_snapshot,
+from proliferate.server.cloud.runtime.auth_status import (
+    build_workspace_runtime_auth_snapshot,
+    load_workspace_runtime_auth_snapshot,
+    selected_agent_auth_agent_kinds,
 )
 from proliferate.server.cloud.runtime.scheduler import schedule_workspace_provision
 from proliferate.server.cloud.runtime.service import (
     get_workspace_connection,
-    sync_workspace_credentials,
 )
 from proliferate.server.cloud.workspaces.access import (
     cloud_workspace_user_can_read,
@@ -116,7 +110,7 @@ from proliferate.server.cloud.workspaces.models import (
     WorkspaceDetail,
     WorkspaceDirectTargetContext,
     WorkspaceSummary,
-    credential_freshness_payload,
+    runtime_auth_payload,
     workspace_detail_payload,
     workspace_summary_payload,
 )
@@ -183,7 +177,7 @@ class ResolvedCloudWorkspaceCreate:
     git_base_branch: str
     display_name: str | None
     active_sandbox_count: int
-    synced_providers: tuple[str, ...]
+    selected_agent_kinds: tuple[str, ...]
     cloud_repo_limit: int | None
 
 
@@ -239,16 +233,14 @@ async def list_cloud_workspaces_for_user(
         user_id=user_id,
         cloud_workspace_ids=[workspace.id for workspace in workspaces],
     )
-    credential_records = await list_selected_synced_credentials_for_request(db, user_id)
-    credential_revisions = build_credential_revision_state(credential_records)
     snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
     summaries: list[WorkspaceSummary] = []
     for workspace in workspaces:
         runtime_environment = await get_runtime_environment_for_workspace(db, workspace)
-        credential_freshness = (
-            build_credential_freshness_snapshot(runtime_environment, credential_revisions)
-            if runtime_environment is not None
-            else None
+        runtime_auth = await build_workspace_runtime_auth_snapshot(
+            db,
+            workspace=workspace,
+            runtime_environment=runtime_environment,
         )
         billing_subject_id = (
             runtime_environment.billing_subject_id
@@ -264,7 +256,7 @@ async def list_cloud_workspaces_for_user(
             workspace_summary_payload(
                 workspace,
                 runtime_environment=runtime_environment,
-                credential_freshness=credential_freshness,
+                runtime_auth=runtime_auth,
                 action_block_kind=action_block_kind,
                 action_block_reason=action_block_reason,
                 creator_context=_creator_context_for_automation_run(
@@ -327,6 +319,47 @@ def _raise_repo_limit_exceeded(error: CloudRepoLimitExceededError) -> NoReturn:
     ) from error
 
 
+async def _load_personal_agent_auth_agent_kinds(user_id: UUID) -> tuple[str, ...]:
+    async with db_engine.async_session_factory() as db:
+        profile = await agent_auth_store.get_active_personal_sandbox_profile_for_user(
+            db,
+            user_id,
+        )
+        if profile is None:
+            return ()
+        result = await selected_agent_auth_agent_kinds(
+            db,
+            sandbox_profile_id=profile.id,
+        )
+        return result
+
+
+async def _agent_auth_agent_kinds_for_workspace_request(
+    db: AsyncSession,
+    workspace: CloudWorkspace,
+) -> tuple[str, ...]:
+    sandbox_profile_id = workspace.sandbox_profile_id
+    if sandbox_profile_id is None:
+        profile = await agent_auth_store.get_active_personal_sandbox_profile_for_user(
+            db,
+            workspace.user_id,
+        )
+        if profile is None:
+            return ()
+        sandbox_profile_id = profile.id
+    return await selected_agent_auth_agent_kinds(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+    )
+
+
+async def _load_agent_auth_agent_kinds_for_workspace(
+    workspace: CloudWorkspace,
+) -> tuple[str, ...]:
+    async with db_engine.async_session_factory() as db:
+        return await _agent_auth_agent_kinds_for_workspace_request(db, workspace)
+
+
 def _workspace_action_block(
     workspace: CloudWorkspace,
     billing: BillingSnapshot,
@@ -359,17 +392,12 @@ async def _build_workspace_detail_for_request(
     workspace: CloudWorkspace,
 ) -> WorkspaceDetail:
     runtime_environment = await get_runtime_environment_for_workspace(db, workspace)
-    credential_records = await list_selected_synced_credentials_for_request(
+    runtime_auth = await build_workspace_runtime_auth_snapshot(
         db,
-        workspace.user_id,
+        workspace=workspace,
+        runtime_environment=runtime_environment,
     )
-    credential_revisions = build_credential_revision_state(credential_records)
-    credential_freshness = (
-        build_credential_freshness_snapshot(runtime_environment, credential_revisions)
-        if runtime_environment is not None
-        else None
-    )
-    statuses = build_credential_statuses(credential_records)
+    ready_agent_kind_values = await _agent_auth_agent_kinds_for_workspace_request(db, workspace)
     billing = await get_billing_snapshot_for_subject(
         runtime_environment.billing_subject_id
         if runtime_environment is not None
@@ -382,9 +410,9 @@ async def _build_workspace_detail_for_request(
     )
     return workspace_detail_payload(
         workspace,
-        statuses,
+        ready_agent_kind_values,
         runtime_environment=runtime_environment,
-        credential_freshness=credential_freshness,
+        runtime_auth=runtime_auth,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
         creator_context=_creator_context_for_automation_run(
@@ -400,10 +428,11 @@ async def _build_workspace_detail(
     workspace: CloudWorkspace,
 ) -> WorkspaceDetail:
     runtime_environment = await load_runtime_environment_for_workspace(workspace)
-    credential_freshness = await build_runtime_credential_freshness_snapshot(
-        runtime_environment,
+    runtime_auth = await load_workspace_runtime_auth_snapshot(
+        workspace=workspace,
+        runtime_environment=runtime_environment,
     )
-    statuses = await load_synced_credential_statuses(workspace.user_id)
+    ready_agent_kind_values = await _load_agent_auth_agent_kinds_for_workspace(workspace)
     billing = await get_billing_snapshot_for_subject(
         runtime_environment.billing_subject_id
         if runtime_environment is not None
@@ -416,9 +445,9 @@ async def _build_workspace_detail(
     )
     return workspace_detail_payload(
         workspace,
-        statuses,
+        ready_agent_kind_values,
         runtime_environment=runtime_environment,
-        credential_freshness=credential_freshness,
+        runtime_auth=runtime_auth,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
         creator_context=_creator_context_for_automation_run(
@@ -563,18 +592,20 @@ async def _resolve_new_cloud_workspace_create(
             status_code=400,
         )
 
-    statuses = await load_synced_credential_statuses(user.id)
-    synced_providers = tuple(status.provider for status in statuses if status.synced)
-    if required_agent_kind is not None and required_agent_kind not in synced_providers:
+    selected_agent_kinds = await _load_personal_agent_auth_agent_kinds(user.id)
+    if required_agent_kind is not None and required_agent_kind not in selected_agent_kinds:
         raise CloudApiError(
             "missing_agent_credentials",
-            f"Sync {required_agent_kind} credentials before running this cloud automation.",
+            (
+                f"Select {required_agent_kind} agent authentication before running "
+                "this cloud automation."
+            ),
             status_code=400,
         )
-    if not synced_providers:
+    if not selected_agent_kinds:
         raise CloudApiError(
             "missing_supported_credentials",
-            "Sync a supported cloud credential before creating a cloud workspace.",
+            "Select an agent authentication credential before creating a cloud workspace.",
             status_code=400,
         )
     log_cloud_event(
@@ -582,7 +613,7 @@ async def _resolve_new_cloud_workspace_create(
         repo=f"{git_owner}/{git_repo_name}",
         base_branch=resolved_base_branch,
         branch_name=cleaned_branch_name,
-        synced_providers=",".join(synced_providers),
+        selected_agent_kinds=",".join(selected_agent_kinds),
         active_sandbox_count=authorization.active_sandbox_count,
     )
     return ResolvedCloudWorkspaceCreate(
@@ -593,7 +624,7 @@ async def _resolve_new_cloud_workspace_create(
         git_base_branch=resolved_base_branch,
         display_name=(display_name.strip() if display_name and display_name.strip() else None),
         active_sandbox_count=authorization.active_sandbox_count,
-        synced_providers=synced_providers,
+        selected_agent_kinds=selected_agent_kinds,
         cloud_repo_limit=cloud_repo_limit,
     )
 
@@ -855,11 +886,11 @@ async def start_cloud_workspace(
     )
     _raise_if_cloud_workspace_start_denied(authorization)
 
-    statuses = await load_synced_credential_statuses(user.id)
-    if not any(status.synced for status in statuses):
+    selected_agent_kinds = await _load_personal_agent_auth_agent_kinds(user.id)
+    if not selected_agent_kinds:
         raise CloudApiError(
             "missing_supported_credentials",
-            "Sync a supported cloud credential before starting a cloud workspace.",
+            "Select an agent authentication credential before starting a cloud workspace.",
             status_code=400,
         )
     log_cloud_event(
@@ -868,7 +899,7 @@ async def start_cloud_workspace(
         repo=f"{workspace.git_owner}/{workspace.git_repo_name}",
         base_branch=base_branch,
         branch_name=workspace.git_branch,
-        synced_providers=",".join(status.provider for status in statuses if status.synced),
+        selected_agent_kinds=",".join(selected_agent_kinds),
         active_sandbox_count=authorization.active_sandbox_count,
     )
 
@@ -988,17 +1019,6 @@ async def sync_cloud_workspace_display_name(
     workspace = await cloud_workspace_user_can_read_with_db(db, user_id, workspace_id)
     workspace = await update_workspace_display_name(db, workspace, cleaned)
     return await _build_workspace_detail_for_request(db, workspace)
-
-
-async def sync_cloud_workspace_credentials(
-    db: AsyncSession,
-    user_id: UUID,
-    workspace_id: UUID,
-) -> WorkspaceDetail:
-    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
-    await sync_workspace_credentials(workspace)
-    reloaded_workspace = await cloud_workspace_user_can_read_with_db(db, user_id, workspace_id)
-    return await _build_workspace_detail_for_request(db, reloaded_workspace)
 
 
 async def stop_cloud_workspace(
@@ -1196,5 +1216,5 @@ async def get_cloud_connection(
         runtime_generation=target.runtime_generation,
         allowed_agent_kinds=allowed_agent_kinds(),
         ready_agent_kinds=target.ready_agent_kinds,
-        credential_freshness=credential_freshness_payload(target.credential_freshness),
+        runtime_auth=runtime_auth_payload(target.runtime_auth),
     )

@@ -11,8 +11,8 @@ from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.anyharness_api import (
     get_runtime_ready_agent_kinds,
 )
-from proliferate.server.cloud.runtime.credential_freshness import (
-    ensure_runtime_environment_credentials_current,
+from proliferate.server.cloud.runtime.auth_status import (
+    load_workspace_runtime_auth_snapshot,
 )
 from proliferate.server.cloud.runtime.ensure_running import (
     ensure_environment_runtime_ready,
@@ -25,41 +25,6 @@ from proliferate.server.cloud.runtime.worktree_policy_sync import (
 from proliferate.utils.crypto import decrypt_text
 
 provision_workspace = _provision_workspace
-
-
-async def sync_workspace_credentials(workspace: CloudWorkspace) -> None:
-    runtime_environment = await load_runtime_environment_for_workspace(workspace)
-    billing_subject_id = (
-        runtime_environment.billing_subject_id
-        if runtime_environment is not None
-        else workspace.billing_subject_id
-    )
-    billing = await get_billing_snapshot_for_subject(billing_subject_id)
-    if billing.billing_mode == BILLING_MODE_ENFORCE and billing.active_spend_hold:
-        raise CloudApiError(
-            "workspace_not_ready",
-            (
-                "Cloud workspace is currently blocked. "
-                "Credentials will apply on the next allowed start."
-            ),
-            status_code=409,
-        )
-
-    if runtime_environment is None:
-        raise CloudApiError(
-            "workspace_not_ready",
-            (
-                "Cloud workspace does not have a runtime environment yet. "
-                "Credentials will apply on the next start."
-            ),
-            status_code=409,
-        )
-
-    await ensure_runtime_environment_credentials_current(
-        runtime_environment.id,
-        workspace_id=workspace.id,
-        allow_process_restart=True,
-    )
 
 
 async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnectionTarget:
@@ -106,11 +71,6 @@ async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnecti
         allow_launcher_restart=True,
         access_token=access_token,
     )
-    credential_freshness = await ensure_runtime_environment_credentials_current(
-        runtime_environment.id,
-        workspace_id=workspace.id,
-        allow_process_restart=True,
-    )
     reloaded_workspace = await load_cloud_workspace_by_id(workspace.id)
     reloaded_environment = await load_runtime_environment_for_workspace(
         reloaded_workspace or workspace,
@@ -123,6 +83,16 @@ async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnecti
         raise CloudApiError(
             "workspace_not_ready",
             "Cloud workspace runtime is not ready yet.",
+            status_code=409,
+        )
+    runtime_auth = await load_workspace_runtime_auth_snapshot(
+        workspace=reloaded_workspace,
+        runtime_environment=reloaded_environment,
+    )
+    if runtime_auth is None or not runtime_auth.target_current:
+        raise CloudApiError(
+            "agent_auth_not_current",
+            "Cloud workspace agent authentication is not current yet.",
             status_code=409,
         )
     access_token = decrypt_text(reloaded_environment.runtime_token_ciphertext)
@@ -146,5 +116,5 @@ async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnecti
         anyharness_workspace_id=reloaded_workspace.anyharness_workspace_id,
         runtime_generation=reloaded_environment.runtime_generation,
         ready_agent_kinds=ready_agent_kinds,
-        credential_freshness=credential_freshness,
+        runtime_auth=runtime_auth,
     )

@@ -4,7 +4,6 @@ import { useSetupStatusQuery } from "@anyharness/sdk-react";
 import type { CloudRepoFileMetadata } from "@/lib/access/cloud/client";
 import { useCloudRepoConfig } from "@/hooks/access/cloud/use-cloud-repo-config";
 import { useCloudWorkspaceRepoConfigStatus } from "@/hooks/access/cloud/use-cloud-workspace-repo-config-status";
-import { useResyncCloudWorkspaceCredentials } from "@/hooks/access/cloud/use-resync-cloud-workspace-credentials";
 import { useResyncCloudWorkspaceFiles } from "@/hooks/access/cloud/use-resync-cloud-workspace-files";
 import { useRunCloudWorkspaceSetup } from "@/hooks/access/cloud/use-run-cloud-workspace-setup";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
@@ -39,12 +38,10 @@ interface CloudWorkspaceSettingsPanelReadyState {
   setupScript: string;
   errorMessage: string | null;
   isResyncingFiles: boolean;
-  isResyncingCredentials: boolean;
   isRunningSetup: boolean;
   canRunSetup: boolean;
   navigateToRepoSettings: () => void;
   onResyncFiles: () => void;
-  onResyncCredentials: () => void;
   onRunSetup: () => void;
 }
 
@@ -83,7 +80,6 @@ export function useCloudWorkspaceSettingsPanelState(): CloudWorkspaceSettingsPan
     refetchWhileRunning: true,
   });
   const resyncFilesMutation = useResyncCloudWorkspaceFiles(cloudWorkspaceId);
-  const resyncCredentialsMutation = useResyncCloudWorkspaceCredentials(cloudWorkspaceId);
   const runSetupMutation = useRunCloudWorkspaceSetup(cloudWorkspaceId);
 
   if (!cloudWorkspaceId || !cloudWorkspace) {
@@ -100,10 +96,6 @@ export function useCloudWorkspaceSettingsPanelState(): CloudWorkspaceSettingsPan
   const onResyncFiles = useCallback(() => {
     void resyncFilesMutation.mutateAsync();
   }, [resyncFilesMutation]);
-
-  const onResyncCredentials = useCallback(() => {
-    void resyncCredentialsMutation.mutateAsync();
-  }, [resyncCredentialsMutation]);
 
   const onRunSetup = useCallback(() => {
     void runSetupMutation.mutateAsync();
@@ -124,18 +116,16 @@ export function useCloudWorkspaceSettingsPanelState(): CloudWorkspaceSettingsPan
     envVarKeys: repoConfigStatus?.envVarKeys ?? EMPTY_ENV_VAR_KEYS,
     setupScript,
     errorMessage: formatCloudWorkspaceSettingsError({
-      credentialError: resyncCredentialsMutation.error ?? null,
+      credentialError: null,
       fileError: resyncFilesMutation.error ?? null,
       setupError: runSetupMutation.error ?? null,
       lastApplyError: repoConfigStatus?.lastApplyError,
     }),
     isResyncingFiles: resyncFilesMutation.isPending,
-    isResyncingCredentials: resyncCredentialsMutation.isPending,
     isRunningSetup: runSetupMutation.isPending,
     canRunSetup: setupScript.trim().length > 0,
     navigateToRepoSettings,
     onResyncFiles,
-    onResyncCredentials,
     onRunSetup,
   };
 }

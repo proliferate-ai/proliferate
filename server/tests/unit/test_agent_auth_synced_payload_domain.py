@@ -55,20 +55,17 @@ def test_build_credential_statuses_applies_defaults_and_filters_revoked() -> Non
     assert by_provider["gemini"].auth_mode == "env"
 
 
-def test_normalize_claude_env_payload_keeps_allowed_key_only() -> None:
-    normalized = normalize_synced_credential_payload(
-        agent_kind="claude",
-        auth_mode="env",
-        env_vars={"ANTHROPIC_API_KEY": "sk-ant-test"},
-        files=None,
-    )
+def test_normalize_claude_env_payload_rejects_api_key_sync() -> None:
+    with pytest.raises(AgentAuthError) as exc_info:
+        normalize_synced_credential_payload(
+            agent_kind="claude",
+            auth_mode="env",
+            env_vars={"ANTHROPIC_API_KEY": "sk-ant-test"},
+            files=None,
+        )
 
-    assert normalized.auth_mode == "env"
-    assert normalized.payload == {
-        "provider": "claude",
-        "authMode": "env",
-        "envVars": {"ANTHROPIC_API_KEY": "sk-ant-test"},
-    }
+    assert exc_info.value.code == "invalid_payload"
+    assert exc_info.value.message == "Env credential sync is not supported for agent 'claude'."
 
 
 def test_normalize_gemini_env_rejects_incompatible_api_keys() -> None:

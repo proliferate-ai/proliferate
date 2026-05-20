@@ -17,11 +17,6 @@ from tests.e2e.cloud.helpers.shared import AuthSession, CloudE2ETestError, Cloud
 
 def build_sync_payload(config: CloudTestConfig, provider: str) -> dict[str, Any]:
     if provider == "claude":
-        if config.anthropic_api_key:
-            return {
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": config.anthropic_api_key},
-            }
         if config.claude_auth_path is None:
             raise CloudE2ETestError("Claude auth file was not found locally.")
         entry = build_claude_file_entry(config.claude_auth_path)

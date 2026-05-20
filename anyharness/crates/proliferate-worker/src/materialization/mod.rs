@@ -340,7 +340,6 @@ mod tests {
             setup_script: "".to_string(),
             run_command: "".to_string(),
             git_credential: None,
-            agent_credentials: BTreeMap::new(),
             runtime_config: Some(
                 super::runtime_config::RuntimeConfigMaterializationFragment {
                     revision_id: "rev_1".to_string(),

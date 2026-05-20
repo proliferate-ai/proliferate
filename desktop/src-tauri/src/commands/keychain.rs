@@ -119,10 +119,10 @@ fn augment_gemini_env_vars(name: &str, env_vars: &mut HashMap<String, String>) {
 const AGENT_AUTH_PROVIDERS: &[AgentAuthProviderSpec] = &[
     AgentAuthProviderSpec {
         id: "claude",
-        default_auth_mode: "env",
-        env_secret_names: &["ANTHROPIC_API_KEY"],
+        default_auth_mode: "file",
+        env_secret_names: &[],
         discovery_provider: Some(ProviderId::Claude),
-        missing_message: "No Claude credentials found. Set ANTHROPIC_API_KEY or log in to Claude Code.",
+        missing_message: "No portable Claude credentials found. Log in to Claude Code to sync file-based auth.",
         augment_env_vars: None,
     },
     AgentAuthProviderSpec {

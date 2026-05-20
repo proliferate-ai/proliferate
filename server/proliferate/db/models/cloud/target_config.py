@@ -53,7 +53,6 @@ class CloudTargetConfig(Base):
     summary_json: Mapped[str] = mapped_column(Text)
     env_vars_version: Mapped[int] = mapped_column(Integer, default=0)
     files_version: Mapped[int] = mapped_column(Integer, default=0)
-    credential_snapshot_version: Mapped[int] = mapped_column(Integer, default=0)
     mcp_materialization_version: Mapped[int] = mapped_column(Integer, default=0)
     materialization_status: Mapped[str] = mapped_column(String(32), default="pending")
     last_command_id: Mapped[uuid.UUID | None] = mapped_column(
