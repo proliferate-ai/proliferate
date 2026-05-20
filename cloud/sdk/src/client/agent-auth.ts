@@ -13,7 +13,6 @@ import type {
   CreateOpenAiCompatibleCredentialInput,
   EnsureManagedCreditsRequest,
   EnsureManagedCreditsResponse,
-  EnsureSandboxProfileInput,
   SandboxAgentAuthSelection,
   SandboxAgentAuthTargetState,
   SandboxProfile,
@@ -160,26 +159,22 @@ export async function deleteAgentAuthCredentialShare(
 }
 
 export async function ensurePersonalSandboxProfile(
-  input: EnsureSandboxProfileInput = {},
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<SandboxProfile> {
   return client.requestJson<SandboxProfile>({
     method: "POST",
     path: "/v1/cloud/sandbox-profiles/personal",
-    body: { managedTargetId: input.managedTargetId ?? null },
   });
 }
 
 export async function ensureOrganizationSandboxProfile(
   organizationId: string,
-  input: EnsureSandboxProfileInput = {},
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<SandboxProfile> {
   return client.requestJson<SandboxProfile>({
     method: "POST",
     path: "/v1/cloud/organizations/{organization_id}/sandbox-profile",
     pathParams: { organization_id: organizationId },
-    body: { managedTargetId: input.managedTargetId ?? null },
   });
 }
 

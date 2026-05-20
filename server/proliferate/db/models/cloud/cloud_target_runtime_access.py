@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.db.models.base import Base, utcnow
@@ -17,13 +17,12 @@ class CloudTargetRuntimeAccess(Base):
             "(active_sandbox_id IS NOT NULL AND slot_generation IS NOT NULL)",
             name="ck_cloud_target_runtime_access_active_slot_fields",
         ),
+        UniqueConstraint("target_id", name="uq_cloud_target_runtime_access_target_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     target_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("cloud_targets.id", ondelete="CASCADE"),
-        unique=True,
-        index=True,
     )
     sandbox_profile_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("sandbox_profile.id", ondelete="CASCADE"),

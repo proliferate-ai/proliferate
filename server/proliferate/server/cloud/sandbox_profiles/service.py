@@ -34,6 +34,9 @@ class SandboxProfileTargetState:
             and self.runtime_access is not None
             and self.runtime_access.active_sandbox_id == self.slot.id
             and self.runtime_access.slot_generation == self.slot.slot_generation
+            and bool(self.runtime_access.anyharness_base_url)
+            and bool(self.runtime_access.runtime_token_ciphertext)
+            and bool(self.runtime_access.anyharness_data_key_ciphertext)
         )
 
 

@@ -65,9 +65,8 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
       const nextProfile = target.ownerScope === "organization"
         ? await mutations.ensureOrganizationProfile({
             organizationId: target.organizationId!,
-            managedTargetId: target.id,
           })
-        : await mutations.ensurePersonalProfile({ managedTargetId: target.id });
+        : await mutations.ensurePersonalProfile();
       setProfile(nextProfile);
       setFeedback("Agent auth profile loaded.");
     } catch (error) {
