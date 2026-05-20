@@ -10,11 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_mcp.auth import upsert_connection_auth
-from proliferate.db.store.cloud_mcp.compat import (
-    legacy_delete_connection,
-    legacy_list_connections,
-    legacy_upsert_secret_connection,
-)
 from proliferate.db.store.cloud_mcp.connections import (
     delete_user_connection,
     get_user_connection,
@@ -49,7 +44,6 @@ from proliferate.server.cloud.mcp_connections.models import (
     PatchCloudMcpConnectionRequest,
     PublicizeCloudMcpConnectionRequest,
     PutCloudMcpSecretAuthRequest,
-    SyncCloudMcpConnectionRequest,
 )
 from proliferate.server.cloud.targets.domain.policy import require_target_admin_membership
 from proliferate.utils.crypto import encrypt_json
@@ -124,7 +118,6 @@ def _auth_state(
         entry_auth_kind=entry.auth_kind if entry else None,
         has_auth=record.auth is not None,
         stored_auth_status=record.auth.auth_status if record.auth else None,
-        has_legacy_payload=bool(record.payload_ciphertext),
     )
     return state.auth_kind, state.auth_status
 
@@ -316,9 +309,7 @@ async def patch_cloud_mcp_connection(
             else None
         ),
         public_updated_by_user_id=(
-            actor_user_id
-            if body.public_to_org is not None
-            else existing.public_updated_by_user_id
+            actor_user_id if body.public_to_org is not None else existing.public_updated_by_user_id
         ),
     )
     if record is None:
@@ -479,57 +470,3 @@ async def delete_cloud_mcp_connection_for_user(
             actor_user_id=connection.user_id,
             reason="mcp_connection_deleted",
         )
-
-
-async def list_cloud_mcp_connection_statuses(
-    db: AsyncSession,
-    user_id: UUID,
-) -> list[CloudMcpConnectionRecord]:
-    return await legacy_list_connections(db, user_id)
-
-
-async def sync_cloud_mcp_connection_for_user(
-    db: AsyncSession,
-    user_id: UUID,
-    connection_id: str,
-    body: SyncCloudMcpConnectionRequest,
-) -> None:
-    cleaned_connection_id = validate_connection_id(connection_id)
-    entry = get_catalog_entry(body.catalog_entry_id.strip())
-    if entry is None:
-        _invalid_payload("Connector catalog entry was not found.")
-    if not entry.cloud_secret_sync:
-        _invalid_payload(f"{entry.name} does not support legacy cloud secret sync.")
-    cleaned = _validate_secret_fields_or_raise(entry, body.secret_fields)
-    existing = await list_user_connections(db, user_id)
-    server_name = generate_server_name(
-        entry,
-        {
-            record.server_name
-            for record in existing
-            if record.connection_id != cleaned_connection_id
-        },
-        cleaned_connection_id,
-    )
-    await legacy_upsert_secret_connection(
-        db,
-        user_id=user_id,
-        connection_id=cleaned_connection_id,
-        catalog_entry_id=entry.id,
-        catalog_entry_version=entry.version,
-        server_name=server_name,
-        settings_json="{}",
-        payload_ciphertext=encrypt_json({"secretFields": cleaned}),
-    )
-
-
-async def delete_legacy_cloud_mcp_connection_for_user(
-    db: AsyncSession,
-    user_id: UUID,
-    connection_id: str,
-) -> None:
-    await legacy_delete_connection(
-        db,
-        user_id=user_id,
-        connection_id=validate_connection_id(connection_id),
-    )

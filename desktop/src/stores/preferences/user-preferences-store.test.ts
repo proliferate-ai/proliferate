@@ -354,55 +354,22 @@ describe("user preference migration", () => {
     expect(PERSISTED_RECORD_BACKFILL.transparentChromeEnabled).toBe(true);
   });
 
-  it("defaults coding-session Plugins to disabled for older preference blobs", () => {
-    const { preferences, changed } = migrateUserPreferences({
-      ...USER_PREFERENCE_DEFAULTS,
-      pluginsInCodingSessionsEnabled: undefined as unknown as boolean,
-    });
-
-    expect(changed).toBe(true);
-    expect(preferences.pluginsInCodingSessionsEnabled).toBe(false);
-  });
-
-  it("preserves an explicit coding-session Plugins preference", () => {
-    const { preferences } = migrateUserPreferences({
-      ...USER_PREFERENCE_DEFAULTS,
-      pluginsInCodingSessionsEnabled: true,
-    });
-
-    expect(preferences.pluginsInCodingSessionsEnabled).toBe(true);
-  });
-
-  it("migrates the legacy coding-session Powers key to Plugins", () => {
-    const { preferences, changed } = migrateUserPreferences({
-      ...USER_PREFERENCE_DEFAULTS,
-      pluginsInCodingSessionsEnabled: undefined as unknown as boolean,
-      powersInCodingSessionsEnabled: true,
-    });
-
-    expect(changed).toBe(true);
-    expect(preferences.pluginsInCodingSessionsEnabled).toBe(true);
-    expect(preferences).not.toHaveProperty("powersInCodingSessionsEnabled");
-  });
-
-  it("preserves legacy coding-session Powers preferences during bootstrap", async () => {
+  it("drops legacy coding-session plugin preference keys during bootstrap", async () => {
     storeMocks.values.set("user_preferences", {
       themePreset: "ship",
+      pluginsInCodingSessionsEnabled: true,
       powersInCodingSessionsEnabled: true,
     });
 
     await bootstrapUserPreferencesForTest();
 
     const preferences = useUserPreferencesStore.getState();
-    expect(preferences.pluginsInCodingSessionsEnabled).toBe(true);
+    expect(preferences).not.toHaveProperty("pluginsInCodingSessionsEnabled");
     expect(preferences).not.toHaveProperty("powersInCodingSessionsEnabled");
-    expect(storeMocks.set).toHaveBeenCalledWith(
-      "user_preferences",
-      expect.objectContaining({
-        pluginsInCodingSessionsEnabled: true,
-      }),
-    );
     const lastPersistedValue = storeMocks.set.mock.calls[storeMocks.set.mock.calls.length - 1]?.[1];
+    expect(lastPersistedValue).not.toHaveProperty(
+      "pluginsInCodingSessionsEnabled",
+    );
     expect(lastPersistedValue).not.toHaveProperty(
       "powersInCodingSessionsEnabled",
     );

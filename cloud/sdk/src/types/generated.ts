@@ -120,8 +120,6 @@ export type LocalAutomationMutationResponse =
   components["schemas"]["LocalAutomationMutationResponse"];
 export type LocalAutomationRunClaimResponse =
   components["schemas"]["LocalAutomationRunClaimResponse"];
-export type CloudMcpConnectionSyncStatus = components["schemas"]["CloudMcpConnectionSyncStatus"];
-export type SyncCloudMcpConnectionRequest = components["schemas"]["SyncCloudMcpConnectionRequest"];
 export type CloudMcpCatalogResponse = components["schemas"]["ConnectorCatalogResponse"];
 export type CloudMcpCatalogEntry = components["schemas"]["ConnectorCatalogEntryModel"];
 export type CloudPluginPackage = components["schemas"]["PluginPackageModel"];
@@ -184,3 +182,10 @@ export type MaterializeTargetConfigRequest =
   components["schemas"]["MaterializeTargetConfigRequest"];
 export type MaterializeTargetConfigResponse =
   components["schemas"]["MaterializeTargetConfigResponse"];
+export type RefreshRuntimeConfigRequest =
+  components["schemas"]["RefreshRuntimeConfigRequest"];
+export type RuntimeConfigRevision = components["schemas"]["RuntimeConfigRevisionModel"];
+export type RuntimeConfigStatusResponse =
+  components["schemas"]["RuntimeConfigStatusResponse"];
+export type RuntimeConfigMaterializationFragment =
+  components["schemas"]["RuntimeConfigMaterializationFragment"];

@@ -41,7 +41,6 @@ export function selectPersistedUserPreferencesSlice(
     turnEndSoundEnabled: preferences.turnEndSoundEnabled,
     turnEndSoundId: preferences.turnEndSoundId,
     transparentChromeEnabled: preferences.transparentChromeEnabled,
-    pluginsInCodingSessionsEnabled: preferences.pluginsInCodingSessionsEnabled,
     subagentsEnabled: preferences.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: preferences.cloudRuntimeInputSyncEnabled,

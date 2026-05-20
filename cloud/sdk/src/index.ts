@@ -19,6 +19,7 @@ export * from "./client/mobility.js";
 export * from "./client/organizations.js";
 export * from "./client/repo-configs.js";
 export * from "./client/repos.js";
+export * from "./client/runtime-config.js";
 export * from "./client/sessions.js";
 export * from "./client/support.js";
 export * from "./client/target-configs.js";

@@ -32,6 +32,8 @@ pub struct RuntimeConfigArtifactResponse {
     pub content_type: String,
     pub byte_size: i64,
     pub source_ref: Option<String>,
+    pub resource_id: Option<String>,
+    pub display_name: Option<String>,
     pub content: String,
 }
 

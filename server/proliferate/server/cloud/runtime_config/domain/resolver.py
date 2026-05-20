@@ -111,6 +111,8 @@ class ResolvedArtifactRef:
     byte_size: int
     source_ref: str | None
     content: str
+    resource_id: str | None = None
+    display_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -544,6 +546,8 @@ def _resolved_plugin_skill(
             source_ref=f"plugin:{package.id}:{plugin_skill.id}:resource:{resource.resource_id}",
             content_type=resource.content_type,
             content=resource.content,
+            resource_id=resource.resource_id,
+            display_name=resource.display_name,
         )
         for resource in plugin_skill.resources
     )
@@ -576,7 +580,14 @@ def _skill_source(skill_item: SkillConfiguredItemSnapshot) -> SourceRowRef:
     )
 
 
-def _skill_artifact(*, source_ref: str, content_type: str, content: str) -> ResolvedArtifactRef:
+def _skill_artifact(
+    *,
+    source_ref: str,
+    content_type: str,
+    content: str,
+    resource_id: str | None = None,
+    display_name: str | None = None,
+) -> ResolvedArtifactRef:
     import hashlib
 
     raw = content.encode("utf-8")
@@ -586,6 +597,8 @@ def _skill_artifact(*, source_ref: str, content_type: str, content: str) -> Reso
         byte_size=len(raw),
         source_ref=source_ref,
         content=content,
+        resource_id=resource_id,
+        display_name=display_name,
     )
 
 

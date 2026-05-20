@@ -159,7 +159,7 @@ async def test_cloud_executor_command_preserves_target_organization_id(
                 display_name="Managed cloud",
                 kind=CloudTargetKind.managed_cloud.value,
                 owner_scope="organization",
-                owner_user_id=user_id,
+                owner_user_id=None,
                 organization_id=organization_id,
                 created_by_user_id=user_id,
                 default_workspace_root=None,

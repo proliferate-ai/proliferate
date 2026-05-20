@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from proliferate.server.cloud.mcp_catalog.domain.rendering import parse_settings, validate_settings
 from proliferate.server.cloud.mcp_catalog.domain.types import (
@@ -110,7 +109,6 @@ def _mcp_server_payload(server) -> dict[str, object]:  # noqa: ANN001
                 if _template_has_value(query.value, settings, optional=query.optional)
             ],
         }
-        launch["url"] = _append_literal_query_values(launch["url"], launch["query"])
     else:
         launch = {
             "kind": "stdio",
@@ -151,6 +149,8 @@ def _artifact_payload(artifact: ResolvedArtifactRef) -> dict[str, object]:
         "contentType": artifact.content_type,
         "byteSize": artifact.byte_size,
         "sourceRef": artifact.source_ref,
+        "resourceId": artifact.resource_id,
+        "displayName": artifact.display_name,
     }
 
 
@@ -323,45 +323,6 @@ def _render_launch_url(source: StaticUrl | UrlBySetting, settings: dict[str, obj
     selected = settings.get(source.setting_id)
     variants = {variant.value: variant.url for variant in source.variants}
     return variants[str(selected)]
-
-
-def _append_literal_query_values(
-    url_value: dict[str, object],
-    query_values: object,
-) -> dict[str, object]:
-    if url_value.get("kind") != "literal" or not isinstance(query_values, list):
-        return url_value
-    query: dict[str, str] = {}
-    dynamic_query: list[dict[str, object]] = []
-    for item in query_values:
-        if (
-            isinstance(item, dict)
-            and isinstance(item.get("name"), str)
-            and isinstance(item.get("value"), dict)
-            and item["value"].get("kind") == "literal"
-        ):
-            query[item["name"]] = str(item["value"].get("value", ""))
-        elif isinstance(item, dict):
-            dynamic_query.append(item)
-    if not query:
-        return url_value
-    parsed = urlparse(str(url_value["value"]))
-    existing = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    existing.update(query)
-    return {
-        "kind": "literal",
-        "value": urlunparse(
-            (
-                parsed.scheme,
-                parsed.netloc,
-                parsed.path,
-                parsed.params,
-                urlencode(existing),
-                parsed.fragment,
-            )
-        ),
-        "dynamicQuery": dynamic_query,
-    }
 
 
 def _template_has_value(template: str, settings: dict[str, object], *, optional: bool) -> bool:

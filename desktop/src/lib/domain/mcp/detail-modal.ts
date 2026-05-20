@@ -32,9 +32,9 @@ export function connectorLocalOAuthSuccessToast(
   successLabel: string,
 ): string {
   if (successLabel === "reconnected") {
-    return `${entryName} reconnected. Restart or resume the local session to refresh tools.`;
+    return `${entryName} reconnected. Cloud sandbox runtime config will use the refreshed connection.`;
   }
-  return `${entryName} connected. Start a new local session with plugins enabled to use it.`;
+  return `${entryName} connected. Cloud sandbox runtime config will include the connection after refresh.`;
 }
 
 export function validateConnectorSecretValues(

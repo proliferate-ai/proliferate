@@ -4,12 +4,14 @@ use anyharness_contract::v1::{
     ApplyRuntimeConfigRequest, ApplyRuntimeConfigResponse, RuntimeArtifactPayload,
     RuntimeConfigExternalScope, RuntimeConfigManifest, RuntimeConfigRevision,
     RuntimeConfigRevisionExpectation, RuntimeConfigStatusResponse, RuntimeMcpLaunch,
-    RuntimeMcpServer, RuntimeMcpValue, RuntimeSkill, SessionMcpBindingSummary,
+    RuntimeMcpNamedValue, RuntimeMcpServer, RuntimeMcpValue, RuntimeSkill,
+    SessionMcpBindingSummary,
 };
 use rusqlite::{params, OptionalExtension, Row};
+use url::Url;
 
-use crate::domains::plugins::{
-    SessionPlugin, SessionPluginBundle, SessionPluginSkill, SessionPluginSkillResource,
+use super::model::{
+    RuntimeConfigSessionContext, RuntimeConfigSessionSkill, RuntimeConfigSessionSkillResource,
 };
 use crate::persistence::Db;
 use crate::sessions::mcp_bindings::model::{
@@ -135,6 +137,70 @@ impl RuntimeConfigStore {
             .optional()
         })
     }
+
+    fn set_session_context(
+        &self,
+        session_id: &str,
+        record: &RuntimeConfigRecord,
+    ) -> anyhow::Result<()> {
+        let manifest_json = serde_json::to_string(&record.manifest)?;
+        let artifact_payloads_json = serde_json::to_string(&record.artifact_payloads)?;
+        let scope = record
+            .revision
+            .external_scope
+            .clone()
+            .unwrap_or_else(default_external_scope);
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO runtime_config_session_context (
+                    session_id, scope_provider, scope_id, target_id, revision_id, sequence,
+                    content_hash, manifest_json, artifact_payloads_json, applied_at, updated_at
+                 ) VALUES (
+                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'), datetime('now')
+                 )
+                 ON CONFLICT(session_id) DO UPDATE SET
+                    scope_provider = excluded.scope_provider,
+                    scope_id = excluded.scope_id,
+                    target_id = excluded.target_id,
+                    revision_id = excluded.revision_id,
+                    sequence = excluded.sequence,
+                    content_hash = excluded.content_hash,
+                    manifest_json = excluded.manifest_json,
+                    artifact_payloads_json = excluded.artifact_payloads_json,
+                    applied_at = datetime('now'),
+                    updated_at = datetime('now')",
+                params![
+                    session_id,
+                    scope.provider,
+                    scope.id,
+                    scope.target_id.as_deref(),
+                    record.revision.id,
+                    record.revision.sequence,
+                    record.revision.content_hash,
+                    manifest_json,
+                    artifact_payloads_json,
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    fn find_session_context(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Option<RuntimeConfigRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT scope_provider, scope_id, target_id, revision_id, sequence,
+                        content_hash, manifest_json, artifact_payloads_json
+                 FROM runtime_config_session_context
+                 WHERE session_id = ?1",
+                [session_id],
+                runtime_config_record_from_row,
+            )
+            .optional()
+        })
+    }
 }
 
 fn runtime_config_record_from_row(row: &Row<'_>) -> rusqlite::Result<RuntimeConfigRecord> {
@@ -188,7 +254,7 @@ pub enum RuntimeConfigError {
 pub struct RuntimeConfigSessionInputs {
     pub mcp_servers: Vec<SessionMcpServer>,
     pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
-    pub plugin_bundle: Option<SessionPluginBundle>,
+    pub context: RuntimeConfigSessionContext,
 }
 
 impl RuntimeConfigService {
@@ -230,6 +296,54 @@ impl RuntimeConfigService {
         &self,
         expected: &RuntimeConfigRevisionExpectation,
     ) -> Result<RuntimeConfigSessionInputs, RuntimeConfigError> {
+        let current = self.record_for_expected(expected)?;
+        session_inputs_from_record(current)
+    }
+
+    pub fn bind_session_to_expected(
+        &self,
+        session_id: &str,
+        expected: &RuntimeConfigRevisionExpectation,
+    ) -> Result<RuntimeConfigSessionInputs, RuntimeConfigError> {
+        let current = self.record_for_expected(expected)?;
+        self.store.set_session_context(session_id, &current)?;
+        session_inputs_from_record(current)
+    }
+
+    pub fn session_context(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<RuntimeConfigSessionContext>, RuntimeConfigError> {
+        let Some(record) = self.store.find_session_context(session_id)? else {
+            return Ok(None);
+        };
+        session_inputs_from_record(record).map(|inputs| Some(inputs.context))
+    }
+
+    pub fn assert_session_context_matches(
+        &self,
+        session_id: &str,
+        expected: &RuntimeConfigRevisionExpectation,
+    ) -> Result<(), RuntimeConfigError> {
+        let record = self
+            .store
+            .find_session_context(session_id)?
+            .ok_or(RuntimeConfigError::Missing)?;
+        if record.revision.id != expected.revision_id
+            || record.revision.content_hash != expected.content_hash
+            || expected
+                .sequence
+                .is_some_and(|sequence| record.revision.sequence != sequence)
+        {
+            return Err(RuntimeConfigError::Stale);
+        }
+        Ok(())
+    }
+
+    fn record_for_expected(
+        &self,
+        expected: &RuntimeConfigRevisionExpectation,
+    ) -> Result<RuntimeConfigRecord, RuntimeConfigError> {
         let current = if expected.external_scope.is_some() {
             self.store
                 .find_by_scope(&scope_key(expected.external_scope.as_ref()))?
@@ -245,45 +359,60 @@ impl RuntimeConfigService {
         {
             return Err(RuntimeConfigError::Stale);
         }
-        if !current.manifest.mcp_servers.iter().all(|server| {
-            server.credential_refs.is_empty() && runtime_launch_is_materialized(&server.launch)
-        }) || current
-            .manifest
-            .skills
-            .iter()
-            .any(|skill| !skill.credential_refs.is_empty())
-        {
-            return Err(RuntimeConfigError::UnresolvedCredentials);
-        }
-        let mcp_servers = current
-            .manifest
-            .mcp_servers
-            .iter()
-            .map(runtime_mcp_to_session_mcp)
-            .collect::<Result<Vec<_>, _>>()?;
-        let artifacts = current
-            .artifact_payloads
-            .iter()
-            .map(|artifact| (artifact.hash.as_str(), artifact))
-            .collect::<HashMap<_, _>>();
-        let plugin_bundle = runtime_skills_to_plugin_bundle(
-            &current.manifest.skills,
-            &current.manifest.mcp_servers,
-            &mcp_servers,
-            &current.manifest.mcp_binding_summaries,
-            &artifacts,
-        )?;
-        let summaries = if current.manifest.mcp_binding_summaries.is_empty() {
-            None
-        } else {
-            Some(current.manifest.mcp_binding_summaries)
-        };
-        Ok(RuntimeConfigSessionInputs {
-            mcp_servers,
-            mcp_binding_summaries: summaries,
-            plugin_bundle,
-        })
+        Ok(current)
     }
+}
+
+fn session_inputs_from_record(
+    current: RuntimeConfigRecord,
+) -> Result<RuntimeConfigSessionInputs, RuntimeConfigError> {
+    validate_materialized_record(&current)?;
+    let mcp_servers = current
+        .manifest
+        .mcp_servers
+        .iter()
+        .map(runtime_mcp_to_session_mcp)
+        .collect::<Result<Vec<_>, _>>()?;
+    let artifacts = current
+        .artifact_payloads
+        .iter()
+        .map(|artifact| (artifact.hash.as_str(), artifact))
+        .collect::<HashMap<_, _>>();
+    let skills = runtime_skills_to_session_skills(
+        &current.manifest.skills,
+        &current.manifest.mcp_servers,
+        &mcp_servers,
+        &artifacts,
+    )?;
+    let summaries = if current.manifest.mcp_binding_summaries.is_empty() {
+        None
+    } else {
+        Some(current.manifest.mcp_binding_summaries.clone())
+    };
+    Ok(RuntimeConfigSessionInputs {
+        mcp_servers: mcp_servers.clone(),
+        mcp_binding_summaries: summaries,
+        context: RuntimeConfigSessionContext {
+            revision: current.revision,
+            mcp_servers,
+            mcp_binding_summaries: current.manifest.mcp_binding_summaries,
+            skills,
+        },
+    })
+}
+
+fn validate_materialized_record(record: &RuntimeConfigRecord) -> Result<(), RuntimeConfigError> {
+    if !record.manifest.mcp_servers.iter().all(|server| {
+        server.credential_refs.is_empty() && runtime_launch_is_materialized(&server.launch)
+    }) || record
+        .manifest
+        .skills
+        .iter()
+        .any(|skill| !skill.credential_refs.is_empty())
+    {
+        return Err(RuntimeConfigError::UnresolvedCredentials);
+    }
+    Ok(())
 }
 
 fn validate_apply_request(request: &ApplyRuntimeConfigRequest) -> Result<(), RuntimeConfigError> {
@@ -353,23 +482,25 @@ fn runtime_mcp_to_session_mcp(
     server: &RuntimeMcpServer,
 ) -> Result<SessionMcpServer, RuntimeConfigError> {
     match &server.launch {
-        RuntimeMcpLaunch::Http { url, headers, .. } => {
-            Ok(SessionMcpServer::Http(SessionMcpHttpServer {
-                connection_id: server.id.clone(),
-                catalog_entry_id: server.catalog_entry_id.clone(),
-                server_name: server.server_name.clone(),
-                url: literal_runtime_value(url)?,
-                headers: headers
-                    .iter()
-                    .map(|header| {
-                        Ok(SessionMcpHeader {
-                            name: header.name.clone(),
-                            value: literal_runtime_value(&header.value)?,
-                        })
+        RuntimeMcpLaunch::Http {
+            url,
+            headers,
+            query,
+        } => Ok(SessionMcpServer::Http(SessionMcpHttpServer {
+            connection_id: server.id.clone(),
+            catalog_entry_id: server.catalog_entry_id.clone(),
+            server_name: server.server_name.clone(),
+            url: http_url_with_query(url, query)?,
+            headers: headers
+                .iter()
+                .map(|header| {
+                    Ok(SessionMcpHeader {
+                        name: header.name.clone(),
+                        value: literal_runtime_value(&header.value)?,
                     })
-                    .collect::<Result<Vec<_>, RuntimeConfigError>>()?,
-            }))
-        }
+                })
+                .collect::<Result<Vec<_>, RuntimeConfigError>>()?,
+        })),
         RuntimeMcpLaunch::Stdio { command, args, env } => {
             Ok(SessionMcpServer::Stdio(SessionMcpStdioServer {
                 connection_id: server.id.clone(),
@@ -394,16 +525,31 @@ fn runtime_mcp_to_session_mcp(
     }
 }
 
-fn runtime_skills_to_plugin_bundle(
+fn http_url_with_query(
+    url: &RuntimeMcpValue,
+    query: &[RuntimeMcpNamedValue],
+) -> Result<String, RuntimeConfigError> {
+    let raw_url = literal_runtime_value(url)?;
+    if query.is_empty() {
+        return Ok(raw_url);
+    }
+    let mut parsed = Url::parse(&raw_url)
+        .map_err(|error| RuntimeConfigError::Internal(anyhow::anyhow!(error)))?;
+    {
+        let mut pairs = parsed.query_pairs_mut();
+        for item in query {
+            pairs.append_pair(&item.name, &literal_runtime_value(&item.value)?);
+        }
+    }
+    Ok(parsed.into())
+}
+
+fn runtime_skills_to_session_skills(
     skills: &[RuntimeSkill],
     runtime_mcp_servers: &[RuntimeMcpServer],
     mcp_servers: &[SessionMcpServer],
-    mcp_binding_summaries: &[SessionMcpBindingSummary],
     artifacts: &HashMap<&str, &RuntimeArtifactPayload>,
-) -> Result<Option<SessionPluginBundle>, RuntimeConfigError> {
-    if skills.is_empty() {
-        return Ok(None);
-    }
+) -> Result<Vec<RuntimeConfigSessionSkill>, RuntimeConfigError> {
     let mut server_names = BTreeMap::new();
     for server in runtime_mcp_servers {
         server_names.insert(server.id.clone(), server.server_name.clone());
@@ -419,27 +565,17 @@ fn runtime_skills_to_plugin_bundle(
             }
         }
     }
-    let plugin_skills = skills
+    skills
         .iter()
         .map(|skill| runtime_skill_to_session_skill(skill, artifacts, &server_names))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(Some(SessionPluginBundle {
-        plugins: vec![SessionPlugin {
-            plugin_id: "runtime-config".to_string(),
-            version: None,
-            skills: plugin_skills,
-            mcp_servers: mcp_servers.to_vec(),
-            mcp_binding_summaries: mcp_binding_summaries.to_vec(),
-            credential_bindings: Vec::new(),
-        }],
-    }))
+        .collect::<Result<Vec<_>, _>>()
 }
 
 fn runtime_skill_to_session_skill(
     skill: &RuntimeSkill,
     artifacts: &HashMap<&str, &RuntimeArtifactPayload>,
     server_names: &BTreeMap<String, String>,
-) -> Result<SessionPluginSkill, RuntimeConfigError> {
+) -> Result<RuntimeConfigSessionSkill, RuntimeConfigError> {
     let instruction = artifacts
         .get(skill.instruction_artifact.hash.as_str())
         .ok_or_else(|| {
@@ -452,12 +588,13 @@ fn runtime_skill_to_session_skill(
             let payload = artifacts
                 .get(resource.hash.as_str())
                 .ok_or_else(|| RuntimeConfigError::MissingArtifact(resource.hash.clone()))?;
-            Ok(SessionPluginSkillResource {
+            Ok(RuntimeConfigSessionSkillResource {
                 resource_id: resource
-                    .source_ref
+                    .resource_id
                     .clone()
+                    .or_else(|| resource.source_ref.clone())
                     .unwrap_or_else(|| resource.hash.clone()),
-                display_name: resource.source_ref.clone(),
+                display_name: resource.display_name.clone(),
                 content_type: payload.content_type.clone(),
                 content: payload.content.clone(),
             })
@@ -468,14 +605,14 @@ fn runtime_skill_to_session_skill(
         .iter()
         .map(|id| server_names.get(id).cloned().unwrap_or_else(|| id.clone()))
         .collect();
-    Ok(SessionPluginSkill {
+    Ok(RuntimeConfigSessionSkill {
         skill_id: skill.id.clone(),
         display_name: skill.display_name.clone(),
         description: skill.description.clone(),
         instructions: instruction.content.clone(),
         resources,
         required_mcp_servers,
-        credential_binding_ids: Vec::new(),
+        credential_binding_ids: skill.credential_refs.clone(),
     })
 }
 
@@ -525,18 +662,13 @@ mod tests {
         assert_eq!(inputs.mcp_servers.len(), 1);
         assert_eq!(inputs.mcp_binding_summaries.expect("summaries").len(), 1);
         assert_eq!(
-            inputs
-                .plugin_bundle
-                .expect("plugin bundle")
-                .plugins
-                .first()
-                .expect("plugin")
-                .skills
-                .first()
-                .expect("skill")
-                .instructions,
+            inputs.context.skills.first().expect("skill").instructions,
             "# Use GitHub\n"
         );
+        let skill = inputs.context.skills.first().expect("skill");
+        let resource = skill.resources.first().expect("resource");
+        assert_eq!(resource.resource_id, "triage-guide");
+        assert_eq!(resource.display_name.as_deref(), Some("Triage guide"));
 
         let stale = service.session_inputs_for_expected(&RuntimeConfigRevisionExpectation {
             revision_id: "rev-old".to_string(),
@@ -579,6 +711,51 @@ mod tests {
     }
 
     #[test]
+    fn runtime_http_query_values_are_included_in_session_url() {
+        let db = Db::open_in_memory().expect("db");
+        let service = RuntimeConfigService::new(RuntimeConfigStore::new(db));
+        let mut request = apply_request();
+        request.manifest.mcp_servers[0].launch = RuntimeMcpLaunch::Http {
+            url: RuntimeMcpValue::Literal {
+                value: "https://example.test/mcp?existing=1".to_string(),
+            },
+            headers: Vec::new(),
+            query: vec![
+                RuntimeMcpNamedValue {
+                    name: "api_key".to_string(),
+                    value: RuntimeMcpValue::Literal {
+                        value: "secret value".to_string(),
+                    },
+                },
+                RuntimeMcpNamedValue {
+                    name: "team".to_string(),
+                    value: RuntimeMcpValue::Literal {
+                        value: "eng".to_string(),
+                    },
+                },
+            ],
+        };
+        service.apply_config(request.clone()).expect("apply");
+
+        let inputs = service
+            .session_inputs_for_expected(&RuntimeConfigRevisionExpectation {
+                revision_id: request.revision.id.clone(),
+                sequence: Some(request.revision.sequence),
+                content_hash: request.revision.content_hash.clone(),
+                external_scope: request.revision.external_scope.clone(),
+            })
+            .expect("runtime inputs");
+
+        let SessionMcpServer::Http(server) = inputs.mcp_servers.first().expect("mcp server") else {
+            panic!("expected HTTP MCP server");
+        };
+        assert_eq!(
+            server.url,
+            "https://example.test/mcp?existing=1&api_key=secret+value&team=eng"
+        );
+    }
+
+    #[test]
     fn python_manifest_shape_deserializes() {
         let raw = serde_json::json!({
             "mcpServers": [{
@@ -618,6 +795,16 @@ mod tests {
             content_type: "text/markdown".to_string(),
             byte_size: 13,
             source_ref: Some("plugin:github:instructions".to_string()),
+            resource_id: None,
+            display_name: None,
+        };
+        let resource = RuntimeArtifactRef {
+            hash: "sha256:guide".to_string(),
+            content_type: "text/markdown".to_string(),
+            byte_size: 11,
+            source_ref: Some("plugin:github:resource:guide".to_string()),
+            resource_id: Some("triage-guide".to_string()),
+            display_name: Some("Triage guide".to_string()),
         };
         ApplyRuntimeConfigRequest {
             revision: RuntimeConfigRevision {
@@ -665,20 +852,33 @@ mod tests {
                     display_name: "Use GitHub".to_string(),
                     description: "Use GitHub".to_string(),
                     instruction_artifact: artifact.clone(),
-                    resources: Vec::new(),
+                    resources: vec![resource.clone()],
                     required_mcp_server_ids: vec!["conn-1".to_string()],
                     credential_refs: Vec::new(),
                 }],
-                artifacts: vec![artifact],
+                artifacts: vec![artifact, resource],
                 warnings: Vec::new(),
             },
-            artifact_payloads: vec![RuntimeArtifactPayload {
-                hash: "sha256:instructions".to_string(),
-                content_type: "text/markdown".to_string(),
-                byte_size: 13,
-                source_ref: Some("plugin:github:instructions".to_string()),
-                content: "# Use GitHub\n".to_string(),
-            }],
+            artifact_payloads: vec![
+                RuntimeArtifactPayload {
+                    hash: "sha256:instructions".to_string(),
+                    content_type: "text/markdown".to_string(),
+                    byte_size: 13,
+                    source_ref: Some("plugin:github:instructions".to_string()),
+                    resource_id: None,
+                    display_name: None,
+                    content: "# Use GitHub\n".to_string(),
+                },
+                RuntimeArtifactPayload {
+                    hash: "sha256:guide".to_string(),
+                    content_type: "text/markdown".to_string(),
+                    byte_size: 11,
+                    source_ref: Some("plugin:github:resource:guide".to_string()),
+                    resource_id: Some("triage-guide".to_string()),
+                    display_name: Some("Triage guide".to_string()),
+                    content: "Use issues.".to_string(),
+                },
+            ],
             source: RuntimeConfigSource::Worker,
         }
     }

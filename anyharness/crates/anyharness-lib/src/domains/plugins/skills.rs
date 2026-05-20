@@ -1,30 +1,24 @@
-use crate::domains::plugins::{
-    SessionPlugin, SessionPluginBundle, SessionPluginSkill, SessionPluginSkillResource,
+use crate::domains::runtime_config::model::{
+    RuntimeConfigSessionContext, RuntimeConfigSessionSkill,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
 
 pub const SKILLS_MCP_SERVER_NAME: &str = "proliferate_skills";
 pub const SKILLS_MCP_CONNECTION_ID: &str = "proliferate-skills";
-pub const PRODUCT_SKILLS_PLUGIN_ID: &str = "proliferate.product.skills";
-pub const SUBAGENTS_WORKFLOW_SKILL_ID: &str = "proliferate.subagents.workflow";
 
-pub fn bundle_has_skills(bundle: &SessionPluginBundle) -> bool {
-    bundle
-        .plugins
-        .iter()
-        .any(|plugin| !plugin.skills.is_empty())
+pub fn context_has_skills(context: &RuntimeConfigSessionContext) -> bool {
+    !context.skills.is_empty()
 }
 
-pub fn iter_skills(bundle: &SessionPluginBundle) -> impl Iterator<Item = &SessionPluginSkill> {
-    bundle
-        .plugins
-        .iter()
-        .flat_map(|plugin| plugin.skills.iter())
+pub fn iter_skills(
+    context: &RuntimeConfigSessionContext,
+) -> impl Iterator<Item = &RuntimeConfigSessionSkill> {
+    context.skills.iter()
 }
 
-pub fn render_skill_index(bundle: &SessionPluginBundle) -> Option<String> {
-    let skills = iter_skills(bundle).collect::<Vec<_>>();
+pub fn render_skill_index(context: &RuntimeConfigSessionContext) -> Option<String> {
+    let skills = iter_skills(context).collect::<Vec<_>>();
     if skills.is_empty() {
         return None;
     }
@@ -46,36 +40,8 @@ pub fn render_skill_index(bundle: &SessionPluginBundle) -> Option<String> {
     Some(lines.join("\n"))
 }
 
-pub fn effective_bundle_with_product_skills(
-    mut bundle: SessionPluginBundle,
-    product_skills: Vec<SessionPluginSkill>,
-) -> SessionPluginBundle {
-    bundle
-        .plugins
-        .retain(|plugin| plugin.plugin_id != PRODUCT_SKILLS_PLUGIN_ID);
-    if !product_skills.is_empty() {
-        bundle.plugins.push(SessionPlugin {
-            plugin_id: PRODUCT_SKILLS_PLUGIN_ID.to_string(),
-            version: Some("1".to_string()),
-            mcp_servers: Vec::new(),
-            mcp_binding_summaries: Vec::new(),
-            credential_bindings: Vec::new(),
-            skills: product_skills,
-        });
-    }
-    bundle
-}
-
-pub fn product_skills_for_session(subagents_workflow_available: bool) -> Vec<SessionPluginSkill> {
-    let mut skills = Vec::new();
-    if subagents_workflow_available {
-        skills.push(subagents_workflow_skill());
-    }
-    skills
-}
-
-pub fn list_available_skills(bundle: &SessionPluginBundle) -> Value {
-    let skills = iter_skills(bundle)
+pub fn list_available_skills(context: &RuntimeConfigSessionContext) -> Value {
+    let skills = iter_skills(context)
         .map(|skill| {
             json!({
                 "skillId": skill.skill_id,
@@ -90,9 +56,12 @@ pub fn list_available_skills(bundle: &SessionPluginBundle) -> Value {
     json!({ "skills": skills })
 }
 
-pub fn activate_skill(bundle: &SessionPluginBundle, skill_id: &str) -> anyhow::Result<Value> {
-    let skill =
-        find_skill(bundle, skill_id).ok_or_else(|| anyhow::anyhow!("unknown skill: {skill_id}"))?;
+pub fn activate_skill(
+    context: &RuntimeConfigSessionContext,
+    skill_id: &str,
+) -> anyhow::Result<Value> {
+    let skill = find_skill(context, skill_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown skill: {skill_id}"))?;
     Ok(json!({
         "skillId": skill.skill_id,
         "displayName": skill.display_name,
@@ -109,12 +78,12 @@ pub fn activate_skill(bundle: &SessionPluginBundle, skill_id: &str) -> anyhow::R
 }
 
 pub fn get_skill_resource(
-    bundle: &SessionPluginBundle,
+    context: &RuntimeConfigSessionContext,
     skill_id: &str,
     resource_id: &str,
 ) -> anyhow::Result<Value> {
-    let skill =
-        find_skill(bundle, skill_id).ok_or_else(|| anyhow::anyhow!("unknown skill: {skill_id}"))?;
+    let skill = find_skill(context, skill_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown skill: {skill_id}"))?;
     let resource = skill
         .resources
         .iter()
@@ -143,67 +112,19 @@ pub struct GetSkillResourceArgs {
 }
 
 fn find_skill<'a>(
-    bundle: &'a SessionPluginBundle,
+    context: &'a RuntimeConfigSessionContext,
     skill_id: &str,
-) -> Option<&'a SessionPluginSkill> {
-    iter_skills(bundle).find(|skill| skill.skill_id == skill_id)
+) -> Option<&'a RuntimeConfigSessionSkill> {
+    iter_skills(context).find(|skill| skill.skill_id == skill_id)
 }
-
-fn subagents_workflow_skill() -> SessionPluginSkill {
-    SessionPluginSkill {
-        skill_id: SUBAGENTS_WORKFLOW_SKILL_ID.to_string(),
-        display_name: "Subagent workflow".to_string(),
-        description:
-            "Delegate bounded work to same-workspace subagents and read their results safely."
-                .to_string(),
-        instructions: SUBAGENTS_WORKFLOW_INSTRUCTIONS.to_string(),
-        resources: vec![SessionPluginSkillResource {
-            resource_id: "tool-flow".to_string(),
-            display_name: Some("Subagent tool flow".to_string()),
-            content_type: "text/markdown".to_string(),
-            content: SUBAGENTS_WORKFLOW_TOOL_FLOW.to_string(),
-        }],
-        required_mcp_servers: vec!["subagents".to_string()],
-        credential_binding_ids: Vec::new(),
-    }
-}
-
-const SUBAGENTS_WORKFLOW_INSTRUCTIONS: &str = r#"# Subagent Workflow
-
-Use subagents for bounded, parallel work where the child can produce a concrete result without needing your immediate next decision.
-
-Default flow:
-
-1. Call `get_subagent_launch_options` before choosing a non-default `harnessId` or `initialConfig`.
-2. Call `create_subagent` with a short `label`, the full authored `prompt`, and `wakeOnCompletion: true` when you want to be prompted after the next child completion.
-3. Use the returned `subagentId` as the handle for later calls. Legacy `childSessionId` fields are compatibility details.
-4. Prefer `read_subagent_latest_turns` for normal result reads.
-5. Use `search_subagent_transcript` when you need to find a specific mention.
-6. Use `read_subagent_events` only for bounded debugging.
-7. Call `close_subagent` when the child is no longer useful.
-
-Keep delegated tasks narrow. Do not send a subagent work that depends on hidden context it cannot access. When reporting a child result, read it first and cite the child label or `subagentId`.
-"#;
-
-const SUBAGENTS_WORKFLOW_TOOL_FLOW: &str = r#"# Subagent Tool Flow
-
-`create_subagent` starts a same-workspace child session and returns `subagentId`, `label`, applied config, prompt status, wake status, and a recommended read cursor.
-
-`send_subagent_message` sends or queues follow-up work. `wakeOnCompletion` is next-completion scoped: it prevents missed wakes after arming, but it is not a per-prompt completion guarantee if the child is already running.
-
-`read_subagent_latest_turns` is the normal result reader. `search_subagent_transcript` is the grep path. `read_subagent_events` is the raw bounded debug path.
-"#;
 
 #[cfg(test)]
 mod tests {
-    use crate::domains::plugins::{
-        SessionPlugin, SessionPluginBundle, SessionPluginSkill, SessionPluginSkillResource,
-    };
+    use anyharness_contract::v1::RuntimeConfigRevision;
 
-    use super::{
-        activate_skill, effective_bundle_with_product_skills, get_skill_resource,
-        list_available_skills, product_skills_for_session, render_skill_index,
-        PRODUCT_SKILLS_PLUGIN_ID,
+    use super::{activate_skill, get_skill_resource, list_available_skills, render_skill_index};
+    use crate::domains::runtime_config::model::{
+        RuntimeConfigSessionContext, RuntimeConfigSessionSkill, RuntimeConfigSessionSkillResource,
     };
 
     #[test]
@@ -244,44 +165,29 @@ mod tests {
         assert!(get_skill_resource(&bundle(), "connector.conn_github.triage", "missing").is_err());
     }
 
-    #[test]
-    fn product_skills_replace_previous_product_skill_bundle() {
-        let first =
-            effective_bundle_with_product_skills(bundle(), product_skills_for_session(true));
-        let second = effective_bundle_with_product_skills(first, product_skills_for_session(true));
-
-        assert_eq!(
-            second
-                .plugins
-                .iter()
-                .filter(|plugin| plugin.plugin_id == PRODUCT_SKILLS_PLUGIN_ID)
-                .count(),
-            1,
-        );
-    }
-
-    fn bundle() -> SessionPluginBundle {
-        SessionPluginBundle {
-            plugins: vec![SessionPlugin {
-                plugin_id: "connector.conn_github".to_string(),
-                version: Some("1".to_string()),
-                mcp_servers: Vec::new(),
-                mcp_binding_summaries: Vec::new(),
-                credential_bindings: Vec::new(),
-                skills: vec![SessionPluginSkill {
-                    skill_id: "connector.conn_github.triage".to_string(),
-                    display_name: "GitHub triage".to_string(),
-                    description: "Inspect GitHub state.".to_string(),
-                    instructions: "# GitHub triage".to_string(),
-                    resources: vec![SessionPluginSkillResource {
-                        resource_id: "guide".to_string(),
-                        display_name: Some("Guide".to_string()),
-                        content_type: "text/markdown".to_string(),
-                        content: "Use narrow queries.".to_string(),
-                    }],
-                    required_mcp_servers: vec!["github".to_string()],
-                    credential_binding_ids: vec!["conn_github".to_string()],
+    fn bundle() -> RuntimeConfigSessionContext {
+        RuntimeConfigSessionContext {
+            revision: RuntimeConfigRevision {
+                id: "rev-1".to_string(),
+                sequence: 1,
+                content_hash: "sha256:manifest".to_string(),
+                external_scope: None,
+            },
+            mcp_servers: Vec::new(),
+            mcp_binding_summaries: Vec::new(),
+            skills: vec![RuntimeConfigSessionSkill {
+                skill_id: "connector.conn_github.triage".to_string(),
+                display_name: "GitHub triage".to_string(),
+                description: "Inspect GitHub state.".to_string(),
+                instructions: "# GitHub triage".to_string(),
+                resources: vec![RuntimeConfigSessionSkillResource {
+                    resource_id: "guide".to_string(),
+                    display_name: Some("Guide".to_string()),
+                    content_type: "text/markdown".to_string(),
+                    content: "Use narrow queries.".to_string(),
                 }],
+                required_mcp_servers: vec!["github".to_string()],
+                credential_binding_ids: vec!["conn_github".to_string()],
             }],
         }
     }
