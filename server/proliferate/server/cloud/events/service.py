@@ -55,6 +55,13 @@ class SessionProjectionPatch:
     ended_at: str | None = None
 
 
+@dataclass(frozen=True)
+class ProjectionIngestPolicy:
+    projection_level: str
+    live_fanout: bool
+    transcript_rows: bool
+
+
 async def ingest_worker_event_batch(
     db: AsyncSession,
     *,
@@ -90,16 +97,36 @@ async def ingest_worker_event_batch(
             cloud_workspace_by_session[event.session_id] = cloud_workspace_id
 
         received_by_session[event.session_id].append(event.seq)
-        if not await _projection_allows_ingest(
+        policy = await _projection_ingest_policy(
             db,
             target_id=auth.target_id,
             session_id=event.session_id,
-        ):
+        )
+        if policy is None:
             live_only_events += 1
             continue
         payload_decision = retained_payload(current_event_type, envelope)
         if not payload_decision.durable:
             live_only_events += 1
+            continue
+        if policy.projection_level == "session_summaries" and not _updates_session_summary(
+            current_event_type
+        ):
+            live_only_events += 1
+            continue
+        if policy.projection_level == "session_summaries":
+            accepted_events += 1
+            patch = await _apply_projection(
+                db,
+                auth=auth,
+                cloud_workspace_id=cloud_workspace_id,
+                workspace_id=current_workspace_id,
+                envelope=envelope,
+                payload_json=None,
+                include_transcript=False,
+            )
+            if policy.live_fanout:
+                projection_patches.append(patch)
             continue
         event_count, payload_bytes = await events_store.get_session_event_usage(
             db,
@@ -148,16 +175,17 @@ async def ingest_worker_event_batch(
             duplicate_events += 1
             continue
         accepted_events += 1
-        projection_patches.append(
-            await _apply_projection(
-                db,
-                auth=auth,
-                cloud_workspace_id=cloud_workspace_id,
-                workspace_id=current_workspace_id,
-                envelope=envelope,
-                payload_json=payload_decision.payload_json,
-            )
+        patch = await _apply_projection(
+            db,
+            auth=auth,
+            cloud_workspace_id=cloud_workspace_id,
+            workspace_id=current_workspace_id,
+            envelope=envelope,
+            payload_json=payload_decision.payload_json,
+            include_transcript=policy.transcript_rows,
         )
+        if policy.live_fanout:
+            projection_patches.append(patch)
 
     session_acks: list[WorkerEventSessionAck] = []
     for session_id, seqs in received_by_session.items():
@@ -194,24 +222,41 @@ async def ingest_worker_event_batch(
     )
 
 
-async def _projection_allows_ingest(
+async def _projection_ingest_policy(
     db: AsyncSession,
     *,
     target_id: UUID,
     session_id: str,
-) -> bool:
+) -> ProjectionIngestPolicy | None:
     projection = await events_store.get_session_projection(
         db,
         target_id=target_id,
         session_id=session_id,
     )
     if projection is None or projection.exposure_id is None:
-        return True
+        return None
     exposure = await exposures_store.get_workspace_exposure_by_id(
         db,
         projection.exposure_id,
     )
-    return exposure is not None and exposure.archived_at is None and exposure.status == "active"
+    if exposure is None or exposure.archived_at is not None or exposure.status != "active":
+        return None
+    return ProjectionIngestPolicy(
+        projection_level=projection.projection_level,
+        live_fanout=projection.projection_level == "live",
+        transcript_rows=projection.projection_level in {"transcript", "live"},
+    )
+
+
+def _updates_session_summary(event_type_value: str) -> bool:
+    return event_type_value in {
+        "session_started",
+        "session_ended",
+        "turn_started",
+        "turn_ended",
+        "session_info_update",
+        "config_option_update",
+    }
 
 
 async def get_session_snapshot(
@@ -330,6 +375,7 @@ async def _apply_projection(
     workspace_id: str | None,
     envelope: dict[str, object],
     payload_json: str | None,
+    include_transcript: bool,
 ) -> CloudSessionPatchResponse:
     session_id = str(envelope["sessionId"])
     seq = _int_value(envelope["seq"])
@@ -359,7 +405,7 @@ async def _apply_projection(
     transcript_item = None
     pending_interaction = None
 
-    if current_event_type in {"item_started", "item_completed"}:
+    if include_transcript and current_event_type in {"item_started", "item_completed"}:
         item_id = transcript_item_id(envelope)
         if item_id is not None:
             item = transcript_item_payload(event_payload)
@@ -381,7 +427,7 @@ async def _apply_projection(
                 payload_json=payload_json,
                 completed=current_event_type == "item_completed",
             )
-    elif current_event_type == "interaction_requested":
+    elif include_transcript and current_event_type == "interaction_requested":
         request_id = _str_or_none(event_payload.get("requestId"))
         if request_id:
             pending_interaction = await events_store.upsert_pending_interaction(
@@ -398,7 +444,7 @@ async def _apply_projection(
                 description=_str_or_none(event_payload.get("description")),
                 payload_json=payload_json,
             )
-    elif current_event_type == "interaction_resolved":
+    elif include_transcript and current_event_type == "interaction_resolved":
         request_id = _str_or_none(event_payload.get("requestId"))
         if request_id:
             pending_interaction = await events_store.resolve_pending_interaction(

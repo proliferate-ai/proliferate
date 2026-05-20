@@ -13,9 +13,9 @@ pub struct WorkerStore {
 #[derive(Debug, Clone)]
 pub struct ProjectionCursorUpsert {
     pub exposure_id: String,
-    pub session_projection_id: Option<String>,
+    pub session_projection_id: String,
     pub anyharness_workspace_id: String,
-    pub anyharness_session_id: Option<String>,
+    pub anyharness_session_id: String,
     pub projection_level: String,
     pub commandable: bool,
     pub last_uploaded_seq: i64,
@@ -25,7 +25,7 @@ pub struct ProjectionCursorUpsert {
 #[derive(Debug, Clone)]
 pub struct ProjectionCursor {
     pub exposure_id: String,
-    pub session_projection_id: Option<String>,
+    pub session_projection_id: String,
     pub anyharness_workspace_id: String,
     pub anyharness_session_id: String,
     pub projection_level: String,
@@ -116,10 +116,10 @@ impl WorkerStore {
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS worker_projection_cursor (
-                exposure_id TEXT PRIMARY KEY,
-                session_projection_id TEXT,
+                session_projection_id TEXT PRIMARY KEY,
+                exposure_id TEXT NOT NULL,
                 anyharness_workspace_id TEXT NOT NULL,
-                anyharness_session_id TEXT,
+                anyharness_session_id TEXT NOT NULL,
                 projection_level TEXT NOT NULL,
                 commandable INTEGER NOT NULL CHECK (commandable IN (0, 1)),
                 last_uploaded_seq INTEGER NOT NULL DEFAULT 0,
@@ -186,6 +186,7 @@ impl WorkerStore {
             "gap_state_json",
             "gap_state_json TEXT",
         )?;
+        ensure_projection_cursor_keyed_by_projection(&conn)?;
         Ok(())
     }
 
@@ -318,8 +319,8 @@ impl WorkerStore {
             tx.execute(
                 r#"
                 INSERT INTO worker_projection_cursor (
-                    exposure_id,
                     session_projection_id,
+                    exposure_id,
                     anyharness_workspace_id,
                     anyharness_session_id,
                     projection_level,
@@ -331,8 +332,7 @@ impl WorkerStore {
                     updated_at
                 )
                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8, NULL, CURRENT_TIMESTAMP)
-                ON CONFLICT(exposure_id) DO UPDATE SET
-                    session_projection_id = excluded.session_projection_id,
+                ON CONFLICT(session_projection_id) DO UPDATE SET
                     anyharness_workspace_id = excluded.anyharness_workspace_id,
                     anyharness_session_id = excluded.anyharness_session_id,
                     projection_level = excluded.projection_level,
@@ -361,8 +361,8 @@ impl WorkerStore {
                     updated_at = CURRENT_TIMESTAMP
                 "#,
                 params![
-                    cursor.exposure_id,
                     cursor.session_projection_id,
+                    cursor.exposure_id,
                     cursor.anyharness_workspace_id,
                     cursor.anyharness_session_id,
                     cursor.projection_level,
@@ -381,8 +381,8 @@ impl WorkerStore {
         let mut stmt = conn.prepare(
             r#"
             SELECT
-                exposure_id,
                 session_projection_id,
+                exposure_id,
                 anyharness_workspace_id,
                 anyharness_session_id,
                 projection_level,
@@ -391,15 +391,14 @@ impl WorkerStore {
                 last_ack_seq
             FROM worker_projection_cursor
             WHERE status = 'active'
-              AND anyharness_session_id IS NOT NULL
               AND gap_state_json IS NULL
             ORDER BY updated_at DESC
             "#,
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(ProjectionCursor {
-                exposure_id: row.get(0)?,
-                session_projection_id: row.get(1)?,
+                session_projection_id: row.get(0)?,
+                exposure_id: row.get(1)?,
                 anyharness_workspace_id: row.get(2)?,
                 anyharness_session_id: row.get(3)?,
                 projection_level: row.get(4)?,
@@ -437,7 +436,7 @@ impl WorkerStore {
 
     pub fn record_projection_cursor_gap(
         &self,
-        exposure_id: &str,
+        session_projection_id: &str,
         expected_seq: i64,
         first_observed_seq: i64,
     ) -> Result<(), WorkerError> {
@@ -453,9 +452,9 @@ impl WorkerStore {
             UPDATE worker_projection_cursor
             SET gap_state_json = ?2,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE exposure_id = ?1
+            WHERE session_projection_id = ?1
             "#,
-            params![exposure_id, gap_state_json],
+            params![session_projection_id, gap_state_json],
         )?;
         Ok(())
     }
@@ -589,6 +588,51 @@ fn add_column_if_missing(
     Ok(())
 }
 
+fn ensure_projection_cursor_keyed_by_projection(conn: &Connection) -> Result<(), WorkerError> {
+    let mut stmt = conn.prepare("PRAGMA table_info(worker_projection_cursor)")?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(1)?, row.get::<_, i64>(5)?))
+    })?;
+    let mut primary_key_column = None;
+    for row in rows {
+        let (name, primary_key_order) = row?;
+        if primary_key_order > 0 {
+            primary_key_column = Some(name);
+            break;
+        }
+    }
+    if primary_key_column.as_deref() == Some("session_projection_id") {
+        return Ok(());
+    }
+    conn.execute("DROP TABLE IF EXISTS worker_projection_cursor", [])?;
+    conn.execute(
+        r#"
+        CREATE TABLE worker_projection_cursor (
+            session_projection_id TEXT PRIMARY KEY,
+            exposure_id TEXT NOT NULL,
+            anyharness_workspace_id TEXT NOT NULL,
+            anyharness_session_id TEXT NOT NULL,
+            projection_level TEXT NOT NULL,
+            commandable INTEGER NOT NULL CHECK (commandable IN (0, 1)),
+            last_uploaded_seq INTEGER NOT NULL DEFAULT 0,
+            last_ack_seq INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'active',
+            gap_state_json TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        "#,
+        [],
+    )?;
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS ix_worker_projection_cursor_active_session
+            ON worker_projection_cursor(status, anyharness_session_id)
+        "#,
+        [],
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -605,9 +649,8 @@ mod tests {
         let store = test_store();
         store
             .reconcile_projection_cursors(&[
-                cursor("exposure-active", Some("session-1"), "active", 4),
-                cursor("exposure-workspace-only", None, "active", 0),
-                cursor("exposure-paused", Some("session-2"), "paused", 0),
+                cursor("exposure-active", "session-1", "active", 4),
+                cursor("exposure-paused", "session-2", "paused", 0),
             ])
             .expect("reconcile");
 
@@ -632,7 +675,7 @@ mod tests {
     fn projection_cursor_ack_is_monotonic() {
         let store = test_store();
         store
-            .reconcile_projection_cursors(&[cursor("exposure-1", Some("session-1"), "active", 4)])
+            .reconcile_projection_cursors(&[cursor("exposure-1", "session-1", "active", 4)])
             .expect("reconcile");
 
         store
@@ -653,10 +696,10 @@ mod tests {
     fn projection_cursor_gap_removes_cursor_from_active_tail_set_until_repaired() {
         let store = test_store();
         store
-            .reconcile_projection_cursors(&[cursor("exposure-1", Some("session-1"), "active", 4)])
+            .reconcile_projection_cursors(&[cursor("exposure-1", "session-1", "active", 4)])
             .expect("reconcile");
         store
-            .record_projection_cursor_gap("exposure-1", 5, 8)
+            .record_projection_cursor_gap("projection-session-1", 5, 8)
             .expect("gap");
         assert!(store
             .list_active_projection_cursors()
@@ -664,7 +707,7 @@ mod tests {
             .is_empty());
 
         store
-            .reconcile_projection_cursors(&[cursor("exposure-1", Some("session-1"), "active", 8)])
+            .reconcile_projection_cursors(&[cursor("exposure-1", "session-1", "active", 8)])
             .expect("repair reconcile");
         let cursors = store
             .list_active_projection_cursors()
@@ -673,17 +716,38 @@ mod tests {
         assert_eq!(cursors[0].last_uploaded_seq, 8);
     }
 
+    #[test]
+    fn projection_cursors_are_keyed_by_session_projection() {
+        let store = test_store();
+        store
+            .reconcile_projection_cursors(&[
+                cursor("exposure-1", "session-1", "active", 2),
+                cursor("exposure-1", "session-2", "active", 5),
+            ])
+            .expect("reconcile");
+
+        let mut cursors = store
+            .list_active_projection_cursors()
+            .expect("active cursors");
+        cursors.sort_by(|left, right| left.anyharness_session_id.cmp(&right.anyharness_session_id));
+        assert_eq!(cursors.len(), 2);
+        assert_eq!(cursors[0].session_projection_id, "projection-session-1");
+        assert_eq!(cursors[0].last_uploaded_seq, 2);
+        assert_eq!(cursors[1].session_projection_id, "projection-session-2");
+        assert_eq!(cursors[1].last_uploaded_seq, 5);
+    }
+
     fn cursor(
         exposure_id: &str,
-        session_id: Option<&str>,
+        session_id: &str,
         status: &str,
         last_uploaded_seq: i64,
     ) -> ProjectionCursorUpsert {
         ProjectionCursorUpsert {
             exposure_id: exposure_id.to_string(),
-            session_projection_id: session_id.map(|id| format!("projection-{id}")),
+            session_projection_id: format!("projection-{session_id}"),
             anyharness_workspace_id: "workspace-1".to_string(),
-            anyharness_session_id: session_id.map(ToOwned::to_owned),
+            anyharness_session_id: session_id.to_string(),
             projection_level: "live".to_string(),
             commandable: true,
             last_uploaded_seq,
