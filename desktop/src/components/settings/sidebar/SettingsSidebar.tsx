@@ -32,7 +32,7 @@ interface SettingsSidebarProps {
 }
 
 const SETTINGS_SIDEBAR_ROOT_CLASS =
-  "flex h-full w-[300px] shrink-0 select-none flex-col border-r border-sidebar-border bg-sidebar";
+  "flex h-full w-[300px] shrink-0 select-none flex-col border-r border-sidebar-border bg-sidebar-background";
 const SETTINGS_NAV_CLASS = "flex-1 overflow-y-auto px-2.5 pb-4";
 const SETTINGS_GROUPS_CLASS = "flex flex-col";
 const SETTINGS_GROUP_CLASS = "flex flex-col gap-0.5";

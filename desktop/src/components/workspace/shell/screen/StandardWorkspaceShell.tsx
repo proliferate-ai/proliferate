@@ -201,7 +201,7 @@ export function StandardWorkspaceShell() {
             >
               <div
                 id="main-sidebar"
-                className="flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out"
+                className="flex shrink-0 flex-col overflow-hidden bg-sidebar-background transition-[width] duration-150 ease-in-out"
                 style={{ width: sidebarOpen ? sidebarWidth : 0 }}
               >
                 <DebugProfiler id="workspace-sidebar-frame">
