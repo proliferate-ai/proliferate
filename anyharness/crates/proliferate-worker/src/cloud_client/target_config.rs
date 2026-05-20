@@ -71,7 +71,7 @@ pub struct RuntimeConfigCredentialMaterializationResponse {
 impl fmt::Debug for RuntimeConfigCredentialMaterializationResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RuntimeConfigCredentialMaterializationResponse")
-            .field("credentials", &self.credentials)
+            .field("credential_count", &self.credentials.len())
             .field("missing_credential_refs", &self.missing_credential_refs)
             .finish()
     }
