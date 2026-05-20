@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.mcp import (
@@ -52,13 +52,19 @@ async def _connection_record(
 ) -> CloudMcpConnectionRecord:
     return CloudMcpConnectionRecord(
         id=record.id,
-        user_id=record.user_id,
-        org_id=record.org_id,
+        owner_scope=record.owner_scope,
+        owner_user_id=record.owner_user_id,
+        organization_id=record.organization_id,
         connection_id=record.connection_id,
         catalog_entry_id=record.catalog_entry_id,
         catalog_entry_version=record.catalog_entry_version,
         server_name=record.server_name,
         enabled=record.enabled,
+        public_to_org=record.public_to_org,
+        public_organization_id=record.public_organization_id,
+        public_status=record.public_status,
+        public_updated_at=record.public_updated_at,
+        public_updated_by_user_id=record.public_updated_by_user_id,
         settings_json=record.settings_json,
         config_version=record.config_version,
         payload_ciphertext=record.payload_ciphertext,
@@ -78,7 +84,8 @@ async def _get_connection_orm(
     return (
         await db.execute(
             select(CloudMcpConnection).where(
-                CloudMcpConnection.user_id == user_id,
+                CloudMcpConnection.owner_scope == "personal",
+                CloudMcpConnection.owner_user_id == user_id,
                 CloudMcpConnection.connection_id == connection_id,
             )
         )
@@ -93,7 +100,10 @@ async def list_user_connections(
         (
             await db.execute(
                 select(CloudMcpConnection)
-                .where(CloudMcpConnection.user_id == user_id)
+                .where(
+                    CloudMcpConnection.owner_scope == "personal",
+                    CloudMcpConnection.owner_user_id == user_id,
+                )
                 .order_by(CloudMcpConnection.updated_at.desc())
             )
         )
@@ -123,7 +133,8 @@ async def get_user_connection_by_db_id(
         await db.execute(
             select(CloudMcpConnection).where(
                 CloudMcpConnection.id == connection_db_id,
-                CloudMcpConnection.user_id == user_id,
+                CloudMcpConnection.owner_scope == "personal",
+                CloudMcpConnection.owner_user_id == user_id,
             )
         )
     ).scalar_one_or_none()
@@ -151,8 +162,9 @@ async def upsert_user_connection(
     )
     if connection is None:
         connection = CloudMcpConnection(
-            user_id=user_id,
-            org_id=None,
+            owner_scope="personal",
+            owner_user_id=user_id,
+            organization_id=None,
             connection_id=connection_id or str(uuid.uuid4()),
             catalog_entry_id=catalog_entry_id,
             catalog_entry_version=catalog_entry_version,
@@ -193,6 +205,10 @@ async def patch_user_connection(
     settings_json: str | None = None,
     server_name: str | None = None,
     catalog_entry_version: int | None = None,
+    public_to_org: bool | None = None,
+    public_organization_id: UUID | None = None,
+    public_status: str | None = None,
+    public_updated_by_user_id: UUID | None = None,
 ) -> CloudMcpConnectionRecord | None:
     connection = await _get_connection_orm(db, user_id, connection_id)
     if connection is None:
@@ -213,7 +229,21 @@ async def patch_user_connection(
     ):
         connection.catalog_entry_version = catalog_entry_version
         changed = True
+    if public_to_org is not None and connection.public_to_org != public_to_org:
+        connection.public_to_org = public_to_org
+        changed = True
+    if public_organization_id != connection.public_organization_id:
+        connection.public_organization_id = public_organization_id
+        changed = True
+    if public_status is not None and connection.public_status != public_status:
+        connection.public_status = public_status
+        changed = True
+    if public_updated_by_user_id != connection.public_updated_by_user_id:
+        connection.public_updated_by_user_id = public_updated_by_user_id
+        changed = True
     if changed:
+        if public_to_org is not None or public_status is not None:
+            connection.public_updated_at = utcnow()
         connection.config_version += 1
         connection.updated_at = utcnow()
     await db.flush()
@@ -237,3 +267,56 @@ async def delete_user_connection(
     )
     await db.delete(connection)
     await db.flush()
+
+
+async def list_enabled_connections_for_personal_profile(
+    db: AsyncSession,
+    user_id: UUID,
+) -> tuple[CloudMcpConnectionRecord, ...]:
+    records = list(
+        (
+            await db.execute(
+                select(CloudMcpConnection)
+                .where(
+                    CloudMcpConnection.owner_scope == "personal",
+                    CloudMcpConnection.owner_user_id == user_id,
+                    CloudMcpConnection.enabled.is_(True),
+                )
+                .order_by(CloudMcpConnection.updated_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple([await _connection_record(db, record) for record in records])
+
+
+async def list_enabled_connections_for_organization_profile(
+    db: AsyncSession,
+    organization_id: UUID,
+) -> tuple[CloudMcpConnectionRecord, ...]:
+    records = list(
+        (
+            await db.execute(
+                select(CloudMcpConnection)
+                .where(
+                    CloudMcpConnection.enabled.is_(True),
+                    or_(
+                        (
+                            (CloudMcpConnection.owner_scope == "organization")
+                            & (CloudMcpConnection.organization_id == organization_id)
+                        ),
+                        (
+                            (CloudMcpConnection.public_to_org.is_(True))
+                            & (CloudMcpConnection.public_organization_id == organization_id)
+                            & (CloudMcpConnection.public_status == "public")
+                        ),
+                    ),
+                )
+                .order_by(CloudMcpConnection.updated_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple([await _connection_record(db, record) for record in records])

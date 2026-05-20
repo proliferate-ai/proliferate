@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::{AgentAuthExternalScope, OriginContext};
+use super::{AgentAuthExternalScope, OriginContext, RuntimeConfigRevisionExpectation};
 use super::{
     ContentPart, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
     PermissionInteractionOption, PromptProvenance, SessionLiveConfigSnapshot,
@@ -160,6 +160,8 @@ pub struct CreateSessionRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub required_agent_auth_revision: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_runtime_config_revision: Option<RuntimeConfigRevisionExpectation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode_id: Option<String>,
@@ -250,6 +252,13 @@ impl fmt::Debug for CreateSessionRequest {
             .field("agent_kind", &self.agent_kind)
             .field("model_id", &self.model_id)
             .field("mode_id", &self.mode_id)
+            .field(
+                "expected_runtime_config_revision",
+                &self
+                    .expected_runtime_config_revision
+                    .as_ref()
+                    .map(|revision| &revision.revision_id),
+            )
             .field(
                 "system_prompt_append_count",
                 &self
@@ -361,6 +370,8 @@ pub struct SubagentCompletionSummary {
 #[serde(rename_all = "camelCase")]
 pub struct ResumeSessionRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_runtime_config_revision: Option<RuntimeConfigRevisionExpectation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_servers: Option<Vec<SessionMcpServer>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
@@ -371,6 +382,13 @@ pub struct ResumeSessionRequest {
 impl fmt::Debug for ResumeSessionRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ResumeSessionRequest")
+            .field(
+                "expected_runtime_config_revision",
+                &self
+                    .expected_runtime_config_revision
+                    .as_ref()
+                    .map(|revision| &revision.revision_id),
+            )
             .field(
                 "mcp_server_count",
                 &self.mcp_servers.as_ref().map(|servers| servers.len()),
@@ -671,6 +689,7 @@ mod tests {
             agent_kind: "claude".to_string(),
             agent_auth_scope: None,
             required_agent_auth_revision: None,
+            expected_runtime_config_revision: None,
             model_id: Some("default".to_string()),
             mode_id: Some("bypassPermissions".to_string()),
             system_prompt_append: Some(vec!["Rename the branch".to_string()]),

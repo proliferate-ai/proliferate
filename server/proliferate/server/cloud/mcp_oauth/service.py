@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.cloud_mcp import CLOUD_MCP_OAUTH_FLOW_TTL
+from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.cloud_mcp.auth import upsert_connection_auth
 from proliferate.db.store.cloud_mcp.connections import (
     get_user_connection_by_db_id,
@@ -409,4 +410,19 @@ async def complete_cloud_mcp_oauth_callback(
         token_expires_at=token.expires_at,
     )
     await complete_oauth_flow(db, flow_id=flow.id)
+    from proliferate.server.cloud.runtime_config.service import (  # noqa: PLC0415
+        refresh_profile_runtime_config,
+    )
+
+    profile = await sandbox_profile_store.ensure_personal_sandbox_profile(
+        db,
+        user_id=connection.user_id,
+        created_by_user_id=connection.user_id,
+    )
+    await refresh_profile_runtime_config(
+        db,
+        sandbox_profile_id=profile.id,
+        actor_user_id=connection.user_id,
+        reason="mcp_oauth_completed",
+    )
     return CloudMcpOAuthCallbackResult(ok=True, status="completed")

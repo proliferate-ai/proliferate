@@ -19,6 +19,8 @@ async def assert_current_schema(
         "cloud_mcp_connection_auth",
         "cloud_mcp_oauth_client",
         "cloud_mcp_oauth_flow",
+        "cloud_plugin_configured_item",
+        "cloud_skill_configured_item",
         "cloud_credential",
         "cloud_workspace_handoff_op",
         "cloud_workspace_mobility",
@@ -34,6 +36,9 @@ async def assert_current_schema(
         "sandbox_agent_auth_selection",
         "sandbox_profile",
         "sandbox_profile_agent_auth_revision",
+        "sandbox_profile_runtime_config_artifact",
+        "sandbox_profile_runtime_config_current",
+        "sandbox_profile_runtime_config_revision",
         "sandbox_profile_target_state",
         "cloud_worktree_retention_policy",
         "cloud_workspace",
@@ -288,13 +293,74 @@ async def assert_current_schema(
         }
     )
     assert {
-        "org_id",
+        "owner_scope",
+        "owner_user_id",
+        "organization_id",
         "catalog_entry_version",
         "server_name",
         "enabled",
+        "public_to_org",
+        "public_organization_id",
+        "public_status",
         "settings_json",
         "config_version",
     } <= mcp_connection_columns
+    mcp_connection_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints("cloud_mcp_connection")
+        }
+    )
+    assert {
+        "ck_cloud_mcp_connection_owner_fields",
+        "ck_cloud_mcp_connection_public",
+        "ck_cloud_mcp_connection_owner_scope",
+        "ck_cloud_mcp_connection_public_status",
+    } <= mcp_connection_checks
+    mcp_connection_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("cloud_mcp_connection")
+        }
+    )
+    assert {
+        "uq_cloud_mcp_connection_personal_connection_id",
+        "uq_cloud_mcp_connection_organization_connection_id",
+    } <= mcp_connection_indexes
+
+    skill_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints(
+                "cloud_skill_configured_item"
+            )
+        }
+    )
+    assert {
+        "ck_skill_configured_owner_fields",
+        "ck_skill_configured_public",
+        "ck_skill_configured_source_kind",
+    } <= skill_checks
+
+    plugin_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints(
+                "cloud_plugin_configured_item"
+            )
+        }
+    )
+    assert {
+        "ck_plugin_configured_owner_fields",
+        "ck_plugin_configured_public",
+    } <= plugin_checks
+
+    runtime_config_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("sandbox_profile_runtime_config_revision")
+        }
+    )
+    assert "ix_runtime_config_revision_profile_created" in runtime_config_indexes
 
     agent_auth_indexes = await conn.run_sync(
         lambda sync_conn: {
