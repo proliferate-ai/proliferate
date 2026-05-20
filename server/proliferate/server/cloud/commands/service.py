@@ -171,9 +171,9 @@ async def _populate_agent_auth_preflight_payload(
     }:
         return payload
     if target.sandbox_profile_id is None:
-        return payload
-    if "sandboxProfileId" in payload and "requiredAgentAuthRevision" in payload:
-        return payload
+        next_payload = dict(payload)
+        next_payload.pop("agentAuthScope", None)
+        return next_payload
     state = await agent_auth_store.get_target_state(
         db,
         sandbox_profile_id=target.sandbox_profile_id,
@@ -187,8 +187,16 @@ async def _populate_agent_auth_preflight_payload(
     else:
         required_revision = state.desired_revision
     next_payload = dict(payload)
-    next_payload.setdefault("sandboxProfileId", str(target.sandbox_profile_id))
-    next_payload.setdefault("requiredAgentAuthRevision", required_revision)
+    next_payload["sandboxProfileId"] = str(target.sandbox_profile_id)
+    next_payload["requiredAgentAuthRevision"] = required_revision
+    if kind == CloudCommandKind.start_session.value:
+        next_payload["agentAuthScope"] = {
+            "provider": "proliferate-cloud",
+            "id": str(target.sandbox_profile_id),
+            "targetId": str(target.id),
+        }
+    else:
+        next_payload.pop("agentAuthScope", None)
     return next_payload
 
 

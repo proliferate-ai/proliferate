@@ -43,6 +43,7 @@ from proliferate.db.store.cloud_agent_auth.records import (
     AgentGatewayPolicyRecord,
     AgentGatewayProviderCredentialRecord,
     AgentGatewayRuntimeGrantRecord,
+    LegacyCloudCredentialRecord,
     SandboxAgentAuthSelectionRecord,
     SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
@@ -92,6 +93,7 @@ _CLEANUP_SELECTION_ERROR_CODES = {
     "credential_share_revoked",
     "legacy_cloud_credential_revoked",
 }
+_LEGACY_CLAUDE_ENV_UNSUPPORTED_CODE = "legacy_claude_env_requires_native_files"
 _OPENCODE_ALLOWED_AUTH_FILES: frozenset[str] = frozenset({".config/opencode/auth.json"})
 
 
@@ -1673,6 +1675,7 @@ async def _backfill_legacy_cloud_credentials(
         for selection in await store.list_selections_for_profile(db, profile.id)
     }
     for legacy in active_legacy_by_id.values():
+        import_status, redacted_summary = _legacy_import_status_and_summary(legacy)
         credential = await store.find_agent_auth_credential_for_legacy_cloud_credential(
             db,
             legacy.id,
@@ -1687,14 +1690,8 @@ async def _backfill_legacy_cloud_credentials(
                 agent_kind=legacy.provider,
                 credential_kind="synced_path",
                 display_name=f"Synced {legacy.provider} auth",
-                redacted_summary_json=json.dumps(
-                    {
-                        "source": "cloud_credential",
-                        "authMode": legacy.auth_mode,
-                    },
-                    sort_keys=True,
-                ),
-                status="ready",
+                redacted_summary_json=json.dumps(redacted_summary, sort_keys=True),
+                status=import_status,
                 legacy_cloud_credential_id=legacy.id,
             )
             await store.record_audit_event(
@@ -1720,20 +1717,42 @@ async def _backfill_legacy_cloud_credentials(
                 await store.update_credential_status(
                     db,
                     credential_id=credential.id,
-                    status="ready",
+                    status=import_status,
                     redacted_summary_json=json.dumps(
-                        {
-                            "source": "cloud_credential",
-                            "authMode": legacy.auth_mode,
-                        },
+                        redacted_summary,
                         sort_keys=True,
                     ),
                 )
                 or credential
             )
             imported_credential_ids.add(credential.id)
-            changed = True
+            if import_status == "ready":
+                changed = True
         if credential.revoked_at is not None:
+            continue
+        if credential.status != "ready":
+            selection = existing_selections.get(legacy.provider)
+            if (
+                selection is not None
+                and selection.credential_id == credential.id
+                and selection.status == "active"
+            ):
+                await store.mark_selection_invalid(
+                    db,
+                    selection_id=selection.id,
+                    error_code=_LEGACY_CLAUDE_ENV_UNSUPPORTED_CODE,
+                    error_message=(
+                        "Legacy Claude environment credentials must be re-synced as "
+                        "native Claude auth files before sandbox use."
+                    ),
+                )
+                await _bump_profile_for_selection(
+                    db,
+                    selection,
+                    actor_user_id=actor_user_id,
+                    reason=_LEGACY_CLAUDE_ENV_UNSUPPORTED_CODE,
+                    force_restart=True,
+                )
             continue
         selection = existing_selections.get(legacy.provider)
         should_select = False
@@ -1778,6 +1797,24 @@ async def _backfill_legacy_cloud_credentials(
             force_restart=False,
         )
     return updated or profile
+
+
+def _legacy_import_status_and_summary(
+    legacy: LegacyCloudCredentialRecord,
+) -> tuple[str, dict[str, object]]:
+    summary: dict[str, object] = {
+        "source": "cloud_credential",
+        "authMode": legacy.auth_mode,
+    }
+    if legacy.provider == "claude" and legacy.auth_mode == "env":
+        summary.update(
+            {
+                "statusReason": _LEGACY_CLAUDE_ENV_UNSUPPORTED_CODE,
+                "needsAction": "sync_claude_native_auth_files",
+            }
+        )
+        return "needs_resync", summary
+    return "ready", summary
 
 
 async def _reconcile_managed_budget_subject(
