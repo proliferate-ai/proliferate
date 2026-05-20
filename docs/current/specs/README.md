@@ -1,9 +1,9 @@
 # Cloud / Shared Sandbox Spec Pack
 
 Status: active implementation spec pack for the cloud/shared-sandbox
-architecture. Specs `00` through `05` are the current implementation
-contract; specs `06` through `10` are planned follow-on specs and must be
-written before those surfaces are implemented.
+architecture. Specs `00` through `10` are the current implementation
+contract. Implement them in dependency order; do not start a downstream
+surface until its upstream data model and command contracts are in place.
 
 Date: 2026-05-20.
 
@@ -23,9 +23,6 @@ spec assumes the foundation is in place.
 03-settings-admin-ia.md           Settings/Admin information architecture and shared UI primitives.
 04-cloud-running-alignment.md     Cloud command queue, worker dispatch, projection, preflight.
 05-claiming.md                    Shared unclaimed work, claim ownership, Desktop direct-attach tokens.
-
-Planned; not yet implementation specs:
-
 06-automations.md                 Scheduled/triggered work that reuses sandbox/auth/command primitives.
 07-slack-bot.md                   Slack bot as a team-automation entrypoint.
 08-web-mobile-dispatch.md         Cloud-mediated web/mobile clients and remote-access UX.
@@ -107,6 +104,16 @@ sandbox_profile_runtime_config_revision
 agent_auth_revision
   Selected per-harness auth materialization plan for a sandbox profile.
 
+cloud_agent_run_config
+  Named agent launch/session configuration shared by automations, Slack,
+  web/mobile new chat, and Desktop cloud starts. Spec 06 owns the table and
+  catalog validation rules.
+
+cloud_agent_run_config_default
+  Explicit server-side default pointer per personal user or organization and
+  agent kind. Do not model these defaults in `organization_settings` or
+  desktop-local preferences.
+
 exposure
   Cloud policy admission for a runtime workspace/session: whether Cloud can
   list, project, and dispatch commands to it. Owned by
@@ -136,6 +143,11 @@ migration / move
 billing_subject
   Entitlement holder. Personal subject per user. Organization subject per org.
   Slots, workspaces, and managed-credit budgets are billed to the subject.
+
+cloud_api_key
+  Cowork/dispatch API token introduced by spec 08. Keys are HMAC-stored,
+  scoped by explicit `scopes_json`, and are never equivalent to blanket org
+  admin credentials.
 ```
 
 ## Dependency Graph
@@ -186,6 +198,27 @@ when the spec is responsible for the enforcement point.
 - **UI lands with its backend slice.** Plugins UI lands with spec 01. Agent
   auth UI lands with spec 02. Compute readiness UI lands with spec 00.
   Claim UI lands with spec 05. Dispatch UI lands with spec 08.
+- **Server auth is the security boundary.** UI helpers such as
+  `useIsAdmin(org)` may hide controls, but server specs must state the
+  concrete role/policy check, usually active org role in
+  `organization_admin_roles()`.
+- **Repo paths are repo-relative.** Alembic migrations live under
+  `server/alembic/versions/`. Server tests live under `server/tests/`.
+  Product app paths should be written as `web/`, `mobile/`, `cloud/sdk/`,
+  etc., not machine-local absolute paths.
+
+## Implementation Posture
+
+The preferred rollout is **one implementation PR per spec**, in dependency
+order. A spec's chunks are review checkpoints inside that PR. They may be
+split into smaller PRs only when the split does not leave duplicate models,
+dead paths, partially wired security checks, or visible inert UI.
+
+Specs `01` and `02` can start in parallel after the spec `00` foundation
+contract lands. Spec `03` can build shared IA primitives in parallel, but
+visible panes still land with their backing feature slices. Specs `04` and
+later should not invent alternate upstream models if their dependency is not
+merged yet; wait or update the upstream spec.
 
 ## Migration Posture
 
@@ -305,10 +338,11 @@ Each spec follows this layout:
 7.  Implementation Phases / Chunks
 8.  Acceptance Criteria
 9.  Verification / Tests
-10. Open Questions                (only if genuinely unresolved)
+10. Final Decisions / Deferred Questions
 ```
 
 Each section is grounded in the current repository code as of `2026-05-20`.
 Where a planning note describes something that does not yet exist in code,
 the spec says so explicitly under "Current Repo State" and treats it as new
-work.
+work. Section 10 is not a place for unresolved blockers: it records final V1
+decisions and explicitly deferred V2/follow-up questions.

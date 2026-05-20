@@ -847,7 +847,7 @@ Server (Python):
 server/proliferate/db/models/billing.py
   + FreeCloudAllocation
 
-server/proliferate/db/migrations/versions/<NEW>_billing_alignment.py
+server/alembic/versions/<NEW>_billing_alignment.py
   - free_cloud_allocation table
 
 server/proliferate/db/store/billing.py
@@ -981,7 +981,7 @@ Chunk G  Sidebar billing badge (small Desktop polish)
 Chunk H  Tests + smoke
 ```
 
-All chunks land in one PR.
+Preferred implementation is one PR per spec. Chunks are review checkpoints inside that PR and may be split only when the split does not leave duplicate models, dead paths, partially wired security checks, or visible inert UI.
 
 ## 8. Acceptance Criteria
 
@@ -1068,43 +1068,43 @@ uv run pytest -q
 Targeted server tests:
 
 ```text
-tests/server/cloud/runtime/test_wake_hook_consults_billing.py
+server/tests/cloud/runtime/test_wake_hook_consults_billing.py
   - paused slot + active billing_hold('credits_exhausted')
     -> command transitions to failed_delivery sandbox_wake_blocked
   - paused slot + allowed -> wake proceeds
-tests/server/billing/test_free_trial_github_dedup.py
+server/tests/billing/test_free_trial_github_dedup.py
   - missing github_identity -> github_required_for_free_trial
   - first issuance succeeds
   - second account same github -> github_identity_already_used
-tests/server/billing/test_managed_credit_budget_from_plan.py
+server/tests/billing/test_managed_credit_budget_from_plan.py
   - free org -> free budget
   - pro org -> pro budget
   - unlimited org -> unlimited budget
   - billing_entitlement custom_managed_credit_budget overrides
-tests/server/billing/test_subscription_updated_triggers_reconcile.py
-tests/server/billing/test_cancel_downgrades_at_period_boundary.py
-tests/server/billing/test_subscription_deleted_clean_cancel_no_hold.py
+server/tests/billing/test_subscription_updated_triggers_reconcile.py
+server/tests/billing/test_cancel_downgrades_at_period_boundary.py
+server/tests/billing/test_subscription_deleted_clean_cancel_no_hold.py
   - cancellation_details.reason='cancellation_requested',
     prior_status='active' -> no payment_failed hold; budget
     schedules downgrade at period_end
-tests/server/billing/test_subscription_deleted_payment_failure_holds.py
+server/tests/billing/test_subscription_deleted_payment_failure_holds.py
   - prior_status='past_due' -> payment_failed hold; budget
     preserved until period_end
-tests/server/billing/test_subscription_deleted_immediate_cancel.py
+server/tests/billing/test_subscription_deleted_immediate_cancel.py
   - effective_at < current_period_end with no paid entitlement
     -> immediate downgrade; hold only if payment problem
-tests/server/billing/test_github_link_preserves_link_denies_trial.py
+server/tests/billing/test_github_link_preserves_link_denies_trial.py
   - link succeeds even when GitHub id used elsewhere
   - free_trial_v2 grant denied with github_identity_already_used
-tests/server/billing/test_invoice_upcoming_emits_decision_event.py
-tests/server/billing/test_trial_will_end_emits_decision_event.py
-tests/server/cloud/webhooks/test_e2b_timeout_closes_segment.py
-tests/server/cloud/workspaces/test_response_includes_billing_envelope.py
-tests/server/cloud/live/test_billing_patch_on_hold_change.py
-tests/server/billing/test_existing_authorize_sandbox_start_unchanged.py
-tests/server/billing/test_no_new_plan_entitlement_table.py
+server/tests/billing/test_invoice_upcoming_emits_decision_event.py
+server/tests/billing/test_trial_will_end_emits_decision_event.py
+server/tests/cloud/webhooks/test_e2b_timeout_closes_segment.py
+server/tests/cloud/workspaces/test_response_includes_billing_envelope.py
+server/tests/cloud/live/test_billing_patch_on_hold_change.py
+server/tests/billing/test_existing_authorize_sandbox_start_unchanged.py
+server/tests/billing/test_no_new_plan_entitlement_table.py
   -- structural test that plan_entitlement schema is NOT introduced
-tests/server/billing/test_no_compute_subject_period_table.py
+server/tests/billing/test_no_compute_subject_period_table.py
 ```
 
 Web:
@@ -1196,12 +1196,12 @@ Manual smoke:
    - no billing_hold inserted
 ```
 
-## 10. Open Questions
+## 10. Final Decisions / Deferred Questions
 
 1. **Should the free trial dedup also gate `team_trial`?**
 
    V1 only `personal_free` is in use. `team_trial` would gate
-   when teams get a trial. Bias: yes, mirror the personal logic
+   when teams get a trial. Decision: yes, mirror the personal logic
    when team trial ships; same table, different `allocation_kind`.
 
 2. **`customer.subscription.deleted` is reason-sensitive.**
@@ -1271,7 +1271,7 @@ Manual smoke:
 5. **Should `invoice.upcoming` and `trial_will_end` immediately
    publish billing patches, or batch?**
 
-   Bias: immediate publish. UI surfaces these as banners; latency
+   Decision: immediate publish. UI surfaces these as banners; latency
    matters more than throughput here.
 
 6. **Should the LLM credits hard cap stay forever, or is V2

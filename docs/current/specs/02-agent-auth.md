@@ -1039,9 +1039,11 @@ Tests in §9.
 
 ## 7. Implementation Phases
 
-```text
-All chunks land in one PR. Phases here describe build-order inside that
-PR, not staged rollout.
+Preferred implementation is one PR per spec. Chunks are review
+checkpoints inside that PR and may be split only when the split does
+not leave duplicate models, dead paths, partially wired security
+checks, or visible inert UI. Phases here describe build-order inside
+that PR, not staged rollout.
 
 ```text
 Chunk A  Rebind to spec 00
@@ -1319,7 +1321,7 @@ Manual smoke cases:
         the next scoped launch fails closed; UI prompts reconnect
 ```
 
-## 10. Open Questions
+## 10. Final Decisions / Deferred Questions
 
 1. **Should `auth_status != 'ready'` on a publicized MCP be blocker or
    warning?** That belongs in spec 01 — answered there. For agent auth,
@@ -1329,7 +1331,7 @@ Manual smoke cases:
 2. **Should the rename of agent-auth target state columns ship inside
    the spec 00 migration or as a Phase 0 follow-up here?**
 
-   Bias: ship in spec 00's migration so the agent-auth service does not
+   Decision: ship in spec 00's migration so the agent-auth service does not
    live across two table shapes. Spec 02's Phase 0 is purely the
    Python/Rust code path update.
 
@@ -1351,7 +1353,7 @@ Manual smoke cases:
 5. **Should the capability API also expose runtime config flags
    (per-spec-01)?**
 
-   Bias: keep `GET /v1/cloud/capabilities` narrow to gateway/agent-auth
+   Decision: keep `GET /v1/cloud/capabilities` narrow to gateway/agent-auth
    in V1. Spec 01 can add a sibling endpoint or expand this one in
    Phase 5; either is fine.
 
@@ -1365,7 +1367,7 @@ Manual smoke cases:
 7. **Should we add a `force_restart_required` query parameter on the
    selection PUT for admins?**
 
-   Bias: yes — admin "force rotate" is a known UX need. Default false;
+   Decision: yes — admin "force rotate" is a known UX need. Default false;
    when true, bump revision and queue `refresh_agent_auth_config` with
    `force_restart=true`.
 

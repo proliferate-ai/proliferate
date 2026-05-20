@@ -1317,7 +1317,7 @@ desktop/src/lib/access/anyharness/sessions.ts
 The runtime substrate must be reliable before product state is layered on.
 Phases are ordered to keep launches fail-closed at each step.
 
-All chunks land in one PR. Phases here describe build-order inside that
+Preferred implementation is one PR per spec. Chunks are review checkpoints inside that PR and may be split only when the split does not leave duplicate models, dead paths, partially wired security checks, or visible inert UI. Phases here describe build-order inside that
 PR, not staged rollout.
 
 ```text
@@ -1583,12 +1583,12 @@ Manual smoke cases:
      -> session launches successfully
 ```
 
-## 10. Open Questions
+## 10. Final Decisions / Deferred Questions
 
 1. **Persist `cloud_plugin_configured_item` in V1, or always materialize
    into child MCPs/skills only?**
 
-   Bias: ship the table, but treat it as a thin grouping marker. Reasons:
+   Decision: ship the table, but treat it as a thin grouping marker. Reasons:
    - "Plugin installed" is a real product concept (Settings/Admin IA wants
      a Plugins list).
    - Uninstall/re-enable is cleaner when there is a parent row.
@@ -1597,7 +1597,7 @@ Manual smoke cases:
 
 2. **MCP `auth_status != 'ready'` — blocker or warning by default?**
 
-   Bias: blocker for personal profile if the user explicitly enabled the
+   Decision: blocker for personal profile if the user explicitly enabled the
    MCP (it cannot do its job without auth). Warning for org profile
    public-to-org cases when the source has not been reconnected (avoids
    blocking the whole shared sandbox on one bad connection). Make it
@@ -1614,20 +1614,20 @@ Manual smoke cases:
 4. **Should the spec add `materialize_environment_runtime_config` as a
    dedicated command kind?**
 
-   Bias: no in V1. Extending `materialize_environment` is correct cost
+   Decision: no in V1. Extending `materialize_environment` is correct cost
    for the benefit. Revisit when independent retry or independent
    metering of runtime-config applies becomes important.
 
 5. **Where should the Settings UI live for skills?**
 
-   Bias: as a section inside the Plugins page (so plugin-provided skills
+   Decision: as a section inside the Plugins page (so plugin-provided skills
    live next to their plugin) plus a top-level "Skills" tab for
    user-authored skills. Spec 03 (Settings/Admin IA) makes the final
    call.
 
 6. **Should user-authored skills land in V1?**
 
-   Bias: no. `cloud_skill_configured_item.skill_source_kind='user'` and
+   Decision: no. `cloud_skill_configured_item.skill_source_kind='user'` and
    `user_skill_payload_ref` are reserved for future use. Phase 5 UI
    does not expose creation; it shows catalog and plugin-provided skills
    only.
