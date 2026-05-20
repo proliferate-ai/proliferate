@@ -99,9 +99,11 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
 export const ChatView = memo(function ChatView({
   shellRenderSurface = null,
   showWorkspaceFooter = true,
+  showWorkspaceStatusPanels = true,
 }: {
   shellRenderSurface?: WorkspaceRenderSurface | null;
   showWorkspaceFooter?: boolean;
+  showWorkspaceStatusPanels?: boolean;
 }) {
   useDebugRenderCount("chat-surface");
   const { mode } = useChatSurfaceState(shellRenderSurface);
@@ -116,6 +118,7 @@ export const ChatView = memo(function ChatView({
   const isSessionMode = shouldShowSessionInputChrome(mode);
   const composerDockSlots = useComposerDockSlots({
     suppressSessionSlots,
+    suppressWorkspaceStatusPanels: !showWorkspaceStatusPanels,
   });
   const promptCapabilities = suppressComposerActiveSessionState
     ? null

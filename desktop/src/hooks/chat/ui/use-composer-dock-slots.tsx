@@ -25,8 +25,10 @@ export interface ComposerDockSlots {
 
 export function useComposerDockSlots(options?: {
   suppressSessionSlots?: boolean;
+  suppressWorkspaceStatusPanels?: boolean;
 }): ComposerDockSlots {
   const suppressSessionSlots = options?.suppressSessionSlots ?? false;
+  const suppressWorkspaceStatusPanels = options?.suppressWorkspaceStatusPanels ?? false;
   const { primaryPendingInteraction } = useActivePendingInteractionState();
   const pendingPrompts = useActivePendingPrompts();
   const activeTodoTracker = useActiveTodoTracker();
@@ -45,12 +47,14 @@ export function useComposerDockSlots(options?: {
   ), [primaryPendingInteraction?.kind]);
 
   const ambientContextSlot = useMemo<ReactNode | null>(() => (
-    workspaceStatusPanel
+    suppressWorkspaceStatusPanels
+      ? null
+      : workspaceStatusPanel
       ? <WorkspaceArrivalAttachedPanel />
       : selectedCloudRuntime.state && selectedCloudRuntime.state.phase !== "ready"
         ? <CloudRuntimeAttachedPanel />
         : null
-  ), [selectedCloudRuntime.state, workspaceStatusPanel]);
+  ), [selectedCloudRuntime.state, suppressWorkspaceStatusPanels, workspaceStatusPanel]);
   const activeAgentSlot = useMemo<ReactNode | null>(() => (
     suppressSessionSlots
       ? null

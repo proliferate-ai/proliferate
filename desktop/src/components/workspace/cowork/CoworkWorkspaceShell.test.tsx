@@ -8,7 +8,10 @@ import { CoworkWorkspaceShell } from "@/components/workspace/cowork/CoworkWorksp
 const chatViewRender = vi.hoisted(() => vi.fn());
 
 vi.mock("@/components/workspace/chat/ChatView", () => ({
-  ChatView: (props: { showWorkspaceFooter?: boolean }) => {
+  ChatView: (props: {
+    showWorkspaceFooter?: boolean;
+    showWorkspaceStatusPanels?: boolean;
+  }) => {
     chatViewRender(props);
     return <div data-testid="chat-view" />;
   },
@@ -123,7 +126,7 @@ afterEach(() => {
 });
 
 describe("CoworkWorkspaceShell", () => {
-  it("renders chat without the standard workspace footer", () => {
+  it("renders chat without standard workspace composer panels", () => {
     render(
       <CoworkWorkspaceShell
         workspaceId="workspace-cowork"
@@ -132,7 +135,10 @@ describe("CoworkWorkspaceShell", () => {
     );
 
     expect(chatViewRender).toHaveBeenCalledWith(
-      expect.objectContaining({ showWorkspaceFooter: false }),
+      expect.objectContaining({
+        showWorkspaceFooter: false,
+        showWorkspaceStatusPanels: false,
+      }),
     );
   });
 });
