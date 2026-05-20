@@ -200,16 +200,16 @@
   --color-prose-border: hsl(25 7% 26%);
 
   /* -- Sidebar -- */
-  --color-sidebar: hsl(24 9% 12%);
-  --color-sidebar-background: hsl(24 9% 12%);
-  --color-sidebar-foreground: hsl(0 0% 100% / 0.9);
-  --color-sidebar-primary: hsl(30 8% 91%);
-  --color-sidebar-primary-foreground: hsl(30 0% 100%);
-  --color-sidebar-muted-foreground: hsl(0 0% 100% / 0.6);
-  --color-sidebar-accent: hsl(0 0% 100% / 0.05);
-  --color-sidebar-accent-foreground: hsl(0 0% 100% / 0.9);
-  --color-sidebar-border: hsl(0 0% 100% / 0.1);
-  --color-sidebar-ring: hsl(20 6% 72%);
+  --color-sidebar: #141414;
+  --color-sidebar-background: #141414;
+  --color-sidebar-foreground: #ffffff;
+  --color-sidebar-primary: #ffffff;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-muted-foreground: rgba(255, 255, 255, 0.481);
+  --color-sidebar-accent: rgba(255, 255, 255, 0.074);
+  --color-sidebar-accent-foreground: #ffffff;
+  --color-sidebar-border: rgba(255, 255, 255, 0.079);
+  --color-sidebar-ring: rgba(127, 193, 255, 0.747);
   --color-sidebar-blue: hsl(213 94% 68%);
 
   /* -- Status -- */
@@ -534,14 +534,14 @@
   /* -- Sidebar -- */
   --color-sidebar: #141414;
   --color-sidebar-background: #141414;
-  --color-sidebar-foreground: rgba(255, 255, 255, 0.82);
+  --color-sidebar-foreground: #ffffff;
   --color-sidebar-primary: #ffffff;
   --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-muted-foreground: rgba(255, 255, 255, 0.42);
-  --color-sidebar-accent: rgba(255, 255, 255, 0.038);
-  --color-sidebar-accent-foreground: rgba(255, 255, 255, 0.9);
-  --color-sidebar-border: rgba(255, 255, 255, 0.066);
-  --color-sidebar-ring: rgba(131, 195, 255, 0.76);
+  --color-sidebar-muted-foreground: rgba(255, 255, 255, 0.481);
+  --color-sidebar-accent: rgba(255, 255, 255, 0.074);
+  --color-sidebar-accent-foreground: #ffffff;
+  --color-sidebar-border: rgba(255, 255, 255, 0.079);
+  --color-sidebar-ring: rgba(127, 193, 255, 0.747);
   --color-sidebar-blue: #339cff;
 
   /* -- Status -- */
@@ -662,14 +662,14 @@
 
   --color-sidebar: #141414;
   --color-sidebar-background: #141414;
-  --color-sidebar-foreground: color-mix(in oklab, #ffffff 82%, transparent);
+  --color-sidebar-foreground: #ffffff;
   --color-sidebar-primary: #ffffff;
   --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-muted-foreground: color-mix(in oklab, #ffffff 50%, transparent);
-  --color-sidebar-accent: color-mix(in oklab, #ffffff 5%, transparent);
+  --color-sidebar-muted-foreground: rgba(255, 255, 255, 0.481);
+  --color-sidebar-accent: rgba(255, 255, 255, 0.074);
   --color-sidebar-accent-foreground: #ffffff;
-  --color-sidebar-border: color-mix(in oklab, #ffffff 8%, transparent);
-  --color-sidebar-ring: color-mix(in oklab, #339cff 70%, transparent);
+  --color-sidebar-border: rgba(255, 255, 255, 0.079);
+  --color-sidebar-ring: rgba(127, 193, 255, 0.747);
   --color-sidebar-blue: #339cff;
 
   --color-git-green: #40c977;

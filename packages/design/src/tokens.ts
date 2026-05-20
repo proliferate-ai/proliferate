@@ -41,11 +41,11 @@ export const colors = {
   infoForeground: "#ffffff",
   sidebar: "#141414",
   sidebarBackground: "#141414",
-  sidebarForeground: "rgba(255,255,255,0.82)",
-  sidebarMutedForeground: "rgba(255,255,255,0.42)",
-  sidebarAccent: "rgba(255,255,255,0.05)",
+  sidebarForeground: "#ffffff",
+  sidebarMutedForeground: "rgba(255,255,255,0.481)",
+  sidebarAccent: "rgba(255,255,255,0.074)",
   sidebarAccentForeground: "#ffffff",
-  sidebarBorder: "rgba(255,255,255,0.084)",
+  sidebarBorder: "rgba(255,255,255,0.079)",
   sidebarBlue: "#339cff",
 } as const;
 
