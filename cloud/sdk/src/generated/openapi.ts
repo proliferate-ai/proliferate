@@ -571,6 +571,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cloud Capabilities Endpoint */
+        get: operations["cloud_capabilities_endpoint_v1_cloud_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workspaces": {
         parameters: {
             query?: never;
@@ -2936,6 +2953,27 @@ export interface components {
             /** Lasterrormessage */
             lastErrorMessage: string | null;
         };
+        /** AgentGatewayCapabilities */
+        AgentGatewayCapabilities: {
+            /** Enabled */
+            enabled: boolean;
+            /** Managedcreditsenabled */
+            managedCreditsEnabled: boolean;
+            /** Defaultmanagedbudgetusd */
+            defaultManagedBudgetUsd: string | null;
+            /** Byokenabled */
+            byokEnabled: boolean;
+            /** Anthropicbyokenabled */
+            anthropicByokEnabled: boolean;
+            /** Openaibyokenabled */
+            openaiByokEnabled: boolean;
+            /** Bedrockbyokenabled */
+            bedrockByokEnabled: boolean;
+            /** Openaicompatiblebyokenabled */
+            openaiCompatibleByokEnabled: boolean;
+            /** Opencodeenabled */
+            opencodeEnabled: boolean;
+        };
         /** AgentGatewayPolicyResponse */
         AgentGatewayPolicyResponse: {
             /**
@@ -3390,6 +3428,10 @@ export interface components {
             id_token: string;
             /** User */
             user?: string | null;
+        };
+        /** CloudCapabilitiesResponse */
+        CloudCapabilitiesResponse: {
+            agentGateway: components["schemas"]["AgentGatewayCapabilities"];
         };
         /** CloudCommandResponse */
         CloudCommandResponse: {
@@ -6092,6 +6134,8 @@ export interface components {
             currentRevision?: number | null;
             /** Targetid */
             targetId?: string | null;
+            /** Slotgeneration */
+            slotGeneration?: number | null;
             /**
              * Sandboxprofileid
              * Format: uuid
@@ -6115,6 +6159,8 @@ export interface components {
             credentialId: string;
             /** Credentialrevision */
             credentialRevision: number;
+            /** Status */
+            status?: string | null;
             /** Credentialshareid */
             credentialShareId?: string | null;
             gateway?: components["schemas"]["WorkerAgentAuthGatewayConfig"] | null;
@@ -6141,6 +6187,8 @@ export interface components {
             errorCode?: string | null;
             /** Errormessage */
             errorMessage?: string | null;
+            /** Appliedcleanuppaths */
+            appliedCleanupPaths?: string[];
         };
         /** WorkerAgentAuthStatusResponse */
         WorkerAgentAuthStatusResponse: {
@@ -8158,6 +8206,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cloud_capabilities_endpoint_v1_cloud_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudCapabilitiesResponse"];
                 };
             };
         };

@@ -418,6 +418,8 @@ async def assert_current_schema(
     assert {
         "uq_agent_gateway_runtime_grant_token_hash",
         "ix_agent_gateway_runtime_grant_target_profile_agent",
+        "ix_agent_gateway_runtime_grant_cloud_sandbox_id",
+        "ix_agent_gateway_runtime_grant_slot",
     } <= runtime_grant_indexes
 
     version = await conn.scalar(text("SELECT version_num FROM alembic_version"))

@@ -966,6 +966,42 @@ class TestCloudCommandsApi:
         assert created.json()["detail"]["code"] == "cloud_command_internal_only"
 
     @pytest.mark.asyncio
+    async def test_managed_profile_preflight_blocks_revision_zero_without_state(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-agent-auth-revision-zero",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="agent-auth-revision-zero",
+        )
+        assert profile.agent_auth_revision == 0
+        await db_session.commit()
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "agent-auth-preflight-revision-zero",
+                "targetId": target_id,
+                "kind": "start_session",
+                "payload": {
+                    "workspaceId": "anyharness-workspace-1",
+                    "agentKind": "claude",
+                },
+            },
+        )
+        assert created.status_code == 409
+        assert created.json()["detail"]["code"] == "cloud_command_agent_auth_not_ready"
+
+    @pytest.mark.asyncio
     async def test_agent_auth_preflight_requires_applied_target_state(
         self,
         client: AsyncClient,
@@ -1096,6 +1132,40 @@ class TestCloudCommandsApi:
         payload = json.loads(command.payload_json)
         assert payload["sandboxProfileId"] == str(profile.id)
         assert payload["requiredAgentAuthRevision"] == profile.agent_auth_revision
+
+        await agent_auth_store.upsert_target_state(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+            desired_revision=profile.agent_auth_revision,
+            applied_revision=profile.agent_auth_revision,
+            status="applied",
+            force_restart_required=True,
+            last_command_id=None,
+            last_worker_id=None,
+            last_error_code=None,
+            last_error_message=None,
+        )
+        await db_session.commit()
+
+        restart_required = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "agent-auth-preflight-restart-required",
+                "targetId": target_id,
+                "kind": "send_prompt",
+                "sessionId": "session-1",
+                "payload": {
+                    "text": "hello",
+                },
+            },
+        )
+        assert restart_required.status_code == 409
+        assert (
+            restart_required.json()["detail"]["code"]
+            == "cloud_command_agent_auth_restart_required"
+        )
 
     @pytest.mark.asyncio
     async def test_agent_auth_preflight_command_requires_refresh_capable_worker(

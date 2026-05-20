@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from proliferate.auth.dependencies import current_active_user
+from proliferate.db.models.auth import User
 from proliferate.server.cloud.capabilities.models import CloudCapabilitiesResponse
 from proliferate.server.cloud.capabilities.service import cloud_capabilities
 
@@ -11,5 +13,7 @@ router = APIRouter()
 
 
 @router.get("/capabilities", response_model=CloudCapabilitiesResponse)
-async def cloud_capabilities_endpoint() -> CloudCapabilitiesResponse:
+async def cloud_capabilities_endpoint(
+    _user: User = Depends(current_active_user),
+) -> CloudCapabilitiesResponse:
     return cloud_capabilities()

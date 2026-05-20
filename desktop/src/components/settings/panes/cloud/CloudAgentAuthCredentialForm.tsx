@@ -4,12 +4,12 @@ import type {
   AgentGatewayCapabilities,
   CreateGatewayCredentialRequest,
 } from "@proliferate/cloud-sdk";
+import { useAgentAuthMutations } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@/components/ui/Label";
 import { Select } from "@/components/ui/Select";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { useAgentAuthMutations } from "@/hooks/access/cloud/agent-auth/use-agent-auth";
 
 type ProviderChoice =
   | "anthropic_api_key"

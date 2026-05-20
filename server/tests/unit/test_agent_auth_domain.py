@@ -69,6 +69,10 @@ def test_protected_env_allowlist_is_agent_and_mode_scoped() -> None:
         agent_kind="claude",
         materialization_mode="gateway_env",
     )
+    assert "ANTHROPIC_API_KEY" not in allowed_protected_env_keys(
+        agent_kind="claude",
+        materialization_mode="synced_files",
+    )
     reject_unallowed_protected_env(
         agent_kind="opencode",
         materialization_mode="gateway_env",
@@ -84,3 +88,13 @@ def test_protected_env_allowlist_is_agent_and_mode_scoped() -> None:
         assert "OPENAI_API_KEY" in str(exc)
     else:
         raise AssertionError("expected protected env violation")
+    try:
+        reject_unallowed_protected_env(
+            agent_kind="claude",
+            materialization_mode="synced_files",
+            keys={"ANTHROPIC_API_KEY"},
+        )
+    except ValueError as exc:
+        assert "ANTHROPIC_API_KEY" in str(exc)
+    else:
+        raise AssertionError("expected synced protected env violation")

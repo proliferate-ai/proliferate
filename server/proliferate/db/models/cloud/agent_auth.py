@@ -648,6 +648,11 @@ class AgentGatewayRuntimeGrant(Base):
             "agent_kind",
         ),
         Index(
+            "ix_agent_gateway_runtime_grant_slot",
+            "cloud_sandbox_id",
+            "slot_generation",
+        ),
+        Index(
             "ix_agent_gateway_runtime_grant_selection_revision",
             "selection_id",
             "issued_profile_revision",
@@ -678,6 +683,12 @@ class AgentGatewayRuntimeGrant(Base):
         ForeignKey("sandbox_profile.id", ondelete="CASCADE"),
         index=True,
     )
+    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("organization.id", ondelete="CASCADE"),
         index=True,

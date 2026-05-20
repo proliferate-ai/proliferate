@@ -40,7 +40,7 @@ const CLAUDE_GATEWAY_PROTECTED_ENV: &[&str] = &[
 ];
 const CODEX_GATEWAY_PROTECTED_ENV: &[&str] = &["CODEX_API_KEY", "CODEX_HOME"];
 const OPENCODE_GATEWAY_PROTECTED_ENV: &[&str] = &["OPENAI_API_KEY", "OPENAI_BASE_URL"];
-const CLAUDE_SYNCED_PROTECTED_ENV: &[&str] = &["ANTHROPIC_API_KEY"];
+const CLAUDE_SYNCED_PROTECTED_ENV: &[&str] = &[];
 const GEMINI_SYNCED_PROTECTED_ENV: &[&str] = &[
     "GEMINI_API_KEY",
     "GOOGLE_API_KEY",
@@ -233,18 +233,16 @@ impl AgentAuthConfigService {
             .clone()
             .unwrap_or_else(default_external_scope);
         let scope_key = scope_key(&scope);
-        if self
-            .store
-            .current_revision(&scope_key)?
-            .is_some_and(|current| current > request.revision)
-        {
-            return Ok(ApplyAgentAuthConfigResponse {
-                applied: false,
-                revision: request.revision,
-                selection_count: 0,
-                no_selection_kinds: no_selection_kinds(&request.selections),
-                status: "stale".to_string(),
-            });
+        if let Some(current_revision) = self.store.current_revision(&scope_key)? {
+            if current_revision > request.revision {
+                return Ok(ApplyAgentAuthConfigResponse {
+                    applied: false,
+                    revision: current_revision,
+                    selection_count: 0,
+                    no_selection_kinds: no_selection_kinds(&request.selections),
+                    status: "stale".to_string(),
+                });
+            }
         }
         self.write_managed_config_files(&request)?;
         let plaintext = serde_json::to_vec(&request)?;
@@ -253,9 +251,13 @@ impl AgentAuthConfigService {
             .store
             .upsert(&scope_key, &scope, request.revision, &ciphertext)?;
         if !applied {
+            let current_revision = self
+                .store
+                .current_revision(&scope_key)?
+                .unwrap_or(request.revision);
             return Ok(ApplyAgentAuthConfigResponse {
                 applied: false,
-                revision: request.revision,
+                revision: current_revision,
                 selection_count: 0,
                 no_selection_kinds: no_selection_kinds(&request.selections),
                 status: "stale".to_string(),
@@ -513,9 +515,13 @@ fn no_selection_kinds(selections: &[AgentAuthSelectionConfig]) -> Vec<String> {
     AGENT_AUTH_REQUIRED_AGENT_KINDS
         .iter()
         .filter(|kind| {
-            !selections
-                .iter()
-                .any(|selection| selection.agent_kind == **kind)
+            !selections.iter().any(|selection| {
+                selection.agent_kind == **kind
+                    && selection
+                        .status
+                        .as_deref()
+                        .map_or(true, |status| matches!(status, "active" | "ready"))
+            })
         })
         .map(|kind| (*kind).to_string())
         .collect()
@@ -565,11 +571,16 @@ fn scope_key(scope: &AgentAuthExternalScope) -> String {
     if scope.provider == "local" && scope.id == "default" {
         return LOCAL_SCOPE_KEY.to_string();
     }
-    format!(
+    let mut key = format!(
         "{}:{}",
         sanitize_scope_part(&scope.provider),
-        sanitize_scope_part(&scope.id)
-    )
+        sanitize_scope_part(&scope.id),
+    );
+    if let Some(target_id) = scope.target_id.as_deref().filter(|value| !value.is_empty()) {
+        key.push_str(":target:");
+        key.push_str(&sanitize_scope_part(target_id));
+    }
+    key
 }
 
 fn sanitize_scope_part(value: &str) -> String {

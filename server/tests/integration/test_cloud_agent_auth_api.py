@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from base64 import b64encode
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -255,6 +256,113 @@ async def test_legacy_cloud_credential_delete_invalidates_existing_selection(
     selection = response.json()[0]
     assert selection["status"] == "invalid"
     assert selection["lastErrorCode"] == "legacy_cloud_credential_revoked"
+
+
+@pytest.mark.asyncio
+async def test_revoked_synced_selection_materializes_invalid_cleanup_plan(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-legacy-delete-cleanup@example.com",
+    )
+    response = await client.put(
+        "/v1/cloud/credentials/claude",
+        headers=_headers(tokens),
+        json={
+            "authMode": "file",
+            "files": [
+                {
+                    "relativePath": ".claude.json",
+                    "contentBase64": b64encode(
+                        b'{"apiKey":"sk-ant-test"}'
+                    ).decode("ascii"),
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+    )
+    assert profile_response.status_code == 200
+    profile = profile_response.json()
+    profile_id = UUID(profile["id"])
+    target_id = UUID(profile["primaryTargetId"])
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    worker_token = f"agent-auth-cleanup-{uuid.uuid4()}"
+    await worker_auth_store.create_worker(
+        db_session,
+        target_id=target_id,
+        cloud_sandbox_id=slot.id,
+        slot_generation=slot.slot_generation,
+        token_hash=worker_service._hash_token(
+            domain=CLOUD_WORKER_TOKEN_DOMAIN,
+            token=worker_token,
+        ),
+        machine_fingerprint="agent-auth-cleanup",
+        hostname="agent-auth-cleanup",
+        worker_version="0.1.0",
+        anyharness_version="0.1.0",
+        supervisor_version=None,
+        now=utcnow(),
+    )
+    await db_session.commit()
+    worker_headers = {"Authorization": f"Bearer {worker_token}"}
+    initial_lease = await client.post(
+        "/v1/cloud/worker/commands/lease",
+        headers=worker_headers,
+        json={"supportedKinds": ["refresh_agent_auth_config"], "leaseTimeoutSeconds": 30},
+    )
+    assert initial_lease.status_code == 200
+    initial_command = initial_lease.json()["command"]
+    if initial_command is not None:
+        initial_result = await client.post(
+            f"/v1/cloud/worker/commands/{initial_command['commandId']}/result",
+            headers=worker_headers,
+            json={
+                "status": "accepted",
+                "leaseId": initial_command["leaseId"],
+                "slotGeneration": initial_command["slotGeneration"],
+            },
+        )
+        assert initial_result.status_code == 200
+
+    response = await client.delete("/v1/cloud/credentials/claude", headers=_headers(tokens))
+    assert response.status_code == 200
+    lease = await client.post(
+        "/v1/cloud/worker/commands/lease",
+        headers=worker_headers,
+        json={"supportedKinds": ["refresh_agent_auth_config"], "leaseTimeoutSeconds": 30},
+    )
+    assert lease.status_code == 200
+    command = lease.json()["command"]
+    assert command["kind"] == "refresh_agent_auth_config"
+
+    materialization = await client.get(
+        f"/v1/cloud/worker/agent-auth-configs/{profile['id']}/materialization",
+        headers=worker_headers,
+        params={
+            "command_id": command["commandId"],
+            "revision": command["payload"]["revision"],
+            "lease_id": command["leaseId"],
+        },
+    )
+    assert materialization.status_code == 200
+    selection = materialization.json()["selections"][0]
+    assert selection["agentKind"] == "claude"
+    assert selection["status"] == "invalid"
+    assert selection["syncedFiles"]["files"] == []
+    assert {
+        cleanup["relativePath"] for cleanup in selection["syncedFiles"]["cleanup"]
+    } == {".claude.json", ".claude/.credentials.json"}
 
 
 @pytest.mark.asyncio

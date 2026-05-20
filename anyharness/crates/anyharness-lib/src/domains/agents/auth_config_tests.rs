@@ -210,6 +210,97 @@ fn launch_overlay_uses_requested_scope() {
 }
 
 #[test]
+fn apply_config_stale_response_reports_current_revision() {
+    let service = AgentAuthConfigService::new(
+        AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
+        Some(cipher()),
+        std::env::temp_dir(),
+    );
+    let scope = AgentAuthExternalScope {
+        provider: "proliferate-cloud".to_string(),
+        id: "profile-1".to_string(),
+        target_id: Some("target-1".to_string()),
+    };
+    service
+        .apply_config(ApplyAgentAuthConfigRequest {
+            external_auth_scope: Some(scope.clone()),
+            revision: 2,
+            selections: Vec::new(),
+        })
+        .expect("apply current");
+
+    let stale = service
+        .apply_config(ApplyAgentAuthConfigRequest {
+            external_auth_scope: Some(scope),
+            revision: 1,
+            selections: Vec::new(),
+        })
+        .expect("apply stale");
+
+    assert!(!stale.applied);
+    assert_eq!(stale.revision, 2);
+    assert_eq!(stale.status, "stale");
+}
+
+#[test]
+fn launch_overlay_separates_same_profile_by_target_scope() {
+    let service = AgentAuthConfigService::new(
+        AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
+        Some(cipher()),
+        std::env::temp_dir(),
+    );
+    let target_1 = AgentAuthExternalScope {
+        provider: "proliferate-cloud".to_string(),
+        id: "profile-1".to_string(),
+        target_id: Some("target-1".to_string()),
+    };
+    let target_2 = AgentAuthExternalScope {
+        provider: "proliferate-cloud".to_string(),
+        id: "profile-1".to_string(),
+        target_id: Some("target-2".to_string()),
+    };
+    for (scope, base_url) in [
+        (target_1.clone(), "https://target-1.example"),
+        (target_2.clone(), "https://target-2.example"),
+    ] {
+        service
+            .apply_config(ApplyAgentAuthConfigRequest {
+                external_auth_scope: Some(scope),
+                revision: 1,
+                selections: vec![AgentAuthSelectionConfig {
+                    agent_kind: "claude".to_string(),
+                    materialization_mode: "gateway_env".to_string(),
+                    credential_id: "credential-1".to_string(),
+                    credential_revision: 1,
+                    status: Some("active".to_string()),
+                    credential_share_id: None,
+                    expires_at: None,
+                    protected_env: BTreeMap::from([(
+                        "ANTHROPIC_BASE_URL".to_string(),
+                        base_url.to_string(),
+                    )]),
+                    support_env: BTreeMap::new(),
+                    protected_config: BTreeMap::new(),
+                    support_config: BTreeMap::new(),
+                    synced_file_paths: Vec::new(),
+                }],
+            })
+            .expect("apply");
+    }
+
+    let scoped = service
+        .launch_overlay("claude", Some(&target_1), Some(1))
+        .expect("target-1 overlay");
+    assert_eq!(
+        scoped
+            .protected_env
+            .get("ANTHROPIC_BASE_URL")
+            .map(String::as_str),
+        Some("https://target-1.example")
+    );
+}
+
+#[test]
 fn launch_overlay_fails_when_required_revision_is_not_applied() {
     let service = AgentAuthConfigService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
@@ -267,6 +358,48 @@ fn launch_overlay_fails_closed_for_missing_scoped_selection() {
 }
 
 #[test]
+fn launch_overlay_fails_closed_for_invalid_scoped_selection() {
+    let service = AgentAuthConfigService::new(
+        AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
+        Some(cipher()),
+        std::env::temp_dir(),
+    );
+    let scope = AgentAuthExternalScope {
+        provider: "proliferate-cloud".to_string(),
+        id: "profile-1".to_string(),
+        target_id: Some("target-1".to_string()),
+    };
+    service
+        .apply_config(ApplyAgentAuthConfigRequest {
+            external_auth_scope: Some(scope.clone()),
+            revision: 1,
+            selections: vec![AgentAuthSelectionConfig {
+                agent_kind: "claude".to_string(),
+                materialization_mode: "synced_files".to_string(),
+                credential_id: "credential-1".to_string(),
+                credential_revision: 1,
+                status: Some("invalid".to_string()),
+                credential_share_id: None,
+                expires_at: None,
+                protected_env: BTreeMap::new(),
+                support_env: BTreeMap::new(),
+                protected_config: BTreeMap::new(),
+                support_config: BTreeMap::new(),
+                synced_file_paths: Vec::new(),
+            }],
+        })
+        .expect("apply");
+
+    let error = service
+        .launch_overlay("claude", Some(&scope), Some(1))
+        .expect_err("invalid selection should fail closed");
+    let AgentAuthLaunchOverlayError::SelectionRequired(required) = error else {
+        panic!("expected selection required");
+    };
+    assert_eq!(required.selection_status, "invalid");
+}
+
+#[test]
 fn apply_config_rejects_disallowed_protected_env_key() {
     let service = AgentAuthConfigService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
@@ -297,6 +430,39 @@ fn apply_config_rejects_disallowed_protected_env_key() {
         })
         .expect_err("disallowed key");
     assert!(error.to_string().contains("OPENAI_API_KEY"));
+}
+
+#[test]
+fn apply_config_rejects_claude_synced_protected_env() {
+    let service = AgentAuthConfigService::new(
+        AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
+        Some(cipher()),
+        std::env::temp_dir(),
+    );
+    let error = service
+        .apply_config(ApplyAgentAuthConfigRequest {
+            external_auth_scope: None,
+            revision: 1,
+            selections: vec![AgentAuthSelectionConfig {
+                agent_kind: "claude".to_string(),
+                materialization_mode: "synced_files".to_string(),
+                credential_id: "credential-1".to_string(),
+                credential_revision: 1,
+                status: None,
+                credential_share_id: None,
+                expires_at: None,
+                protected_env: BTreeMap::from([(
+                    "ANTHROPIC_API_KEY".to_string(),
+                    "secret".to_string(),
+                )]),
+                support_env: BTreeMap::new(),
+                protected_config: BTreeMap::new(),
+                support_config: BTreeMap::new(),
+                synced_file_paths: Vec::new(),
+            }],
+        })
+        .expect_err("disallowed synced key");
+    assert!(error.to_string().contains("ANTHROPIC_API_KEY"));
 }
 
 #[test]

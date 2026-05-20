@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 
 class AgentGatewayCapabilities(BaseModel):
     enabled: bool
+    managed_credits_enabled: bool = Field(alias="managedCreditsEnabled")
+    default_managed_budget_usd: str | None = Field(alias="defaultManagedBudgetUsd")
     byok_enabled: bool = Field(alias="byokEnabled")
     anthropic_byok_enabled: bool = Field(alias="anthropicByokEnabled")
     openai_byok_enabled: bool = Field(alias="openaiByokEnabled")
