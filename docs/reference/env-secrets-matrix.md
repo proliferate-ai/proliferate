@@ -89,6 +89,9 @@ timers on this branch. These values are defined in
 | `SENTRY_RELEASE` | No | No | Server Sentry release |
 | `SENTRY_TRACES_SAMPLE_RATE` | No | No | Server Sentry tracing |
 | `SUPPORT_SLACK_WEBHOOK_URL` | Yes | No | Slack destination for support messages |
+| `SIGNUPS_SLACK_WEBHOOK_URL` | Yes | No | Internal Slack destination for desktop GitHub hosted-user signup notifications; sends user email, GitHub handle/id, name, and creation date |
+| `BILLING_POSITIVE_SLACK_WEBHOOK_URL` | Yes | No | Internal Slack destination for positive billing notifications; sends billing owner email, GitHub handle/id, name, creation date, workspace count, and org user count |
+| `BILLING_NEGATIVE_SLACK_WEBHOOK_URL` | Yes | No | Internal Slack destination for negative billing notifications; sends billing owner email, GitHub handle/id, name, creation date, workspace count, and org user count |
 
 ## AI Magic
 

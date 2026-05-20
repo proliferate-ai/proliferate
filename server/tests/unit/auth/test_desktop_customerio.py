@@ -71,6 +71,25 @@ def _stub_identity_attachment(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     return attach_identity_mock
 
 
+def _stub_signup_notifications(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    existing_account_or_email: bool,
+) -> Mock:
+    monkeypatch.setattr(
+        desktop_service,
+        "github_oauth_account_or_email_exists",
+        AsyncMock(return_value=existing_account_or_email),
+    )
+    schedule_signup_mock = Mock()
+    monkeypatch.setattr(
+        desktop_service,
+        "schedule_signup_slack_notification",
+        schedule_signup_mock,
+    )
+    return schedule_signup_mock
+
+
 @pytest.mark.asyncio
 async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
     monkeypatch: pytest.MonkeyPatch,
@@ -85,6 +104,10 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
     user_manager = SimpleNamespace(oauth_callback=AsyncMock(return_value=user))
     create_auth_code_mock = AsyncMock(return_value=SimpleNamespace(code="auth-code"))
     schedule_mock = Mock()
+    schedule_signup_mock = _stub_signup_notifications(
+        monkeypatch,
+        existing_account_or_email=False,
+    )
     sync_profile_mock = AsyncMock(return_value=synced_user)
     attach_identity_mock = _stub_identity_attachment(monkeypatch)
 
@@ -138,6 +161,14 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
         display_name="The Octocat",
     )
     schedule_mock.assert_called_once_with(synced_user)
+    schedule_signup_mock.assert_called_once()
+    signup_notification = schedule_signup_mock.call_args.args[0]
+    assert signup_notification.name == "The Octocat"
+    assert signup_notification.email == "desktop-github@example.com"
+    assert signup_notification.github == "octocat"
+    assert schedule_signup_mock.call_args.kwargs == {
+        "dedupe_key": "github:github-account-desktop",
+    }
 
 
 @pytest.mark.asyncio
@@ -150,6 +181,10 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_existing_user
     user_manager = SimpleNamespace(oauth_callback=AsyncMock(return_value=user))
     create_auth_code_mock = AsyncMock(return_value=SimpleNamespace(code="auth-code"))
     schedule_mock = Mock()
+    schedule_signup_mock = _stub_signup_notifications(
+        monkeypatch,
+        existing_account_or_email=True,
+    )
     sync_profile_mock = AsyncMock(return_value=user)
     attach_identity_mock = _stub_identity_attachment(monkeypatch)
 
@@ -195,6 +230,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_existing_user
     attach_identity_mock.assert_awaited_once()
     sync_profile_mock.assert_awaited_once()
     schedule_mock.assert_called_once_with(user)
+    schedule_signup_mock.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -246,6 +282,10 @@ async def test_finish_github_desktop_callback_skips_customerio_when_auth_code_cr
     user = _make_user("desktop-github@example.com", display_name=None)
     user_manager = SimpleNamespace(oauth_callback=AsyncMock(return_value=user))
     schedule_mock = Mock()
+    schedule_signup_mock = _stub_signup_notifications(
+        monkeypatch,
+        existing_account_or_email=False,
+    )
     sync_profile_mock = AsyncMock(return_value=user)
     attach_identity_mock = _stub_identity_attachment(monkeypatch)
 
@@ -293,6 +333,7 @@ async def test_finish_github_desktop_callback_skips_customerio_when_auth_code_cr
         )
 
     schedule_mock.assert_not_called()
+    schedule_signup_mock.assert_not_called()
     attach_identity_mock.assert_awaited_once()
 
 

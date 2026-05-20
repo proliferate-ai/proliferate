@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -17,6 +18,7 @@ from proliferate.constants.billing import (
     PRO_PERIOD_GRANT_TYPE,
     REFILL_10H_GRANT_TYPE,
 )
+from proliferate.db import engine as db_engine
 from proliferate.db.models.billing import BillingSubject, BillingSubscription
 from proliferate.db.store.billing import (
     apply_payment_failed_hold,
@@ -24,6 +26,7 @@ from proliferate.db.store.billing import (
     clear_payment_failed_holds,
     ensure_billing_grant_record,
     get_billing_subject_for_stripe_reference,
+    get_billing_subscription_by_stripe_subscription_id,
     load_billing_subscription_by_id,
     mark_seat_adjustment_failed,
     mark_seat_adjustment_grant_issued,
@@ -76,16 +79,33 @@ from proliferate.server.billing.pricing import (
     classify_monthly_price_id,
 )
 from proliferate.server.billing.seats import pro_period_grant_source_ref
+from proliferate.server.notifications import (
+    BillingSlackEvent,
+    BillingSlackNotification,
+    deliver_billing_slack_notifications,
+    load_billing_slack_notification_context,
+)
 
 STRIPE_SIGNATURE_TOLERANCE_SECONDS = 300
 STRIPE_PROVIDER = "stripe"
 PAYMENT_HOLD_SOURCE = "stripe_webhook"
+BILLING_SLACK_ACTIVE_STATUSES = {"active", "trialing"}
+BILLING_SLACK_CANCELLED_STATUSES = {"canceled"}
+BILLING_SLACK_PRE_START_STATUSES = {"incomplete"}
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class StripeSignature:
     timestamp: int
     signatures: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SubscriptionSyncResult:
+    record: BillingSubscription | None
+    notifications: tuple[BillingSlackNotification, ...] = ()
 
 
 async def handle_stripe_webhook(
@@ -122,19 +142,28 @@ async def handle_stripe_webhook(
             status_code=400,
         )
 
-    receipt = await claim_webhook_event(
+    claim = await claim_webhook_event(
         provider=STRIPE_PROVIDER,
         event_id=event_id,
         event_type=event_type,
     )
+    if claim.status == "in_progress":
+        raise BillingServiceError(
+            "stripe_webhook_in_progress",
+            "Stripe webhook event is already being processed.",
+            status_code=409,
+        )
 
-    if receipt is not None:
+    notifications: tuple[BillingSlackNotification, ...] = ()
+    if claim.status == "claimed" and claim.receipt is not None:
         try:
-            await _dispatch_stripe_event(event)
+            dispatch_notifications = await _dispatch_stripe_event(event)
         except Exception as exc:
-            await mark_webhook_event_failed_by_id(receipt_id=receipt.id, error=str(exc))
+            await mark_webhook_event_failed_by_id(receipt_id=claim.receipt.id, error=str(exc))
             raise
-        await mark_webhook_event_processed_by_id(receipt_id=receipt.id)
+        notifications = tuple(dispatch_notifications or ())
+        await mark_webhook_event_processed_by_id(receipt_id=claim.receipt.id)
+        await deliver_billing_slack_notifications(notifications)
 
     livemode = event.get("livemode")
     return StripeWebhookAck(
@@ -144,20 +173,29 @@ async def handle_stripe_webhook(
     )
 
 
-async def _dispatch_stripe_event(event: dict[str, Any]) -> None:
+async def _dispatch_stripe_event(event: dict[str, Any]) -> tuple[BillingSlackNotification, ...]:
     event_type = event.get("type")
     stripe_object = _event_object(event)
     if event_type == "checkout.session.completed":
         await _handle_checkout_session_completed(stripe_object)
     elif event_type in {"customer.subscription.created", "customer.subscription.updated"}:
-        await _sync_subscription(stripe_object)
+        result = await _sync_subscription_for_billing_notifications(
+            stripe_object,
+            event_type=event_type,
+        )
+        return result.notifications
     elif event_type == "customer.subscription.deleted":
-        await _sync_subscription(stripe_object)
+        result = await _sync_subscription_for_billing_notifications(
+            stripe_object,
+            event_type=event_type,
+        )
         await _apply_payment_hold_for_subscription(stripe_object)
+        return result.notifications
     elif event_type == "invoice.paid":
-        await _handle_invoice_paid(stripe_object)
+        return await _handle_invoice_paid(stripe_object)
     elif event_type == "invoice.payment_failed":
         await _handle_invoice_payment_failed(stripe_object)
+    return ()
 
 
 def _line_is_cloud_subscription(line: dict[str, Any]) -> bool:
@@ -260,6 +298,107 @@ async def _sync_subscription(subscription: dict[str, Any]) -> BillingSubscriptio
     return await _reconcile_initial_org_subscription_seats(record)
 
 
+async def _sync_subscription_for_billing_notifications(
+    subscription: dict[str, Any],
+    *,
+    event_type: str,
+) -> SubscriptionSyncResult:
+    subscription_id = subscription.get("id")
+    previous = (
+        await _load_billing_subscription_by_stripe_subscription_id(subscription_id)
+        if isinstance(subscription_id, str)
+        else None
+    )
+    record = await _sync_subscription(subscription)
+    if record is None:
+        return SubscriptionSyncResult(record=None)
+    events = _billing_slack_events_for_subscription_transition(
+        event_type=event_type,
+        previous=previous,
+        current=record,
+    )
+    notifications: list[BillingSlackNotification] = []
+    for event in events:
+        notification = await _build_billing_slack_notification(record, event)
+        if notification is None:
+            continue
+        notifications.append(notification)
+    return SubscriptionSyncResult(record=record, notifications=tuple(notifications))
+
+
+def _billing_slack_events_for_subscription_transition(
+    *,
+    event_type: str,
+    previous: BillingSubscription | None,
+    current: BillingSubscription,
+) -> tuple[BillingSlackEvent, ...]:
+    if _subscription_has_cancel_intent(current):
+        if event_type == "customer.subscription.deleted" or not _subscription_has_cancel_intent(
+            previous
+        ):
+            return ("cancelled",)
+        return ()
+
+    if not _subscription_is_active(current):
+        return ()
+
+    if event_type == "customer.subscription.created":
+        return ("subscribed",)
+    if event_type in {"customer.subscription.updated", "invoice.paid"} and (
+        previous is None or previous.status in BILLING_SLACK_PRE_START_STATUSES
+    ):
+        return ("subscribed",)
+
+    return ()
+
+
+async def _build_billing_slack_notification(
+    record: BillingSubscription,
+    event: BillingSlackEvent,
+) -> BillingSlackNotification | None:
+    try:
+        context = await load_billing_slack_notification_context(
+            billing_subject_id=record.billing_subject_id,
+        )
+    except Exception:
+        logger.exception("Could not load billing Slack notification context")
+        return None
+    if context is None:
+        return None
+    return BillingSlackNotification(
+        event=event,
+        stripe_subscription_id=record.stripe_subscription_id,
+        name=context.name,
+        email=context.email,
+        github=context.github,
+        user_created_at=context.user_created_at,
+        workspace_count=context.workspace_count,
+        organization_user_count=context.organization_user_count,
+    )
+
+
+async def _load_billing_subscription_by_stripe_subscription_id(
+    stripe_subscription_id: str,
+) -> BillingSubscription | None:
+    async with db_engine.async_session_factory() as db:
+        return await get_billing_subscription_by_stripe_subscription_id(
+            db,
+            stripe_subscription_id,
+        )
+
+
+def _subscription_is_active(subscription: BillingSubscription | None) -> bool:
+    return subscription is not None and subscription.status in BILLING_SLACK_ACTIVE_STATUSES
+
+
+def _subscription_has_cancel_intent(subscription: BillingSubscription | None) -> bool:
+    return subscription is not None and (
+        subscription.cancel_at_period_end
+        or subscription.canceled_at is not None
+        or subscription.status in BILLING_SLACK_CANCELLED_STATUSES
+    )
+
+
 async def _reconcile_initial_org_subscription_seats(
     record: BillingSubscription,
 ) -> BillingSubscription:
@@ -312,10 +451,10 @@ def _subscription_item_details(
     )
 
 
-async def _handle_invoice_paid(invoice: dict[str, Any]) -> None:
+async def _handle_invoice_paid(invoice: dict[str, Any]) -> tuple[BillingSlackNotification, ...]:
     invoice_id = invoice.get("id")
     if not isinstance(invoice_id, str):
-        return
+        return ()
     lines = _line_items_from_object(invoice)
     if not lines:
         lines = await stripe_billing.list_invoice_lines(invoice_id)
@@ -324,17 +463,23 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> None:
         None,
     )
     if cloud_line is None:
-        return
+        return ()
     subject = await _subject_from_object(invoice)
     subscription_id = _invoice_subscription_id(invoice, lines)
     subscription_record: BillingSubscription | None = None
+    notifications: tuple[BillingSlackNotification, ...] = ()
     if subscription_id:
         subscription = await stripe_billing.retrieve_subscription(subscription_id)
-        subscription_record = await _sync_subscription(subscription)
+        sync_result = await _sync_subscription_for_billing_notifications(
+            subscription,
+            event_type="invoice.paid",
+        )
+        subscription_record = sync_result.record
+        notifications = sync_result.notifications
         if subject is None:
             subject = await _subject_from_object(subscription)
     if subject is None:
-        return
+        return notifications
     if (
         settings.pro_billing_enabled
         and subscription_record is not None
@@ -359,6 +504,7 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> None:
             top_up_existing=True,
         )
     await clear_payment_failed_holds(billing_subject_id=subject.id)
+    return notifications
 
 
 async def _handle_invoice_payment_failed(invoice: dict[str, Any]) -> None:
