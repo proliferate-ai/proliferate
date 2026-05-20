@@ -35,6 +35,26 @@ pub struct RuntimeConfigArtifactResponse {
     pub content: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeConfigCredentialMaterializationRequest {
+    pub credential_refs: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeConfigCredentialValue {
+    pub credential_ref: String,
+    pub value: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeConfigCredentialMaterializationResponse {
+    pub credentials: Vec<RuntimeConfigCredentialValue>,
+    pub missing_credential_refs: Vec<String>,
+}
+
 impl CloudClient {
     pub async fn fetch_target_config_materialization(
         &self,
@@ -125,6 +145,28 @@ impl CloudClient {
                 reqwest::header::AUTHORIZATION,
                 auth::bearer_header(worker_token),
             )
+            .send()
+            .await?;
+        parse_json_response(response).await
+    }
+
+    pub async fn fetch_runtime_config_credentials(
+        &self,
+        worker_token: &str,
+        revision_id: &str,
+        credential_refs: Vec<String>,
+    ) -> Result<RuntimeConfigCredentialMaterializationResponse, WorkerError> {
+        let response = self
+            .http
+            .post(format!(
+                "{}/v1/cloud/worker/runtime-configs/{}/credentials/materialize",
+                self.base_url, revision_id
+            ))
+            .header(
+                reqwest::header::AUTHORIZATION,
+                auth::bearer_header(worker_token),
+            )
+            .json(&RuntimeConfigCredentialMaterializationRequest { credential_refs })
             .send()
             .await?;
         parse_json_response(response).await

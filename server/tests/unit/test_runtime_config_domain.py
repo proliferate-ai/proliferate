@@ -25,6 +25,12 @@ from proliferate.server.cloud.runtime_config.domain.resolver import (
     SkillConfiguredItemSnapshot,
     resolve_runtime_config,
 )
+from proliferate.server.cloud.runtime_config.models import (
+    RuntimeConfigArtifactRefModel,
+    RuntimeConfigMaterializationFragment,
+)
+from proliferate.server.cloud.runtime_config.service import _credential_value_from_payload
+from proliferate.server.cloud.target_config.models import TargetConfigMaterializationPlan
 
 
 def _entry(entry_id: str = "github") -> CatalogEntry:
@@ -134,7 +140,11 @@ def _mcp(
     )
 
 
-def _skill(*, owner_user_id: str = "user-a") -> SkillConfiguredItemSnapshot:
+def _skill(
+    *,
+    owner_user_id: str = "user-a",
+    enabled: bool = True,
+) -> SkillConfiguredItemSnapshot:
     return SkillConfiguredItemSnapshot(
         id="skill-1",
         owner_scope="personal",
@@ -145,7 +155,7 @@ def _skill(*, owner_user_id: str = "user-a") -> SkillConfiguredItemSnapshot:
         skill_version=None,
         plugin_id="github",
         plugin_version="1+test",
-        enabled=True,
+        enabled=enabled,
         public_to_org=False,
         public_organization_id=None,
         public_status="private",
@@ -306,6 +316,18 @@ def test_plugin_child_skill_is_removed_when_parent_plugin_disabled_or_deleted() 
     assert not deleted_plan.skills
 
 
+def test_disabled_plugin_child_row_suppresses_default_plugin_skill_synthesis() -> None:
+    plan = resolve_runtime_config(
+        _input(
+            mcps=(_mcp(id="mcp-owned"),),
+            skills=(_skill(enabled=False),),
+            plugins=(_plugin(),),
+        )
+    )
+
+    assert not plan.skills
+
+
 def test_manifest_hash_is_stable_and_redacts_secret_values() -> None:
     plan = resolve_runtime_config(
         _input(mcps=(_mcp(id="mcp-owned"),), skills=(_skill(),), plugins=(_plugin(),))
@@ -329,6 +351,64 @@ def test_manifest_hash_is_stable_and_redacts_secret_values() -> None:
             "reason": None,
         }
     ]
+
+
+def test_runtime_config_materialization_fragment_alias_round_trips() -> None:
+    plan = TargetConfigMaterializationPlan(
+        target_config_id="config-1",
+        target_id="target-1",
+        config_version=3,
+        workspace_root="/tmp/workspace",
+        repo={"provider": "github", "owner": "proliferate-ai", "name": "proliferate"},
+        env_vars={},
+        tracked_files=[],
+        runtime_config=RuntimeConfigMaterializationFragment(
+            revision_id="revision-1",
+            sandbox_profile_id="profile-1",
+            target_id="target-1",
+            sequence=7,
+            content_hash="sha256:manifest",
+            manifest={"mcpServers": [], "skills": []},
+            artifact_refs=[
+                RuntimeConfigArtifactRefModel(
+                    hash="sha256:instructions",
+                    content_type="text/markdown",
+                    byte_size=13,
+                    source_ref="plugin:github:triage:instructions",
+                )
+            ],
+            credential_refs=[{"credentialRef": "mcp:connection-1:api_key"}],
+        ),
+    )
+
+    payload = plan.model_dump(mode="json", by_alias=True)
+    assert payload["runtimeConfig"]["revisionId"] == "revision-1"
+
+    round_tripped = TargetConfigMaterializationPlan.model_validate(payload)
+
+    assert round_tripped.runtime_config is not None
+    assert round_tripped.runtime_config.revision_id == "revision-1"
+    assert round_tripped.runtime_config.artifact_refs[0].content_type == "text/markdown"
+    assert round_tripped.runtime_config.credential_refs == [
+        {"credentialRef": "mcp:connection-1:api_key"}
+    ]
+
+
+def test_runtime_config_credential_payload_resolution() -> None:
+    assert (
+        _credential_value_from_payload(
+            {"secretFields": {"api_key": "secret-value"}},
+            "api_key",
+        )
+        == "secret-value"
+    )
+    assert (
+        _credential_value_from_payload(
+            {"accessToken": "oauth-token"},
+            "access_token",
+        )
+        == "oauth-token"
+    )
 
 
 def test_runtime_config_domain_imports_stay_pure() -> None:
