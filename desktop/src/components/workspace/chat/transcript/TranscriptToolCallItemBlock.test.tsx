@@ -65,4 +65,57 @@ describe("TranscriptToolCallItemBlock", () => {
     expect(html).not.toContain("src/file-3.ts");
     expect(html).toContain("Show 2 more");
   });
+
+  it("renders subagent status checks as delegated agent receipts", () => {
+    const item = toolCallItem({
+      semanticKind: "subagent",
+      nativeToolName: "mcp__subagents__get_subagent_status",
+      rawOutput: {
+        subagentId: "subagent_123",
+        sessionLinkId: "link-123",
+        childSessionId: "child-123",
+        label: "API Surface Check",
+        status: "running",
+      },
+    });
+
+    const html = renderToStaticMarkup(
+      createElement(TranscriptToolCallItemBlock, {
+        item,
+        workspaceId: "workspace-1",
+        onOpenArtifact: () => {},
+      }),
+    );
+
+    expect(html).toContain("Checked subagent");
+    expect(html).toContain("API Surface Check");
+    expect(html).toContain("Working");
+    expect(html).toContain("text-[length:var(--text-chat)]");
+  });
+
+  it("renders subagent close receipts without an open-session affordance", () => {
+    const item = toolCallItem({
+      semanticKind: "subagent",
+      nativeToolName: "mcp__subagents__close_subagent",
+      rawOutput: {
+        subagentId: "subagent_123",
+        sessionLinkId: "link-123",
+        childSessionId: "child-123",
+        label: "API Surface Check",
+        closed: true,
+      },
+    });
+
+    const html = renderToStaticMarkup(
+      createElement(TranscriptToolCallItemBlock, {
+        item,
+        workspaceId: "workspace-1",
+        onOpenArtifact: () => {},
+      }),
+    );
+
+    expect(html).toContain("Closed subagent");
+    expect(html).toContain("API Surface Check");
+    expect(html).not.toContain("Open API Surface Check");
+  });
 });

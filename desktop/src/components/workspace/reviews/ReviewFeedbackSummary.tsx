@@ -148,7 +148,7 @@ function ReviewTerminalReceipt({
     <div className="flex justify-end" data-telemetry-mask>
       <p
         data-testid="review-terminal-receipt"
-        className="max-w-[77%] text-right text-chat leading-[var(--text-chat--line-height)] text-muted-foreground"
+        className="max-w-[77%] text-right text-[length:var(--text-chat)] font-normal leading-[var(--text-chat--line-height)] text-muted-foreground"
       >
         {/* Multiple reviewers can open different sessions, so each name owns its own target. */}
         {reviewerNameList(assignments, onOpenReviewerSession)}

@@ -25,7 +25,7 @@ export function SubagentWakeBadge({
   const targetChildSessionId = childSessionId?.trim() || null;
   const canOpenChild = Boolean(targetChildSessionId && onOpenChild);
   const className =
-    "max-w-[77%] text-right text-chat leading-[var(--text-chat--line-height)] text-muted-foreground";
+    "max-w-[77%] text-right text-[length:var(--text-chat)] font-normal leading-[var(--text-chat--line-height)] text-muted-foreground";
   const content = (
     <>
       {/* The outer receipt owns opening; keep the name static to avoid nested buttons. */}

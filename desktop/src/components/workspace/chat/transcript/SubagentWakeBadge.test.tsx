@@ -20,7 +20,8 @@ describe("SubagentWakeBadge", () => {
     );
 
     const receipt = container.querySelector("button");
-    expect(receipt?.className).toContain("text-chat");
+    expect(receipt?.className).toContain("text-[length:var(--text-chat)]");
+    expect(receipt?.className).toContain("font-normal");
     expect(receipt?.className).toContain("text-muted-foreground");
     expect(receipt?.textContent).toContain("finished a turn.");
   });

@@ -171,6 +171,16 @@ mod tests {
     }
 
     #[test]
+    fn subagents_selection_prioritizes_product_mcp_in_prompt_text() {
+        let extras = product_mcp_prompt_extras(&[SelectedProductMcp::Subagents]);
+
+        assert_eq!(extras.system_prompt_append.len(), 1);
+        assert!(extras.system_prompt_append[0].contains("Proliferate `subagents` MCP"));
+        assert!(extras.system_prompt_append[0].contains("proliferate.subagents.workflow"));
+        assert_eq!(extras.mcp_binding_summaries.len(), 1);
+    }
+
+    #[test]
     fn workspace_naming_selection_adds_prompt_text_and_binding_summary() {
         let extras = product_mcp_prompt_extras(&[SelectedProductMcp::WorkspaceNaming]);
 

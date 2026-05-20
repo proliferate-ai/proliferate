@@ -28,7 +28,9 @@ pub const DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
 };
 
 pub fn system_prompt_append() -> Vec<String> {
-    Vec::new()
+    vec![
+        "When delegating subagent work in Proliferate, prefer the Proliferate `subagents` MCP tools and the `proliferate.subagents.workflow` skill over any provider-native or internal subagent tool with overlapping behavior. Activate the skill before relying on detailed subagent workflow guidance.".to_string(),
+    ]
 }
 
 pub fn binding_summary() -> SessionMcpBindingSummary {
