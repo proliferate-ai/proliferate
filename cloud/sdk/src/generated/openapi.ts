@@ -1256,41 +1256,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/mcp-connections/statuses": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Cloud Mcp Connection Statuses Endpoint */
-        get: operations["list_cloud_mcp_connection_statuses_endpoint_v1_cloud_mcp_connections_statuses_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/mcp-connections/{connection_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Sync Cloud Mcp Connection Endpoint */
-        put: operations["sync_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__put"];
-        post?: never;
-        /** Delete Legacy Cloud Mcp Connection Endpoint */
-        delete: operations["delete_legacy_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/cloud/mcp/connections/{connection_id}/oauth/start": {
         parameters: {
             query?: never;
@@ -3702,17 +3667,6 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
-        /** CloudMcpConnectionSyncStatus */
-        CloudMcpConnectionSyncStatus: {
-            /** Connectionid */
-            connectionId: string;
-            /** Catalogentryid */
-            catalogEntryId: string;
-            /** Synced */
-            synced: boolean;
-            /** Lastsyncedat */
-            lastSyncedAt?: string | null;
-        };
         /** CloudMcpConnectionsResponse */
         CloudMcpConnectionsResponse: {
             /** Connections */
@@ -5480,6 +5434,10 @@ export interface components {
             byteSize: number;
             /** Sourceref */
             sourceRef?: string | null;
+            /** Resourceid */
+            resourceId?: string | null;
+            /** Displayname */
+            displayName?: string | null;
         };
         /** RuntimeConfigArtifactResponse */
         RuntimeConfigArtifactResponse: {
@@ -5491,6 +5449,10 @@ export interface components {
             byteSize: number;
             /** Sourceref */
             sourceRef?: string | null;
+            /** Resourceid */
+            resourceId?: string | null;
+            /** Displayname */
+            displayName?: string | null;
             /** Content */
             content: string;
         };
@@ -5963,15 +5925,6 @@ export interface components {
             relativePath: string;
             /** Contentbase64 */
             contentBase64: string;
-        };
-        /** SyncCloudMcpConnectionRequest */
-        SyncCloudMcpConnectionRequest: {
-            /** Catalogentryid */
-            catalogEntryId: string;
-            /** Secretfields */
-            secretFields: {
-                [key: string]: string;
-            };
         };
         /** SyncCodexCredentialRequest */
         SyncCodexCredentialRequest: {
@@ -9847,92 +9800,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CloudMcpConnectionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_cloud_mcp_connection_statuses_endpoint_v1_cloud_mcp_connections_statuses_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudMcpConnectionSyncStatus"][];
-                };
-            };
-        };
-    };
-    sync_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                connection_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SyncCloudMcpConnectionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OkResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_legacy_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                connection_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OkResponse"];
                 };
             };
             /** @description Validation Error */

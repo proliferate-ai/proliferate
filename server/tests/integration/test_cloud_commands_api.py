@@ -965,6 +965,41 @@ class TestCloudCommandsApi:
         assert created.json()["detail"]["code"] == "cloud_command_internal_only"
 
     @pytest.mark.asyncio
+    async def test_managed_runtime_config_preflight_requires_target_config(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-runtime-config-target-config",
+        )
+        target_id, _worker_headers, _profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="runtime-config-target-config",
+        )
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "runtime-config-target-config-required",
+                "targetId": target_id,
+                "kind": "start_session",
+                "payload": {
+                    "workspaceId": "anyharness-workspace-1",
+                    "agentKind": "claude",
+                },
+            },
+        )
+
+        assert created.status_code == 409
+        assert created.json()["detail"]["code"] == "cloud_command_target_config_required"
+
+    @pytest.mark.asyncio
     async def test_agent_auth_preflight_requires_applied_target_state(
         self,
         client: AsyncClient,

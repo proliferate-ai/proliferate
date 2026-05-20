@@ -192,6 +192,10 @@ pub struct RuntimeArtifactRef {
     pub byte_size: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_ref: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -202,6 +206,10 @@ pub struct RuntimeArtifactPayload {
     pub byte_size: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_ref: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
     pub content: String,
 }
 

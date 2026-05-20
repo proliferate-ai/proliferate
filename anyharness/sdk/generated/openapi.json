@@ -13141,8 +13141,20 @@
           "contentType": {
             "type": "string"
           },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "hash": {
             "type": "string"
+          },
+          "resourceId": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sourceRef": {
             "type": [
@@ -13167,8 +13179,20 @@
           "contentType": {
             "type": "string"
           },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "hash": {
             "type": "string"
+          },
+          "resourceId": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sourceRef": {
             "type": [

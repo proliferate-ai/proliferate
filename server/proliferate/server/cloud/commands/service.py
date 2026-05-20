@@ -20,6 +20,7 @@ from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
 from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.domain.rules import (
     compact_command_json,
@@ -209,6 +210,12 @@ async def enqueue_command(
         preconditions=body.preconditions,
     )
     validate_command_payload(kind=kind, payload=body.payload)
+    await _validate_agent_auth_preflight(
+        db,
+        user=user,
+        target=target,
+        payload=body.payload,
+    )
     payload = await _stamp_managed_runtime_config_preflight(
         db,
         user=user,
@@ -218,12 +225,6 @@ async def enqueue_command(
     )
     if payload is not body.payload:
         body = body.model_copy(update={"payload": payload})
-    await _validate_agent_auth_preflight(
-        db,
-        user=user,
-        target=target,
-        payload=payload,
-    )
     await _validate_runtime_config_preflight(
         db,
         user=user,
@@ -502,6 +503,13 @@ async def _stamp_managed_runtime_config_preflight(
         return payload
     if target.sandbox_profile_id is None:
         return payload
+    configs = await target_config_store.list_target_configs(db, target_id=target.id)
+    if not configs:
+        raise CloudApiError(
+            "cloud_command_target_config_required",
+            "Managed targets require a materialized target config before sessions can start.",
+            status_code=409,
+        )
     from proliferate.server.cloud.runtime_config.service import (  # noqa: PLC0415
         refresh_profile_runtime_config,
     )

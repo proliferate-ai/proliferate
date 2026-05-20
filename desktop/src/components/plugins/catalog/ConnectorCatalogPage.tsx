@@ -114,7 +114,7 @@ export function ConnectorCatalogPage() {
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Install a package below. Enabled packages add MCP tools and
-                    plugin skills to compatible new sessions.
+                    plugin skills to managed cloud sandbox runtime config.
                   </p>
                 </div>
               )}

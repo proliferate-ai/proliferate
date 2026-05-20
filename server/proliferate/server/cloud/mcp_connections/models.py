@@ -43,11 +43,6 @@ class PublicizeCloudMcpConnectionRequest(BaseModel):
     organization_id: UUID = Field(alias="organizationId")
 
 
-class SyncCloudMcpConnectionRequest(BaseModel):
-    catalog_entry_id: str = Field(alias="catalogEntryId")
-    secret_fields: dict[str, str] = Field(alias="secretFields")
-
-
 class CloudMcpConnectionResponse(BaseModel):
     connection_id: str = Field(serialization_alias="connectionId")
     owner_scope: str = Field(serialization_alias="ownerScope")
@@ -79,13 +74,6 @@ class CloudMcpConnectionResponse(BaseModel):
 
 class CloudMcpConnectionsResponse(BaseModel):
     connections: list[CloudMcpConnectionResponse]
-
-
-class CloudMcpConnectionSyncStatus(BaseModel):
-    connection_id: str = Field(serialization_alias="connectionId")
-    catalog_entry_id: str = Field(serialization_alias="catalogEntryId")
-    synced: bool
-    last_synced_at: str | None = Field(default=None, serialization_alias="lastSyncedAt")
 
 
 def _to_iso(value: object) -> str | None:
@@ -127,18 +115,4 @@ def cloud_mcp_connection_payload(
         auth_version=record.auth.auth_version if record.auth else None,
         created_at=_to_iso(record.created_at) or "",
         updated_at=_to_iso(record.updated_at) or "",
-    )
-
-
-def cloud_mcp_connection_status_payload(
-    record: CloudMcpConnectionRecord,
-) -> CloudMcpConnectionSyncStatus:
-    auth = record.auth
-    payload_ciphertext = record.payload_ciphertext
-    synced = bool((auth is not None and auth.auth_status == "ready") or payload_ciphertext)
-    return CloudMcpConnectionSyncStatus(
-        connection_id=str(record.connection_id),
-        catalog_entry_id=str(record.catalog_entry_id),
-        synced=synced,
-        last_synced_at=_to_iso(record.last_synced_at),
     )

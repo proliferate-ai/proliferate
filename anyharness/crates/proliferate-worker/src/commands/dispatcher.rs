@@ -740,6 +740,8 @@ async fn apply_runtime_config_to_anyharness(
             content_type: payload.content_type,
             byte_size: payload.byte_size,
             source_ref: payload.source_ref,
+            resource_id: payload.resource_id,
+            display_name: payload.display_name,
             content: payload.content,
         });
     }

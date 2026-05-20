@@ -43,6 +43,8 @@ class RuntimeConfigArtifactRefModel(BaseModel):
     content_type: str = Field(alias="contentType")
     byte_size: int = Field(alias="byteSize")
     source_ref: str | None = Field(default=None, alias="sourceRef")
+    resource_id: str | None = Field(default=None, alias="resourceId")
+    display_name: str | None = Field(default=None, alias="displayName")
 
 
 class RuntimeConfigMaterializationFragment(BaseModel):
@@ -87,6 +89,8 @@ class RuntimeConfigArtifactResponse(BaseModel):
     content_type: str = Field(alias="contentType")
     byte_size: int = Field(alias="byteSize")
     source_ref: str | None = Field(default=None, alias="sourceRef")
+    resource_id: str | None = Field(default=None, alias="resourceId")
+    display_name: str | None = Field(default=None, alias="displayName")
     content: str
 
 
