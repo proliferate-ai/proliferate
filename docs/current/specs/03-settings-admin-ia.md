@@ -352,23 +352,27 @@ Help/check-for-updates      spec 03   updater
 
 ### 5.3 Shared vocabulary
 
-These exact words appear in copy, query keys, and component names
-across every spec. No synonyms.
+These exact strings appear in TS enums, OpenAPI schemas, Python enums,
+and DB CHECK constraints. No synonyms across the stack. Convention:
+snake_case for machine values (DB-friendly, matches existing
+`owner_scope='personal'`, `kind='managed_cloud'`,
+`visibility='shared_unclaimed'` enums). Human-readable labels live in
+copy and convert at render time.
 
-**Workspace type** (where a workspace runs):
+**WorkspaceType** (where a workspace runs):
 
 ```text
 local                Desktop AnyHarness on the user's machine
 worktree             a worktree under a local repo
 ssh                  remote SSH-accessible AnyHarness
-personal-cloud       managed cloud, owner_scope = 'personal'
-shared-cloud         managed cloud, owner_scope = 'organization'
+personal_cloud       managed cloud, owner_scope = 'personal'
+shared_cloud         managed cloud, owner_scope = 'organization'
 ```
 
 **Origin** (how the work was started):
 
 ```text
-manual-desktop | manual-web | manual-mobile | automation | slack | cowork-api
+manual_desktop | manual_web | manual_mobile | automation | slack | cowork_api
 ```
 
 Origin survives claiming.
@@ -376,7 +380,7 @@ Origin survives claiming.
 **Exposure** (whether Cloud can see/control the workspace):
 
 ```text
-not-tracked          no exposure row
+not_tracked          no exposure row
 viewable             Cloud projection active; not commandable
 controllable         exposure + commandable
 paused               exposure exists but stopped projecting
@@ -387,39 +391,91 @@ revoked              exposure was active and is now off
 **Access** (who can act on the work):
 
 ```text
-personal             owner only
-shared-unclaimed     org members can view + interact pre-claim
+private              owner only
+shared_unclaimed     org members can view + interact pre-claim
 claimed              one claiming user has narrowed control
-admin-managed        admin audit/manage view only
+admin_managed        admin audit/manage view only
 archived             retained but hidden from active lists
 ```
 
-**Sandbox type** (the runtime container the work lives in):
+Note: `private`/`shared_unclaimed`/`claimed`/`archived` are the values
+already used by the existing `cloud_workspace_exposure.visibility`
+DB enum. `admin_managed` is a new state that spec 05 adds to the enum
+when claiming lands; spec 03 establishes the vocabulary; spec 05 owns
+the migration.
+
+**SandboxType** (the runtime container the work lives in):
 
 ```text
 local                local AnyHarness; no Cloud sandbox
 ssh                  remote AnyHarness on an SSH target
-managed-personal     managed cloud with owner_scope='personal'
-managed-shared       managed cloud with owner_scope='organization'
+managed_personal     managed cloud with owner_scope='personal'
+managed_shared       managed cloud with owner_scope='organization'
 ```
 
-Concretely, this means:
+**Display labels** (in `copy/settings/vocabulary-copy.ts`):
 
 ```text
-status enums in TS use these strings literally.
-copy text uses the human form: "Personal cloud" not "Personal-cloud".
-machine ids stay kebab-case.
-where a feature spec needs more granularity it extends, never renames.
+WorkspaceType  personal_cloud  -> "Personal cloud"
+               shared_cloud    -> "Shared cloud"
+               worktree        -> "Worktree"
+               local           -> "Local"
+               ssh             -> "SSH"
+
+Origin         manual_desktop  -> "Desktop"
+               manual_web      -> "Web"
+               manual_mobile   -> "Mobile"
+               automation      -> "Automation"
+               slack           -> "Slack"
+               cowork_api      -> "Cowork API"
+
+Exposure       not_tracked     -> "Not tracked"
+               viewable        -> "Viewable"
+               controllable    -> "Live"
+               paused          -> "Paused"
+               stale           -> "Stale"
+               revoked         -> "Revoked"
+
+Access         private         -> "Private"
+               shared_unclaimed -> "Shared (unclaimed)"
+               claimed         -> "Claimed"
+               admin_managed   -> "Admin managed"
+               archived        -> "Archived"
+
+SandboxType    local           -> "Local"
+               ssh             -> "SSH"
+               managed_personal -> "Personal cloud"
+               managed_shared  -> "Shared cloud"
 ```
 
-A reusable file lives at:
+Reusable files:
 
 ```text
 desktop/src/lib/domain/vocabulary.ts      (new)
-  WorkspaceType, Origin, Exposure, Access, SandboxType TS enums
-  helpers: workspaceTypeLabel(), sandboxTypeLabel(), accessLabel()
+  WorkspaceType, Origin, Exposure, Access, SandboxType TS enums whose
+  string values are the snake_case strings above (so the wire payload,
+  the TS literal, and the DB CHECK enum are identical bytes)
+  helpers: workspaceTypeLabel(), sandboxTypeLabel(), accessLabel(),
+    exposureLabel(), originLabel()
 copy/settings/vocabulary-copy.ts          (new)
   human-readable labels per locale
+```
+
+Server-side:
+
+```text
+server emits and accepts the same snake_case strings on the wire and
+in DB enums. OpenAPI schema enums use these values literally so the
+generated TS types match desktop/src/lib/domain/vocabulary.ts at the
+character level.
+
+Existing DB CHECK enums that already match this convention are left
+in place (cloud_workspace_exposure.visibility, sandbox_profile.status,
+cloud_targets.kind, agent_kind, etc.).
+
+Specs that add new enums (spec 05 admin_managed, spec 08 dispatch
+states) emit the same vocabulary; the strings on the wire are exactly
+the strings in copy/settings/vocabulary-copy.ts keys.
 ```
 
 ### 5.4 Shared UI primitives
@@ -440,7 +496,7 @@ CredentialPicker
   Props:
     agentKind          'claude' | 'codex' | 'opencode' | 'gemini'
     ownerContext       'personal' | { kind: 'organization', orgId }
-    sandboxType        'managed-personal' | 'managed-shared' | 'local' | 'ssh'
+    sandboxType        'managed_personal' | 'managed_shared' | 'local' | 'ssh'
     visibleCredentials list of CredentialSnapshot   (filtered by hook)
     selectedCredentialId?
     onSelect(credentialId, shareId?)
