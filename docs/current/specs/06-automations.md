@@ -7,6 +7,7 @@ Date: 2026-05-20.
 Depends on: [`00-sandbox-foundation.md`](00-sandbox-foundation.md),
 [`01-mcp-skills-plugins.md`](01-mcp-skills-plugins.md),
 [`02-agent-auth.md`](02-agent-auth.md),
+[`03-settings-admin-ia.md`](03-settings-admin-ia.md),
 [`04-cloud-running-alignment.md`](04-cloud-running-alignment.md),
 [`05-claiming.md`](05-claiming.md).
 
@@ -15,7 +16,7 @@ same sandbox profile, runtime config, agent auth, command queue,
 exposure/projection, and claim primitives as user-initiated work.
 The system already exists; spec 06 aligns it to the new foundation:
 team scope, reusable agent run configs, preflight with auto-cascade,
-and shared-unclaimed exposure on team runs.
+and shared_unclaimed exposure on team runs.
 
 ## 1. Purpose & Scope
 
@@ -580,7 +581,7 @@ Consumers that snapshot:
 ```text
 automation_run.agent_run_config_snapshot_json             (spec 06)
 slack_thread_work.agent_run_config_snapshot_json          (spec 07)
-cloud_session.agent_run_config_snapshot_json              (Desktop / Web / Mobile new-chat consumer)
+cloud_session_projection.agent_run_config_snapshot_json   (Desktop / Web / Mobile new-chat consumer; spec 04 §5.4)
 ```
 
 Spec 06 ships the column on `automation_run`. Spec 07 ships the

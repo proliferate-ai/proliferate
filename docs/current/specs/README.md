@@ -217,6 +217,80 @@ that are `Option<…>` because they only apply to one of several call sites
 (e.g. `sandbox_profile_id` exists for managed-cloud commands but not for
 local-target commands) are fine and not what this rule restricts.
 
+## Unresolved Ambiguity
+
+The 2026-05-20 consistency + critique passes flagged several cross-cutting
+items that span multiple specs and are not fully resolved by any single
+spec. Implementers should treat these as the open coordination work.
+
+1. **`useIsAdmin(org_id)` shape is defined in spec 03 §5.5 but consumed by
+   specs 05, 06, 07, 09 with no shared import contract.** The hook lives
+   at `desktop/src/hooks/access/cloud/organizations/use-is-admin.ts`
+   (doesn't exist yet). Downstream specs must import from there;
+   anyone who inlines the role check violates spec 03 acceptance #14.
+
+2. **`desktop/src/lib/domain/vocabulary.ts` is a hard transitive
+   dependency for specs 04-10.** It doesn't exist yet. If any feature
+   spec ships before spec 03's Chunk E, vocabulary imports fail.
+   Recommendation: ship the vocabulary file as its own small PR ahead
+   of every other UI-touching spec.
+
+3. **`managed_profile_launch` (spec 04 §6) is now formalized with a
+   concrete signature.** Specs 06, 07, 08, 10 import it. If any of them
+   land before spec 04 §6 ships the helper, their workspace-creation
+   paths fail.
+
+4. **`materialize_environment` with `cloud_workspace_id = null` is
+   legal during preflight cascade.** Spec 04 §5.1 result handler must
+   distinguish workspace-level commands (echo cloud_workspace_id) from
+   target-level commands (which legitimately have none). Specs 06 §5.5
+   and 08 §5.6 both depend on this. Spec 04 acceptance #18 covers
+   workspace-level results; the target-level case should be added.
+
+5. **`sandbox_profile_target_state` field names are scattered.**
+   Spec 00 §5.6 owns the schema. Spec 04 §5.2 reads `applied_runtime_config_sequence`
+   etc. Specs 01 §5.10, 02 §5.1, 06 §5.5 each describe partial views.
+   The single source of truth is spec 00 §5.6; all readers should
+   import the same store snapshot dataclass.
+
+6. **`authorization_context_json` residue after `cloud_workspace_id`
+   promotion to a column** (spec 00 §5.8). The JSON column still holds
+   `targetOwnerScope`, `targetOrganizationId`, `actorUserId`, etc. Spec
+   00 should explicitly state: the JSON column stays for the other
+   fields; only `cloudWorkspaceId` is promoted to a typed column. New
+   code reads the column; legacy code reading the JSON for that key
+   stops working after the migration. Same-PR rewrite per the
+   migration posture.
+
+7. **Worker behavior on `plan.slot_generation` mismatch** (spec 02 §5.11
+   materialization plan). The worker should refuse the apply if the
+   plan's slot_generation disagrees with its enrollment-persisted
+   slot_generation. Spec 02 acceptance should add this explicitly.
+
+8. **The Cowork API auto-cascade path** (spec 08 §5.6) shares the
+   cascade primitive with spec 06 §5.5. The implementation should
+   live in one shared module
+   (`server/proliferate/server/cloud/commands/cascade.py`), not be
+   duplicated.
+
+9. **JWKS bootstrap on a fresh target** (spec 05 §5.4). If AnyHarness
+   has never received its public verification keys, the first JWT
+   validation fails. Worker should fetch JWKS during enrollment and
+   write it to AnyHarness before any direct-attach JWT is issued for
+   that target. Spec 05 should add a one-line acceptance bullet.
+
+10. **`backfill_exposed_workspace` (renamed in spec 04 §10 Open Q #5)
+    admission policy is owned by spec 08** per spec 04 §5.10. Spec 08
+    Open Q #6 (workspace move "Continue remotely" admission) references
+    the same command. The admission policy should be written
+    explicitly in spec 08 §5.5 — when does Cloud accept a
+    `backfill_exposed_workspace` from a worker?
+
+These ambiguities are not blockers — each spec is implementable in
+isolation — but the coordination matters at PR-stack assembly time.
+Resolve as part of the foundation (spec 00) PR or the spec immediately
+downstream of where the issue surfaces.
+
 ## Spec Format
 
 Each spec follows this layout:

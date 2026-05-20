@@ -496,6 +496,13 @@ ADD COLUMN gap_state_json        text                                  nullable
                                  { last_gap_seq, last_repair_attempt_at, kind }
 ADD COLUMN last_uploaded_seq     integer                               nullable
                                  mirror of cloud_event_ingest_state for fast reads
+ADD COLUMN agent_run_config_snapshot_json  jsonb                       nullable
+                                 -- resolved cloud_agent_run_config
+                                    values at session-creation time;
+                                    spec 06 §5.3 snapshot pattern.
+                                    Set by the launch caller (Desktop /
+                                    web / mobile / cowork) on
+                                    start_session; immutable thereafter.
 
 backfill:
   default projection_level = 'live'
@@ -956,13 +963,68 @@ server/proliferate/server/cloud/commands/api.py
     where helpful
 
 server/proliferate/server/cloud/workspaces/service.py
-  - rewrite create_cloud_workspace to write sandbox_profile_id +
-    target_id BEFORE enqueue_command (managed_profile_launch
-    helper)
+  - rewrite create_cloud_workspace to use the new managed_profile_launch
+    helper (signature below)
   - stamp origin enum from caller (web/desktop/automation/slack)
-  - create or upsert cloud_workspace_exposure with sensible defaults
-    (personal -> 'private' + commandable; automation -> 'private' +
-    commandable; slack/team -> 'shared_unclaimed' + commandable)
+
+managed_profile_launch signature (canonical; every caller imports here):
+
+  def managed_profile_launch(
+      db: AsyncSession,
+      *,
+      owner_scope: str,                    # 'personal' | 'organization'
+      owner_user_id: UUID | None,
+      organization_id: UUID | None,
+      normalized_repo_key: str,
+      git_branch: str | None,
+      worktree_path: str | None,
+      origin: str,                         # spec 03 §5.3 Origin enum value
+      source_kind: str,                    # spec 05 §5.1 source_kind for
+                                           # claim provenance; matches origin
+                                           # for most callers; 'manual' for
+                                           # Desktop dispatch
+      exposure_visibility: str,            # spec 04 §5.3 visibility enum
+      exposure_commandable: bool,
+      default_projection_level: str,       # 'live' | 'transcript' |
+                                           # 'session_summaries'
+      required_runtime_config_revision_id: str | None,   # spec 01
+      required_agent_auth_revision: int | None,          # spec 02
+      actor_user_id: UUID,
+      idempotency_key: str | None = None,
+  ) -> ManagedProfileLaunchResult:
+      ...
+
+  class ManagedProfileLaunchResult:
+      sandbox_profile_id:        UUID
+      target_id:                 UUID
+      active_sandbox_id:         UUID    # spec 00 slot id
+      slot_generation:           int
+      cloud_workspace_id:        UUID
+      cloud_workspace_exposure_id: UUID
+      cloud_session_projection_id: UUID | None   # set later on start_session
+      already_exists:            bool   # idempotency: True if same key
+                                         # resolved to existing rows
+
+The helper is transactional: ensure_*_sandbox_profile,
+ensure_primary_profile_target, ensure_profile_slot (background-
+provisioned), cloud_workspace INSERT, cloud_workspace_exposure
+INSERT or revision bump, all in one server-side flow. On
+failure before exposure insert, the cloud_workspace row is rolled
+back.
+
+Slot provisioning runs in the background (spec 00 §2.1); the
+helper returns once the cloud_workspace + exposure rows exist
+even if the slot is still `creating`. Wake-required commands
+that arrive against a creating slot use the spec 04 §5.6 async
+wake path.
+
+Sensible exposure defaults per caller (callers pass these
+explicitly; the helper does not infer):
+  personal launch            visibility='private', commandable=true
+  automation personal        visibility='private', commandable=true
+  automation team            visibility='shared_unclaimed', commandable=true
+  slack team                 visibility='shared_unclaimed', commandable=true
+  desktop dispatch           visibility='private', commandable=true
   - create or upsert cloud_session_projection on session start
 
 server/proliferate/server/cloud/runtime/wake.py     (new)
