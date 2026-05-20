@@ -40,7 +40,7 @@ export const colors = {
   infoSubtle: "rgba(51,156,255,0.14)",
   infoForeground: "#ffffff",
   sidebar: "#141414",
-  sidebarBackground: "#141414",
+  sidebarBackground: "#181818",
   sidebarForeground: "#ffffff",
   sidebarMutedForeground: "rgba(255,255,255,0.481)",
   sidebarAccent: "rgba(255,255,255,0.074)",

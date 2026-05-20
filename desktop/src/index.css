@@ -201,7 +201,7 @@
 
   /* -- Sidebar -- */
   --color-sidebar: #141414;
-  --color-sidebar-background: #141414;
+  --color-sidebar-background: #181818;
   --color-sidebar-foreground: #ffffff;
   --color-sidebar-primary: #ffffff;
   --color-sidebar-primary-foreground: #ffffff;
@@ -533,7 +533,7 @@
 
   /* -- Sidebar -- */
   --color-sidebar: #141414;
-  --color-sidebar-background: #141414;
+  --color-sidebar-background: #181818;
   --color-sidebar-foreground: #ffffff;
   --color-sidebar-primary: #ffffff;
   --color-sidebar-primary-foreground: #ffffff;
@@ -661,7 +661,7 @@
   --color-prose-border: color-mix(in oklab, #ffffff 8%, transparent);
 
   --color-sidebar: #141414;
-  --color-sidebar-background: #141414;
+  --color-sidebar-background: #181818;
   --color-sidebar-foreground: #ffffff;
   --color-sidebar-primary: #ffffff;
   --color-sidebar-primary-foreground: #ffffff;
