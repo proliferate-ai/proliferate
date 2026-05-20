@@ -6,12 +6,8 @@ import {
   Copy,
   FileText,
   FolderList,
+  Mail,
 } from "@/components/ui/icons";
-import {
-  GmailBrandIcon,
-  MailAppIcon,
-  OutlookBrandIcon,
-} from "@/components/ui/app-icons";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useSupportDialogState } from "@/hooks/support/facade/use-support-dialog-state";
@@ -62,31 +58,28 @@ export function SupportDialog({
       title="Support"
       description="Questions, bugs, or setup issues. Send a note and we'll follow up directly."
       sizeClassName="max-w-lg"
-      overlayClassName="bg-background/65 backdrop-blur-[3px]"
-      panelClassName="border-border/70 bg-background/95 shadow-floating"
       bodyClassName="px-5 pb-5 pt-0"
       telemetryBlocked
     >
       <div className="space-y-4">
         <div className="space-y-4">
           {contextLabel && (
-            <div className="rounded-md border border-border bg-foreground/5 px-3 py-2 text-xs text-muted-foreground">
+            <div className="text-xs leading-5 text-muted-foreground">
               {contextLabel}
             </div>
           )}
-          <p className="max-w-md text-sm leading-6 text-foreground">
+          <p className="max-w-md text-sm leading-6">
             Help is a message away. Send us a note at {fallbackEmail}, and
             we&apos;ll reply within a day.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="primary"
+              variant="outline"
               size="sm"
               autoFocus
-              className="border border-foreground/20 bg-foreground/5 text-foreground shadow-none hover:bg-foreground/10"
               onClick={() => { void handleGmail(); }}
             >
-              <GmailBrandIcon className="size-3.5 shrink-0" />
+              <Mail className="size-3.5 shrink-0" />
               {CAPABILITY_COPY.supportGmailLabel}
             </Button>
             <Button
@@ -94,7 +87,7 @@ export function SupportDialog({
               size="sm"
               onClick={() => { void handleOutlook(); }}
             >
-              <OutlookBrandIcon className="size-3.5 shrink-0" />
+              <Mail className="size-3.5 shrink-0" />
               {CAPABILITY_COPY.supportOutlookLabel}
             </Button>
             <Button
@@ -102,7 +95,7 @@ export function SupportDialog({
               size="sm"
               onClick={() => { void handleEmail(); }}
             >
-              <MailAppIcon className="size-4 shrink-0" />
+              <Mail className="size-3.5 shrink-0" />
               {CAPABILITY_COPY.supportMailAppLabel}
             </Button>
             <Button
@@ -190,7 +183,7 @@ function SupportDebugSection({
         aria-expanded={expanded}
         aria-controls={contentId}
         onClick={onToggle}
-        className="flex w-full whitespace-normal rounded-md border border-border bg-foreground/5 px-3 py-2 text-left transition-colors hover:bg-foreground/10"
+        className="flex w-full whitespace-normal rounded-md py-2 text-left"
       >
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-medium text-foreground">
@@ -210,7 +203,7 @@ function SupportDebugSection({
       <div
         id={contentId}
         hidden={!expanded}
-        className="rounded-md border border-border bg-foreground/5 px-3 py-2"
+        className="border-t border-border pt-3"
       >
         <div className="space-y-2">
           <p className="text-xs leading-5 text-muted-foreground">
@@ -269,7 +262,7 @@ function SupportDebugSection({
             </Button>
           </div>
         </div>
-        <p className="mt-2 text-[11px] leading-5 text-muted-foreground/80">
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
           Event exports include prompts, raw notifications, tool output, file paths, and
           runtime metadata. Nothing is sent automatically.
         </p>

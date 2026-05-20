@@ -127,7 +127,7 @@ describe("SupportDialog", () => {
     expect(screen.getByText(/Event exports include prompts/)).toBeTruthy();
   });
 
-  it("keeps Gmail first without a white fallback background", () => {
+  it("keeps Gmail first with a plain outline treatment", () => {
     renderSupportDialog();
 
     const buttons = screen.getAllByRole("button");
@@ -135,7 +135,8 @@ describe("SupportDialog", () => {
     const outlook = screen.getByRole("button", { name: /Outlook/i });
 
     expect(buttons.indexOf(gmail)).toBeLessThan(buttons.indexOf(outlook));
-    expect(gmail.className).toContain("bg-foreground/5");
+    expect(gmail.className).toContain("border");
+    expect(gmail.className).not.toContain("bg-foreground/5");
     expect(gmail.className).not.toContain("bg-primary");
     expect(outlook.className).toContain("border");
   });
