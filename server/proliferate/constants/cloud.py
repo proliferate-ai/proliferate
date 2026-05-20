@@ -461,7 +461,7 @@ class CloudCommandKind(StrEnum):
     resume_workspace = "resume_workspace"
     prune_workspace = "prune_workspace"
     extend_workspace_ttl = "extend_workspace_ttl"
-    sync_existing_workspace = "sync_existing_workspace"
+    backfill_exposed_workspace = "backfill_exposed_workspace"
 
 
 class CloudCommandStatus(StrEnum):
@@ -506,7 +506,7 @@ ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.update_session_config.value,
     CloudCommandKind.cancel_turn.value,
     CloudCommandKind.close_session.value,
-    CloudCommandKind.sync_existing_workspace.value,
+    CloudCommandKind.backfill_exposed_workspace.value,
 )
 DEFAULT_CLOUD_WORKER_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.start_session.value,

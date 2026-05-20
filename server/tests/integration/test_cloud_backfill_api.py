@@ -255,7 +255,7 @@ class TestCloudBackfillApi:
         assert second_sessions.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_sync_existing_workspace_command_can_be_queued(
+    async def test_backfill_exposed_workspace_command_can_be_queued(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -276,10 +276,10 @@ class TestCloudBackfillApi:
             "/v1/cloud/commands",
             headers=auth.headers,
             json={
-                "idempotencyKey": "sync-local-workspace",
+                "idempotencyKey": "backfill-local-workspace",
                 "targetId": target_id,
                 "workspaceId": "local-workspace-1",
-                "kind": "sync_existing_workspace",
+                "kind": "backfill_exposed_workspace",
                 "payload": {},
                 "source": "desktop_cloud_view",
             },
@@ -299,7 +299,7 @@ class TestCloudBackfillApi:
             "/v1/cloud/worker/commands/lease",
             headers=worker_headers,
             json={
-                "supportedKinds": ["sync_existing_workspace"],
+                "supportedKinds": ["backfill_exposed_workspace"],
                 "leaseTimeoutSeconds": 30,
             },
         )
