@@ -32,6 +32,7 @@ describe("useConfiguredLaunchReadiness", () => {
       targetReadinessError: null,
       isLoading: false,
       launchAgents: [],
+      defaultLaunchSelection: null,
     });
     mocks.useAgentCatalog.mockReturnValue({
       agentsByKind: new Map(),
@@ -50,6 +51,7 @@ describe("useConfiguredLaunchReadiness", () => {
       targetReadinessError: null,
       isLoading: false,
       launchAgents: [],
+      defaultLaunchSelection: null,
     });
 
     const { result } = renderHook(() => useConfiguredLaunchReadiness());
@@ -71,6 +73,7 @@ describe("useConfiguredLaunchReadiness", () => {
       targetReadinessError: targetError,
       isLoading: false,
       launchAgents: [],
+      defaultLaunchSelection: null,
     });
 
     const { result } = renderHook(() => useConfiguredLaunchReadiness());
@@ -102,6 +105,7 @@ describe("useConfiguredLaunchReadiness", () => {
         },
         models: [],
       }],
+      defaultLaunchSelection: null,
     });
     mocks.useAgentCatalog.mockReturnValue({
       agentsByKind: new Map([
@@ -141,6 +145,7 @@ describe("useConfiguredLaunchReadiness", () => {
         },
         models: [],
       }],
+      defaultLaunchSelection: null,
     });
     mocks.useAgentCatalog.mockReturnValue({
       agentsByKind: new Map(),
@@ -153,6 +158,52 @@ describe("useConfiguredLaunchReadiness", () => {
       disabledReason: "opencode isn't supported by this runtime yet.",
       status: "unavailable",
       isReady: false,
+    });
+  });
+
+  it("falls back to another ready agent when the fresh Claude default is unavailable", () => {
+    useUserPreferencesStore.setState({
+      defaultChatAgentKind: "claude",
+      defaultChatModelIdByAgentKind: {},
+    });
+    mocks.useChatLaunchCatalog.mockReturnValue({
+      data: {},
+      error: null,
+      targetReadinessError: null,
+      isLoading: false,
+      launchAgents: [{
+        kind: "codex",
+        displayName: "Codex",
+        defaultModelId: "gpt-5.4",
+        dynamicModels: false,
+        modelDisplayPolicy: null,
+        promptCapabilities: null,
+        models: [{
+          id: "gpt-5.4",
+          displayName: "GPT 5.4",
+          aliases: [],
+          status: "active",
+          isDefault: true,
+          tags: [],
+          launchRemediation: null,
+        }],
+        launchControls: [],
+      }],
+      defaultLaunchSelection: { kind: "codex", modelId: "gpt-5.4" },
+    });
+    mocks.useAgentCatalog.mockReturnValue({
+      agentsByKind: new Map(),
+    });
+
+    const { result } = renderHook(() => useConfiguredLaunchReadiness());
+
+    expect(result.current).toMatchObject({
+      configuredKind: "claude",
+      selection: { kind: "codex", modelId: "gpt-5.4" },
+      displayName: "GPT 5.4",
+      disabledReason: null,
+      status: "ready",
+      isReady: true,
     });
   });
 });

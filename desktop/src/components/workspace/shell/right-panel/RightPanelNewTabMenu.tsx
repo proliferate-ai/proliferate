@@ -16,7 +16,6 @@ interface RightPanelNewTabMenuProps {
   open: boolean;
   defaultKind: RightPanelNewTabMenuDefault;
   isWorkspaceReady: boolean;
-  canCreateBrowserTab: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onCreateTerminal: () => void;
   onCreateBrowser: () => void;
@@ -27,13 +26,12 @@ export function RightPanelNewTabMenu({
   open,
   defaultKind,
   isWorkspaceReady,
-  canCreateBrowserTab,
   onOpenChange,
   onCreateTerminal,
   onCreateBrowser,
   shortcutRevealVisible,
 }: RightPanelNewTabMenuProps) {
-  const showBrowserShortcut = isWorkspaceReady && canCreateBrowserTab;
+  const showBrowserShortcut = isWorkspaceReady;
 
   return (
     <PopoverButton
@@ -64,7 +62,6 @@ export function RightPanelNewTabMenu({
         <NewTabMenuContent
           defaultKind={defaultKind}
           isWorkspaceReady={isWorkspaceReady}
-          canCreateBrowserTab={canCreateBrowserTab}
           onCreateTerminal={() => {
             close();
             onCreateTerminal();
@@ -82,13 +79,11 @@ export function RightPanelNewTabMenu({
 function NewTabMenuContent({
   defaultKind,
   isWorkspaceReady,
-  canCreateBrowserTab,
   onCreateTerminal,
   onCreateBrowser,
 }: {
   defaultKind: RightPanelNewTabMenuDefault;
   isWorkspaceReady: boolean;
-  canCreateBrowserTab: boolean;
   onCreateTerminal: () => void;
   onCreateBrowser: () => void;
 }) {
@@ -130,7 +125,7 @@ function NewTabMenuContent({
         label="Browser"
         variant="sidebar"
         icon={<AppShellBrowserIcon className="size-4" />}
-        disabled={!isWorkspaceReady || !canCreateBrowserTab}
+        disabled={!isWorkspaceReady}
         autoFocus={defaultKind === "browser"}
         onClick={onCreateBrowser}
       />

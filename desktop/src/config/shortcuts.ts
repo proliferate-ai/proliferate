@@ -53,12 +53,12 @@ export const SHORTCUTS = {
   },
   goHome: {
     id: "app.go-home",
-    label: "⌘⇧,",
-    nonMacLabel: "Ctrl+Shift+,",
+    label: "⌘⌥,",
+    nonMacLabel: "Ctrl+Alt+,",
     description: "Go home",
     owner: "js",
-    match: { kind: "fixed-code", code: "Comma", meta: true, shift: true, alt: false },
-    allowInInputs: false,
+    match: { kind: "fixed-code", code: "Comma", meta: true, shift: false, alt: true },
+    allowInInputs: true,
   },
   goPlugins: {
     id: "app.go-plugins",

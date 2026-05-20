@@ -263,7 +263,15 @@ function resolveSelectorModels(
     });
   }
 
-  return agent.models;
+  return agent.models.map((model) => ({
+    id: model.id,
+    displayName: resolveModelDisplayName({
+      agentKind: agent.kind,
+      modelId: model.id,
+      sourceLabels: [model.displayName],
+      preferKnownAlias: true,
+    }) ?? model.displayName,
+  }));
 }
 
 function resolveModelSelectionActionKindForModel(

@@ -111,6 +111,28 @@ export function createBrowserTabInRightPanelState(
   );
 }
 
+export function createOrActivateBrowserTabInRightPanelState(
+  input: Partial<RightPanelWorkspaceState> | undefined,
+  browserId: string,
+  isCloudWorkspaceSelected: boolean,
+): RightPanelWorkspaceState {
+  const state = reconcileRightPanelWorkspaceState(input, { isCloudWorkspaceSelected });
+  if (canCreateRightPanelBrowserTab(state)) {
+    return createBrowserTabInRightPanelState(state, browserId, isCloudWorkspaceSelected);
+  }
+
+  const browserIds = browserIdsFromHeaderOrder(state.headerOrder);
+  const existingBrowserId = browserIds[browserIds.length - 1];
+  if (!existingBrowserId || !state.browserTabsById[existingBrowserId]) {
+    return state;
+  }
+
+  return {
+    ...state,
+    activeEntryKey: rightPanelBrowserHeaderKey(existingBrowserId),
+  };
+}
+
 export function updateBrowserTabUrlInRightPanelState(
   input: Partial<RightPanelWorkspaceState> | undefined,
   browserId: string,

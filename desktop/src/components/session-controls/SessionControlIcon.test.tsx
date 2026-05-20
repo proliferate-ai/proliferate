@@ -32,13 +32,14 @@ describe("SessionControlIcon", () => {
     });
     expect(resolveConfiguredSessionControlValue("claude", "mode", "acceptEdits")).toMatchObject({
       icon: "sparkles",
-      label: "Auto",
-      shortLabel: "Auto",
+      label: "Accept Edits",
+      shortLabel: "Edits",
     });
     expect(resolveConfiguredSessionControlValue("claude", "mode", "auto")).toMatchObject({
       icon: "sparkles",
       label: "Auto",
       shortLabel: "Auto",
+      description: "Use a model classifier to approve or deny permission prompts.",
     });
   });
 });

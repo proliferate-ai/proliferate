@@ -13,11 +13,8 @@ import {
   OutlookBrandIcon,
 } from "@/components/ui/app-icons";
 import { ModalShell } from "@/components/ui/ModalShell";
-import { Textarea } from "@/components/ui/Textarea";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useSupportDialogState } from "@/hooks/support/facade/use-support-dialog-state";
-import { SUPPORT_MESSAGE_MAX_LENGTH } from "@/lib/domain/support/constants";
-import { clampSupportMessage } from "@/lib/domain/support/formatting";
 import type { SupportMessageContext } from "@/lib/domain/support/types";
 
 interface SupportDialogProps {
@@ -48,16 +45,11 @@ export function SupportDialog({
     handleEmail,
     handleGmail,
     handleOutlook,
-    handleSend,
-    inAppSupportEnabled,
     isCopyingInvestigationJson,
     isExportingDebugBundle,
     isExportingReplayRecording,
     isExportingSessionDebugJson,
     isExportingWorkspaceDebugJson,
-    isSendingSupportMessage,
-    message,
-    setMessage,
   } = useSupportDialogState({
     onClose,
     context,
@@ -68,98 +60,61 @@ export function SupportDialog({
       open
       onClose={onClose}
       title="Support"
-      description={inAppSupportEnabled
-        ? "Questions, bugs, or setup issues. Send a note and we'll follow up directly."
-        : undefined}
+      description="Questions, bugs, or setup issues. Send a note and we'll follow up directly."
       sizeClassName="max-w-lg"
       overlayClassName="bg-background/65 backdrop-blur-[3px]"
       panelClassName="border-border/70 bg-background/95 shadow-floating"
       bodyClassName="px-5 pb-5 pt-0"
       telemetryBlocked
-      footer={inAppSupportEnabled ? (
-        <>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => { void handleSend(); }}
-            loading={isSendingSupportMessage}
-            disabled={!message.trim()}
-          >
-            Send
-          </Button>
-        </>
-      ) : undefined}
     >
       <div className="space-y-4">
-        {inAppSupportEnabled ? (
-          <div className="space-y-3">
-            {contextLabel && (
-              <div className="rounded-md border border-border bg-foreground/5 px-3 py-2 text-xs text-muted-foreground">
-                {contextLabel}
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <Textarea
-                autoFocus
-                rows={6}
-                maxLength={SUPPORT_MESSAGE_MAX_LENGTH}
-                value={message}
-                onChange={(event) => setMessage(clampSupportMessage(event.target.value))}
-                placeholder="What do you need help with?"
-                className="min-h-[132px]"
-              />
-              <div className="flex justify-end">
-                <span className="text-xs text-muted-foreground">
-                  {message.length} / {SUPPORT_MESSAGE_MAX_LENGTH}
-                </span>
-              </div>
+        <div className="space-y-4">
+          {contextLabel && (
+            <div className="rounded-md border border-border bg-foreground/5 px-3 py-2 text-xs text-muted-foreground">
+              {contextLabel}
             </div>
+          )}
+          <p className="max-w-md text-sm leading-6 text-foreground">
+            Help is a message away. Send us a note at {fallbackEmail}, and
+            we&apos;ll reply within a day.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              autoFocus
+              className="border border-foreground/20 bg-foreground/5 text-foreground shadow-none hover:bg-foreground/10"
+              onClick={() => { void handleGmail(); }}
+            >
+              <GmailBrandIcon className="size-3.5 shrink-0" />
+              {CAPABILITY_COPY.supportGmailLabel}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { void handleOutlook(); }}
+            >
+              <OutlookBrandIcon className="size-3.5 shrink-0" />
+              {CAPABILITY_COPY.supportOutlookLabel}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { void handleEmail(); }}
+            >
+              <MailAppIcon className="size-4 shrink-0" />
+              {CAPABILITY_COPY.supportMailAppLabel}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { void handleCopyEmail(); }}
+            >
+              <Copy className="size-3.5 shrink-0" />
+              {CAPABILITY_COPY.supportCopyLabel}
+            </Button>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <p className="max-w-md text-sm leading-6 text-foreground">
-              Help is a message away. Send us a note at {fallbackEmail}, and
-              we&apos;ll reply within a day.
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="primary"
-                size="sm"
-                className="border border-foreground/20 bg-foreground/5 text-foreground shadow-none hover:bg-foreground/10"
-                onClick={() => { void handleGmail(); }}
-              >
-                <GmailBrandIcon className="size-3.5 shrink-0" />
-                {CAPABILITY_COPY.supportGmailLabel}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => { void handleOutlook(); }}
-              >
-                <OutlookBrandIcon className="size-3.5 shrink-0" />
-                {CAPABILITY_COPY.supportOutlookLabel}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => { void handleEmail(); }}
-              >
-                <MailAppIcon className="size-4 shrink-0" />
-                {CAPABILITY_COPY.supportMailAppLabel}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => { void handleCopyEmail(); }}
-              >
-                <Copy className="size-3.5 shrink-0" />
-                {CAPABILITY_COPY.supportCopyLabel}
-              </Button>
-            </div>
-          </div>
-        )}
+        </div>
 
         {canExportDebugBundle && (
           <SupportDebugSection

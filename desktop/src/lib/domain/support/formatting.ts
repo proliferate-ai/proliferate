@@ -1,4 +1,3 @@
-import { SUPPORT_MESSAGE_MAX_LENGTH } from "@/lib/domain/support/constants";
 import type { SupportMessageContext } from "@/lib/domain/support/types";
 
 export function formatSupportContextLabel(
@@ -13,17 +12,15 @@ export function formatSupportContextLabel(
   return null;
 }
 
-export function buildSupportEmailBody(_context: SupportMessageContext): string {
-  // Leave the email body empty on purpose — the subject already identifies
-  // the product, and the user should start with a clean textarea rather
-  // than the default robotic "Context: / Intent: general" template.
-  return "";
-}
+export function buildSupportEmailBody(context: SupportMessageContext): string {
+  const contextLabel = formatSupportContextLabel(context);
+  const details = [
+    contextLabel ? `Context: ${contextLabel}` : null,
+    context.workspaceId ? `Workspace ID: ${context.workspaceId}` : null,
+    context.pathname ? `Path: ${context.pathname}` : null,
+    `Source: ${context.source}`,
+    `Intent: ${context.intent}`,
+  ].filter((line): line is string => Boolean(line));
 
-export function clampSupportMessage(message: string): string {
-  return message.slice(0, SUPPORT_MESSAGE_MAX_LENGTH);
-}
-
-export function normalizeSupportMessageForSend(message: string): string {
-  return clampSupportMessage(message.trim());
+  return `\n\n---\n${details.join("\n")}`;
 }

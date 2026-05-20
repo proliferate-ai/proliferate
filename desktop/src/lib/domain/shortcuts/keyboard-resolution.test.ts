@@ -148,7 +148,7 @@ describe("resolveKeyboardShortcut", () => {
     });
   });
 
-  it("keeps command-comma settings distinct from command-shift-comma home on mac", () => {
+  it("keeps command-comma settings distinct from command-option-comma home on mac", () => {
     vi.stubGlobal("navigator", {
       platform: "MacIntel",
       userAgent: "Mac OS X",
@@ -183,6 +183,15 @@ describe("resolveKeyboardShortcut", () => {
       ctrlKey: false,
       shiftKey: true,
       altKey: false,
+    } as KeyboardEvent)).toBeNull();
+
+    expect(resolveKeyboardShortcut({
+      key: ",",
+      code: "Comma",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
     } as KeyboardEvent)).toEqual({
       id: "app.go-home",
       shortcut: expect.objectContaining({ id: "app.go-home" }),

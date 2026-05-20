@@ -6,6 +6,7 @@ import { resolveConfiguredLaunchSelection } from "@/lib/domain/chat/composer/pre
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selection";
 import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
+import { resolveCurrentModelDisplayName } from "@/lib/domain/chat/models/model-selector-current";
 
 export function useConfiguredLaunchReadiness(
   activeSelection: ModelSelectorSelection | null = null,
@@ -66,15 +67,28 @@ export function useConfiguredLaunchReadiness(
       ? `${preferences.defaultChatAgentKind} isn't supported by this runtime yet.`
     : resolution.reason;
   const isBlockedByReadiness = isConfiguredAgentMissing || isConfiguredAgentNotReady;
+  const fallbackSelection = isBlockedByReadiness
+    ? launchCatalog.defaultLaunchSelection ?? null
+    : null;
+  const selection = fallbackSelection ?? (isBlockedByReadiness ? null : resolution.selection);
+  const displayName = fallbackSelection
+    ? resolveCurrentModelDisplayName({
+      activeLaunchIdentity: null,
+      defaultLaunchSelection: fallbackSelection,
+      launchAgents: launchCatalog.launchAgents,
+      liveConfigLabel: null,
+    })
+    : resolution.displayName;
+  const status = fallbackSelection ? "ready" : effectiveStatus;
 
   return {
     configuredKind: preferences.defaultChatAgentKind || null,
-    selection: isBlockedByReadiness ? null : resolution.selection,
-    displayName: resolution.displayName,
-    disabledReason,
-    status: effectiveStatus,
+    selection,
+    displayName,
+    disabledReason: fallbackSelection ? null : disabledReason,
+    status,
     isLoading: !hasLaunchReadinessError && launchCatalog.isLoading,
-    isReady: effectiveStatus === "ready",
+    isReady: status === "ready",
     launchCatalog,
   };
 }

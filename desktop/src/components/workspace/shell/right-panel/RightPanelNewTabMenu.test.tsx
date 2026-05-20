@@ -9,7 +9,7 @@ import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 describe("RightPanelNewTabMenu", () => {
   afterEach(cleanup);
 
-  it("reveals the browser-tab shortcut only when browser tabs are usable", () => {
+  it("reveals the browser-tab shortcut whenever the workspace is ready", () => {
     const label = getShortcutDisplayLabel(SHORTCUTS.openBrowserTab);
 
     const rendered = render(
@@ -17,7 +17,6 @@ describe("RightPanelNewTabMenu", () => {
         open={false}
         defaultKind="browser"
         isWorkspaceReady
-        canCreateBrowserTab
         onOpenChange={vi.fn()}
         onCreateTerminal={vi.fn()}
         onCreateBrowser={vi.fn()}
@@ -31,8 +30,7 @@ describe("RightPanelNewTabMenu", () => {
       <RightPanelNewTabMenu
         open={false}
         defaultKind="browser"
-        isWorkspaceReady
-        canCreateBrowserTab={false}
+        isWorkspaceReady={false}
         onOpenChange={vi.fn()}
         onCreateTerminal={vi.fn()}
         onCreateBrowser={vi.fn()}

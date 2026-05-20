@@ -40,7 +40,6 @@ interface RightPanelFrameProps {
   shouldRenderContent: boolean;
   shouldMountBrowserPanel: boolean;
   shouldMountTerminalPanel: boolean;
-  canCreateBrowserTab: boolean;
   canConnectTerminals: boolean;
   isLoadingTerminals: boolean;
   terminalListErrorMessage: string | null;
@@ -88,7 +87,6 @@ export function RightPanelFrame({
   shouldRenderContent,
   shouldMountBrowserPanel,
   shouldMountTerminalPanel,
-  canCreateBrowserTab,
   canConnectTerminals,
   isLoadingTerminals,
   terminalListErrorMessage,
@@ -127,7 +125,6 @@ export function RightPanelFrame({
         buffersByPath={buffersByPath}
         tabModes={tabModes}
         isWorkspaceReady={isWorkspaceReady}
-        canCreateBrowserTab={canCreateBrowserTab}
         newTabMenuRequestToken={newTabMenuRequestToken}
         newTabMenuDefaultKind={newTabMenuDefaultKind}
         onActivateTool={onActivateTool}

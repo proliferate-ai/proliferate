@@ -299,6 +299,7 @@ mod tests {
             Some("us.anthropic.claude-sonnet-4-6")
         );
         assert_eq!(projected.models[0].default_opt_in, Some(true));
+        assert_eq!(projected.models[0].display_name, "Sonnet");
         assert_eq!(
             projected.models[0].description.as_deref(),
             Some("Curated Claude default")
