@@ -4,11 +4,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from proliferate.constants.cloud import SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS, CloudAgentKind
+from proliferate.constants.cloud import (
+    SUPPORTED_CLOUD_AGENTS,
+    SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS,
+    CloudAgentKind,
+)
 from proliferate.server.cloud.agent_auth.domain.types import SyncedCredentialAuthMode
 
 _DEFAULT_AUTH_MODES: dict[CloudAgentKind, SyncedCredentialAuthMode] = {
-    "claude": "env",
+    "claude": "file",
     "codex": "file",
     "gemini": "env",
 }
@@ -60,7 +64,7 @@ def build_credential_statuses(
 
 
 def allowed_agent_kinds() -> list[CloudAgentKind]:
-    return list(SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS)
+    return list(SUPPORTED_CLOUD_AGENTS)
 
 
 def ready_agent_kinds(statuses: Sequence[CredentialStatusRecord]) -> list[CloudAgentKind]:

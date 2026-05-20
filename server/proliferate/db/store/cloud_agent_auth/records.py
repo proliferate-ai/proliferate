@@ -160,6 +160,7 @@ class SandboxProfileTargetStateRecord:
     last_agent_auth_applied_at: datetime | None
     last_agent_auth_error_code: str | None
     last_agent_auth_error_message: str | None
+    pending_agent_auth_cleanup_json: str | None
     applied_runtime_config_sequence: int
     applied_runtime_config_revision_id: str | None
     runtime_config_status: str
@@ -203,6 +204,10 @@ class SandboxProfileTargetStateRecord:
     @property
     def last_error_message(self) -> str | None:
         return self.last_agent_auth_error_message
+
+    @property
+    def pending_cleanup_json(self) -> str | None:
+        return self.pending_agent_auth_cleanup_json
 
 
 SandboxProfileAgentAuthTargetStateRecord = SandboxProfileTargetStateRecord
