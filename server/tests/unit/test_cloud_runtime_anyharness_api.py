@@ -10,8 +10,8 @@ from proliferate.integrations.anyharness import (
 )
 from proliferate.server.cloud.runtime import anyharness_api
 from proliferate.server.cloud.runtime.anyharness_api import (
-    _install_required_synced_providers,
-    _synced_ready_providers,
+    _install_required_agent_kinds,
+    _ready_required_agent_kinds,
 )
 
 
@@ -113,7 +113,7 @@ async def test_verify_runtime_auth_enforced_raises_when_probe_request_errors(
 
 
 @pytest.mark.asyncio
-async def test_reconcile_remote_agents_skips_install_when_synced_agents_are_already_ready(
+async def test_reconcile_remote_agents_skips_install_when_required_agents_are_already_ready(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     list_calls: list[str] = []
@@ -136,7 +136,7 @@ async def test_reconcile_remote_agents_skips_install_when_synced_agents_are_alre
     ready_agents = await anyharness_api.reconcile_remote_agents(
         "https://runtime.invalid",
         "runtime-token",
-        synced_providers=["claude", "codex"],
+        required_agent_kinds=["claude", "codex"],
     )
 
     assert ready_agents == ["claude", "codex"]
@@ -145,7 +145,7 @@ async def test_reconcile_remote_agents_skips_install_when_synced_agents_are_alre
 
 
 @pytest.mark.asyncio
-async def test_reconcile_remote_agents_installs_only_install_required_synced_agents(
+async def test_reconcile_remote_agents_installs_only_install_required_agents(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     list_responses = [
@@ -190,15 +190,15 @@ async def test_reconcile_remote_agents_installs_only_install_required_synced_age
     ready_agents = await anyharness_api.reconcile_remote_agents(
         "https://runtime.invalid",
         "runtime-token",
-        synced_providers=["claude", "codex", "gemini"],
+        required_agent_kinds=["claude", "codex", "gemini"],
     )
 
     assert ready_agents == ["claude", "codex"]
     assert install_calls == ["codex"]
 
 
-def test_install_required_synced_providers_includes_gemini() -> None:
-    providers = _install_required_synced_providers(
+def test_install_required_agent_kinds_includes_gemini() -> None:
+    providers = _install_required_agent_kinds(
         [
             RemoteAgentSummary(kind="claude", readiness="ready", credential_state=None),
             RemoteAgentSummary(
@@ -213,8 +213,8 @@ def test_install_required_synced_providers_includes_gemini() -> None:
     assert providers == ["gemini"]
 
 
-def test_synced_ready_providers_includes_gemini() -> None:
-    providers = _synced_ready_providers(
+def test_ready_required_agent_kinds_includes_gemini() -> None:
+    providers = _ready_required_agent_kinds(
         [
             RemoteAgentSummary(kind="claude", readiness="ready", credential_state=None),
             RemoteAgentSummary(kind="gemini", readiness="ready", credential_state=None),

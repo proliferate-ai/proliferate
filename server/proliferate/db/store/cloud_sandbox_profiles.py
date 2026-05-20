@@ -82,8 +82,7 @@ async def ensure_personal_sandbox_profile(
         .on_conflict_do_nothing(
             index_elements=[SandboxProfile.owner_user_id],
             index_where=(
-                (SandboxProfile.owner_scope == "personal")
-                & SandboxProfile.archived_at.is_(None)
+                (SandboxProfile.owner_scope == "personal") & SandboxProfile.archived_at.is_(None)
             ),
         )
         .returning(SandboxProfile.id)

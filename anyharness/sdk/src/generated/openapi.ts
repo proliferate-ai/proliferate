@@ -3077,6 +3077,7 @@ export interface components {
         };
         PromptSessionRequest: {
             blocks: components["schemas"]["PromptInputBlock"][];
+            expectedRuntimeConfigRevision?: null | components["schemas"]["RuntimeConfigRevisionExpectation"];
             promptId?: string | null;
         };
         PromptSessionResponse: {

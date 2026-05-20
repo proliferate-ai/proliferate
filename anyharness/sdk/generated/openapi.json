@@ -11619,6 +11619,16 @@
               "$ref": "#/components/schemas/PromptInputBlock"
             }
           },
+          "expectedRuntimeConfigRevision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RuntimeConfigRevisionExpectation"
+              }
+            ]
+          },
           "promptId": {
             "type": [
               "string",

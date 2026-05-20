@@ -70,6 +70,10 @@ pub fn map_runtime_config_error(error: RuntimeConfigError) -> ApiError {
             format!("runtime config artifact is missing: {hash}"),
             "RUNTIME_CONFIG_ARTIFACT_MISSING",
         ),
+        RuntimeConfigError::ArtifactIntegrityMismatch(hash) => ApiError::bad_request(
+            format!("runtime config artifact integrity mismatch: {hash}"),
+            "RUNTIME_CONFIG_ARTIFACT_INTEGRITY_MISMATCH",
+        ),
         RuntimeConfigError::UnmaterializedValue => ApiError::conflict(
             "runtime config contains an unmaterialized launch value",
             "RUNTIME_CONFIG_UNMATERIALIZED_VALUE",

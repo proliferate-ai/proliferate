@@ -67,9 +67,9 @@ def _claude_file_payload(api_key: str) -> dict[str, object]:
         "files": [
             {
                 "relativePath": ".claude.json",
-                "contentBase64": base64.b64encode(
-                    f'{{"apiKey":"{api_key}"}}'.encode()
-                ).decode("ascii"),
+                "contentBase64": base64.b64encode(f'{{"apiKey":"{api_key}"}}'.encode()).decode(
+                    "ascii"
+                ),
             }
         ],
     }
@@ -157,7 +157,6 @@ async def _link_secondary_account(db_session: AsyncSession, user_id: str) -> Non
     )
     db_session.add(account)
     await db_session.commit()
-
 
 
 async def _list_mcp_connections(
@@ -900,6 +899,7 @@ class TestCloudRepoConfig:
             },
         )
         assert response.status_code == 400
+
 
 class TestCloudRepoBranches:
     @pytest.mark.asyncio

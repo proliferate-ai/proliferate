@@ -551,9 +551,7 @@ async def load_active_runtime_access_for_target(
 ) -> CloudTargetRuntimeAccessSnapshot | None:
     row = (
         await db.execute(
-            select(CloudTargetRuntimeAccess).where(
-                CloudTargetRuntimeAccess.target_id == target_id
-            )
+            select(CloudTargetRuntimeAccess).where(CloudTargetRuntimeAccess.target_id == target_id)
         )
     ).scalar_one_or_none()
     return _runtime_access_snapshot(row) if row is not None else None
@@ -621,8 +619,7 @@ async def update_target_runtime_access(
         db.add(row)
     else:
         slot_changed = (
-            row.active_sandbox_id != active_sandbox_id
-            or row.slot_generation != slot_generation
+            row.active_sandbox_id != active_sandbox_id or row.slot_generation != slot_generation
         )
         if row.active_sandbox_id not in {None, active_sandbox_id}:
             previous_slot = await db.get(CloudSandbox, row.active_sandbox_id)

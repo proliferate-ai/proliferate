@@ -604,21 +604,25 @@ async def get_active_personal_synced_credential_for_update(
     agent_kind: str,
 ) -> AgentAuthCredentialRecord | None:
     row = (
-        await db.execute(
-            select(AgentAuthCredential)
-            .where(
-                AgentAuthCredential.owner_scope == "personal",
-                AgentAuthCredential.owner_user_id == user_id,
-                AgentAuthCredential.organization_id.is_(None),
-                AgentAuthCredential.agent_kind == agent_kind,
-                AgentAuthCredential.credential_kind == "synced_path",
-                AgentAuthCredential.revoked_at.is_(None),
-                AgentAuthCredential.status != "revoked",
+        (
+            await db.execute(
+                select(AgentAuthCredential)
+                .where(
+                    AgentAuthCredential.owner_scope == "personal",
+                    AgentAuthCredential.owner_user_id == user_id,
+                    AgentAuthCredential.organization_id.is_(None),
+                    AgentAuthCredential.agent_kind == agent_kind,
+                    AgentAuthCredential.credential_kind == "synced_path",
+                    AgentAuthCredential.revoked_at.is_(None),
+                    AgentAuthCredential.status != "revoked",
+                )
+                .order_by(AgentAuthCredential.created_at.asc())
+                .with_for_update()
             )
-            .order_by(AgentAuthCredential.created_at.asc())
-            .with_for_update()
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     return _credential_record(row) if row is not None else None
 
 
