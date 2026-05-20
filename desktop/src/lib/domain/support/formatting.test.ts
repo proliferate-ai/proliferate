@@ -24,7 +24,7 @@ describe("formatSupportContextLabel", () => {
 });
 
 describe("buildSupportEmailBody", () => {
-  it("appends support context below a clean email compose area", () => {
+  it("keeps email compose blank", () => {
     expect(buildSupportEmailBody({
       source: "sidebar",
       intent: "general",
@@ -32,15 +32,6 @@ describe("buildSupportEmailBody", () => {
       workspaceLocation: "local",
       workspaceId: "workspace-1",
       pathname: "/workspace/workspace-1",
-    })).toBe([
-      "",
-      "",
-      "---",
-      "Context: local · repo-a",
-      "Workspace ID: workspace-1",
-      "Path: /workspace/workspace-1",
-      "Source: sidebar",
-      "Intent: general",
-    ].join("\n"));
+    })).toBe("");
   });
 });

@@ -79,7 +79,7 @@ describe("useSupportDialogState", () => {
     expect(openEmailCompose).toHaveBeenCalledWith({
       to: SUPPORT_EMAIL_ADDRESS,
       subject: CAPABILITY_COPY.supportEmailSubject,
-      body: "\n\n---\nSource: sidebar\nIntent: general",
+      body: "",
     });
     expect(onClose).toHaveBeenCalledTimes(1);
   });

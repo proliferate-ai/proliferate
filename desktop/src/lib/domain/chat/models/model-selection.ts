@@ -269,7 +269,7 @@ function resolveSelectorModels(
       agentKind: agent.kind,
       modelId: model.id,
       sourceLabels: [model.displayName],
-      preferKnownAlias: true,
+      preferKnownAlias: shouldPreferStaticModelAlias(model.displayName),
     }) ?? model.displayName,
   }));
 }
@@ -364,6 +364,10 @@ function shouldHideSelectorModel(
   return /\bopus\s*4\.1\b/.test(label)
     || /\bopus\s*4\.5\b/.test(label)
     || (/\bopus\s*4\.6\b/.test(label) && /\b1m\b|1m context/.test(label));
+}
+
+function shouldPreferStaticModelAlias(displayName: string): boolean {
+  return !/\b\d+(?:\.\d+)?\b/.test(displayName);
 }
 
 export function filterModelSelectorGroups(

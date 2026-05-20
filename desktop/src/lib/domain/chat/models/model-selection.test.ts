@@ -210,6 +210,7 @@ describe("buildModelSelectorGroups", () => {
         launchAgent("claude", [
           model("us.anthropic.claude-sonnet-4-6", "sonnet", true),
           model("haiku", "haiku", false, { defaultOptIn: true }),
+          model("opus", "Opus 4.1", false, { defaultOptIn: true }),
         ]),
       ],
       { kind: "claude", modelId: "us.anthropic.claude-sonnet-4-6" },
@@ -228,6 +229,10 @@ describe("buildModelSelectorGroups", () => {
       {
         modelId: "haiku",
         displayName: "Haiku 4.5",
+      },
+      {
+        modelId: "opus",
+        displayName: "Opus 4.1",
       },
     ]);
   });
