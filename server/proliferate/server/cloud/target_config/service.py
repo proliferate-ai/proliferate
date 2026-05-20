@@ -303,6 +303,8 @@ async def materialize_target_config(
                 db,
                 sandbox_profile_id=target.sandbox_profile_id,
             )
+        if runtime_config is not None:
+            runtime_config = runtime_config.model_copy(update={"target_id": str(target.id)})
 
     mcp = None
     if runtime_config is None:

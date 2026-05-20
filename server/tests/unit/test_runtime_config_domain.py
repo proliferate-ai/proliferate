@@ -19,6 +19,7 @@ from proliferate.server.cloud.runtime_config.domain.manifest import (
 )
 from proliferate.server.cloud.runtime_config.domain.resolver import (
     McpConnectionSnapshot,
+    PluginConfiguredItemSnapshot,
     ResolverInput,
     SandboxProfileResolverSnapshot,
     SkillConfiguredItemSnapshot,
@@ -154,17 +155,38 @@ def _skill(*, owner_user_id: str = "user-a") -> SkillConfiguredItemSnapshot:
     )
 
 
+def _plugin(
+    *,
+    enabled: bool = True,
+    owner_user_id: str = "user-a",
+) -> PluginConfiguredItemSnapshot:
+    return PluginConfiguredItemSnapshot(
+        id="plugin-1",
+        owner_scope="personal",
+        owner_user_id=owner_user_id,
+        organization_id=None,
+        plugin_id="github",
+        plugin_version="1+test",
+        enabled=enabled,
+        public_to_org=False,
+        public_organization_id=None,
+        public_status="private",
+        config_version=1,
+    )
+
+
 def _input(
     *,
     profile: SandboxProfileResolverSnapshot | None = None,
     mcps: tuple[McpConnectionSnapshot, ...] = (),
     skills: tuple[SkillConfiguredItemSnapshot, ...] = (),
+    plugins: tuple[PluginConfiguredItemSnapshot, ...] = (),
 ) -> ResolverInput:
     return ResolverInput(
         sandbox_profile=profile or _profile(),
         mcp_connections=mcps,
         skill_configured_items=skills,
-        plugin_configured_items=(),
+        plugin_configured_items=plugins,
         catalog=(_entry(),),
         plugin_packages=(_plugin_package(),),
     )
@@ -205,6 +227,31 @@ def test_org_profile_includes_publicized_items_for_that_org_only() -> None:
     assert [server.connection_db_id for server in plan.mcp_servers] == ["mcp-org-a"]
 
 
+def test_org_profile_ignores_org_owned_rows_publicized_to_other_orgs() -> None:
+    org_owned = _mcp(id="mcp-org-owned", public_organization_id="org-a")
+    org_owned = McpConnectionSnapshot(
+        **{
+            **org_owned.__dict__,
+            "owner_scope": "organization",
+            "owner_user_id": None,
+            "organization_id": "org-b",
+        }
+    )
+
+    plan = resolve_runtime_config(
+        _input(
+            profile=_profile(
+                owner_scope="organization",
+                owner_user_id=None,
+                organization_id="org-a",
+            ),
+            mcps=(org_owned,),
+        )
+    )
+
+    assert not plan.mcp_servers
+
+
 def test_duplicate_server_names_are_namespaced_with_warning() -> None:
     plan = resolve_runtime_config(
         _input(
@@ -227,6 +274,7 @@ def test_not_ready_mcp_blocks_skill_that_requires_it() -> None:
         _input(
             mcps=(_mcp(id="mcp-unready", auth_status="needs_reconnect"),),
             skills=(_skill(),),
+            plugins=(_plugin(),),
         )
     )
 
@@ -238,8 +286,30 @@ def test_not_ready_mcp_blocks_skill_that_requires_it() -> None:
     }
 
 
+def test_plugin_child_skill_is_removed_when_parent_plugin_disabled_or_deleted() -> None:
+    disabled_plan = resolve_runtime_config(
+        _input(
+            mcps=(_mcp(id="mcp-owned"),),
+            skills=(_skill(),),
+            plugins=(_plugin(enabled=False),),
+        )
+    )
+    deleted_plan = resolve_runtime_config(
+        _input(
+            mcps=(_mcp(id="mcp-owned"),),
+            skills=(_skill(),),
+            plugins=(),
+        )
+    )
+
+    assert not disabled_plan.skills
+    assert not deleted_plan.skills
+
+
 def test_manifest_hash_is_stable_and_redacts_secret_values() -> None:
-    plan = resolve_runtime_config(_input(mcps=(_mcp(id="mcp-owned"),), skills=(_skill(),)))
+    plan = resolve_runtime_config(
+        _input(mcps=(_mcp(id="mcp-owned"),), skills=(_skill(),), plugins=(_plugin(),))
+    )
 
     first = compile_runtime_config_manifest(plan, sandbox_profile_id="profile-1")
     second = compile_runtime_config_manifest(plan, sandbox_profile_id="profile-1")
@@ -249,6 +319,16 @@ def test_manifest_hash_is_stable_and_redacts_secret_values() -> None:
     assert "api_key" in first.manifest_json
     assert "Use the configured MCP carefully." not in first.manifest_json
     assert first.artifact_payloads[0].content == "Use the configured MCP carefully."
+    assert first.manifest["mcpBindingSummaries"] == [
+        {
+            "id": "mcp:mcp-owned",
+            "serverName": "github",
+            "displayName": "Github",
+            "transport": "http",
+            "outcome": "applied",
+            "reason": None,
+        }
+    ]
 
 
 def test_runtime_config_domain_imports_stay_pure() -> None:

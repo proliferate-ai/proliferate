@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use anyharness_contract::v1::{RuntimeArtifactRef, RuntimeConfigManifest};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -12,11 +13,12 @@ use super::files::write_file;
 pub struct RuntimeConfigMaterializationFragment {
     pub revision_id: String,
     pub sandbox_profile_id: String,
+    pub target_id: Option<String>,
     pub sequence: i64,
     pub content_hash: String,
-    pub manifest: Value,
+    pub manifest: RuntimeConfigManifest,
     #[serde(default)]
-    pub artifact_refs: Vec<Value>,
+    pub artifact_refs: Vec<RuntimeArtifactRef>,
     #[serde(default)]
     pub credential_refs: Vec<Value>,
 }
@@ -41,8 +43,8 @@ impl RuntimeConfigMaterializationFragment {
             sandbox_profile_id: self.sandbox_profile_id.clone(),
             sequence: self.sequence,
             content_hash: self.content_hash.clone(),
-            mcp_server_count: array_len(&self.manifest, "mcpServers"),
-            skill_count: array_len(&self.manifest, "skills"),
+            mcp_server_count: self.manifest.mcp_servers.len(),
+            skill_count: self.manifest.skills.len(),
             artifact_count: self.artifact_refs.len(),
             credential_ref_count: self.credential_refs.len(),
         }
@@ -59,6 +61,7 @@ pub fn write_runtime_config_projection(
     let projection = serde_json::json!({
         "revisionId": runtime_config.revision_id,
         "sandboxProfileId": runtime_config.sandbox_profile_id,
+        "targetId": runtime_config.target_id,
         "sequence": runtime_config.sequence,
         "contentHash": runtime_config.content_hash,
         "manifest": runtime_config.manifest,
@@ -75,12 +78,4 @@ pub fn write_runtime_config_projection(
         true,
     )?;
     Ok(Some(runtime_config.summary()))
-}
-
-fn array_len(value: &Value, field: &str) -> usize {
-    value
-        .get(field)
-        .and_then(Value::as_array)
-        .map(Vec::len)
-        .unwrap_or(0)
 }

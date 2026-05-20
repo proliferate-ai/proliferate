@@ -209,17 +209,26 @@ async def enqueue_command(
         preconditions=body.preconditions,
     )
     validate_command_payload(kind=kind, payload=body.payload)
+    payload = await _stamp_managed_runtime_config_preflight(
+        db,
+        user=user,
+        target=target,
+        kind=kind,
+        payload=body.payload,
+    )
+    if payload is not body.payload:
+        body = body.model_copy(update={"payload": payload})
     await _validate_agent_auth_preflight(
         db,
         user=user,
         target=target,
-        payload=body.payload,
+        payload=payload,
     )
     await _validate_runtime_config_preflight(
         db,
         user=user,
         target=target,
-        payload=body.payload,
+        payload=payload,
     )
     resolved_workspace_id, payload, cloud_workspace_id = await _resolve_command_workspace(
         db,
@@ -479,6 +488,89 @@ async def get_command_status(
             status_code=404,
         )
     return command
+
+
+async def _stamp_managed_runtime_config_preflight(
+    db: AsyncSession,
+    *,
+    user: User,
+    target: targets_store.CloudTargetSnapshot,
+    kind: str,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    if kind not in {CloudCommandKind.start_session.value, CloudCommandKind.send_prompt.value}:
+        return payload
+    if target.sandbox_profile_id is None:
+        return payload
+    from proliferate.server.cloud.runtime_config.service import (  # noqa: PLC0415
+        refresh_profile_runtime_config,
+    )
+
+    _current, current_revision = await runtime_config_store.get_current(
+        db,
+        sandbox_profile_id=target.sandbox_profile_id,
+    )
+    if current_revision is None:
+        await refresh_profile_runtime_config(
+            db,
+            sandbox_profile_id=target.sandbox_profile_id,
+            actor_user_id=user.id,
+            reason="runtime_config_preflight_missing",
+        )
+        _current, current_revision = await runtime_config_store.get_current(
+            db,
+            sandbox_profile_id=target.sandbox_profile_id,
+        )
+    if current_revision is None:
+        raise CloudApiError(
+            "cloud_command_runtime_config_missing",
+            "Runtime config has not been compiled for this sandbox profile.",
+            status_code=409,
+        )
+    state = await agent_auth_store.get_target_state(
+        db,
+        sandbox_profile_id=target.sandbox_profile_id,
+        target_id=target.id,
+    )
+    if (
+        state is None
+        or state.runtime_config_status != "applied"
+        or state.applied_runtime_config_revision_id != str(current_revision.id)
+        or state.applied_runtime_config_sequence < current_revision.sequence
+    ):
+        await refresh_profile_runtime_config(
+            db,
+            sandbox_profile_id=target.sandbox_profile_id,
+            actor_user_id=user.id,
+            reason="runtime_config_preflight_not_applied",
+        )
+        _current, current_revision = await runtime_config_store.get_current(
+            db,
+            sandbox_profile_id=target.sandbox_profile_id,
+        )
+        if current_revision is None:
+            raise CloudApiError(
+                "cloud_command_runtime_config_missing",
+                "Runtime config has not been compiled for this sandbox profile.",
+                status_code=409,
+            )
+    stamped = dict(payload)
+    stamped["sandboxProfileId"] = str(target.sandbox_profile_id)
+    stamped["requiredRuntimeConfigRevisionId"] = str(current_revision.id)
+    stamped["requiredRuntimeConfigSequence"] = current_revision.sequence
+    stamped["requiredRuntimeConfigContentHash"] = current_revision.content_hash
+    if kind == CloudCommandKind.start_session.value:
+        stamped["expectedRuntimeConfigRevision"] = {
+            "revisionId": str(current_revision.id),
+            "sequence": current_revision.sequence,
+            "contentHash": current_revision.content_hash,
+            "externalScope": {
+                "provider": "proliferate-cloud",
+                "id": str(target.sandbox_profile_id),
+                "targetId": str(target.id),
+            },
+        }
+    return stamped
 
 
 def is_terminal_command_status(status: str) -> bool:

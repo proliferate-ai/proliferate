@@ -42,6 +42,7 @@ class RuntimeConfigArtifactRefModel(BaseModel):
 class RuntimeConfigMaterializationFragment(BaseModel):
     revision_id: str = Field(serialization_alias="revisionId")
     sandbox_profile_id: str = Field(serialization_alias="sandboxProfileId")
+    target_id: str | None = Field(default=None, serialization_alias="targetId")
     sequence: int
     content_hash: str = Field(serialization_alias="contentHash")
     manifest: dict[str, object]
@@ -73,6 +74,7 @@ class RuntimeConfigArtifactResponse(BaseModel):
     hash: str
     content_type: str = Field(serialization_alias="contentType")
     byte_size: int = Field(serialization_alias="byteSize")
+    source_ref: str | None = Field(default=None, serialization_alias="sourceRef")
     content: str
 
 

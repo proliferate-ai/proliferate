@@ -16,6 +16,7 @@ pub mod product_mcp;
 pub mod replay;
 pub mod repo_roots;
 pub mod reviews;
+pub mod runtime_config;
 pub mod sessions;
 pub mod subagents;
 pub mod terminals;

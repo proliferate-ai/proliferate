@@ -347,6 +347,7 @@ fn require_allowed_agent_auth_file(provider: &str, relative_path: &str) -> Resul
 mod tests {
     use std::{collections::BTreeMap, fs};
 
+    use anyharness_contract::v1::RuntimeConfigManifest;
     use serde_json::json;
     use sha2::{Digest, Sha256};
 
@@ -451,12 +452,43 @@ mod tests {
                 super::runtime_config::RuntimeConfigMaterializationFragment {
                     revision_id: "rev_1".to_string(),
                     sandbox_profile_id: "profile_1".to_string(),
+                    target_id: Some("target_1".to_string()),
                     sequence: 7,
                     content_hash: "sha256:test".to_string(),
-                    manifest: json!({
-                        "mcpServers": [{"id": "mcp:1"}],
-                        "skills": [{"id": "skill:1"}],
-                    }),
+                    manifest: serde_json::from_value::<RuntimeConfigManifest>(json!({
+                        "mcpServers": [{
+                            "id": "mcp:1",
+                            "connectionId": "conn-1",
+                            "catalogEntryId": "github",
+                            "serverName": "github",
+                            "transport": "http",
+                            "launch": {
+                                "kind": "http",
+                                "url": {"kind": "literal", "value": "https://example.test/mcp"},
+                                "headers": [],
+                                "query": []
+                            },
+                            "credentialRefs": []
+                        }],
+                        "mcpBindingSummaries": [],
+                        "skills": [{
+                            "id": "skill:1",
+                            "sourceKind": "plugin",
+                            "displayName": "Skill",
+                            "description": "Skill",
+                            "instructionArtifact": {
+                                "hash": "sha256:instructions",
+                                "contentType": "text/markdown",
+                                "byteSize": 1
+                            },
+                            "resources": [],
+                            "requiredMcpServerIds": [],
+                            "credentialRefs": []
+                        }],
+                        "artifacts": [],
+                        "warnings": []
+                    }))
+                    .expect("runtime config manifest"),
                     artifact_refs: vec![],
                     credential_refs: vec![],
                 },
