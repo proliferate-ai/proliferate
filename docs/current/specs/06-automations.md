@@ -1,0 +1,1064 @@
+# 06 — Automations
+
+Status: implementation-ready spec.
+
+Date: 2026-05-20.
+
+Depends on: [`00-sandbox-foundation.md`](00-sandbox-foundation.md),
+[`01-mcp-skills-plugins.md`](01-mcp-skills-plugins.md),
+[`02-agent-auth.md`](02-agent-auth.md),
+[`04-cloud-running-alignment.md`](04-cloud-running-alignment.md),
+[`05-claiming.md`](05-claiming.md).
+
+Automations are scheduled or manually-triggered work that uses the
+same sandbox profile, runtime config, agent auth, command queue,
+exposure/projection, and claim primitives as user-initiated work.
+The system already exists; spec 06 aligns it to the new foundation:
+team scope, reusable agent run configs, preflight with auto-cascade,
+and shared-unclaimed exposure on team runs.
+
+## 1. Purpose & Scope
+
+In scope:
+
+- Add `owner_scope` ∈ `{personal, organization}` to `Automation`.
+  Personal automations create personal work; team automations
+  create org-owned `shared_unclaimed` work that is claim-eligible.
+- Replace inline `agent_kind / model_id / mode_id / reasoning_effort`
+  columns with a `cloud_agent_run_config` row referenced by FK +
+  per-run snapshot for audit.
+- Rename `Automation.execution_target` → `Automation.target_mode`
+  with values from spec 03 vocabulary:
+  `local | personal_cloud | shared_cloud`.
+- Route automation workspace/session creation through the new
+  `managed_profile_launch` helper from spec 04. Profile, target,
+  and slot are resolved through `ensure_*_sandbox_profile` and
+  `ensure_primary_profile_target`.
+- Per-run preflight: runtime config (spec 01) and agent auth
+  (spec 02). Stale state triggers **auto-cascade** — enqueue
+  `materialize_environment` and/or `refresh_agent_auth_config`
+  first, then `start_session` depending on them. Cascade attempts
+  bounded; terminal failure marks the run failed with a typed
+  error.
+- Exposure defaults: personal → `visibility='private'`,
+  `commandable=true`; team → `visibility='shared_unclaimed'`,
+  `commandable=true`. Spec 05's claim flow takes over from there.
+- Team automation requires shared cloud readiness; fail-fast at
+  enqueue if `ensure_organization_sandbox_profile` cannot
+  complete or the org profile is `blocked`.
+- Existing scheduler loop, RRULE cursor on `Automation.next_run_at`,
+  and idempotent missed-tick handling stay as-is.
+
+Out of scope:
+
+- New trigger kinds beyond `scheduled` and `manual`. Repository-
+  event triggers and webhook triggers are not in V1.
+- Multi-tenant scheduling fairness (per-org or per-user rate limits).
+- Automation-defined exposure overrides. The exposure default is
+  fixed by `owner_scope`; admins cannot configure a team automation
+  to produce `private` work, nor can a user produce
+  `shared_unclaimed` work.
+- A separate `automation_run` audit log table. Existing status +
+  error fields + `cloud_commands` audit are sufficient.
+- Slack-specific automation behaviour (→ spec 07). Spec 06 ensures
+  Slack can reuse the same primitives.
+- Local-automation execution semantics on Desktop beyond what
+  exists today (Desktop worker scheduling). Spec 06 keeps the
+  current local execution shape and only adjusts the `target_mode`
+  enum.
+
+## 2. Mental Model
+
+```text
+Automation                           a reusable definition
+  owner_scope                        personal | organization
+  target_mode                        local | personal_cloud | shared_cloud
+  cloud_agent_run_config_id          how the agent should be run
+  cloud_repo_config_id               which repo + env
+  schedule_rrule / next_run_at       when (or null for manual-only)
+
+AutomationRun                        one execution attempt
+  trigger_kind                       scheduled | manual
+  snapshots                          frozen-at-trigger metadata
+  cloud_workspace_id                 the workspace created for the run
+  sandbox_profile_id                 the profile the run resolved to
+  exposure_id                        which exposure was created
+  agent_run_config_snapshot_json     resolved values used by the run
+  status                             queued -> ... -> dispatched | failed | cancelled
+
+flow                                 reuse the same primitives:
+  1. scheduler tick creates an automation_run row
+  2. executor claims the run (existing executor lease)
+  3. resolve owner -> sandbox_profile (ensure_personal / _organization)
+  4. resolve primary target
+  5. preflight runtime config; cascade if stale
+  6. preflight agent auth; cascade if stale
+  7. managed_profile_launch creates cloud_workspace + exposure
+       personal -> visibility='private', commandable=true
+       team     -> visibility='shared_unclaimed', commandable=true
+  8. start_session command
+  9. send_prompt command with the prompt snapshot
+  10. wait for end-of-turn projection
+  11. mark dispatched (or failed)
+```
+
+Rule: **no automation-specific MCP/auth/model surface.** Anything
+an automation does for runtime config, agent auth, or workspace
+launch is the same call any web/mobile/Slack/Desktop caller would
+make. Spec 06 enforces this by routing every automation runner
+side effect through the same `managed_profile_launch` and command
+enqueue paths.
+
+## 3. Dependencies
+
+Hard:
+
+- Spec 00: `sandbox_profile`, `ensure_personal_sandbox_profile`,
+  `ensure_organization_sandbox_profile`,
+  `ensure_primary_profile_target`,
+  `sandbox_profile_target_state`.
+- Spec 01: `cloud_sandbox_runtime_config_current`,
+  `materialize_environment` carrying the runtime config fragment.
+- Spec 02: `sandbox_profile_agent_auth_revision`,
+  `refresh_agent_auth_config`.
+- Spec 04: `managed_profile_launch` helper,
+  `cloud_workspace_exposure`, `cloud_session_projection` with
+  exposure binding, runtime-config preflight (`_validate_runtime_config_preflight`),
+  agent-auth preflight (`_validate_agent_auth_preflight`).
+- Spec 05: `shared_unclaimed` claim eligibility; team-automation
+  output is the canonical source of unclaimed shared work.
+
+Soft:
+
+- Spec 03: `AgentRunConfigSelector` UI primitive consumed by the
+  automation editor; `useIsAdmin` gates team-automation creation.
+- Spec 07: Slack uses the same `cloud_agent_run_config` row when
+  configured by an admin.
+- Spec 09: billing wake gate (spec 04) is consulted on every
+  automation run; billing-blocked subjects fail the run with a
+  typed error.
+
+## 4. Current Repo State
+
+Verified against `/home/user/proliferate` on 2026-05-20.
+
+### 4.1 What is shipped
+
+**`Automation` model** (`db/models/automations.py`):
+
+```text
+id, user_id, cloud_repo_config_id,
+title, prompt, schedule_rrule, schedule_timezone, schedule_summary,
+execution_target ENUM('cloud','local'),
+cloud_target_id nullable FK,
+cloud_target_kind_snapshot text nullable,
+agent_kind, model_id, mode_id, reasoning_effort   -- inline agent config
+enabled, paused_at, next_run_at, last_scheduled_at,
+created_at, updated_at
+```
+
+**No owner_scope.** Automations are user-scoped only today.
+
+**`AutomationRun` model**:
+
+```text
+id, automation_id, user_id,
+trigger_kind ENUM('scheduled','manual'),
+scheduled_for nullable (required for scheduled),
+execution_target,
+status ENUM(queued, claimed, creating_workspace,
+            provisioning_workspace, creating_session,
+            dispatching, dispatched, failed, cancelled),
+title_snapshot, prompt_snapshot, git_*_snapshot,
+agent_kind_snapshot, model_id_snapshot, mode_id_snapshot,
+reasoning_effort_snapshot,
+cloud_workspace_id nullable FK,
+anyharness_workspace_id nullable, anyharness_session_id nullable,
+executor_kind, executor_id, claim_id, claimed_at,
+claim_expires_at, last_heartbeat_at,
+dispatch_started_at, dispatched_at, failed_at, cancelled_at,
+last_error_code, last_error_message
+```
+
+No `agent_run_config_id`. No `sandbox_profile_id`. No
+`exposure_id`. No `agent_run_config_snapshot_json`.
+
+**Execution pipeline**
+(`server/automations/worker/cloud_execution/pipeline.py`):
+
+```text
+ordered stages:
+  resolve_target
+  ensure_git_identity
+  materialize_workspace
+  materialize_environment        (env files only today; no runtime config)
+  start_session
+  apply_session_config
+  dispatch_prompt
+```
+
+Target resolution
+(`stages/target.py`):
+- if `cloud_target_id_snapshot` is set, load that target;
+- else scan visible targets, pick first online `managed_cloud`
+  with no archive.
+- **Does NOT call `ensure_*_sandbox_profile`.**
+
+Workspace creation
+(`server/cloud/workspaces/service.py:create_cloud_workspace_for_automation_run`):
+- Resolves via `_resolve_new_cloud_workspace_create`.
+- Calls `_raise_org_cloud_not_ready` (which today blocks all
+  org-scoped paths, including any hypothetical org automation).
+- Inserts CloudWorkspace; attaches to `automation_run.cloud_workspace_id`.
+
+**No runtime config preflight.** **No agent auth preflight.**
+
+**Scheduler** (`worker/scheduler.py:run_scheduler_loop`):
+- Polling interval from settings.
+- `_resolve_due_schedule()` parses RRULE; advances
+  `Automation.next_run_at`.
+- UNIQUE constraint on `(automation_id, scheduled_for)` for
+  scheduled runs prevents duplicate ticks.
+
+**No `agent_run_config` or `cloud_agent_run_config` table exists.**
+
+**Desktop UI**:
+
+```text
+desktop/src/pages/AutomationsPage.tsx                  -> AutomationsScreen
+desktop/src/components/automations/
+  screen/AutomationsScreen.tsx
+  list/AutomationListContent.tsx, AutomationRow.tsx,
+        AutomationSectionHeader.tsx, AutomationDetailContent.tsx
+  timeline/AutomationRunTimeline.tsx
+  editor/AutomationEditorModal.tsx, AutomationEditorControls.tsx
+  controls/AutomationTargetPicker.tsx, AutomationModelPicker.tsx,
+           AutomationModePicker.tsx
+
+desktop/src/hooks/access/cloud/automations/
+  use-automations.ts, use-automation-mutations.ts,
+  use-local-automation-run-claims.ts, query-keys.ts
+```
+
+No "personal / team" toggle. No `AgentRunConfigSelector` (spec 03
+primitive).
+
+### 4.2 Gaps spec 06 closes
+
+- `Automation` has no `owner_scope`. Team automations cannot exist.
+- Inline agent config columns block reuse; no
+  `cloud_agent_run_config` row.
+- Target resolution does not go through `ensure_*_sandbox_profile`;
+  the automation runner does not depend on spec 00.
+- No runtime config or agent auth preflight in the pipeline; runs
+  silently launch on stale state.
+- No auto-cascade on stale revisions; spec 04 ships fail-fast and
+  defers cascade to here.
+- Workspace creation does not set `cloud_workspace_exposure`;
+  team-automation output is not claim-eligible today.
+- `execution_target` ENUM is `cloud | local`; doesn't distinguish
+  personal vs shared cloud.
+
+## 5. Target Model
+
+### 5.1 `Automation` model changes
+
+Add columns:
+
+```text
+owner_scope            text   'personal' | 'organization'   NOT NULL
+owner_user_id          uuid fk user.id                       NULL
+organization_id        uuid fk organization.id               NULL
+cloud_agent_run_config_id  uuid fk cloud_agent_run_config.id NOT NULL
+created_by_user_id     uuid fk user.id                       NOT NULL
+```
+
+Rename column:
+
+```text
+execution_target  ->  target_mode
+  enum: 'local' | 'personal_cloud' | 'shared_cloud'
+```
+
+Drop columns (replaced by `cloud_agent_run_config_id` + snapshot):
+
+```text
+agent_kind, model_id, mode_id, reasoning_effort
+```
+
+Drop column (derived at runtime):
+
+```text
+cloud_target_id        -- target resolved via sandbox_profile +
+                          profile_target_role='primary'
+```
+
+`cloud_target_kind_snapshot` stays on AutomationRun for audit only.
+
+Migration (one PR; no users):
+
+```text
+- add owner_scope / owner_user_id / organization_id, default
+  ('personal', user_id, NULL) for existing rows
+- add cloud_agent_run_config_id NOT NULL; migration creates a row
+  per existing automation from the inline columns and points the
+  FK at it
+- drop inline agent config columns
+- drop cloud_target_id
+- rename execution_target -> target_mode; rewrite enum values
+- rename user_id -> created_by_user_id
+```
+
+Constraints:
+
+```text
+CHECK ck_automation_owner_fields
+  (owner_scope='personal' AND owner_user_id IS NOT NULL AND organization_id IS NULL)
+  OR
+  (owner_scope='organization' AND organization_id IS NOT NULL AND owner_user_id IS NULL)
+
+CHECK ck_automation_target_mode_owner
+  (owner_scope='personal'     AND target_mode IN ('local','personal_cloud'))
+  OR
+  (owner_scope='organization' AND target_mode = 'shared_cloud')
+
+CHECK ck_automation_target_mode_enum
+  target_mode IN ('local','personal_cloud','shared_cloud')
+```
+
+`Automation.next_run_at`, `last_scheduled_at`, `schedule_rrule`,
+`schedule_timezone` keep their meanings.
+
+### 5.2 `AutomationRun` model changes
+
+Add columns:
+
+```text
+owner_scope                       text                                    NOT NULL
+owner_user_id                     uuid                                    NULL
+organization_id                   uuid                                    NULL
+created_by_user_id                uuid fk user.id                         NOT NULL
+
+sandbox_profile_id                uuid fk sandbox_profile.id              NULL
+                                  -- filled by executor at runtime
+
+cloud_workspace_exposure_id       uuid fk cloud_workspace_exposure.id     NULL
+                                  -- filled at managed_profile_launch
+
+agent_run_config_snapshot_json    jsonb                                   NULL
+                                  -- captures resolved values used by
+                                     this run; immutable after dispatch
+
+cascade_attempt                   integer NOT NULL default 0
+                                  -- incremented when the runner enqueues
+                                     materialize_environment or
+                                     refresh_agent_auth_config to recover
+                                     from stale state
+last_cascade_command_id           uuid                                    NULL
+                                  -- last preflight cascade command id
+                                     for diagnostics
+last_cascade_reason               text                                    NULL
+                                  'runtime_config_stale' |
+                                  'agent_auth_stale' |
+                                  'runtime_config_apply_failed' |
+                                  'agent_auth_apply_failed'
+```
+
+Drop columns (replaced by snapshot json):
+
+```text
+agent_kind_snapshot, model_id_snapshot, mode_id_snapshot,
+reasoning_effort_snapshot
+```
+
+Rename column:
+
+```text
+execution_target  ->  target_mode
+```
+
+Status enum: keep existing values. Cascade rounds are visible
+through `cloud_commands` rows whose `result_json.parent_command_id`
+points at the run's `start_session` / `send_prompt` command, not
+through new states on the run itself. The run's status reflects the
+end-to-end outcome.
+
+### 5.3 `cloud_agent_run_config` (new)
+
+```text
+cloud_agent_run_config
+  id                              uuid pk
+  owner_scope                     text  'system' | 'personal' | 'organization'
+  owner_user_id                   uuid fk user.id                 NULL
+  organization_id                 uuid fk organization.id         NULL
+  created_by_user_id              uuid fk user.id                 NOT NULL
+
+  name                            text   NOT NULL
+  agent_kind                      text   'claude' | 'codex' | 'opencode' | 'gemini' | 'cursor'
+  model_id                        text   NOT NULL
+  control_values_json             jsonb  NOT NULL default '{}'
+
+  usable_in_personal_sandboxes    boolean NOT NULL default true
+  usable_in_shared_sandboxes      boolean NOT NULL default false
+
+  catalog_version_pinned_at       text                            NULL
+                                  -- e.g. "2026-05-20.v1"; not
+                                     enforced for backwards
+                                     resolution, used for audit
+
+  status                          text   'active' | 'archived'
+  created_at, updated_at
+
+  CHECK ck_cloud_agent_run_config_owner_fields
+  CHECK ck_cloud_agent_run_config_status
+  CHECK ck_cloud_agent_run_config_agent_kind
+```
+
+Semantics:
+
+- Owner scope mirrors the rest of the data model: system rows
+  visible by policy, personal rows visible to owner, organization
+  rows visible to org members.
+- `control_values_json` stores the resolved control values
+  (`mode`, `effort`, `fast_mode`, `collaboration_mode`, etc.). The
+  canonical option set lives in the existing `catalog.json` / model
+  catalog (spec 01-adjacent). The selector validates control values
+  against the catalog at write time and at run time.
+- `usable_in_personal_sandboxes` / `usable_in_shared_sandboxes`
+  default conservatively. Org admins flip
+  `usable_in_shared_sandboxes=true` for configs they want available
+  to Slack and team automations.
+
+API:
+
+```text
+GET    /v1/cloud/agent-run-configs
+POST   /v1/cloud/agent-run-configs
+GET    /v1/cloud/agent-run-configs/{id}
+PATCH  /v1/cloud/agent-run-configs/{id}
+DELETE /v1/cloud/agent-run-configs/{id}        -- soft archive
+```
+
+Listing supports `?owner_scope=personal|organization|system` filters
+and `?usable_in=personal_sandboxes|shared_sandboxes` boolean
+filters.
+
+### 5.4 Scheduler + cursor
+
+Scheduler stays as-is. The cursor pattern on `Automation.next_run_at`
++ UNIQUE `(automation_id, scheduled_for)` on AutomationRun handles
+missed ticks idempotently.
+
+Two additions:
+
+```text
+- _resolve_due_schedule() also honors automation.owner_scope when
+  picking the next run's owner fields (so the AutomationRun row
+  inherits owner_scope/user_id/org_id from the Automation).
+
+- on creating an AutomationRun, the scheduler snapshots the
+  resolved cloud_agent_run_config at trigger time into
+  agent_run_config_snapshot_json. The snapshot is the source of
+  truth for that run; later edits to the cloud_agent_run_config row
+  do not affect in-flight runs.
+```
+
+Scheduled runs continue to require `scheduled_for IS NOT NULL`;
+manual runs `scheduled_for IS NULL`.
+
+### 5.5 Execution pipeline — preflight + cascade
+
+The pipeline gets two new stages:
+
+```text
+ordered stages (after spec 06):
+  resolve_owner_and_profile        (new; replaces resolve_target)
+  ensure_git_identity
+  preflight_runtime_config         (new)
+  preflight_agent_auth             (new)
+  materialize_workspace
+  materialize_environment          (now carries the runtime config fragment per spec 01)
+  start_session
+  apply_session_config
+  dispatch_prompt
+  observe_end_of_turn              (existing)
+```
+
+Each new/changed stage:
+
+```text
+resolve_owner_and_profile
+  if automation.owner_scope == 'personal':
+      ensure_personal_sandbox_profile(automation.owner_user_id)
+  else:
+      ensure_organization_sandbox_profile(automation.organization_id)
+      -- fail-fast if shared cloud isn't enabled or the org profile
+         is blocked: mark the run failed with
+         error_code='shared_cloud_not_ready'
+  ensure_primary_profile_target(profile.id)
+  set automation_run.sandbox_profile_id = profile.id
+  set automation_run.cloud_target_kind_snapshot = target.kind
+
+preflight_runtime_config
+  load sandbox_profile_target_state for (profile, target)
+  if applied_runtime_config_sequence < current_sequence:
+      -- auto-cascade
+      enqueue materialize_environment(target_id,
+                                       cloud_workspace_id=null yet,
+                                       runtime_config fragment)
+      automation_run.cascade_attempt += 1
+      automation_run.last_cascade_reason = 'runtime_config_stale'
+      automation_run.last_cascade_command_id = <id>
+      wait for the materialize_environment result
+      if applied: continue
+      if failed:
+        cascade_attempt < max? retry; else fail run with
+        error_code='runtime_config_apply_failed'
+
+preflight_agent_auth
+  same pattern. Stale -> enqueue refresh_agent_auth_config; wait;
+  fail run with error_code='agent_auth_apply_failed' after max
+  attempts.
+
+materialize_workspace
+  call managed_profile_launch with:
+    sandbox_profile_id
+    target_id (primary)
+    normalized_repo_key
+    branch (from repo config snapshot)
+    origin='automation'
+    visibility = (owner_scope=='personal' ? 'private' : 'shared_unclaimed')
+    commandable = true
+    default_projection_level = 'live'
+    source_kind = 'automation'  (for spec 05 claim)
+  set automation_run.cloud_workspace_id and
+      automation_run.cloud_workspace_exposure_id from the response
+```
+
+Cascade attempt cap:
+
+```text
+MAX_CASCADE_ATTEMPTS_PER_RUN = 3       (configurable;
+                                        settings.automation_run_cascade_max_attempts)
+```
+
+Each cascade enqueue:
+- carries `parent_command_id` set to the originating run id (the
+  AutomationRun id, not a command id) for audit grouping
+- carries `cascade_reason` in the payload
+- counts against `automation_run.cascade_attempt`
+
+If the cascade itself fails (e.g. the `materialize_environment`
+result is `failed`):
+
+```text
+- if cascade_attempt < MAX_CASCADE_ATTEMPTS_PER_RUN: retry with
+  fresh revision pin (the desired revision may have moved on)
+- else: fail the run with the appropriate
+  *_apply_failed error code
+```
+
+Idempotency: the executor's claim lease ensures only one executor
+processes a given automation_run at a time. Cascade enqueues
+include the automation_run id in their idempotency key so retried
+ticks collapse.
+
+### 5.6 Workspace creation via `managed_profile_launch`
+
+The current `create_cloud_workspace_for_automation_run` is replaced
+by a call to `managed_profile_launch` (spec 04 §5.7) with
+automation-specific arguments. The returned tuple carries:
+
+```text
+cloud_workspace_id
+cloud_workspace_exposure_id
+cloud_session_projection_id    (created when start_session arrives;
+                                returned as null at workspace stage)
+required_runtime_config_revision   pinned from profile current
+required_agent_auth_revision       pinned from profile current
+```
+
+The automation_run row updates accordingly.
+
+`_raise_org_cloud_not_ready` is no longer called from the
+automation path. Org readiness is now resolved by
+`ensure_organization_sandbox_profile`; failure surfaces as a typed
+`shared_cloud_not_ready` error in the run.
+
+### 5.7 Exposure defaults
+
+```text
+owner_scope='personal'   visibility='private',
+                          commandable=true,
+                          default_projection_level='live'
+
+owner_scope='organization'  visibility='shared_unclaimed',
+                             commandable=true,
+                             default_projection_level='live'
+```
+
+A team automation's workspace lands as `shared_unclaimed`. Any org
+member can claim via spec 05's `POST /v1/cloud/workspaces/{id}/claim`
+endpoint. The claim is one-way; the spec-05 audit applies.
+
+Note: spec 05's UI flow ("Claimed by Alice on Mar 12. To take over,
+archive and recreate.") is the canonical recovery path if a team
+member claims by accident.
+
+### 5.8 Local automations
+
+`target_mode='local'` automations:
+
+- Allowed only when `owner_scope='personal'`.
+- Execute on Desktop via the existing local executor service
+  (`server/automations/local_executor_service.py` +
+  `desktop/src/hooks/access/cloud/automations/use-local-automation-run-claims.ts`).
+- Do not call `ensure_personal_sandbox_profile` (no cloud profile
+  involved) and do not preflight runtime config / agent auth (the
+  local Desktop AnyHarness handles its own state).
+- Still emit AutomationRun rows with the new `target_mode` enum
+  value; the preflight stages are skipped via an early branch.
+
+Org-scoped automations cannot be `target_mode='local'` (enforced by
+the CHECK constraint in §5.1).
+
+### 5.9 API surface
+
+```text
+Existing (renamed / parameter changes):
+  GET    /v1/cloud/automations          -- supports
+                                            ?owner_scope=personal|organization
+                                            filter; org members see team
+                                            automations even if not creator
+  POST   /v1/cloud/automations          -- body adds owner_scope,
+                                            cloud_agent_run_config_id,
+                                            target_mode
+  GET    /v1/cloud/automations/{id}
+  PATCH  /v1/cloud/automations/{id}
+  DELETE /v1/cloud/automations/{id}
+  POST   /v1/cloud/automations/{id}/runs   -- manual trigger
+  GET    /v1/cloud/automations/{id}/runs
+
+New:
+  GET    /v1/cloud/agent-run-configs
+  POST   /v1/cloud/agent-run-configs
+  GET    /v1/cloud/agent-run-configs/{id}
+  PATCH  /v1/cloud/agent-run-configs/{id}
+  DELETE /v1/cloud/agent-run-configs/{id}
+
+Worker (unchanged):
+  POST   /v1/cloud/worker/automation-claims/...  (existing executor lease;
+                                                   unrelated to user claim
+                                                   spec 05)
+```
+
+Authorization:
+
+```text
+- creating a personal automation: any authenticated user
+- creating a team automation: useIsAdmin(org_id) only
+  (per spec 03 admin gating)
+- editing a team automation: same admin gate
+- triggering a manual run of a team automation: any org member
+  with org_role in {admin, member, owner}; reads existing
+  membership table
+```
+
+## 6. Files To Change
+
+Server (Python):
+
+```text
+server/proliferate/db/models/automations.py
+  - Automation: add owner_scope, owner_user_id, organization_id,
+                created_by_user_id, cloud_agent_run_config_id
+  - Automation: drop agent_kind/model_id/mode_id/reasoning_effort,
+                cloud_target_id
+  - Automation: rename execution_target -> target_mode and update
+                enum
+  - AutomationRun: same ownership fields; add sandbox_profile_id,
+                   cloud_workspace_exposure_id,
+                   agent_run_config_snapshot_json,
+                   cascade_attempt, last_cascade_command_id,
+                   last_cascade_reason
+  - AutomationRun: drop agent_*_snapshot columns
+  - update CHECKs
+
+server/proliferate/db/models/cloud/agent_run_config.py            (new)
+  CloudAgentRunConfig
+
+server/proliferate/db/migrations/versions/<NEW>_automations_v2.py
+  - all of the above; one-PR replacement
+
+server/proliferate/db/store/automations.py
+  - extend snapshot dataclasses
+  - new helpers: load_automation_for_org, list_automations_for_owner
+
+server/proliferate/db/store/cloud_agent_run_config/              (new)
+  configs.py
+
+server/proliferate/server/automations/
+  service.py            authorization + validation now branches on
+                        owner_scope; create_team_automation gated by
+                        useIsAdmin
+  api.py                add owner_scope to request/response;
+                        accept cloud_agent_run_config_id
+  models.py             snapshot dataclasses
+  domain/policy.py      pure invariants for owner_scope/target_mode
+  domain/cascade.py     (new) cascade attempt math (pure)
+  worker/scheduler.py   inherits owner fields onto AutomationRun;
+                        snapshots agent_run_config at trigger
+  worker/cloud_execution/pipeline.py
+                        new stages: resolve_owner_and_profile,
+                        preflight_runtime_config, preflight_agent_auth
+  worker/cloud_execution/stages/profile.py    (new)
+                        ensure_*_sandbox_profile,
+                        ensure_primary_profile_target,
+                        wraps spec-00 helpers
+  worker/cloud_execution/stages/preflight_runtime_config.py (new)
+                        cascade enqueue + wait + retry
+  worker/cloud_execution/stages/preflight_agent_auth.py     (new)
+                        same shape
+  worker/cloud_execution/stages/target.py
+                        thin: just resolve primary target from profile
+  worker/cloud_execution/stages/workspace.py
+                        call managed_profile_launch with
+                        origin='automation', visibility derived from
+                        owner_scope, source_kind='automation'
+  worker/cloud_execution/commands.py
+                        thread cloud_workspace_id, sandbox_profile_id,
+                        required_*_revision into enqueued commands
+
+server/proliferate/server/cloud/agent_run_config/                (new)
+  api.py, service.py, models.py, access.py, domain/policy.py
+
+server/proliferate/server/cloud/workspaces/service.py
+  - delete or replace create_cloud_workspace_for_automation_run;
+    automations call managed_profile_launch directly
+  - delete _raise_org_cloud_not_ready (now handled by
+    ensure_organization_sandbox_profile failure)
+
+server/proliferate/config.py
+  - automation_run_cascade_max_attempts  default 3
+```
+
+Desktop:
+
+```text
+desktop/src/hooks/access/cloud/automations/
+  use-automations.ts                              extend response shape
+  use-automation-mutations.ts                     accept owner_scope +
+                                                   cloud_agent_run_config_id
+
+desktop/src/hooks/access/cloud/agent-run-configs/  (new)
+  use-agent-run-configs.ts
+  use-agent-run-config-mutations.ts
+  query-keys.ts
+
+desktop/src/components/automations/
+  editor/AutomationEditorModal.tsx
+    - new "Owner" toggle (Personal | Team), gated by useIsAdmin
+    - replace AutomationModelPicker + AutomationModePicker with
+      AgentRunConfigSelector primitive (spec 03 §5.4)
+    - keep AutomationTargetPicker but reduce to target_mode toggle
+      (local vs personal_cloud, or shared_cloud for team)
+    - show RuntimeReadinessPanel (spec 03) for the resolved
+      sandbox_profile when target_mode != 'local'
+  detail/AutomationDetailContent.tsx
+    - show owner_scope badge ("Team" / "Personal")
+    - show last cascade reason if any
+    - link to claim flow for shared_unclaimed runs (spec 05)
+  timeline/AutomationRunTimeline.tsx
+    - cascade rows collapsed under the parent start_session row
+      using parent_command_id
+
+desktop/src/pages/AgentRunConfigsPage.tsx                        (new)
+  list + edit + archive cloud_agent_run_config rows
+  -- placement: nested under Settings > Agents > Agent Defaults
+     (spec 03 §5.1)
+```
+
+SDK regeneration:
+
+```text
+cloud/sdk/src/client/automations.ts                              extend
+cloud/sdk/src/client/agent-run-configs.ts                        (new)
+cloud/sdk/src/types/generated.ts                                  regen
+```
+
+## 7. Implementation Chunks
+
+All chunks land in one PR.
+
+```text
+Chunk A  cloud_agent_run_config table + service + API
+  - migration; model; store; service; access; api
+  - validation: control_values_json against catalog at write time
+  - usable_in_* defaults
+
+Chunk B  Automation model migration + service updates
+  - add owner_scope + organization_id + created_by_user_id
+  - replace inline agent config columns with FK
+  - rename execution_target -> target_mode
+  - drop cloud_target_id
+  - CHECKs (owner_fields, target_mode_owner, target_mode_enum)
+  - validation in service: useIsAdmin gate for team automations
+
+Chunk C  AutomationRun model + snapshot pipeline
+  - add owner fields, sandbox_profile_id,
+    cloud_workspace_exposure_id, agent_run_config_snapshot_json,
+    cascade fields
+  - scheduler inherits + snapshots
+  - drop agent_*_snapshot columns
+
+Chunk D  Execution pipeline refactor
+  - new stages: resolve_owner_and_profile,
+    preflight_runtime_config, preflight_agent_auth
+  - rewrite stages/target.py to consume profile primary target
+  - rewrite stages/workspace.py to call managed_profile_launch
+  - cascade logic; cap = 3; typed error codes
+
+Chunk E  Workspace creation rewrite
+  - delete create_cloud_workspace_for_automation_run
+  - delete _raise_org_cloud_not_ready managed-cloud usages
+  - automations call managed_profile_launch directly with
+    origin='automation', source_kind='automation', visibility
+    derived from owner_scope
+
+Chunk F  Desktop UI
+  - Owner toggle
+  - AgentRunConfigSelector (consumes spec 03 primitive)
+  - RuntimeReadinessPanel embed
+  - team-automation gating via useIsAdmin
+  - AgentRunConfigsPage CRUD
+  - timeline cascade collapse
+
+Chunk G  Tests + smoke
+```
+
+## 8. Acceptance Criteria
+
+1. `Automation.owner_scope` exists with CHECK enforcing the
+   personal vs organization mutex. Team automations require
+   `organization_id`; personal require `owner_user_id`.
+2. `Automation.target_mode` is `local | personal_cloud | shared_cloud`
+   with CHECK enforcing personal-only for `local` and personal_cloud,
+   and organization-only for `shared_cloud`.
+3. `cloud_agent_run_config` table exists with owner_scope,
+   usable_in_*_sandboxes, and CRUD endpoints.
+4. `Automation.cloud_agent_run_config_id` is NOT NULL; inline
+   agent config columns are removed.
+5. `AutomationRun.sandbox_profile_id`,
+   `cloud_workspace_exposure_id`,
+   `agent_run_config_snapshot_json`, `cascade_attempt`,
+   `last_cascade_command_id`, `last_cascade_reason` exist.
+6. Executor pipeline calls `ensure_*_sandbox_profile` based on
+   automation owner_scope, then `ensure_primary_profile_target`.
+   Org-scoped runs fail-fast with `shared_cloud_not_ready` if the
+   profile can't be ensured.
+7. `preflight_runtime_config` cascades on stale: enqueues
+   `materialize_environment`, waits for applied, retries up to
+   `automation_run_cascade_max_attempts` (default 3), then fails
+   the run with `runtime_config_apply_failed`.
+8. `preflight_agent_auth` cascades on stale: enqueues
+   `refresh_agent_auth_config`, same shape, fails with
+   `agent_auth_apply_failed` after max attempts.
+9. Cascade commands carry `parent_command_id` referencing the
+   automation_run id (or the originating command id) and
+   `cascade_reason` in their payload, for audit grouping.
+10. Workspace creation calls `managed_profile_launch` (spec 04).
+    `create_cloud_workspace_for_automation_run` and
+    `_raise_org_cloud_not_ready` are deleted.
+11. Personal-scope runs produce
+    `cloud_workspace_exposure.visibility='private'`,
+    `commandable=true`. Team-scope runs produce
+    `visibility='shared_unclaimed'`, `commandable=true`. Both have
+    `default_projection_level='live'`, `origin='automation'`,
+    `source_kind='automation'`.
+12. Team-automation creation requires admin (useIsAdmin gate);
+    triggering a manual run of a team automation is open to any
+    org member.
+13. Scheduled runs snapshot `cloud_agent_run_config` at trigger
+    time into `agent_run_config_snapshot_json`. Editing the
+    underlying `cloud_agent_run_config` row does not affect
+    in-flight runs.
+14. `cloud_agent_run_config.usable_in_shared_sandboxes=false`
+    blocks selection on team automations. The selector validates
+    at write time; the server validates at run time.
+15. `target_mode='local'` is permitted only when
+    `owner_scope='personal'`. Validation in service.py.
+16. Desktop `AutomationEditorModal` shows the Owner (Personal /
+    Team) toggle. Team toggle is disabled with tooltip when
+    `useIsAdmin` returns false.
+17. Desktop `AutomationEditorModal` uses
+    `AgentRunConfigSelector` (spec 03 primitive) instead of the
+    legacy `AutomationModelPicker` + `AutomationModePicker`. Old
+    pickers are deleted.
+18. Desktop `AutomationRunTimeline` collapses cascade rows under
+    the parent `start_session` row via `parent_command_id`.
+19. Spec 04's `_validate_runtime_config_preflight` returns
+    `runtime_config_stale` for automation-source commands; the
+    automation runner catches this typed error and cascades
+    (spec 04 fail-fast default still holds for other sources).
+20. No automation-specific MCP/auth/model surface remains. A grep
+    for legacy `automation_run.agent_kind_snapshot` etc. returns no
+    hits.
+
+## 9. Verification / Tests
+
+Server:
+
+```bash
+cd server
+uv run pytest -q
+```
+
+Targeted tests:
+
+```text
+tests/server/automations/test_owner_scope_check.py
+tests/server/automations/test_target_mode_owner_check.py
+tests/server/automations/test_team_automation_admin_gated.py
+tests/server/automations/test_cloud_agent_run_config_crud.py
+tests/server/automations/test_run_config_usable_in_shared_validation.py
+tests/server/automations/test_scheduler_snapshots_agent_run_config.py
+tests/server/automations/test_pipeline_resolve_owner_and_profile.py
+tests/server/automations/test_pipeline_runtime_config_cascade.py
+tests/server/automations/test_pipeline_agent_auth_cascade.py
+tests/server/automations/test_cascade_attempt_capped.py
+tests/server/automations/test_workspace_uses_managed_profile_launch.py
+tests/server/automations/test_personal_run_creates_private_exposure.py
+tests/server/automations/test_team_run_creates_shared_unclaimed_exposure.py
+tests/server/automations/test_shared_cloud_not_ready_fails_fast.py
+tests/server/automations/test_local_only_personal.py
+tests/server/automations/test_run_inherits_owner_fields.py
+tests/server/automations/test_cascade_commands_carry_parent_id.py
+```
+
+Desktop:
+
+```bash
+cd desktop && pnpm test -- --run && pnpm typecheck
+```
+
+Targeted Desktop tests:
+
+```text
+desktop/src/components/automations/editor/AutomationEditorModal.test.tsx
+  - owner toggle visible; team disabled for non-admin
+  - AgentRunConfigSelector renders configs
+  - target_mode picker offers correct values per owner_scope
+desktop/src/components/automations/timeline/AutomationRunTimeline.test.tsx
+  - cascade rows collapse under parent
+desktop/src/hooks/access/cloud/agent-run-configs/use-agent-run-configs.test.ts
+desktop/src/pages/AgentRunConfigsPage.test.tsx
+```
+
+Manual smoke:
+
+```text
+1. Personal automation with stale runtime config
+   - user creates personal automation, target_mode='personal_cloud'
+   - admin publishes a new MCP causing the profile's
+     desired_runtime_config_sequence to advance
+   - scheduler triggers the automation
+   - run pipeline: resolve_owner_and_profile -> preflight_runtime_config
+     observes stale -> cascade enqueues materialize_environment
+   - materialize_environment succeeds
+   - run proceeds to start_session; succeeds
+   - run.cascade_attempt = 1; last_cascade_reason = 'runtime_config_stale'
+
+2. Team automation with shared cloud not enabled
+   - admin attempts to create a team automation, but
+     ensure_organization_sandbox_profile fails (org has not enabled
+     shared cloud; spec 00 invariant)
+   - run pipeline fails immediately with
+     error_code='shared_cloud_not_ready'
+
+3. Team automation happy path
+   - admin enables shared cloud
+   - admin creates team automation with owner_scope=organization,
+     target_mode=shared_cloud, cloud_agent_run_config_id pointing at
+     a config with usable_in_shared_sandboxes=true
+   - scheduler triggers; pipeline runs
+   - workspace exposure: visibility='shared_unclaimed', commandable=true,
+     origin='automation', source_kind='automation'
+   - run dispatches successfully
+   - any org member can claim via POST /workspaces/{id}/claim
+   - after claim, the claimer can use Cloud-mediated APIs (or
+     Desktop direct-attach per spec 05) to continue the work
+
+4. Stale agent auth recovery
+   - org rotates Bedrock pool; sandbox_profile_target_state
+     applied_agent_auth_revision falls behind
+   - next team automation tick: cascade enqueues
+     refresh_agent_auth_config; succeeds; start_session proceeds
+
+5. Cascade cap
+   - simulate persistent materialize_environment failure
+   - cascade_attempt increments 1, 2, 3
+   - run fails with error_code='runtime_config_apply_failed'
+   - subsequent ticks treat this run as terminal; next scheduled
+     run triggers a fresh attempt
+
+6. Local automation
+   - personal automation, target_mode='local'
+   - pipeline skips preflight stages (no managed cloud)
+   - local executor picks up the run; runs against Desktop AnyHarness
+```
+
+## 10. Open Questions
+
+1. **Should `cloud_agent_run_config` live under `db/models/cloud/`
+   or alongside automations?**
+
+   Bias: under `db/models/cloud/` because it's consumed by Slack,
+   automations, web, mobile, and Desktop new-chat. It is not
+   automation-specific. Slack reuses it directly.
+
+2. **Should the cascade attempt cap be per run or per
+   `(automation_id, day)`?**
+
+   V1 is per run (3 attempts per run). If a config is broken and
+   every scheduled run fails immediately, the cap doesn't help.
+
+   Bias: keep per-run for V1. Add a separate
+   `automation_failure_backoff` (e.g. pause automation after N
+   consecutive failed runs) as a follow-up. Spec 06 does not ship
+   the backoff.
+
+3. **What happens to in-flight runs when an automation is edited
+   mid-tick?**
+
+   Snapshots cover this: the AutomationRun row captures
+   `agent_run_config_snapshot_json`, `prompt_snapshot`, repo
+   snapshot. Edits to the parent Automation row do not affect the
+   in-flight run.
+
+   But: editing
+   `automation.cloud_agent_run_config_id` does not retroactively
+   update in-flight runs (good). Editing the
+   `cloud_agent_run_config` row's `control_values_json` also does
+   not (good, because we snapshot at trigger time).
+
+4. **Should team automations require an explicit
+   `created_by_user_id` AND admin role at trigger time, or only at
+   create time?**
+
+   Bias: admin only at create time. Triggering a manual run of an
+   existing team automation is open to any org member. Rationale:
+   ops folks who aren't admins should be able to fire team
+   automations.
+
+5. **Cascade enqueue idempotency key**
+
+   Bias: include `automation_run_id` and `cascade_reason` in the
+   idempotency key so a retried tick (executor lease expired and
+   re-claimed) collapses with the prior cascade.
+
+6. **Should `cloud_agent_run_config_snapshot_json` snapshot the
+   catalog version too?**
+
+   Yes — include `catalog_version_pinned_at` from the config row,
+   plus the resolved control values. That way audit can show
+   "this run used catalog vX with these controls".
