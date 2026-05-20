@@ -144,7 +144,19 @@ pub enum RuntimeMcpValue {
         credential_ref: String,
     },
     Template {
-        parts: Vec<RuntimeMcpValue>,
+        parts: Vec<RuntimeMcpTemplatePart>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RuntimeMcpTemplatePart {
+    Literal {
+        value: String,
+    },
+    Credential {
+        #[serde(rename = "credentialRef")]
+        credential_ref: String,
     },
 }
 
