@@ -101,6 +101,8 @@ class CloudTargetSummary(BaseModel):
     kind: str
     status: str
     owner_scope: str = Field(serialization_alias="ownerScope")
+    sandbox_profile_id: str | None = Field(default=None, serialization_alias="sandboxProfileId")
+    profile_target_role: str = Field(serialization_alias="profileTargetRole")
     organization_id: str | None = Field(default=None, serialization_alias="organizationId")
     default_workspace_root: str | None = Field(
         default=None,
@@ -118,7 +120,7 @@ class CloudTargetSummary(BaseModel):
 
 
 class CloudTargetDetail(CloudTargetSummary):
-    owner_user_id: str = Field(serialization_alias="ownerUserId")
+    owner_user_id: str | None = Field(default=None, serialization_alias="ownerUserId")
     created_by_user_id: str = Field(serialization_alias="createdByUserId")
 
 
@@ -219,6 +221,8 @@ def target_summary_payload(value: CloudTargetSnapshot) -> CloudTargetSummary:
         kind=value.kind,
         status=value.status,
         owner_scope=value.owner_scope,
+        sandbox_profile_id=str(value.sandbox_profile_id) if value.sandbox_profile_id else None,
+        profile_target_role=value.profile_target_role,
         organization_id=str(value.organization_id) if value.organization_id else None,
         default_workspace_root=value.default_workspace_root,
         inventory=inventory_payload(value.inventory),
@@ -233,6 +237,6 @@ def target_summary_payload(value: CloudTargetSnapshot) -> CloudTargetSummary:
 def target_detail_payload(value: CloudTargetSnapshot) -> CloudTargetDetail:
     return CloudTargetDetail(
         **target_summary_payload(value).model_dump(),
-        owner_user_id=str(value.owner_user_id),
+        owner_user_id=str(value.owner_user_id) if value.owner_user_id else None,
         created_by_user_id=str(value.created_by_user_id),
     )

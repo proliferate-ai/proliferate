@@ -12,6 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
 from proliferate.db.models.cloud.commands import CloudCommand
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.targets import CloudWorker
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.utils.time import utcnow
 
 
@@ -26,6 +29,7 @@ class CloudCommandSnapshot:
     actor_kind: str
     source: str
     workspace_id: str | None
+    cloud_workspace_id: UUID | None
     session_id: str | None
     kind: str
     payload_json: str
@@ -35,6 +39,8 @@ class CloudCommandSnapshot:
     status: str
     lease_id: str | None
     leased_by_worker_id: UUID | None
+    leased_cloud_sandbox_id: UUID | None
+    leased_slot_generation: int | None
     attempt_count: int
     lease_expires_at: datetime | None
     delivered_at: datetime | None
@@ -59,6 +65,7 @@ def _snapshot(row: CloudCommand) -> CloudCommandSnapshot:
         actor_kind=row.actor_kind,
         source=row.source,
         workspace_id=row.workspace_id,
+        cloud_workspace_id=row.cloud_workspace_id,
         session_id=row.session_id,
         kind=row.kind,
         payload_json=row.payload_json,
@@ -68,6 +75,8 @@ def _snapshot(row: CloudCommand) -> CloudCommandSnapshot:
         status=row.status,
         lease_id=row.lease_id,
         leased_by_worker_id=row.leased_by_worker_id,
+        leased_cloud_sandbox_id=row.leased_cloud_sandbox_id,
+        leased_slot_generation=row.leased_slot_generation,
         attempt_count=row.attempt_count,
         lease_expires_at=row.lease_expires_at,
         delivered_at=row.delivered_at,
@@ -94,6 +103,7 @@ async def create_command(
     source: str,
     workspace_id: str | None,
     session_id: str | None,
+    cloud_workspace_id: UUID | None,
     kind: str,
     payload_json: str,
     observed_event_seq: int | None,
@@ -110,6 +120,7 @@ async def create_command(
         actor_kind=actor_kind,
         source=source,
         workspace_id=workspace_id,
+        cloud_workspace_id=cloud_workspace_id,
         session_id=session_id,
         kind=kind,
         payload_json=payload_json,
@@ -251,9 +262,29 @@ async def lease_next_command(
     ).scalar_one_or_none()
     if row is None:
         return None
+    worker = await db.get(CloudWorker, worker_id)
+    if worker is None:
+        return None
+    if worker.cloud_sandbox_id is not None:
+        active_slot = (
+            await db.execute(
+                select(CloudSandbox.id)
+                .where(
+                    CloudSandbox.id == worker.cloud_sandbox_id,
+                    CloudSandbox.target_id == target_id,
+                    CloudSandbox.slot_generation == worker.slot_generation,
+                    CloudSandbox.superseded_at.is_(None),
+                    CloudSandbox.status.in_(("creating", "running", "paused", "blocked")),
+                )
+            )
+        ).scalar_one_or_none()
+        if active_slot is None:
+            return None
     row.status = CloudCommandStatus.leased.value
     row.lease_id = lease_id
     row.leased_by_worker_id = worker_id
+    row.leased_cloud_sandbox_id = worker.cloud_sandbox_id
+    row.leased_slot_generation = worker.slot_generation
     row.lease_expires_at = lease_expires_at
     row.attempt_count += 1
     row.delivered_at = None
@@ -284,6 +315,13 @@ async def mark_command_delivered(
         return _snapshot(row)
     if _is_terminal_status(row.status) or row.status != CloudCommandStatus.leased.value:
         return None
+    if await _leased_slot_is_stale(db, row, worker_id=worker_id):
+        row.status = CloudCommandStatus.superseded.value
+        row.error_code = "stale_slot"
+        row.error_message = "Command delivery came from a stale sandbox slot."
+        row.updated_at = now
+        await db.flush()
+        return _snapshot(row)
     row.status = CloudCommandStatus.delivered.value
     row.delivered_at = now
     row.updated_at = now
@@ -316,6 +354,13 @@ async def mark_command_failed_delivery(
         CloudCommandStatus.delivered.value,
     }:
         return None
+    if await _leased_slot_is_stale(db, row, worker_id=worker_id):
+        row.status = CloudCommandStatus.superseded.value
+        row.error_code = "stale_slot"
+        row.error_message = "Command delivery came from a stale sandbox slot."
+        row.updated_at = now
+        await db.flush()
+        return _snapshot(row)
     row.status = CloudCommandStatus.failed_delivery.value
     row.error_code = error_code
     row.error_message = error_message
@@ -334,6 +379,9 @@ async def record_command_result(
     error_code: str | None,
     error_message: str | None,
     result_json: str | None,
+    cloud_workspace_id: UUID | None,
+    slot_generation: int | None,
+    anyharness_workspace_id: str | None,
     now: datetime,
 ) -> CloudCommandSnapshot | None:
     row = await _get_worker_leased_command(
@@ -351,6 +399,14 @@ async def record_command_result(
         CloudCommandStatus.delivered.value,
     }:
         return None
+    stale_slot = await _leased_slot_is_stale(db, row, worker_id=worker_id)
+    if stale_slot:
+        row.status = CloudCommandStatus.superseded.value
+        row.error_code = "stale_slot"
+        row.error_message = "Command result came from a stale sandbox slot."
+        row.updated_at = now
+        await db.flush()
+        return _snapshot(row)
     effective_status = status
     effective_error_code = error_code
     effective_error_message = error_message
@@ -359,7 +415,20 @@ async def record_command_result(
         status=status,
         result_json=result_json,
     )
+    result_cloud_workspace_id = cloud_workspace_id or _result_cloud_workspace_id(result_json)
     if (
+        row.kind == CloudCommandKind.materialize_workspace.value
+        and row.cloud_workspace_id is not None
+        and (
+            result_cloud_workspace_id is None
+            or result_cloud_workspace_id != row.cloud_workspace_id
+            or not await _cloud_workspace_matches_command(db, row)
+        )
+    ):
+        effective_status = CloudCommandStatus.rejected.value
+        effective_error_code = "cloud_workspace_not_found"
+        effective_error_message = "materialize_workspace result does not match a Cloud workspace."
+    elif (
         row.kind == CloudCommandKind.materialize_workspace.value
         and status
         in {
@@ -377,6 +446,8 @@ async def record_command_result(
     row.result_json = _safe_result_json(kind=row.kind, result_json=result_json)
     if materialized_workspace_id is not None:
         row.workspace_id = materialized_workspace_id
+    if anyharness_workspace_id is not None:
+        row.workspace_id = anyharness_workspace_id
     row.updated_at = now
     if effective_status in {
         CloudCommandStatus.accepted.value,
@@ -390,7 +461,81 @@ async def record_command_result(
     }:
         row.rejected_at = now
     await db.flush()
+    if (
+        row.kind == CloudCommandKind.materialize_workspace.value
+        and effective_status
+        in {
+            CloudCommandStatus.accepted.value,
+            CloudCommandStatus.accepted_but_queued.value,
+        }
+        and row.cloud_workspace_id is not None
+        and (materialized_workspace_id or anyharness_workspace_id)
+    ):
+        await _record_materialized_cloud_workspace(
+            db,
+            cloud_workspace_id=row.cloud_workspace_id,
+            anyharness_workspace_id=anyharness_workspace_id or materialized_workspace_id or "",
+            slot_generation=slot_generation or row.leased_slot_generation,
+            now=now,
+        )
     return _snapshot(row)
+
+
+async def _leased_slot_is_stale(
+    db: AsyncSession,
+    row: CloudCommand,
+    *,
+    worker_id: UUID,
+) -> bool:
+    if row.leased_cloud_sandbox_id is None and row.leased_slot_generation is None:
+        return False
+    worker = await db.get(CloudWorker, worker_id)
+    if worker is None:
+        return True
+    if (
+        worker.cloud_sandbox_id != row.leased_cloud_sandbox_id
+        or worker.slot_generation != row.leased_slot_generation
+    ):
+        return True
+    active_slot = (
+        await db.execute(
+            select(CloudSandbox.id).where(
+                CloudSandbox.id == row.leased_cloud_sandbox_id,
+                CloudSandbox.target_id == row.target_id,
+                CloudSandbox.slot_generation == row.leased_slot_generation,
+                CloudSandbox.superseded_at.is_(None),
+                CloudSandbox.status.in_(("creating", "running", "paused", "blocked")),
+            )
+        )
+    ).scalar_one_or_none()
+    return active_slot is None
+
+
+async def _cloud_workspace_matches_command(db: AsyncSession, row: CloudCommand) -> bool:
+    if row.cloud_workspace_id is None:
+        return True
+    workspace = await db.get(CloudWorkspace, row.cloud_workspace_id)
+    return workspace is not None and workspace.target_id == row.target_id
+
+
+async def _record_materialized_cloud_workspace(
+    db: AsyncSession,
+    *,
+    cloud_workspace_id: UUID,
+    anyharness_workspace_id: str,
+    slot_generation: int | None,
+    now: datetime,
+) -> None:
+    workspace = await db.get(CloudWorkspace, cloud_workspace_id)
+    if workspace is None:
+        return
+    workspace.anyharness_workspace_id = anyharness_workspace_id
+    workspace.materialized_slot_generation = slot_generation
+    workspace.status = "ready"
+    workspace.status_detail = "Ready"
+    workspace.ready_at = now
+    workspace.updated_at = now
+    await db.flush()
 
 
 def _materialized_workspace_id(
@@ -421,6 +566,22 @@ def _materialized_workspace_id(
     if not isinstance(workspace_id, str) or not workspace_id.strip():
         return None
     return workspace_id.strip()
+
+
+def _result_cloud_workspace_id(result_json: str | None) -> UUID | None:
+    try:
+        result = json.loads(result_json or "{}")
+    except ValueError:
+        return None
+    if not isinstance(result, dict):
+        return None
+    value = result.get("cloudWorkspaceId")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return UUID(value)
+    except ValueError:
+        return None
 
 
 def _safe_result_json(*, kind: str, result_json: str | None) -> str | None:

@@ -62,6 +62,7 @@ class CloudCommandResponse(BaseModel):
     idempotency_key: str = Field(serialization_alias="idempotencyKey")
     target_id: str = Field(serialization_alias="targetId")
     workspace_id: str | None = Field(default=None, serialization_alias="workspaceId")
+    cloud_workspace_id: str | None = Field(default=None, serialization_alias="cloudWorkspaceId")
     session_id: str | None = Field(default=None, serialization_alias="sessionId")
     kind: str
     source: str
@@ -84,6 +85,7 @@ def command_response_payload(value: CloudCommandSnapshot) -> CloudCommandRespons
         idempotency_key=value.idempotency_key,
         target_id=str(value.target_id),
         workspace_id=value.workspace_id,
+        cloud_workspace_id=str(value.cloud_workspace_id) if value.cloud_workspace_id else None,
         session_id=value.session_id,
         kind=value.kind,
         source=value.source,

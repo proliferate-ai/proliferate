@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudWorkspaceStatus
 from proliferate.db.models.cloud.commands import CloudCommand
+from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from tests.e2e.cloud.helpers.auth import create_user_and_login
@@ -22,6 +23,7 @@ async def _create_enrolled_target(
     auth: AuthSession,
     *,
     suffix: str = "command",
+    kind: str = "ssh",
 ) -> tuple[str, dict[str, str]]:
     await seed_linked_github_account(
         db_session,
@@ -33,7 +35,7 @@ async def _create_enrolled_target(
         headers=auth.headers,
         json={
             "displayName": f"Command Target {suffix}",
-            "kind": "ssh",
+            "kind": kind,
             "ownerScope": "personal",
         },
     )
@@ -53,6 +55,26 @@ async def _create_enrolled_target(
     worker_headers = {"Authorization": f"Bearer {worker['workerToken']}"}
     await _accept_initial_git_identity_command(client, worker_headers)
     return enrollment["target"]["id"], worker_headers
+
+
+async def _create_personal_profile_bound_to_target(
+    db_session: AsyncSession,
+    *,
+    user_id: UUID,
+    target_id: UUID,
+):
+    profile = await agent_auth_store.ensure_personal_sandbox_profile(
+        db_session,
+        user_id=user_id,
+    )
+    target = await db_session.get(CloudTarget, target_id)
+    assert target is not None
+    target.sandbox_profile_id = profile.id
+    target.profile_target_role = "primary"
+    await db_session.flush()
+    rebound = await agent_auth_store.get_sandbox_profile(db_session, profile.id)
+    assert rebound is not None
+    return rebound
 
 
 async def _accept_initial_git_identity_command(
@@ -928,12 +950,17 @@ class TestCloudCommandsApi:
             db_session,
             email_prefix="cloud-command-agent-auth-preflight",
         )
-        target_id, _worker_headers = await _create_enrolled_target(client, db_session, auth)
+        target_id, _worker_headers = await _create_enrolled_target(
+            client,
+            db_session,
+            auth,
+            kind="managed_cloud",
+        )
         target_uuid = UUID(target_id)
-        profile = await agent_auth_store.ensure_personal_sandbox_profile(
+        profile = await _create_personal_profile_bound_to_target(
             db_session,
             user_id=UUID(auth.user_id),
-            managed_target_id=target_uuid,
+            target_id=target_uuid,
         )
         profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
             db_session,
@@ -1019,12 +1046,17 @@ class TestCloudCommandsApi:
             db_session,
             email_prefix="cloud-command-agent-auth-worker-capability",
         )
-        target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
+        target_id, worker_headers = await _create_enrolled_target(
+            client,
+            db_session,
+            auth,
+            kind="managed_cloud",
+        )
         target_uuid = UUID(target_id)
-        profile = await agent_auth_store.ensure_personal_sandbox_profile(
+        profile = await _create_personal_profile_bound_to_target(
             db_session,
             user_id=UUID(auth.user_id),
-            managed_target_id=target_uuid,
+            target_id=target_uuid,
         )
         profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
             db_session,

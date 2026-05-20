@@ -20,6 +20,7 @@ from proliferate.constants.cloud import (
     WorkspaceStatus,
 )
 from proliferate.db import engine as db_engine
+from proliferate.db.models.cloud.agent_auth import SandboxProfile
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing import (
@@ -44,6 +45,19 @@ class CloudRepoLimitExceededError(RuntimeError):
 def _workspace_repo_apply_lock_key(workspace_id: UUID) -> int:
     prefix = int.from_bytes(workspace_id.bytes[:8], byteorder="big", signed=False)
     return (prefix ^ WORKSPACE_REPO_APPLY_LOCK_SALT) & ((1 << 63) - 1)
+
+
+def normalized_repo_key(
+    *,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+) -> str:
+    return (
+        f"{git_provider.strip().lower()}/"
+        f"{git_owner.strip().lower()}/"
+        f"{git_repo_name.strip().lower()}"
+    )
 
 
 async def _enforce_cloud_repo_limit(
@@ -239,6 +253,89 @@ async def create_cloud_workspace_record(
         await db.refresh(workspace)
     else:
         await db.flush()
+    return workspace
+
+
+async def create_managed_cloud_workspace_for_profile(
+    db: AsyncSession,
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+    created_by_user_id: UUID,
+    display_name: str | None,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+    git_branch: str,
+    git_base_branch: str | None,
+    worktree_path: str | None,
+    origin_json: str | None,
+    template_version: str,
+    repo_env_vars_ciphertext: str | None = None,
+) -> CloudWorkspace:
+    profile = await db.get(SandboxProfile, sandbox_profile_id)
+    if profile is None or profile.archived_at is not None:
+        raise RuntimeError("Sandbox profile not found.")
+    if profile.owner_scope == "personal":
+        owner_user_id = profile.owner_user_id
+        organization_id = None
+        if owner_user_id is None:
+            raise RuntimeError("Personal sandbox profile is missing owner_user_id.")
+        user_id = owner_user_id
+    else:
+        owner_user_id = None
+        organization_id = profile.organization_id
+        if organization_id is None:
+            raise RuntimeError("Organization sandbox profile is missing organization_id.")
+        user_id = created_by_user_id
+    now = utcnow()
+    workspace = CloudWorkspace(
+        user_id=user_id,
+        owner_scope=profile.owner_scope,
+        owner_user_id=owner_user_id,
+        organization_id=organization_id,
+        created_by_user_id=created_by_user_id,
+        billing_subject_id=profile.billing_subject_id,
+        runtime_environment_id=None,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=target_id,
+        display_name=display_name,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        normalized_repo_key=normalized_repo_key(
+            git_provider=git_provider,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        ),
+        git_branch=git_branch,
+        git_base_branch=git_base_branch,
+        worktree_path=worktree_path,
+        origin_json=origin_json,
+        status=CloudWorkspaceStatus.pending.value,
+        status_detail="Pending",
+        last_error=None,
+        template_version=template_version,
+        runtime_generation=0,
+        materialized_slot_generation=None,
+        required_runtime_config_sequence=0,
+        required_runtime_config_revision_id=None,
+        required_agent_auth_revision=profile.desired_agent_auth_revision,
+        repo_env_vars_ciphertext=repo_env_vars_ciphertext,
+        repo_files_applied_version=0,
+        repo_setup_applied_version=0,
+        repo_post_ready_phase=WorkspacePostReadyPhase.idle.value,
+        repo_post_ready_files_total=0,
+        repo_post_ready_files_applied=0,
+        repo_post_ready_apply_token=None,
+        repo_files_last_failed_path=None,
+        repo_files_last_error=None,
+        cleanup_state=CloudWorkspaceCleanupState.none.value,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(workspace)
+    await db.flush()
     return workspace
 
 
