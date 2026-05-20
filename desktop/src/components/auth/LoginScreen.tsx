@@ -1,4 +1,5 @@
 import { ProliferateLivingMark } from "@/components/brand/ProliferateLivingMark";
+import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
 import { ArrowRight, GitHub } from "@/components/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { AUTH_LOGIN_LABELS } from "@/copy/auth/auth-copy";
@@ -27,7 +28,7 @@ export function LoginScreen({
   canContinueLocally,
 }: LoginScreenProps) {
   return (
-    <div
+    <AuthAppearanceBoundary
       className="flex min-h-screen flex-col items-center justify-center bg-background p-8"
       data-tauri-drag-region="true"
     >
@@ -91,6 +92,6 @@ export function LoginScreen({
           )}
         </div>
       </div>
-    </div>
+    </AuthAppearanceBoundary>
   );
 }

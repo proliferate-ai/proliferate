@@ -11,9 +11,11 @@ import {
 
 describe("appearance preferences", () => {
   it("resolves invalid size ids to default", () => {
+    expect(resolveAppearanceSizeId("xxsmall")).toBe("xxsmall");
     expect(resolveAppearanceSizeId("xsmall")).toBe("xsmall");
     expect(resolveAppearanceSizeId("small")).toBe("small");
     expect(resolveAppearanceSizeId("xxlarge")).toBe("xxlarge");
+    expect(resolveAppearanceSizeId("xxxlarge")).toBe("xxxlarge");
     expect(resolveAppearanceSizeId("unknown")).toBe("default");
     expect(resolveAppearanceSizeId(undefined)).toBe("default");
   });
@@ -21,16 +23,18 @@ describe("appearance preferences", () => {
   it("steps appearance size ids within bounds", () => {
     expect(stepAppearanceSizeId("default", 1)).toBe("large");
     expect(stepAppearanceSizeId("default", -1)).toBe("small");
-    expect(stepAppearanceSizeId("xxlarge", 1)).toBe("xxlarge");
-    expect(stepAppearanceSizeId("xsmall", -1)).toBe("xsmall");
+    expect(stepAppearanceSizeId("xxlarge", 1)).toBe("xxxlarge");
+    expect(stepAppearanceSizeId("xxxlarge", 1)).toBe("xxxlarge");
+    expect(stepAppearanceSizeId("xsmall", -1)).toBe("xxsmall");
+    expect(stepAppearanceSizeId("xxsmall", -1)).toBe("xxsmall");
   });
 
   it("steps UI and readable code font sizes independently", () => {
     expect(stepAppearanceFontSizes({
-      uiFontSizeId: "xxlarge",
+      uiFontSizeId: "xxxlarge",
       readableCodeFontSizeId: "large",
     }, 1)).toEqual({
-      uiFontSizeId: "xxlarge",
+      uiFontSizeId: "xxxlarge",
       readableCodeFontSizeId: "xlarge",
     });
   });
@@ -54,6 +58,14 @@ describe("appearance preferences", () => {
 
   it("defines exact UI font preset values", () => {
     expect(UI_FONT_SCALES).toEqual({
+      xxsmall: {
+        xs: { fontSize: "0.40625rem", lineHeight: "0.625rem" },
+        sm: { fontSize: "0.4375rem", lineHeight: "0.75rem" },
+        base: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
+        chat: { fontSize: "9px", lineHeight: "17px" },
+        lg: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
+        xl: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
+      },
       xsmall: {
         xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
         sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
@@ -102,6 +114,14 @@ describe("appearance preferences", () => {
         lg: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
         xl: { fontSize: "1.3125rem", lineHeight: "2.125rem" },
       },
+      xxxlarge: {
+        xs: { fontSize: "0.75rem", lineHeight: "1.125rem" },
+        sm: { fontSize: "0.875rem", lineHeight: "1.3125rem" },
+        base: { fontSize: "0.9375rem", lineHeight: "1.5rem" },
+        chat: { fontSize: "16px", lineHeight: "24px" },
+        lg: { fontSize: "1.125rem", lineHeight: "1.75rem" },
+        xl: { fontSize: "1.375rem", lineHeight: "2.25rem" },
+      },
     });
   });
 
@@ -118,6 +138,14 @@ describe("appearance preferences", () => {
 
   it("defines exact readable code preset values", () => {
     expect(READABLE_CODE_FONT_SCALES).toEqual({
+      xxsmall: {
+        monacoFontSize: 8,
+        monacoLineHeight: 15,
+        diffsFontSize: "8px",
+        diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
+        codeFontSize: "0.5rem",
+        codeLineHeight: "1.625",
+      },
       xsmall: {
         monacoFontSize: 9,
         monacoLineHeight: 16,
@@ -164,6 +192,14 @@ describe("appearance preferences", () => {
         diffsFontSize: "14px",
         diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
         codeFontSize: "0.875rem",
+        codeLineHeight: "1.625",
+      },
+      xxxlarge: {
+        monacoFontSize: 15,
+        monacoLineHeight: 24,
+        diffsFontSize: "15px",
+        diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
+        codeFontSize: "0.9375rem",
         codeLineHeight: "1.625",
       },
     });
