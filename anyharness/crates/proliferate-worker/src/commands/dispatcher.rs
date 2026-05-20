@@ -269,6 +269,7 @@ async fn process_refresh_agent_auth_config_command(
                 current_revision: None,
                 error_code: None,
                 error_message: None,
+                applied_cleanup_paths: Vec::new(),
             },
         )
         .await;
@@ -286,6 +287,7 @@ async fn process_refresh_agent_auth_config_command(
             materialization_root,
             &payload.sandbox_profile_id,
             &command.target_id,
+            command.slot_generation,
             payload.revision,
             &plan,
         )?;
@@ -304,6 +306,7 @@ async fn process_refresh_agent_auth_config_command(
                         current_revision: outcome.current_revision,
                         error_code: None,
                         error_message: None,
+                        applied_cleanup_paths: outcome.applied_cleanup_paths.clone(),
                     },
                 )
                 .await
@@ -322,6 +325,7 @@ async fn process_refresh_agent_auth_config_command(
                         current_revision: outcome.current_revision,
                         error_code: None,
                         error_message: None,
+                        applied_cleanup_paths: Vec::new(),
                     },
                 )
                 .await
@@ -359,6 +363,7 @@ async fn process_refresh_agent_auth_config_command(
                         current_revision: None,
                         error_code: Some("agent_auth_materialization_failed".to_string()),
                         error_message: Some(SAFE_AGENT_AUTH_REFRESH_ERROR.to_string()),
+                        applied_cleanup_paths: Vec::new(),
                     },
                 )
                 .await;

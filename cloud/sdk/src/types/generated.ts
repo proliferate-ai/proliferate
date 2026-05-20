@@ -66,20 +66,20 @@ export type OrganizationInvitationAcceptResponse =
   components["schemas"]["OrganizationInvitationAcceptResponse"];
 export type CloudWorkspaceSummary = Omit<
   components["schemas"]["WorkspaceSummary"],
-  "status" | "runtime" | "actionBlockKind" | "actionBlockReason"
+  "status" | "workspaceStatus" | "runtime" | "actionBlockKind" | "actionBlockReason"
 > & {
   status: CloudWorkspaceStatus;
-  workspaceStatus?: CloudWorkspaceStatus;
+  workspaceStatus: CloudWorkspaceStatus;
   runtime?: CloudWorkspaceRuntimeSummary;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
 };
 export type CloudWorkspaceDetail = Omit<
   components["schemas"]["WorkspaceDetail"],
-  "status" | "runtime" | "actionBlockKind" | "actionBlockReason"
+  "status" | "workspaceStatus" | "runtime" | "actionBlockKind" | "actionBlockReason"
 > & {
   status: CloudWorkspaceStatus;
-  workspaceStatus?: CloudWorkspaceStatus;
+  workspaceStatus: CloudWorkspaceStatus;
   runtime?: CloudWorkspaceRuntimeSummary;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;

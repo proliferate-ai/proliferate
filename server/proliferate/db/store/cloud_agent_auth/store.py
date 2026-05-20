@@ -1440,6 +1440,56 @@ async def list_active_runtime_grants_for_route(
     return tuple(_runtime_grant_record(row) for row in rows)
 
 
+async def list_runtime_grants_needing_rotation(
+    db: AsyncSession,
+    *,
+    now: datetime,
+    expires_before: datetime,
+    limit: int,
+) -> tuple[AgentGatewayRuntimeGrantRecord, ...]:
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayRuntimeGrant)
+                .join(
+                    SandboxAgentAuthSelection,
+                    SandboxAgentAuthSelection.id == AgentGatewayRuntimeGrant.selection_id,
+                )
+                .join(
+                    AgentAuthCredential,
+                    AgentAuthCredential.id == AgentGatewayRuntimeGrant.credential_id,
+                )
+                .join(
+                    AgentGatewayPolicy,
+                    AgentGatewayPolicy.id == AgentGatewayRuntimeGrant.policy_id,
+                )
+                .join(
+                    SandboxProfile,
+                    SandboxProfile.id == AgentGatewayRuntimeGrant.sandbox_profile_id,
+                )
+                .where(
+                    AgentGatewayRuntimeGrant.revoked_at.is_(None),
+                    AgentGatewayRuntimeGrant.expires_at > now,
+                    AgentGatewayRuntimeGrant.expires_at <= expires_before,
+                    SandboxAgentAuthSelection.status == "active",
+                    SandboxAgentAuthSelection.selected_revision == AgentAuthCredential.revision,
+                    AgentAuthCredential.status == "ready",
+                    AgentAuthCredential.revoked_at.is_(None),
+                    AgentGatewayPolicy.status == "ready",
+                    AgentGatewayPolicy.litellm_sync_status == "synced",
+                    SandboxProfile.archived_at.is_(None),
+                    SandboxProfile.deleted_at.is_(None),
+                )
+                .order_by(AgentGatewayRuntimeGrant.expires_at.asc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_runtime_grant_record(row) for row in rows)
+
+
 async def lock_runtime_grant_route(
     db: AsyncSession,
     *,

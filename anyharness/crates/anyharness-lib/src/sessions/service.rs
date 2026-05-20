@@ -14,7 +14,9 @@ use super::model::{
     SessionRecord,
 };
 use super::store::SessionStore;
-use crate::domains::agents::auth_config::AgentAuthConfigService;
+use crate::domains::agents::auth_config::{
+    AgentAuthConfigService, AgentAuthLaunchOverlayError, AgentAuthSelectionRequired,
+};
 use crate::domains::agents::catalog::projection::models::bundled_create_mode_ids;
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::model_registry::resolution::{
@@ -54,6 +56,7 @@ pub enum CreateSessionError {
         agent_kind: String,
         mode_id: String,
     },
+    AgentAuthSelectionRequired(AgentAuthSelectionRequired),
     Invalid(String),
     Internal(anyhow::Error),
 }
@@ -165,7 +168,7 @@ impl SessionService {
                 agent_auth_scope.as_ref(),
                 required_agent_auth_revision,
             )
-            .map_err(|error| CreateSessionError::Invalid(error.to_string()))?;
+            .map_err(map_agent_auth_launch_error_to_create)?;
         let mut readiness_env = workspace_env.clone();
         readiness_env.extend(agent_auth_overlay.support_env);
         readiness_env.extend(agent_auth_overlay.protected_env);
@@ -556,6 +559,15 @@ pub fn read_prompt_attachment_content_with_legacy_fallback(
         &storage_path,
     )?;
     Ok(content)
+}
+
+fn map_agent_auth_launch_error_to_create(error: AgentAuthLaunchOverlayError) -> CreateSessionError {
+    match error {
+        AgentAuthLaunchOverlayError::SelectionRequired(required) => {
+            CreateSessionError::AgentAuthSelectionRequired(required)
+        }
+        AgentAuthLaunchOverlayError::Internal(error) => CreateSessionError::Internal(error),
+    }
 }
 
 const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";

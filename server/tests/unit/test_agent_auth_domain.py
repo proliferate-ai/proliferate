@@ -6,6 +6,10 @@ from proliferate.server.cloud.agent_auth.domain.policy import (
     can_select_credential_for_profile,
     selection_plan_for_credential,
 )
+from proliferate.server.cloud.agent_auth.protected_env import (
+    allowed_protected_env_keys,
+    reject_unallowed_protected_env,
+)
 
 
 def test_gateway_selection_plan_maps_agent_protocols() -> None:
@@ -54,3 +58,29 @@ def test_org_profile_requires_share_for_personal_synced_credential() -> None:
         has_active_share=True,
     )
     assert isinstance(allowed, PolicyAllowed)
+
+
+def test_protected_env_allowlist_is_agent_and_mode_scoped() -> None:
+    assert "ANTHROPIC_CUSTOM_HEADERS" in allowed_protected_env_keys(
+        agent_kind="claude",
+        materialization_mode="gateway_env",
+    )
+    assert "OPENAI_API_KEY" not in allowed_protected_env_keys(
+        agent_kind="claude",
+        materialization_mode="gateway_env",
+    )
+    reject_unallowed_protected_env(
+        agent_kind="opencode",
+        materialization_mode="gateway_env",
+        keys={"OPENAI_API_KEY", "OPENAI_BASE_URL"},
+    )
+    try:
+        reject_unallowed_protected_env(
+            agent_kind="claude",
+            materialization_mode="gateway_env",
+            keys={"OPENAI_API_KEY"},
+        )
+    except ValueError as exc:
+        assert "OPENAI_API_KEY" in str(exc)
+    else:
+        raise AssertionError("expected protected env violation")

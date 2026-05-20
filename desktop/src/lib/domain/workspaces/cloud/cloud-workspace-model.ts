@@ -1,6 +1,7 @@
 export type CloudWorkspaceStatus =
   | "pending"
   | "materializing"
+  | "needs_rematerialization"
   | "ready"
   | "archived"
   | "error";

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -990,6 +991,24 @@ class TestCloudCommandsApi:
             force_restart=False,
         )
         assert profile is not None
+        await db_session.commit()
+
+        missing_state = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "agent-auth-preflight-missing-state",
+                "targetId": target_id,
+                "kind": "start_session",
+                "payload": {
+                    "workspaceId": "anyharness-workspace-1",
+                    "agentKind": "claude",
+                },
+            },
+        )
+        assert missing_state.status_code == 409
+        assert missing_state.json()["detail"]["code"] == "cloud_command_agent_auth_not_ready"
+
         await agent_auth_store.upsert_target_state(
             db_session,
             sandbox_profile_id=profile.id,
@@ -1054,6 +1073,29 @@ class TestCloudCommandsApi:
             },
         )
         assert ready.status_code == 200
+
+        auto_populated = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "agent-auth-preflight-auto-populated",
+                "targetId": target_id,
+                "kind": "start_session",
+                "payload": {
+                    "workspaceId": "anyharness-workspace-1",
+                    "agentKind": "claude",
+                },
+            },
+        )
+        assert auto_populated.status_code == 200
+        command = await db_session.get(
+            CloudCommand,
+            UUID(auto_populated.json()["commandId"]),
+        )
+        assert command is not None
+        payload = json.loads(command.payload_json)
+        assert payload["sandboxProfileId"] == str(profile.id)
+        assert payload["requiredAgentAuthRevision"] == profile.agent_auth_revision
 
     @pytest.mark.asyncio
     async def test_agent_auth_preflight_command_requires_refresh_capable_worker(
