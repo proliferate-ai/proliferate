@@ -13,11 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
 from proliferate.db.models.cloud.agent_auth import SandboxProfile, SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
+from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
 from proliferate.db.models.cloud.runtime_config import (
     SandboxProfileRuntimeConfigCurrent,
     SandboxProfileRuntimeConfigRevision,
 )
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.sync import CloudSessionProjection
 from proliferate.db.models.cloud.targets import CloudTarget, CloudWorker
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
@@ -792,6 +794,16 @@ async def record_command_result(
             slot_generation=row.leased_slot_generation,
             now=now,
         )
+    if row.kind == CloudCommandKind.start_session.value and effective_status in {
+        CloudCommandStatus.accepted.value,
+        CloudCommandStatus.accepted_but_queued.value,
+    }:
+        await _record_started_cloud_session_projection(
+            db,
+            row=row,
+            result_json=result_json,
+            now=now,
+        )
     return _snapshot(row)
 
 
@@ -915,7 +927,123 @@ async def _record_materialized_cloud_workspace(
     workspace.status_detail = "Ready"
     workspace.ready_at = now
     workspace.updated_at = now
+    if workspace.target_id is not None:
+        exposure = await _load_active_workspace_exposure(
+            db,
+            target_id=workspace.target_id,
+            cloud_workspace_id=workspace.id,
+        )
+        visibility = "shared_unclaimed" if workspace.owner_scope == "organization" else "private"
+        origin = workspace.origin
+        if exposure is None:
+            db.add(
+                CloudWorkspaceExposure(
+                    target_id=workspace.target_id,
+                    cloud_workspace_id=workspace.id,
+                    anyharness_workspace_id=anyharness_workspace_id,
+                    owner_scope=workspace.owner_scope,
+                    owner_user_id=workspace.owner_user_id,
+                    organization_id=workspace.organization_id,
+                    visibility=visibility,
+                    claimed_by_user_id=None,
+                    default_projection_level="live",
+                    commandable=True,
+                    status="active",
+                    revision=1,
+                    origin=origin,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        else:
+            changed = False
+            for attr, value in (
+                ("anyharness_workspace_id", anyharness_workspace_id),
+                ("visibility", visibility),
+                ("status", "active"),
+                ("commandable", True),
+                ("origin", origin),
+            ):
+                if getattr(exposure, attr) != value:
+                    setattr(exposure, attr, value)
+                    changed = True
+            if changed:
+                exposure.revision += 1
+                exposure.updated_at = now
     await db.flush()
+
+
+async def _record_started_cloud_session_projection(
+    db: AsyncSession,
+    *,
+    row: CloudCommand,
+    result_json: str | None,
+    now: datetime,
+) -> None:
+    if row.cloud_workspace_id is None or not row.workspace_id:
+        return
+    session_id = _started_session_id(result_json)
+    if session_id is None:
+        return
+    exposure = await _load_active_workspace_exposure(
+        db,
+        target_id=row.target_id,
+        cloud_workspace_id=row.cloud_workspace_id,
+    )
+    projection = (
+        await db.execute(
+            select(CloudSessionProjection)
+            .where(CloudSessionProjection.target_id == row.target_id)
+            .where(CloudSessionProjection.session_id == session_id)
+            .with_for_update()
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if projection is None:
+        projection = CloudSessionProjection(
+            target_id=row.target_id,
+            exposure_id=exposure.id if exposure is not None else None,
+            cloud_workspace_id=row.cloud_workspace_id,
+            workspace_id=row.workspace_id,
+            session_id=session_id,
+            status="running",
+            projection_level=(
+                exposure.default_projection_level if exposure is not None else "live"
+            ),
+            commandable=exposure.commandable if exposure is not None else True,
+            last_event_seq=0,
+            last_uploaded_seq=0,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(projection)
+    else:
+        projection.exposure_id = exposure.id if exposure is not None else projection.exposure_id
+        projection.cloud_workspace_id = row.cloud_workspace_id
+        projection.workspace_id = row.workspace_id
+        projection.status = projection.status or "running"
+        if exposure is not None:
+            projection.projection_level = exposure.default_projection_level
+            projection.commandable = exposure.commandable
+        projection.updated_at = now
+    await db.flush()
+
+
+async def _load_active_workspace_exposure(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    cloud_workspace_id: UUID,
+) -> CloudWorkspaceExposure | None:
+    return (
+        await db.execute(
+            select(CloudWorkspaceExposure)
+            .where(CloudWorkspaceExposure.target_id == target_id)
+            .where(CloudWorkspaceExposure.cloud_workspace_id == cloud_workspace_id)
+            .where(CloudWorkspaceExposure.archived_at.is_(None))
+            .limit(1)
+        )
+    ).scalar_one_or_none()
 
 
 def _materialized_workspace_id(
@@ -962,6 +1090,31 @@ def _result_cloud_workspace_id(result_json: str | None) -> UUID | None:
         return UUID(value)
     except ValueError:
         return None
+
+
+def _started_session_id(result_json: str | None) -> str | None:
+    try:
+        result = json.loads(result_json or "{}")
+    except ValueError:
+        return None
+    if not isinstance(result, dict):
+        return None
+    candidates: list[object] = [
+        result.get("sessionId"),
+        result.get("anyharnessSessionId"),
+    ]
+    body = result.get("body")
+    if isinstance(body, dict):
+        candidates.extend(
+            [
+                body.get("sessionId"),
+                body.get("id"),
+            ]
+        )
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
 
 
 def _safe_result_json(*, kind: str, result_json: str | None) -> str | None:
