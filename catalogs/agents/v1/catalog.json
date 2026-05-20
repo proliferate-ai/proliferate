@@ -197,7 +197,7 @@
           },
           {
             "id": "us.anthropic.claude-sonnet-4-6",
-            "displayName": "Sonnet",
+            "displayName": "Sonnet 4.6",
             "description": "Sonnet 4.6 · Best for everyday tasks",
             "aliases": [
               "sonnet",
@@ -221,7 +221,7 @@
           },
           {
             "id": "us.anthropic.claude-sonnet-4-6[1m]",
-            "displayName": "Sonnet (1M context)",
+            "displayName": "Sonnet 4.6 (1M context)",
             "description": "Sonnet 4.6 for long sessions",
             "aliases": [
               "sonnet[1m]",
@@ -245,7 +245,7 @@
           },
           {
             "id": "haiku",
-            "displayName": "Haiku",
+            "displayName": "Haiku 4.5",
             "description": "Haiku 4.5 · Fastest for quick answers",
             "aliases": [
               "claude-haiku-4-5"

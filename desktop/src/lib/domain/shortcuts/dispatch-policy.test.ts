@@ -32,6 +32,22 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(true);
   });
 
+  it("allows home from text inputs when Cmd+Option+, is not already handled locally", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.goHome, {
+      key: ",",
+      code: "Comma",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+      defaultPrevented: false,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+  });
+
   it("respects defaultPrevented for rename now that reload stays unbound", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.renameSession, {
       key: "r",
@@ -312,7 +328,7 @@ describe("shortcut dispatch policy", () => {
       target: null,
     } as KeyboardEvent)).toBe(true);
 
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.openBrowserTab, {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.newSessionTab, {
       key: "t",
       code: "KeyT",
       metaKey: true,

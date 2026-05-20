@@ -9,6 +9,7 @@ import {
 import {
   canCreateRightPanelBrowserTab,
   createBrowserTabInRightPanelState,
+  createOrActivateBrowserTabInRightPanelState,
   reconcileRightPanelWorkspaceState,
   removeBrowserTabFromRightPanelState,
   removeTerminalFromRightPanelState,
@@ -213,6 +214,19 @@ describe("right panel domain", () => {
     expect(canCreateRightPanelBrowserTab(state)).toBe(false);
     expect(createBrowserTabInRightPanelState(state, "extra", false).headerOrder)
       .not.toContain("browser:extra");
+  });
+
+  it("activates an existing browser tab when the create shortcut runs at the limit", () => {
+    let state = reconcileRightPanelWorkspaceState(undefined, { isCloudWorkspaceSelected: false });
+    for (let index = 0; index < RIGHT_PANEL_BROWSER_TAB_LIMIT; index += 1) {
+      state = createBrowserTabInRightPanelState(state, `b${index}`, false);
+    }
+    state = { ...state, activeEntryKey: "tool:scratch" };
+
+    const next = createOrActivateBrowserTabInRightPanelState(state, "extra", false);
+
+    expect(next.headerOrder).not.toContain("browser:extra");
+    expect(next.activeEntryKey).toBe(`browser:b${RIGHT_PANEL_BROWSER_TAB_LIMIT - 1}`);
   });
 
   it("reorders terminal ids immediately", () => {

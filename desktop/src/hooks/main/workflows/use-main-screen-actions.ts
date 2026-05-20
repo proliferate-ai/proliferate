@@ -63,6 +63,11 @@ export function useMainScreenActions({
     requestRightPanelFocus();
   }, [requestRightPanelFocus, setRightPanelOpen, setRightPanelState]);
 
+  const openRightPanel = useCallback(() => {
+    setRightPanelOpen(true);
+    requestRightPanelFocus();
+  }, [requestRightPanelFocus, setRightPanelOpen]);
+
   const openTerminalPanel = useCallback((terminalId?: string) => {
     if (!selectedWorkspaceId) {
       return false;
@@ -175,6 +180,7 @@ export function useMainScreenActions({
   return {
     renameBranch,
     onToggleSidebar: () => setSidebarOpen((value) => !value),
+    openRightPanel,
     toggleRightPanel,
     openTerminalPanel,
     onSetRightPanelTool: openRightPanelTool,

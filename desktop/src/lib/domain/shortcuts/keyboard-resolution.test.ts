@@ -148,7 +148,7 @@ describe("resolveKeyboardShortcut", () => {
     });
   });
 
-  it("keeps command-comma settings distinct from command-shift-comma home on mac", () => {
+  it("keeps command-comma settings distinct from command-option-comma home on mac", () => {
     vi.stubGlobal("navigator", {
       platform: "MacIntel",
       userAgent: "Mac OS X",
@@ -183,6 +183,15 @@ describe("resolveKeyboardShortcut", () => {
       ctrlKey: false,
       shiftKey: true,
       altKey: false,
+    } as KeyboardEvent)).toBeNull();
+
+    expect(resolveKeyboardShortcut({
+      key: ",",
+      code: "Comma",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
     } as KeyboardEvent)).toEqual({
       id: "app.go-home",
       shortcut: expect.objectContaining({ id: "app.go-home" }),
@@ -274,6 +283,19 @@ describe("resolveKeyboardShortcut", () => {
       id: "workspace.by-index",
       shortcut: expect.objectContaining({ id: "workspace.by-index" }),
       trigger: expect.objectContaining({ source: "keyboard", digit: 1 }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "t",
+      code: "KeyT",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.new-session-tab",
+      shortcut: expect.objectContaining({ id: "workspace.new-session-tab" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
     });
 
     expect(resolveKeyboardShortcut({

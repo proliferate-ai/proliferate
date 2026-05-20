@@ -179,6 +179,21 @@ describe("RightPanel terminal activation", () => {
     });
   });
 
+  it("opens the right panel when a browser tab request is handled while collapsed", async () => {
+    const onOpenPanel = vi.fn();
+    render(
+      <RightPanelHarness
+        isWorkspaceReady
+        isOpen={false}
+        onOpenPanel={onOpenPanel}
+      />,
+    );
+
+    requestRightPanelBrowserTab();
+
+    await waitFor(() => expect(onOpenPanel).toHaveBeenCalledTimes(1));
+  });
+
   it("replays no-id terminal activation once workspace content becomes renderable", async () => {
     const terminal = terminalRecord("terminal-1");
     const refetch = vi.fn(async () => ({ data: [terminal] }));
@@ -476,6 +491,7 @@ function RightPanelHarness({
   isWorkspaceReady,
   focusRequestToken = 0,
   nativeOverlaysHidden = false,
+  onOpenPanel,
   terminalActivationRequestToken,
   terminalActivationRequestWorkspaceId,
   workspaceId = "workspace-1",
@@ -485,6 +501,7 @@ function RightPanelHarness({
   isWorkspaceReady: boolean;
   focusRequestToken?: number;
   nativeOverlaysHidden?: boolean;
+  onOpenPanel?: () => void;
   terminalActivationRequestToken?: number;
   terminalActivationRequestWorkspaceId?: string;
   workspaceId?: string;
@@ -502,6 +519,7 @@ function RightPanelHarness({
       onStateChange={setState as Dispatch<SetStateAction<RightPanelWorkspaceState>>}
       focusRequestToken={focusRequestToken}
       nativeOverlaysHidden={nativeOverlaysHidden}
+      onOpenPanel={onOpenPanel ?? (() => undefined)}
       onTogglePanel={() => undefined}
       terminalActivationRequest={terminalActivationRequestToken
         ? {
@@ -543,6 +561,7 @@ function RemountingRightPanelHarness({
       repoSettingsHref="/settings"
       onStateChange={setState as Dispatch<SetStateAction<RightPanelWorkspaceState>>}
       terminalActivationRequest={terminalActivationRequest}
+      onOpenPanel={() => undefined}
       onTogglePanel={() => undefined}
       onTerminalActivationRequestHandled={(request) => {
         setTerminalActivationRequest((current) =>

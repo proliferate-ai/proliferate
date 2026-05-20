@@ -23,7 +23,6 @@ interface RightPanelHeaderTabsProps {
   buffersByPath: Record<string, WorkspaceFileBuffer>;
   tabModes: Record<string, FileViewerMode>;
   isWorkspaceReady: boolean;
-  canCreateBrowserTab: boolean;
   newTabMenuRequestToken: number;
   newTabMenuDefaultKind: RightPanelNewTabMenuDefault;
   onActivateTool: (tool: RightPanelTool) => void;
@@ -51,7 +50,6 @@ export function RightPanelHeaderTabs({
   buffersByPath,
   tabModes,
   isWorkspaceReady,
-  canCreateBrowserTab,
   newTabMenuRequestToken,
   newTabMenuDefaultKind,
   onActivateTool,
@@ -133,11 +131,9 @@ export function RightPanelHeaderTabs({
                 open={newTabMenuOpen}
                 defaultKind={newTabMenuDefaultKind}
                 isWorkspaceReady={isWorkspaceReady}
-                canCreateBrowserTab={canCreateBrowserTab}
                 onOpenChange={setNewTabMenuOpen}
                 onCreateTerminal={onCreateTerminal}
                 onCreateBrowser={onCreateBrowser}
-                shortcutRevealVisible={shortcutRevealVisible}
               />
             </div>
           </div>

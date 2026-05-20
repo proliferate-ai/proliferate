@@ -377,6 +377,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                           terminalActivationRequest={terminalActivationRequest}
                           focusRequestToken={rightPanelFocusRequestToken}
                           nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
+                          onOpenPanel={actions.openRightPanel}
                           onTogglePanel={actions.toggleRightPanel}
                           onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
                         />

@@ -78,6 +78,7 @@ describe("user preference migration", () => {
     expect(preferences.colorMode).toBe("dark");
     expect(preferences.uiFontSizeId).toBe("default");
     expect(preferences.readableCodeFontSizeId).toBe("default");
+    expect(preferences.defaultChatAgentKind).toBe("claude");
     expect(preferences.transparentChromeEnabled).toBe(false);
     expect(preferences.pasteAttachmentsEnabled).toBe(true);
     expect(preferences.worktreeAutoDeleteLimit).toBe(20);
@@ -91,6 +92,7 @@ describe("user preference migration", () => {
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.themePreset).toBe("ship");
     expect(preferences.transparentChromeEnabled).toBe(true);
+    expect(preferences.defaultChatAgentKind).toBe("claude");
   });
 
   it("migrates legacy per-key scalar models into the primary harness map", async () => {
@@ -349,8 +351,10 @@ describe("user preference migration", () => {
 
   it("keeps existing-record backfills distinct from new-user defaults", () => {
     expect(USER_PREFERENCE_DEFAULTS.themePreset).toBe("mono");
+    expect(USER_PREFERENCE_DEFAULTS.defaultChatAgentKind).toBe("claude");
     expect(USER_PREFERENCE_DEFAULTS.transparentChromeEnabled).toBe(false);
     expect(PERSISTED_RECORD_BACKFILL.themePreset).toBe("ship");
+    expect(PERSISTED_RECORD_BACKFILL.defaultChatAgentKind).toBe("");
     expect(PERSISTED_RECORD_BACKFILL.transparentChromeEnabled).toBe(true);
   });
 

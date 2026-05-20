@@ -204,6 +204,39 @@ describe("buildModelSelectorGroups", () => {
     ]);
   });
 
+  it("uses known Claude labels for static catalog rows", () => {
+    const groups = buildModelSelectorGroups(
+      [
+        launchAgent("claude", [
+          model("us.anthropic.claude-sonnet-4-6", "sonnet", true),
+          model("haiku", "haiku", false, { defaultOptIn: true }),
+          model("opus", "Opus 4.1", false, { defaultOptIn: true }),
+        ]),
+      ],
+      { kind: "claude", modelId: "us.anthropic.claude-sonnet-4-6" },
+      { kind: "claude", modelId: "us.anthropic.claude-sonnet-4-6" },
+      null,
+    );
+
+    expect(groups[0]?.models.map((model) => ({
+      modelId: model.modelId,
+      displayName: model.displayName,
+    }))).toEqual([
+      {
+        modelId: "us.anthropic.claude-sonnet-4-6",
+        displayName: "Sonnet 4.6",
+      },
+      {
+        modelId: "haiku",
+        displayName: "Haiku 4.5",
+      },
+      {
+        modelId: "opus",
+        displayName: "Opus 4.1",
+      },
+    ]);
+  });
+
   it("applies visibility preferences to active model controls", () => {
     const groups = buildModelSelectorGroups(
       [

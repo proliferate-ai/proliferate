@@ -210,7 +210,7 @@ mod tests {
         );
         assert!(labels.iter().any(|(id, name, description)| {
             *id == "us.anthropic.claude-sonnet-4-6"
-                && *name == "Sonnet"
+                && *name == "Sonnet 4.6"
                 && description
                     .unwrap_or("")
                     .contains("Best for everyday tasks")

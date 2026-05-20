@@ -263,7 +263,15 @@ function resolveSelectorModels(
     });
   }
 
-  return agent.models;
+  return agent.models.map((model) => ({
+    id: model.id,
+    displayName: resolveModelDisplayName({
+      agentKind: agent.kind,
+      modelId: model.id,
+      sourceLabels: [model.displayName],
+      preferKnownAlias: shouldPreferStaticModelAlias(model.displayName),
+    }) ?? model.displayName,
+  }));
 }
 
 function resolveModelSelectionActionKindForModel(
@@ -356,6 +364,10 @@ function shouldHideSelectorModel(
   return /\bopus\s*4\.1\b/.test(label)
     || /\bopus\s*4\.5\b/.test(label)
     || (/\bopus\s*4\.6\b/.test(label) && /\b1m\b|1m context/.test(label));
+}
+
+function shouldPreferStaticModelAlias(displayName: string): boolean {
+  return !/\b\d+(?:\.\d+)?\b/.test(displayName);
 }
 
 export function filterModelSelectorGroups(

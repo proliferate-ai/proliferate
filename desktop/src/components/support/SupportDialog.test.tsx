@@ -3,7 +3,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SupportDialog } from "@/components/support/SupportDialog";
-import { SUPPORT_MESSAGE_MAX_LENGTH } from "@/lib/domain/support/constants";
 import type { SupportMessageContext } from "@/lib/domain/support/types";
 
 const supportState = vi.hoisted(() => ({
@@ -31,16 +30,11 @@ interface SupportDialogStateMock {
   handleEmail: () => Promise<void>;
   handleGmail: () => Promise<void>;
   handleOutlook: () => Promise<void>;
-  handleSend: () => Promise<void>;
-  inAppSupportEnabled: boolean;
   isCopyingInvestigationJson: boolean;
   isExportingDebugBundle: boolean;
   isExportingReplayRecording: boolean;
   isExportingSessionDebugJson: boolean;
   isExportingWorkspaceDebugJson: boolean;
-  isSendingSupportMessage: boolean;
-  message: string;
-  setMessage: (message: string) => void;
 }
 
 const context: SupportMessageContext = {
@@ -70,16 +64,11 @@ function createSupportState(
     handleEmail: vi.fn(async () => {}),
     handleGmail: vi.fn(async () => {}),
     handleOutlook: vi.fn(async () => {}),
-    handleSend: vi.fn(async () => {}),
-    inAppSupportEnabled: true,
     isCopyingInvestigationJson: false,
     isExportingDebugBundle: false,
     isExportingReplayRecording: false,
     isExportingSessionDebugJson: false,
     isExportingWorkspaceDebugJson: false,
-    isSendingSupportMessage: false,
-    message: "",
-    setMessage: vi.fn(),
     ...overrides,
   };
 }
@@ -105,26 +94,20 @@ afterEach(() => {
 });
 
 describe("SupportDialog", () => {
-  it("blocks telemetry on the portaled panel and shows the support message count", () => {
-    renderSupportDialog({ message: "Need help" });
+  it("blocks telemetry on the portaled panel and shows email support options", () => {
+    renderSupportDialog();
 
     const dialog = screen.getByRole("dialog", { name: "Support" });
-    const textarea = screen.getByPlaceholderText("What do you need help with?") as HTMLTextAreaElement;
 
     expect(dialog.getAttribute("data-telemetry-block")).toBe("true");
-    expect(textarea.maxLength).toBe(SUPPORT_MESSAGE_MAX_LENGTH);
-    expect(screen.getByText(`${"Need help".length} / ${SUPPORT_MESSAGE_MAX_LENGTH}`)).toBeTruthy();
-  });
-
-  it("clamps pasted support messages before storing them", () => {
-    const setMessage = vi.fn();
-    renderSupportDialog({ setMessage });
-
-    fireEvent.change(screen.getByPlaceholderText("What do you need help with?"), {
-      target: { value: "a".repeat(SUPPORT_MESSAGE_MAX_LENGTH + 1) },
-    });
-
-    expect(setMessage).toHaveBeenCalledWith("a".repeat(SUPPORT_MESSAGE_MAX_LENGTH));
+    expect(screen.queryByPlaceholderText("What do you need help with?")).toBeNull();
+    const gmail = screen.getByRole("button", { name: /Gmail/i });
+    expect(gmail).toBeTruthy();
+    expect(document.activeElement).toBe(gmail);
+    expect(screen.getByRole("button", { name: /Outlook/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Mail app/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Copy email/i })).toBeTruthy();
+    expect(screen.queryByText("local · hedgehog")).toBeNull();
   });
 
   it("keeps diagnostics collapsed until the disclosure opens", () => {
@@ -144,15 +127,16 @@ describe("SupportDialog", () => {
     expect(screen.getByText(/Event exports include prompts/)).toBeTruthy();
   });
 
-  it("keeps Gmail first without a white fallback background", () => {
-    renderSupportDialog({ inAppSupportEnabled: false });
+  it("keeps Gmail first with a plain outline treatment", () => {
+    renderSupportDialog();
 
     const buttons = screen.getAllByRole("button");
     const gmail = screen.getByRole("button", { name: /Gmail/i });
     const outlook = screen.getByRole("button", { name: /Outlook/i });
 
     expect(buttons.indexOf(gmail)).toBeLessThan(buttons.indexOf(outlook));
-    expect(gmail.className).toContain("bg-foreground/5");
+    expect(gmail.className).toContain("border");
+    expect(gmail.className).not.toContain("bg-foreground/5");
     expect(gmail.className).not.toContain("bg-primary");
     expect(outlook.className).toContain("border");
   });

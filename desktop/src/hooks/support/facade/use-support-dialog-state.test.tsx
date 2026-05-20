@@ -2,23 +2,13 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { SUPPORT_EMAIL_ADDRESS } from "@/config/capabilities";
+import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useSupportDialogState } from "@/hooks/support/facade/use-support-dialog-state";
-import { SUPPORT_MESSAGE_MAX_LENGTH } from "@/lib/domain/support/constants";
 import type { SupportMessageContext } from "@/lib/domain/support/types";
 
-const sendSupportMessage = vi.hoisted(() => vi.fn(async () => {}));
 const showToast = vi.hoisted(() => vi.fn());
-
-vi.mock("@/hooks/capabilities/derived/use-app-capabilities", () => ({
-  useAppCapabilities: () => ({ supportEnabled: true }),
-}));
-
-vi.mock("@/hooks/access/cloud/use-send-support-message", () => ({
-  useSendSupportMessage: () => ({
-    sendSupportMessage,
-    isSendingSupportMessage: false,
-  }),
-}));
+const openEmailCompose = vi.hoisted(() => vi.fn(async () => {}));
 
 vi.mock("@/hooks/support/workflows/use-session-debug-actions", () => ({
   useSessionDebugActions: () => ({
@@ -51,7 +41,7 @@ vi.mock("@/lib/access/tauri/shell", () => ({
   getHomeDir: vi.fn(async () => "/Users/pablo"),
   listAvailableEditors: vi.fn(async () => []),
   listOpenTargets: vi.fn(async () => []),
-  openEmailCompose: vi.fn(async () => {}),
+  openEmailCompose,
   openExternal: vi.fn(async () => undefined),
   openGmailCompose: vi.fn(async () => {}),
   openInEditor: vi.fn(async () => undefined),
@@ -60,11 +50,6 @@ vi.mock("@/lib/access/tauri/shell", () => ({
   openTarget: vi.fn(async () => undefined),
   pickFolder: vi.fn(async () => null),
   revealInFinder: vi.fn(async () => undefined),
-}));
-
-vi.mock("@/stores/auth/auth-store", () => ({
-  useAuthStore: (selector: (state: { status: string }) => unknown) =>
-    selector({ status: "authenticated" }),
 }));
 
 vi.mock("@/stores/toast/toast-store", () => ({
@@ -83,21 +68,18 @@ afterEach(() => {
 });
 
 describe("useSupportDialogState", () => {
-  it("does not send support payloads beyond the server message limit", async () => {
+  it("opens email support instead of sending through the cloud support endpoint", async () => {
     const onClose = vi.fn();
     const { result } = renderHook(() => useSupportDialogState({ onClose, context }));
 
-    act(() => {
-      result.current.setMessage(`  ${"a".repeat(SUPPORT_MESSAGE_MAX_LENGTH + 5)}  `);
-    });
-
     await act(async () => {
-      await result.current.handleSend();
+      await result.current.handleEmail();
     });
 
-    expect(sendSupportMessage).toHaveBeenCalledWith({
-      message: "a".repeat(SUPPORT_MESSAGE_MAX_LENGTH),
-      context,
+    expect(openEmailCompose).toHaveBeenCalledWith({
+      to: SUPPORT_EMAIL_ADDRESS,
+      subject: CAPABILITY_COPY.supportEmailSubject,
+      body: "",
     });
     expect(onClose).toHaveBeenCalledTimes(1);
   });

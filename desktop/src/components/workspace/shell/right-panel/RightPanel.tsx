@@ -15,7 +15,6 @@ import { useRightPanelHeaderEntries } from "@/hooks/workspaces/derived/use-right
 import { useRightPanelRootFocus } from "@/hooks/workspaces/ui/use-right-panel-root-focus";
 import { useRightPanelStateUpdater } from "@/hooks/workspaces/ui/use-right-panel-state-updater";
 import {
-  RIGHT_PANEL_BROWSER_TAB_LIMIT,
   parseRightPanelHeaderEntryKey,
   rightPanelBrowserHeaderKey,
   rightPanelTerminalHeaderKey,
@@ -28,7 +27,7 @@ import {
 } from "@/lib/domain/workspaces/shell/right-panel-model";
 import { createRightPanelBrowserTabId } from "@/lib/domain/workspaces/shell/right-panel-browser-tabs";
 import {
-  createBrowserTabInRightPanelState,
+  createOrActivateBrowserTabInRightPanelState,
   reconcileRightPanelWorkspaceState,
   removeBrowserTabFromRightPanelState,
   removeTerminalFromRightPanelState,
@@ -74,6 +73,7 @@ interface RightPanelProps {
   terminalActivationRequest: TerminalActivationRequest | null;
   focusRequestToken?: number;
   nativeOverlaysHidden?: boolean;
+  onOpenPanel: () => void;
   onTogglePanel: () => void;
   onTerminalActivationRequestHandled: (request: TerminalActivationRequest) => void;
 }
@@ -91,6 +91,7 @@ export const RightPanel = memo(function RightPanel({
   terminalActivationRequest,
   focusRequestToken = 0,
   nativeOverlaysHidden = false,
+  onOpenPanel,
   onTogglePanel,
   onTerminalActivationRequestHandled,
 }: RightPanelProps) {
@@ -132,7 +133,6 @@ export const RightPanel = memo(function RightPanel({
     visibleTerminals,
     orderedTerminals,
     browserTabs,
-    canCreateBrowserTab,
     headerEntries,
   } = useRightPanelHeaderEntries({
     state,
@@ -402,22 +402,18 @@ export const RightPanel = memo(function RightPanel({
     if (!workspaceId || !shouldRenderContent) {
       return;
     }
-    if (!canCreateBrowserTab) {
-      showToast(`Maximum ${RIGHT_PANEL_BROWSER_TAB_LIMIT} browser tabs. Close one to open another.`);
-      return;
-    }
     updateState((previous) =>
-      createBrowserTabInRightPanelState(
+      createOrActivateBrowserTabInRightPanelState(
         previous,
         createRightPanelBrowserTabId(),
         isCloudWorkspaceSelected,
       ),
     );
+    onOpenPanel();
   }, [
-    canCreateBrowserTab,
     isCloudWorkspaceSelected,
+    onOpenPanel,
     shouldRenderContent,
-    showToast,
     updateState,
     workspaceId,
   ]);
@@ -547,7 +543,6 @@ export const RightPanel = memo(function RightPanel({
       shouldRenderContent={shouldRenderContent}
       shouldMountBrowserPanel={shouldMountBrowserPanel}
       shouldMountTerminalPanel={shouldMountTerminalPanel}
-      canCreateBrowserTab={canCreateBrowserTab}
       canConnectTerminals={terminalsQuery.isSuccess}
       isLoadingTerminals={terminalsQuery.isLoading && !terminalsQuery.data}
       terminalListErrorMessage={terminalsQuery.isError ? "Terminal list unavailable" : null}

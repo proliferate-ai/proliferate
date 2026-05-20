@@ -102,7 +102,7 @@ function canBypassDefaultPrevented(
   }
 
   if (
-    shortcut.id === SHORTCUTS.openBrowserTab.id
+    shortcut.id === SHORTCUTS.newSessionTab.id
     && (event.metaKey || event.ctrlKey)
     && !event.altKey
     && !event.shiftKey

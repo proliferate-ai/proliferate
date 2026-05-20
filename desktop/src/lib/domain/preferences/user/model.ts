@@ -43,7 +43,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   colorMode: "dark",
   uiFontSizeId: "default",
   readableCodeFontSizeId: "default",
-  defaultChatAgentKind: "",
+  defaultChatAgentKind: "claude",
   defaultChatModelIdByAgentKind: {},
   chatModelVisibilityOverridesByAgentKind: {},
   defaultSessionModeByAgentKind: {},

@@ -1,6 +1,5 @@
 import { useCallback, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import {
@@ -9,32 +8,24 @@ import {
   AppShellTerminalIcon,
 } from "@/components/ui/icons";
 import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
-import { SHORTCUTS } from "@/config/shortcuts";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 
 interface RightPanelNewTabMenuProps {
   open: boolean;
   defaultKind: RightPanelNewTabMenuDefault;
   isWorkspaceReady: boolean;
-  canCreateBrowserTab: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onCreateTerminal: () => void;
   onCreateBrowser: () => void;
-  shortcutRevealVisible: boolean;
 }
 
 export function RightPanelNewTabMenu({
   open,
   defaultKind,
   isWorkspaceReady,
-  canCreateBrowserTab,
   onOpenChange,
   onCreateTerminal,
   onCreateBrowser,
-  shortcutRevealVisible,
 }: RightPanelNewTabMenuProps) {
-  const showBrowserShortcut = isWorkspaceReady && canCreateBrowserTab;
-
   return (
     <PopoverButton
       align="end"
@@ -47,14 +38,6 @@ export function RightPanelNewTabMenu({
           className="ui-icon-button workspace-shell-icon-button workspace-shell-toolbar-button glass-editor-panel-new-tab-menu-trigger relative"
         >
           <AppShellPlusIcon className="ui-icon" />
-          {showBrowserShortcut ? (
-            <ShortcutBadge
-              label={getShortcutDisplayLabel(SHORTCUTS.openBrowserTab)}
-              className={`pointer-events-none absolute -right-1 -bottom-1 z-20 text-muted-foreground opacity-0 transition-opacity duration-150 ${
-                shortcutRevealVisible ? "opacity-100" : ""
-              }`}
-            />
-          ) : null}
           <span className="sr-only">Open new tab menu</span>
         </IconButton>
       }
@@ -64,7 +47,6 @@ export function RightPanelNewTabMenu({
         <NewTabMenuContent
           defaultKind={defaultKind}
           isWorkspaceReady={isWorkspaceReady}
-          canCreateBrowserTab={canCreateBrowserTab}
           onCreateTerminal={() => {
             close();
             onCreateTerminal();
@@ -82,13 +64,11 @@ export function RightPanelNewTabMenu({
 function NewTabMenuContent({
   defaultKind,
   isWorkspaceReady,
-  canCreateBrowserTab,
   onCreateTerminal,
   onCreateBrowser,
 }: {
   defaultKind: RightPanelNewTabMenuDefault;
   isWorkspaceReady: boolean;
-  canCreateBrowserTab: boolean;
   onCreateTerminal: () => void;
   onCreateBrowser: () => void;
 }) {
@@ -130,7 +110,7 @@ function NewTabMenuContent({
         label="Browser"
         variant="sidebar"
         icon={<AppShellBrowserIcon className="size-4" />}
-        disabled={!isWorkspaceReady || !canCreateBrowserTab}
+        disabled={!isWorkspaceReady}
         autoFocus={defaultKind === "browser"}
         onClick={onCreateBrowser}
       />
