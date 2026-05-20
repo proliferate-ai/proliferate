@@ -1,18 +1,13 @@
-import { createContext, useContext, type ReactNode } from "react"
+import { type ReactNode } from "react"
 import { useShortcutRevealState } from "@/hooks/shortcuts/lifecycle/use-shortcut-reveal-state"
-
-const ShortcutRevealContext = createContext(false)
+import { useShortcutRevealStore } from "@/stores/shortcuts/shortcut-reveal-store"
 
 export function ShortcutRevealProvider({ children }: { children: ReactNode }) {
-  const visible = useShortcutRevealState()
+  useShortcutRevealState()
 
-  return (
-    <ShortcutRevealContext.Provider value={visible}>
-      {children}
-    </ShortcutRevealContext.Provider>
-  )
+  return <>{children}</>
 }
 
 export function useShortcutRevealVisible(): boolean {
-  return useContext(ShortcutRevealContext)
+  return useShortcutRevealStore((state) => state.visible)
 }

@@ -14,60 +14,58 @@ import { Search } from "@/components/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 
-interface ShortcutTableEntry {
+interface ShortcutEntryView {
   id: string;
   command: string;
-  groupTitle: string;
   label: string;
+}
+
+interface ShortcutSectionView {
+  title: string;
+  entries: ShortcutEntryView[];
 }
 
 function ShortcutBadge({ label }: { label: string }) {
   return (
-    <kbd className="inline-flex min-h-8 shrink-0 items-center justify-center rounded-md border-0 bg-current/10 px-2 py-1 font-sans text-sm leading-none text-current shadow-none">
+    <kbd className="inline-flex min-h-7 shrink-0 items-center justify-center rounded-md border-0 bg-current/10 px-2 py-1 font-sans text-xs leading-none text-current shadow-none">
       {label}
     </kbd>
   );
 }
 
-function ShortcutRow({ command, groupTitle, label }: ShortcutTableEntry) {
+function ShortcutRow({ command, label }: ShortcutEntryView) {
   return (
-    <tr className="group border-t border-border-light align-middle first:border-t-0 hover:bg-foreground/5">
-      <td className="px-4 py-2">
-        <span className="block truncate text-sm text-foreground">{command}</span>
-        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{groupTitle}</span>
-      </td>
-      <td className="px-4 py-2">
-        <div className="flex min-h-8 items-center text-muted-foreground">
-          <ShortcutBadge label={label} />
-        </div>
-      </td>
-    </tr>
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-2.5 hover:bg-foreground/5">
+      <span className="min-w-0 truncate text-sm text-foreground">{command}</span>
+      <div className="ml-auto flex min-h-7 items-center justify-end text-muted-foreground">
+        <ShortcutBadge label={label} />
+      </div>
+    </li>
   );
 }
 
-function ShortcutTable({ entries }: { entries: ShortcutTableEntry[] }) {
+function ShortcutSection({ section }: { section: ShortcutSectionView }) {
+  const sectionId = `keyboard-shortcuts-${section.title.toLowerCase().replace(/\s+/g, "-")}`;
+
   return (
-    <div className="overflow-hidden rounded-lg border border-border-light bg-surface-elevated shadow-subtle">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[32rem] table-fixed border-collapse text-sm">
-          <colgroup>
-            <col />
-            <col className="w-56" />
-          </colgroup>
-          <thead className="text-left text-muted-foreground">
-            <tr className="border-b border-border-light bg-foreground/5">
-              <th className="px-4 py-2 text-xs font-medium">Command</th>
-              <th className="px-4 py-2 text-xs font-medium">Keybinding</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry) => (
-              <ShortcutRow key={entry.id} {...entry} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <section
+      aria-labelledby={sectionId}
+      className="overflow-hidden rounded-lg border border-border-light bg-surface-elevated shadow-subtle"
+    >
+      <header className="border-b border-border-light bg-foreground/5 px-4 py-2.5">
+        <h3
+          id={sectionId}
+          className="text-sm font-medium text-foreground"
+        >
+          {section.title}
+        </h3>
+      </header>
+      <ul className="divide-y divide-border-light">
+        {section.entries.map((entry) => (
+          <ShortcutRow key={entry.id} {...entry} />
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -149,26 +147,32 @@ export function KeyboardShortcutsPane() {
     };
   }).filter((group) => group.shortcutKeys.length > 0), [normalizedQuery]);
 
-  const tableEntries = useMemo<ShortcutTableEntry[]>(() => [
-    ...shortcutGroups.flatMap((group) => group.shortcutKeys.map((shortcutKey) => {
-      const shortcut = SHORTCUTS[shortcutKey];
-      return {
-        id: shortcut.id,
-        command: shortcut.description,
-        groupTitle: group.title,
-        label: getShortcutDisplayLabel(shortcut),
-      };
+  const sections = useMemo<ShortcutSectionView[]>(() => [
+    ...shortcutGroups.map((group) => ({
+      title: group.title,
+      entries: group.shortcutKeys.map((shortcutKey) => {
+        const shortcut = SHORTCUTS[shortcutKey];
+        return {
+          id: shortcut.id,
+          command: shortcut.description,
+          label: getShortcutDisplayLabel(shortcut),
+        };
+      }),
     })),
-    ...composerShortcutGroups.flatMap((group) => group.shortcutKeys.map((shortcutKey) => {
-      const shortcut = COMPOSER_SHORTCUTS[shortcutKey];
-      return {
-        id: `${group.title}:${shortcut.key}:${shortcutKey}`,
-        command: shortcut.description,
-        groupTitle: group.title,
-        label: getShortcutDisplayLabel(shortcut),
-      };
+    ...composerShortcutGroups.map((group) => ({
+      title: group.title,
+      entries: group.shortcutKeys.map((shortcutKey) => {
+        const shortcut = COMPOSER_SHORTCUTS[shortcutKey];
+        return {
+          id: `${group.title}:${shortcut.key}:${shortcutKey}`,
+          command: shortcut.description,
+          label: getShortcutDisplayLabel(shortcut),
+        };
+      }),
     })),
   ], [composerShortcutGroups, shortcutGroups]);
+
+  const hasShortcuts = sections.length > 0;
 
   return (
     <section className="space-y-5">
@@ -188,8 +192,12 @@ export function KeyboardShortcutsPane() {
           />
         </div>
 
-        {tableEntries.length > 0 ? (
-          <ShortcutTable entries={tableEntries} />
+        {hasShortcuts ? (
+          <div className="space-y-3">
+            {sections.map((section) => (
+              <ShortcutSection key={section.title} section={section} />
+            ))}
+          </div>
         ) : (
           <div className="rounded-lg border border-border-light bg-surface-elevated px-4 py-8 text-center text-sm text-muted-foreground shadow-subtle">
             No shortcuts found

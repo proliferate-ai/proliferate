@@ -1,12 +1,21 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SHORTCUT_REVEAL_DELAY_MS,
   SHORTCUT_REVEAL_RESET_EVENT,
   useShortcutRevealState,
 } from "@/hooks/shortcuts/lifecycle/use-shortcut-reveal-state";
+import {
+  ShortcutRevealProvider,
+  useShortcutRevealVisible,
+} from "@/providers/ShortcutRevealProvider";
+
+function ShortcutRevealProbe() {
+  const visible = useShortcutRevealVisible();
+  return <output aria-label="shortcut reveal visible">{String(visible)}</output>;
+}
 
 describe("useShortcutRevealState", () => {
   beforeEach(() => {
@@ -139,5 +148,26 @@ describe("useShortcutRevealState", () => {
       document.dispatchEvent(new Event("visibilitychange"));
     });
     expect(result.current).toBe(false);
+  });
+
+  it("shares reveal visibility with consumers outside the provider subtree", () => {
+    render(
+      <>
+        <ShortcutRevealProvider>
+          <span>Lifecycle host</span>
+        </ShortcutRevealProvider>
+        <ShortcutRevealProbe />
+      </>,
+    );
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "Meta",
+        metaKey: true,
+      }));
+      vi.advanceTimersByTime(SHORTCUT_REVEAL_DELAY_MS);
+    });
+
+    expect(screen.getByLabelText("shortcut reveal visible").textContent).toBe("true");
   });
 });
