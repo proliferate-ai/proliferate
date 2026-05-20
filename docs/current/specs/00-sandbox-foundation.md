@@ -85,6 +85,120 @@ spec 04  workspace/session launch requires applied current revisions
 spec 09  every wake-gated command requires billing_subject not blocked
 ```
 
+### 2.1 Lifecycle and synchronicity
+
+Profile, target, and slot are created lazily at different latencies. The API
+returns as soon as a Cloud DB row exists; provisioning that touches E2B or
+waits on worker enrollment runs in the background.
+
+**Synchronous (returns inside the request):**
+
+```text
+ensure_personal_sandbox_profile(user_id)
+  INSERT sandbox_profile (status='configuring')
+  ensure_personal_billing_subject and stamp billing_subject_id
+  return SandboxProfileSnapshot
+
+ensure_organization_sandbox_profile(organization_id)
+  same, owner_scope='organization', no owner_user_id
+
+ensure_primary_profile_target(sandbox_profile_id)
+  INSERT cloud_targets (profile_target_role='primary', kind='managed_cloud',
+                        status='enrolling')
+  mint enrollment token carrying (sandbox_profile_id, will-be-cloud_sandbox_id,
+                                  will-be-slot_generation)
+  return CloudTargetSnapshot
+
+The two "ensure profile" helpers may also create the primary target in the
+same request if the caller is an explicit enable-cloud action. The behaviour
+must be idempotent under concurrency.
+```
+
+**Background (enqueued, polled or pushed):**
+
+```text
+provision_profile_slot(sandbox_profile_id, target_id)
+  INSERT cloud_sandbox (status='creating', slot_generation = max(prev)+1)
+  call E2B SDK to create the provider sandbox; record external_sandbox_id
+  boot supervisor + worker inside; wait for first enrollment + heartbeat
+  cloud_target_runtime_access populated from enrollment payload
+  cloud_sandbox.status -> 'running'
+  cloud_targets.status -> 'online'
+  cloud_target_status / inventory updated from heartbeat
+  on failure: cloud_sandbox.status='error', blocked_reason set,
+              sandbox_profile.status='blocked' or 'error'
+              reconciler retries with bounded backoff
+
+reconcile_sandbox_profile_target(sandbox_profile_id, target_id)
+  scans (profile, target) pairs whose desired state has not converged:
+    - missing/expired runtime access
+    - desired runtime_config_sequence > applied
+    - desired agent_auth_revision > applied
+  re-enqueues materialize_environment / refresh_agent_auth_config
+```
+
+**Profile status state machine:**
+
+```text
+configuring   profile row exists, no primary target yet
+              -- transition: ensure_primary_profile_target succeeds
+
+provisioning  target exists; slot creation is in flight
+              -- transition: provision_profile_slot success -> enabled
+              --             provision_profile_slot failure -> blocked/error
+
+enabled       at least one slot reached 'running' for the primary target;
+              runtime access populated; profile is usable
+              -- aliased to 'active' in V1 to preserve existing partial
+                 unique indexes; new code reads 'enabled'
+
+blocked       billing/policy says no compute is allowed right now;
+              cleared by spec 09 / spec 02 reconcilers
+
+error         provisioning failed in a way the reconciler cannot self-heal;
+              admin/owner action required
+
+disabled      explicit user/admin action; reactivatable
+```
+
+`sandbox_profile.status` describes enablement, not runtime readiness. Whether
+the target is reachable lives on `cloud_targets.status`,
+`cloud_sandbox.status`, and `sandbox_profile_target_state`. UI composes
+"sandbox ready?" by joining all three.
+
+**Polling / push expectations:**
+
+```text
+GET /v1/cloud/sandbox-profiles/{id}                profile + status
+GET /v1/cloud/sandbox-profiles/{id}/target-state   runtime + auth + slot readiness
+GET /v1/cloud/sandbox-profiles/{id}/events         optional SSE for cheap UI updates
+                                                   (defer to spec 04 if not trivial)
+```
+
+Cloud-intent actions that ought to trigger profile creation in the
+background (no explicit "Enable Cloud" click required):
+
+```text
+personal:
+  user opens personal cloud settings for the first time
+  user adds first personal MCP / skill / plugin
+  user selects personal agent auth
+  user tries to start work on personal cloud
+  user configures a repo for personal cloud
+
+organization:
+  admin opens shared cloud settings for the first time
+  admin publicizes first MCP / skill / plugin to the org
+  admin selects shared agent auth
+  admin creates first team automation requiring shared cloud
+  admin installs Slack
+  admin creates first shared workspace
+```
+
+Explicit "Enable Personal/Shared Cloud" buttons remain available as a
+discoverability surface, but they are convenience wrappers around the same
+ensure helpers, not a required gate.
+
 ## 3. Dependencies
 
 None.
@@ -329,15 +443,23 @@ managed_target_id     dropped (was denormalized; now derived from
                       profile_target_role = 'primary')
 ```
 
-Status widening:
+Status widening (see §2.1 for the full state machine):
 
 ```text
 existing CHECK ck_sandbox_profile_status uses SUPPORTED_SANDBOX_PROFILE_STATUSES.
-extend that constant to include:
-  configuring | enabled | disabled | blocked | error
-keep 'active' as an alias for 'enabled' for one PR cycle.
+extend that constant to:
+  configuring | provisioning | enabled | disabled | blocked | error | active
 
-unique partial indexes continue to use status IN ('active','enabled').
+  configuring   row exists, no primary target yet (sync ensure succeeded)
+  provisioning  primary target exists, slot creation is in flight (background)
+  enabled       at least one slot reached 'running'; profile usable
+  disabled      explicit user/admin disable
+  blocked       billing/policy block; reactivatable when cleared
+  error         provisioning failed in a way the reconciler cannot self-heal
+  active        compatibility alias for 'enabled'; new code reads 'enabled'
+
+unique partial indexes continue to use status IN ('active','enabled') so
+the existing one-per-user / one-per-org invariant survives the rename.
 ```
 
 Invariants (unchanged):
@@ -756,6 +878,7 @@ created. The server verifies:
 
 ```text
 result.cloud_workspace_id  = cloud_commands.cloud_workspace_id
+result.cloud_workspace_id  refers to an existing cloud_workspace row
 result target_id           = cloud_workspace.target_id
 result slot id / generation = active slot id / generation
 ```
@@ -763,6 +886,18 @@ result slot id / generation = active slot id / generation
 Only then may the server update `cloud_workspace.anyharness_workspace_id`,
 `cloud_workspace.materialized_slot_generation`, workspace status, session
 projection rows, or profile-target applied state.
+
+**Worker results never auto-create `cloud_workspace`.** A result whose
+`cloud_workspace_id` does not match an existing Cloud row is rejected with
+a structured `cloud_workspace_not_found` error and marked the command stale.
+This preserves the invariant that **Cloud creates the workspace row before
+AnyHarness materialization begins** (acceptance #8) and prevents orphan
+AnyHarness workspaces from inserting themselves into the Cloud product
+ledger.
+
+`sync_existing_workspace` is the only command kind that legitimately creates
+a `cloud_workspace` row from a runtime that existed first. Spec 08
+(dispatch/remote access) owns its admission policy.
 
 ### 5.11 Future command kinds — out of scope for this PR
 
@@ -807,7 +942,140 @@ POST /v1/cloud/worker/enroll
 The foundation does **not** add user-facing dispatch APIs. Spec 04 owns
 those.
 
-### 5.13 Required runtime-grant / billing notes
+### 5.13 Provisioning lifecycle and background jobs
+
+The foundation introduces two background jobs and one reconciler. They are
+the home for any work that touches E2B or waits on worker enrollment.
+
+**`provision_profile_slot` (background)**:
+
+```text
+trigger
+  ensure_profile_slot enqueues this when no active slot exists for
+  (sandbox_profile_id, target_id) and the profile is not blocked
+
+steps
+  1. Lock (sandbox_profile_id, target_id). Reload active slot. Abort if one
+     already exists (idempotent).
+  2. Resolve template + compute shape from sandbox_profile + plan/entitlement
+     (spec 09 owns entitlement check; foundation defaults to "personal free
+     shape").
+  3. INSERT cloud_sandbox status='creating', slot_generation=max(prev)+1,
+     billing_subject_id copied from profile, lifecycle_on_timeout='pause',
+     lifecycle_auto_resume=true, provider_timeout_seconds=<short window>.
+  4. Call E2B SDK to create provider sandbox with Proliferate metadata
+     (sandbox_profile_id, target_id, cloud_sandbox_id, slot_generation,
+     billing_subject_id). Record external_sandbox_id and started_at.
+  5. Wait for worker enrollment (bounded poll + heartbeat callback path)
+     identified by the enrollment token minted at target ensure time.
+  6. UPSERT cloud_target_runtime_access with compare-and-set on
+     (active_sandbox_id, slot_generation).
+  7. cloud_sandbox.status -> 'running'; cloud_targets.status -> 'online';
+     sandbox_profile.status -> 'enabled' if this is the first slot.
+
+failure
+  on bounded retry exhaustion:
+    cloud_sandbox.status -> 'error', blocked_reason set
+    sandbox_profile.status -> 'error' (admin/owner-actionable) or
+                              'blocked' (billing-cleared)
+  the reconciler picks up sandbox_profile.status='provisioning' rows whose
+  slot is older than the provisioning timeout and retries.
+```
+
+**`reconcile_sandbox_profile_target` (reconciler tick)**:
+
+```text
+trigger
+  periodic timer (1-5 minutes); also enqueued by sandbox_profile_target_state
+  writes that mark desired > applied.
+
+steps
+  for each (sandbox_profile_id, target_id) row whose
+    sandbox_profile_target_state.applied_* < desired_* OR
+    cloud_target_runtime_access is missing/stale:
+      verify slot is still active
+      enqueue materialize_environment (runtime config) if applicable
+      enqueue refresh_agent_auth_config if applicable
+      bump last_attempted_at; record errors
+
+idempotent. Re-enqueues commands by content_hash / revision_id so duplicates
+collapse server-side.
+```
+
+**`reconcile_paused_sandbox_for_wake_required_command` (later — flagged for
+spec 09)**: when a wake-required command targets a paused slot, the spec-09
+billing gate decides whether to resume. The foundation only models the slot
+state and `lifecycle_auto_resume` flag.
+
+Both jobs live in:
+
+```text
+server/proliferate/server/cloud/runtime/provision.py
+  provision_profile_slot(...) handler
+
+server/proliferate/server/cloud/runtime/reconciler.py        (new)
+  reconcile_sandbox_profile_target(...) handler
+
+server/proliferate/server/scheduler/*  or  server/proliferate/server/jobs/*
+  (use whatever scheduling/queue mechanism the repo already has;
+   prefer the existing automations/scheduler primitive rather than
+   inventing a parallel one)
+```
+
+**Synchronicity rule (enforceable):**
+
+```text
+ALLOWED in sync request
+  INSERT into sandbox_profile, cloud_targets
+  reads of existing rows
+  enrollment token mint
+  billing_subject ensure helpers
+  validation that pre-conditions are met
+
+NOT ALLOWED in sync request for managed cloud
+  any E2B SDK call (create/resume/pause/kill/list)
+  waiting on worker enrollment / heartbeat
+  worker command execution
+
+Code review hook: any new managed-cloud server module that imports the E2B
+SDK must live under server/proliferate/server/cloud/runtime/ and only be
+called from background handlers.
+```
+
+### 5.14 Org creation invariant
+
+```text
+Organization creation does NOT write sandbox_profile.
+
+Existing org creation paths
+  server/proliferate/server/organizations/**
+  server/proliferate/db/store/organizations.py
+remain unchanged by this spec. No new fields, no new side effects.
+
+Shared cloud is a separate opt-in. ensure_organization_sandbox_profile is
+called by:
+  - the explicit "Enable Shared Cloud" action (if shown in settings), or
+  - the first shared cloud-intent action the admin takes
+    (publicize MCP, create team automation, install Slack, configure
+     shared agent auth, create shared workspace).
+
+This decoupling matters because:
+  - org creation today is broad (members, invitations, billing subject
+    for paid plans, default settings). Adding sandbox compute provisioning
+    to that flow makes it slower, harder to roll back, and tightly couples
+    two unrelated lifecycles.
+  - many orgs will never use shared cloud. Lazy creation avoids
+    half-provisioned compute for those orgs.
+  - the org admin who enables shared cloud may not be the same admin who
+    created the org. created_by_user_id on sandbox_profile records the
+    enabling actor, separate from organization.created_by_user_id.
+```
+
+Spec 04 / spec 06 / spec 07 each name the precise call sites where they
+trigger `ensure_organization_sandbox_profile` from their respective
+admin/automation/Slack flows.
+
+### 5.15 Required runtime-grant / billing notes
 
 ```text
 sandbox_profile.billing_subject_id   sourced from
@@ -927,9 +1195,13 @@ server/proliferate/server/cloud/sandbox_profiles/                          (new)
 server/proliferate/server/cloud/runtime/
   ensure_running.py        rewrite around (sandbox_profile_id, target_id);
                             no CloudRuntimeEnvironment reads/writes for managed.
-  provision.py             rewrite primary-target provisioning;
-                            ensure_primary_profile_target +
-                            ensure_profile_slot + record_target_runtime_access.
+                            sync portion only: row existence checks; defers
+                            E2B work to provision.py background handler.
+  provision.py             owns the provision_profile_slot background job.
+                            ensure_primary_profile_target (sync) +
+                            provision_profile_slot (background) +
+                            record_target_runtime_access.
+  reconciler.py            (new) reconcile_sandbox_profile_target tick.
   bootstrap.py / sandbox_exec.py / data_key.py
                             update to write cloud_target_runtime_access
                             and feed slot identity into enrollment tokens.
@@ -1043,11 +1315,21 @@ Chunk 2  Sandbox profile store + service
   - status state machine: configuring -> enabled
   - sandbox_profile_target_state store split from cloud_agent_auth store
 
-Chunk 3  Target/slot lifecycle around profiles
+Chunk 3a  Sync target lifecycle around profiles
   - ensure_primary_profile_target (idempotent with unique-index retry)
-  - ensure_profile_slot (active-slot lock, slot_generation bump on replace)
-  - record_target_runtime_access compare-and-set
-  - issue enrollment tokens carrying slot identity
+  - mint enrollment token carrying (sandbox_profile_id, slot placeholders)
+  - sync API returns immediately with status='configuring' or
+    status='provisioning'; no E2B call inside the request
+
+Chunk 3b  Background slot provisioning + reconciler
+  - provision_profile_slot background handler (E2B create, worker boot,
+    enrollment wait, cloud_target_runtime_access write, status transitions)
+  - reconcile_sandbox_profile_target tick (re-enqueue stale apply commands,
+    retry stuck provisioning, mark error after bounded retries)
+  - register handlers with whichever scheduler/queue primitive the repo
+    already uses; do not invent a parallel queue
+  - manual smoke that a profile transitions configuring -> provisioning ->
+    enabled without the originating API request blocking
 
 Chunk 4  Worker wire contract
   - extend envelope, result, delivery, enroll, heartbeat
@@ -1148,6 +1430,25 @@ Single-PR acceptance:
     passing `0 / 0` state.
 20. `refresh_agent_auth_config` continues to work against the renamed
     `SandboxProfileTargetState`.
+21. **Sandbox profile creation does not block on E2B provisioning.** The
+    sync API returns with `status='configuring'` (or `'provisioning'` if
+    `ensure_primary_profile_target` was also called) before any E2B SDK
+    operation runs. Slot provisioning runs in `provision_profile_slot` in
+    the background; status transitions `configuring -> provisioning ->
+    enabled` are observable via `GET /v1/cloud/sandbox-profiles/{id}` and
+    `…/target-state`.
+22. **Organization creation does not write `sandbox_profile`.** Existing
+    org creation paths (`server/proliferate/server/organizations/**`) are
+    not touched by this spec. `ensure_organization_sandbox_profile` is
+    called only from shared cloud-intent actions.
+23. **Worker results never auto-create `cloud_workspace`.** Results whose
+    `cloud_workspace_id` is absent or does not match an existing row are
+    rejected (`cloud_workspace_not_found`) and the command is marked stale.
+    The only path that creates a `cloud_workspace` row from existing runtime
+    state is `sync_existing_workspace` (admission owned by spec 08).
+24. The reconciler tick re-enqueues stale apply commands by `revision_id /
+    content_hash` so duplicates collapse server-side. Retrying a failed
+    `provision_profile_slot` does not create duplicate slot rows.
 
 ## 9. Verification / Tests
 
@@ -1217,22 +1518,37 @@ cd cloud/sdk && pnpm run generate && pnpm run build
 Manual smoke:
 
 ```text
-1. Enable personal cloud
-     -> sandbox_profile row created with billing_subject_id set
-     -> primary cloud_target created on first explicit cloud-intent action
-     -> cloud_sandbox slot created on first wake-required command
-     -> cloud_target_runtime_access populated from worker enrollment
-     -> cloud_workspace row exists before AnyHarness materialization
-     -> cloud_workspace.anyharness_workspace_id filled from worker result
+1. Enable personal cloud (synchronous part)
+     -> sandbox_profile row INSERTed with billing_subject_id set,
+        status='configuring'
+     -> API returns inside the request; no E2B call yet
+     -> primary cloud_target created on the first explicit cloud-intent
+        action; profile status moves to 'provisioning'
+     -> provision_profile_slot background job runs:
+          E2B sandbox created
+          worker boots, enrolls, heartbeats
+          cloud_target_runtime_access populated
+          cloud_sandbox.status='running'
+          sandbox_profile.status='enabled'
+     -> GET /sandbox-profiles/{id} observed to transition without the
+        original API request blocking
      -> sandbox_profile_target_state shows runtime_config_status='applied'
         at 0/0 and agent_auth_status accordingly
 
-2. Pause provider sandbox
-     -> Cloud lists workspace/sessions without waking
+2. Create a managed cloud workspace
+     -> cloud_workspace row exists before AnyHarness materialization
+     -> materialize_workspace command carries cloud_workspace_id
+     -> worker echoes cloud_workspace_id + anyharness_workspace_id
+     -> cloud_workspace.anyharness_workspace_id filled from worker result
+     -> simulating a worker result with unknown cloud_workspace_id
+        is rejected with cloud_workspace_not_found
+
+3. Pause provider sandbox
+     -> Cloud lists workspaces/sessions without waking
      -> cloud_target_runtime_access remains current with the paused slot id
      -> next wake-required command resumes through Proliferate-owned path
 
-3. Replace provider sandbox
+4. Replace provider sandbox
      -> old cloud_sandbox.superseded_at set; status terminal
      -> new cloud_sandbox row with slot_generation = old + 1
      -> sandbox_profile_target_state applied_* cleared
@@ -1240,17 +1556,28 @@ Manual smoke:
      -> next start_session fails preflight until rematerialization
      -> stale worker (old slot_generation) is fenced out
 
-4. Enable shared cloud as admin
-     -> sandbox_profile (owner_scope=organization) created
-     -> primary target / slot provisioned through ensure helpers
+5. Enable shared cloud as admin (implicit trigger)
+     -> admin publicizes first MCP to org
+     -> ensure_organization_sandbox_profile runs in background;
+        no org creation flow touched
+     -> primary target / slot provisioned through provision_profile_slot
      -> _raise_org_cloud_not_ready either gone or routes through
         ensure_organization_sandbox_profile before failing
+     -> ensure_personal_sandbox_profile is NOT called for this admin's
+        personal account just because they enabled shared cloud
 
-5. Run automation against shared cloud
+6. Run automation against shared cloud
      -> automation calls managed_profile_launch with owner_scope=organization
      -> cloud_workspace.owner_scope=organization; billing_subject_id matches
         organization billing_subject
      -> if launch is not ready, fails before creating partial rows
+
+7. Provision retry on transient failure
+     -> simulate E2B failure during provision_profile_slot
+     -> sandbox_profile.status='error' or 'blocked', not 'provisioning'
+     -> reconciler retries with bounded backoff; no duplicate slot rows
+     -> on success, status moves to 'enabled'; existing sandbox_profile row
+        is reused, not duplicated
 ```
 
 ## 10. Open Questions
@@ -1264,8 +1591,8 @@ Manual smoke:
 
 2. **Should `sandbox_profile.status` rename `active` to `enabled` in this PR?**
 
-   Bias: no. Keep the existing value name and partial unique indexes; add
-   `configuring`, `disabled`, `blocked`, `error`. A future cosmetic PR can
+   Bias: no. Keep `'active'` as a compatibility alias for `'enabled'`; the
+   partial unique indexes continue to accept both. A future cosmetic PR can
    rename.
 
 3. **Should the `agent_auth_revision` column on `sandbox_profile` be renamed
@@ -1281,3 +1608,35 @@ Manual smoke:
    `profile_target_role = 'none'`. A later spec can add an explicit
    `cloud_target.policy_profile_id` if non-managed targets need shared
    policy defaults.
+
+5. **Which queue/scheduler does `provision_profile_slot` run on?**
+
+   The repo already has automation scheduling (`server/proliferate/server/
+   automations/**`) and runtime scheduling (`server/proliferate/server/cloud/
+   runtime/scheduler.py`). The foundation should reuse one of those rather
+   than inventing a new mechanism. Decision needed during implementation:
+   audit both and pick the one that already handles bounded retry + dedupe.
+
+6. **Does the foundation add a profile-events SSE stream, or just polling?**
+
+   Polling (`GET /sandbox-profiles/{id}` + `…/target-state`) is sufficient
+   for V1. SSE is a UX-latency improvement and may already be available
+   through the existing cloud events fanout (spec 04). The foundation does
+   not add a new SSE channel; spec 04 can fold profile/slot events into
+   the existing channel if it exists.
+
+7. **Should `ensure_*_sandbox_profile` always also call
+   `ensure_primary_profile_target`?**
+
+   Two shapes:
+     (a) "ensure profile" creates only the profile row. The caller (or a
+         later cloud-intent action) calls `ensure_primary_profile_target`
+         when compute is actually needed.
+     (b) "ensure profile" also ensures the primary target so the profile is
+         immediately ready to receive a slot the first time
+         `provision_profile_slot` runs.
+
+   Bias: (b). The target row is free; the slot is the expensive part. (b)
+   also makes the enrollment-token mint and `cloud_target_runtime_access`
+   placeholder available earlier so the background slot job has less to do
+   in its critical path.
