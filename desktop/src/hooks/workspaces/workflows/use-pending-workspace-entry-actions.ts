@@ -12,6 +12,9 @@ import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import {
   usePendingWorkspaceSessionMaterialization,
 } from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
+import {
+  resolveActiveProjectedSessionForPendingWorkspace,
+} from "@/hooks/workspaces/workflows/pending-workspace-projected-session";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import {
@@ -78,9 +81,15 @@ export function usePendingWorkspaceEntryActions() {
             errorMessage: null,
           });
           try {
+            const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+            const initialActiveSessionId = resolveActiveProjectedSessionForPendingWorkspace(
+              entry.request.workspaceId,
+              pending,
+            );
             await selectWorkspace(entry.request.workspaceId, {
               force: true,
               preservePending: true,
+              ...(initialActiveSessionId ? { initialActiveSessionId } : {}),
               latencyFlowId,
             });
 

@@ -19,6 +19,9 @@ import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspac
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useCloudCredentialActions } from "@/hooks/cloud/workflows/use-cloud-credential-actions";
+import {
+  resolveActiveProjectedSessionForPendingWorkspace,
+} from "@/hooks/workspaces/workflows/pending-workspace-projected-session";
 import { clearViewedSessionErrors } from "@/stores/preferences/workspace-ui-store";
 import {
   captureTelemetryException,
@@ -99,10 +102,14 @@ export function useCloudWorkspaceActions() {
       const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
       const shouldPreservePending = pendingWorkspaceEntry?.workspaceId === syntheticWorkspaceId
         && pendingWorkspaceEntry.stage === "awaiting-cloud-ready";
+      const initialActiveSessionId = shouldPreservePending
+        ? resolveActiveProjectedSessionForPendingWorkspace(syntheticWorkspaceId, pendingWorkspaceEntry)
+        : null;
       if (selectedWorkspaceId === syntheticWorkspaceId) {
         await selectWorkspace(syntheticWorkspaceId, {
           force: true,
           preservePending: shouldPreservePending,
+          ...(initialActiveSessionId ? { initialActiveSessionId } : {}),
         });
       }
       trackProductEvent("cloud_workspace_started", {

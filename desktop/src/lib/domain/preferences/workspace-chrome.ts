@@ -65,7 +65,7 @@ export function resolveCoworkWorkspaceChromeClasses({
     root: transparent ? "bg-transparent" : "bg-sidebar",
     contentShell: [
       transparent ? "bg-transparent" : "bg-background",
-      sidebarOpen ? "rounded-tl-lg" : "",
+      sidebarOpen && !transparent ? "rounded-tl-[22px] border-l border-t border-sidebar-border" : "",
     ].filter(Boolean).join(" "),
     header: transparent ? WORKSPACE_GLASS_HEADER_CLASS : WORKSPACE_SOLID_HEADER_CLASS,
   };

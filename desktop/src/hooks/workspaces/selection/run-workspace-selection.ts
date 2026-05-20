@@ -19,6 +19,7 @@ import {
   trackWorkspaceInteraction,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
+import { isPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
 import { getLatestWorkspaceInteractionTimestamp } from "@/lib/domain/workspaces/selection/selection";
 import {
   logLatency,
@@ -68,9 +69,27 @@ function resolveInitialActiveSessionId(
   }
 
   const cachedSlot = getSessionRecord(candidate);
-  return cachedSlot?.workspaceId && cachedSlot.workspaceId !== workspaceId
-    ? null
-    : candidate;
+  if (!cachedSlot?.workspaceId || cachedSlot.workspaceId === workspaceId) {
+    return candidate;
+  }
+
+  const shouldPreservePendingProjection =
+    options?.preservePending === true
+    && isTransientClientSessionId(candidate)
+    && !cachedSlot.materializedSessionId
+    && isPendingWorkspaceUiKey(cachedSlot.workspaceId);
+  if (shouldPreservePendingProjection) {
+    logLatency("workspace.select.projected_initial_session_preserved", {
+      workspaceId,
+      workspaceUiKey,
+      sessionId: candidate,
+      existingWorkspaceId: cachedSlot.workspaceId,
+      reason: "preserve_pending_projection",
+    });
+    return candidate;
+  }
+
+  return null;
 }
 
 function prepareOptimisticWorkspaceSessionShell(input: {
@@ -94,6 +113,17 @@ function prepareOptimisticWorkspaceSessionShell(input: {
         workspaceId: input.workspaceId,
       },
     ));
+  } else if (!existing.materializedSessionId && isTransientClientSessionId(input.sessionId)) {
+    if (!existing.workspaceId) {
+      patchSessionRecord(input.sessionId, { workspaceId: input.workspaceId });
+    }
+    logLatency("workspace.select.projected_session_preserved", {
+      workspaceId: input.workspaceId,
+      workspaceUiKey: input.workspaceUiKey,
+      sessionId: input.sessionId,
+      existingWorkspaceId: existing.workspaceId ?? null,
+      reason: "transient_unmaterialized_session",
+    });
   } else if (!existing.workspaceId || !existing.materializedSessionId) {
     patchSessionRecord(input.sessionId, {
       materializedSessionId: existing.materializedSessionId ?? input.sessionId,
@@ -113,6 +143,11 @@ function prepareOptimisticWorkspaceSessionShell(input: {
     sessionId: input.sessionId,
     createdRecord: !existing,
   });
+}
+
+function isTransientClientSessionId(sessionId: string): boolean {
+  return sessionId.startsWith("client-session:")
+    || sessionId.startsWith("pending-session:");
 }
 
 async function invalidateCloudWorkspaceStartState(

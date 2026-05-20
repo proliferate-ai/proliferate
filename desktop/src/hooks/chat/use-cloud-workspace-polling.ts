@@ -8,6 +8,9 @@ import {
   usePendingWorkspaceSessionMaterialization,
 } from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 import {
+  resolveActiveProjectedSessionForPendingWorkspace,
+} from "@/hooks/workspaces/workflows/pending-workspace-projected-session";
+import {
   isCloudWorkspacePostReadyPending,
   shouldPollCloudWorkspaceForUpdates,
   shouldShowCloudWorkspaceStatusScreen,
@@ -83,16 +86,21 @@ export function useCloudWorkspacePolling() {
           const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
           const shouldPreservePending = pending?.workspaceId === selectedWorkspaceId
             && pending.stage === "awaiting-cloud-ready";
+          const initialActiveSessionId = shouldPreservePending
+            ? resolveActiveProjectedSessionForPendingWorkspace(selectedWorkspaceId, pending)
+            : null;
           logLatency("workspace.cloud_polling.ready_selection.start", {
             workspaceId: selectedWorkspaceId,
             pendingAttemptId: pending?.attemptId ?? null,
             shouldPreservePending,
+            initialActiveSessionId,
           });
 
           try {
             await selectWorkspace(selectedWorkspaceId, {
               force: true,
               preservePending: shouldPreservePending,
+              ...(initialActiveSessionId ? { initialActiveSessionId } : {}),
             });
           } catch (error) {
             if (
