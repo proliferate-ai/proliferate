@@ -6,16 +6,25 @@ import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-sta
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useCoworkThreads } from "@/hooks/access/anyharness/cowork/use-cowork-threads";
 import { useWorkspaceSidebarActivityStates } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
+import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
+import { SidebarStatusIndicatorView } from "@/components/workspace/shell/sidebar/SidebarIndicators";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
 import { CoworkThreadItem } from "./CoworkThreadItem";
-import { ProductSidebarSectionHeader } from "@proliferate/product-ui/sidebar/ProductSidebar";
+import {
+  ProductSidebarSectionHeader,
+  ProductSidebarThreadRow,
+} from "@proliferate/product-ui/sidebar/ProductSidebar";
 
 const DEFAULT_VISIBLE_THREAD_COUNT = 5;
 
 export function CoworkThreadsSection() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore((state) =>
+    state.selectedLogicalWorkspaceId
+  );
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const workspaceActivities = useWorkspaceSidebarActivityStates();
   const { status, isLoading: statusLoading } = useCoworkStatus();
   const { threads, isLoading: threadsLoading } = useCoworkThreads(status?.enabled ?? false);
@@ -26,6 +35,27 @@ export function CoworkThreadsSection() {
   const handleToggleCollapsed = useCallback(() => {
     setThreadsCollapsed(!threadsCollapsed);
   }, [setThreadsCollapsed, threadsCollapsed]);
+  const pendingCoworkEntry = pendingWorkspaceEntry?.source === "cowork-created"
+    ? pendingWorkspaceEntry
+    : null;
+  const pendingCoworkUiKey = pendingCoworkEntry
+    ? buildPendingWorkspaceUiKey(pendingCoworkEntry)
+    : null;
+  const showPendingCoworkThread = Boolean(
+    pendingCoworkEntry
+    && !threads.some((thread) => thread.workspaceId === pendingCoworkEntry.workspaceId),
+  );
+  const pendingCoworkThreadActive = Boolean(
+    pendingCoworkEntry
+    && (
+      selectedLogicalWorkspaceId === pendingCoworkUiKey
+      || (
+        pendingCoworkEntry.workspaceId
+        && selectedWorkspaceId === pendingCoworkEntry.workspaceId
+      )
+    ),
+  );
+  const renderedThreadCount = threads.length + (showPendingCoworkThread ? 1 : 0);
 
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
   const toggleThreadExpanded = useCallback((threadId: string) => {
@@ -65,7 +95,7 @@ export function CoworkThreadsSection() {
         label="Threads"
         actions={(
           <>
-          {threads.length > 0 && (
+          {renderedThreadCount > 0 && (
             <SidebarActionButton
               onClick={handleToggleCollapsed}
               title={threadsCollapsed ? "Expand threads" : "Collapse threads"}
@@ -92,16 +122,32 @@ export function CoworkThreadsSection() {
 
       {!threadsCollapsed && (
         <div className="flex flex-col gap-px">
+          {showPendingCoworkThread && pendingCoworkEntry && (
+            <ProductSidebarThreadRow
+              active={pendingCoworkThreadActive}
+              status={(
+                <SidebarStatusIndicatorView
+                  indicator={{ kind: "iterating", tooltip: "Creating chat" }}
+                />
+              )}
+              label={pendingCoworkEntry.displayName}
+              trailingLabel="Setting up"
+            />
+          )}
           {statusLoading || threadsLoading ? (
-            <div className="flex flex-col gap-1 px-2 py-2" aria-label="Loading threads" role="status">
-              <SkeletonBlock className="h-7 w-full bg-sidebar-accent" />
-              <SkeletonBlock className="h-7 w-[82%] bg-sidebar-accent/80" />
-              <p className="sr-only">Loading threads</p>
-            </div>
+            showPendingCoworkThread ? null : (
+              <div className="flex flex-col gap-1 px-2 py-2" aria-label="Loading threads" role="status">
+                <SkeletonBlock className="h-7 w-full bg-sidebar-accent" />
+                <SkeletonBlock className="h-7 w-[82%] bg-sidebar-accent/80" />
+                <p className="sr-only">Loading threads</p>
+              </div>
+            )
           ) : threads.length === 0 ? (
-            <div className="px-2 py-2 text-xs text-sidebar-muted-foreground">
-              {isCreatingThread ? "Creating chat" : "No chats yet"}
-            </div>
+            showPendingCoworkThread ? null : (
+              <div className="px-2 py-2 text-xs text-sidebar-muted-foreground">
+                {isCreatingThread ? "Creating chat" : "No chats yet"}
+              </div>
+            )
           ) : (
             <>
               {visibleThreads.map((thread) => (

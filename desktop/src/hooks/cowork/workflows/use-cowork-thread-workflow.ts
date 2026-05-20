@@ -3,11 +3,13 @@ import {
   useAnyHarnessRuntimeContext,
   useCreateCoworkThreadMutation,
 } from "@anyharness/sdk-react";
+import type { Session } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/composer/preference-resolvers";
 import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
+import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildSubmittingPendingWorkspaceEntry,
@@ -24,6 +26,7 @@ import {
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceEntryFlow } from "@/hooks/workspaces/use-workspace-entry-flow";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
@@ -33,22 +36,27 @@ import {
   resolveSessionMcpServersForLaunch,
 } from "@/lib/workflows/sessions/session-mcp-launch";
 import {
-  createSessionRecordFromSummary,
+  createEmptySessionRecord,
+  getSessionRecord,
   putSessionRecord,
 } from "@/stores/sessions/session-records";
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
+import { materializeSessionRecord } from "@/hooks/sessions/workflows/session-creation-local-state";
 import {
   markWorkspaceViewed,
   rememberLastViewedSession,
   trackWorkspaceInteraction,
+  useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 
@@ -60,19 +68,59 @@ function resolveErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+function materializedCoworkSessionRecord(input: {
+  clientSessionId: string;
+  session: Session;
+  workspaceId: string;
+  fallbackAgentKind: string;
+  fallbackModelId: string;
+  fallbackModeId: string | null;
+  fallbackTitle: string | null;
+}): SessionRuntimeRecord {
+  const modeId =
+    input.session.liveConfig?.normalizedControls.mode?.currentValue
+    ?? input.session.modeId
+    ?? input.fallbackModeId;
+  const record = createEmptySessionRecord(
+    input.clientSessionId,
+    input.session.agentKind || input.fallbackAgentKind,
+    {
+      workspaceId: input.workspaceId,
+      materializedSessionId: input.session.id,
+      modelId: input.session.modelId ?? input.fallbackModelId,
+      modeId,
+      title: input.session.title ?? input.fallbackTitle,
+      actionCapabilities: input.session.actionCapabilities,
+      liveConfig: input.session.liveConfig ?? null,
+      executionSummary: input.session.executionSummary ?? null,
+      mcpBindingSummaries: input.session.mcpBindingSummaries ?? null,
+      lastPromptAt: input.session.lastPromptAt ?? null,
+      optimisticPrompt: null,
+      sessionRelationship: { kind: "root" },
+    },
+  );
+
+  return {
+    ...record,
+    status: resolveStatusFromExecutionSummary(
+      input.session.executionSummary,
+      input.session.status ?? "idle",
+    ),
+    transcriptHydrated: true,
+  };
+}
+
 export function useCoworkThreadWorkflow() {
   const location = useLocation();
   const navigate = useNavigate();
   const anyHarnessRuntime = useAnyHarnessRuntimeContext();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { upsertLocalWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
-  const enterPendingWorkspaceShell = useSessionSelectionStore(
-    (state) => state.enterPendingWorkspaceShell,
-  );
   const setPendingWorkspaceEntry = useSessionSelectionStore(
     (state) => state.setPendingWorkspaceEntry,
   );
   const activateWorkspace = useSessionSelectionStore((state) => state.activateWorkspace);
+  const { beginPendingWorkspace } = useWorkspaceEntryFlow();
   const { agents } = useAgentCatalog();
   const { data: modelRegistries = EMPTY_MODEL_REGISTRIES } = useCloudLaunchModelRegistries();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
@@ -88,7 +136,6 @@ export function useCoworkThreadWorkflow() {
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const setDraftText = useChatInputStore((state) => state.setDraftText);
   const clearDraft = useChatInputStore((state) => state.clearDraft);
-  const requestComposerFocus = useChatInputStore((state) => state.requestFocus);
   const createCoworkThreadMutation = useCreateCoworkThreadMutation();
 
   const navigateToWorkspaceShell = useCallback(() => {
@@ -127,8 +174,16 @@ export function useCoworkThreadWorkflow() {
       agentKind: input.agentKind,
       modelId: input.modelId,
     });
-    enterPendingWorkspaceShell(entry);
-    requestComposerFocus();
+    useWorkspaceUiStore.getState().setThreadsCollapsed(false);
+    const projectedSessionId = beginPendingWorkspace(entry, {
+      initialSession: {
+        kind: "session",
+        agentKind: input.agentKind,
+        modelId: input.modelId,
+        modeId,
+        displayTitle: input.modelId,
+      },
+    });
     navigateToWorkspaceShell();
 
     try {
@@ -212,12 +267,36 @@ export function useCoworkThreadWorkflow() {
 
       upsertLocalWorkspace(result.workspace);
       upsertWorkspaceSessionRecord(result.workspace.id, launchedSession);
-      putSessionRecord(
-        createSessionRecordFromSummary(launchedSession, result.workspace.id, {
-          transcriptHydrated: true,
-          sessionRelationship: { kind: "root" },
-        }),
-      );
+      const activeSessionId = projectedSessionId ?? launchedSession.id;
+      if (projectedSessionId) {
+        const projectedRecord = getSessionRecord(projectedSessionId);
+        const record = materializedCoworkSessionRecord({
+          clientSessionId: projectedSessionId,
+          session: launchedSession,
+          workspaceId: result.workspace.id,
+          fallbackAgentKind: input.agentKind,
+          fallbackModelId: input.modelId,
+          fallbackModeId: modeId ?? null,
+          fallbackTitle: projectedRecord?.title ?? input.modelId,
+        });
+        materializeSessionRecord(projectedSessionId, launchedSession.id, record);
+        useSessionIntentStore.getState().bindMaterializedSession(
+          projectedSessionId,
+          launchedSession.id,
+        );
+      } else {
+        putSessionRecord(
+          materializedCoworkSessionRecord({
+            clientSessionId: launchedSession.id,
+            session: launchedSession,
+            workspaceId: result.workspace.id,
+            fallbackAgentKind: input.agentKind,
+            fallbackModelId: input.modelId,
+            fallbackModeId: modeId ?? null,
+            fallbackTitle: input.modelId,
+          }),
+        );
+      }
       if (input.draftText?.length) {
         setDraftText(result.workspace.id, input.draftText);
         if (input.sourceWorkspaceId && input.sourceWorkspaceId !== result.workspace.id) {
@@ -235,7 +314,7 @@ export function useCoworkThreadWorkflow() {
         logicalWorkspaceId: null,
         workspaceId: result.workspace.id,
         clearPending: false,
-        initialActiveSessionId: launchedSession.id,
+        initialActiveSessionId: activeSessionId,
       });
       rememberLastViewedSession(result.workspace.id, launchedSession.id);
       trackWorkspaceInteraction(result.workspace.id, new Date().toISOString());
@@ -271,7 +350,10 @@ export function useCoworkThreadWorkflow() {
       if (isAttemptCurrent(entry.attemptId)) {
         setPendingWorkspaceEntry(null);
       }
-      return result;
+      return {
+        ...result,
+        projectedSessionId,
+      };
     } catch (error) {
       const message = resolveErrorMessage(error, "Couldn't start cowork thread.");
       logLatency("workspace.cowork.create.failed", {
@@ -295,15 +377,14 @@ export function useCoworkThreadWorkflow() {
     }
   }, [
     anyHarnessRuntime,
+    beginPendingWorkspace,
     clearDraft,
     createCoworkThreadMutation,
-    enterPendingWorkspaceShell,
     initForWorkspace,
     modelRegistries,
     navigateToWorkspaceShell,
     preferences.coworkWorkspaceDelegationEnabled,
     preferences.defaultLiveSessionControlValuesByAgentKind,
-    requestComposerFocus,
     runtimeUrl,
     setDraftText,
     activateWorkspace,

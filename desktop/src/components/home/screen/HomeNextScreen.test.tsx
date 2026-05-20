@@ -133,6 +133,7 @@ describe("HomeNextScreen model availability notices", () => {
     resetHomeNext();
     screenMocks.handleHomeAction.mockClear();
     screenMocks.launch.mockClear();
+    screenMocks.launch.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -191,5 +192,33 @@ describe("HomeNextScreen model availability notices", () => {
     fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "hello" } });
 
     expect(screen.getByText("Choose a repository")).toBeTruthy();
+  });
+
+  it("does not render a submitted preview below the composer for cowork launches", () => {
+    render(<HomeNextScreen />);
+
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "start cowork" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    expect(screenMocks.launch).toHaveBeenCalledWith(expect.objectContaining({
+      text: "start cowork",
+      target: { kind: "cowork" },
+    }));
+    expect(screen.queryByText("start cowork")).toBeNull();
+  });
+
+  it("keeps the submitted preview for repository launches", () => {
+    screenMocks.homeNext.launchTarget = {
+      kind: "worktree",
+      repoRootId: "repo-root-1",
+      sourceWorkspaceId: null,
+      baseBranch: null,
+    };
+    render(<HomeNextScreen />);
+
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "start worktree" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    expect(screen.getByText("start worktree")).toBeTruthy();
   });
 });

@@ -110,6 +110,38 @@ describe("session selection store invariants", () => {
     });
   });
 
+  it("deselects workspace shell state without clearing cached session metadata", () => {
+    useSessionSelectionStore.setState({
+      pendingWorkspaceEntry: pendingWorkspaceEntry(),
+      selectedLogicalWorkspaceId: "logical-a",
+      selectedWorkspaceId: "workspace-a",
+      workspaceSelectionNonce: 4,
+      workspaceArrivalEvent: {
+        workspaceId: "workspace-a",
+        source: "local-created",
+        createdAt: 100,
+      },
+      activeSessionId: "session-a",
+      activeSessionVersion: 7,
+      sessionActivationIntentEpochByWorkspace: { "workspace-a": 3 },
+      hotPaintGate: hotGate({ workspaceId: "workspace-a", sessionId: "session-a", nonce: 12 }),
+    });
+
+    useSessionSelectionStore.getState().deselectWorkspacePreservingSessions();
+
+    expect(useSessionSelectionStore.getState()).toMatchObject({
+      pendingWorkspaceEntry: null,
+      selectedLogicalWorkspaceId: null,
+      selectedWorkspaceId: null,
+      workspaceSelectionNonce: 5,
+      workspaceArrivalEvent: null,
+      activeSessionId: null,
+      activeSessionVersion: 8,
+      sessionActivationIntentEpochByWorkspace: { "workspace-a": 3 },
+      hotPaintGate: null,
+    });
+  });
+
   it("bumps hot workspace intent only for hot activation and keeps session version stable for same session", () => {
     useSessionSelectionStore.setState({
       activeSessionId: "session-a",

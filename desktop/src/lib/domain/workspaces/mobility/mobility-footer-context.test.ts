@@ -310,6 +310,32 @@ describe("buildMobilityFooterContext", () => {
     });
   });
 
+  it("does not build a footer context for pending cowork threads", () => {
+    const entry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "cowork-attempt",
+      selectedWorkspaceId: null,
+      source: "cowork-created",
+      displayName: "Cowork thread",
+      request: {
+        kind: "cowork",
+        input: {
+          agentKind: "claude",
+          modelId: "claude-sonnet-4.5",
+          modeId: "bypassPermissions",
+          draftText: null,
+          sourceWorkspaceId: null,
+        },
+      },
+    });
+
+    expect(buildPendingMobilityFooterContext(entry)).toBeNull();
+    expect(buildPendingMobilityFooterContext({
+      ...entry,
+      workspaceId: "workspace-cowork",
+      request: { kind: "select-existing", workspaceId: "workspace-cowork" },
+    })).toBeNull();
+  });
+
   it.each<{
     effectiveOwner: LogicalWorkspace["effectiveOwner"];
     expected: string;

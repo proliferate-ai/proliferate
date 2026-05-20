@@ -142,14 +142,19 @@ export function HomeNextScreen() {
 
     const submittedDraft = draft;
     const submittedText = submittedDraft.trim();
+    const shouldShowHomeSubmittedPreview = homeNext.launchTarget.kind !== "cowork";
     flushSync(() => {
-      setSubmittedPreview({
-        id: crypto.randomUUID(),
-        text: submittedText,
-      });
+      if (shouldShowHomeSubmittedPreview) {
+        setSubmittedPreview({
+          id: crypto.randomUUID(),
+          text: submittedText,
+        });
+      }
       setDraft("");
     });
-    await waitForNextPaint();
+    if (shouldShowHomeSubmittedPreview) {
+      await waitForNextPaint();
+    }
     const succeeded = await launch({
       text: submittedDraft,
       modelSelection: homeNext.effectiveModelSelection,

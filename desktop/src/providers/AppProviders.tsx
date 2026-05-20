@@ -7,6 +7,7 @@ import type { CoworkStatus } from "@anyharness/sdk";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useCallback, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { appQueryClient } from "@/lib/infra/query/query-client";
 import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
 import {
@@ -23,6 +24,7 @@ import {
 import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
 import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/access/cloud/use-cloud-workspace-connection";
+import { resolveRouteScopedWorkspaceProviderId } from "@/lib/domain/workspaces/selection/workspace-provider-scope";
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/cache/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -39,9 +41,15 @@ export function AppProviders({ children }: { children: ReactNode }) {
 }
 
 function WorkspaceProviders({ children }: { children: ReactNode }) {
+  const location = useLocation();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
+  const providerWorkspaceId = resolveRouteScopedWorkspaceProviderId({
+    pathname: location.pathname,
+    selectedLogicalWorkspaceId,
+    selectedWorkspaceId,
+  });
   const resolveConnection = useCallback(
     (workspaceId: string) => {
       const workspaceCollections = getWorkspaceCollectionsFromCache(appQueryClient, runtimeUrl);
@@ -131,7 +139,7 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
   return (
     <AnyHarnessRuntime runtimeUrl={runtimeUrl}>
       <AnyHarnessWorkspace
-        workspaceId={selectedLogicalWorkspaceId ?? selectedWorkspaceId}
+        workspaceId={providerWorkspaceId}
         resolveConnection={resolveConnection}
       >
         {children}
