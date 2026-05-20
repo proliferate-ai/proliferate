@@ -1,23 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { SHORTCUTS } from "@/config/shortcuts";
-import {
-  buildShortcutRangeLabelById,
-  shortcutDigitForRangeIndex,
-} from "@/lib/domain/shortcuts/presentation";
+import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
 
 describe("shortcut presentation", () => {
-  it("labels first eight range targets and uses digit nine for the final target", () => {
-    expect(Array.from({ length: 10 }, (_, index) =>
-      shortcutDigitForRangeIndex(index, 10)
-    )).toEqual([1, 2, 3, 4, 5, 6, 7, 8, null, 9]);
-    expect(Array.from({ length: 9 }, (_, index) =>
-      shortcutDigitForRangeIndex(index, 9)
-    )).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    expect(Array.from({ length: 4 }, (_, index) =>
-      shortcutDigitForRangeIndex(index, 4)
-    )).toEqual([1, 2, 3, 4]);
-  });
-
   it("builds labels that match range shortcut digit resolution", () => {
     const labels = buildShortcutRangeLabelById(
       Array.from({ length: 10 }, (_, index) => `workspace-${index + 1}`),

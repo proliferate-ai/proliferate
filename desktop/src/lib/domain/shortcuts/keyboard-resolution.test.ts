@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveKeyboardShortcut } from "@/lib/domain/shortcuts/keyboard-resolution";
+import {
+  resolveKeyboardShortcut,
+  resolveKeyboardShortcuts,
+} from "@/lib/domain/shortcuts/keyboard-resolution";
 
 describe("resolveKeyboardShortcut", () => {
   beforeEach(() => {
@@ -284,6 +287,18 @@ describe("resolveKeyboardShortcut", () => {
       shortcut: expect.objectContaining({ id: "workspace.by-index" }),
       trigger: expect.objectContaining({ source: "keyboard", digit: 1 }),
     });
+
+    expect(resolveKeyboardShortcuts({
+      key: "1",
+      code: "Digit1",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent).map((resolved) => resolved.id)).toEqual([
+      "workspace.tab-by-index",
+      "settings.section-by-index",
+    ]);
 
     expect(resolveKeyboardShortcut({
       key: "t",

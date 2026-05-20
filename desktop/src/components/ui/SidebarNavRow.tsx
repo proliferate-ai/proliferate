@@ -9,6 +9,7 @@ interface SidebarNavRowProps extends Omit<HTMLAttributes<HTMLElement>, "children
   disabled?: boolean;
   status?: ReactNode;
   shortcutLabel?: string;
+  shortcutRevealVisible?: boolean;
   onPress: () => void;
 }
 
@@ -19,6 +20,7 @@ export function SidebarNavRow({
   disabled = false,
   status,
   shortcutLabel,
+  shortcutRevealVisible,
   onPress,
   ...props
 }: SidebarNavRowProps) {
@@ -34,6 +36,7 @@ export function SidebarNavRow({
         shortcutLabel,
       }}
       onSelect={onPress}
+      shortcutRevealVisible={shortcutRevealVisible}
       {...props}
     />
   );

@@ -260,6 +260,15 @@ export const SHORTCUTS = {
     match: { kind: "digit-key", meta: true, shift: false, alt: false },
     allowInInputs: true,
   },
+  settingsSectionByIndex: {
+    id: "settings.section-by-index",
+    label: "⌘1-9",
+    nonMacLabel: "Ctrl+1-9",
+    description: "Switch settings section by index",
+    owner: "js",
+    match: { kind: "digit-key", meta: true, shift: false, alt: false },
+    allowInInputs: false,
+  },
   newSessionTab: {
     id: "workspace.new-session-tab",
     label: "⌘T",
@@ -412,6 +421,7 @@ export const SHORTCUT_GROUPS = [
       "goAutomations",
       "openSupport",
       "showKeyboardShortcuts",
+      "settingsSectionByIndex",
       "increaseTextSize",
       "decreaseTextSize",
     ],

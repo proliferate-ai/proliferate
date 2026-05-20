@@ -6,6 +6,12 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SupportMessageContext } from "@proliferate/cloud-sdk/client/support";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
+import type { SettingsSection } from "@/config/settings";
+import {
+  clearShortcutHandlerRegistryForTests,
+  getShortcutHandler,
+  runShortcutHandler,
+} from "@/lib/domain/shortcuts/registry";
 import { requestSupportDialog } from "@/lib/infra/support/support-dialog-request";
 
 const supportDialogRender = vi.hoisted(() => vi.fn());
@@ -29,9 +35,19 @@ vi.mock("@/components/support/SupportDialog", () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
+  clearShortcutHandlerRegistryForTests();
 });
 
-function renderSettingsSidebar() {
+function renderSettingsSidebar({
+  disabledSections,
+  onNavigateHome = vi.fn(),
+  onSelectSection = vi.fn(),
+}: {
+  disabledSections?: Partial<Record<SettingsSection, boolean>>;
+  onNavigateHome?: () => void;
+  onSelectSection?: (section: SettingsSection) => void;
+} = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -44,8 +60,9 @@ function renderSettingsSidebar() {
       <MemoryRouter initialEntries={["/settings?section=general"]}>
         <SettingsSidebar
           activeSection="general"
-          onNavigateHome={vi.fn()}
-          onSelectSection={vi.fn()}
+          disabledSections={disabledSections}
+          onNavigateHome={onNavigateHome}
+          onSelectSection={onSelectSection}
           onCheckForUpdates={vi.fn()}
           onDownloadUpdate={vi.fn()}
           onOpenRestartPrompt={vi.fn()}
@@ -93,5 +110,80 @@ describe("SettingsSidebar support mount boundary", () => {
 
     expect(supportDialogRender).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("support-dialog")).toBeTruthy();
+  });
+});
+
+describe("SettingsSidebar layout and shortcuts", () => {
+  it("keeps the back row full width", () => {
+    renderSettingsSidebar();
+
+    const backRow = screen.getByRole("button", { name: "Back to app" });
+    expect(backRow.className).toContain("w-full");
+    expect(backRow.className).not.toContain("w-fit");
+  });
+
+  it("renders Cmd number labels with the sidebar reveal treatment", () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    renderSettingsSidebar();
+
+    const shortcutLabel = screen.getByText("⌘1");
+    expect(shortcutLabel.className).toContain("opacity-0");
+    expect(shortcutLabel.className).toContain("group-hover:opacity-100");
+  });
+
+  it("selects settings sections from Cmd number shortcuts", async () => {
+    const onSelectSection = vi.fn();
+    renderSettingsSidebar({ onSelectSection });
+
+    await waitFor(() => {
+      expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
+    });
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 2,
+    })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 9,
+    })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("review");
+  });
+
+  it("keeps disabled sections in numbering but declines their shortcut", async () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    const onSelectSection = vi.fn();
+    renderSettingsSidebar({
+      disabledSections: { appearance: true },
+      onSelectSection,
+    });
+
+    await waitFor(() => {
+      expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
+    });
+
+    expect(screen.getByText("⌘2")).toBeTruthy();
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 2,
+    })).toBe(false);
+    expect(onSelectSection).not.toHaveBeenCalled();
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 3,
+    })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("keyboard");
   });
 });

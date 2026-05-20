@@ -3,19 +3,7 @@ import {
   getShortcutDisplayLabel,
   type ShortcutDigit,
 } from "@/lib/domain/shortcuts/matching";
-
-export function shortcutDigitForRangeIndex(
-  index: number,
-  total: number,
-): ShortcutDigit | null {
-  if (index < 0 || total <= 0 || index >= total) {
-    return null;
-  }
-  if (index < 8) {
-    return (index + 1) as ShortcutDigit;
-  }
-  return index === total - 1 ? 9 : null;
-}
+import { shortcutDigitForRangeIndex } from "@/lib/domain/shortcuts/range";
 
 export function getShortcutRangeItemDisplayLabel(
   shortcut: Pick<ShortcutDef, "label" | "nonMacLabel">,

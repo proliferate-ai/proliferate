@@ -356,6 +356,22 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(true);
   });
 
+  it("blocks settings section index shortcuts in text-entry targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.settingsSectionByIndex, {
+      key: "3",
+      code: "Digit3",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: false,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(false);
+  });
+
   it("allows tab cycling aliases from right-panel text inputs even when handled locally", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.previousTab, {
       key: "{",
