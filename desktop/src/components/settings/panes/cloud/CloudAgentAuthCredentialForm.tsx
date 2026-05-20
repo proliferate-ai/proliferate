@@ -1,6 +1,7 @@
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import type {
   AgentAuthAgentKind,
+  AgentGatewayCapabilities,
   CreateGatewayCredentialRequest,
 } from "@proliferate/cloud-sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -28,7 +29,7 @@ interface CloudAgentAuthCredentialFormProps {
   organizations: OrganizationOption[];
   libraryOrganizationId: string | null;
   onLibraryOrganizationChange: (organizationId: string | null) => void;
-  gatewayByokEnabled: boolean;
+  agentGatewayCapabilities: AgentGatewayCapabilities | null;
 }
 
 const PROVIDER_OPTIONS: { value: ProviderChoice; label: string }[] = [
@@ -42,11 +43,16 @@ export function CloudAgentAuthCredentialForm({
   organizations,
   libraryOrganizationId,
   onLibraryOrganizationChange,
-  gatewayByokEnabled,
+  agentGatewayCapabilities,
 }: CloudAgentAuthCredentialFormProps) {
   const adminOrganizations = organizations.filter(isAdminOrganization);
   const firstAdminOrganizationId = adminOrganizations[0]?.id ?? null;
   const mutations = useAgentAuthMutations();
+  const providerOptions = useMemo(
+    () => providerOptionsForCapabilities(agentGatewayCapabilities),
+    [agentGatewayCapabilities],
+  );
+  const gatewayByokEnabled = providerOptions.length > 0;
   const [providerKind, setProviderKind] = useState<ProviderChoice>("anthropic_api_key");
   const [agentKind, setAgentKind] = useState<Extract<AgentAuthAgentKind, "codex" | "opencode">>("codex");
   const [ownerScope, setOwnerScope] = useState<"personal" | "organization">("personal");
@@ -68,6 +74,18 @@ export function CloudAgentAuthCredentialForm({
     displayName.trim().length > 0
     && (ownerScope === "personal" || Boolean(selectedOrganizationId))
     && createPayloadReady(providerKind, { apiKey, baseUrl, roleArn, region, externalId });
+
+  useEffect(() => {
+    if (providerOptions.length > 0 && !providerOptions.some((option) => option.value === providerKind)) {
+      setProviderKind(providerOptions[0].value);
+    }
+  }, [providerKind, providerOptions]);
+
+  useEffect(() => {
+    if (agentKind === "opencode" && agentGatewayCapabilities?.opencodeEnabled !== true) {
+      setAgentKind("codex");
+    }
+  }, [agentGatewayCapabilities?.opencodeEnabled, agentKind]);
 
   async function handleCreateCredential() {
     const body = buildCreateCredentialRequest({
@@ -153,7 +171,7 @@ export function CloudAgentAuthCredentialForm({
                   onChange={(event: ChangeEvent<HTMLSelectElement>) =>
                     setProviderKind(event.target.value as ProviderChoice)}
                 >
-                  {PROVIDER_OPTIONS.map((option) => (
+                  {providerOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -172,7 +190,12 @@ export function CloudAgentAuthCredentialForm({
                       )}
                   >
                     <option value="codex">Codex</option>
-                    <option value="opencode">OpenCode</option>
+                    <option
+                      value="opencode"
+                      disabled={agentGatewayCapabilities?.opencodeEnabled !== true}
+                    >
+                      OpenCode
+                    </option>
                   </Select>
                 </div>
               )}
@@ -283,6 +306,29 @@ export function CloudAgentAuthCredentialForm({
       </div>
     </SettingsCard>
   );
+}
+
+function providerOptionsForCapabilities(
+  capabilities: AgentGatewayCapabilities | null,
+): { value: ProviderChoice; label: string }[] {
+  if (!capabilities?.enabled || !capabilities.byokEnabled) {
+    return [];
+  }
+  return PROVIDER_OPTIONS.filter((option) => {
+    if (option.value === "anthropic_api_key") {
+      return capabilities.anthropicByokEnabled;
+    }
+    if (option.value === "openai_api_key") {
+      return capabilities.openaiByokEnabled;
+    }
+    if (option.value === "bedrock_assume_role") {
+      return capabilities.bedrockByokEnabled;
+    }
+    if (option.value === "openai_compatible") {
+      return capabilities.openaiCompatibleByokEnabled;
+    }
+    return false;
+  });
 }
 
 function createPayloadReady(

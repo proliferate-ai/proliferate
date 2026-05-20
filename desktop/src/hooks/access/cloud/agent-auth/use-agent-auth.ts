@@ -2,6 +2,7 @@ import "@/lib/access/cloud/client";
 
 export {
   useAgentAuthCredentials,
+  useCloudCapabilities,
   useAgentAuthMutations,
   useSandboxAgentAuthSelections,
   useSandboxAgentAuthTargetStates,

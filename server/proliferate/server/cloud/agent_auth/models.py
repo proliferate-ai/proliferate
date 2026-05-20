@@ -220,6 +220,7 @@ class WorkerAgentAuthMaterializationPlan(BaseModel):
     reason: str | None = None
     current_revision: int | None = Field(default=None, alias="currentRevision")
     target_id: UUID | None = Field(default=None, alias="targetId")
+    slot_generation: int | None = Field(default=None, alias="slotGeneration")
     sandbox_profile_id: UUID = Field(alias="sandboxProfileId")
     revision: int
     selections: list[WorkerAgentAuthSelectionPlan] = Field(default_factory=list)
@@ -234,6 +235,7 @@ class WorkerAgentAuthStatusRequest(BaseModel):
     current_revision: int | None = Field(default=None, alias="currentRevision")
     error_code: str | None = Field(default=None, alias="errorCode")
     error_message: str | None = Field(default=None, alias="errorMessage")
+    applied_cleanup_paths: list[str] = Field(default_factory=list, alias="appliedCleanupPaths")
 
 
 class WorkerAgentAuthStatusResponse(BaseModel):

@@ -186,6 +186,9 @@ fn map_create_session_service_error(
             agent_kind,
             mode_id,
         },
+        crate::sessions::service::CreateSessionError::AgentAuthSelectionRequired(required) => {
+            CreateAndStartSessionError::AgentAuthSelectionRequired(required)
+        }
         crate::sessions::service::CreateSessionError::Invalid(detail) => {
             CreateAndStartSessionError::Invalid(detail)
         }

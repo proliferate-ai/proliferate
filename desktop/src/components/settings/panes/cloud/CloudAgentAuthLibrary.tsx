@@ -5,10 +5,10 @@ import { Badge } from "@/components/ui/Badge";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { CloudAgentAuthCredentialForm } from "@/components/settings/panes/cloud/CloudAgentAuthCredentialForm";
-import { AGENT_GATEWAY_BYOK_ENABLED } from "@/config/agent-auth";
 import {
   useAgentAuthCredentials,
   useAgentAuthMutations,
+  useCloudCapabilities,
 } from "@/hooks/access/cloud/agent-auth/use-agent-auth";
 import { useOrganizations } from "@/hooks/access/cloud/organizations/use-organizations";
 import {
@@ -19,7 +19,7 @@ import {
   agentAuthCredentialStatusLabel,
   agentAuthCredentialStatusTone,
   describeAgentAuthCredential,
-  isHostedCloudV1AgentAuthCredential,
+  isAgentAuthCredentialVisibleForCapabilities,
   isProliferateManagedCreditsCredential,
 } from "@/lib/domain/agent-auth/agent-auth-presentation";
 import { useAuthStore } from "@/stores/auth/auth-store";
@@ -30,6 +30,8 @@ export function CloudAgentAuthLibrary() {
   const { data: credentials = [] } = useAgentAuthCredentials({
     organizationId: libraryOrganizationId,
   });
+  const { data: capabilities } = useCloudCapabilities();
+  const agentGatewayCapabilities = capabilities?.agentGateway ?? null;
   const mutations = useAgentAuthMutations();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [sharingCredentialId, setSharingCredentialId] = useState<string | null>(null);
@@ -49,10 +51,9 @@ export function CloudAgentAuthLibrary() {
 
   const visibleCredentials = useMemo(
     () =>
-      AGENT_GATEWAY_BYOK_ENABLED
-        ? credentials
-        : credentials.filter(isHostedCloudV1AgentAuthCredential),
-    [credentials],
+      credentials.filter((credential) =>
+        isAgentAuthCredentialVisibleForCapabilities(credential, agentGatewayCapabilities)),
+    [agentGatewayCapabilities, credentials],
   );
   const grouped = useMemo(() => groupCredentialsByAgent(visibleCredentials), [visibleCredentials]);
 
@@ -102,7 +103,7 @@ export function CloudAgentAuthLibrary() {
         organizations={organizations.data?.organizations ?? []}
         libraryOrganizationId={libraryOrganizationId}
         onLibraryOrganizationChange={setLibraryOrganizationId}
-        gatewayByokEnabled={AGENT_GATEWAY_BYOK_ENABLED}
+        agentGatewayCapabilities={agentGatewayCapabilities}
       />
 
       {feedback && <p className="text-xs text-muted-foreground">{feedback}</p>}

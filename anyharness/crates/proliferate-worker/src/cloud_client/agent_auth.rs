@@ -18,6 +18,7 @@ pub struct AgentAuthStatusRequest {
     pub current_revision: Option<i64>,
     pub error_code: Option<String>,
     pub error_message: Option<String>,
+    pub applied_cleanup_paths: Vec<String>,
 }
 
 impl CloudClient {

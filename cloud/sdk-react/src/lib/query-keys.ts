@@ -22,6 +22,10 @@ export function agentAuthRootKey() {
   return [...cloudRootKey(), "agent-auth"] as const;
 }
 
+export function cloudCapabilitiesKey() {
+  return [...cloudRootKey(), "capabilities"] as const;
+}
+
 export function agentAuthCredentialsKey(
   organizationId: string | null = null,
   agentKind: string | null = null,
