@@ -8,6 +8,7 @@ def test_cloud_orm_package_registers_all_cloud_tables() -> None:
     expected_tables = {
         "cloud_runtime_environment",
         "cloud_workspace",
+        "cloud_workspace_exposure",
         "cloud_workspace_setup_run",
         "cloud_workspace_mobility",
         "cloud_workspace_handoff_op",
