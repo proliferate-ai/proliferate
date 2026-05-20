@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any, Literal, cast
+from typing import Literal, cast
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from proliferate.db.store.cloud_sync.target_config import CloudTargetConfigSnapshot
 from proliferate.server.cloud.commands.models import CloudCommandResponse
+from proliferate.server.cloud.runtime_config.models import RuntimeConfigMaterializationFragment
 
 
 def _to_iso(value: datetime | None) -> str | None:
@@ -23,11 +24,12 @@ def _json_dict(value: str) -> dict[str, object]:
 
 
 class MaterializeTargetConfigRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     git_provider: Literal["github"] = Field(default="github", alias="gitProvider")
     git_owner: str = Field(alias="gitOwner", min_length=1)
     git_repo_name: str = Field(alias="gitRepoName", min_length=1)
     workspace_root: str | None = Field(default=None, alias="workspaceRoot")
-    mcp_connection_ids: list[str] | None = Field(default=None, alias="mcpConnectionIds")
     include_git_credentials: bool = Field(default=True, alias="includeGitCredentials")
     source: str | None = None
     idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
@@ -77,8 +79,11 @@ class TargetConfigMaterializationPlan(BaseModel):
         alias="gitCredential",
         repr=False,
     )
-    mcp: dict[str, Any] | None = Field(default=None, repr=False)
-    skills: list[dict[str, Any]] = Field(default_factory=list)
+    runtime_config: RuntimeConfigMaterializationFragment | None = Field(
+        default=None,
+        alias="runtimeConfig",
+        repr=False,
+    )
     readiness_requirements: dict[str, object] = Field(
         default_factory=dict,
         alias="readinessRequirements",

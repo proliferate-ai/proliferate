@@ -19,7 +19,6 @@ describe("persisted user preference keys", () => {
     expect(pickLegacyUserPreferencesInput(persisted)).toEqual({
       themePreset: "mono",
       defaultChatModelId: "gpt-5",
-      powersInCodingSessionsEnabled: false,
     });
     expect(getForwardCompatibleUserPreferenceExtras(persisted)).toEqual({
       futureBoolean: true,

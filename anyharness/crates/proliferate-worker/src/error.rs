@@ -44,6 +44,8 @@ pub enum WorkerError {
     SetPrivatePermissions { path: PathBuf, source: io::Error },
     #[error("target materialization failed: {0}")]
     Materialization(String),
+    #[error("runtime config credentials are missing")]
+    MissingRuntimeConfigCredentials(Vec<String>),
     #[error("worker update failed: {0}")]
     Update(String),
 }

@@ -21,12 +21,6 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
   preferences: UserPreferences;
   changed: boolean;
 } {
-  const rawPreferences = preferences;
-  const legacyPowersPreference = rawPreferences.powersInCodingSessionsEnabled;
-  const hasCurrentPluginsPreference =
-    typeof rawPreferences.pluginsInCodingSessionsEnabled === "boolean";
-  const hasLegacyPowersPreference =
-    typeof legacyPowersPreference === "boolean";
   const {
     defaultChatModelId,
     defaultChatModelIdByAgentKind,
@@ -36,7 +30,7 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     ...PERSISTED_RECORD_BACKFILL,
     ...preferencesWithoutLegacyModel,
     defaultChatModelIdByAgentKind: {},
-  } as UserPreferences & { powersInCodingSessionsEnabled?: unknown };
+  } as UserPreferences;
   let changed = false;
 
   const sanitizedDefaultChatAgentKind = typeof next.defaultChatAgentKind === "string"
@@ -90,20 +84,6 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
 
   if (typeof next.transparentChromeEnabled !== "boolean") {
     next.transparentChromeEnabled = PERSISTED_RECORD_BACKFILL.transparentChromeEnabled;
-    changed = true;
-  }
-
-  if (!hasCurrentPluginsPreference) {
-    // "Powers" was the old product name. Read the legacy persisted key once,
-    // then write future records with the current "plugins" store field.
-    next.pluginsInCodingSessionsEnabled =
-      hasLegacyPowersPreference
-        ? legacyPowersPreference
-        : PERSISTED_RECORD_BACKFILL.pluginsInCodingSessionsEnabled;
-    changed = true;
-  }
-  if ("powersInCodingSessionsEnabled" in rawPreferences) {
-    delete next.powersInCodingSessionsEnabled;
     changed = true;
   }
 

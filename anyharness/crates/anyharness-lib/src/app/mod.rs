@@ -23,7 +23,6 @@ use crate::domains::plans::runtime::PlanRuntime;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plans::store::PlanStore;
 use crate::domains::plugins::mcp::{auth::SkillsMcpAuth, SkillsProductMcpServer};
-use crate::domains::plugins::{PluginBundleRegistry, PluginSessionLaunchExtension};
 use crate::domains::reviews::hooks::ReviewSessionHooks;
 use crate::domains::reviews::mcp::{
     auth::ReviewMcpAuth, tools as review_mcp_tools, ReviewProductMcpServer,
@@ -31,6 +30,8 @@ use crate::domains::reviews::mcp::{
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::ReviewStore;
+use crate::domains::runtime_config::service::{RuntimeConfigService, RuntimeConfigStore};
+use crate::domains::runtime_config::session_extension::RuntimeConfigSessionLaunchExtension;
 use crate::persistence::Db;
 use crate::repo_roots::service::RepoRootService;
 use crate::repo_roots::store::RepoRootStore;
@@ -94,6 +95,7 @@ pub struct AppState {
     pub agent_auth_config_service: Arc<AgentAuthConfigService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub dynamic_model_registry_service: Arc<DynamicModelRegistryService>,
+    pub runtime_config_service: Arc<RuntimeConfigService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub files_runtime: Arc<WorkspaceFilesRuntime>,
@@ -158,6 +160,9 @@ impl AppState {
             WorkspaceStore::new(db.clone()),
             runtime_home.clone(),
         ));
+        let runtime_config_service = Arc::new(RuntimeConfigService::new(RuntimeConfigStore::new(
+            db.clone(),
+        )));
         let process_service = Arc::new(ProcessService::new());
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
@@ -239,15 +244,14 @@ impl AppState {
             review_service.clone(),
         ));
         let workspace_naming_mcp_auth = Arc::new(WorkspaceNamingMcpAuth::new(runtime_home.clone()));
-        let plugin_bundle_registry = PluginBundleRegistry::default();
         let skills_mcp_auth = Arc::new(SkillsMcpAuth::new(runtime_home.clone()));
-        let plugin_session_launch_extension = Arc::new(PluginSessionLaunchExtension::new(
-            plugin_bundle_registry.clone(),
-            runtime_base_url.clone(),
-            bearer_token.clone(),
-            skills_mcp_auth.clone(),
-            Some(subagent_service.clone()),
-        ));
+        let runtime_config_session_launch_extension =
+            Arc::new(RuntimeConfigSessionLaunchExtension::new(
+                runtime_config_service.clone(),
+                runtime_base_url.clone(),
+                bearer_token.clone(),
+                skills_mcp_auth.clone(),
+            ));
         let product_mcp_launch_catalog = ProductMcpLaunchCatalog::new(
             runtime_base_url.clone(),
             bearer_token.clone(),
@@ -262,7 +266,7 @@ impl AppState {
             cowork_session_hooks.clone(),
             subagent_session_hooks.clone(),
             review_session_hooks.clone(),
-            plugin_session_launch_extension,
+            runtime_config_session_launch_extension,
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
@@ -273,7 +277,7 @@ impl AppState {
             session_data_cipher,
             session_extensions,
             product_mcp_launch_catalog,
-            plugin_bundle_registry.clone(),
+            runtime_config_service.clone(),
             workspace_access_gate.clone(),
             plan_service.clone(),
             agent_auth_config_service.clone(),
@@ -378,7 +382,7 @@ impl AppState {
             ))),
             ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
                 Arc::new(SkillsProductMcpServer::new(
-                    plugin_bundle_registry,
+                    runtime_config_service.clone(),
                     skills_mcp_auth,
                 )),
                 None,
@@ -400,6 +404,7 @@ impl AppState {
             agent_auth_config_service,
             agent_reconcile_service,
             dynamic_model_registry_service,
+            runtime_config_service,
             repo_root_service,
             workspace_runtime,
             files_runtime,

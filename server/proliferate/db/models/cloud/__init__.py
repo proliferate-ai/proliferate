@@ -9,9 +9,12 @@ from . import cloud_target_runtime_access as cloud_target_runtime_access  # noqa
 from . import commands as commands  # noqa: F401
 from . import mcp as mcp  # noqa: F401
 from . import mobility as mobility  # noqa: F401
+from . import plugins as plugins  # noqa: F401
 from . import repo_config as repo_config  # noqa: F401
+from . import runtime_config as runtime_config  # noqa: F401
 from . import runtime_environments as runtime_environments  # noqa: F401
 from . import sandboxes as sandboxes  # noqa: F401
+from . import skills as skills  # noqa: F401
 from . import sync as sync  # noqa: F401
 from . import target_config as target_config  # noqa: F401
 from . import target_git_identity as target_git_identity  # noqa: F401

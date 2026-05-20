@@ -346,8 +346,6 @@ function isResumeRequestOptions(
       || "measurementOperationId" in value
       || "timingCategory" in value
       || "timingScope" in value
-    )
-    && !("mcpServers" in value)
-    && !("mcpBindingSummaries" in value),
+    ),
   );
 }

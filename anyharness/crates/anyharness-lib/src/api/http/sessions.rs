@@ -4,8 +4,8 @@ use anyharness_contract::v1::{
     CreateSessionRequest, EditPendingPromptRequest, ForkChildStartStatus, ForkSessionRequest,
     ForkSessionResponse, GetSessionLiveConfigResponse, InteractionDecision, PromptInputBlock,
     PromptSessionRequest, PromptSessionResponse, ResolveInteractionRequest, ResumeSessionRequest,
-    Session, SessionEventEnvelope, SessionPluginBundle, SessionRawNotificationEnvelope,
-    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, UpdateSessionTitleRequest,
+    Session, SessionEventEnvelope, SessionRawNotificationEnvelope, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, UpdateSessionTitleRequest,
 };
 use axum::{
     body::Bytes,
@@ -21,7 +21,6 @@ use crate::acp::permission_broker::PermissionDecision;
 use crate::app::AppState;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
-use crate::sessions::mcp_bindings::contract::bindings_from_contract;
 use crate::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
 use crate::sessions::mcp_bindings::summaries::validate_binding_summaries;
 use crate::sessions::runtime::contract::session_link_to_summary;
@@ -77,8 +76,25 @@ pub async fn create_session(
     let model_id = req.model_id.clone();
     let mode_id = req.mode_id.clone();
     let origin = request_origin_or_api_default(req.origin.clone(), "create_session");
-    let mcp_servers = bindings_from_contract(req.mcp_servers.clone().unwrap_or_default());
-    if let Some(summaries) = req.mcp_binding_summaries.as_deref() {
+    let runtime_inputs = if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
+        Some(
+            state
+                .runtime_config_service
+                .session_inputs_for_expected(expected)
+                .map_err(super::runtime_config::map_runtime_config_error)?,
+        )
+    } else {
+        None
+    };
+    let mcp_servers = runtime_inputs
+        .as_ref()
+        .map(|inputs| inputs.mcp_servers.clone())
+        .unwrap_or_default();
+    let mcp_binding_summaries = runtime_inputs
+        .as_ref()
+        .and_then(|inputs| inputs.mcp_binding_summaries.clone())
+        .filter(|summaries| !summaries.is_empty());
+    if let Some(summaries) = mcp_binding_summaries.as_deref() {
         validate_binding_summaries(summaries)
             .map_err(|error| ApiError::bad_request(error.to_string(), "INVALID_MCP_SUMMARY"))?;
     }
@@ -113,9 +129,9 @@ pub async fn create_session(
             model_id.as_deref(),
             mode_id.as_deref(),
             req.system_prompt_append,
-            mcp_servers,
-            req.mcp_binding_summaries,
-            req.plugin_bundle,
+            Vec::new(),
+            None,
+            req.expected_runtime_config_revision.clone(),
             req.subagents_enabled.unwrap_or(true),
             req.agent_auth_scope,
             req.required_agent_auth_revision,
@@ -577,55 +593,35 @@ pub async fn resume_session(
 ) -> Result<Json<Session>, ApiError> {
     let latency = LatencyRequestContext::from_headers(&headers);
     let req = parse_optional_resume_request(body)?;
-    if let Some(summaries) = req.mcp_binding_summaries.as_deref() {
-        validate_binding_summaries(summaries)
-            .map_err(|error| ApiError::bad_request(error.to_string(), "INVALID_MCP_SUMMARY"))?;
+    let has_live_session = state.session_runtime.has_live_session(&session_id).await;
+    if req.expected_runtime_config_revision.is_some() && has_live_session {
+        return Err(ApiError::conflict(
+            "runtime config changes require restarting the session",
+            "RUNTIME_CONFIG_RESUME_UNSUPPORTED",
+        ));
     }
-    let mcp_refresh = if req.mcp_servers.is_some() || req.mcp_binding_summaries.is_some() {
-        Some(SessionMcpRefresh {
-            mcp_servers: bindings_from_contract(req.mcp_servers.unwrap_or_default()),
-            mcp_binding_summaries: req.mcp_binding_summaries,
-        })
-    } else {
+    if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
+        state
+            .runtime_config_service
+            .assert_session_context_matches(&session_id, expected)
+            .map_err(super::runtime_config::map_runtime_config_error)?;
+    }
+    let mcp_refresh = if has_live_session {
         None
-    };
-    let plugin_bundle = req.plugin_bundle;
-    validate_resume_plugin_bundle_clear(plugin_bundle.as_ref(), mcp_refresh.is_some())?;
-    let updated = if let Some(plugin_bundle) = plugin_bundle {
-        let _lease = acquire_session_exclusive_operation_lease(
-            &state,
-            &session_id,
-            WorkspaceOperationKind::SessionResume,
-        )
-        .await?;
-        if state.session_runtime.has_live_session(&session_id).await {
-            return Err(ApiError::conflict(
-                "Plugin bundle changes require restarting the session.",
-                "SESSION_RESTART_REQUIRED",
-            ));
-        }
-        state
-            .session_runtime
-            .set_session_plugin_bundle(&session_id, plugin_bundle)
-            .map_err(map_ensure_live_session_error)?;
-        state
-            .session_runtime
-            .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
-            .await
-            .map_err(map_ensure_live_session_error)?
     } else {
-        let _lease = acquire_session_operation_lease(
-            &state,
-            &session_id,
-            WorkspaceOperationKind::SessionResume,
-        )
-        .await?;
-        state
-            .session_runtime
-            .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
-            .await
-            .map_err(map_ensure_live_session_error)?
+        Some(SessionMcpRefresh {
+            mcp_servers: Vec::new(),
+            mcp_binding_summaries: None,
+        })
     };
+    let _lease =
+        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionResume)
+            .await?;
+    let updated = state
+        .session_runtime
+        .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
+        .await
+        .map_err(map_ensure_live_session_error)?;
 
     Ok(Json(session_to_contract(&state, &updated).await?))
 }
@@ -646,19 +642,6 @@ fn parse_optional_resume_request(body: Bytes) -> Result<ResumeSessionRequest, Ap
             "INVALID_RESUME_REQUEST",
         )
     })
-}
-
-fn validate_resume_plugin_bundle_clear(
-    plugin_bundle: Option<&SessionPluginBundle>,
-    has_mcp_refresh: bool,
-) -> Result<(), ApiError> {
-    if plugin_bundle.is_some_and(|bundle| bundle.plugins.is_empty()) && !has_mcp_refresh {
-        return Err(ApiError::bad_request(
-            "Clearing a plugin bundle requires an MCP server refresh.",
-            "PLUGIN_CLEAR_REQUIRES_MCP_REFRESH",
-        ));
-    }
-    Ok(())
 }
 
 async fn acquire_session_operation_lease(
@@ -1397,8 +1380,7 @@ mod tests {
             Err(_) => panic!("parse empty body"),
         };
 
-        assert!(request.mcp_servers.is_none());
-        assert!(request.mcp_binding_summaries.is_none());
+        assert!(request.expected_runtime_config_revision.is_none());
     }
 
     #[test]
@@ -1408,8 +1390,7 @@ mod tests {
             Err(_) => panic!("parse empty object"),
         };
 
-        assert!(request.mcp_servers.is_none());
-        assert!(request.mcp_binding_summaries.is_none());
+        assert!(request.expected_runtime_config_revision.is_none());
     }
 
     #[test]
@@ -1419,8 +1400,7 @@ mod tests {
             Err(_) => panic!("parse null body"),
         };
 
-        assert!(request.mcp_servers.is_none());
-        assert!(request.mcp_binding_summaries.is_none());
+        assert!(request.expected_runtime_config_revision.is_none());
     }
 
     #[test]
@@ -1444,31 +1424,14 @@ mod tests {
     }
 
     #[test]
-    fn resume_request_accepts_empty_mcp_servers() {
-        let request =
-            match parse_optional_resume_request(Bytes::from_static(br#"{"mcpServers":[]}"#)) {
-                Ok(request) => request,
-                Err(_) => panic!("parse empty MCP server list"),
-            };
+    fn resume_request_rejects_legacy_mcp_servers() {
+        let error = parse_optional_resume_request(Bytes::from_static(br#"{"mcpServers":[]}"#))
+            .expect_err("legacy MCP server list should be rejected");
 
-        assert_eq!(request.mcp_servers.unwrap_or_default().len(), 0);
-        assert!(request.mcp_binding_summaries.is_none());
-    }
-
-    #[test]
-    fn empty_plugin_bundle_clear_requires_mcp_refresh() {
-        let bundle = SessionPluginBundle {
-            plugins: Vec::new(),
-        };
-
-        let error = validate_resume_plugin_bundle_clear(Some(&bundle), false)
-            .expect_err("empty plugin clear without refresh should fail");
         assert_eq!(
             error.into_response().status(),
             axum::http::StatusCode::BAD_REQUEST
         );
-        assert!(validate_resume_plugin_bundle_clear(Some(&bundle), true).is_ok());
-        assert!(validate_resume_plugin_bundle_clear(None, false).is_ok());
     }
 
     #[test]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
@@ -18,7 +19,9 @@ from proliferate.db.models.auth import User
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
+from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
 from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.domain.rules import (
     compact_command_json,
@@ -262,6 +265,20 @@ async def enqueue_command(
         target=target,
         payload=payload,
     )
+    payload = await _stamp_managed_runtime_config_preflight(
+        db,
+        actor_user_id=user.id,
+        target=target,
+        kind=kind,
+        payload=payload,
+    )
+    validate_command_payload(kind=kind, payload=payload)
+    await _validate_runtime_config_preflight(
+        db,
+        actor_user_id=user.id,
+        target=target,
+        payload=payload,
+    )
     command_body = body.model_copy(update={"payload": payload})
     resolved_workspace_id, payload, cloud_workspace_id = await _resolve_command_workspace(
         db,
@@ -408,6 +425,101 @@ async def _validate_agent_auth_preflight(
         )
 
 
+async def _validate_runtime_config_preflight(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    target: targets_store.CloudTargetSnapshot,
+    payload: dict[str, object],
+) -> None:
+    sandbox_profile_id = payload.get("sandboxProfileId")
+    required_revision_id = payload.get("requiredRuntimeConfigRevisionId")
+    required_sequence = payload.get("requiredRuntimeConfigSequence")
+    required_content_hash = payload.get("requiredRuntimeConfigContentHash")
+    if (
+        sandbox_profile_id is None
+        and required_revision_id is None
+        and required_sequence is None
+        and required_content_hash is None
+    ):
+        return
+    try:
+        profile_id = UUID(str(sandbox_profile_id))
+    except (TypeError, ValueError) as exc:
+        raise CloudApiError(
+            "cloud_command_runtime_config_profile_invalid",
+            "Runtime config preflight sandboxProfileId is invalid.",
+            status_code=400,
+        ) from exc
+    if target.sandbox_profile_id != profile_id:
+        raise CloudApiError(
+            "cloud_command_runtime_config_target_mismatch",
+            "Runtime config sandbox profile is not attached to this target.",
+            status_code=409,
+        )
+    if target.owner_scope == "personal" and target.owner_user_id != actor_user_id:
+        raise CloudApiError(
+            "cloud_command_runtime_config_profile_not_found",
+            "Runtime config sandbox profile not found.",
+            status_code=404,
+        )
+    if not isinstance(required_revision_id, str) or not required_revision_id.strip():
+        raise CloudApiError(
+            "cloud_command_runtime_config_revision_required",
+            "Runtime config preflight revision id is required.",
+            status_code=400,
+        )
+    if not isinstance(required_sequence, int) or isinstance(required_sequence, bool):
+        raise CloudApiError(
+            "cloud_command_runtime_config_sequence_required",
+            "Runtime config preflight sequence is required.",
+            status_code=400,
+        )
+    if not isinstance(required_content_hash, str) or not required_content_hash.strip():
+        raise CloudApiError(
+            "cloud_command_runtime_config_hash_required",
+            "Runtime config preflight content hash is required.",
+            status_code=400,
+        )
+    _current, current_revision = await runtime_config_store.get_current(
+        db,
+        sandbox_profile_id=profile_id,
+    )
+    if current_revision is None:
+        raise CloudApiError(
+            "cloud_command_runtime_config_missing",
+            "Runtime config has not been compiled for this sandbox profile.",
+            status_code=409,
+        )
+    if (
+        str(current_revision.id) != required_revision_id
+        or current_revision.sequence != required_sequence
+        or current_revision.content_hash != required_content_hash
+    ):
+        raise CloudApiError(
+            "cloud_command_runtime_config_revision_stale",
+            "Runtime config preflight revision is stale.",
+            status_code=409,
+        )
+    _raise_runtime_config_blocked_if_needed(current_revision)
+    state = await agent_auth_store.get_target_state(
+        db,
+        sandbox_profile_id=profile_id,
+        target_id=target.id,
+    )
+    if (
+        state is None
+        or state.runtime_config_status != "applied"
+        or state.applied_runtime_config_revision_id != required_revision_id
+        or state.applied_runtime_config_sequence < required_sequence
+    ):
+        raise CloudApiError(
+            "cloud_command_runtime_config_not_ready",
+            "Runtime config has not been applied to this target.",
+            status_code=409,
+        )
+
+
 async def get_command_status(
     db: AsyncSession,
     *,
@@ -433,6 +545,155 @@ async def get_command_status(
             status_code=404,
         )
     return command
+
+
+async def _stamp_managed_runtime_config_preflight(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    target: targets_store.CloudTargetSnapshot,
+    kind: str,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    if kind not in {CloudCommandKind.start_session.value, CloudCommandKind.send_prompt.value}:
+        return payload
+    if target.sandbox_profile_id is None:
+        return payload
+    configs = await target_config_store.list_target_configs(db, target_id=target.id)
+    if not configs:
+        raise CloudApiError(
+            "cloud_command_target_config_required",
+            "Managed targets require a materialized target config before sessions can start.",
+            status_code=409,
+        )
+    from proliferate.server.cloud.runtime_config.service import (  # noqa: PLC0415
+        refresh_profile_runtime_config,
+    )
+
+    _current, current_revision = await runtime_config_store.get_current(
+        db,
+        sandbox_profile_id=target.sandbox_profile_id,
+    )
+    if current_revision is None:
+        await refresh_profile_runtime_config(
+            db,
+            sandbox_profile_id=target.sandbox_profile_id,
+            actor_user_id=actor_user_id,
+            reason="runtime_config_preflight_missing",
+        )
+        _current, current_revision = await runtime_config_store.get_current(
+            db,
+            sandbox_profile_id=target.sandbox_profile_id,
+        )
+    if current_revision is None:
+        raise CloudApiError(
+            "cloud_command_runtime_config_missing",
+            "Runtime config has not been compiled for this sandbox profile.",
+            status_code=409,
+        )
+    _raise_runtime_config_blocked_if_needed(current_revision)
+    state = await agent_auth_store.get_target_state(
+        db,
+        sandbox_profile_id=target.sandbox_profile_id,
+        target_id=target.id,
+    )
+    if (
+        state is None
+        or state.runtime_config_status != "applied"
+        or state.applied_runtime_config_revision_id != str(current_revision.id)
+        or state.applied_runtime_config_sequence < current_revision.sequence
+    ):
+        await refresh_profile_runtime_config(
+            db,
+            sandbox_profile_id=target.sandbox_profile_id,
+            actor_user_id=actor_user_id,
+            reason="runtime_config_preflight_not_applied",
+        )
+        _current, current_revision = await runtime_config_store.get_current(
+            db,
+            sandbox_profile_id=target.sandbox_profile_id,
+        )
+        if current_revision is None:
+            raise CloudApiError(
+                "cloud_command_runtime_config_missing",
+                "Runtime config has not been compiled for this sandbox profile.",
+                status_code=409,
+            )
+        _raise_runtime_config_blocked_if_needed(current_revision)
+    stamped = dict(payload)
+    stamped["sandboxProfileId"] = str(target.sandbox_profile_id)
+    stamped["requiredRuntimeConfigRevisionId"] = str(current_revision.id)
+    stamped["requiredRuntimeConfigSequence"] = current_revision.sequence
+    stamped["requiredRuntimeConfigContentHash"] = current_revision.content_hash
+    if kind == CloudCommandKind.start_session.value:
+        stamped["expectedRuntimeConfigRevision"] = {
+            "revisionId": str(current_revision.id),
+            "sequence": current_revision.sequence,
+            "contentHash": current_revision.content_hash,
+            "externalScope": {
+                "provider": "proliferate-cloud",
+                "id": str(target.sandbox_profile_id),
+                "targetId": str(target.id),
+            },
+        }
+    return stamped
+
+
+async def stamp_and_validate_runtime_config_preflight(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    target_id: UUID,
+    kind: str,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    target = await targets_store.get_target_by_id(db, target_id)
+    if target is None:
+        raise CloudApiError(
+            "cloud_command_target_not_found",
+            "Target not found.",
+            status_code=404,
+        )
+    stamped = await _stamp_managed_runtime_config_preflight(
+        db,
+        actor_user_id=actor_user_id,
+        target=target,
+        kind=kind,
+        payload=payload,
+    )
+    await _validate_runtime_config_preflight(
+        db,
+        actor_user_id=actor_user_id,
+        target=target,
+        payload=stamped,
+    )
+    return stamped
+
+
+def _raise_runtime_config_blocked_if_needed(
+    revision: runtime_config_store.SandboxProfileRuntimeConfigRevisionSnapshot,
+) -> None:
+    blocking_errors = _runtime_config_blocking_errors(revision.manifest_json)
+    if not blocking_errors:
+        return
+    raise CloudApiError(
+        "cloud_command_runtime_config_blocked",
+        "Runtime config has blocking resolver errors and cannot launch.",
+        status_code=409,
+    )
+
+
+def _runtime_config_blocking_errors(manifest_json: str) -> list[dict[str, object]]:
+    try:
+        manifest = json.loads(manifest_json)
+    except ValueError:
+        return []
+    if not isinstance(manifest, dict):
+        return []
+    blocking_errors = manifest.get("blockingErrors")
+    if not isinstance(blocking_errors, list):
+        return []
+    return [item for item in blocking_errors if isinstance(item, dict)]
 
 
 def is_terminal_command_status(status: str) -> bool:

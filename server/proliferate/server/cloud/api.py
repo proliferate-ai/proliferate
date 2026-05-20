@@ -12,12 +12,17 @@ from proliferate.server.cloud.events.api import router as events_router
 from proliferate.server.cloud.live.api import router as live_router
 from proliferate.server.cloud.mcp_catalog.api import router as mcp_catalog_router
 from proliferate.server.cloud.mcp_connections.api import router as mcp_connections_router
-from proliferate.server.cloud.mcp_materialization.api import router as mcp_materialization_router
 from proliferate.server.cloud.mcp_oauth.api import router as mcp_oauth_router
 from proliferate.server.cloud.mobility.api import router as mobility_router
+from proliferate.server.cloud.plugins.api import router as plugins_router
 from proliferate.server.cloud.repo_config.api import router as repo_config_router
 from proliferate.server.cloud.repos.api import router as repos_router
+from proliferate.server.cloud.runtime_config.api import router as runtime_config_router
+from proliferate.server.cloud.runtime_config.api import (
+    worker_router as runtime_config_worker_router,
+)
 from proliferate.server.cloud.sandbox_profiles.api import router as sandbox_profiles_router
+from proliferate.server.cloud.skills.api import router as skills_router
 from proliferate.server.cloud.target_config.api import router as target_config_router
 from proliferate.server.cloud.target_config.api import worker_router as target_config_worker_router
 from proliferate.server.cloud.target_git_identity.api import (
@@ -40,8 +45,9 @@ router.include_router(sandbox_profiles_router)
 router.include_router(agent_auth_router)
 router.include_router(mcp_catalog_router)
 router.include_router(mcp_connections_router)
-router.include_router(mcp_materialization_router)
 router.include_router(mcp_oauth_router)
+router.include_router(plugins_router)
+router.include_router(skills_router)
 router.include_router(webhooks_router)
 router.include_router(targets_router)
 router.include_router(compute_router)
@@ -50,7 +56,9 @@ router.include_router(commands_router)
 router.include_router(events_router)
 router.include_router(live_router)
 router.include_router(backfill_router)
+router.include_router(runtime_config_router)
 router.include_router(agent_auth_worker_router)
+router.include_router(runtime_config_worker_router)
 router.include_router(target_config_worker_router)
 router.include_router(target_git_identity_worker_router)
 router.include_router(worker_router)

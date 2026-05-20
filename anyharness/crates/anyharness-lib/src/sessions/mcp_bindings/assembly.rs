@@ -3,12 +3,12 @@ use std::sync::Arc;
 
 use anyharness_contract::v1::SessionMcpBindingSummary;
 
-use super::crypto::{decrypt_bindings, SessionDataCipher, SessionMcpBindingsError};
+use super::crypto::SessionDataCipher;
 use super::model::SessionMcpServer;
 use super::product_catalog::ProductMcpLaunchCatalog;
 use super::summaries::serialize_binding_summaries;
 use crate::sessions::extensions::{SessionExtension, SessionLaunchContext, SessionLaunchExtras};
-use crate::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
+use crate::sessions::model::SessionRecord;
 use crate::workspaces::model::WorkspaceRecord;
 
 pub const SESSION_RESTART_REQUIRED_DETAIL: &str =
@@ -30,19 +30,14 @@ pub enum SessionMcpLaunchAssemblyError {
 }
 
 pub fn assemble_session_mcp_launch(
-    cipher: Option<&SessionDataCipher>,
+    _cipher: Option<&SessionDataCipher>,
     session_extensions: &[Arc<dyn SessionExtension>],
     product_mcp_launch_catalog: &ProductMcpLaunchCatalog,
     workspace: &WorkspaceRecord,
     record: &SessionRecord,
     persisted_system_prompt_append: Option<String>,
 ) -> Result<SessionMcpLaunchAssembly, SessionMcpLaunchAssemblyError> {
-    let mut mcp_servers = if record.mcp_binding_policy == SessionMcpBindingPolicy::InternalOnly {
-        Vec::new()
-    } else {
-        decrypt_bindings(cipher, record.mcp_bindings_ciphertext.as_deref())
-            .map_err(map_decrypt_bindings_error_to_assembly)?
-    };
+    let mut mcp_servers = Vec::new();
 
     let mut launch_extras = resolve_extension_launch_extras(session_extensions, workspace, record)
         .map_err(SessionMcpLaunchAssemblyError::Internal)?;
@@ -181,18 +176,6 @@ fn merge_extension_binding_summaries(
     })
 }
 
-fn map_decrypt_bindings_error_to_assembly(
-    error: SessionMcpBindingsError,
-) -> SessionMcpLaunchAssemblyError {
-    match error {
-        SessionMcpBindingsError::MissingDataKey => SessionMcpLaunchAssemblyError::MissingDataKey,
-        SessionMcpBindingsError::Encrypt(error) => SessionMcpLaunchAssemblyError::Internal(error),
-        SessionMcpBindingsError::Decrypt(_) => SessionMcpLaunchAssemblyError::RestartRequired(
-            SESSION_RESTART_REQUIRED_DETAIL.to_string(),
-        ),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,6 +186,7 @@ mod tests {
     use crate::sessions::mcp_bindings::model::{
         SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
     };
+    use crate::sessions::model::SessionMcpBindingPolicy;
 
     #[derive(Clone)]
     struct StaticExtension {
@@ -307,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn assemble_launch_orders_user_servers_before_product_servers() {
+    fn assemble_launch_ignores_legacy_user_bindings_and_keeps_product_servers() {
         let cipher = sample_cipher();
         let user_server = http_server("user-1", "user");
         let product_server = http_server("product-1", "product");
@@ -336,13 +320,9 @@ mod tests {
         )
         .expect("assemble launch");
 
-        assert_eq!(assembled.mcp_servers.len(), 2);
+        assert_eq!(assembled.mcp_servers.len(), 1);
         assert!(matches!(
             &assembled.mcp_servers[0],
-            SessionMcpServer::Http(server) if server.server_name == "user"
-        ));
-        assert!(matches!(
-            &assembled.mcp_servers[1],
             SessionMcpServer::Http(server) if server.server_name == "product"
         ));
         assert_eq!(
@@ -392,11 +372,11 @@ mod tests {
     }
 
     #[test]
-    fn assemble_launch_maps_corrupt_user_bindings_to_restart_required() {
+    fn assemble_launch_ignores_corrupt_legacy_user_bindings() {
         let mut record = session_record();
         record.mcp_bindings_ciphertext = Some("v1:not-valid-base64".to_string());
 
-        let error = assemble_session_mcp_launch(
+        let assembled = assemble_session_mcp_launch(
             Some(&sample_cipher()),
             &[],
             &ProductMcpLaunchCatalog::disabled(),
@@ -404,12 +384,9 @@ mod tests {
             &record,
             None,
         )
-        .expect_err("restart required");
+        .expect("assemble launch");
 
-        assert!(matches!(
-            error,
-            SessionMcpLaunchAssemblyError::RestartRequired(_)
-        ));
+        assert!(assembled.mcp_servers.is_empty());
     }
 
     #[test]

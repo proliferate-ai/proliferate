@@ -55,7 +55,6 @@ export function GeneralPane() {
     themePreset: state.themePreset,
     turnEndSoundEnabled: state.turnEndSoundEnabled,
     turnEndSoundId: state.turnEndSoundId,
-    pluginsInCodingSessionsEnabled: state.pluginsInCodingSessionsEnabled,
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     pasteAttachmentsEnabled: state.pasteAttachmentsEnabled,
@@ -187,17 +186,8 @@ export function GeneralPane() {
       <GeneralSection title="Session policy">
         <SettingsCard>
           <SettingsCardRow
-            label="Use plugins in coding sessions"
-            description="New coding sessions receive enabled compatible plugins at launch. Existing live sessions need a restart."
-          >
-            <Switch
-              checked={preferences.pluginsInCodingSessionsEnabled}
-              onChange={(value) => preferences.set("pluginsInCodingSessionsEnabled", value)}
-            />
-          </SettingsCardRow>
-          <SettingsCardRow
             label="Plugins setup"
-            description="Configure your plugins."
+            description="Configure cloud connectors and plugin packages."
           >
             <Button
               type="button"

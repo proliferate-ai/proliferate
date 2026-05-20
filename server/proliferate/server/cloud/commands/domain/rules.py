@@ -136,6 +136,7 @@ def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
         return
     if kind in {CloudCommandKind.start_session.value, CloudCommandKind.send_prompt.value}:
         _validate_optional_agent_auth_preflight_payload(kind=kind, payload=payload)
+        _validate_optional_runtime_config_preflight_payload(kind=kind, payload=payload)
         return
     if kind != CloudCommandKind.materialize_workspace.value:
         return
@@ -349,6 +350,62 @@ def _validate_agent_auth_scope(payload: dict[str, object], kind: str) -> None:
         raise CloudApiError(
             "cloud_command_agent_auth_scope_invalid",
             f"{kind} agentAuthScope must match the cloud-owned auth preflight scope.",
+            status_code=400,
+        )
+
+
+def _validate_optional_runtime_config_preflight_payload(
+    *,
+    kind: str,
+    payload: dict[str, object],
+) -> None:
+    has_runtime_preflight = any(
+        field in payload
+        for field in (
+            "requiredRuntimeConfigRevisionId",
+            "requiredRuntimeConfigSequence",
+            "requiredRuntimeConfigContentHash",
+        )
+    )
+    if not has_runtime_preflight:
+        return
+    _required_string(
+        payload,
+        "sandboxProfileId",
+        code="cloud_command_runtime_config_profile_required",
+        message=f"{kind} payload must contain sandboxProfileId with runtime config preflight.",
+    )
+    _required_string(
+        payload,
+        "requiredRuntimeConfigRevisionId",
+        code="cloud_command_runtime_config_revision_required",
+        message=(
+            f"{kind} payload must contain requiredRuntimeConfigRevisionId with runtime "
+            "config preflight."
+        ),
+    )
+    _required_string(
+        payload,
+        "requiredRuntimeConfigContentHash",
+        code="cloud_command_runtime_config_hash_required",
+        message=(
+            f"{kind} payload must contain requiredRuntimeConfigContentHash with runtime "
+            "config preflight."
+        ),
+    )
+    sequence = _required_int(
+        payload,
+        "requiredRuntimeConfigSequence",
+        code="cloud_command_runtime_config_sequence_required",
+        message=(
+            f"{kind} payload must contain requiredRuntimeConfigSequence with runtime "
+            "config preflight."
+        ),
+    )
+    if sequence < 0:
+        raise CloudApiError(
+            "cloud_command_runtime_config_sequence_invalid",
+            f"{kind} requiredRuntimeConfigSequence must be non-negative.",
             status_code=400,
         )
 

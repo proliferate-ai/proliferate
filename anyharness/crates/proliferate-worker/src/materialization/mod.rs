@@ -3,9 +3,8 @@ pub mod env;
 pub mod files;
 pub mod git;
 pub mod git_identity;
-pub mod mcp;
 pub mod repo_checkout;
-pub mod skills;
+pub mod runtime_config;
 
 use std::{
     collections::BTreeMap,
@@ -19,6 +18,7 @@ use sha2::{Digest, Sha256};
 use crate::error::WorkerError;
 
 use files::{expand_home, materialization_error, safe_join, write_file};
+use runtime_config::{RuntimeConfigMaterializationFragment, RuntimeConfigProjectionSummary};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -44,9 +44,7 @@ pub struct TargetConfigMaterializationPlan {
     #[serde(default)]
     pub run_command: String,
     pub git_credential: Option<GitCredential>,
-    pub mcp: Option<Value>,
-    #[serde(default)]
-    pub skills: Vec<Value>,
+    pub runtime_config: Option<RuntimeConfigMaterializationFragment>,
     #[serde(default)]
     pub readiness_requirements: BTreeMap<String, Value>,
 }
@@ -89,6 +87,7 @@ pub struct MaterializationOutcome {
     pub git_configured: bool,
     pub mcp_configured: bool,
     pub skills_configured: bool,
+    pub runtime_config: Option<RuntimeConfigProjectionSummary>,
 }
 
 pub fn parse_materialize_environment_payload(
@@ -116,8 +115,14 @@ pub fn materialize_plan(
     write_repo_files(&workspace_root, &plan.tracked_files)?;
     let git_configured =
         git::write_git_materialization(&workspace_root, plan.git_credential.as_ref())?;
-    let mcp_configured = mcp::write_mcp_materialization(&workspace_root, plan.mcp.as_ref())?;
-    let skills_configured = skills::write_skill_refs(&workspace_root, &plan.skills)?;
+    let runtime_config = runtime_config::write_runtime_config_projection(
+        &workspace_root,
+        plan.runtime_config.as_ref(),
+    )?;
+    let (mcp_configured, skills_configured) = runtime_config
+        .as_ref()
+        .map(|summary| (summary.mcp_server_count > 0, summary.skill_count > 0))
+        .unwrap_or((false, false));
     write_manifest(&workspace_root, plan)?;
     Ok(MaterializationOutcome {
         target_config_id: plan.target_config_id.clone(),
@@ -129,6 +134,7 @@ pub fn materialize_plan(
         git_configured,
         mcp_configured,
         skills_configured,
+        runtime_config,
     })
 }
 
@@ -172,6 +178,7 @@ fn write_manifest(
         },
         "setupScript": plan.setup_script,
         "runCommand": plan.run_command,
+        "runtimeConfig": plan.runtime_config.as_ref().map(|fragment| fragment.summary()),
         "readinessRequirements": plan.readiness_requirements,
     });
     let contents = serde_json::to_vec_pretty(&manifest)?;
@@ -236,6 +243,7 @@ fn expand_path(path: &Path) -> PathBuf {
 mod tests {
     use std::{collections::BTreeMap, fs};
 
+    use anyharness_contract::v1::RuntimeConfigManifest;
     use serde_json::json;
     use sha2::{Digest, Sha256};
 
@@ -245,7 +253,7 @@ mod tests {
     };
 
     #[test]
-    fn materializes_repo_env_git_mcp_and_files() {
+    fn materializes_repo_env_git_and_files() {
         let root = std::env::temp_dir().join(format!(
             "proliferate-worker-materialization-{}",
             std::process::id()
@@ -279,8 +287,7 @@ mod tests {
                 username: Some("Pablo".to_string()),
                 email: Some("pablo@example.com".to_string()),
             }),
-            mcp: Some(json!({"mcpServers": []})),
-            skills: vec![],
+            runtime_config: None,
             readiness_requirements: BTreeMap::new(),
         };
 
@@ -297,7 +304,7 @@ mod tests {
                 .contains("APP_ENV")
         );
         assert!(root.join(".proliferate/git/gitconfig").exists());
-        assert!(root.join(".proliferate/mcp/materialization.json").exists());
+        assert!(!root.join(".proliferate/mcp/materialization.json").exists());
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -309,6 +316,95 @@ mod tests {
             "unexpected": true,
         });
         assert!(parse_materialize_environment_payload(&payload).is_err());
+    }
+
+    #[test]
+    fn runtime_config_fragment_skips_legacy_mcp_and_skill_files() {
+        let root = std::env::temp_dir().join(format!(
+            "proliferate-worker-runtime-config-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let plan = TargetConfigMaterializationPlan {
+            target_config_id: "cfg_1".to_string(),
+            target_id: "target_1".to_string(),
+            config_version: 3,
+            workspace_root: root.to_string_lossy().to_string(),
+            repo: TargetConfigRepo {
+                provider: "github".to_string(),
+                owner: "proliferate-ai".to_string(),
+                name: "proliferate".to_string(),
+            },
+            env_vars: BTreeMap::new(),
+            tracked_files: vec![],
+            setup_script: "".to_string(),
+            run_command: "".to_string(),
+            git_credential: None,
+            runtime_config: Some(
+                super::runtime_config::RuntimeConfigMaterializationFragment {
+                    revision_id: "rev_1".to_string(),
+                    sandbox_profile_id: "profile_1".to_string(),
+                    target_id: Some("target_1".to_string()),
+                    sequence: 7,
+                    content_hash: "sha256:test".to_string(),
+                    manifest: serde_json::from_value::<RuntimeConfigManifest>(json!({
+                        "mcpServers": [{
+                            "id": "mcp:1",
+                            "connectionId": "conn-1",
+                            "catalogEntryId": "github",
+                            "serverName": "github",
+                            "transport": "http",
+                            "launch": {
+                                "kind": "http",
+                                "url": {"kind": "literal", "value": "https://example.test/mcp"},
+                                "headers": [],
+                                "query": []
+                            },
+                            "credentialRefs": []
+                        }],
+                        "mcpBindingSummaries": [],
+                        "skills": [{
+                            "id": "skill:1",
+                            "sourceKind": "plugin",
+                            "displayName": "Skill",
+                            "description": "Skill",
+                            "instructionArtifact": {
+                                "hash": "sha256:instructions",
+                                "contentType": "text/markdown",
+                                "byteSize": 1
+                            },
+                            "resources": [],
+                            "requiredMcpServerIds": [],
+                            "credentialRefs": []
+                        }],
+                        "artifacts": [],
+                        "warnings": []
+                    }))
+                    .expect("runtime config manifest"),
+                    artifact_refs: vec![],
+                    credential_refs: vec![],
+                },
+            ),
+            readiness_requirements: BTreeMap::new(),
+        };
+
+        let outcome = materialize_plan(Some(&root), 3, &plan).expect("materialization succeeds");
+
+        assert!(outcome.mcp_configured);
+        assert!(outcome.skills_configured);
+        assert_eq!(
+            outcome
+                .runtime_config
+                .as_ref()
+                .map(|summary| summary.sequence),
+            Some(7)
+        );
+        assert!(root
+            .join(".proliferate/runtime-config/manifest.json")
+            .exists());
+        assert!(!root.join(".proliferate/mcp/materialization.json").exists());
+        assert!(!root.join(".proliferate/skills/refs.json").exists());
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
@@ -339,8 +435,7 @@ mod tests {
             setup_script: "".to_string(),
             run_command: "".to_string(),
             git_credential: None,
-            mcp: None,
-            skills: vec![],
+            runtime_config: None,
             readiness_requirements: BTreeMap::new(),
         };
 

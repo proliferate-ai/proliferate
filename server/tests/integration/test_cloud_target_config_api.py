@@ -78,7 +78,6 @@ async def test_target_config_materialization_command_is_secret_safe(
         json={
             "gitOwner": "proliferate-ai",
             "gitRepoName": "proliferate",
-            "mcpConnectionIds": [],
         },
     )
     assert created.status_code == 200
@@ -147,7 +146,6 @@ async def test_target_config_materialization_command_is_secret_safe(
         json={
             "gitOwner": "proliferate-ai",
             "gitRepoName": "proliferate",
-            "mcpConnectionIds": [],
         },
     )
     assert refreshed.status_code == 200

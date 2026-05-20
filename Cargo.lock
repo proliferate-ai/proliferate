@@ -4221,6 +4221,7 @@ dependencies = [
 name = "proliferate-worker"
 version = "0.1.0"
 dependencies = [
+ "anyharness-contract",
  "anyhow",
  "chrono",
  "clap",

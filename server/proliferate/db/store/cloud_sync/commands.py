@@ -13,6 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
 from proliferate.db.models.cloud.agent_auth import SandboxProfile, SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
+from proliferate.db.models.cloud.runtime_config import (
+    SandboxProfileRuntimeConfigCurrent,
+    SandboxProfileRuntimeConfigRevision,
+)
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.targets import CloudTarget, CloudWorker
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
@@ -323,6 +327,17 @@ async def lease_next_command(
             row.updated_at = now
             await db.flush()
             continue
+        runtime_config_error = await _runtime_config_lease_blocker(db, row, target=target)
+        if runtime_config_error is not None:
+            status, code, message = runtime_config_error
+            row.status = status
+            row.error_code = code
+            row.error_message = message
+            if status == CloudCommandStatus.rejected.value:
+                row.rejected_at = now
+            row.updated_at = now
+            await db.flush()
+            continue
         row.status = CloudCommandStatus.leased.value
         row.lease_id = lease_id
         row.leased_by_worker_id = worker_id
@@ -337,6 +352,136 @@ async def lease_next_command(
         await db.flush()
         return _snapshot(row)
     return None
+
+
+async def _runtime_config_lease_blocker(
+    db: AsyncSession,
+    row: CloudCommand,
+    *,
+    target: CloudTarget | None,
+) -> tuple[str, str, str] | None:
+    if row.kind not in {
+        CloudCommandKind.start_session.value,
+        CloudCommandKind.send_prompt.value,
+    }:
+        return None
+    try:
+        payload = json.loads(row.payload_json or "{}")
+    except json.JSONDecodeError:
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_payload_invalid",
+            "Launch command payload is not valid JSON.",
+        )
+    if not isinstance(payload, dict):
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_payload_invalid",
+            "Launch command payload is invalid.",
+        )
+    sandbox_profile_id = payload.get("sandboxProfileId")
+    required_revision_id = payload.get("requiredRuntimeConfigRevisionId")
+    required_sequence = payload.get("requiredRuntimeConfigSequence")
+    required_content_hash = payload.get("requiredRuntimeConfigContentHash")
+    if (
+        sandbox_profile_id is None
+        and required_revision_id is None
+        and required_sequence is None
+        and required_content_hash is None
+    ):
+        return None
+    try:
+        profile_id = UUID(str(sandbox_profile_id))
+    except (TypeError, ValueError):
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_profile_invalid",
+            "Launch command runtime config profile is invalid.",
+        )
+    try:
+        revision_id = UUID(str(required_revision_id))
+    except (TypeError, ValueError):
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_revision_invalid",
+            "Launch command runtime config revision is invalid.",
+        )
+    if not isinstance(required_sequence, int) or isinstance(required_sequence, bool):
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_sequence_invalid",
+            "Launch command runtime config sequence is invalid.",
+        )
+    if not isinstance(required_content_hash, str) or not required_content_hash.strip():
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_hash_invalid",
+            "Launch command runtime config content hash is invalid.",
+        )
+    if target is None or target.sandbox_profile_id != profile_id:
+        return (
+            CloudCommandStatus.superseded.value,
+            "runtime_config_target_mismatch",
+            "Launch command runtime config target no longer matches.",
+        )
+    current = await db.get(SandboxProfileRuntimeConfigCurrent, profile_id)
+    if current is None or current.current_revision_id != revision_id:
+        return (
+            CloudCommandStatus.superseded.value,
+            "runtime_config_revision_stale",
+            "Launch command runtime config revision was superseded before dispatch.",
+        )
+    revision = await db.get(SandboxProfileRuntimeConfigRevision, revision_id)
+    if (
+        revision is None
+        or revision.sandbox_profile_id != profile_id
+        or revision.sequence != required_sequence
+        or revision.content_hash != required_content_hash
+    ):
+        return (
+            CloudCommandStatus.superseded.value,
+            "runtime_config_revision_stale",
+            "Launch command runtime config revision was superseded before dispatch.",
+        )
+    if _runtime_config_has_blocking_errors(revision.manifest_json):
+        return (
+            CloudCommandStatus.superseded.value,
+            "runtime_config_blocked",
+            "Launch command runtime config is blocked by resolver errors.",
+        )
+    state = (
+        await db.execute(
+            select(SandboxProfileTargetState).where(
+                SandboxProfileTargetState.sandbox_profile_id == profile_id,
+                SandboxProfileTargetState.target_id == row.target_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if (
+        state is None
+        or state.runtime_config_status != "applied"
+        or state.applied_runtime_config_revision_id != str(revision_id)
+        or state.applied_runtime_config_sequence < required_sequence
+    ):
+        return (
+            CloudCommandStatus.superseded.value,
+            "runtime_config_not_ready",
+            "Launch command runtime config was no longer current before dispatch.",
+        )
+    return None
+
+
+def _runtime_config_has_blocking_errors(manifest_json: str) -> bool:
+    try:
+        manifest = json.loads(manifest_json)
+    except ValueError:
+        return False
+    if not isinstance(manifest, dict):
+        return False
+    blocking_errors = manifest.get("blockingErrors")
+    return isinstance(blocking_errors, list) and any(
+        isinstance(item, dict) for item in blocking_errors
+    )
 
 
 async def _agent_auth_lease_blocker(

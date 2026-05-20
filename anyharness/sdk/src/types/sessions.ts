@@ -42,15 +42,6 @@ export type SessionMcpBindingNotAppliedReason =
   components["schemas"]["SessionMcpBindingNotAppliedReason"];
 export type SessionMcpBindingSummary =
   components["schemas"]["SessionMcpBindingSummary"];
-export type SessionPlugin = components["schemas"]["SessionPlugin"];
-export type SessionPluginBundle = components["schemas"]["SessionPluginBundle"];
-export type SessionPluginCredentialBinding =
-  components["schemas"]["SessionPluginCredentialBinding"];
-export type SessionPluginCredentialBindingStatus =
-  components["schemas"]["SessionPluginCredentialBindingStatus"];
-export type SessionPluginSkill = components["schemas"]["SessionPluginSkill"];
-export type SessionPluginSkillResource =
-  components["schemas"]["SessionPluginSkillResource"];
 export type ResumeSessionRequest = components["schemas"]["ResumeSessionRequest"];
 export type UpdateSessionTitleRequest =
   components["schemas"]["UpdateSessionTitleRequest"];
