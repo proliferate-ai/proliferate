@@ -10,7 +10,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store.cloud_sync import events as events_store
-from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.events.domain.cursors import advance_contiguous_cursor
@@ -22,6 +21,7 @@ from proliferate.server.cloud.events.domain.projection import (
     transcript_item_payload,
     transcript_item_text,
 )
+from proliferate.server.cloud.events.ingest_policy import projection_ingest_policy
 from proliferate.server.cloud.events.models import (
     CloudSessionPatchResponse,
     CloudSessionProjectionResponse,
@@ -56,21 +56,6 @@ class SessionProjectionPatch:
     ended_at: str | None = None
 
 
-@dataclass(frozen=True)
-class ProjectionIngestPolicy:
-    cloud_workspace_id: UUID | None
-    workspace_id: str | None
-    projection_level: str
-    live_fanout: bool
-    transcript_rows: bool
-
-
-@dataclass(frozen=True)
-class ProjectionIngestAdmission:
-    policy: ProjectionIngestPolicy | None
-    discard_reason: str = "inactive_projection"
-
-
 async def ingest_worker_event_batch(
     db: AsyncSession,
     *,
@@ -97,7 +82,7 @@ async def ingest_worker_event_batch(
         current_event_type = event_type(envelope)
         current_workspace_id = event.workspace_id
 
-        admission = await _projection_ingest_policy(
+        admission = await projection_ingest_policy(
             db,
             target_id=auth.target_id,
             session_id=event.session_id,
@@ -327,40 +312,6 @@ async def ingest_worker_event_batch(
         live_only_events=live_only_events,
         session_acks=session_acks,
         event_acks=event_acks,
-    )
-
-
-async def _projection_ingest_policy(
-    db: AsyncSession,
-    *,
-    target_id: UUID,
-    session_id: str,
-    workspace_id: str | None,
-) -> ProjectionIngestAdmission:
-    projection = await events_store.get_session_projection(
-        db,
-        target_id=target_id,
-        session_id=session_id,
-    )
-    if projection is None or projection.exposure_id is None:
-        return ProjectionIngestAdmission(policy=None)
-    exposure = await exposures_store.get_workspace_exposure_by_id(
-        db,
-        projection.exposure_id,
-    )
-    if exposure is None or exposure.archived_at is not None or exposure.status != "active":
-        return ProjectionIngestAdmission(policy=None)
-    expected_workspace_id = exposure.anyharness_workspace_id or projection.workspace_id
-    if expected_workspace_id and workspace_id and workspace_id != expected_workspace_id:
-        return ProjectionIngestAdmission(policy=None, discard_reason="workspace_mismatch")
-    return ProjectionIngestAdmission(
-        policy=ProjectionIngestPolicy(
-            cloud_workspace_id=projection.cloud_workspace_id or exposure.cloud_workspace_id,
-            workspace_id=expected_workspace_id or workspace_id,
-            projection_level=projection.projection_level,
-            live_fanout=projection.projection_level == "live",
-            transcript_rows=projection.projection_level in {"transcript", "live"},
-        )
     )
 
 
