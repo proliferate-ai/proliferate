@@ -16,6 +16,7 @@ from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.server.cloud.agent_auth.service import (
     AgentGatewayReconcilePassResult,
     reconcile_agent_gateway_litellm_mirror,
+    reconcile_agent_gateway_runtime_grant_freshness,
 )
 from proliferate.utils.time import duration_ms
 
@@ -66,6 +67,10 @@ async def _run_reconcile_pass(db: AsyncSession) -> AgentGatewayReconcilePassResu
         db,
         limit=settings.agent_gateway_reconciler_batch_size,
     )
+    grant_result = await reconcile_agent_gateway_runtime_grant_freshness(
+        db,
+        limit=settings.agent_gateway_reconciler_batch_size,
+    )
     logger.info(
         "agent gateway LiteLLM reconcile pass completed",
         extra={
@@ -76,6 +81,10 @@ async def _run_reconcile_pass(db: AsyncSession) -> AgentGatewayReconcilePassResu
             "policies_checked": result.policies_checked,
             "policies_reconciled": result.policies_reconciled,
             "policies_failed": result.policies_failed,
+            "runtime_grants_checked": grant_result.grants_checked,
+            "runtime_grant_targets_refreshed": grant_result.targets_refreshed,
+            "runtime_grants_skipped": grant_result.grants_skipped,
+            "runtime_grants_failed": grant_result.grants_failed,
             "elapsed_ms": duration_ms(started),
         },
     )

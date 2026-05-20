@@ -36,6 +36,9 @@ fn problem(
             detail,
             instance: None,
             code: code.map(String::from),
+            resolution_scope: None,
+            agent_kind: None,
+            selection_status: None,
         }),
     )
 }

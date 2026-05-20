@@ -24,6 +24,9 @@ from proliferate.constants.cloud import (
     AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
     AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN,
     AGENT_GATEWAY_TOKEN_HASH_KEY_ID,
+    CLAUDE_ALLOWED_AUTH_FILES,
+    CODEX_ALLOWED_AUTH_FILES,
+    GEMINI_ALLOWED_AUTH_FILES,
     CloudAgentKind,
     CloudCommandActorKind,
     CloudCommandKind,
@@ -73,6 +76,7 @@ from proliferate.server.cloud.agent_auth.models import (
     WorkerAgentAuthStatusResponse,
     WorkerAgentAuthSyncedFilesConfig,
 )
+from proliferate.server.cloud.agent_auth.protected_env import reject_unallowed_protected_env
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
@@ -83,6 +87,12 @@ from proliferate.utils.time import utcnow
 _ORG_ADMIN_ROLES = {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN}
 _GATEWAY_GRANT_TTL = timedelta(days=7)
 _MANAGED_CREDIT_AGENT_KINDS_V1: tuple[CloudAgentKind, ...] = ("claude",)
+_CLEANUP_SELECTION_ERROR_CODES = {
+    "credential_revoked",
+    "credential_share_revoked",
+    "legacy_cloud_credential_revoked",
+}
+_OPENCODE_ALLOWED_AUTH_FILES: frozenset[str] = frozenset({".config/opencode/auth.json"})
 
 
 @dataclass(frozen=True)
@@ -119,6 +129,14 @@ class AgentGatewayReconcilePassResult:
     policies_checked: int
     policies_reconciled: int
     policies_failed: int
+
+
+@dataclass(frozen=True)
+class RuntimeGrantFreshnessReconcilePassResult:
+    grants_checked: int
+    targets_refreshed: int
+    grants_skipped: int
+    grants_failed: int
 
 
 async def ensure_personal_sandbox_profile(
@@ -603,6 +621,60 @@ async def reconcile_agent_gateway_litellm_mirror(
     )
 
 
+async def reconcile_agent_gateway_runtime_grant_freshness(
+    db: AsyncSession,
+    *,
+    limit: int = 50,
+    refresh_window: timedelta = timedelta(days=2),
+) -> RuntimeGrantFreshnessReconcilePassResult:
+    if limit <= 0 or not settings.agent_gateway_enabled:
+        return RuntimeGrantFreshnessReconcilePassResult(
+            grants_checked=0,
+            targets_refreshed=0,
+            grants_skipped=0,
+            grants_failed=0,
+        )
+    now = utcnow()
+    grants = await store.list_runtime_grants_needing_rotation(
+        db,
+        now=now,
+        expires_before=now + refresh_window,
+        limit=limit,
+    )
+    refreshed_targets: set[tuple[UUID, UUID]] = set()
+    skipped = 0
+    failed = 0
+    for grant in grants:
+        key = (grant.sandbox_profile_id, grant.target_id)
+        if key in refreshed_targets:
+            skipped += 1
+            continue
+        try:
+            profile = await store.get_sandbox_profile(db, grant.sandbox_profile_id)
+            if profile is None:
+                skipped += 1
+                continue
+            if grant.issued_profile_revision != profile.agent_auth_revision:
+                skipped += 1
+                continue
+            await _mark_target_pending_and_queue_refresh(
+                db,
+                profile=profile,
+                actor_user_id=None,
+                reason="runtime_grant_expiring",
+                force_restart=False,
+            )
+            refreshed_targets.add(key)
+        except Exception:
+            failed += 1
+    return RuntimeGrantFreshnessReconcilePassResult(
+        grants_checked=len(grants),
+        targets_refreshed=len(refreshed_targets),
+        grants_skipped=skipped,
+        grants_failed=failed,
+    )
+
+
 async def share_personal_credential_with_organization(
     db: AsyncSession,
     *,
@@ -995,6 +1067,7 @@ async def worker_agent_auth_materialization_plan(
             reason="superseded",
             currentRevision=profile.agent_auth_revision,
             targetId=auth.target_id,
+            slotGeneration=auth.slot_generation,
             sandboxProfileId=profile.id,
             revision=revision,
             selections=[],
@@ -1005,7 +1078,7 @@ async def worker_agent_auth_materialization_plan(
             code="agent_auth_revision_mismatch",
             status_code=409,
         )
-    await _require_agent_auth_target_state(
+    target_state = await _require_agent_auth_target_state(
         db,
         profile=profile,
         auth=auth,
@@ -1013,6 +1086,10 @@ async def worker_agent_auth_materialization_plan(
     )
     selections = []
     for selection in await store.list_selections_for_profile(db, profile.id):
+        cleanup_plan = _worker_cleanup_selection_plan(selection)
+        if cleanup_plan is not None:
+            selections.append(cleanup_plan)
+            continue
         if selection.status != "active":
             continue
         selections.append(
@@ -1028,6 +1105,7 @@ async def worker_agent_auth_materialization_plan(
         reason=None,
         currentRevision=profile.agent_auth_revision,
         targetId=auth.target_id,
+        slotGeneration=target_state.slot_generation or auth.slot_generation,
         sandboxProfileId=profile.id,
         revision=revision,
         selections=selections,
@@ -1085,7 +1163,20 @@ async def record_worker_agent_auth_status(
         applied_revision = (
             body.applied_revision if body.applied_revision is not None else body.revision
         )
-        if applied_revision < desired_revision:
+        missing_cleanup_paths = await _missing_worker_cleanup_paths(
+            db,
+            sandbox_profile_id=profile.id,
+            applied_cleanup_paths=set(body.applied_cleanup_paths),
+        )
+        if missing_cleanup_paths:
+            status = "failed"
+            applied_revision = existing_applied
+            error_code = "agent_auth_cleanup_incomplete"
+            error_message = (
+                "Agent auth cleanup did not report all required paths: "
+                + ", ".join(missing_cleanup_paths)
+            )
+        elif applied_revision < desired_revision:
             status = "superseded"
         else:
             desired_revision = applied_revision
@@ -1143,6 +1234,18 @@ def _validate_worker_status_revisions(
 
 def _worker_status_error_message(error_code: str) -> str:
     return f"Agent auth materialization failed ({error_code})."
+
+
+async def _missing_worker_cleanup_paths(
+    db: AsyncSession,
+    *,
+    sandbox_profile_id: UUID,
+    applied_cleanup_paths: set[str],
+) -> list[str]:
+    expected: set[str] = set()
+    for selection in await store.list_selections_for_profile(db, sandbox_profile_id):
+        expected.update(_cleanup_paths_for_selection(selection))
+    return sorted(path for path in expected if path not in applied_cleanup_paths)
 
 
 async def _require_agent_auth_refresh_command(
@@ -1263,6 +1366,82 @@ async def _worker_selection_plan(
     )
 
 
+def _worker_cleanup_selection_plan(
+    selection: SandboxAgentAuthSelectionRecord,
+) -> WorkerAgentAuthSelectionPlan | None:
+    if selection.status != "invalid":
+        return None
+    if selection.materialization_mode != "synced_files":
+        return None
+    if selection.last_error_code not in _CLEANUP_SELECTION_ERROR_CODES:
+        return None
+    cleanup = [
+        {
+            "relativePath": relative_path,
+            "reason": selection.last_error_code,
+        }
+        for relative_path in _cleanup_paths_for_selection(selection)
+    ]
+    if not cleanup:
+        return None
+    return WorkerAgentAuthSelectionPlan(
+        agentKind=selection.agent_kind,
+        materializationMode=selection.materialization_mode,
+        credentialId=selection.credential_id,
+        credentialRevision=selection.selected_revision,
+        credentialShareId=selection.credential_share_id,
+        gateway=None,
+        syncedFiles=WorkerAgentAuthSyncedFilesConfig(
+            credentialShareId=selection.credential_share_id,
+            envVars={},
+            files=[],
+            cleanup=cleanup,
+        ),
+    )
+
+
+def _cleanup_paths_for_selection(selection: SandboxAgentAuthSelectionRecord) -> tuple[str, ...]:
+    if selection.status != "invalid":
+        return ()
+    if selection.materialization_mode != "synced_files":
+        return ()
+    if selection.last_error_code not in _CLEANUP_SELECTION_ERROR_CODES:
+        return ()
+    return _native_auth_file_paths(selection.agent_kind)
+
+
+def _native_auth_file_paths(agent_kind: str) -> tuple[str, ...]:
+    if agent_kind == "claude":
+        return tuple(sorted(CLAUDE_ALLOWED_AUTH_FILES))
+    if agent_kind == "codex":
+        return tuple(sorted(CODEX_ALLOWED_AUTH_FILES))
+    if agent_kind == "gemini":
+        return tuple(sorted(GEMINI_ALLOWED_AUTH_FILES))
+    if agent_kind == "opencode":
+        return tuple(sorted(_OPENCODE_ALLOWED_AUTH_FILES))
+    return ()
+
+
+def _reject_unallowed_selection_protected_env(
+    *,
+    agent_kind: str,
+    materialization_mode: str,
+    protected_env: dict[str, str],
+) -> None:
+    try:
+        reject_unallowed_protected_env(
+            agent_kind=agent_kind,
+            materialization_mode=materialization_mode,
+            keys=set(protected_env),
+        )
+    except ValueError as exc:
+        raise AgentAuthError(
+            str(exc),
+            code="agent_auth_protected_env_not_allowed",
+            status_code=409,
+        ) from exc
+
+
 async def _worker_gateway_config(
     db: AsyncSession,
     *,
@@ -1279,7 +1458,7 @@ async def _worker_gateway_config(
     base = _gateway_base_url()
     if selection.agent_kind == "claude":
         facade_base = f"{base}/anthropic"
-        return WorkerAgentAuthGatewayConfig(
+        config = WorkerAgentAuthGatewayConfig(
             protocolFacade="anthropic",
             baseUrls={"anthropic": facade_base},
             runtimeGrantToken=result.raw_token,
@@ -1294,9 +1473,15 @@ async def _worker_gateway_config(
             protectedConfig={},
             supportConfig={},
         )
+        _reject_unallowed_selection_protected_env(
+            agent_kind=selection.agent_kind,
+            materialization_mode=selection.materialization_mode,
+            protected_env=config.protected_env,
+        )
+        return config
     if selection.agent_kind == "codex":
         facade_base = f"{base}/openai/v1"
-        return WorkerAgentAuthGatewayConfig(
+        config = WorkerAgentAuthGatewayConfig(
             protocolFacade="openai",
             baseUrls={"openai": facade_base},
             runtimeGrantToken=result.raw_token,
@@ -1319,9 +1504,15 @@ async def _worker_gateway_config(
             },
             supportConfig={},
         )
+        _reject_unallowed_selection_protected_env(
+            agent_kind=selection.agent_kind,
+            materialization_mode=selection.materialization_mode,
+            protected_env=config.protected_env,
+        )
+        return config
     if selection.agent_kind == "opencode":
         facade_base = f"{base}/openai/v1"
-        return WorkerAgentAuthGatewayConfig(
+        config = WorkerAgentAuthGatewayConfig(
             protocolFacade="openai",
             baseUrls={"openai": facade_base},
             runtimeGrantToken=result.raw_token,
@@ -1334,6 +1525,12 @@ async def _worker_gateway_config(
             protectedConfig={},
             supportConfig={},
         )
+        _reject_unallowed_selection_protected_env(
+            agent_kind=selection.agent_kind,
+            materialization_mode=selection.materialization_mode,
+            protected_env=config.protected_env,
+        )
+        return config
     raise AgentAuthError(
         "Gateway auth is not supported for this agent.",
         code="gateway_not_supported_for_agent",
@@ -1384,6 +1581,11 @@ async def _worker_synced_files_config(
             code="synced_credential_payload_invalid",
             status_code=409,
         )
+    _reject_unallowed_selection_protected_env(
+        agent_kind=selection.agent_kind,
+        materialization_mode=selection.materialization_mode,
+        protected_env=env_vars,
+    )
     return WorkerAgentAuthSyncedFilesConfig(
         credentialShareId=selection.credential_share_id,
         envVars=env_vars,
@@ -2456,7 +2658,10 @@ async def _queue_agent_auth_refresh_command(
     force_restart: bool,
 ) -> commands_store.CloudCommandSnapshot:
     idempotency_scope = f"target:{target_id}:agent-auth-config:{profile.id}"
-    idempotency_key = f"agent-auth-config:{target_id}:{profile.id}:{profile.agent_auth_revision}"
+    idempotency_key = (
+        f"agent-auth-config:{target_id}:{profile.id}:{profile.agent_auth_revision}:"
+        f"{reason}:{int(force_restart)}"
+    )
     existing = await commands_store.get_command_by_idempotency(
         db,
         idempotency_scope=idempotency_scope,

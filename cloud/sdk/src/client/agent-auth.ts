@@ -5,6 +5,7 @@ import type {
   AgentAuthCredentialListOptions,
   AgentAuthCredentialShare,
   AgentAuthMutationResponse,
+  CloudCapabilities,
   CreateAnthropicApiKeyCredentialInput,
   CreateBedrockAssumeRoleCredentialInput,
   CreateGatewayCredentialRequest,
@@ -18,6 +19,15 @@ import type {
   SandboxProfile,
   SelectAgentAuthCredentialInput,
 } from "../types/index.js";
+
+export async function getCloudCapabilities(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudCapabilities> {
+  return client.requestJson<CloudCapabilities>({
+    method: "GET",
+    path: "/v1/cloud/capabilities",
+  });
+}
 
 export async function listAgentAuthCredentials(
   options: AgentAuthCredentialListOptions = {},

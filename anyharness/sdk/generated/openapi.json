@@ -5702,6 +5702,12 @@
               "type": "string"
             }
           },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "supportConfig": {
             "type": "object",
             "additionalProperties": {},
@@ -5776,6 +5782,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "supportConfigKeys": {
             "type": "array",
@@ -6233,6 +6245,12 @@
         "properties": {
           "applied": {
             "type": "boolean"
+          },
+          "noSelectionKinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "revision": {
             "type": "integer",
@@ -11165,6 +11183,12 @@
           "status"
         ],
         "properties": {
+          "agentKind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "code": {
             "type": [
               "string",
@@ -11178,6 +11202,22 @@
             ]
           },
           "instance": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolutionScope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentAuthExternalScope"
+              }
+            ]
+          },
+          "selectionStatus": {
             "type": [
               "string",
               "null"

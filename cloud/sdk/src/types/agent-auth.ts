@@ -78,3 +78,17 @@ export interface SelectAgentAuthCredentialInput {
   credentialShareId?: string | null;
   forceRestart?: boolean;
 }
+
+export interface AgentGatewayCapabilities {
+  enabled: boolean;
+  byokEnabled: boolean;
+  anthropicByokEnabled: boolean;
+  openaiByokEnabled: boolean;
+  bedrockByokEnabled: boolean;
+  openaiCompatibleByokEnabled: boolean;
+  opencodeEnabled: boolean;
+}
+
+export interface CloudCapabilities {
+  agentGateway: AgentGatewayCapabilities;
+}

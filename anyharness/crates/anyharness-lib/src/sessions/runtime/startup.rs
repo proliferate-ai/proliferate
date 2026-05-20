@@ -177,6 +177,9 @@ impl SessionRuntime {
                 StartSessionError::RestartRequired(detail) => {
                     EnsureLiveSessionError::RestartRequired(detail)
                 }
+                StartSessionError::AgentAuthSelectionRequired(required) => {
+                    EnsureLiveSessionError::AgentAuthSelectionRequired(required)
+                }
                 StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
                     EnsureLiveSessionError::Internal(error)
                 }
@@ -362,7 +365,7 @@ impl SessionRuntime {
                 record.agent_auth_scope.as_ref(),
                 record.required_agent_auth_revision,
             )
-            .map_err(StartSessionError::Internal)?;
+            .map_err(map_agent_auth_launch_error_to_start)?;
         let mut readiness_env = workspace_env.clone();
         readiness_env.extend(agent_auth_overlay.support_env.clone());
         readiness_env.extend(agent_auth_overlay.protected_env.clone());
@@ -482,6 +485,9 @@ pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> any
             anyhow::anyhow!("{}", SessionMcpBindingsError::missing_data_key_detail())
         }
         StartSessionError::RestartRequired(detail) => anyhow::anyhow!(detail),
+        StartSessionError::AgentAuthSelectionRequired(required) => {
+            anyhow::anyhow!(required.detail)
+        }
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => error,
     }
 }
@@ -531,7 +537,23 @@ fn map_start_session_error_to_create(error: StartSessionError) -> CreateAndStart
         StartSessionError::RestartRequired(detail) => {
             CreateAndStartSessionError::Internal(anyhow::anyhow!(detail))
         }
+        StartSessionError::AgentAuthSelectionRequired(required) => {
+            CreateAndStartSessionError::AgentAuthSelectionRequired(required)
+        }
         StartSessionError::Internal(error) => CreateAndStartSessionError::Internal(error),
         StartSessionError::AcpStart(error) => CreateAndStartSessionError::StartFailed(error),
+    }
+}
+
+fn map_agent_auth_launch_error_to_start(
+    error: crate::domains::agents::auth_config::AgentAuthLaunchOverlayError,
+) -> StartSessionError {
+    match error {
+        crate::domains::agents::auth_config::AgentAuthLaunchOverlayError::SelectionRequired(
+            required,
+        ) => StartSessionError::AgentAuthSelectionRequired(required),
+        crate::domains::agents::auth_config::AgentAuthLaunchOverlayError::Internal(error) => {
+            StartSessionError::Internal(error)
+        }
     }
 }

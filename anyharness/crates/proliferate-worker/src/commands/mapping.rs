@@ -134,7 +134,33 @@ fn start_session_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMa
     let mut body = object.clone();
     body.insert("workspaceId".to_string(), Value::String(workspace_id));
     body.insert("agentKind".to_string(), Value::String(agent_kind));
-    map_runtime_config_preflight(&mut body)?;
+    if !body.contains_key("agentAuthScope") {
+        if let Some(sandbox_profile_id) =
+            string_field(object, "sandboxProfileId", "sandbox_profile_id")
+        {
+            body.insert(
+                "agentAuthScope".to_string(),
+                json!({
+                    "provider": "proliferate-cloud",
+                    "id": sandbox_profile_id,
+                    "targetId": command.target_id,
+                }),
+            );
+        }
+    }
+    if !body.contains_key("requiredAgentAuthRevision") {
+        if let Some(revision) = integer_field(
+            object,
+            "requiredAgentAuthRevision",
+            "required_agent_auth_revision",
+        ) {
+            body.insert(
+                "requiredAgentAuthRevision".to_string(),
+                Value::Number(revision.into()),
+            );
+        }
+    }
+    map_runtime_config_preflight(&mut body, &command.target_id)?;
     body.entry("origin".to_string())
         .or_insert_with(|| json!({ "kind": "system", "entrypoint": "cloud" }));
     Ok(Value::Object(body))
@@ -201,7 +227,7 @@ fn prompt_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMappingEr
         ));
     };
     let mut body = object.clone();
-    strip_runtime_config_preflight(&mut body);
+    strip_preflight_fields(&mut body);
     if !body.contains_key("promptId") && !body.contains_key("prompt_id") {
         body.insert(
             "promptId".to_string(),
@@ -224,7 +250,10 @@ fn prompt_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMappingEr
     Ok(Value::Object(body))
 }
 
-fn map_runtime_config_preflight(body: &mut Map<String, Value>) -> Result<(), CommandMappingError> {
+fn map_runtime_config_preflight(
+    body: &mut Map<String, Value>,
+    target_id: &str,
+) -> Result<(), CommandMappingError> {
     let existing_expected = body.get("expectedRuntimeConfigRevision").cloned();
     let revision_id = body
         .remove("requiredRuntimeConfigRevisionId")
@@ -261,14 +290,17 @@ fn map_runtime_config_preflight(body: &mut Map<String, Value>) -> Result<(), Com
             "externalScope": sandbox_profile_id.map(|id| json!({
                 "provider": "proliferate-cloud",
                 "id": id,
+                "targetId": target_id,
             })),
         }),
     );
     Ok(())
 }
 
-fn strip_runtime_config_preflight(body: &mut Map<String, Value>) {
+fn strip_preflight_fields(body: &mut Map<String, Value>) {
+    body.remove("agentAuthScope");
     body.remove("sandboxProfileId");
+    body.remove("requiredAgentAuthRevision");
     body.remove("requiredRuntimeConfigRevisionId");
     body.remove("requiredRuntimeConfigSequence");
     body.remove("requiredRuntimeConfigContentHash");
@@ -342,6 +374,13 @@ fn string_field(object: &Map<String, Value>, primary: &str, fallback: &str) -> O
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn integer_field(object: &Map<String, Value>, primary: &str, fallback: &str) -> Option<i64> {
+    object
+        .get(primary)
+        .or_else(|| object.get(fallback))
+        .and_then(Value::as_i64)
 }
 
 fn require_non_empty(
@@ -460,24 +499,58 @@ mod tests {
                 .and_then(serde_json::Value::as_i64),
             Some(7)
         );
+        assert_eq!(
+            body.pointer("/expectedRuntimeConfigRevision/externalScope/targetId")
+                .and_then(serde_json::Value::as_str),
+            Some("target-1")
+        );
     }
 
     #[test]
-    fn strips_runtime_config_preflight_from_prompt_payload() {
+    fn maps_start_session_agent_auth_scope_from_preflight_payload() {
+        let mut command = test_command(json!({
+            "workspaceId": "workspace-1",
+            "agentKind": "claude",
+            "sandboxProfileId": "profile-1",
+            "requiredAgentAuthRevision": 9
+        }));
+        command.kind = "start_session".to_string();
+
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::StartSession { body } = mapped else {
+            panic!("expected start session");
+        };
+        assert_eq!(body["agentAuthScope"]["provider"], "proliferate-cloud");
+        assert_eq!(body["agentAuthScope"]["id"], "profile-1");
+        assert_eq!(body["agentAuthScope"]["targetId"], "target-1");
+        assert_eq!(body["requiredAgentAuthRevision"], 9);
+    }
+
+    #[test]
+    fn strips_preflight_fields_from_prompt_payload() {
         let mut command = test_command(json!({
             "text": "continue",
+            "agentAuthScope": {
+                "provider": "proliferate-cloud",
+                "id": "profile-1",
+                "targetId": "target-1"
+            },
             "sandboxProfileId": "profile-1",
+            "requiredAgentAuthRevision": 9,
             "requiredRuntimeConfigRevisionId": "rev-1",
             "requiredRuntimeConfigSequence": 7,
             "requiredRuntimeConfigContentHash": "sha256:abc"
         }));
         command.kind = "send_prompt".to_string();
         command.session_id = Some("session-1".to_string());
+
         let mapped = map_cloud_command(&command).expect("mapped");
         let AnyHarnessCommand::SendPrompt { body, .. } = mapped else {
             panic!("expected send prompt");
         };
+        assert!(body.get("agentAuthScope").is_none());
         assert!(body.get("sandboxProfileId").is_none());
+        assert!(body.get("requiredAgentAuthRevision").is_none());
         assert!(body.get("requiredRuntimeConfigRevisionId").is_none());
         assert!(body.get("blocks").is_some());
     }

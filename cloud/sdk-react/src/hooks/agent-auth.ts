@@ -7,6 +7,7 @@ import {
   ensureManagedCreditsForOrganization,
   ensureOrganizationSandboxProfile,
   ensurePersonalSandboxProfile,
+  getCloudCapabilities,
   getSandboxAgentAuthSelections,
   getSandboxAgentAuthTargetStates,
   listAgentAuthCredentials,
@@ -14,6 +15,7 @@ import {
   type AgentAuthAgentKind,
   type AgentAuthCredential,
   type AgentAuthCredentialListOptions,
+  type CloudCapabilities,
   type CreateGatewayCredentialRequest,
   type EnsureManagedCreditsRequest,
   type SandboxAgentAuthSelection,
@@ -25,6 +27,7 @@ import { useCloudClient } from "../context/CloudClientProvider.js";
 import {
   agentAuthCredentialsKey,
   agentAuthRootKey,
+  cloudCapabilitiesKey,
   sandboxAgentAuthSelectionsKey,
   sandboxAgentAuthTargetStatesKey,
 } from "../lib/query-keys.js";
@@ -32,6 +35,15 @@ import {
 const EMPTY_CREDENTIALS: AgentAuthCredential[] = [];
 const EMPTY_SELECTIONS: SandboxAgentAuthSelection[] = [];
 const EMPTY_TARGET_STATES: SandboxAgentAuthTargetState[] = [];
+
+export function useCloudCapabilities(enabled = true) {
+  const client = useCloudClient();
+  return useQuery<CloudCapabilities>({
+    queryKey: cloudCapabilitiesKey(),
+    queryFn: () => getCloudCapabilities(client),
+    enabled,
+  });
+}
 
 export function useAgentAuthCredentials(
   options: AgentAuthCredentialListOptions & { enabled?: boolean } = {},
