@@ -20,6 +20,7 @@ export interface SubagentMcpReceiptPresentation {
   childSessionId: string | null;
   statusLabel: string | null;
   detailLabel: string | null;
+  wakeScheduled: boolean;
   openSessionAllowed: boolean;
 }
 
@@ -117,7 +118,6 @@ export function deriveSubagentMcpReceiptPresentation(
   const title =
     readStringField(rawOutput, "label")
     ?? readStringField(rawInput, "label")
-    ?? subagentId
     ?? "Subagent";
   const rawStatus =
     readStringField(rawOutput, "status")
@@ -129,13 +129,14 @@ export function deriveSubagentMcpReceiptPresentation(
 
   return {
     action,
-    actionLabel: actionLabel(action, item.status === "in_progress"),
+    actionLabel: actionLabel(action, item.status === "in_progress", item.nativeToolName),
     title,
     subagentId,
     sessionLinkId,
     childSessionId,
     statusLabel,
     detailLabel,
+    wakeScheduled: action === "wake",
     openSessionAllowed: action !== "close" && normalizeStatus(rawStatus) !== "closed",
   };
 }
@@ -152,6 +153,8 @@ function receiptActionFromToolName(toolName: string | null | undefined): Subagen
       return "wake";
     case "mcp__subagents__get_subagent_status":
       return "status";
+    case "mcp__subagents__read_subagent_events":
+      return "read";
     case "mcp__subagents__read_subagent_latest_turns":
       return "read";
     case "mcp__subagents__search_subagent_transcript":
@@ -163,7 +166,11 @@ function receiptActionFromToolName(toolName: string | null | undefined): Subagen
   }
 }
 
-function actionLabel(action: SubagentMcpReceiptAction, running: boolean): string {
+function actionLabel(
+  action: SubagentMcpReceiptAction,
+  running: boolean,
+  toolName: string | null | undefined,
+): string {
   switch (action) {
     case "send":
       return running ? "Sending message to subagent" : "Sent message to subagent";
@@ -172,6 +179,9 @@ function actionLabel(action: SubagentMcpReceiptAction, running: boolean): string
     case "status":
       return running ? "Checking subagent" : "Checked subagent";
     case "read":
+      if (normalizeToolName(toolName) === "mcp__subagents__read_subagent_events") {
+        return running ? "Reading subagent events" : "Read subagent events";
+      }
       return running ? "Reading subagent turns" : "Read subagent turns";
     case "search":
       return running ? "Searching subagent" : "Searched subagent";
@@ -193,10 +203,8 @@ function detailLabelForAction(
     case "status":
       return statusLabel;
     case "read": {
-      const turns = output.turns;
-      return Array.isArray(turns)
-        ? `${turns.length} ${turns.length === 1 ? "turn" : "turns"}`
-        : null;
+      return readArrayCountLabel(output, "turns", "turn")
+        ?? readArrayCountLabel(output, "events", "event");
     }
     case "search": {
       const matches = output.matches;
@@ -207,6 +215,18 @@ function detailLabelForAction(
     case "close":
       return readBooleanField(output, "alreadyClosed") ? "Already closed" : null;
   }
+}
+
+function readArrayCountLabel(
+  output: Record<string, unknown>,
+  key: string,
+  singular: string,
+): string | null {
+  const value = output[key];
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  return `${value.length} ${value.length === 1 ? singular : `${singular}s`}`;
 }
 
 function formatStatusLabel(status: string | null): string | null {

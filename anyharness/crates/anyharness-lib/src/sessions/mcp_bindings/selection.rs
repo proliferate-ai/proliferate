@@ -81,9 +81,6 @@ pub fn product_mcp_prompt_extras(selected: &[SelectedProductMcp]) -> SessionLaun
             }
             SelectedProductMcp::Subagents => {
                 extras
-                    .system_prompt_append
-                    .extend(crate::sessions::subagents::mcp::definition::system_prompt_append());
-                extras
                     .mcp_binding_summaries
                     .push(crate::sessions::subagents::mcp::definition::binding_summary());
             }
@@ -171,12 +168,10 @@ mod tests {
     }
 
     #[test]
-    fn subagents_selection_prioritizes_product_mcp_in_prompt_text() {
+    fn subagents_selection_adds_binding_summary_without_prompt_text() {
         let extras = product_mcp_prompt_extras(&[SelectedProductMcp::Subagents]);
 
-        assert_eq!(extras.system_prompt_append.len(), 1);
-        assert!(extras.system_prompt_append[0].contains("Proliferate `subagents` MCP"));
-        assert!(extras.system_prompt_append[0].contains("proliferate.subagents.workflow"));
+        assert!(extras.system_prompt_append.is_empty());
         assert_eq!(extras.mcp_binding_summaries.len(), 1);
     }
 

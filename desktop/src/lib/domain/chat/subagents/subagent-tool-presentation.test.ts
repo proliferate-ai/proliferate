@@ -43,6 +43,9 @@ describe("subagent tool presentation", () => {
     expect(isSubagentProvisioningAction({
       nativeToolName: "mcp__subagents__read_subagent_latest_turns",
     })).toBe(false);
+    expect(isSubagentProvisioningAction({
+      nativeToolName: "mcp__subagents__read_subagent_events",
+    })).toBe(false);
   });
 
   it("derives concise status receipt presentation with the child target", () => {
@@ -66,7 +69,60 @@ describe("subagent tool presentation", () => {
       sessionLinkId: "link-123",
       childSessionId: "child-123",
       detailLabel: "Working",
+      wakeScheduled: false,
       openSessionAllowed: true,
+    });
+  });
+
+  it("uses a generic title when a receipt only has a raw subagent id", () => {
+    const presentation = deriveSubagentMcpReceiptPresentation(toolCallItem({
+      nativeToolName: "mcp__subagents__get_subagent_status",
+      rawOutput: {
+        subagentId: "subagent_abc123",
+        status: "idle",
+      },
+    }));
+
+    expect(presentation).toMatchObject({
+      title: "Subagent",
+      subagentId: "subagent_abc123",
+      detailLabel: "Idle",
+    });
+  });
+
+  it("derives read-event receipts with event counts", () => {
+    const presentation = deriveSubagentMcpReceiptPresentation(toolCallItem({
+      nativeToolName: "mcp__subagents__read_subagent_events",
+      rawOutput: {
+        label: "Runtime Server Survey",
+        events: [{ id: "event-1" }, { id: "event-2" }],
+      },
+    }));
+
+    expect(presentation).toMatchObject({
+      action: "read",
+      actionLabel: "Read subagent events",
+      title: "Runtime Server Survey",
+      detailLabel: "2 events",
+    });
+  });
+
+  it("derives receipt output from JSON result text when raw output is absent", () => {
+    const presentation = deriveSubagentMcpReceiptPresentation(toolCallItem({
+      nativeToolName: "mcp__subagents__search_subagent_transcript",
+      contentParts: [{
+        type: "tool_result_text",
+        text: JSON.stringify({
+          label: "Runtime Server Survey",
+          matches: [{ line: "first" }],
+        }, null, 2),
+      }],
+    }));
+
+    expect(presentation).toMatchObject({
+      action: "search",
+      title: "Runtime Server Survey",
+      detailLabel: "1 match",
     });
   });
 

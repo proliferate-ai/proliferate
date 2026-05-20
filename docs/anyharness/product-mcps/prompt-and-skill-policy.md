@@ -173,8 +173,9 @@ Use list_available_skills to inspect them and activate_skill before relying on
 a skill's full instructions.
 
 Available skills:
-- proliferate.subagents.workflow (Subagent workflow) - Use subagents for bounded
-  parallel work, result reads, wake scheduling, and cleanup.
+- proliferate.subagents.workflow (Subagent workflow) - Use Proliferate
+  subagent MCP tools for bounded parallel work, result reads, wake scheduling,
+  and cleanup.
 ```
 
 The skill body should be concise and operational. It should name exact tools,

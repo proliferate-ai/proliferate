@@ -48,6 +48,7 @@ export function SubagentToolActionRow({
     originLabel: "Subagent",
     statusCategory: delegatedWorkStatusCategoryFromLabel({
       statusLabel: presentation.detailLabel ?? presentation.statusLabel,
+      wakeScheduled: presentation.wakeScheduled,
     }),
     statusLabel: presentation.detailLabel ?? presentation.statusLabel ?? "Updated",
     parentTitle: null,
