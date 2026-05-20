@@ -65,8 +65,8 @@ describe("ProductSidebar", () => {
       />,
     );
 
-    expect(container.innerHTML).toContain("bg-sidebar-background");
-    expect(container.innerHTML).not.toContain("bg-sidebar pb-2");
+    expect(container.innerHTML).toContain("bg-sidebar");
+    expect(container.innerHTML).not.toContain("bg-sidebar-background");
     expect(screen.getByText("Proliferate")).toBeTruthy();
     expect(screen.getByText("Home")).toBeTruthy();
     expect(screen.getAllByText("Shared cloud").length).toBeGreaterThan(0);
