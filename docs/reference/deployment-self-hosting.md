@@ -385,6 +385,9 @@ All vars from [env-secrets-matrix.md](env-secrets-matrix.md) apply, plus:
 - Anonymous telemetry vars (`PROLIFERATE_ANONYMOUS_TELEMETRY_*`)
 - Observability vars (`SENTRY_*`, `CUSTOMERIO_*`)
 - `SUPPORT_SLACK_WEBHOOK_URL` — routes support messages to Proliferate's Slack
+- `SIGNUPS_SLACK_WEBHOOK_URL` — routes internal desktop GitHub hosted-user signup notifications; messages include user email, GitHub handle/id, name, and creation date
+- `BILLING_POSITIVE_SLACK_WEBHOOK_URL` — routes internal subscription-start notifications with billing-owner PII and usage counts
+- `BILLING_NEGATIVE_SLACK_WEBHOOK_URL` — routes internal cancellation notifications with billing-owner PII and usage counts
 - `CLOUD_BILLING_MODE=enforce` for usage-based billing
 - `E2B_WEBHOOK_SIGNATURE_SECRET` — E2B webhook verification (when using E2B)
 

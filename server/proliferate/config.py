@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     cloud_billing_mode: str = "off"
     pro_billing_enabled: bool = False
     support_slack_webhook_url: str = ""
+    signups_slack_webhook_url: str = ""
+    billing_positive_slack_webhook_url: str = ""
+    billing_negative_slack_webhook_url: str = ""
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_cloud_monthly_price_id: str = ""

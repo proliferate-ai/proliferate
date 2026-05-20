@@ -5,7 +5,7 @@ import hmac
 import json
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -34,6 +34,8 @@ from proliferate.db.store.billing import (
     ensure_personal_billing_subject,
 )
 from proliferate.server.billing import stripe_webhooks
+from proliferate.server import notifications as slack_notifications
+from proliferate.server.billing.models import BillingServiceError
 
 
 def _stripe_signature(payload: bytes, *, secret: str, timestamp: int | None = None) -> str:
@@ -41,6 +43,75 @@ def _stripe_signature(payload: bytes, *, secret: str, timestamp: int | None = No
     signed_payload = str(timestamp).encode("ascii") + b"." + payload
     digest = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
     return f"t={timestamp},v1={digest}"
+
+
+def _subscription_payload(
+    *,
+    subject_id: str,
+    customer_id: str,
+    subscription_id: str,
+    status: str,
+    cancel_at_period_end: bool = False,
+    canceled_at: int | None = None,
+) -> dict[str, object]:
+    return {
+        "id": subscription_id,
+        "customer": customer_id,
+        "status": status,
+        "cancel_at_period_end": cancel_at_period_end,
+        "canceled_at": canceled_at,
+        "latest_invoice": f"in_{subscription_id}",
+        "metadata": {
+            "billing_subject_id": subject_id,
+            "purpose": "cloud_subscription",
+        },
+        "items": {
+            "data": [
+                {
+                    "id": f"si_{subscription_id}",
+                    "price": {"id": "price_cloud"},
+                    "current_period_start": 1_776_586_422,
+                    "current_period_end": 1_779_178_422,
+                }
+            ]
+        },
+    }
+
+
+async def _handle_subscription_event(
+    *,
+    secret: str,
+    event_id: str,
+    event_type: str,
+    subscription: dict[str, object],
+) -> None:
+    payload = json.dumps(
+        {
+            "id": event_id,
+            "type": event_type,
+            "data": {"object": subscription},
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    await stripe_webhooks.handle_stripe_webhook(
+        payload=payload,
+        signature_header=_stripe_signature(payload, secret=secret),
+    )
+
+
+def _capture_billing_notifications(monkeypatch: pytest.MonkeyPatch) -> list[object]:
+    notifications: list[object] = []
+
+    async def fake_send_billing_slack_notification(notification: object) -> bool:
+        notifications.append(notification)
+        return True
+
+    monkeypatch.setattr(
+        slack_notifications,
+        "send_billing_slack_notification",
+        fake_send_billing_slack_notification,
+    )
+    return notifications
 
 
 @pytest.mark.asyncio
@@ -110,14 +181,6 @@ async def test_stripe_webhook_requires_configuration(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason=(
-        "Current receipt claim logic reclaims processed events because processed "
-        "receipts have no active lease; Phase 8 webhook idempotency cleanup "
-        "should make this return an ack without dispatch."
-    ),
-    strict=True,
-)
 async def test_stripe_webhook_duplicate_processed_event_does_not_dispatch_again(
     db_session: AsyncSession,
     test_engine,  # type: ignore[no-untyped-def]
@@ -166,6 +229,51 @@ async def test_stripe_webhook_duplicate_processed_event_does_not_dispatch_again(
     assert receipt.provider == "stripe"
     assert receipt.status == "processed"
     assert receipt.attempt_count == 1
+
+
+@pytest.mark.asyncio
+async def test_stripe_webhook_in_progress_duplicate_is_retryable(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    secret = "whsec_test_secret"
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    db_session.add(
+        WebhookEventReceipt(
+            provider="stripe",
+            event_id="evt_in_progress",
+            event_type="invoice.paid",
+            status="processing",
+            attempt_count=1,
+            processing_lease_expires_at=datetime.now(UTC) + timedelta(minutes=5),
+            received_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+    )
+    await db_session.commit()
+    payload = json.dumps(
+        {
+            "id": "evt_in_progress",
+            "type": "invoice.paid",
+            "data": {"object": {"id": "in_progress"}},
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+    with pytest.raises(BillingServiceError) as exc_info:
+        await stripe_webhooks.handle_stripe_webhook(
+            payload=payload,
+            signature_header=_stripe_signature(payload, secret=secret),
+        )
+
+    assert exc_info.value.code == "stripe_webhook_in_progress"
+    assert exc_info.value.status_code == 409
 
 
 @pytest.mark.asyncio
@@ -233,6 +341,429 @@ async def test_stripe_webhook_failed_event_can_be_reclaimed_and_processed(
     assert processed.status == "processed"
     assert processed.attempt_count == 2
     assert processed.last_error is None
+
+
+@pytest.mark.asyncio
+async def test_subscription_created_schedules_positive_billing_notification_once(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    secret = "whsec_test_secret"
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
+    notifications = _capture_billing_notifications(monkeypatch)
+
+    user_id = uuid.uuid4()
+    db_session.add(
+        User(
+            id=user_id,
+            email="billing-positive@example.com",
+            hashed_password="unused",
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+            display_name="Billing Positive",
+            github_login="billing-positive",
+            created_at=datetime(2026, 5, 1, tzinfo=UTC),
+        )
+    )
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject.stripe_customer_id = "cus_billing_positive"
+    await db_session.commit()
+
+    payload = json.dumps(
+        {
+            "id": "evt_subscription_created_notify",
+            "type": "customer.subscription.created",
+            "data": {
+                "object": _subscription_payload(
+                    subject_id=str(subject.id),
+                    customer_id="cus_billing_positive",
+                    subscription_id="sub_billing_positive",
+                    status="active",
+                )
+            },
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    signature = _stripe_signature(payload, secret=secret)
+
+    await stripe_webhooks.handle_stripe_webhook(
+        payload=payload,
+        signature_header=signature,
+    )
+    await stripe_webhooks.handle_stripe_webhook(
+        payload=payload,
+        signature_header=signature,
+    )
+
+    assert len(notifications) == 1
+    notification = notifications[0]
+    assert notification.event == "subscribed"
+    assert notification.name == "Billing Positive"
+    assert notification.email == "billing-positive@example.com"
+    assert notification.github == "billing-positive"
+    assert notification.workspace_count == 0
+    assert notification.organization_user_count == 1
+
+
+@pytest.mark.asyncio
+async def test_invoice_paid_before_subscription_created_still_schedules_positive_once(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    secret = "whsec_test_secret"
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
+    notifications = _capture_billing_notifications(monkeypatch)
+
+    user_id = uuid.uuid4()
+    db_session.add(
+        User(
+            id=user_id,
+            email="invoice-first@example.com",
+            hashed_password="unused",
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+            display_name="Invoice First",
+            github_login="invoice-first",
+            created_at=datetime(2026, 5, 1, tzinfo=UTC),
+        )
+    )
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject.stripe_customer_id = "cus_invoice_first"
+    await db_session.commit()
+
+    subscription = _subscription_payload(
+        subject_id=str(subject.id),
+        customer_id="cus_invoice_first",
+        subscription_id="sub_invoice_first",
+        status="active",
+    )
+
+    async def fake_retrieve_subscription(subscription_id: str) -> dict[str, object]:
+        assert subscription_id == "sub_invoice_first"
+        return subscription
+
+    monkeypatch.setattr(
+        stripe_webhooks.stripe_billing,
+        "retrieve_subscription",
+        fake_retrieve_subscription,
+    )
+
+    invoice_payload = json.dumps(
+        {
+            "id": "evt_invoice_first",
+            "type": "invoice.paid",
+            "data": {
+                "object": {
+                    "id": "in_invoice_first",
+                    "customer": "cus_invoice_first",
+                    "subscription": "sub_invoice_first",
+                    "lines": {
+                        "data": [
+                            {
+                                "id": "il_invoice_first",
+                                "price": {"id": "price_cloud"},
+                                "parent": {
+                                    "subscription_item_details": {
+                                        "subscription": "sub_invoice_first",
+                                        "subscription_item": "si_sub_invoice_first",
+                                    },
+                                    "type": "subscription_item_details",
+                                },
+                            }
+                        ]
+                    },
+                }
+            },
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    await stripe_webhooks.handle_stripe_webhook(
+        payload=invoice_payload,
+        signature_header=_stripe_signature(invoice_payload, secret=secret),
+    )
+    await _handle_subscription_event(
+        secret=secret,
+        event_id="evt_subscription_created_after_invoice",
+        event_type="customer.subscription.created",
+        subscription=subscription,
+    )
+
+    assert len(notifications) == 1
+    assert notifications[0].event == "subscribed"
+    assert notifications[0].email == "invoice-first@example.com"
+
+
+@pytest.mark.asyncio
+async def test_distinct_subscription_events_share_billing_notification_claim(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    secret = "whsec_test_secret"
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
+    notifications = _capture_billing_notifications(monkeypatch)
+
+    user_id = uuid.uuid4()
+    db_session.add(
+        User(
+            id=user_id,
+            email="billing-distinct-events@example.com",
+            hashed_password="unused",
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+            display_name="Distinct Events",
+            github_login="distinct-events",
+        )
+    )
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject.stripe_customer_id = "cus_billing_distinct_events"
+    await db_session.commit()
+    subscription = _subscription_payload(
+        subject_id=str(subject.id),
+        customer_id="cus_billing_distinct_events",
+        subscription_id="sub_billing_distinct_events",
+        status="active",
+    )
+
+    await _handle_subscription_event(
+        secret=secret,
+        event_id="evt_distinct_created",
+        event_type="customer.subscription.created",
+        subscription=subscription,
+    )
+    await _handle_subscription_event(
+        secret=secret,
+        event_id="evt_distinct_updated",
+        event_type="customer.subscription.updated",
+        subscription=subscription,
+    )
+
+    assert [notification.event for notification in notifications] == ["subscribed"]
+
+
+@pytest.mark.asyncio
+async def test_payment_recovery_does_not_send_subscription_started_notification(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    secret = "whsec_test_secret"
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
+    notifications = _capture_billing_notifications(monkeypatch)
+
+    user_id = uuid.uuid4()
+    db_session.add(
+        User(
+            id=user_id,
+            email="billing-recovery@example.com",
+            hashed_password="unused",
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+            display_name="Billing Recovery",
+            github_login="billing-recovery",
+        )
+    )
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject.stripe_customer_id = "cus_billing_recovery"
+    await db_session.commit()
+    subscription = _subscription_payload(
+        subject_id=str(subject.id),
+        customer_id="cus_billing_recovery",
+        subscription_id="sub_billing_recovery",
+        status="past_due",
+    )
+    await stripe_webhooks._sync_subscription(subscription)
+
+    await _handle_subscription_event(
+        secret=secret,
+        event_id="evt_recovery_updated",
+        event_type="customer.subscription.updated",
+        subscription=subscription | {"status": "active"},
+    )
+
+    assert notifications == []
+
+
+@pytest.mark.asyncio
+async def test_subscription_cancellation_schedules_negative_notification_once(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    secret = "whsec_test_secret"
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
+    notifications = _capture_billing_notifications(monkeypatch)
+
+    user_id = uuid.uuid4()
+    db_session.add(
+        User(
+            id=user_id,
+            email="billing-negative@example.com",
+            hashed_password="unused",
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+            display_name="Billing Negative",
+            github_login="billing-negative",
+            created_at=datetime(2026, 5, 1, tzinfo=UTC),
+        )
+    )
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject.stripe_customer_id = "cus_billing_negative"
+    await db_session.commit()
+
+    await _handle_subscription_event(
+        secret=secret,
+        event_id="evt_subscription_created_before_cancel",
+        event_type="customer.subscription.created",
+        subscription=_subscription_payload(
+            subject_id=str(subject.id),
+            customer_id="cus_billing_negative",
+            subscription_id="sub_billing_negative",
+            status="active",
+        ),
+    )
+    notifications.clear()
+
+    await _handle_subscription_event(
+        secret=secret,
+        event_id="evt_subscription_cancel_scheduled",
+        event_type="customer.subscription.updated",
+        subscription=_subscription_payload(
+            subject_id=str(subject.id),
+            customer_id="cus_billing_negative",
+            subscription_id="sub_billing_negative",
+            status="active",
+            cancel_at_period_end=True,
+        ),
+    )
+    await _handle_subscription_event(
+        secret=secret,
+        event_id="evt_subscription_deleted_after_cancel",
+        event_type="customer.subscription.deleted",
+        subscription=_subscription_payload(
+            subject_id=str(subject.id),
+            customer_id="cus_billing_negative",
+            subscription_id="sub_billing_negative",
+            status="canceled",
+            cancel_at_period_end=True,
+            canceled_at=1_777_000_000,
+        ),
+    )
+
+    assert len(notifications) == 1
+    notification = notifications[0]
+    assert notification.event == "cancelled"
+    assert notification.email == "billing-negative@example.com"
+
+
+@pytest.mark.asyncio
+async def test_billing_notification_delivery_failure_keeps_webhook_processed(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    secret = "whsec_test_secret"
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
+    monkeypatch.setattr(settings, "billing_positive_slack_webhook_url", "https://positive")
+
+    async def failed_send(_notification: object) -> bool:
+        return False
+
+    monkeypatch.setattr(
+        slack_notifications,
+        "send_billing_slack_notification",
+        failed_send,
+    )
+
+    user_id = uuid.uuid4()
+    db_session.add(
+        User(
+            id=user_id,
+            email="billing-slack-failure@example.com",
+            hashed_password="unused",
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+            display_name="Slack Failure",
+            github_login="slack-failure",
+        )
+    )
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject.stripe_customer_id = "cus_billing_slack_failure"
+    await db_session.commit()
+
+    await _handle_subscription_event(
+        secret=secret,
+        event_id="evt_subscription_schedule_failure",
+        event_type="customer.subscription.created",
+        subscription=_subscription_payload(
+            subject_id=str(subject.id),
+            customer_id="cus_billing_slack_failure",
+            subscription_id="sub_billing_slack_failure",
+            status="active",
+        ),
+    )
+
+    receipt = (
+        await db_session.execute(
+            select(WebhookEventReceipt).where(
+                WebhookEventReceipt.event_id == "evt_subscription_schedule_failure"
+            )
+        )
+    ).scalar_one()
+    assert receipt.status == "processed"
+    notification_receipt = (
+        await db_session.execute(
+            select(WebhookEventReceipt).where(
+                WebhookEventReceipt.provider == "billing_slack",
+                WebhookEventReceipt.event_id == "sub_billing_slack_failure:subscribed",
+            )
+        )
+    ).scalar_one()
+    assert notification_receipt.status == "failed"
 
 
 @pytest.mark.asyncio

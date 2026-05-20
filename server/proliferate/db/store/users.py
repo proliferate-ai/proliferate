@@ -2,12 +2,12 @@
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from proliferate.db import engine as db_engine
-from proliferate.db.models.auth import User
+from proliferate.db.models.auth import OAuthAccount, User
 
 
 async def get_user_by_id(
@@ -36,6 +36,33 @@ async def get_user_with_oauth_accounts_by_id(
             select(User).options(selectinload(User.oauth_accounts)).filter_by(id=user_id)
         )
     ).scalar_one_or_none()
+
+
+async def github_oauth_account_or_email_exists(
+    db: AsyncSession,
+    *,
+    account_id: str,
+    account_email: str,
+) -> bool:
+    account = (
+        await db.execute(
+            select(OAuthAccount.id)
+            .where(
+                OAuthAccount.oauth_name == "github",
+                OAuthAccount.account_id == account_id,
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if account is not None:
+        return True
+    normalized_email = account_email.strip().lower()
+    user = (
+        await db.execute(
+            select(User.id).where(func.lower(User.email) == normalized_email).limit(1)
+        )
+    ).scalar_one_or_none()
+    return user is not None
 
 
 async def update_user_github_profile(

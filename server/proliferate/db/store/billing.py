@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TypeVar
+from typing import Literal, TypeVar
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -145,6 +145,15 @@ class InitialSeatReconcileAdjustment:
     id: UUID
     monthly_subscription_item_id: str
     target_quantity: int
+
+
+WebhookEventClaimStatus = Literal["claimed", "already_processed", "in_progress"]
+
+
+@dataclass(frozen=True)
+class WebhookEventClaim:
+    status: WebhookEventClaimStatus
+    receipt: WebhookEventReceipt | None
 
 
 async def ensure_personal_billing_subject(db: AsyncSession, user_id: UUID) -> BillingSubject:
@@ -1466,6 +1475,19 @@ async def load_billing_subscription_by_id(
         return await db.get(BillingSubscription, billing_subscription_id)
 
 
+async def get_billing_subscription_by_stripe_subscription_id(
+    db: AsyncSession,
+    stripe_subscription_id: str,
+) -> BillingSubscription | None:
+    return (
+        await db.execute(
+            select(BillingSubscription).where(
+                BillingSubscription.stripe_subscription_id == stripe_subscription_id
+            )
+        )
+    ).scalar_one_or_none()
+
+
 async def _has_current_period_seat_decrease_for_membership(
     db: AsyncSession,
     *,
@@ -1699,7 +1721,7 @@ async def record_sandbox_event_receipt(
     return (result.rowcount or 0) > 0
 
 
-async def claim_webhook_event_receipt(
+async def claim_webhook_event_receipt_claim(
     db: AsyncSession,
     *,
     provider: str,
@@ -1707,7 +1729,7 @@ async def claim_webhook_event_receipt(
     event_type: str,
     external_sandbox_id: str | None = None,
     lease_seconds: int = 300,
-) -> WebhookEventReceipt | None:
+) -> WebhookEventClaim:
     now = utcnow()
     lease_expires_at = now + timedelta(seconds=lease_seconds)
     result = await db.execute(
@@ -1736,21 +1758,53 @@ async def claim_webhook_event_receipt(
                 "last_error": None,
                 "updated_at": now,
             },
-            where=or_(
+            where=and_(
                 WebhookEventReceipt.status != "processed",
-                WebhookEventReceipt.processing_lease_expires_at.is_(None),
-                WebhookEventReceipt.processing_lease_expires_at < now,
+                or_(
+                    WebhookEventReceipt.processing_lease_expires_at.is_(None),
+                    WebhookEventReceipt.processing_lease_expires_at < now,
+                ),
             ),
         )
         .returning(WebhookEventReceipt.id)
     )
     receipt_id = result.scalar_one_or_none()
     if receipt_id is None:
-        return None
+        existing = (
+            await db.execute(
+                select(WebhookEventReceipt).where(
+                    WebhookEventReceipt.provider == provider,
+                    WebhookEventReceipt.event_id == event_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is not None and existing.status == "processed":
+            return WebhookEventClaim(status="already_processed", receipt=existing)
+        return WebhookEventClaim(status="in_progress", receipt=existing)
     receipt = await db.get(WebhookEventReceipt, receipt_id)
     if receipt is None:
         raise RuntimeError("Webhook receipt disappeared after claim.")
-    return receipt
+    return WebhookEventClaim(status="claimed", receipt=receipt)
+
+
+async def claim_webhook_event_receipt(
+    db: AsyncSession,
+    *,
+    provider: str,
+    event_id: str,
+    event_type: str,
+    external_sandbox_id: str | None = None,
+    lease_seconds: int = 300,
+) -> WebhookEventReceipt | None:
+    claim = await claim_webhook_event_receipt_claim(
+        db,
+        provider=provider,
+        event_id=event_id,
+        event_type=event_type,
+        external_sandbox_id=external_sandbox_id,
+        lease_seconds=lease_seconds,
+    )
+    return claim.receipt if claim.status == "claimed" else None
 
 
 async def mark_webhook_event_processed(
@@ -1793,9 +1847,9 @@ async def claim_webhook_event(
     event_id: str,
     event_type: str,
     external_sandbox_id: str | None = None,
-) -> WebhookEventReceipt | None:
+) -> WebhookEventClaim:
     async with db_engine.async_session_factory() as db:
-        receipt = await claim_webhook_event_receipt(
+        claim = await claim_webhook_event_receipt_claim(
             db,
             provider=provider,
             event_id=event_id,
@@ -1803,7 +1857,7 @@ async def claim_webhook_event(
             external_sandbox_id=external_sandbox_id,
         )
         await db.commit()
-        return receipt
+        return claim
 
 
 async def mark_webhook_event_processed_by_id(*, receipt_id: UUID) -> WebhookEventReceipt:

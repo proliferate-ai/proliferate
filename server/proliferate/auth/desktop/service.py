@@ -62,7 +62,11 @@ from proliferate.db.store.auth import (
     consume_auth_code_for_state,
     create_auth_code,
 )
-from proliferate.db.store.users import get_active_user_by_id, update_user_github_profile
+from proliferate.db.store.users import (
+    get_active_user_by_id,
+    github_oauth_account_or_email_exists,
+    update_user_github_profile,
+)
 from proliferate.integrations.customerio import (
     identify_customerio_user,
     track_customerio_desktop_authenticated,
@@ -70,6 +74,10 @@ from proliferate.integrations.customerio import (
 from proliferate.integrations.github import (
     GitHubIntegrationError,
     get_github_user_profile,
+)
+from proliferate.server.notifications import (
+    SignupSlackNotification,
+    schedule_signup_slack_notification,
 )
 
 if TYPE_CHECKING:
@@ -331,6 +339,12 @@ async def finish_github_desktop_callback(
             message="GitHub did not return an email address for this account.",
         )
 
+    github_account_or_email_exists = await github_oauth_account_or_email_exists(
+        db,
+        account_id=account_id,
+        account_email=account_email,
+    )
+
     try:
         user = await user_manager.oauth_callback(
             github_oauth_client.name,
@@ -407,6 +421,16 @@ async def finish_github_desktop_callback(
         redirect_uri=state_data["redirect_uri"],
     )
     schedule_customerio_desktop_authenticated_user_sync(user)
+    if not github_account_or_email_exists:
+        schedule_signup_slack_notification(
+            SignupSlackNotification(
+                name=user.display_name or github_display_name or user.email,
+                email=user.email,
+                github=user.github_login or github_login or account_id,
+                user_created_at=user.created_at,
+            ),
+            dedupe_key=f"github:{account_id}",
+        )
     deep_link_url = build_redirect_url(
         state_data["redirect_uri"],
         code=auth_code.code,

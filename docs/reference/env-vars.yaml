@@ -663,6 +663,24 @@
   description: Slack incoming webhook for support messages (Proliferate Cloud only)
   tags: [production]
 
+- name: SIGNUPS_SLACK_WEBHOOK_URL
+  secret: true
+  default: ""
+  description: Slack incoming webhook for internal desktop GitHub hosted-user signup notifications; messages include user email, GitHub handle/id, name, and creation date
+  tags: [production]
+
+- name: BILLING_POSITIVE_SLACK_WEBHOOK_URL
+  secret: true
+  default: ""
+  description: Slack incoming webhook for internal positive billing notifications; messages include billing owner email, GitHub handle/id, name, creation date, workspace count, and org user count
+  tags: [production]
+
+- name: BILLING_NEGATIVE_SLACK_WEBHOOK_URL
+  secret: true
+  default: ""
+  description: Slack incoming webhook for internal negative billing notifications; messages include billing owner email, GitHub handle/id, name, creation date, workspace count, and org user count
+  tags: [production]
+
 # ═══════════════════════════════════════════════════════════════════════
 # Desktop: Renderer (VITE_*)
 # ═══════════════════════════════════════════════════════════════════════

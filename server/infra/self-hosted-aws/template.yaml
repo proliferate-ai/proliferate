@@ -1130,6 +1130,9 @@ Resources:
                 DAYTONA_SERVER_URL=https://app.daytona.io/api
                 DAYTONA_TARGET=us
                 SUPPORT_SLACK_WEBHOOK_URL=
+                SIGNUPS_SLACK_WEBHOOK_URL=
+                BILLING_POSITIVE_SLACK_WEBHOOK_URL=
+                BILLING_NEGATIVE_SLACK_WEBHOOK_URL=
                 STRIPE_SECRET_KEY=
                 STRIPE_WEBHOOK_SECRET=
                 STRIPE_STARTER_MONTHLY_PRICE_ID=

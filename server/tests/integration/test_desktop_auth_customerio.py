@@ -132,6 +132,12 @@ class TestDesktopGitHubCustomerIoSync:
             "schedule_customerio_desktop_authenticated_user_sync",
             schedule_mock,
         )
+        schedule_signup_mock = Mock()
+        monkeypatch.setattr(
+            desktop_service,
+            "schedule_signup_slack_notification",
+            schedule_signup_mock,
+        )
         _enable_github(monkeypatch, "desktop-github@example.com")
         verifier, oauth_state = await _start_browser_flow(client)
 
@@ -149,6 +155,14 @@ class TestDesktopGitHubCustomerIoSync:
         assert scheduled_user.display_name == "GitHub Tester"
         assert scheduled_user.github_login == "github-desktop-github"
         assert scheduled_user.avatar_url == ("https://avatars.githubusercontent.com/u/583231?v=4")
+        schedule_signup_mock.assert_called_once()
+        signup_notification = schedule_signup_mock.call_args.args[0]
+        assert signup_notification.name == "GitHub Tester"
+        assert signup_notification.email == "desktop-github@example.com"
+        assert signup_notification.github == "github-desktop-github"
+        assert schedule_signup_mock.call_args.kwargs == {
+            "dedupe_key": "github:github-account-desktop-github@example.com",
+        }
 
         exchange = await client.post(
             "/auth/desktop/poll",
@@ -170,12 +184,18 @@ class TestDesktopGitHubCustomerIoSync:
         client: AsyncClient,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        user_id = await _create_user("linked@example.com", display_name="Linked User")
+        user_id = await _create_user("Linked@Example.com", display_name="Linked User")
         schedule_mock = Mock()
         monkeypatch.setattr(
             desktop_service,
             "schedule_customerio_desktop_authenticated_user_sync",
             schedule_mock,
+        )
+        schedule_signup_mock = Mock()
+        monkeypatch.setattr(
+            desktop_service,
+            "schedule_signup_slack_notification",
+            schedule_signup_mock,
         )
         _enable_github(monkeypatch, "linked@example.com")
         verifier, oauth_state = await _start_browser_flow(client)
@@ -189,10 +209,11 @@ class TestDesktopGitHubCustomerIoSync:
         schedule_mock.assert_called_once()
         scheduled_user = schedule_mock.call_args.args[0]
         assert str(scheduled_user.id) == user_id
-        assert scheduled_user.email == "linked@example.com"
+        assert scheduled_user.email == "Linked@Example.com"
         assert scheduled_user.display_name == "Linked User"
         assert scheduled_user.github_login == "github-linked"
         assert scheduled_user.avatar_url == ("https://avatars.githubusercontent.com/u/583231?v=4")
+        schedule_signup_mock.assert_not_called()
 
         exchange = await client.post(
             "/auth/desktop/poll",
@@ -202,7 +223,7 @@ class TestDesktopGitHubCustomerIoSync:
             },
         )
         assert exchange.status_code == 200
-        assert exchange.json()["user"]["email"] == "linked@example.com"
+        assert exchange.json()["user"]["email"] == "Linked@Example.com"
 
     @pytest.mark.asyncio
     async def test_does_not_sync_customerio_when_github_exchange_fails(
