@@ -377,12 +377,9 @@ async def sync_cloud_mcp_connection_for_user(
         (record for record in existing if record.connection_id == cleaned_connection_id),
         None,
     )
-    was_ready = (
-        existing_connection is not None and _auth_state(existing_connection)[1] == "ready"
-    )
-    secret_fields_unchanged = (
-        existing_connection is not None
-        and _connection_secret_fields_match(existing_connection, cleaned)
+    was_ready = existing_connection is not None and _auth_state(existing_connection)[1] == "ready"
+    secret_fields_unchanged = existing_connection is not None and _connection_secret_fields_match(
+        existing_connection, cleaned
     )
     server_name = generate_server_name(
         entry,

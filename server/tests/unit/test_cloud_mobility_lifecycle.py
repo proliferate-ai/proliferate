@@ -16,8 +16,8 @@ from proliferate.db.store.cloud_mobility import (
     complete_cloud_workspace_handoff_cleanup,
     create_cloud_workspace_handoff_op,
     create_cloud_workspace_handoff_op_for_user,
-    expire_stale_cloud_workspace_handoff_op_for_user,
     fail_cloud_workspace_handoff_op,
+    fail_cloud_workspace_handoff_op_checkpoint_for_user,
     finalize_cloud_workspace_handoff_op,
     get_active_handoff_for_mobility,
     get_active_user_handoff_op,
@@ -380,17 +380,18 @@ async def test_stale_expiry_before_finalize_marks_failed_and_clears_active_hando
         cleanup_completed_at=handoff.cleanup_completed_at,
     )
 
-    expired = await expire_stale_cloud_workspace_handoff_op_for_user(
+    expired = await fail_cloud_workspace_handoff_op_checkpoint_for_user(
         user_id=user_id,
         mobility_workspace_id=mobility.id,
         handoff_op_id=handoff.id,
         phase=stale_outcome.phase,
         lifecycle_state=stale_outcome.lifecycle_state,
-        keep_active_handoff=stale_outcome.keep_active_handoff,
         failure_code=stale_outcome.failure_code,
         failure_detail=stale_outcome.failure_detail,
         status_detail=visible_failure_status_detail(stale_outcome.failure_detail),
         last_error=visible_failure_last_error(stale_outcome.failure_detail),
+        keep_active_handoff=stale_outcome.keep_active_handoff,
+        event_type="handoff_stale",
     )
 
     visible = await load_cloud_workspace_mobility_for_user(
@@ -428,17 +429,18 @@ async def test_stale_expiry_after_finalize_marks_cleanup_failed_and_keeps_active
         cleanup_completed_at=handoff.cleanup_completed_at,
     )
 
-    expired = await expire_stale_cloud_workspace_handoff_op_for_user(
+    expired = await fail_cloud_workspace_handoff_op_checkpoint_for_user(
         user_id=user_id,
         mobility_workspace_id=mobility.id,
         handoff_op_id=handoff.id,
         phase=stale_outcome.phase,
         lifecycle_state=stale_outcome.lifecycle_state,
-        keep_active_handoff=stale_outcome.keep_active_handoff,
         failure_code=stale_outcome.failure_code,
         failure_detail=stale_outcome.failure_detail,
         status_detail=visible_failure_status_detail(stale_outcome.failure_detail),
         last_error=visible_failure_last_error(stale_outcome.failure_detail),
+        keep_active_handoff=stale_outcome.keep_active_handoff,
+        event_type="handoff_stale",
     )
 
     visible = await load_cloud_workspace_mobility_for_user(

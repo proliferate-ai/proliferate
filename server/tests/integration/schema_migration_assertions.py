@@ -353,8 +353,7 @@ async def assert_current_schema(
 
     mcp_event_indexes = await conn.run_sync(
         lambda sync_conn: {
-            index["name"]
-            for index in inspect(sync_conn).get_indexes("cloud_mcp_connection_event")
+            index["name"] for index in inspect(sync_conn).get_indexes("cloud_mcp_connection_event")
         }
     )
     assert {

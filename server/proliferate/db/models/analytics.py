@@ -34,9 +34,7 @@ class ClientDailyActivity(Base):
             "surface",
             "anonymous_install_uuid",
             unique=True,
-            postgresql_where=text(
-                "actor_user_id IS NULL AND anonymous_install_uuid IS NOT NULL"
-            ),
+            postgresql_where=text("actor_user_id IS NULL AND anonymous_install_uuid IS NOT NULL"),
         ),
         Index("ix_client_daily_activity_date_surface", "activity_date", "surface"),
     )
