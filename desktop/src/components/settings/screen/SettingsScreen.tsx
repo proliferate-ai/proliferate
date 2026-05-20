@@ -161,7 +161,7 @@ export function SettingsScreen({
         onOpenRestartPrompt={openRestartPrompt}
       />
 
-      <div className="relative flex-1 bg-surface-under">
+      <div className="relative flex-1 bg-background">
         <div className="absolute left-0 right-0 top-0 h-10" data-tauri-drag-region="true" />
         <AutoHideScrollArea className="h-full" viewportClassName="px-8 pt-12">
           <div className="flex justify-center pb-16">
