@@ -12,14 +12,17 @@ async def assert_current_schema(
         "anonymous_telemetry_event",
         "anonymous_telemetry_install",
         "anonymous_telemetry_local_install",
+        "client_daily_activity",
         "billing_entitlement",
         "billing_grant",
         "cloud_commands",
+        "cloud_mcp_connection_event",
         "cloud_mcp_connection",
         "cloud_mcp_connection_auth",
         "cloud_mcp_oauth_client",
         "cloud_mcp_oauth_flow",
         "cloud_credential",
+        "cloud_workspace_mobility_event",
         "cloud_workspace_handoff_op",
         "cloud_workspace_mobility",
         "cloud_sandbox",
@@ -325,6 +328,69 @@ async def assert_current_schema(
         "uq_agent_gateway_runtime_grant_token_hash",
         "ix_agent_gateway_runtime_grant_target_profile_agent",
     } <= runtime_grant_indexes
+
+    client_daily_activity_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("client_daily_activity")
+        }
+    )
+    assert {
+        "uq_client_daily_activity_actor_day_surface",
+        "uq_client_daily_activity_install_day_surface",
+        "ix_client_daily_activity_date_surface",
+    } <= client_daily_activity_indexes
+
+    client_daily_activity_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints("client_daily_activity")
+        }
+    )
+    assert {
+        "ck_client_daily_activity_surface",
+        "ck_client_daily_activity_identity_present",
+    } <= client_daily_activity_checks
+
+    mcp_event_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("cloud_mcp_connection_event")
+        }
+    )
+    assert {
+        "ix_cloud_mcp_connection_event_user_day",
+        "ix_cloud_mcp_connection_event_connection",
+        "ix_cloud_mcp_connection_event_type",
+    } <= mcp_event_indexes
+
+    mobility_event_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("cloud_workspace_mobility_event")
+        }
+    )
+    assert {
+        "ix_cloud_workspace_mobility_event_user_day",
+        "ix_cloud_workspace_mobility_event_workspace",
+        "ix_cloud_workspace_mobility_event_handoff",
+        "ix_cloud_workspace_mobility_event_type",
+    } <= mobility_event_indexes
+
+    analytics_views = await conn.run_sync(
+        lambda sync_conn: set(inspect(sync_conn).get_view_names(schema="analytics"))
+    )
+    assert {
+        "daily_anonymous_usage",
+        "daily_client_activity",
+        "daily_cloud_workspaces",
+        "daily_cloud_sessions",
+        "daily_desktop_installs",
+        "daily_sandboxes",
+        "daily_automation_activity",
+        "daily_mcp_activity",
+        "daily_mobility_activity",
+        "daily_new_users",
+    } <= analytics_views
 
     version = await conn.scalar(text("SELECT version_num FROM alembic_version"))
     assert version == head_revision

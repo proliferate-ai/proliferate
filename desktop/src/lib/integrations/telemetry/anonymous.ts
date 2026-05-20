@@ -18,6 +18,7 @@ import {
 
 interface AnonymousTelemetryInitInput {
   endpoint: string;
+  clientDailyActivityEndpoint: string;
   telemetryMode: DesktopTelemetryMode;
 }
 
@@ -27,9 +28,11 @@ interface AnonymousTelemetryRuntime {
   platform: string;
   arch: string;
   endpoint: string;
+  clientDailyActivityEndpoint: string;
   telemetryMode: DesktopTelemetryMode;
 }
 
+const CLIENT_DAILY_ACTIVITY_STORAGE_PREFIX = "proliferate:client-daily-activity:desktop";
 const USAGE_FLUSH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const VERSION_HEARTBEAT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const HOUSEKEEPING_INTERVAL_MS = 60 * 60 * 1000;
@@ -42,6 +45,7 @@ let saveQueue: Promise<void> = Promise.resolve();
 let versionTimerId: ReturnType<typeof globalThis.setInterval> | null = null;
 let housekeepingTimerId: ReturnType<typeof globalThis.setInterval> | null = null;
 let usageFlushPromise: Promise<void> | null = null;
+let clientDailyActivityPromise: Promise<void> | null = null;
 let pendingDirectives: AnonymousTelemetryDirective[] = [];
 
 function isExpectedLocalDevNetworkFailure(error: unknown): boolean {
@@ -52,6 +56,66 @@ function logAnonymousTelemetryWarning(message: string, error: unknown): void {
   if (import.meta.env.DEV && !isExpectedLocalDevNetworkFailure(error)) {
     console.warn(message, error);
   }
+}
+
+function utcDateKey(now = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
+function clientDailyActivityStorageKey(dateKey: string): string {
+  return `${CLIENT_DAILY_ACTIVITY_STORAGE_PREFIX}:${dateKey}`;
+}
+
+function clientDailyActivityAlreadySent(dateKey: string): boolean {
+  try {
+    return globalThis.localStorage?.getItem(clientDailyActivityStorageKey(dateKey)) === "sent";
+  } catch {
+    return false;
+  }
+}
+
+function markClientDailyActivitySent(dateKey: string): void {
+  try {
+    globalThis.localStorage?.setItem(clientDailyActivityStorageKey(dateKey), "sent");
+  } catch {
+    // Local throttling is best-effort; the server still dedupes the event.
+  }
+}
+
+async function sendClientDailyActivityOnce(): Promise<void> {
+  const currentRuntime = runtime;
+  if (!currentRuntime) {
+    return;
+  }
+  const dateKey = utcDateKey();
+  if (clientDailyActivityAlreadySent(dateKey)) {
+    return;
+  }
+  if (clientDailyActivityPromise) {
+    return clientDailyActivityPromise;
+  }
+  clientDailyActivityPromise = (async () => {
+    const response = await fetch(currentRuntime.clientDailyActivityEndpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        surface: "desktop",
+        anonymousInstallUuid: currentRuntime.installId,
+        telemetryMode: currentRuntime.telemetryMode,
+        appVersion: currentRuntime.appVersion,
+        platform: currentRuntime.platform,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`client_daily_activity_${response.status}`);
+    }
+    markClientDailyActivitySent(dateKey);
+  })().finally(() => {
+    clientDailyActivityPromise = null;
+  });
+  return clientDailyActivityPromise;
 }
 
 function persistState(): Promise<void> {
@@ -235,13 +299,21 @@ function startTimers(): void {
     void flushUsageCounters().catch((error) => {
       logAnonymousTelemetryWarning("Failed to flush anonymous usage counters", error);
     });
+    void sendClientDailyActivityOnce().catch((error) => {
+      logAnonymousTelemetryWarning("Failed to send desktop daily activity", error);
+    });
   }, HOUSEKEEPING_INTERVAL_MS);
 }
 
 export async function initializeAnonymousTelemetry(
   input: AnonymousTelemetryInitInput,
 ): Promise<void> {
-  if (initialized && runtime?.telemetryMode === input.telemetryMode && runtime.endpoint === input.endpoint) {
+  if (
+    initialized
+    && runtime?.telemetryMode === input.telemetryMode
+    && runtime.endpoint === input.endpoint
+    && runtime.clientDailyActivityEndpoint === input.clientDailyActivityEndpoint
+  ) {
     return;
   }
 
@@ -258,9 +330,13 @@ export async function initializeAnonymousTelemetry(
       platform: bootstrap.platform,
       arch: bootstrap.arch,
       endpoint: input.endpoint,
+      clientDailyActivityEndpoint: input.clientDailyActivityEndpoint,
       telemetryMode: input.telemetryMode,
     };
     initialized = true;
+    void sendClientDailyActivityOnce().catch((error) => {
+      logAnonymousTelemetryWarning("Failed to send desktop daily activity", error);
+    });
 
     await markActivation("first_launch");
     await retryPendingMilestones();

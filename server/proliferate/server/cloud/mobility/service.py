@@ -22,6 +22,7 @@ from proliferate.db.store.cloud_mobility import (
     load_active_user_handoff_op_for_user,
     load_cloud_workspace_mobility_for_user,
     load_cloud_workspace_mobility_value,
+    record_cloud_workspace_mobility_event_for_user,
     update_cloud_workspace_handoff_phase_checkpoint_for_user,
     update_cloud_workspace_handoff_phase_for_user,
 )
@@ -298,6 +299,18 @@ async def preflight_cloud_workspace_handoff(
         repo_config_ms=repo_config_elapsed_ms,
         elapsed_ms=duration_ms(preflight_started),
     )
+    with suppress(Exception):
+        await record_cloud_workspace_mobility_event_for_user(
+            user_id=user_id,
+            cloud_workspace_id=workspace.cloud_workspace_id,
+            handoff_op_id=workspace.active_handoff.id if workspace.active_handoff else None,
+            event_type="preflight_completed",
+            direction=direction,
+            source_owner=workspace.owner,
+            target_owner=target_owner_for_direction(direction)
+            if is_valid_handoff_direction(direction)
+            else None,
+        )
     return response
 
 

@@ -5,11 +5,17 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from proliferate.config import settings
+from proliferate.db import engine as db_engine
+from proliferate.db.store.analytics import (
+    CloudMcpConnectionEventInsert,
+    record_cloud_mcp_connection_event,
+)
 from proliferate.db.store.cloud_mcp.auth import (
     load_connection_auth_standalone,
     mark_connection_auth_status_if_version_standalone,
     update_connection_auth_if_version_standalone,
 )
+from proliferate.db.store.cloud_mcp.connections import get_user_connection_by_db_id
 from proliferate.db.store.cloud_mcp.oauth_clients import get_oauth_client_standalone
 from proliferate.db.store.cloud_mcp.types import CloudMcpAuthRecord, CloudMcpConnectionRecord
 from proliferate.integrations.mcp_oauth import McpOAuthProviderError, refresh_token
@@ -83,6 +89,11 @@ async def _ready_oauth_access_token_locked(
         )
         if marked is None:
             return await _latest_ready_oauth_access_token(record)
+        await _record_oauth_refresh_auth_failed(
+            record,
+            auth_status="needs_reconnect",
+            failure_code="missing_refresh_token",
+        )
         return None
 
     issuer = payload.get("issuer")
@@ -122,6 +133,11 @@ async def _ready_oauth_access_token_locked(
         )
         if marked is None:
             return await _latest_ready_oauth_access_token(record)
+        await _record_oauth_refresh_auth_failed(
+            record,
+            auth_status="needs_reconnect" if exc.code == "invalid_grant" else "error",
+            failure_code=exc.code,
+        )
         return None
 
     next_payload = {
@@ -163,6 +179,33 @@ def _ready_access_token_from_auth(auth: CloudMcpAuthRecord) -> str | None:
     if expires_at is not None and expires_at <= datetime.now(UTC) + _OAUTH_REFRESH_SKEW:
         return None
     return access_token
+
+
+async def _record_oauth_refresh_auth_failed(
+    record: CloudMcpConnectionRecord,
+    *,
+    auth_status: str,
+    failure_code: str,
+) -> None:
+    async with db_engine.async_session_factory() as db:
+        connection = await get_user_connection_by_db_id(db, record.user_id, record.id)
+        if connection is None:
+            return
+        await record_cloud_mcp_connection_event(
+            db,
+            CloudMcpConnectionEventInsert(
+                user_id=connection.user_id,
+                org_id=connection.org_id,
+                connection_id=connection.connection_id,
+                catalog_entry_id=connection.catalog_entry_id,
+                event_type="auth_failed",
+                auth_kind="oauth",
+                auth_status=auth_status,
+                enabled=connection.enabled,
+                failure_code=failure_code,
+            ),
+        )
+        await db.commit()
 
 
 def _parse_expires_at(value: object) -> datetime | None:

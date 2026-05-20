@@ -3,6 +3,7 @@ import {
   bootstrapWebSession,
   logoutWebSession,
   type AuthSessionResponse,
+  type AuthUser,
 } from "@proliferate/cloud-sdk";
 import { CloudClientProvider } from "@proliferate/cloud-sdk-react";
 import {
@@ -20,6 +21,7 @@ import { createWebCloudClient } from "../lib/access/cloud/client";
 
 interface AuthTokenContextValue {
   token: string | null;
+  user: AuthUser | null;
   bootstrapping: boolean;
   setToken: (token: string) => void;
   setSession: (session: AuthSessionResponse) => void;
@@ -31,6 +33,7 @@ const queryClient = new QueryClient();
 
 export function WebCloudProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
+  const [user, setUserState] = useState<AuthUser | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
   const authEpochRef = useRef(0);
   const client = useMemo(() => createWebCloudClient(webEnv.apiBaseUrl, token), [token]);
@@ -44,11 +47,13 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
         if (!cancelled && authEpochRef.current === bootstrapEpoch) {
           queryClient.clear();
           setTokenState(session.accessToken);
+          setUserState(session.user);
         }
       })
       .catch(() => {
         if (!cancelled && authEpochRef.current === bootstrapEpoch) {
           setTokenState(null);
+          setUserState(null);
         }
       })
       .finally(() => {
@@ -64,18 +69,21 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
   const authToken = useMemo<AuthTokenContextValue>(
     () => ({
       token,
+      user,
       bootstrapping,
       setToken(nextToken) {
         authEpochRef.current += 1;
         queryClient.clear();
         setBootstrapping(false);
         setTokenState(nextToken);
+        setUserState(null);
       },
       setSession(session) {
         authEpochRef.current += 1;
         queryClient.clear();
         setBootstrapping(false);
         setTokenState(session.accessToken);
+        setUserState(session.user);
       },
       async clearToken() {
         authEpochRef.current += 1;
@@ -91,9 +99,10 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
         queryClient.clear();
         setBootstrapping(false);
         setTokenState(null);
+        setUserState(null);
       },
     }),
-    [bootstrapping, token],
+    [bootstrapping, token, user],
   );
 
   return (

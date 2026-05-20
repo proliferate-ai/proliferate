@@ -73,6 +73,9 @@ start of the task, not after implementation has already started.
 
 - `docs/analytics/anonymous-telemetry.md`
   - first-party install-level analytics records, routing, and storage
+- `docs/analytics/metabase.md`
+  - first-party dashboard views, source tables, deferred metrics, and
+    read-only Metabase access
 - `docs/analytics/posthog.md`
   - hosted-product desktop vendor analytics and replay
 - `docs/analytics/sentry.md`

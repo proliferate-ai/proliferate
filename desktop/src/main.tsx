@@ -5,7 +5,10 @@ import App from "./App";
 import "./lib/access/cloud/client";
 import { bootstrapProliferateApiConfig } from "./lib/infra/proliferate-api";
 import { initializeAnonymousTelemetry } from "./lib/integrations/telemetry/anonymous";
-import { getAnonymousTelemetryEndpoint } from "./lib/integrations/telemetry/config";
+import {
+  getAnonymousTelemetryEndpoint,
+  getClientDailyActivityEndpoint,
+} from "./lib/integrations/telemetry/config";
 import {
   getDesktopTelemetryRuntimeState,
   getDesktopTelemetryRootHandlers,
@@ -140,6 +143,7 @@ function startAnonymousTelemetry(): void {
 
   void initializeAnonymousTelemetry({
     endpoint: getAnonymousTelemetryEndpoint(),
+    clientDailyActivityEndpoint: getClientDailyActivityEndpoint(),
     telemetryMode: runtimeState.telemetryMode,
   }).catch((error) => {
     warnStartupFailure("Failed to initialize anonymous telemetry", error);

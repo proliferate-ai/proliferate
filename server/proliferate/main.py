@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
+import proliferate.db.models.analytics  # noqa: F401
 import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
@@ -27,6 +28,7 @@ from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
 from proliferate.server.agent_gateway.api import router as agent_gateway_router
 from proliferate.server.ai_magic.api import router as ai_magic_router
+from proliferate.server.analytics.api import router as analytics_router
 from proliferate.server.anonymous_telemetry.api import router as anonymous_telemetry_router
 from proliferate.server.anonymous_telemetry.worker import (
     start_server_anonymous_telemetry_sender,
@@ -187,6 +189,7 @@ def create_app() -> FastAPI:
         prefix=f"{api_prefix}/v1",
         tags=["anonymous_telemetry"],
     )
+    app.include_router(analytics_router, prefix=f"{api_prefix}/v1", tags=["analytics"])
     app.include_router(cloud_router, prefix=f"{api_prefix}/v1", tags=["cloud"])
     app.include_router(catalogs_router, prefix=f"{api_prefix}/v1", tags=["catalogs"])
     app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])

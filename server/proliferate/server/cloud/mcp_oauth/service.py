@@ -8,6 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.cloud_mcp import CLOUD_MCP_OAUTH_FLOW_TTL
+from proliferate.db.store.analytics import (
+    CloudMcpConnectionEventInsert,
+    record_cloud_mcp_connection_event,
+)
 from proliferate.db.store.cloud_mcp.auth import upsert_connection_auth
 from proliferate.db.store.cloud_mcp.connections import (
     get_user_connection_by_db_id,
@@ -312,6 +316,14 @@ async def get_cloud_mcp_oauth_flow_status(
         now=datetime.now(UTC),
     ):
         status = await fail_oauth_flow(db, flow_id=flow.id, failure_code="expired") or flow
+        connection = await get_user_connection_by_db_id(db, flow.user_id, flow.connection_db_id)
+        if connection is not None:
+            await _record_oauth_connection_event(
+                db,
+                connection,
+                event_type="auth_failed",
+                failure_code="expired",
+            )
     return CloudMcpOAuthFlowStatus(
         flow=status,
         include_authorization_url=oauth_status_includes_authorization_url(status.status),
@@ -341,13 +353,27 @@ async def complete_cloud_mcp_oauth_callback(
     flow = await claim_active_oauth_flow_by_state_hash(db, hashed)
     if flow is None:
         return CloudMcpOAuthCallbackResult(ok=False, status="failed")
+    connection = await get_user_connection_by_db_id(db, flow.user_id, flow.connection_db_id)
     if oauth_flow_is_expired(expires_at=flow.expires_at, now=datetime.now(UTC)):
         await fail_oauth_flow(db, flow_id=flow.id, failure_code="expired")
+        if connection is not None:
+            await _record_oauth_connection_event(
+                db,
+                connection,
+                event_type="auth_failed",
+                failure_code="expired",
+            )
         return CloudMcpOAuthCallbackResult(ok=False, status="expired")
     if not flow.token_endpoint or not flow.resource:
         await fail_oauth_flow(db, flow_id=flow.id, failure_code="invalid_flow")
+        if connection is not None:
+            await _record_oauth_connection_event(
+                db,
+                connection,
+                event_type="auth_failed",
+                failure_code="invalid_flow",
+            )
         return CloudMcpOAuthCallbackResult(ok=False, status="failed")
-    connection = await get_user_connection_by_db_id(db, flow.user_id, flow.connection_db_id)
     if connection is None:
         await fail_oauth_flow(db, flow_id=flow.id, failure_code="invalid_flow")
         return CloudMcpOAuthCallbackResult(ok=False, status="failed")
@@ -385,8 +411,15 @@ async def complete_cloud_mcp_oauth_callback(
                 catalog_entry_id=connection.catalog_entry_id if connection else "",
             )
         await fail_oauth_flow(db, flow_id=flow.id, failure_code=exc.code)
+        await _record_oauth_connection_event(
+            db,
+            connection,
+            event_type="auth_failed",
+            failure_code=exc.code,
+        )
         return CloudMcpOAuthCallbackResult(ok=False, status="failed")
 
+    was_ready = connection.auth is not None and connection.auth.auth_status == "ready"
     await upsert_connection_auth(
         db,
         connection_db_id=flow.connection_db_id,
@@ -409,4 +442,35 @@ async def complete_cloud_mcp_oauth_callback(
         token_expires_at=token.expires_at,
     )
     await complete_oauth_flow(db, flow_id=flow.id)
+    await _record_oauth_connection_event(
+        db,
+        connection,
+        event_type="reconnected" if was_ready else "auth_ready",
+        auth_status="ready",
+    )
     return CloudMcpOAuthCallbackResult(ok=True, status="completed")
+
+
+async def _record_oauth_connection_event(
+    db: AsyncSession,
+    connection: CloudMcpConnectionRecord,
+    *,
+    event_type: str,
+    auth_status: str | None = None,
+    failure_code: str | None = None,
+) -> None:
+    await record_cloud_mcp_connection_event(
+        db,
+        CloudMcpConnectionEventInsert(
+            user_id=connection.user_id,
+            org_id=connection.org_id,
+            connection_id=connection.connection_id,
+            catalog_entry_id=connection.catalog_entry_id,
+            event_type=event_type,
+            auth_kind="oauth",
+            auth_status=auth_status
+            or (connection.auth.auth_status if connection.auth is not None else None),
+            enabled=connection.enabled,
+            failure_code=failure_code,
+        ),
+    )

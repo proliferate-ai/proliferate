@@ -79,3 +79,7 @@ export function getAnonymousTelemetryEndpoint(): string {
     || buildProliferateApiUrl("/v1/telemetry/anonymous")
   );
 }
+
+export function getClientDailyActivityEndpoint(): string {
+  return buildProliferateApiUrl("/v1/analytics/client-daily-activity");
+}

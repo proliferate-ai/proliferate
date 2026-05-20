@@ -24,6 +24,7 @@ import { MobileSessionsScreen } from "../sessions/MobileSessionsScreen";
 import { MobileSettingsScreen } from "../settings/MobileSettingsScreen";
 import { MobileTopBar, MobileTopBarIconButton } from "../primitives/MobileTopBar";
 import { MobileWorkspacesScreen } from "../workspaces/MobileWorkspacesScreen";
+import { useMobileClientDailyActivity } from "../../hooks/telemetry/use-mobile-client-daily-activity";
 import { drawerRoutes, routeTitle, type RouteId } from "../../navigation/navigation-model";
 import { useMobileScreenTelemetry } from "../../hooks/telemetry/use-mobile-screen-telemetry";
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
@@ -32,6 +33,7 @@ import { colors, radius, shadow, spacing } from "../../styles/tokens";
 export function MobileShell() {
   const {
     authState,
+    accessToken,
     user,
     signInWithProvider,
     connectGitHub,
@@ -48,6 +50,13 @@ export function MobileShell() {
   const telemetryScreen = selectedChat ? "chat" : route;
 
   useMobileScreenTelemetry(authState, telemetryScreen);
+  const canRecordAuthenticatedActivity = authState === "active" || authState === "needs_github";
+  useMobileClientDailyActivity({
+    accessToken: canRecordAuthenticatedActivity ? accessToken : null,
+    actorStorageKey: user?.id ?? null,
+    routeOrScreen: authState === "needs_github" ? "connect_github" : telemetryScreen,
+    viewingChat: authState === "active" && selectedChat !== null,
+  });
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {

@@ -59,6 +59,7 @@ describe("initializeAnonymousTelemetry", () => {
 
     await anonymous.initializeAnonymousTelemetry({
       endpoint: "https://self.example/v1/telemetry/anonymous",
+      clientDailyActivityEndpoint: "https://self.example/v1/analytics/client-daily-activity",
       telemetryMode: "local_dev",
     });
 
@@ -75,6 +76,7 @@ describe("initializeAnonymousTelemetry", () => {
 
     await anonymous.initializeAnonymousTelemetry({
       endpoint: "https://self.example/v1/telemetry/anonymous",
+      clientDailyActivityEndpoint: "https://self.example/v1/analytics/client-daily-activity",
       telemetryMode: "self_managed",
     });
 

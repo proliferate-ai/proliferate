@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import engine as db_engine
+from proliferate.db.models.analytics import CloudWorkspaceMobilityEvent
 from proliferate.db.models.cloud.mobility import CloudWorkspaceHandoffOp, CloudWorkspaceMobility
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.utils.time import utcnow
@@ -161,6 +162,39 @@ def _clear_retryable_handoff_failure(
     record.status_detail = None
     record.last_error = None
     return True
+
+
+def _record_mobility_event(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    cloud_workspace_id: UUID | None,
+    handoff_op_id: UUID | None,
+    event_type: str,
+    direction: str | None = None,
+    source_owner: str | None = None,
+    target_owner: str | None = None,
+    from_phase: str | None = None,
+    to_phase: str | None = None,
+    failure_code: str | None = None,
+    occurred_at: datetime,
+) -> None:
+    db.add(
+        CloudWorkspaceMobilityEvent(
+            user_id=user_id,
+            cloud_workspace_id=cloud_workspace_id,
+            handoff_op_id=handoff_op_id,
+            event_type=event_type,
+            direction=direction,
+            source_owner=source_owner,
+            target_owner=target_owner,
+            from_phase=from_phase,
+            to_phase=to_phase,
+            failure_code=failure_code,
+            occurred_at=occurred_at,
+            created_at=occurred_at,
+        )
+    )
 
 
 async def get_cloud_workspace_mobility(
@@ -449,6 +483,18 @@ async def create_cloud_workspace_handoff_op(
     mobility_workspace.status_detail = "Handoff started"
     mobility_workspace.last_error = None
     mobility_workspace.updated_at = now
+    _record_mobility_event(
+        db,
+        user_id=mobility_workspace.user_id,
+        cloud_workspace_id=mobility_workspace.cloud_workspace_id,
+        handoff_op_id=record.id,
+        event_type="handoff_started",
+        direction=direction,
+        source_owner=source_owner,
+        target_owner=target_owner,
+        to_phase=record.phase,
+        occurred_at=now,
+    )
 
     await db.commit()
     await db.refresh(record)
@@ -466,6 +512,7 @@ async def update_cloud_workspace_handoff_phase(
     cloud_workspace_id: UUID | None = None,
 ) -> CloudWorkspaceHandoffOpValue:
     now = utcnow()
+    previous_phase = handoff_op.phase
     handoff_op.phase = phase
     handoff_op.heartbeat_at = now
     handoff_op.updated_at = now
@@ -474,6 +521,20 @@ async def update_cloud_workspace_handoff_phase(
     if status_detail is not None:
         mobility_workspace.status_detail = status_detail
     mobility_workspace.updated_at = now
+    if previous_phase != phase:
+        _record_mobility_event(
+            db,
+            user_id=handoff_op.user_id,
+            cloud_workspace_id=mobility_workspace.cloud_workspace_id,
+            handoff_op_id=handoff_op.id,
+            event_type="phase_changed",
+            direction=handoff_op.direction,
+            source_owner=handoff_op.source_owner,
+            target_owner=handoff_op.target_owner,
+            from_phase=previous_phase,
+            to_phase=phase,
+            occurred_at=now,
+        )
     await db.flush()
     return _handoff_value(handoff_op)
 
@@ -498,6 +559,7 @@ async def finalize_cloud_workspace_handoff_op(
     cloud_workspace_id: UUID | None,
 ) -> CloudWorkspaceHandoffOpValue:
     now = utcnow()
+    previous_phase = handoff_op.phase
     handoff_op.phase = "cleanup_pending"
     handoff_op.finalized_at = now
     handoff_op.heartbeat_at = now
@@ -513,6 +575,20 @@ async def finalize_cloud_workspace_handoff_op(
     mobility_workspace.status_detail = "Awaiting source cleanup"
     mobility_workspace.last_error = None
     mobility_workspace.updated_at = now
+    if previous_phase != handoff_op.phase:
+        _record_mobility_event(
+            db,
+            user_id=handoff_op.user_id,
+            cloud_workspace_id=mobility_workspace.cloud_workspace_id,
+            handoff_op_id=handoff_op.id,
+            event_type="finalized",
+            direction=handoff_op.direction,
+            source_owner=handoff_op.source_owner,
+            target_owner=handoff_op.target_owner,
+            from_phase=previous_phase,
+            to_phase=handoff_op.phase,
+            occurred_at=now,
+        )
 
     await db.flush()
     return _handoff_value(handoff_op)
@@ -525,6 +601,7 @@ async def complete_cloud_workspace_handoff_cleanup(
     mobility_workspace: CloudWorkspaceMobility,
 ) -> CloudWorkspaceHandoffOpValue:
     now = utcnow()
+    previous_phase = handoff_op.phase
     handoff_op.phase = "completed"
     handoff_op.cleanup_completed_at = now
     handoff_op.heartbeat_at = now
@@ -533,6 +610,20 @@ async def complete_cloud_workspace_handoff_cleanup(
     mobility_workspace.active_handoff_op_id = None
     mobility_workspace.status_detail = "Ready"
     mobility_workspace.updated_at = now
+    if previous_phase != handoff_op.phase:
+        _record_mobility_event(
+            db,
+            user_id=handoff_op.user_id,
+            cloud_workspace_id=mobility_workspace.cloud_workspace_id,
+            handoff_op_id=handoff_op.id,
+            event_type="cleanup_completed",
+            direction=handoff_op.direction,
+            source_owner=handoff_op.source_owner,
+            target_owner=handoff_op.target_owner,
+            from_phase=previous_phase,
+            to_phase=handoff_op.phase,
+            occurred_at=now,
+        )
 
     await db.flush()
     return _handoff_value(handoff_op)
@@ -551,6 +642,7 @@ async def fail_cloud_workspace_handoff_op(
     last_error: str,
 ) -> CloudWorkspaceHandoffOpValue:
     now = utcnow()
+    previous_phase = handoff_op.phase
     handoff_op.phase = phase
     handoff_op.failure_code = failure_code
     handoff_op.failure_detail = failure_detail
@@ -562,6 +654,21 @@ async def fail_cloud_workspace_handoff_op(
     mobility_workspace.status_detail = status_detail
     mobility_workspace.last_error = last_error
     mobility_workspace.updated_at = now
+    if previous_phase != phase:
+        _record_mobility_event(
+            db,
+            user_id=handoff_op.user_id,
+            cloud_workspace_id=mobility_workspace.cloud_workspace_id,
+            handoff_op_id=handoff_op.id,
+            event_type="handoff_failed",
+            direction=handoff_op.direction,
+            source_owner=handoff_op.source_owner,
+            target_owner=handoff_op.target_owner,
+            from_phase=previous_phase,
+            to_phase=phase,
+            failure_code=failure_code,
+            occurred_at=now,
+        )
 
     await db.flush()
     return _handoff_value(handoff_op)
@@ -655,6 +762,37 @@ async def load_active_user_handoff_op_for_user(
             final_handoff_phases=final_handoff_phases,
         )
         return _handoff_value(record) if record is not None else None
+
+
+async def record_cloud_workspace_mobility_event_for_user(
+    *,
+    user_id: UUID,
+    cloud_workspace_id: UUID | None,
+    handoff_op_id: UUID | None,
+    event_type: str,
+    direction: str | None = None,
+    source_owner: str | None = None,
+    target_owner: str | None = None,
+    from_phase: str | None = None,
+    to_phase: str | None = None,
+    failure_code: str | None = None,
+) -> None:
+    async with db_engine.async_session_factory() as db:
+        _record_mobility_event(
+            db,
+            user_id=user_id,
+            cloud_workspace_id=cloud_workspace_id,
+            handoff_op_id=handoff_op_id,
+            event_type=event_type,
+            direction=direction,
+            source_owner=source_owner,
+            target_owner=target_owner,
+            from_phase=from_phase,
+            to_phase=to_phase,
+            failure_code=failure_code,
+            occurred_at=utcnow(),
+        )
+        await db.commit()
 
 
 async def create_cloud_workspace_handoff_op_for_user(
@@ -924,6 +1062,7 @@ async def expire_stale_cloud_workspace_handoff_op_for_user(
         )
 
         now = utcnow()
+        previous_phase = handoff_op.phase
         handoff_op.failure_code = failure_code
         handoff_op.failure_detail = failure_detail
         handoff_op.heartbeat_at = now
@@ -938,6 +1077,21 @@ async def expire_stale_cloud_workspace_handoff_op_for_user(
             mobility_workspace.active_handoff_op_id = handoff_op.id
         else:
             mobility_workspace.active_handoff_op_id = None
+        if previous_phase != phase:
+            _record_mobility_event(
+                db,
+                user_id=handoff_op.user_id,
+                cloud_workspace_id=mobility_workspace.cloud_workspace_id,
+                handoff_op_id=handoff_op.id,
+                event_type="handoff_stale",
+                direction=handoff_op.direction,
+                source_owner=handoff_op.source_owner,
+                target_owner=handoff_op.target_owner,
+                from_phase=previous_phase,
+                to_phase=phase,
+                failure_code=failure_code,
+                occurred_at=now,
+            )
 
         await db.commit()
         await db.refresh(handoff_op)

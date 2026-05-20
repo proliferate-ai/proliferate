@@ -1,7 +1,11 @@
 import { useAuthViewer } from "@proliferate/cloud-sdk-react";
-import { type ReactNode, useEffect, useMemo, useRef } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
+import {
+  recordWebClientDailyActivity,
+  webTelemetryScreenForPath,
+} from "../lib/integrations/telemetry/client-daily-activity";
 import { getWebTelemetryConfig } from "../lib/integrations/telemetry/config";
 import {
   identifyWebPostHogUser,
@@ -19,11 +23,12 @@ import { useAuthToken } from "./WebCloudProvider";
 
 export function WebTelemetryProvider({ children }: { children: ReactNode }) {
   const config = useMemo(() => getWebTelemetryConfig(), []);
-  const { token, bootstrapping } = useAuthToken();
+  const { token, user, bootstrapping } = useAuthToken();
   const viewer = useAuthViewer(!bootstrapping && Boolean(token));
   const location = useLocation();
   const lastIdentityRef = useRef<string | null>(null);
   const lastPageRef = useRef<string | null>(null);
+  const [activityTick, setActivityTick] = useState(0);
 
   useEffect(() => {
     initializeWebPostHog({
@@ -32,6 +37,13 @@ export function WebTelemetryProvider({ children }: { children: ReactNode }) {
       posthog: config.posthog,
     });
   }, [config]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActivityTick((tick) => tick + 1);
+    }, 60 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const route = webTelemetryRouteForPathname(location.pathname);
@@ -55,15 +67,27 @@ export function WebTelemetryProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const user = viewer.data?.user;
-    if (!user || lastIdentityRef.current === user.id) {
+    const viewerUser = viewer.data?.user;
+    if (!viewerUser || lastIdentityRef.current === viewerUser.id) {
       return;
     }
 
-    setWebSentryUser(user.id);
-    identifyWebPostHogUser(user);
-    lastIdentityRef.current = user.id;
+    setWebSentryUser(viewerUser.id);
+    identifyWebPostHogUser(viewerUser);
+    lastIdentityRef.current = viewerUser.id;
   }, [token, viewer.data?.user]);
+
+  useEffect(() => {
+    void recordWebClientDailyActivity({
+      accessToken: token,
+      actorStorageKey: viewer.data?.user?.id ?? user?.id ?? null,
+      routeOrScreen: webTelemetryScreenForPath(location.pathname),
+    }).catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn("Failed to record web daily activity", error);
+      }
+    });
+  }, [activityTick, location.pathname, token, user?.id, viewer.data?.user?.id]);
 
   return children;
 }

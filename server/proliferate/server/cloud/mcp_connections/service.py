@@ -7,6 +7,10 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.store.analytics import (
+    CloudMcpConnectionEventInsert,
+    record_cloud_mcp_connection_event,
+)
 from proliferate.db.store.cloud_mcp.auth import upsert_connection_auth
 from proliferate.db.store.cloud_mcp.compat import (
     legacy_delete_connection,
@@ -48,7 +52,7 @@ from proliferate.server.cloud.mcp_connections.models import (
     PutCloudMcpSecretAuthRequest,
     SyncCloudMcpConnectionRequest,
 )
-from proliferate.utils.crypto import encrypt_json
+from proliferate.utils.crypto import decrypt_json, encrypt_json
 
 
 @dataclass(frozen=True)
@@ -140,6 +144,53 @@ def _connection_payload(record: CloudMcpConnectionRecord) -> CloudMcpConnectionP
     )
 
 
+async def _record_mcp_connection_event(
+    db: AsyncSession,
+    record: CloudMcpConnectionRecord,
+    *,
+    event_type: str,
+    auth_kind: str | None = None,
+    auth_status: str | None = None,
+    enabled: bool | None = None,
+    failure_code: str | None = None,
+) -> None:
+    if auth_kind is None or auth_status is None:
+        resolved_auth_kind, resolved_auth_status = _auth_state(record)
+        auth_kind = auth_kind or resolved_auth_kind
+        auth_status = auth_status or resolved_auth_status
+    await record_cloud_mcp_connection_event(
+        db,
+        CloudMcpConnectionEventInsert(
+            user_id=record.user_id,
+            org_id=record.org_id,
+            connection_id=record.connection_id,
+            catalog_entry_id=record.catalog_entry_id,
+            event_type=event_type,
+            auth_kind=auth_kind,
+            auth_status=auth_status,
+            enabled=enabled if enabled is not None else record.enabled,
+            failure_code=failure_code,
+        ),
+    )
+
+
+def _connection_secret_fields_match(
+    record: CloudMcpConnectionRecord,
+    secret_fields: dict[str, str],
+) -> bool:
+    payload_ciphertext = (
+        record.auth.payload_ciphertext
+        if record.auth is not None and record.auth.payload_ciphertext
+        else record.payload_ciphertext
+    )
+    if not payload_ciphertext:
+        return False
+    with suppress(Exception):
+        payload = decrypt_json(payload_ciphertext)
+        return payload.get("secretFields") == secret_fields
+    return False
+
+
 async def list_cloud_mcp_connections(
     db: AsyncSession,
     user_id: UUID,
@@ -178,6 +229,13 @@ async def create_cloud_mcp_connection(
         settings_json=connection_settings_json(settings),
         enabled=body.enabled,
     )
+    await _record_mcp_connection_event(
+        db,
+        record,
+        event_type="connection_created",
+        auth_kind=entry.auth_kind,
+        enabled=body.enabled,
+    )
     if entry.auth_kind == "none":
         await upsert_connection_auth(
             db,
@@ -191,6 +249,14 @@ async def create_cloud_mcp_connection(
         if refreshed is None:
             _not_found()
         record = refreshed
+        await _record_mcp_connection_event(
+            db,
+            record,
+            event_type="auth_ready",
+            auth_kind="none",
+            auth_status="ready",
+            enabled=record.enabled,
+        )
     return _connection_payload(record)
 
 
@@ -228,6 +294,13 @@ async def patch_cloud_mcp_connection(
     )
     if record is None:
         _not_found()
+    if body.enabled is not None and body.enabled != existing.enabled:
+        await _record_mcp_connection_event(
+            db,
+            record,
+            event_type="enabled" if body.enabled else "disabled",
+            enabled=record.enabled,
+        )
     return _connection_payload(record)
 
 
@@ -251,6 +324,18 @@ async def put_cloud_mcp_connection_secret_auth(
     updated = await get_user_connection(db, record.user_id, record.connection_id)
     if updated is None:
         _not_found()
+    await _record_mcp_connection_event(
+        db,
+        updated,
+        event_type=(
+            "secret_updated"
+            if record.auth is not None and record.auth.auth_status == "ready"
+            else "auth_ready"
+        ),
+        auth_kind="secret",
+        auth_status="ready",
+        enabled=updated.enabled,
+    )
     return _connection_payload(updated)
 
 
@@ -258,6 +343,12 @@ async def delete_cloud_mcp_connection_for_user(
     db: AsyncSession,
     connection: CloudMcpConnectionRecord,
 ) -> None:
+    await _record_mcp_connection_event(
+        db,
+        connection,
+        event_type="deleted",
+        enabled=connection.enabled,
+    )
     await delete_user_connection(db, connection.user_id, connection.connection_id)
 
 
@@ -282,6 +373,17 @@ async def sync_cloud_mcp_connection_for_user(
         _invalid_payload(f"{entry.name} does not support legacy cloud secret sync.")
     cleaned = _validate_secret_fields_or_raise(entry, body.secret_fields)
     existing = await list_user_connections(db, user_id)
+    existing_connection = next(
+        (record for record in existing if record.connection_id == cleaned_connection_id),
+        None,
+    )
+    was_ready = (
+        existing_connection is not None and _auth_state(existing_connection)[1] == "ready"
+    )
+    secret_fields_unchanged = (
+        existing_connection is not None
+        and _connection_secret_fields_match(existing_connection, cleaned)
+    )
     server_name = generate_server_name(
         entry,
         {
@@ -301,6 +403,16 @@ async def sync_cloud_mcp_connection_for_user(
         settings_json="{}",
         payload_ciphertext=encrypt_json({"secretFields": cleaned}),
     )
+    updated = await get_user_connection(db, user_id, cleaned_connection_id)
+    if updated is not None and not (was_ready and secret_fields_unchanged):
+        await _record_mcp_connection_event(
+            db,
+            updated,
+            event_type="secret_updated" if was_ready else "auth_ready",
+            auth_kind="secret",
+            auth_status="ready",
+            enabled=True,
+        )
 
 
 async def delete_legacy_cloud_mcp_connection_for_user(
@@ -308,8 +420,17 @@ async def delete_legacy_cloud_mcp_connection_for_user(
     user_id: UUID,
     connection_id: str,
 ) -> None:
+    cleaned_connection_id = validate_connection_id(connection_id)
+    existing = await get_user_connection(db, user_id, cleaned_connection_id)
+    if existing is not None:
+        await _record_mcp_connection_event(
+            db,
+            existing,
+            event_type="deleted",
+            enabled=existing.enabled,
+        )
     await legacy_delete_connection(
         db,
         user_id=user_id,
-        connection_id=validate_connection_id(connection_id),
+        connection_id=cleaned_connection_id,
     )
