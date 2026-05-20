@@ -79,7 +79,7 @@ pub const SUPPORTED_COMMAND_KINDS: &[&str] = &[
     "update_session_config",
     "cancel_turn",
     "close_session",
-    "sync_existing_workspace",
+    "backfill_exposed_workspace",
 ];
 
 impl CloudClient {

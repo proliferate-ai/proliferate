@@ -448,7 +448,7 @@ class TestCloudEventSyncApi:
                     "idempotencyKey": "target-stream-command",
                     "targetId": target_id,
                     "workspaceId": "workspace-live",
-                    "kind": "sync_existing_workspace",
+                    "kind": "backfill_exposed_workspace",
                     "payload": {},
                     "source": "desktop_cloud_view",
                 },

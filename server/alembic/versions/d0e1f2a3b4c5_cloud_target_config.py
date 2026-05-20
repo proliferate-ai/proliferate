@@ -32,7 +32,7 @@ _OLD_COMMAND_KINDS = (
     "resume_workspace",
     "prune_workspace",
     "extend_workspace_ttl",
-    "sync_existing_workspace",
+    "backfill_exposed_workspace",
 )
 
 _NEW_COMMAND_KINDS = (
@@ -50,7 +50,7 @@ _NEW_COMMAND_KINDS = (
     "resume_workspace",
     "prune_workspace",
     "extend_workspace_ttl",
-    "sync_existing_workspace",
+    "backfill_exposed_workspace",
 )
 
 _TARGET_CONFIG_STATUSES = (
