@@ -110,7 +110,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
           )}
         </div>
 
-        <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
+        <div className="flex min-h-0 flex-1 overflow-hidden bg-sidebar-background">
           {children}
         </div>
       </div>
