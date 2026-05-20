@@ -1,14 +1,18 @@
-import { useSearchParams } from "react-router-dom";
+import { RefreshCw } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { AuthHandoffScreen } from "../components/auth/screen/AuthHandoffScreen";
+import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen";
+
+import { ProliferateMark } from "../components/app/navigation/ProliferateMark";
 import { routes } from "../config/routes";
 
 export function AuthErrorPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const code = searchParams.get("code");
 
   return (
-    <AuthHandoffScreen
+    <RedirectCallbackScreen
       tone="error"
       title="Sign in needs attention"
       description={
@@ -16,11 +20,17 @@ export function AuthErrorPage() {
           ? `The sign-in attempt could not be completed: ${code}`
           : "The sign-in attempt could not be completed. Return to the app and try again."
       }
-      stateLabel="Auth error"
-      primaryActionLabel="Try again"
-      primaryActionHref={routes.auth}
-      secondaryActionLabel="Go to dashboard"
-      secondaryActionHref={routes.home}
+      statusLabel="Auth error"
+      brandMark={<ProliferateMark size={32} />}
+      primaryAction={{
+        label: "Try again",
+        icon: <RefreshCw size={15} />,
+        onClick: () => navigate(routes.auth),
+      }}
+      secondaryAction={{
+        label: "Go to dashboard",
+        onClick: () => navigate(routes.home),
+      }}
     />
   );
 }

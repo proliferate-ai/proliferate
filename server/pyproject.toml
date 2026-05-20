@@ -50,8 +50,9 @@ ignore = ["B008"]
 "proliferate/server/cloud/runtime/**" = ["ANN401"]
 # utils/ contains generic helpers where Any is unavoidable at public boundaries
 "proliferate/utils/**" = ["ANN401"]
-# pages.py contains inline HTML/SVG string content that exceeds line length
+# Inline HTML/SVG page renderers contain long literal lines.
 "proliferate/auth/desktop/pages.py" = ["E501"]
+"proliferate/utils/redirect_callback_pages.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

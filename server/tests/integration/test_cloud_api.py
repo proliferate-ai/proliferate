@@ -995,9 +995,8 @@ class TestCloudMcpConnections:
         )
 
         assert response.status_code == 200
-        assert "Authorization complete" in response.text
-        assert "finish using this plugin" in response.text
-        assert "Plugins list" in response.text
+        assert "Authorization done" in response.text
+        assert "Redirecting to desktop app..." in response.text
         assert "Open Proliferate" in response.text
         assert (
             "proliferate://plugins?source=mcp_oauth_callback&amp;status=completed" in response.text
