@@ -5,8 +5,43 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { BootstrappedRoute } from "@/components/auth/AuthGate";
+import { LoginScreen } from "@/components/auth/LoginScreen";
 import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
+import {
+  buildUiTextScaleCssVariables,
+  DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES,
+  UI_FONT_SCALES,
+} from "@/lib/domain/preferences/appearance";
 import { useAuthStore } from "@/stores/auth/auth-store";
+
+afterEach(() => {
+  cleanup();
+  for (const property of Object.keys(DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES)) {
+    document.documentElement.style.removeProperty(property);
+  }
+});
+
+function setRootToNonDefaultTextScale() {
+  for (const [property, value] of Object.entries(
+    buildUiTextScaleCssVariables(UI_FONT_SCALES.xxxlarge),
+  )) {
+    document.documentElement.style.setProperty(property, value);
+  }
+}
+
+function getAuthAppearanceBoundary(): HTMLElement {
+  const boundary = document.querySelector<HTMLElement>("[data-auth-default-appearance]");
+  if (!boundary) {
+    throw new Error("Missing auth appearance boundary");
+  }
+  return boundary;
+}
+
+function expectDefaultAuthAppearance(element: HTMLElement) {
+  for (const [property, value] of Object.entries(DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES)) {
+    expect(element.style.getPropertyValue(property)).toBe(value);
+  }
+}
 
 describe("SessionCheckScreen", () => {
   it("uses the auth-style checking copy and branded mark surface", () => {
@@ -17,6 +52,34 @@ describe("SessionCheckScreen", () => {
     expect(html).toContain("Proliferate is restoring your account");
     expect(html).not.toContain("data-jank-canary=\"braille\"");
   });
+
+  it("ignores user appearance text-size preferences", () => {
+    setRootToNonDefaultTextScale();
+    render(<SessionCheckScreen />);
+
+    expectDefaultAuthAppearance(getAuthAppearanceBoundary());
+  });
+});
+
+describe("LoginScreen", () => {
+  it("ignores user appearance text-size preferences", () => {
+    setRootToNonDefaultTextScale();
+    render(
+      <LoginScreen
+        submitting={false}
+        busy={false}
+        error={null}
+        githubSignInAvailable
+        githubSignInChecking={false}
+        githubSignInUnavailableDescription=""
+        onGitHubSignIn={() => {}}
+        onContinueLocally={() => {}}
+        canContinueLocally
+      />,
+    );
+
+    expectDefaultAuthAppearance(getAuthAppearanceBoundary());
+  });
 });
 
 describe("BootstrappedRoute", () => {
@@ -25,7 +88,6 @@ describe("BootstrappedRoute", () => {
   });
 
   afterEach(() => {
-    cleanup();
     useAuthStore.setState({ status: "bootstrapping", session: null, user: null, error: null });
   });
 

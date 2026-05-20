@@ -1,4 +1,5 @@
 import {
+  buildUiTextScaleCssVariables,
   DEFAULT_APPEARANCE_SIZE_ID,
   resolveAppearanceSizeId,
   resolveReadableCodeFontScale,
@@ -72,14 +73,6 @@ export interface AppearancePreference {
   readableCodeFontSizeId: ReadableCodeFontSizeId;
 }
 
-function setTextScaleVariables(
-  prefix: string,
-  scale: { fontSize: string; lineHeight: string },
-) {
-  document.documentElement.style.setProperty(`--text-${prefix}`, scale.fontSize);
-  document.documentElement.style.setProperty(`--text-${prefix}--line-height`, scale.lineHeight);
-}
-
 export function applyAppearancePreference({
   themePreset,
   colorMode,
@@ -97,12 +90,9 @@ export function applyAppearancePreference({
   root.dataset.readableCodeFontSize = resolvedReadableCodeFontSizeId;
   applyMode(colorMode, themePreset);
 
-  setTextScaleVariables("xs", uiScale.xs);
-  setTextScaleVariables("sm", uiScale.sm);
-  setTextScaleVariables("base", uiScale.base);
-  setTextScaleVariables("chat", uiScale.chat);
-  setTextScaleVariables("lg", uiScale.lg);
-  setTextScaleVariables("xl", uiScale.xl);
+  for (const [property, value] of Object.entries(buildUiTextScaleCssVariables(uiScale))) {
+    root.style.setProperty(property, value);
+  }
 
   root.style.setProperty("--diffs-font-size", readableCodeScale.diffsFontSize);
   root.style.setProperty("--diffs-line-height", readableCodeScale.diffsLineHeight);

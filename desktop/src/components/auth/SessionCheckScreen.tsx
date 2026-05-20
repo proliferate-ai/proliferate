@@ -1,4 +1,5 @@
 import { ProliferateLivingMark } from "@/components/brand/ProliferateLivingMark";
+import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
 import { AUTH_GATE_LABELS } from "@/copy/auth/auth-copy";
 import { twMerge } from "tailwind-merge";
 
@@ -14,7 +15,7 @@ export function SessionCheckScreen({
   onResolved,
 }: SessionCheckScreenProps) {
   return (
-    <div
+    <AuthAppearanceBoundary
       className={twMerge(
         "flex min-h-screen flex-col items-center justify-center bg-background p-8",
         className,
@@ -35,6 +36,6 @@ export function SessionCheckScreen({
           </div>
         </div>
       </div>
-    </div>
+    </AuthAppearanceBoundary>
   );
 }

@@ -488,13 +488,13 @@ describe("user preference migration", () => {
   it("preserves explicit valid appearance font preferences", () => {
     const result = migrateUserPreferences({
       ...USER_PREFERENCE_DEFAULTS,
-      uiFontSizeId: "xsmall",
-      readableCodeFontSizeId: "xxlarge",
+      uiFontSizeId: "xxsmall",
+      readableCodeFontSizeId: "xxxlarge",
     });
 
     expect(result.changed).toBe(false);
-    expect(result.preferences.uiFontSizeId).toBe("xsmall");
-    expect(result.preferences.readableCodeFontSizeId).toBe("xxlarge");
+    expect(result.preferences.uiFontSizeId).toBe("xxsmall");
+    expect(result.preferences.readableCodeFontSizeId).toBe("xxxlarge");
   });
 
   it("sanitizes partially present review defaults", () => {

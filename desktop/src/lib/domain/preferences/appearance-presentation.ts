@@ -11,12 +11,14 @@ interface AppearanceSizeOption<T extends string> {
 }
 
 const SIZE_LABELS: Record<UiFontSizeId, string> = {
+  xxsmall: "Extra Extra Small",
   xsmall: "Extra Small",
   small: "Small",
   default: "Default",
   large: "Large",
   xlarge: "Extra Large",
   xxlarge: "Extra Extra Large",
+  xxxlarge: "Extra Extra Extra Large",
 };
 
 export const UI_FONT_SIZE_OPTIONS: AppearanceSizeOption<UiFontSizeId>[] =

@@ -1,4 +1,13 @@
-export const APPEARANCE_SIZE_IDS = ["xsmall", "small", "default", "large", "xlarge", "xxlarge"] as const;
+export const APPEARANCE_SIZE_IDS = [
+  "xxsmall",
+  "xsmall",
+  "small",
+  "default",
+  "large",
+  "xlarge",
+  "xxlarge",
+  "xxxlarge",
+] as const;
 
 export type AppearanceSizeId = (typeof APPEARANCE_SIZE_IDS)[number];
 export type UiFontSizeId = AppearanceSizeId;
@@ -18,6 +27,21 @@ export interface UiFontScale {
   xl: TextTokenScale;
 }
 
+export type UiTextScaleCssVariables = {
+  "--text-xs": string;
+  "--text-xs--line-height": string;
+  "--text-sm": string;
+  "--text-sm--line-height": string;
+  "--text-base": string;
+  "--text-base--line-height": string;
+  "--text-chat": string;
+  "--text-chat--line-height": string;
+  "--text-lg": string;
+  "--text-lg--line-height": string;
+  "--text-xl": string;
+  "--text-xl--line-height": string;
+};
+
 export interface ReadableCodeFontScale {
   monacoFontSize: number;
   monacoLineHeight: number;
@@ -29,15 +53,25 @@ export interface ReadableCodeFontScale {
 
 export const DEFAULT_APPEARANCE_SIZE_ID: AppearanceSizeId = "default";
 export const CHAT_LINE_HEIGHTS: Record<UiFontSizeId, string> = {
+  xxsmall: "17px",
   xsmall: "18px",
   small: "19px",
   default: "20px",
   large: "21px",
   xlarge: "22px",
   xxlarge: "23px",
+  xxxlarge: "24px",
 };
 
 export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
+  xxsmall: {
+    xs: { fontSize: "0.40625rem", lineHeight: "0.625rem" },
+    sm: { fontSize: "0.4375rem", lineHeight: "0.75rem" },
+    base: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
+    chat: { fontSize: "9px", lineHeight: CHAT_LINE_HEIGHTS.xxsmall },
+    lg: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
+    xl: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
+  },
   xsmall: {
     xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
     sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
@@ -86,9 +120,25 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     lg: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
     xl: { fontSize: "1.3125rem", lineHeight: "2.125rem" },
   },
+  xxxlarge: {
+    xs: { fontSize: "0.75rem", lineHeight: "1.125rem" },
+    sm: { fontSize: "0.875rem", lineHeight: "1.3125rem" },
+    base: { fontSize: "0.9375rem", lineHeight: "1.5rem" },
+    chat: { fontSize: "16px", lineHeight: CHAT_LINE_HEIGHTS.xxxlarge },
+    lg: { fontSize: "1.125rem", lineHeight: "1.75rem" },
+    xl: { fontSize: "1.375rem", lineHeight: "2.25rem" },
+  },
 };
 
 export const READABLE_CODE_FONT_SCALES: Record<ReadableCodeFontSizeId, ReadableCodeFontScale> = {
+  xxsmall: {
+    monacoFontSize: 8,
+    monacoLineHeight: 15,
+    diffsFontSize: "8px",
+    diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
+    codeFontSize: "0.5rem",
+    codeLineHeight: "1.625",
+  },
   xsmall: {
     monacoFontSize: 9,
     monacoLineHeight: 16,
@@ -137,6 +187,14 @@ export const READABLE_CODE_FONT_SCALES: Record<ReadableCodeFontSizeId, ReadableC
     codeFontSize: "0.875rem",
     codeLineHeight: "1.625",
   },
+  xxxlarge: {
+    monacoFontSize: 15,
+    monacoLineHeight: 24,
+    diffsFontSize: "15px",
+    diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
+    codeFontSize: "0.9375rem",
+    codeLineHeight: "1.625",
+  },
 };
 
 export function isAppearanceSizeId(value: unknown): value is AppearanceSizeId {
@@ -150,6 +208,27 @@ export function resolveAppearanceSizeId(value: unknown): AppearanceSizeId {
 export function resolveUiFontScale(value: unknown): UiFontScale {
   return UI_FONT_SCALES[resolveAppearanceSizeId(value)];
 }
+
+export function buildUiTextScaleCssVariables(scale: UiFontScale): UiTextScaleCssVariables {
+  return {
+    "--text-xs": scale.xs.fontSize,
+    "--text-xs--line-height": scale.xs.lineHeight,
+    "--text-sm": scale.sm.fontSize,
+    "--text-sm--line-height": scale.sm.lineHeight,
+    "--text-base": scale.base.fontSize,
+    "--text-base--line-height": scale.base.lineHeight,
+    "--text-chat": scale.chat.fontSize,
+    "--text-chat--line-height": scale.chat.lineHeight,
+    "--text-lg": scale.lg.fontSize,
+    "--text-lg--line-height": scale.lg.lineHeight,
+    "--text-xl": scale.xl.fontSize,
+    "--text-xl--line-height": scale.xl.lineHeight,
+  };
+}
+
+export const DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES = buildUiTextScaleCssVariables(
+  UI_FONT_SCALES[DEFAULT_APPEARANCE_SIZE_ID],
+);
 
 export function resolveReadableCodeFontScale(value: unknown): ReadableCodeFontScale {
   return READABLE_CODE_FONT_SCALES[resolveAppearanceSizeId(value)];
