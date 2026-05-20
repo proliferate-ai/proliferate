@@ -266,6 +266,7 @@ mod tests {
                 display_name: None,
                 content: "# Use GitHub\n".to_string(),
             }],
+            credential_values: Vec::new(),
             source: RuntimeConfigSource::Worker,
         }
     }

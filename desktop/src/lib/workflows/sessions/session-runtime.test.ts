@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  assertDirectSessionCreateRuntimeConfigStamped,
   collectInactiveSessionStreamIds,
   detachAndCloseSessionStreams,
   fetchSessionHistory,
@@ -142,6 +143,27 @@ describe("fetchSessionHistory", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("assertDirectSessionCreateRuntimeConfigStamped", () => {
+  it("allows local direct session creation", () => {
+    expect(() => assertDirectSessionCreateRuntimeConfigStamped({
+      anyharnessWorkspaceId: "workspace-1",
+      baseUrl: "http://localhost:6174",
+      location: "local",
+      runtimeGeneration: 0,
+    })).not.toThrow();
+  });
+
+  it("fails closed for direct remote session creation", () => {
+    expect(() => assertDirectSessionCreateRuntimeConfigStamped({
+      anyharnessWorkspaceId: "workspace-1",
+      baseUrl: "https://runtime.example.test",
+      location: "cloud",
+      runtimeGeneration: 1,
+      authToken: "token",
+    })).toThrow(/runtime config stamping/i);
   });
 });
 

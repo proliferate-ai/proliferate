@@ -1,8 +1,8 @@
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 use anyharness_contract::v1::{
     ApplyRuntimeConfigRequest, RuntimeArtifactPayload, RuntimeConfigExternalScope,
-    RuntimeConfigRevision, RuntimeConfigSource,
+    RuntimeConfigRevision, RuntimeConfigSource, RuntimeCredentialValue,
 };
 use serde_json::{json, Value};
 use tokio::time::{sleep, Duration};
@@ -31,10 +31,7 @@ use crate::{
         git_identity::{parse_configure_git_identity_payload, write_target_git_identity},
         materialize_plan, parse_materialize_environment_payload,
         repo_checkout::{ensure_repo_checkout, parse_ensure_repo_checkout_payload},
-        runtime_config::{
-            manifest_credential_refs, materialize_manifest_credentials,
-            RuntimeConfigMaterializationFragment,
-        },
+        runtime_config::{manifest_credential_refs, RuntimeConfigMaterializationFragment},
     },
     store::{PendingCommandResult, WorkerStore},
     sync,
@@ -704,8 +701,8 @@ async fn apply_runtime_config_to_anyharness(
     runtime_config: &RuntimeConfigMaterializationFragment,
 ) -> Result<(), WorkerError> {
     let credential_refs = manifest_credential_refs(&runtime_config.manifest);
-    let credentials = if credential_refs.is_empty() {
-        HashMap::new()
+    let credential_values = if credential_refs.is_empty() {
+        Vec::new()
     } else {
         let response = cloud
             .fetch_runtime_config_credentials(
@@ -722,10 +719,12 @@ async fn apply_runtime_config_to_anyharness(
         response
             .credentials
             .into_iter()
-            .map(|credential| (credential.credential_ref, credential.value))
-            .collect::<HashMap<_, _>>()
+            .map(|credential| RuntimeCredentialValue {
+                credential_ref: credential.credential_ref,
+                value: credential.value,
+            })
+            .collect::<Vec<_>>()
     };
-    let manifest = materialize_manifest_credentials(&runtime_config.manifest, &credentials)?;
     let mut artifact_payloads = Vec::with_capacity(runtime_config.artifact_refs.len());
     for artifact in &runtime_config.artifact_refs {
         let payload = cloud
@@ -756,8 +755,9 @@ async fn apply_runtime_config_to_anyharness(
                 target_id: runtime_config.target_id.clone(),
             }),
         },
-        manifest,
+        manifest: runtime_config.manifest.clone(),
         artifact_payloads,
+        credential_values,
         source: RuntimeConfigSource::Worker,
     };
     let response = anyharness.apply_runtime_config(&request).await?;

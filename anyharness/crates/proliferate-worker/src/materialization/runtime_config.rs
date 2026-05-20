@@ -1,8 +1,8 @@
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 use anyharness_contract::v1::{
-    RuntimeArtifactRef, RuntimeConfigManifest, RuntimeMcpLaunch, RuntimeMcpNamedValue,
-    RuntimeMcpTemplatePart, RuntimeMcpValue,
+    RuntimeArtifactRef, RuntimeConfigManifest, RuntimeMcpLaunch, RuntimeMcpTemplatePart,
+    RuntimeMcpValue,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -88,21 +88,6 @@ pub fn manifest_credential_refs(manifest: &RuntimeConfigManifest) -> Vec<String>
     refs
 }
 
-pub fn materialize_manifest_credentials(
-    manifest: &RuntimeConfigManifest,
-    credentials: &HashMap<String, String>,
-) -> Result<RuntimeConfigManifest, WorkerError> {
-    let mut manifest = manifest.clone();
-    for server in &mut manifest.mcp_servers {
-        server.launch = materialize_launch(&server.launch, credentials)?;
-        server.credential_refs.clear();
-    }
-    for skill in &mut manifest.skills {
-        skill.credential_refs.clear();
-    }
-    Ok(manifest)
-}
-
 pub fn write_runtime_config_projection(
     workspace_root: &Path,
     runtime_config: Option<&RuntimeConfigMaterializationFragment>,
@@ -161,94 +146,13 @@ fn push_unique(refs: &mut Vec<String>, credential_ref: String) {
     }
 }
 
-fn materialize_launch(
-    launch: &RuntimeMcpLaunch,
-    credentials: &HashMap<String, String>,
-) -> Result<RuntimeMcpLaunch, WorkerError> {
-    match launch {
-        RuntimeMcpLaunch::Http {
-            url,
-            headers,
-            query,
-        } => Ok(RuntimeMcpLaunch::Http {
-            url: materialize_value(url, credentials)?,
-            headers: materialize_named_values(headers, credentials)?,
-            query: materialize_named_values(query, credentials)?,
-        }),
-        RuntimeMcpLaunch::Stdio { command, args, env } => Ok(RuntimeMcpLaunch::Stdio {
-            command: materialize_value(command, credentials)?,
-            args: args
-                .iter()
-                .map(|arg| materialize_value(arg, credentials))
-                .collect::<Result<Vec<_>, _>>()?,
-            env: materialize_named_values(env, credentials)?,
-        }),
-    }
-}
-
-fn materialize_named_values(
-    values: &[RuntimeMcpNamedValue],
-    credentials: &HashMap<String, String>,
-) -> Result<Vec<RuntimeMcpNamedValue>, WorkerError> {
-    values
-        .iter()
-        .map(|value| {
-            Ok(RuntimeMcpNamedValue {
-                name: value.name.clone(),
-                value: materialize_value(&value.value, credentials)?,
-            })
-        })
-        .collect()
-}
-
-fn materialize_value(
-    value: &RuntimeMcpValue,
-    credentials: &HashMap<String, String>,
-) -> Result<RuntimeMcpValue, WorkerError> {
-    match value {
-        RuntimeMcpValue::Literal { .. } => Ok(value.clone()),
-        RuntimeMcpValue::Credential { credential_ref } => credentials
-            .get(credential_ref)
-            .cloned()
-            .map(|value| RuntimeMcpValue::Literal { value })
-            .ok_or_else(|| {
-                WorkerError::Materialization(
-                    "runtime config credential ref could not be materialized".to_string(),
-                )
-            }),
-        RuntimeMcpValue::Template { parts } => {
-            let mut rendered = String::new();
-            for part in parts {
-                rendered.push_str(&materialize_template_part_to_string(part, credentials)?);
-            }
-            Ok(RuntimeMcpValue::Literal { value: rendered })
-        }
-    }
-}
-
-fn materialize_template_part_to_string(
-    part: &RuntimeMcpTemplatePart,
-    credentials: &HashMap<String, String>,
-) -> Result<String, WorkerError> {
-    match part {
-        RuntimeMcpTemplatePart::Literal { value } => Ok(value.clone()),
-        RuntimeMcpTemplatePart::Credential { credential_ref } => {
-            credentials.get(credential_ref).cloned().ok_or_else(|| {
-                WorkerError::Materialization(
-                    "runtime config credential ref could not be materialized".to_string(),
-                )
-            })
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
 
     #[test]
-    fn materializes_runtime_config_credentials_for_apply() {
+    fn collects_runtime_config_credential_refs_without_mutating_manifest() {
         let manifest = serde_json::from_value::<RuntimeConfigManifest>(json!({
             "mcpServers": [{
                 "id": "mcp:1",
@@ -301,25 +205,14 @@ mod tests {
             manifest_credential_refs(&manifest),
             vec!["mcp:conn-db:api_key".to_string()]
         );
-        let mut credentials = HashMap::new();
-        credentials.insert(
-            "mcp:conn-db:api_key".to_string(),
-            "secret-token".to_string(),
+        assert_eq!(manifest.mcp_servers[0].credential_refs.len(), 1);
+        assert_eq!(
+            manifest.skills[0].credential_refs,
+            vec!["mcp:mcp:1:credentials".to_string()]
         );
-
-        let materialized =
-            materialize_manifest_credentials(&manifest, &credentials).expect("materialized");
-
-        assert!(materialized.mcp_servers[0].credential_refs.is_empty());
-        assert!(materialized.skills[0].credential_refs.is_empty());
-        let RuntimeMcpLaunch::Http { headers, .. } = &materialized.mcp_servers[0].launch else {
+        let RuntimeMcpLaunch::Http { headers, .. } = &manifest.mcp_servers[0].launch else {
             panic!("expected http launch");
         };
-        assert_eq!(
-            headers[0].value,
-            RuntimeMcpValue::Literal {
-                value: "Bearer secret-token".to_string()
-            }
-        );
+        assert!(matches!(headers[0].value, RuntimeMcpValue::Template { .. }));
     }
 }

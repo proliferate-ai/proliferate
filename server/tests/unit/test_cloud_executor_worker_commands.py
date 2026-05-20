@@ -16,8 +16,10 @@ from proliferate.db import engine as engine_module
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.models.organizations import Organization
+from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.automations.worker.cloud_executor_commands import (
     enqueue_automation_command,
     load_command,
@@ -120,6 +122,54 @@ async def test_cloud_executor_enqueues_idempotent_automation_command(
         assert first.target_id == target.id
         assert first.workspace_id == "workspace-1"
         assert first.session_id is None
+    finally:
+        engine_module.async_session_factory = original_factory
+
+
+@pytest.mark.asyncio
+async def test_cloud_executor_runtime_config_preflight_rejects_unstamped_managed_target(
+    test_engine: AsyncEngine,
+) -> None:
+    original_factory = engine_module.async_session_factory
+    engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    user_id = uuid.uuid4()
+
+    try:
+        async with engine_module.async_session_factory() as session, session.begin():
+            session.add(
+                User(
+                    id=user_id,
+                    email="automation-worker-runtime-config@example.com",
+                    hashed_password="!",
+                    is_active=True,
+                    is_superuser=False,
+                    is_verified=True,
+                )
+            )
+            await session.flush()
+            profile = await sandbox_profile_store.ensure_personal_sandbox_profile(
+                session,
+                user_id=user_id,
+                created_by_user_id=user_id,
+            )
+            target = await targets_store.ensure_primary_profile_target(
+                session,
+                sandbox_profile_id=profile.id,
+                created_by_user_id=user_id,
+            )
+
+        claim = _claim(run_id=uuid.uuid4(), user_id=user_id)
+        with pytest.raises(CloudApiError) as exc:
+            await enqueue_automation_command(
+                claim,
+                target_id=target.id,
+                stage="start-session",
+                kind=CloudCommandKind.start_session.value,
+                workspace_id="workspace-1",
+                payload={"workspaceId": "workspace-1", "agentKind": "proliferate"},
+            )
+
+        assert exc.value.code == "cloud_command_target_config_required"
     finally:
         engine_module.async_session_factory = original_factory
 

@@ -10,6 +10,7 @@ import { PullRequestsClient } from "./pull-requests.js";
 import { RepoRootsClient } from "./repo-roots.js";
 import { ReplayClient } from "./replay.js";
 import { ReviewsClient } from "./reviews.js";
+import { RuntimeConfigClient } from "./runtime-config.js";
 import { RuntimeClient } from "./runtime.js";
 import { SessionsClient } from "./sessions.js";
 import { TerminalsClient } from "./terminals.js";
@@ -363,6 +364,7 @@ export function hashTimingScope(value: string): string {
 
 export class AnyHarnessClient {
   readonly runtime: RuntimeClient;
+  readonly runtimeConfig: RuntimeConfigClient;
   readonly agents: AgentsClient;
   readonly mobility: MobilityClient;
   readonly plans: PlansClient;
@@ -382,6 +384,7 @@ export class AnyHarnessClient {
   constructor(options: AnyHarnessClientOptions) {
     const transport = new AnyHarnessTransport(options);
     this.runtime = new RuntimeClient(transport);
+    this.runtimeConfig = new RuntimeConfigClient(transport);
     this.agents = new AgentsClient(transport);
     this.mobility = new MobilityClient(transport);
     this.plans = new PlansClient(transport);

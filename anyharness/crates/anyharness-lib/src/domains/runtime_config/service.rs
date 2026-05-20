@@ -1,11 +1,12 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 
 use anyharness_contract::v1::{
     ApplyRuntimeConfigRequest, ApplyRuntimeConfigResponse, RuntimeArtifactPayload,
-    RuntimeConfigExternalScope, RuntimeConfigManifest, RuntimeConfigRevision,
-    RuntimeConfigRevisionExpectation, RuntimeConfigStatusResponse, RuntimeMcpLaunch,
-    RuntimeMcpNamedValue, RuntimeMcpServer, RuntimeMcpValue, RuntimeSkill,
-    SessionMcpBindingSummary,
+    RuntimeArtifactStatus, RuntimeConfigExternalScope, RuntimeConfigManifest,
+    RuntimeConfigRevision, RuntimeConfigRevisionExpectation, RuntimeConfigStatusResponse,
+    RuntimeCredentialValue, RuntimeMcpLaunch, RuntimeMcpNamedValue, RuntimeMcpServer,
+    RuntimeMcpTemplatePart, RuntimeMcpValue, RuntimeSkill, SessionMcpBindingSummary,
 };
 use rusqlite::{params, OptionalExtension, Row};
 use url::Url;
@@ -31,6 +32,8 @@ struct RuntimeConfigRecord {
     artifact_payloads: Vec<RuntimeArtifactPayload>,
 }
 
+type CredentialCache = Arc<Mutex<HashMap<String, HashMap<String, String>>>>;
+
 impl RuntimeConfigStore {
     pub fn new(db: Db) -> Self {
         Self { db }
@@ -42,7 +45,6 @@ impl RuntimeConfigStore {
         request: &ApplyRuntimeConfigRequest,
     ) -> anyhow::Result<bool> {
         let manifest_json = serde_json::to_string(&request.manifest)?;
-        let artifact_payloads_json = serde_json::to_string(&request.artifact_payloads)?;
         let scope = request
             .revision
             .external_scope
@@ -52,10 +54,10 @@ impl RuntimeConfigStore {
             let changed = conn.execute(
                 "INSERT INTO runtime_config_current (
                     scope_key, scope_provider, scope_id, target_id, revision_id, sequence,
-                    content_hash, manifest_json, artifact_payloads_json, source,
+                    content_hash, manifest_json, source,
                     applied_at, updated_at
                  ) VALUES (
-                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
+                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,
                     datetime('now'), datetime('now')
                  )
                  ON CONFLICT(scope_key) DO UPDATE SET
@@ -66,7 +68,6 @@ impl RuntimeConfigStore {
                     sequence = excluded.sequence,
                     content_hash = excluded.content_hash,
                     manifest_json = excluded.manifest_json,
-                    artifact_payloads_json = excluded.artifact_payloads_json,
                     source = excluded.source,
                     applied_at = datetime('now'),
                     updated_at = datetime('now')
@@ -80,7 +81,6 @@ impl RuntimeConfigStore {
                     request.revision.sequence,
                     request.revision.content_hash,
                     manifest_json,
-                    artifact_payloads_json,
                     format!("{:?}", request.source).to_lowercase(),
                 ],
             )?;
@@ -110,10 +110,10 @@ impl RuntimeConfigStore {
     }
 
     fn latest(&self) -> anyhow::Result<Option<RuntimeConfigRecord>> {
-        self.db.with_conn(|conn| {
+        let record = self.db.with_conn(|conn| {
             conn.query_row(
                 "SELECT scope_provider, scope_id, target_id, revision_id, sequence,
-                        content_hash, manifest_json, artifact_payloads_json
+                        content_hash, manifest_json
                  FROM runtime_config_current
                  ORDER BY updated_at DESC
                  LIMIT 1",
@@ -121,21 +121,23 @@ impl RuntimeConfigStore {
                 runtime_config_record_from_row,
             )
             .optional()
-        })
+        })?;
+        self.attach_artifact_payloads(record)
     }
 
     fn find_by_scope(&self, scope_key: &str) -> anyhow::Result<Option<RuntimeConfigRecord>> {
-        self.db.with_conn(|conn| {
+        let record = self.db.with_conn(|conn| {
             conn.query_row(
                 "SELECT scope_provider, scope_id, target_id, revision_id, sequence,
-                        content_hash, manifest_json, artifact_payloads_json
+                        content_hash, manifest_json
                  FROM runtime_config_current
                  WHERE scope_key = ?1",
                 [scope_key],
                 runtime_config_record_from_row,
             )
             .optional()
-        })
+        })?;
+        self.attach_artifact_payloads(record)
     }
 
     fn set_session_context(
@@ -144,7 +146,6 @@ impl RuntimeConfigStore {
         record: &RuntimeConfigRecord,
     ) -> anyhow::Result<()> {
         let manifest_json = serde_json::to_string(&record.manifest)?;
-        let artifact_payloads_json = serde_json::to_string(&record.artifact_payloads)?;
         let scope = record
             .revision
             .external_scope
@@ -154,9 +155,9 @@ impl RuntimeConfigStore {
             conn.execute(
                 "INSERT INTO runtime_config_session_context (
                     session_id, scope_provider, scope_id, target_id, revision_id, sequence,
-                    content_hash, manifest_json, artifact_payloads_json, applied_at, updated_at
+                    content_hash, manifest_json, applied_at, updated_at
                  ) VALUES (
-                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'), datetime('now')
+                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now')
                  )
                  ON CONFLICT(session_id) DO UPDATE SET
                     scope_provider = excluded.scope_provider,
@@ -166,7 +167,6 @@ impl RuntimeConfigStore {
                     sequence = excluded.sequence,
                     content_hash = excluded.content_hash,
                     manifest_json = excluded.manifest_json,
-                    artifact_payloads_json = excluded.artifact_payloads_json,
                     applied_at = datetime('now'),
                     updated_at = datetime('now')",
                 params![
@@ -178,7 +178,6 @@ impl RuntimeConfigStore {
                     record.revision.sequence,
                     record.revision.content_hash,
                     manifest_json,
-                    artifact_payloads_json,
                 ],
             )?;
             Ok(())
@@ -189,16 +188,71 @@ impl RuntimeConfigStore {
         &self,
         session_id: &str,
     ) -> anyhow::Result<Option<RuntimeConfigRecord>> {
-        self.db.with_conn(|conn| {
+        let record = self.db.with_conn(|conn| {
             conn.query_row(
                 "SELECT scope_provider, scope_id, target_id, revision_id, sequence,
-                        content_hash, manifest_json, artifact_payloads_json
+                        content_hash, manifest_json
                  FROM runtime_config_session_context
                  WHERE session_id = ?1",
                 [session_id],
                 runtime_config_record_from_row,
             )
             .optional()
+        })?;
+        self.attach_artifact_payloads(record)
+    }
+
+    fn attach_artifact_payloads(
+        &self,
+        record: Option<RuntimeConfigRecord>,
+    ) -> anyhow::Result<Option<RuntimeConfigRecord>> {
+        let Some(mut record) = record else {
+            return Ok(None);
+        };
+        record.artifact_payloads = self.artifact_payloads_for_manifest(&record.manifest)?;
+        Ok(Some(record))
+    }
+
+    fn artifact_payloads_for_manifest(
+        &self,
+        manifest: &RuntimeConfigManifest,
+    ) -> anyhow::Result<Vec<RuntimeArtifactPayload>> {
+        self.db.with_conn(|conn| {
+            let mut payloads = Vec::new();
+            for artifact in &manifest.artifacts {
+                let payload = conn
+                    .query_row(
+                        "SELECT hash, content_type, byte_size, source_ref, content
+                         FROM runtime_config_artifacts
+                         WHERE hash = ?1",
+                        [artifact.hash.as_str()],
+                        |row| {
+                            Ok(RuntimeArtifactPayload {
+                                hash: row.get(0)?,
+                                content_type: row.get(1)?,
+                                byte_size: row.get(2)?,
+                                source_ref: row.get(3)?,
+                                resource_id: artifact.resource_id.clone(),
+                                display_name: artifact.display_name.clone(),
+                                content: row.get(4)?,
+                            })
+                        },
+                    )
+                    .optional()?;
+                if let Some(payload) = payload {
+                    payloads.push(payload);
+                }
+            }
+            Ok(payloads)
+        })
+    }
+
+    fn cached_artifact_hashes(&self) -> anyhow::Result<HashSet<String>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare("SELECT hash FROM runtime_config_artifacts")?;
+            let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+            let hashes = rows.collect::<rusqlite::Result<HashSet<_>>>()?;
+            Ok(hashes)
         })
     }
 }
@@ -210,12 +264,8 @@ fn runtime_config_record_from_row(row: &Row<'_>) -> rusqlite::Result<RuntimeConf
         target_id: row.get(2)?,
     };
     let manifest_json: String = row.get(6)?;
-    let artifacts_json: String = row.get(7)?;
     let manifest = serde_json::from_str(&manifest_json).map_err(|error| {
         rusqlite::Error::FromSqlConversionFailure(6, rusqlite::types::Type::Text, Box::new(error))
-    })?;
-    let artifact_payloads = serde_json::from_str(&artifacts_json).map_err(|error| {
-        rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, Box::new(error))
     })?;
     Ok(RuntimeConfigRecord {
         revision: RuntimeConfigRevision {
@@ -225,13 +275,14 @@ fn runtime_config_record_from_row(row: &Row<'_>) -> rusqlite::Result<RuntimeConf
             external_scope: Some(scope),
         },
         manifest,
-        artifact_payloads,
+        artifact_payloads: Vec::new(),
     })
 }
 
 #[derive(Clone)]
 pub struct RuntimeConfigService {
     store: RuntimeConfigStore,
+    credential_cache: CredentialCache,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -242,6 +293,10 @@ pub enum RuntimeConfigError {
     Stale,
     #[error("runtime config contains unresolved credentials")]
     UnresolvedCredentials,
+    #[error("runtime config is missing credentials: {0:?}")]
+    MissingCredentials(Vec<String>),
+    #[error("runtime config contains inline secret-bearing launch value: {0}")]
+    InlineSecretLiteral(String),
     #[error("runtime config artifact is missing: {0}")]
     MissingArtifact(String),
     #[error("runtime config value is not materialized")]
@@ -259,7 +314,10 @@ pub struct RuntimeConfigSessionInputs {
 
 impl RuntimeConfigService {
     pub fn new(store: RuntimeConfigStore) -> Self {
-        Self { store }
+        Self {
+            store,
+            credential_cache: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     pub fn apply_config(
@@ -269,6 +327,9 @@ impl RuntimeConfigService {
         validate_apply_request(&request)?;
         let scope_key = scope_key(request.revision.external_scope.as_ref());
         let applied = self.store.upsert_current(&scope_key, &request)?;
+        if applied {
+            self.cache_credentials(&request.revision.id, &request.credential_values)?;
+        }
         Ok(ApplyRuntimeConfigResponse {
             applied,
             revision: request.revision,
@@ -280,14 +341,14 @@ impl RuntimeConfigService {
         let current = self.store.latest()?;
         Ok(match current {
             Some(record) => RuntimeConfigStatusResponse {
+                artifacts: self.artifact_statuses(&record.manifest)?,
                 current_revision: Some(record.revision),
                 manifest: Some(record.manifest),
-                artifact_payloads: record.artifact_payloads,
             },
             None => RuntimeConfigStatusResponse {
+                artifacts: Vec::new(),
                 current_revision: None,
                 manifest: None,
-                artifact_payloads: Vec::new(),
             },
         })
     }
@@ -297,7 +358,7 @@ impl RuntimeConfigService {
         expected: &RuntimeConfigRevisionExpectation,
     ) -> Result<RuntimeConfigSessionInputs, RuntimeConfigError> {
         let current = self.record_for_expected(expected)?;
-        session_inputs_from_record(current)
+        self.session_inputs_from_record(current)
     }
 
     pub fn bind_session_to_expected(
@@ -307,7 +368,7 @@ impl RuntimeConfigService {
     ) -> Result<RuntimeConfigSessionInputs, RuntimeConfigError> {
         let current = self.record_for_expected(expected)?;
         self.store.set_session_context(session_id, &current)?;
-        session_inputs_from_record(current)
+        self.session_inputs_from_record(current)
     }
 
     pub fn session_context(
@@ -317,7 +378,8 @@ impl RuntimeConfigService {
         let Some(record) = self.store.find_session_context(session_id)? else {
             return Ok(None);
         };
-        session_inputs_from_record(record).map(|inputs| Some(inputs.context))
+        self.session_inputs_from_record(record)
+            .map(|inputs| Some(inputs.context))
     }
 
     pub fn assert_session_context_matches(
@@ -361,17 +423,90 @@ impl RuntimeConfigService {
         }
         Ok(current)
     }
+
+    fn cache_credentials(
+        &self,
+        revision_id: &str,
+        credential_values: &[RuntimeCredentialValue],
+    ) -> Result<(), RuntimeConfigError> {
+        let mut values = HashMap::new();
+        for credential in credential_values {
+            values.insert(credential.credential_ref.clone(), credential.value.clone());
+        }
+        let mut cache = self.credential_cache.lock().map_err(|_| {
+            RuntimeConfigError::Internal(anyhow::anyhow!("credential cache poisoned"))
+        })?;
+        cache.insert(revision_id.to_string(), values);
+        Ok(())
+    }
+
+    fn credential_values_for_revision(
+        &self,
+        revision_id: &str,
+        required_refs: &[String],
+    ) -> Result<HashMap<String, String>, RuntimeConfigError> {
+        let cache = self.credential_cache.lock().map_err(|_| {
+            RuntimeConfigError::Internal(anyhow::anyhow!("credential cache poisoned"))
+        })?;
+        let values = cache.get(revision_id);
+        let mut missing = Vec::new();
+        let mut resolved = HashMap::new();
+        for credential_ref in required_refs {
+            match values.and_then(|items| items.get(credential_ref)) {
+                Some(value) => {
+                    resolved.insert(credential_ref.clone(), value.clone());
+                }
+                None => missing.push(credential_ref.clone()),
+            }
+        }
+        if missing.is_empty() {
+            Ok(resolved)
+        } else {
+            Err(RuntimeConfigError::MissingCredentials(missing))
+        }
+    }
+
+    fn artifact_statuses(
+        &self,
+        manifest: &RuntimeConfigManifest,
+    ) -> Result<Vec<RuntimeArtifactStatus>, RuntimeConfigError> {
+        let cached = self.store.cached_artifact_hashes()?;
+        Ok(manifest
+            .artifacts
+            .iter()
+            .map(|artifact| RuntimeArtifactStatus {
+                hash: artifact.hash.clone(),
+                content_type: artifact.content_type.clone(),
+                byte_size: artifact.byte_size,
+                source_ref: artifact.source_ref.clone(),
+                resource_id: artifact.resource_id.clone(),
+                display_name: artifact.display_name.clone(),
+                cached: cached.contains(&artifact.hash),
+            })
+            .collect())
+    }
+
+    fn session_inputs_from_record(
+        &self,
+        current: RuntimeConfigRecord,
+    ) -> Result<RuntimeConfigSessionInputs, RuntimeConfigError> {
+        session_inputs_from_record(current, self)
+    }
 }
 
 fn session_inputs_from_record(
     current: RuntimeConfigRecord,
+    service: &RuntimeConfigService,
 ) -> Result<RuntimeConfigSessionInputs, RuntimeConfigError> {
     validate_materialized_record(&current)?;
+    let required_credential_refs = manifest_credential_refs(&current.manifest);
+    let credentials =
+        service.credential_values_for_revision(&current.revision.id, &required_credential_refs)?;
     let mcp_servers = current
         .manifest
         .mcp_servers
         .iter()
-        .map(runtime_mcp_to_session_mcp)
+        .map(|server| runtime_mcp_to_session_mcp(server, &credentials))
         .collect::<Result<Vec<_>, _>>()?;
     let artifacts = current
         .artifact_payloads
@@ -402,29 +537,23 @@ fn session_inputs_from_record(
 }
 
 fn validate_materialized_record(record: &RuntimeConfigRecord) -> Result<(), RuntimeConfigError> {
-    if !record.manifest.mcp_servers.iter().all(|server| {
-        server.credential_refs.is_empty() && runtime_launch_is_materialized(&server.launch)
-    }) || record
-        .manifest
-        .skills
-        .iter()
-        .any(|skill| !skill.credential_refs.is_empty())
-    {
-        return Err(RuntimeConfigError::UnresolvedCredentials);
-    }
+    validate_no_inline_secret_literals(&record.manifest)?;
     Ok(())
 }
 
 fn validate_apply_request(request: &ApplyRuntimeConfigRequest) -> Result<(), RuntimeConfigError> {
-    if !request.manifest.mcp_servers.iter().all(|server| {
-        server.credential_refs.is_empty() && runtime_launch_is_materialized(&server.launch)
-    }) || request
-        .manifest
-        .skills
+    validate_no_inline_secret_literals(&request.manifest)?;
+    let credential_values = request
+        .credential_values
         .iter()
-        .any(|skill| !skill.credential_refs.is_empty())
-    {
-        return Err(RuntimeConfigError::UnresolvedCredentials);
+        .map(|credential| (credential.credential_ref.as_str(), credential))
+        .collect::<HashMap<_, _>>();
+    let missing = manifest_credential_refs(&request.manifest)
+        .into_iter()
+        .filter(|credential_ref| !credential_values.contains_key(credential_ref.as_str()))
+        .collect::<Vec<_>>();
+    if !missing.is_empty() {
+        return Err(RuntimeConfigError::MissingCredentials(missing));
     }
     let payloads = request
         .artifact_payloads
@@ -442,44 +571,205 @@ fn validate_apply_request(request: &ApplyRuntimeConfigRequest) -> Result<(), Run
     Ok(())
 }
 
-fn runtime_launch_is_materialized(launch: &RuntimeMcpLaunch) -> bool {
-    match launch {
-        RuntimeMcpLaunch::Http {
-            url,
-            headers,
-            query,
-        } => {
-            runtime_value_is_literal(url)
-                && headers
-                    .iter()
-                    .all(|header| runtime_value_is_literal(&header.value))
-                && query
-                    .iter()
-                    .all(|query| runtime_value_is_literal(&query.value))
+fn validate_no_inline_secret_literals(
+    manifest: &RuntimeConfigManifest,
+) -> Result<(), RuntimeConfigError> {
+    for server in &manifest.mcp_servers {
+        match &server.launch {
+            RuntimeMcpLaunch::Http {
+                url,
+                headers,
+                query,
+            } => {
+                reject_secret_literal_url(url, &server.server_name)?;
+                for header in headers {
+                    reject_secret_literal_named_value(
+                        "header",
+                        &server.server_name,
+                        &header.name,
+                        &header.value,
+                    )?;
+                }
+                for query in query {
+                    reject_secret_literal_named_value(
+                        "query",
+                        &server.server_name,
+                        &query.name,
+                        &query.value,
+                    )?;
+                }
+            }
+            RuntimeMcpLaunch::Stdio { env, .. } => {
+                for env in env {
+                    reject_secret_literal_named_value(
+                        "env",
+                        &server.server_name,
+                        &env.name,
+                        &env.value,
+                    )?;
+                }
+            }
         }
-        RuntimeMcpLaunch::Stdio { command, args, env } => {
-            runtime_value_is_literal(command)
-                && args.iter().all(runtime_value_is_literal)
-                && env.iter().all(|env| runtime_value_is_literal(&env.value))
+    }
+    Ok(())
+}
+
+fn reject_secret_literal_url(
+    value: &RuntimeMcpValue,
+    server_name: &str,
+) -> Result<(), RuntimeConfigError> {
+    if let RuntimeMcpValue::Literal { value } = value {
+        let lower = value.to_ascii_lowercase();
+        if lower.contains("access_token=")
+            || lower.contains("api_key=")
+            || lower.contains("apikey=")
+            || lower.contains("token=")
+        {
+            return Err(RuntimeConfigError::InlineSecretLiteral(format!(
+                "{server_name} url"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn reject_secret_literal_named_value(
+    kind: &str,
+    server_name: &str,
+    name: &str,
+    value: &RuntimeMcpValue,
+) -> Result<(), RuntimeConfigError> {
+    if !is_secret_field_name(name) || !runtime_value_has_inline_literal(value) {
+        return Ok(());
+    }
+    Err(RuntimeConfigError::InlineSecretLiteral(format!(
+        "{server_name} {kind} {name}"
+    )))
+}
+
+fn runtime_value_has_inline_literal(value: &RuntimeMcpValue) -> bool {
+    match value {
+        RuntimeMcpValue::Literal { value } => !value.is_empty(),
+        RuntimeMcpValue::Credential { .. } => false,
+        RuntimeMcpValue::Template { parts } => {
+            let has_credential = parts
+                .iter()
+                .any(|part| matches!(part, RuntimeMcpTemplatePart::Credential { .. }));
+            !has_credential
+                && parts.iter().any(|part| {
+                    matches!(part, RuntimeMcpTemplatePart::Literal { value } if !value.is_empty())
+                })
         }
     }
 }
 
-fn runtime_value_is_literal(value: &RuntimeMcpValue) -> bool {
-    matches!(value, RuntimeMcpValue::Literal { .. })
+fn is_secret_field_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower == "authorization"
+        || lower == "proxy-authorization"
+        || lower.contains("api-key")
+        || lower.contains("apikey")
+        || lower.contains("api_key")
+        || lower.contains("access-token")
+        || lower.contains("access_token")
+        || lower.contains("auth-token")
+        || lower.contains("auth_token")
+        || lower.contains("secret")
+        || lower.contains("password")
+        || lower.ends_with("_key")
+        || lower.ends_with("_token")
 }
 
-fn literal_runtime_value(value: &RuntimeMcpValue) -> Result<String, RuntimeConfigError> {
+fn manifest_credential_refs(manifest: &RuntimeConfigManifest) -> Vec<String> {
+    let mut refs = Vec::new();
+    for server in &manifest.mcp_servers {
+        for credential_ref in &server.credential_refs {
+            push_unique(&mut refs, credential_ref.credential_ref.clone());
+        }
+        match &server.launch {
+            RuntimeMcpLaunch::Http {
+                url,
+                headers,
+                query,
+            } => {
+                collect_value_credential_refs(&mut refs, url);
+                for header in headers {
+                    collect_value_credential_refs(&mut refs, &header.value);
+                }
+                for query in query {
+                    collect_value_credential_refs(&mut refs, &query.value);
+                }
+            }
+            RuntimeMcpLaunch::Stdio { command, args, env } => {
+                collect_value_credential_refs(&mut refs, command);
+                for arg in args {
+                    collect_value_credential_refs(&mut refs, arg);
+                }
+                for env in env {
+                    collect_value_credential_refs(&mut refs, &env.value);
+                }
+            }
+        }
+    }
+    refs
+}
+
+fn collect_value_credential_refs(refs: &mut Vec<String>, value: &RuntimeMcpValue) {
+    match value {
+        RuntimeMcpValue::Literal { .. } => {}
+        RuntimeMcpValue::Credential { credential_ref } => {
+            push_unique(refs, credential_ref.clone());
+        }
+        RuntimeMcpValue::Template { parts } => {
+            for part in parts {
+                match part {
+                    RuntimeMcpTemplatePart::Literal { .. } => {}
+                    RuntimeMcpTemplatePart::Credential { credential_ref } => {
+                        push_unique(refs, credential_ref.clone());
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn push_unique(refs: &mut Vec<String>, credential_ref: String) {
+    if !refs.contains(&credential_ref) {
+        refs.push(credential_ref);
+    }
+}
+
+fn materialize_runtime_value(
+    value: &RuntimeMcpValue,
+    credentials: &HashMap<String, String>,
+) -> Result<String, RuntimeConfigError> {
     match value {
         RuntimeMcpValue::Literal { value } => Ok(value.clone()),
-        RuntimeMcpValue::Credential { .. } | RuntimeMcpValue::Template { .. } => {
-            Err(RuntimeConfigError::UnmaterializedValue)
+        RuntimeMcpValue::Credential { credential_ref } => credentials
+            .get(credential_ref)
+            .cloned()
+            .ok_or_else(|| RuntimeConfigError::MissingCredentials(vec![credential_ref.clone()])),
+        RuntimeMcpValue::Template { parts } => {
+            let mut rendered = String::new();
+            for part in parts {
+                match part {
+                    RuntimeMcpTemplatePart::Literal { value } => rendered.push_str(value),
+                    RuntimeMcpTemplatePart::Credential { credential_ref } => {
+                        let value = credentials.get(credential_ref).ok_or_else(|| {
+                            RuntimeConfigError::MissingCredentials(vec![credential_ref.clone()])
+                        })?;
+                        rendered.push_str(value);
+                    }
+                }
+            }
+            Ok(rendered)
         }
     }
 }
 
 fn runtime_mcp_to_session_mcp(
     server: &RuntimeMcpServer,
+    credentials: &HashMap<String, String>,
 ) -> Result<SessionMcpServer, RuntimeConfigError> {
     match &server.launch {
         RuntimeMcpLaunch::Http {
@@ -490,13 +780,13 @@ fn runtime_mcp_to_session_mcp(
             connection_id: server.id.clone(),
             catalog_entry_id: server.catalog_entry_id.clone(),
             server_name: server.server_name.clone(),
-            url: http_url_with_query(url, query)?,
+            url: http_url_with_query(url, query, credentials)?,
             headers: headers
                 .iter()
                 .map(|header| {
                     Ok(SessionMcpHeader {
                         name: header.name.clone(),
-                        value: literal_runtime_value(&header.value)?,
+                        value: materialize_runtime_value(&header.value, credentials)?,
                     })
                 })
                 .collect::<Result<Vec<_>, RuntimeConfigError>>()?,
@@ -506,17 +796,17 @@ fn runtime_mcp_to_session_mcp(
                 connection_id: server.id.clone(),
                 catalog_entry_id: server.catalog_entry_id.clone(),
                 server_name: server.server_name.clone(),
-                command: literal_runtime_value(command)?,
+                command: materialize_runtime_value(command, credentials)?,
                 args: args
                     .iter()
-                    .map(literal_runtime_value)
+                    .map(|arg| materialize_runtime_value(arg, credentials))
                     .collect::<Result<Vec<_>, _>>()?,
                 env: env
                     .iter()
                     .map(|env| {
                         Ok(SessionMcpEnvVar {
                             name: env.name.clone(),
-                            value: literal_runtime_value(&env.value)?,
+                            value: materialize_runtime_value(&env.value, credentials)?,
                         })
                     })
                     .collect::<Result<Vec<_>, RuntimeConfigError>>()?,
@@ -528,8 +818,9 @@ fn runtime_mcp_to_session_mcp(
 fn http_url_with_query(
     url: &RuntimeMcpValue,
     query: &[RuntimeMcpNamedValue],
+    credentials: &HashMap<String, String>,
 ) -> Result<String, RuntimeConfigError> {
-    let raw_url = literal_runtime_value(url)?;
+    let raw_url = materialize_runtime_value(url, credentials)?;
     if query.is_empty() {
         return Ok(raw_url);
     }
@@ -538,7 +829,10 @@ fn http_url_with_query(
     {
         let mut pairs = parsed.query_pairs_mut();
         for item in query {
-            pairs.append_pair(&item.name, &literal_runtime_value(&item.value)?);
+            pairs.append_pair(
+                &item.name,
+                &materialize_runtime_value(&item.value, credentials)?,
+            );
         }
     }
     Ok(parsed.into())
@@ -704,10 +998,114 @@ mod tests {
                 mcp_server_id: Some("mcp:1".to_string()),
                 field_name: "Authorization".to_string(),
             });
+        request.manifest.mcp_servers[0].launch = RuntimeMcpLaunch::Http {
+            url: RuntimeMcpValue::Literal {
+                value: "https://example.test/mcp".to_string(),
+            },
+            headers: vec![RuntimeMcpNamedValue {
+                name: "Authorization".to_string(),
+                value: RuntimeMcpValue::Credential {
+                    credential_ref: "mcp:secret".to_string(),
+                },
+            }],
+            query: Vec::new(),
+        };
         assert!(matches!(
             service.apply_config(request),
-            Err(RuntimeConfigError::UnresolvedCredentials)
+            Err(RuntimeConfigError::MissingCredentials(missing)) if missing == vec!["mcp:secret".to_string()]
         ));
+    }
+
+    #[test]
+    fn credentials_remain_refs_in_manifest_and_materialize_from_memory_cache() {
+        let db = Db::open_in_memory().expect("db");
+        let service = RuntimeConfigService::new(RuntimeConfigStore::new(db));
+        let mut request = apply_request();
+        request.manifest.mcp_servers[0]
+            .credential_refs
+            .push(RuntimeCredentialRef {
+                credential_ref: "mcp:api-key".to_string(),
+                used_in: RuntimeCredentialUse::McpLaunchHeader,
+                mcp_server_id: Some("mcp:1".to_string()),
+                field_name: "Authorization".to_string(),
+            });
+        request.manifest.mcp_servers[0].launch = RuntimeMcpLaunch::Http {
+            url: RuntimeMcpValue::Literal {
+                value: "https://example.test/mcp".to_string(),
+            },
+            headers: vec![RuntimeMcpNamedValue {
+                name: "Authorization".to_string(),
+                value: RuntimeMcpValue::Template {
+                    parts: vec![
+                        RuntimeMcpTemplatePart::Literal {
+                            value: "Bearer ".to_string(),
+                        },
+                        RuntimeMcpTemplatePart::Credential {
+                            credential_ref: "mcp:api-key".to_string(),
+                        },
+                    ],
+                },
+            }],
+            query: Vec::new(),
+        };
+        request.credential_values.push(RuntimeCredentialValue {
+            credential_ref: "mcp:api-key".to_string(),
+            value: "secret-token".to_string(),
+        });
+        service.apply_config(request.clone()).expect("apply");
+
+        let status = service.status().expect("status");
+        let manifest = status.manifest.expect("manifest");
+        let manifest_json = serde_json::to_string(&manifest).expect("manifest json");
+        assert!(manifest_json.contains("mcp:api-key"));
+        assert!(!manifest_json.contains("secret-token"));
+        let RuntimeMcpLaunch::Http { headers, .. } = &manifest.mcp_servers[0].launch else {
+            panic!("expected http launch");
+        };
+        assert!(matches!(headers[0].value, RuntimeMcpValue::Template { .. }));
+
+        let inputs = service
+            .session_inputs_for_expected(&RuntimeConfigRevisionExpectation {
+                revision_id: request.revision.id.clone(),
+                sequence: Some(request.revision.sequence),
+                content_hash: request.revision.content_hash.clone(),
+                external_scope: request.revision.external_scope.clone(),
+            })
+            .expect("runtime inputs");
+        let SessionMcpServer::Http(server) = inputs.mcp_servers.first().expect("mcp server") else {
+            panic!("expected HTTP MCP server");
+        };
+        assert_eq!(server.headers[0].value, "Bearer secret-token");
+
+        let restarted_service = RuntimeConfigService::new(service.store.clone());
+        let after_restart =
+            restarted_service.session_inputs_for_expected(&RuntimeConfigRevisionExpectation {
+                revision_id: request.revision.id.clone(),
+                sequence: Some(request.revision.sequence),
+                content_hash: request.revision.content_hash.clone(),
+                external_scope: request.revision.external_scope.clone(),
+            });
+        assert!(matches!(
+            after_restart,
+            Err(RuntimeConfigError::MissingCredentials(missing)) if missing == vec!["mcp:api-key".to_string()]
+        ));
+    }
+
+    #[test]
+    fn status_returns_artifact_metadata_without_payload_content() {
+        let db = Db::open_in_memory().expect("db");
+        let service = RuntimeConfigService::new(RuntimeConfigStore::new(db));
+        service.apply_config(apply_request()).expect("apply");
+
+        let status = service.status().expect("status");
+
+        assert_eq!(status.artifacts.len(), 2);
+        assert!(status.artifacts.iter().all(|artifact| artifact.cached));
+        let status_json = serde_json::to_string(&status).expect("status json");
+        assert!(status_json.contains("\"artifacts\""));
+        assert!(!status_json.contains("artifactPayloads"));
+        assert!(!status_json.contains("# Use GitHub"));
+        assert!(!status_json.contains("Use issues."));
     }
 
     #[test]
@@ -722,9 +1120,9 @@ mod tests {
             headers: Vec::new(),
             query: vec![
                 RuntimeMcpNamedValue {
-                    name: "api_key".to_string(),
+                    name: "key".to_string(),
                     value: RuntimeMcpValue::Literal {
-                        value: "secret value".to_string(),
+                        value: "non-secret value".to_string(),
                     },
                 },
                 RuntimeMcpNamedValue {
@@ -751,7 +1149,7 @@ mod tests {
         };
         assert_eq!(
             server.url,
-            "https://example.test/mcp?existing=1&api_key=secret+value&team=eng"
+            "https://example.test/mcp?existing=1&key=non-secret+value&team=eng"
         );
     }
 
@@ -879,6 +1277,7 @@ mod tests {
                     content: "Use issues.".to_string(),
                 },
             ],
+            credential_values: Vec::new(),
             source: RuntimeConfigSource::Worker,
         }
     }

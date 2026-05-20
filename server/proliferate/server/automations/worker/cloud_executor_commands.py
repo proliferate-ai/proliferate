@@ -17,6 +17,10 @@ from proliferate.db import engine as db_engine
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
+from proliferate.server.cloud.commands.service import (
+    stamp_and_validate_runtime_config_preflight,
+)
+from proliferate.server.cloud.errors import CloudApiError
 from proliferate.utils.time import utcnow
 
 COMMAND_WAIT_POLL_SECONDS = 1.0
@@ -48,12 +52,26 @@ async def enqueue_automation_command(
     idempotency_scope = _idempotency_scope(claim, target_id=target_id)
     idempotency_key = stage
     async with db_engine.async_session_factory() as db, db.begin():
+        payload = await stamp_and_validate_runtime_config_preflight(
+            db,
+            actor_user_id=claim.user_id,
+            target_id=target_id,
+            kind=kind,
+            payload=payload,
+        )
         existing = await commands_store.get_command_by_idempotency(
             db,
             idempotency_scope=idempotency_scope,
             idempotency_key=idempotency_key,
         )
         if existing is not None:
+            expected_payload_json = compact_command_json(payload) or "{}"
+            if existing.payload_json != expected_payload_json:
+                raise CloudApiError(
+                    "cloud_command_runtime_config_unstamped",
+                    "Existing automation command is missing required runtime config preflight.",
+                    status_code=409,
+                )
             return existing
         return await commands_store.create_command(
             db,

@@ -109,6 +109,20 @@ async def refresh_profile_runtime_config(
                 }
             ),
         )
+    if compiled.blocking_errors:
+        await _mark_primary_target_runtime_config_failed(
+            db,
+            profile_id=profile.id,
+            sequence=revision.sequence,
+            revision_id=revision.id,
+            blocking_errors=compiled.blocking_errors,
+        )
+        return RuntimeConfigStatusResponse(
+            sandbox_profile_id=str(profile.id),
+            current_revision=runtime_config_revision_model(revision),
+            manifest=parse_json_dict(revision.manifest_json),
+            warnings=parse_json_dict(revision.warnings_json),
+        )
     await _mark_primary_target_runtime_config_pending(
         db,
         profile_id=profile.id,
@@ -555,6 +569,70 @@ async def _mark_primary_target_runtime_config_pending(
     row.runtime_config_status = "pending"
     row.updated_at = now
     await db.flush()
+
+
+async def _mark_primary_target_runtime_config_failed(
+    db: AsyncSession,
+    *,
+    profile_id: UUID,
+    sequence: int,
+    revision_id: UUID,
+    blocking_errors: tuple[dict[str, object], ...],
+) -> None:
+    target_id = await sandbox_profile_store.load_primary_target_id(db, profile_id)
+    if target_id is None:
+        return
+    row = (
+        await db.execute(
+            select(SandboxProfileTargetState)
+            .where(
+                SandboxProfileTargetState.sandbox_profile_id == profile_id,
+                SandboxProfileTargetState.target_id == target_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    now = utcnow()
+    if row is None:
+        row = SandboxProfileTargetState(
+            sandbox_profile_id=profile_id,
+            target_id=target_id,
+            desired_agent_auth_revision=0,
+            applied_agent_auth_revision=None,
+            agent_auth_status="applied",
+            agent_auth_force_restart_required=False,
+            applied_runtime_config_sequence=0,
+            applied_runtime_config_revision_id=None,
+            runtime_config_status="failed",
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(row)
+    row.runtime_config_status = "failed"
+    row.last_runtime_config_attempted_at = now
+    row.last_runtime_config_error_code = _first_blocking_error_code(blocking_errors)
+    row.last_runtime_config_error_message = json.dumps(
+        {"blockingErrors": list(blocking_errors)},
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    if (
+        row.applied_runtime_config_revision_id == str(revision_id)
+        and row.applied_runtime_config_sequence >= sequence
+    ):
+        row.applied_runtime_config_sequence = 0
+        row.applied_runtime_config_revision_id = None
+    row.updated_at = now
+    await db.flush()
+
+
+def _first_blocking_error_code(blocking_errors: tuple[dict[str, object], ...]) -> str:
+    for error in blocking_errors:
+        code = error.get("code")
+        if isinstance(code, str) and code:
+            return code
+    return "runtime_config_blocked"
 
 
 async def _queue_primary_target_runtime_config_materialization(
