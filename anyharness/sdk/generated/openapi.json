@@ -6261,6 +6261,12 @@
               "$ref": "#/components/schemas/RuntimeArtifactPayload"
             }
           },
+          "credentialValues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeCredentialValue"
+            }
+          },
           "manifest": {
             "$ref": "#/components/schemas/RuntimeConfigManifest"
           },
@@ -13202,6 +13208,48 @@
           }
         }
       },
+      "RuntimeArtifactStatus": {
+        "type": "object",
+        "required": [
+          "hash",
+          "contentType",
+          "byteSize",
+          "cached"
+        ],
+        "properties": {
+          "byteSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cached": {
+            "type": "boolean"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hash": {
+            "type": "string"
+          },
+          "resourceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "RuntimeCapabilities": {
         "type": "object",
         "required": [
@@ -13340,10 +13388,10 @@
       "RuntimeConfigStatusResponse": {
         "type": "object",
         "properties": {
-          "artifactPayloads": {
+          "artifacts": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/RuntimeArtifactPayload"
+              "$ref": "#/components/schemas/RuntimeArtifactStatus"
             }
           },
           "currentRevision": {
@@ -13403,6 +13451,21 @@
           "mcp_launch_env",
           "skill_binding"
         ]
+      },
+      "RuntimeCredentialValue": {
+        "type": "object",
+        "required": [
+          "credentialRef",
+          "value"
+        ],
+        "properties": {
+          "credentialRef": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
       },
       "RuntimeMcpLaunch": {
         "oneOf": [

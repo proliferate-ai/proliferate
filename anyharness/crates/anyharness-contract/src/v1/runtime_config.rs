@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
@@ -49,6 +51,8 @@ pub struct ApplyRuntimeConfigRequest {
     pub manifest: RuntimeConfigManifest,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub artifact_payloads: Vec<RuntimeArtifactPayload>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub credential_values: Vec<RuntimeCredentialValue>,
     pub source: RuntimeConfigSource,
 }
 
@@ -68,7 +72,7 @@ pub struct RuntimeConfigStatusResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manifest: Option<RuntimeConfigManifest>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub artifact_payloads: Vec<RuntimeArtifactPayload>,
+    pub artifacts: Vec<RuntimeArtifactStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -211,6 +215,37 @@ pub struct RuntimeArtifactPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     pub content: String,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeCredentialValue {
+    pub credential_ref: String,
+    pub value: String,
+}
+
+impl fmt::Debug for RuntimeCredentialValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RuntimeCredentialValue")
+            .field("credential_ref", &self.credential_ref)
+            .field("value", &"<redacted>")
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeArtifactStatus {
+    pub hash: String,
+    pub content_type: String,
+    pub byte_size: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_ref: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    pub cached: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

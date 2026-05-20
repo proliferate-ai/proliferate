@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
@@ -218,7 +219,7 @@ async def enqueue_command(
     )
     payload = await _stamp_managed_runtime_config_preflight(
         db,
-        user=user,
+        actor_user_id=user.id,
         target=target,
         kind=kind,
         payload=body.payload,
@@ -227,7 +228,7 @@ async def enqueue_command(
         body = body.model_copy(update={"payload": payload})
     await _validate_runtime_config_preflight(
         db,
-        user=user,
+        actor_user_id=user.id,
         target=target,
         payload=payload,
     )
@@ -373,7 +374,7 @@ async def _validate_agent_auth_preflight(
 async def _validate_runtime_config_preflight(
     db: AsyncSession,
     *,
-    user: User,
+    actor_user_id: UUID,
     target: targets_store.CloudTargetSnapshot,
     payload: dict[str, object],
 ) -> None:
@@ -402,7 +403,7 @@ async def _validate_runtime_config_preflight(
             "Runtime config sandbox profile is not attached to this target.",
             status_code=409,
         )
-    if target.owner_scope == "personal" and target.owner_user_id != user.id:
+    if target.owner_scope == "personal" and target.owner_user_id != actor_user_id:
         raise CloudApiError(
             "cloud_command_runtime_config_profile_not_found",
             "Runtime config sandbox profile not found.",
@@ -446,6 +447,7 @@ async def _validate_runtime_config_preflight(
             "Runtime config preflight revision is stale.",
             status_code=409,
         )
+    _raise_runtime_config_blocked_if_needed(current_revision)
     state = await agent_auth_store.get_target_state(
         db,
         sandbox_profile_id=profile_id,
@@ -494,7 +496,7 @@ async def get_command_status(
 async def _stamp_managed_runtime_config_preflight(
     db: AsyncSession,
     *,
-    user: User,
+    actor_user_id: UUID,
     target: targets_store.CloudTargetSnapshot,
     kind: str,
     payload: dict[str, object],
@@ -522,7 +524,7 @@ async def _stamp_managed_runtime_config_preflight(
         await refresh_profile_runtime_config(
             db,
             sandbox_profile_id=target.sandbox_profile_id,
-            actor_user_id=user.id,
+            actor_user_id=actor_user_id,
             reason="runtime_config_preflight_missing",
         )
         _current, current_revision = await runtime_config_store.get_current(
@@ -535,6 +537,7 @@ async def _stamp_managed_runtime_config_preflight(
             "Runtime config has not been compiled for this sandbox profile.",
             status_code=409,
         )
+    _raise_runtime_config_blocked_if_needed(current_revision)
     state = await agent_auth_store.get_target_state(
         db,
         sandbox_profile_id=target.sandbox_profile_id,
@@ -549,7 +552,7 @@ async def _stamp_managed_runtime_config_preflight(
         await refresh_profile_runtime_config(
             db,
             sandbox_profile_id=target.sandbox_profile_id,
-            actor_user_id=user.id,
+            actor_user_id=actor_user_id,
             reason="runtime_config_preflight_not_applied",
         )
         _current, current_revision = await runtime_config_store.get_current(
@@ -562,6 +565,7 @@ async def _stamp_managed_runtime_config_preflight(
                 "Runtime config has not been compiled for this sandbox profile.",
                 status_code=409,
             )
+        _raise_runtime_config_blocked_if_needed(current_revision)
     stamped = dict(payload)
     stamped["sandboxProfileId"] = str(target.sandbox_profile_id)
     stamped["requiredRuntimeConfigRevisionId"] = str(current_revision.id)
@@ -579,6 +583,63 @@ async def _stamp_managed_runtime_config_preflight(
             },
         }
     return stamped
+
+
+async def stamp_and_validate_runtime_config_preflight(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    target_id: UUID,
+    kind: str,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    target = await targets_store.get_target_by_id(db, target_id)
+    if target is None:
+        raise CloudApiError(
+            "cloud_command_target_not_found",
+            "Target not found.",
+            status_code=404,
+        )
+    stamped = await _stamp_managed_runtime_config_preflight(
+        db,
+        actor_user_id=actor_user_id,
+        target=target,
+        kind=kind,
+        payload=payload,
+    )
+    await _validate_runtime_config_preflight(
+        db,
+        actor_user_id=actor_user_id,
+        target=target,
+        payload=stamped,
+    )
+    return stamped
+
+
+def _raise_runtime_config_blocked_if_needed(
+    revision: runtime_config_store.SandboxProfileRuntimeConfigRevisionSnapshot,
+) -> None:
+    blocking_errors = _runtime_config_blocking_errors(revision.manifest_json)
+    if not blocking_errors:
+        return
+    raise CloudApiError(
+        "cloud_command_runtime_config_blocked",
+        "Runtime config has blocking resolver errors and cannot launch.",
+        status_code=409,
+    )
+
+
+def _runtime_config_blocking_errors(manifest_json: str) -> list[dict[str, object]]:
+    try:
+        manifest = json.loads(manifest_json)
+    except ValueError:
+        return []
+    if not isinstance(manifest, dict):
+        return []
+    blocking_errors = manifest.get("blockingErrors")
+    if not isinstance(blocking_errors, list):
+        return []
+    return [item for item in blocking_errors if isinstance(item, dict)]
 
 
 def is_terminal_command_status(status: str) -> bool:

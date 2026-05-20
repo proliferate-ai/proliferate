@@ -28,6 +28,7 @@ class CompiledRuntimeConfigManifest:
     content_hash: str
     warnings_json: str
     artifact_payloads: tuple[ResolvedArtifactRef, ...]
+    blocking_errors: tuple[dict[str, object], ...]
 
 
 def compile_runtime_config_manifest(
@@ -35,6 +36,10 @@ def compile_runtime_config_manifest(
     *,
     sandbox_profile_id: str,
 ) -> CompiledRuntimeConfigManifest:
+    warning_payloads = [_warning_payload(warning) for warning in plan.warnings]
+    blocking_error_payloads = tuple(
+        _warning_payload(blocker) for blocker in plan.blocking_errors
+    )
     manifest_without_hash = {
         "runtimeConfigVersion": 1,
         "externalScope": {
@@ -56,8 +61,8 @@ def compile_runtime_config_manifest(
         ],
         "skills": [_skill_payload(skill) for skill in plan.skills],
         "artifacts": [_artifact_payload(artifact) for artifact in plan.artifacts],
-        "warnings": [_warning_payload(warning) for warning in plan.warnings],
-        "blockingErrors": [_warning_payload(blocker) for blocker in plan.blocking_errors],
+        "warnings": warning_payloads,
+        "blockingErrors": list(blocking_error_payloads),
         "sourceRowRefs": [
             {
                 "sourceKind": source.source_kind,
@@ -86,6 +91,7 @@ def compile_runtime_config_manifest(
         content_hash=hash_value,
         warnings_json=warnings_json,
         artifact_payloads=plan.artifacts,
+        blocking_errors=blocking_error_payloads,
     )
 
 
