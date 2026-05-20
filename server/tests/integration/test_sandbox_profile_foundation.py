@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import (
     CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
+    CLOUD_WORKER_TOKEN_DOMAIN,
     CloudCommandKind,
     CloudCommandStatus,
 )
@@ -312,6 +313,32 @@ async def test_slot_generation_and_runtime_access_reject_stale_slot_reports(
     assert invalidated_state.slot_generation is None
     assert invalidated_state.agent_auth_status == "pending"
 
+    third_slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    assert third_slot.id != second_slot.id
+    assert third_slot.slot_generation == 3
+    changed_slot_touch = await targets_store.update_target_runtime_access(
+        db_session,
+        target_id=target_id,
+        sandbox_profile_id=profile_id,
+        active_sandbox_id=third_slot.id,
+        slot_generation=third_slot.slot_generation or 0,
+        anyharness_base_url=None,
+        runtime_token_ciphertext=None,
+        anyharness_data_key_ciphertext=None,
+        worker_id=None,
+        heartbeat_at=utcnow(),
+    )
+    assert changed_slot_touch is not None
+    assert changed_slot_touch.active_sandbox_id == third_slot.id
+    assert changed_slot_touch.slot_generation == third_slot.slot_generation
+    assert changed_slot_touch.anyharness_base_url is None
+    assert changed_slot_touch.runtime_token_ciphertext is None
+    assert changed_slot_touch.anyharness_data_key_ciphertext is None
+
 
 @pytest.mark.asyncio
 async def test_materialize_workspace_rejects_mismatched_cloud_workspace_result(
@@ -437,10 +464,16 @@ async def test_managed_materialize_workspace_requires_cloud_workspace_id(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    auth, _profile_id, target_id = await _create_personal_profile(
+    auth, profile_id, target_id = await _create_personal_profile(
         client,
         db_session,
         email_prefix="sandbox-profile-materialize-requires-cloud-workspace",
+    )
+    _slot, worker = await _create_profile_slot_worker(
+        db_session,
+        profile_id=profile_id,
+        target_id=target_id,
+        worker_name="materialize-cloud-workspace-worker",
     )
 
     response = await client.post(
@@ -462,6 +495,227 @@ async def test_managed_materialize_workspace_requires_cloud_workspace_id(
 
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "cloud_command_cloud_workspace_required"
+
+    with pytest.raises(RuntimeError):
+        await commands_store.create_command(
+            db_session,
+            idempotency_scope="missing-cloud-workspace",
+            idempotency_key="store-create",
+            target_id=target_id,
+            organization_id=None,
+            actor_user_id=uuid.UUID(auth.user_id),
+            actor_kind="user",
+            source="api",
+            workspace_id=None,
+            cloud_workspace_id=None,
+            session_id=None,
+            kind=CloudCommandKind.materialize_workspace.value,
+            payload_json=json.dumps({"mode": "worktree"}),
+            observed_event_seq=None,
+            preconditions_json=None,
+            authorization_context_json=None,
+        )
+
+    now = utcnow()
+    legacy_command = CloudCommand(
+        idempotency_scope="missing-cloud-workspace",
+        idempotency_key="legacy-row",
+        target_id=target_id,
+        organization_id=None,
+        actor_user_id=uuid.UUID(auth.user_id),
+        actor_kind="user",
+        source="api",
+        workspace_id=None,
+        cloud_workspace_id=None,
+        session_id=None,
+        kind=CloudCommandKind.materialize_workspace.value,
+        payload_json=json.dumps({"mode": "worktree"}),
+        observed_event_seq=None,
+        preconditions_json=None,
+        authorization_context_json=None,
+        status=CloudCommandStatus.queued.value,
+        attempt_count=0,
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(legacy_command)
+    await db_session.flush()
+    leased = await commands_store.lease_next_command(
+        db_session,
+        target_id=target_id,
+        worker_id=worker.id,
+        supported_kinds=(CloudCommandKind.materialize_workspace.value,),
+        lease_id="missing-cloud-workspace-lease",
+        lease_expires_at=now + timedelta(minutes=5),
+        now=now,
+    )
+    assert leased is None
+    await db_session.refresh(legacy_command)
+    assert legacy_command.status == CloudCommandStatus.rejected.value
+    assert legacy_command.error_code == "cloud_workspace_required"
+
+
+@pytest.mark.asyncio
+async def test_managed_materialize_workspace_keeps_cloud_metadata_out_of_payload(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth, profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="sandbox-profile-materialize-payload",
+    )
+    workspace = await create_managed_cloud_workspace_for_profile(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        created_by_user_id=uuid.UUID(auth.user_id),
+        display_name="acme/rocket",
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name="rocket",
+        git_branch="feature/payload",
+        git_base_branch="main",
+        worktree_path="/workspace/payload",
+        origin_json=None,
+        template_version="managed-cloud-v1",
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        "/v1/cloud/commands",
+        headers=auth.headers,
+        json={
+            "idempotencyKey": "managed-materialize-payload",
+            "targetId": str(target_id),
+            "cloudWorkspaceId": str(workspace.id),
+            "kind": "materialize_workspace",
+            "payload": {
+                "mode": "worktree",
+                "repoRootId": "repo-root-1",
+                "targetPath": "/workspace/payload",
+                "newBranchName": "proliferate/payload",
+                "baseBranch": "main",
+            },
+            "source": "automation",
+        },
+    )
+
+    assert response.status_code == 200
+    command = await db_session.get(CloudCommand, uuid.UUID(response.json()["commandId"]))
+    assert command is not None
+    assert command.cloud_workspace_id == workspace.id
+    payload = json.loads(command.payload_json)
+    assert payload["repoRootId"] == "repo-root-1"
+    assert "cloudWorkspaceId" not in payload
+    assert "sandboxProfileId" not in payload
+
+
+@pytest.mark.asyncio
+async def test_stale_managed_worker_agent_auth_side_channel_fails_closed(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth, profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="sandbox-profile-side-channel-stale",
+    )
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    worker_token = "stale-side-channel-worker-token"
+    worker = await worker_auth_store.create_worker(
+        db_session,
+        target_id=target_id,
+        cloud_sandbox_id=slot.id,
+        slot_generation=slot.slot_generation,
+        token_hash=worker_service._hash_token(
+            domain=CLOUD_WORKER_TOKEN_DOMAIN,
+            token=worker_token,
+        ),
+        machine_fingerprint="stale-side-channel",
+        hostname="stale-side-channel",
+        worker_version="0.1.0",
+        anyharness_version="0.1.0",
+        supervisor_version=None,
+        now=utcnow(),
+    )
+    profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
+        db_session,
+        sandbox_profile_id=profile_id,
+        reason="side_channel_test",
+        actor_user_id=uuid.UUID(auth.user_id),
+        force_restart=False,
+    )
+    assert profile is not None
+    command = await commands_store.create_command(
+        db_session,
+        idempotency_scope="side-channel-stale",
+        idempotency_key="agent-auth-refresh",
+        target_id=target_id,
+        organization_id=None,
+        actor_user_id=uuid.UUID(auth.user_id),
+        actor_kind="system",
+        source="api",
+        workspace_id=None,
+        cloud_workspace_id=None,
+        session_id=None,
+        kind=CloudCommandKind.refresh_agent_auth_config.value,
+        payload_json=json.dumps(
+            {
+                "sandboxProfileId": str(profile_id),
+                "revision": profile.agent_auth_revision,
+                "reason": "side_channel_test",
+                "forceRestart": False,
+            }
+        ),
+        observed_event_seq=None,
+        preconditions_json=None,
+        authorization_context_json=None,
+    )
+    lease_id = "side-channel-lease"
+    leased = await commands_store.lease_next_command(
+        db_session,
+        target_id=target_id,
+        worker_id=worker.id,
+        supported_kinds=(CloudCommandKind.refresh_agent_auth_config.value,),
+        lease_id=lease_id,
+        lease_expires_at=utcnow() + timedelta(minutes=5),
+        now=utcnow(),
+    )
+    assert leased is not None
+    assert leased.id == command.id
+    await agent_auth_store.upsert_target_state(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        desired_revision=profile.agent_auth_revision,
+        applied_revision=None,
+        status="materializing",
+        force_restart_required=False,
+        last_command_id=command.id,
+        last_worker_id=worker.id,
+        last_error_code=None,
+        last_error_message=None,
+    )
+    await supersede_slot(db_session, sandbox_id=slot.id)
+    await db_session.commit()
+
+    response = await client.get(
+        f"/v1/cloud/worker/agent-auth-configs/{profile_id}/materialization",
+        headers={"Authorization": f"Bearer {worker_token}"},
+        params={
+            "command_id": str(command.id),
+            "revision": profile.agent_auth_revision,
+            "lease_id": lease_id,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "cloud_worker_slot_stale"
 
 
 @pytest.mark.asyncio

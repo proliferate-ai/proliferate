@@ -91,11 +91,7 @@ async def _resolve_command_workspace(
                 "Workspace is not attached to the requested target.",
                 status_code=409,
             )
-        payload = dict(body.payload)
-        payload["cloudWorkspaceId"] = str(workspace.id)
-        if target.sandbox_profile_id is not None:
-            payload["sandboxProfileId"] = str(target.sandbox_profile_id)
-        return None, payload, str(workspace.id)
+        return None, body.payload, str(workspace.id)
     if kind != CloudCommandKind.start_session.value:
         return body.workspace_id, body.payload, None
     if not body.workspace_id:

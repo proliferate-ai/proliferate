@@ -33,6 +33,7 @@ from proliferate.server.cloud.target_git_identity.models import (
     target_git_identity_payload,
 )
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
+from proliferate.server.cloud.worker.slot_guard import require_current_managed_worker_slot
 from proliferate.utils.crypto import decrypt_json, encrypt_json
 
 
@@ -229,6 +230,7 @@ async def worker_target_git_identity_plan(
     config_version: int,
     lease_id: str,
 ) -> TargetGitIdentityMaterializationPlan:
+    await require_current_managed_worker_slot(db, auth=auth)
     await _require_configure_git_command(
         db,
         target_id=auth.target_id,
@@ -263,6 +265,7 @@ async def record_worker_target_git_identity_status(
     identity_id: UUID,
     body: WorkerTargetGitIdentityStatusRequest,
 ) -> WorkerTargetGitIdentityStatusResponse:
+    await require_current_managed_worker_slot(db, auth=auth)
     await _require_configure_git_command(
         db,
         target_id=auth.target_id,

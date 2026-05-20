@@ -43,6 +43,36 @@ async def _accept_initial_git_identity_command(
 
 class TestCloudTargetsApi:
     @pytest.mark.asyncio
+    async def test_public_enrollment_rejects_managed_cloud_target(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-targets-managed-enrollment",
+        )
+        await seed_linked_github_account(
+            db_session,
+            user_id=auth.user_id,
+            access_token="gh-managed-enrollment-token",
+        )
+
+        response = await client.post(
+            "/v1/cloud/targets/enrollments",
+            headers=auth.headers,
+            json={
+                "displayName": "Managed Cloud Bypass",
+                "kind": "managed_cloud",
+                "ownerScope": "personal",
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "cloud_target_kind_unsupported"
+
+    @pytest.mark.asyncio
     async def test_ssh_target_enrollment_and_worker_inventory(
         self,
         client: AsyncClient,

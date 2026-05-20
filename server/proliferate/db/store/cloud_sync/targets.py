@@ -620,6 +620,10 @@ async def update_target_runtime_access(
         )
         db.add(row)
     else:
+        slot_changed = (
+            row.active_sandbox_id != active_sandbox_id
+            or row.slot_generation != slot_generation
+        )
         if row.active_sandbox_id not in {None, active_sandbox_id}:
             previous_slot = await db.get(CloudSandbox, row.active_sandbox_id)
             previous_slot_is_current = (
@@ -634,12 +638,17 @@ async def update_target_runtime_access(
         row.sandbox_profile_id = sandbox_profile_id
         row.active_sandbox_id = active_sandbox_id
         row.slot_generation = slot_generation
-        if anyharness_base_url is not None:
+        if slot_changed:
             row.anyharness_base_url = anyharness_base_url
-        if runtime_token_ciphertext is not None:
             row.runtime_token_ciphertext = runtime_token_ciphertext
-        if anyharness_data_key_ciphertext is not None:
             row.anyharness_data_key_ciphertext = anyharness_data_key_ciphertext
+        else:
+            if anyharness_base_url is not None:
+                row.anyharness_base_url = anyharness_base_url
+            if runtime_token_ciphertext is not None:
+                row.runtime_token_ciphertext = runtime_token_ciphertext
+            if anyharness_data_key_ciphertext is not None:
+                row.anyharness_data_key_ciphertext = anyharness_data_key_ciphertext
         row.last_worker_id = worker_id
         row.last_heartbeat_at = heartbeat_at
         row.updated_at = now
