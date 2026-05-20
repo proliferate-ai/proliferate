@@ -26,8 +26,6 @@ from proliferate.server.cloud.commands.models import (
 from proliferate.server.cloud.commands.service import enqueue_command
 from proliferate.server.cloud.credentials.service import load_active_cloud_credential_payloads
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.mcp_materialization.models import MaterializeCloudMcpRequest
-from proliferate.server.cloud.mcp_materialization.service import materialize_cloud_mcp_servers
 from proliferate.server.cloud.runtime_config.service import (
     refresh_profile_runtime_config,
     runtime_config_fragment_for_profile,
@@ -73,10 +71,6 @@ def _command_idempotency_key(
 
 def _credential_snapshot_version(agent_credentials: dict[str, dict[str, object]]) -> int:
     return len(agent_credentials)
-
-
-def _mcp_materialization_version(binding_count: int, warning_count: int) -> int:
-    return binding_count + warning_count
 
 
 def _required_tools(
@@ -303,26 +297,19 @@ async def materialize_target_config(
                 db,
                 sandbox_profile_id=target.sandbox_profile_id,
             )
-        if runtime_config is not None:
-            runtime_config = runtime_config.model_copy(update={"target_id": str(target.id)})
+        if runtime_config is None:
+            raise CloudApiError(
+                "runtime_config_missing",
+                "Managed targets require a materialized runtime config.",
+                status_code=409,
+            )
+        runtime_config = runtime_config.model_copy(update={"target_id": str(target.id)})
 
-    mcp = None
     if runtime_config is None:
-        mcp = await materialize_cloud_mcp_servers(
-            db,
-            user_id=user.id,
-            body=MaterializeCloudMcpRequest(
-                targetLocation="cloud",
-                connectionIds=body.mcp_connection_ids,
-            ),
-        )
-        binding_count = len(mcp.mcp_binding_summaries)
-        warning_count = len(mcp.warnings)
-        plugin_package_count = len(mcp.plugin_packages)
-        mcp_materialization_version = _mcp_materialization_version(
-            binding_count,
-            warning_count,
-        )
+        binding_count = 0
+        warning_count = 0
+        plugin_package_count = 0
+        mcp_materialization_version = 0
     else:
         manifest = runtime_config.manifest
         mcp_servers = manifest.get("mcpServers")
@@ -361,8 +348,6 @@ async def materialize_target_config(
         git_credential=git_credential,
         agent_credentials=agent_credentials,
         runtime_config=runtime_config,
-        mcp=mcp.model_dump(mode="json", by_alias=True) if mcp is not None else None,
-        skills=[],
         readiness_requirements={tool: True for tool in required_tools},
     )
     config = await target_config_store.upsert_target_config(

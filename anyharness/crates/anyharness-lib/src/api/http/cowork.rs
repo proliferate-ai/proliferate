@@ -16,9 +16,7 @@ use crate::domains::cowork::manifest::CoworkArtifactError;
 use crate::domains::cowork::model::CoworkRootRecord;
 use crate::domains::cowork::runtime::{CoworkCreateThreadError, CoworkThreadSummary};
 use crate::repo_roots::model::RepoRootRecord;
-use crate::sessions::mcp_bindings::contract::bindings_from_contract;
 use crate::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
-use crate::sessions::mcp_bindings::summaries::validate_binding_summaries;
 use crate::workspaces::model::WorkspaceRecord;
 
 #[utoipa::path(
@@ -97,19 +95,12 @@ pub async fn create_cowork_thread(
     State(state): State<AppState>,
     Json(req): Json<CreateCoworkThreadRequest>,
 ) -> Result<Json<CreateCoworkThreadResponse>, ApiError> {
-    if let Some(summaries) = req.mcp_binding_summaries.as_deref() {
-        validate_binding_summaries(summaries)
-            .map_err(|error| ApiError::bad_request(error.to_string(), "INVALID_MCP_SUMMARY"))?;
-    }
-    let mcp_servers = bindings_from_contract(req.mcp_servers.unwrap_or_default());
     let result = state
         .cowork_runtime
         .create_thread(
             &req.agent_kind,
             req.model_id.as_deref(),
             req.mode_id.as_deref(),
-            mcp_servers,
-            req.mcp_binding_summaries,
             req.cowork_workspace_delegation_enabled.unwrap_or(true),
         )
         .await

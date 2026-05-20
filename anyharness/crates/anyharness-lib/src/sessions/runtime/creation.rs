@@ -1,10 +1,9 @@
 use std::{collections::HashSet, time::Instant};
 
-use anyharness_contract::v1::{
-    AgentAuthExternalScope, SessionMcpBindingSummary, SessionPluginBundle,
-};
+use anyharness_contract::v1::{AgentAuthExternalScope, SessionMcpBindingSummary};
 
 use crate::domains::plugins::validation::validate_session_plugin_bundle;
+use crate::domains::plugins::SessionPluginBundle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
 use crate::sessions::mcp_bindings::assembly::join_system_prompt_append;

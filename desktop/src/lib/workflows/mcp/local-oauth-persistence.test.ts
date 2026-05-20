@@ -340,10 +340,13 @@ function localOAuthCatalogEntry(): ConnectorCatalogEntry {
 function gmailConnection(overrides: Partial<CloudMcpConnection> = {}): CloudMcpConnection {
   return {
     connectionId: "conn_gmail",
+    ownerScope: "user",
     catalogEntryId: "gmail",
     catalogEntryVersion: 1,
     serverName: "gmail",
     enabled: true,
+    publicToOrg: false,
+    publicStatus: "private",
     settings: { userGoogleEmail: "user@example.com" },
     authKind: "none",
     authStatus: "ready",

@@ -1,4 +1,4 @@
-use anyharness_contract::v1::{
+use crate::domains::plugins::{
     SessionPlugin, SessionPluginBundle, SessionPluginSkill, SessionPluginSkillResource,
 };
 use serde::Deserialize;
@@ -197,7 +197,7 @@ const SUBAGENTS_WORKFLOW_TOOL_FLOW: &str = r#"# Subagent Tool Flow
 
 #[cfg(test)]
 mod tests {
-    use anyharness_contract::v1::{
+    use crate::domains::plugins::{
         SessionPlugin, SessionPluginBundle, SessionPluginSkill, SessionPluginSkillResource,
     };
 

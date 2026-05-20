@@ -24,6 +24,11 @@ export const CLOUD_SIDEBAR_STATUS_DEFINITIONS = {
     tone: "pending",
     className: "border-warning-border bg-warning text-warning-foreground",
   },
+  needs_rematerialization: {
+    label: "updating",
+    tone: "pending",
+    className: "border-warning-border bg-warning text-warning-foreground",
+  },
   ready: {
     label: "cloud",
     tone: "ready",

@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
-use anyharness_contract::v1::{
-    SessionMcpBindingOutcome, SessionMcpServer, SessionMcpTransport, SessionPluginBundle,
-    SessionPluginCredentialBindingStatus,
-};
+use anyharness_contract::v1::{SessionMcpBindingOutcome, SessionMcpTransport};
 
+use crate::domains::plugins::{
+    SessionPlugin, SessionPluginBundle, SessionPluginCredentialBindingStatus,
+};
+use crate::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::sessions::mcp_bindings::summaries::validate_binding_summaries;
 
 #[derive(Debug, thiserror::Error)]
@@ -305,7 +306,7 @@ fn validate_mcp_servers(
 
 fn validate_mcp_binding_summary_consistency(
     plugin_id: &str,
-    plugin: &anyharness_contract::v1::SessionPlugin,
+    plugin: &SessionPlugin,
     mcp_server_names: &HashSet<String>,
 ) -> Result<(), SessionPluginBundleValidationError> {
     if plugin.mcp_binding_summaries.len() != plugin.mcp_servers.len() {
@@ -367,7 +368,7 @@ fn validate_mcp_binding_summary_consistency(
 
 fn validate_credential_bindings(
     plugin_id: &str,
-    plugin: &anyharness_contract::v1::SessionPlugin,
+    plugin: &SessionPlugin,
 ) -> Result<HashSet<String>, SessionPluginBundleValidationError> {
     if plugin.credential_bindings.len() > MAX_CREDENTIAL_BINDINGS_PER_PLUGIN {
         return Err(invalid(format!(
