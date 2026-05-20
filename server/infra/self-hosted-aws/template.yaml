@@ -1146,6 +1146,9 @@ Resources:
                 SENTRY_TRACES_SAMPLE_RATE=1.0
                 CUSTOMERIO_SITE_ID=
                 CUSTOMERIO_API_KEY=
+                CUSTOMERIO_APP_API_KEY=
+                CUSTOMERIO_FROM_EMAIL=
+                CUSTOMERIO_WELCOME_TRANSACTIONAL_MESSAGE_ID=
                 ANTHROPIC_API_KEY=
                 AI_MAGIC_SESSION_TITLE_MODEL=claude-haiku-4-5-20251001
                 CLOUD_RUNTIME_SOURCE_BINARY_PATH=

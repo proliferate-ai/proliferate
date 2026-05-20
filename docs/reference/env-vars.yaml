@@ -661,8 +661,14 @@
 
 - name: CUSTOMERIO_FROM_EMAIL
   secret: false
-  default: "hello@proliferate.dev"
+  default: "hello@proliferate.com"
   description: Customer.io sender email address
+  tags: [production]
+
+- name: CUSTOMERIO_WELCOME_TRANSACTIONAL_MESSAGE_ID
+  secret: false
+  default: ""
+  description: Customer.io transactional message ID used to send the desktop welcome email; leave blank to disable welcome emails
   tags: [production]
 
 - name: RESEND_API_KEY

@@ -26,6 +26,10 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
         DateTime(timezone=True),
         default=utcnow,
     )
+    customerio_welcome_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
 
 class DesktopAuthCode(Base):
