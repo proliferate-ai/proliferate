@@ -25,6 +25,10 @@ import {
   type RightPanelTool,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
+import {
+  resolveRelativeRightPanelHeaderEntryKey,
+  resolveRightPanelHeaderEntryKeyByShortcutIndex,
+} from "@/lib/domain/workspaces/shell/right-panel-shortcuts";
 import { createRightPanelBrowserTabId } from "@/lib/domain/workspaces/shell/right-panel-browser-tabs";
 import {
   createOrActivateBrowserTabInRightPanelState,
@@ -45,6 +49,10 @@ import {
   rightPanelNewTabMenuDefaultFromEvent,
   type RightPanelNewTabMenuDefault,
 } from "@/lib/infra/right-panel-new-tab-menu";
+import {
+  RIGHT_PANEL_SHORTCUT_EVENT,
+  rightPanelShortcutRequestFromEvent,
+} from "@/lib/infra/right-panel-shortcuts";
 import {
   viewerTargetEditablePath,
   viewerTargetKey,
@@ -356,6 +364,67 @@ export const RightPanel = memo(function RightPanel({
         : [...previous.headerOrder, targetKey],
     }));
   }, [openViewerTargets, setActiveViewerTarget, updateState]);
+
+  const activateRightPanelEntry = useCallback((entryKey: RightPanelHeaderEntryKey) => {
+    const entry = parseRightPanelHeaderEntryKey(entryKey);
+    if (!entry) {
+      return false;
+    }
+
+    if (entry.kind === "tool") {
+      activateTool(entry.tool);
+      return true;
+    }
+    if (entry.kind === "terminal") {
+      selectTerminal(entry.terminalId);
+      return true;
+    }
+    if (entry.kind === "browser") {
+      selectBrowser(entry.browserId);
+      return true;
+    }
+    if (entry.kind === "viewer") {
+      selectViewer(entry.targetKey);
+      return true;
+    }
+    return false;
+  }, [activateTool, selectBrowser, selectTerminal, selectViewer]);
+
+  useEffect(() => {
+    const handleShortcutRequest = (event: Event) => {
+      if (!isOpen) {
+        return;
+      }
+
+      const request = rightPanelShortcutRequestFromEvent(event);
+      if (!request) {
+        return;
+      }
+
+      const nextEntryKey = request.kind === "relative-tab"
+        ? resolveRelativeRightPanelHeaderEntryKey({
+            entries: headerEntries,
+            activeEntryKey: state.activeEntryKey,
+            delta: request.delta,
+          })
+        : resolveRightPanelHeaderEntryKeyByShortcutIndex(headerEntries, request.digit);
+      if (!nextEntryKey) {
+        return;
+      }
+
+      activateRightPanelEntry(nextEntryKey);
+    };
+
+    window.addEventListener(RIGHT_PANEL_SHORTCUT_EVENT, handleShortcutRequest);
+    return () => {
+      window.removeEventListener(RIGHT_PANEL_SHORTCUT_EVENT, handleShortcutRequest);
+    };
+  }, [
+    activateRightPanelEntry,
+    headerEntries,
+    isOpen,
+    state.activeEntryKey,
+  ]);
 
   const handleRootPointerDownCapture = useRightPanelRootFocus({
     rootRef,

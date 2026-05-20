@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState, type Dispatch, type SetStateAction } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
@@ -20,6 +20,10 @@ import {
   requestRightPanelBrowserTab,
   requestRightPanelNewTabMenu,
 } from "@/lib/infra/right-panel-new-tab-menu";
+import {
+  requestRightPanelRelativeTab,
+  requestRightPanelTabByIndex,
+} from "@/lib/infra/right-panel-shortcuts";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 
 const terminalActionsMocks = vi.hoisted(() => ({
@@ -390,6 +394,37 @@ describe("RightPanel viewer routing", () => {
 });
 
 describe("RightPanel tab shortcuts", () => {
+  it("activates right-panel entries by option-number shortcut requests", async () => {
+    render(<RightPanelHarness isWorkspaceReady />);
+
+    act(() => {
+      requestRightPanelTabByIndex(2);
+    });
+
+    await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
+  });
+
+  it("cycles right-panel entries by routed tab-cycle shortcut requests", async () => {
+    const { container } = render(<RightPanelHarness isWorkspaceReady />);
+    const root = container.querySelector("[data-right-panel-root='true']");
+    if (!(root instanceof HTMLElement)) {
+      throw new Error("Expected right panel root");
+    }
+
+    fireEvent.pointerDown(root);
+    expect(document.activeElement).toBe(root);
+    expect(root.getAttribute("data-focus-zone")).toBe("right-panel");
+
+    act(() => {
+      requestRightPanelRelativeTab(1);
+    });
+
+    await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
+
+    expect(screen.getByRole("tab", { name: "Changes" }).getAttribute("aria-selected"))
+      .toBe("true");
+  });
+
   it("does not intercept primary-number shell shortcuts after clicking panel content", async () => {
     const { container } = render(<RightPanelHarness isWorkspaceReady />);
     const root = container.querySelector("[data-right-panel-root='true']");

@@ -1,5 +1,10 @@
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { getFocusZone, isRightPanelFocusZone } from "@/lib/domain/focus-zone";
+import {
+  requestRightPanelRelativeTab,
+  requestRightPanelTabByIndex,
+} from "@/lib/infra/right-panel-shortcuts";
 import type { WorkspaceTabActions } from "@/hooks/workspaces/tabs/use-workspace-tab-actions";
 
 type WorkspaceContentShortcutActions = Pick<
@@ -26,10 +31,24 @@ export function useWorkspaceContentShortcuts(
   } = actions;
 
   useShortcutHandler("workspace.previous-tab", () => {
+    if (isRightPanelFocusZone(getFocusZone())) {
+      const handled = requestRightPanelRelativeTab(-1);
+      if (handled) {
+        return true;
+      }
+    }
+
     return activateRelativeTab(-1);
   }, { enabled });
 
   useShortcutHandler("workspace.next-tab", () => {
+    if (isRightPanelFocusZone(getFocusZone())) {
+      const handled = requestRightPanelRelativeTab(1);
+      if (handled) {
+        return true;
+      }
+    }
+
     return activateRelativeTab(1);
   }, { enabled });
 
@@ -40,6 +59,13 @@ export function useWorkspaceContentShortcuts(
   useShortcutHandler("workspace.tab-by-index", ({ digit }) => {
     if (!digit) {
       return false;
+    }
+
+    if (isRightPanelFocusZone(getFocusZone())) {
+      const handled = requestRightPanelTabByIndex(digit);
+      if (handled) {
+        return true;
+      }
     }
 
     return activateTabByShortcutIndex(String(digit));

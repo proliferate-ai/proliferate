@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { focusChatInput, focusTerminal, getFocusZone } from "@/lib/domain/focus-zone";
+import {
+  focusChatInput,
+  focusTerminal,
+  getFocusZone,
+  isRightPanelFocusZone,
+} from "@/lib/domain/focus-zone";
 
 describe("focus-zone helpers", () => {
   afterEach(() => {
@@ -16,6 +21,13 @@ describe("focus-zone helpers", () => {
     });
 
     expect(getFocusZone()).toBe("terminal");
+  });
+
+  it("classifies the right panel and its hosted surfaces as right-panel focus", () => {
+    expect(isRightPanelFocusZone("right-panel")).toBe(true);
+    expect(isRightPanelFocusZone("terminal")).toBe(true);
+    expect(isRightPanelFocusZone("browser")).toBe(true);
+    expect(isRightPanelFocusZone("chat")).toBe(false);
   });
 
   it("focuses the chat composer editor when the chat focus zone exists", () => {

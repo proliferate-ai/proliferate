@@ -113,6 +113,7 @@ export function RightPanelFrame({
     <div
       ref={rootRef}
       data-right-panel-root="true"
+      data-focus-zone="right-panel"
       data-group="true"
       tabIndex={-1}
       onPointerDownCapture={onPointerDownCapture}

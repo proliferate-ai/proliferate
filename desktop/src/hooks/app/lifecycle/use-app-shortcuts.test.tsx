@@ -3,21 +3,32 @@
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppCommandActions } from "@/hooks/app/workflows/use-app-command-actions";
+import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts";
 import {
   clearShortcutHandlerRegistryForTests,
   runShortcutHandler,
 } from "@/lib/domain/shortcuts/registry";
 import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useAppShortcuts } from "./use-app-shortcuts";
+import { requestRightPanelTabByIndex } from "@/lib/infra/right-panel-shortcuts";
+
+const navigationMocks = vi.hoisted(() => ({
+  selectWorkspaceFromSurface: vi.fn(),
+}));
+
+const harnessState = vi.hoisted(() => ({
+  selectedWorkspaceId: null as string | null,
+  selectedLogicalWorkspaceId: null as string | null,
+  sidebarShortcutTargets: [] as string[],
+}));
 
 vi.mock("@/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => ({
-  useSidebarShortcutTargets: () => [],
+  useSidebarShortcutTargets: () => harnessState.sidebarShortcutTargets,
 }));
 
 vi.mock("@/hooks/workspaces/workflows/use-workspace-navigation-workflow", () => ({
   useWorkspaceNavigationWorkflow: () => ({
-    selectWorkspaceFromSurface: vi.fn(),
+    selectWorkspaceFromSurface: navigationMocks.selectWorkspaceFromSurface,
   }),
 }));
 
@@ -29,33 +40,20 @@ vi.mock("@/stores/sessions/session-selection-store", () => ({
     }) => unknown,
   ) =>
     selector({
-      selectedWorkspaceId: null,
-      selectedLogicalWorkspaceId: null,
+      selectedWorkspaceId: harnessState.selectedWorkspaceId,
+      selectedLogicalWorkspaceId: harnessState.selectedLogicalWorkspaceId,
     }),
 }));
 
-function buildCommandActions(): AppCommandActions {
-  const action = {
-    execute: vi.fn(),
-    disabledReason: null,
-  };
-
-  return {
-    openSettings: action,
-    showKeyboardShortcuts: action,
-    goHome: action,
-    goPlugins: action,
-    goAutomations: action,
-    openSupport: action,
-    addRepository: action,
-    newLocalWorkspace: action,
-    newWorktreeWorkspace: action,
-    newCloudWorkspace: action,
-  };
-}
+vi.mock("@/lib/infra/right-panel-shortcuts", () => ({
+  requestRightPanelTabByIndex: vi.fn(() => true),
+}));
 
 describe("useAppShortcuts", () => {
   beforeEach(() => {
+    harnessState.selectedWorkspaceId = null;
+    harnessState.selectedLogicalWorkspaceId = null;
+    harnessState.sidebarShortcutTargets = [];
     clearShortcutHandlerRegistryForTests();
     useUserPreferencesStore.setState({
       ...USER_PREFERENCE_DEFAULTS,
@@ -67,11 +65,12 @@ describe("useAppShortcuts", () => {
   afterEach(() => {
     cleanup();
     clearShortcutHandlerRegistryForTests();
+    document.body.innerHTML = "";
     vi.clearAllMocks();
   });
 
   it("steps appearance font sizes through the registered app shortcuts", () => {
-    renderHook(() => useAppShortcuts(buildCommandActions()));
+    renderHook(() => useAppShortcuts(commandActions()));
 
     useUserPreferencesStore.setState({
       uiFontSizeId: "xsmall",
@@ -95,4 +94,67 @@ describe("useAppShortcuts", () => {
     expect(useUserPreferencesStore.getState().uiFontSizeId).toBe("xxxlarge");
     expect(useUserPreferencesStore.getState().readableCodeFontSizeId).toBe("xlarge");
   });
+
+  it("routes option-number shortcuts to the right panel when right-panel focus is active", () => {
+    harnessState.selectedWorkspaceId = "workspace-1";
+    harnessState.selectedLogicalWorkspaceId = "workspace-1";
+    harnessState.sidebarShortcutTargets = ["workspace-1", "workspace-2", "workspace-3"];
+    const zone = document.createElement("div");
+    zone.tabIndex = 0;
+    zone.setAttribute("data-focus-zone", "right-panel");
+    document.body.append(zone);
+    zone.focus();
+
+    renderHook(() => useAppShortcuts(commandActions()));
+
+    expect(runShortcutHandler("workspace.by-index", {
+      source: "keyboard",
+      digit: 2,
+    })).toBe(true);
+    expect(requestRightPanelTabByIndex).toHaveBeenCalledWith(2);
+    expect(navigationMocks.selectWorkspaceFromSurface).not.toHaveBeenCalled();
+  });
+
+  it("falls back to workspace selection when a stale right-panel focus request is unhandled", () => {
+    harnessState.selectedWorkspaceId = "workspace-1";
+    harnessState.selectedLogicalWorkspaceId = "workspace-1";
+    harnessState.sidebarShortcutTargets = ["workspace-1", "workspace-2", "workspace-3"];
+    const zone = document.createElement("div");
+    zone.tabIndex = 0;
+    zone.setAttribute("data-focus-zone", "right-panel");
+    document.body.append(zone);
+    zone.focus();
+    vi.mocked(requestRightPanelTabByIndex).mockReturnValueOnce(false);
+
+    renderHook(() => useAppShortcuts(commandActions()));
+
+    expect(runShortcutHandler("workspace.by-index", {
+      source: "keyboard",
+      digit: 2,
+    })).toBe(true);
+    expect(requestRightPanelTabByIndex).toHaveBeenCalledWith(2);
+    expect(navigationMocks.selectWorkspaceFromSurface).toHaveBeenCalledWith(
+      "workspace-2",
+      "shortcut",
+    );
+  });
 });
+
+function commandActions(): AppCommandActions {
+  const action = () => ({
+    disabledReason: null,
+    execute: vi.fn(),
+  });
+  return {
+    openSettings: action(),
+    showKeyboardShortcuts: action(),
+    goHome: action(),
+    goPlugins: action(),
+    goAutomations: action(),
+    openSupport: action(),
+    addRepository: action(),
+    newLocalWorkspace: action(),
+    newWorktreeWorkspace: action(),
+    newCloudWorkspace: action(),
+  };
+}
