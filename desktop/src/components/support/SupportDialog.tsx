@@ -29,7 +29,6 @@ export function SupportDialog({
     canExportActiveSessionJson,
     canExportReplayRecording,
     canExportWorkspaceJson,
-    contextLabel,
     fallbackEmail,
     handleCopyInvestigationJson,
     handleExportActiveSessionJson,
@@ -62,11 +61,6 @@ export function SupportDialog({
     >
       <div className="space-y-4">
         <div className="space-y-4">
-          {contextLabel && (
-            <div className="text-xs leading-5 text-muted-foreground">
-              {contextLabel}
-            </div>
-          )}
           <p className="max-w-md text-sm leading-6">
             Help is a message away. Send us a note at {fallbackEmail}, and
             we&apos;ll reply within a day.

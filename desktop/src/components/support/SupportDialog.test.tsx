@@ -107,7 +107,7 @@ describe("SupportDialog", () => {
     expect(screen.getByRole("button", { name: /Outlook/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Mail app/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Copy email/i })).toBeTruthy();
-    expect(screen.getByText("local · hedgehog")).toBeTruthy();
+    expect(screen.queryByText("local · hedgehog")).toBeNull();
   });
 
   it("keeps diagnostics collapsed until the disclosure opens", () => {
