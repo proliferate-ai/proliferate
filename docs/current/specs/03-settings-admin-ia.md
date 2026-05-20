@@ -246,7 +246,12 @@ Workspace
 
 Agents
   agents                   AgentsPane                     (existing; "installed on this Mac")
-  agent-defaults           AgentDefaultsPane              (existing; moved from Workflows)
+  agent-defaults           AgentDefaultsPane              (existing; moved from Workflows;
+                                                           pin one cloud_agent_run_config per
+                                                           agent_kind — spec 06 §5.3 owns content)
+  agent-run-configs        AgentRunConfigsPane            (new; hidden until
+                                                           spec 06 wires content;
+                                                           library of named configs)
   agent-authentication     AgentAuthenticationPane        (new; hidden until
                                                            spec 02 wires
                                                            content)
@@ -273,7 +278,8 @@ SETTINGS_CONTENT_SECTIONS = [
   "general", "appearance", "keyboard",
   "account", "organization", "billing",
   "environments", "shared-environments", "compute",
-  "agents", "agent-defaults", "agent-authentication", "review",
+  "agents", "agent-defaults", "agent-run-configs",
+  "agent-authentication", "review",
   "slack-bot",
 ]
 ```

@@ -383,7 +383,22 @@ points at the run's `start_session` / `send_prompt` command, not
 through new states on the run itself. The run's status reflects the
 end-to-end outcome.
 
-### 5.3 `cloud_agent_run_config` (new)
+### 5.3 `cloud_agent_run_config` — centralized agent configuration
+
+This subsystem is consumed by every surface that starts agent work:
+automations, Slack bot (spec 07), Desktop new-chat, Web/Mobile
+new-chat (spec 08), Cowork API. Spec 06 owns the model because
+automations are the first non-interactive consumer; downstream specs
+reference this section.
+
+**The catalog is the source of truth.** `catalog.json` (and adjacent
+code) defines which agent kinds exist, which models exist per kind,
+and what controls each `(agent_kind, model_id)` accepts. A
+`cloud_agent_run_config` row stores a chosen subset of those values
+under a human-readable name. There is no separate "options" or
+"validity" subsystem; the catalog itself answers both questions.
+
+Schema:
 
 ```text
 cloud_agent_run_config
@@ -401,47 +416,197 @@ cloud_agent_run_config
   usable_in_personal_sandboxes    boolean NOT NULL default true
   usable_in_shared_sandboxes      boolean NOT NULL default false
 
-  catalog_version_pinned_at       text                            NULL
-                                  -- e.g. "2026-05-20.v1"; not
-                                     enforced for backwards
-                                     resolution, used for audit
-
   status                          text   'active' | 'archived'
-  created_at, updated_at
+  created_at, updated_at, archived_at
 
   CHECK ck_cloud_agent_run_config_owner_fields
   CHECK ck_cloud_agent_run_config_status
   CHECK ck_cloud_agent_run_config_agent_kind
 ```
 
-Semantics:
+No `validation_status`. No `catalog_version_pinned_at`. No
+`is_starter_preset`. No `revision`. Validity is a function of the
+current catalog; if a row's `control_values_json` references a
+control that no longer exists, that key is ignored at render time
+and at run time (see below). No background reconciler.
 
-- Owner scope mirrors the rest of the data model: system rows
-  visible by policy, personal rows visible to owner, organization
-  rows visible to org members.
-- `control_values_json` stores the resolved control values
-  (`mode`, `effort`, `fast_mode`, `collaboration_mode`, etc.). The
-  canonical option set lives in the existing `catalog.json` / model
-  catalog (spec 01-adjacent). The selector validates control values
-  against the catalog at write time and at run time.
-- `usable_in_personal_sandboxes` / `usable_in_shared_sandboxes`
-  default conservatively. Org admins flip
-  `usable_in_shared_sandboxes=true` for configs they want available
-  to Slack and team automations.
+**Validation:**
+
+```text
+At write time (POST / PATCH):
+  load catalog entry for (agent_kind, model_id)
+  for each key in control_values_json:
+    if key is not in catalog.controls[agent_kind][model_id]: reject
+    if value is not in catalog.controls[agent_kind][model_id][key].allowed_values: reject
+  for each required control in catalog.controls[agent_kind][model_id]:
+    if missing from control_values_json: reject with field-level error
+  agent_kind must be in catalog.agents
+  model_id must be in catalog.models[agent_kind]
+
+At read time (selector render):
+  load current catalog
+  intersect row.control_values_json with catalog.controls[agent_kind][model_id]
+  render only the intersection; ignore stale keys
+  surface a small "Config has unused settings" badge if intersection
+    is smaller than the row (purely informational)
+
+At run time (use the config):
+  intersect again with current catalog (catalog may have moved between
+    selector render and dispatch)
+  if agent_kind or model_id is no longer in catalog: fail caller with
+    typed error agent_run_config_model_unavailable
+  if a required control is missing: fail with
+    agent_run_config_missing_required
+  otherwise: build the resolved snapshot and proceed
+```
+
+The selector and the run-time check share the same intersection
+helper:
+
+```text
+server/proliferate/server/cloud/agent_run_config/domain/resolve.py
+  resolve_runtime_values(catalog, config_row) -> ResolvedAgentRunConfig
+  pure function; no I/O
+```
+
+**Defaults (no new table).** Per-user and per-org defaults live in
+existing preference stores:
+
+```text
+user_preferences  (existing table; column or jsonb blob)
+  default_agent_run_config_id_by_agent_kind: {
+    "claude": "<uuid>",
+    "codex":  "<uuid>",
+    ...
+  }
+
+organization_settings  (existing; mirror for org defaults)
+  default_agent_run_config_id_by_agent_kind: { ... }
+  scope: applies to new team automations + Slack runs as a
+         pre-selection (user/admin can still pick a different config)
+```
+
+A new table for defaults is not needed; the data is two pointers per
+agent_kind per owner. If `user_preferences` does not exist today as a
+table, the simplest landing is a thin `user_settings` jsonb column
+that other personal preferences can also use later.
+
+Resolution order when starting a session without an explicit
+config_id:
+
+```text
+1. caller (e.g. automation) has agent_kind in mind
+2. read user_preferences.default_agent_run_config_id_by_agent_kind[agent_kind]
+   (or org variant when target_mode='shared_cloud')
+3. if missing: fall back to the lowest-id system row for that agent_kind
+   (system rows are seeded at deploy; treat the first one as the
+   product default)
+4. if still missing: fail with agent_run_config_missing_default
+```
+
+**Starter presets** are just `cloud_agent_run_config` rows with
+`owner_scope='system'` seeded at deploy time. No special column. The
+selector displays them in a "Starter presets" group. Operators of
+self-hosted deployments can edit the seed list; hosted deployments
+edit it as part of Proliferate releases.
+
+**Snapshot pattern (cross-cutting):**
+
+Every consumer that starts a run captures the resolved values at
+trigger time. The snapshot is the audit record; later edits to the
+config row do not affect in-flight or completed runs.
+
+```text
+agent_run_config_snapshot_json
+  {
+    "config_id":              "<uuid>",
+    "config_name":            "ACME Codex review preset",
+    "agent_kind":             "codex",
+    "model_id":               "gpt-5.5",
+    "control_values":         { "effort": "high", ... },   -- post-intersection
+    "ignored_keys":           [],                          -- keys present on
+                                                              row but absent
+                                                              from catalog
+    "owner_scope_at_snapshot": "organization",
+    "snapshotted_at":         "..."
+  }
+```
+
+Consumers that snapshot:
+
+```text
+automation_run.agent_run_config_snapshot_json             (spec 06)
+slack_thread_work.agent_run_config_snapshot_json          (spec 07)
+cloud_session.agent_run_config_snapshot_json              (Desktop / Web / Mobile new-chat consumer)
+```
+
+Spec 06 ships the column on `automation_run`. Spec 07 ships the
+column on its Slack thread work table. The new-chat path (Desktop /
+Web / Mobile) lands the column on `cloud_session` when those flows
+become Cloud-mediated — spec 08 or a future "new chat" spec owns
+that addition.
 
 API:
 
 ```text
 GET    /v1/cloud/agent-run-configs
-POST   /v1/cloud/agent-run-configs
+       ?owner_scope=personal|organization|system
+       ?agent_kind=
+       ?usable_in=personal_sandboxes|shared_sandboxes
+       ?status=active|archived
+POST   /v1/cloud/agent-run-configs                -- validates against catalog
 GET    /v1/cloud/agent-run-configs/{id}
-PATCH  /v1/cloud/agent-run-configs/{id}
-DELETE /v1/cloud/agent-run-configs/{id}        -- soft archive
+PATCH  /v1/cloud/agent-run-configs/{id}           -- re-validates
+DELETE /v1/cloud/agent-run-configs/{id}           -- soft archive
+
+GET    /v1/cloud/agent-run-configs/defaults       -- returns user's pinned defaults
+PUT    /v1/cloud/agent-run-configs/defaults/{agent_kind}
+       body: { config_id }                         -- pin personal default
+PUT    /v1/cloud/organizations/{org}/agent-run-configs/defaults/{agent_kind}
+       body: { config_id }                         -- admin sets org default
 ```
 
-Listing supports `?owner_scope=personal|organization|system` filters
-and `?usable_in=personal_sandboxes|shared_sandboxes` boolean
-filters.
+Authorization:
+
+```text
+- create/edit/archive personal config: owner only
+- create/edit/archive org config:      useIsAdmin(org) only
+- create/edit/archive system config:   not exposed via API; seed at deploy
+- pin personal default:                user is owner
+- pin org default:                     useIsAdmin(org) only
+```
+
+UI integration (spec 03 §5.4 owns the primitive; spec 06 owns the
+page content):
+
+```text
+spec 03 sidebar:
+  Settings > Agents > Agent Defaults              (pin per agent_kind)
+  Settings > Agents > Agent Run Configs           (CRUD list)
+                                                  -- new page slot added
+                                                     to spec 03 §5.1 alongside
+                                                     Agent Defaults
+
+primitive (spec 03 §5.4):
+  AgentRunConfigSelector                          consumes this domain
+```
+
+Spec 03 IA gains an `agent-run-configs` page slot in the Agents
+sidebar group, sibling to `agent-defaults`. Spec 06 fills both pages:
+
+- **Agent Defaults** — per-agent_kind selector that pins which
+  config is the user's (or org's) default. No CRUD here; just a
+  picker per harness.
+- **Agent Run Configs** — the library. Create / edit / archive
+  named configs. Filter by owner_scope; show "Starter presets",
+  "My configs", "Org configs" groupings. Edit modal shows the
+  current catalog controls for `(agent_kind, model_id)` so the
+  user sees what they're choosing.
+
+The spec 03 IA update (adding the `agent-run-configs` page slot) is
+documented here so spec 03 doesn't have to re-open; the section
+just confirms the empty shell already exists per spec 03's pattern.
+
 
 ### 5.4 Scheduler + cursor
 
@@ -1056,9 +1221,12 @@ Manual smoke:
    idempotency key so a retried tick (executor lease expired and
    re-claimed) collapses with the prior cascade.
 
-6. **Should `cloud_agent_run_config_snapshot_json` snapshot the
-   catalog version too?**
+6. **Should the snapshot record a catalog version, or just the
+   resolved values?**
 
-   Yes — include `catalog_version_pinned_at` from the config row,
-   plus the resolved control values. That way audit can show
-   "this run used catalog vX with these controls".
+   Just the resolved values. The catalog moves forward; old
+   snapshots remain valid because they record the values that were
+   used (not "what was allowed at the time"). If forensics ever
+   needs the catalog state at a past time, deploy history is the
+   source. Avoiding `catalog_version_pinned_at` keeps the schema
+   honest with "the catalog is the current source of truth."
