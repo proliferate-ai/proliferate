@@ -21,7 +21,7 @@ from tests.e2e.cloud.helpers import (
     require_local_auth,
     seed_linked_github_account,
     status_for_provider,
-    sync_cloud_credential,
+    sync_agent_auth_credential,
     wait_for_cloud_workspace_status,
     workspace_status,
 )
@@ -52,7 +52,7 @@ async def test_workspace_reconnect_after_stop_start(
         access_token=cloud_test_config.github_token,
     )
 
-    statuses = await sync_cloud_credential(cloud_client, auth, cloud_test_config, "claude")
+    statuses = await sync_agent_auth_credential(cloud_client, auth, cloud_test_config, "claude")
     assert status_for_provider(statuses, "claude")["synced"] is True
 
     branch_name, workspace = await create_ready_cloud_workspace(
@@ -142,7 +142,7 @@ async def test_workspace_recovers_after_native_pause(
         access_token=cloud_test_config.github_token,
     )
 
-    statuses = await sync_cloud_credential(cloud_client, auth, cloud_test_config, "claude")
+    statuses = await sync_agent_auth_credential(cloud_client, auth, cloud_test_config, "claude")
     assert status_for_provider(statuses, "claude")["synced"] is True
 
     branch_name, workspace = await create_ready_cloud_workspace(
@@ -219,7 +219,7 @@ async def test_workspace_delete_cleans_up(
         access_token=cloud_test_config.github_token,
     )
 
-    statuses = await sync_cloud_credential(cloud_client, auth, cloud_test_config, "claude")
+    statuses = await sync_agent_auth_credential(cloud_client, auth, cloud_test_config, "claude")
     assert status_for_provider(statuses, "claude")["synced"] is True
 
     branch_name, workspace = await create_ready_cloud_workspace(

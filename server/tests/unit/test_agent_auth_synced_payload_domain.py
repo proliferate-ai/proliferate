@@ -7,15 +7,15 @@ from datetime import datetime, UTC
 
 import pytest
 
-from proliferate.server.cloud.credentials.domain.status import (
+from proliferate.server.cloud.agent_auth.domain.status import (
     allowed_agent_kinds,
     build_credential_statuses,
     ready_agent_kinds,
 )
-from proliferate.server.cloud.credentials.domain.sync_payload import (
-    normalize_cloud_credential_payload,
+from proliferate.server.cloud.agent_auth.domain.synced_payload import (
+    normalize_synced_credential_payload,
 )
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.agent_auth.errors import AgentAuthError
 
 
 @dataclass(frozen=True)
@@ -56,8 +56,8 @@ def test_build_credential_statuses_applies_defaults_and_filters_revoked() -> Non
 
 
 def test_normalize_claude_env_payload_keeps_allowed_key_only() -> None:
-    normalized = normalize_cloud_credential_payload(
-        provider="claude",
+    normalized = normalize_synced_credential_payload(
+        agent_kind="claude",
         auth_mode="env",
         env_vars={"ANTHROPIC_API_KEY": "sk-ant-test"},
         files=None,
@@ -72,9 +72,9 @@ def test_normalize_claude_env_payload_keeps_allowed_key_only() -> None:
 
 
 def test_normalize_gemini_env_rejects_incompatible_api_keys() -> None:
-    with pytest.raises(CloudApiError) as exc_info:
-        normalize_cloud_credential_payload(
-            provider="gemini",
+    with pytest.raises(AgentAuthError) as exc_info:
+        normalize_synced_credential_payload(
+            agent_kind="gemini",
             auth_mode="env",
             env_vars={
                 "GEMINI_API_KEY": "gemini-key",
@@ -85,7 +85,7 @@ def test_normalize_gemini_env_rejects_incompatible_api_keys() -> None:
 
     assert exc_info.value.code == "invalid_payload"
     assert exc_info.value.message == (
-        "Gemini cloud sync must use either GEMINI_API_KEY or GOOGLE_API_KEY, not both."
+        "Gemini sync must use either GEMINI_API_KEY or GOOGLE_API_KEY, not both."
     )
 
 
@@ -100,8 +100,8 @@ def test_normalize_claude_file_payload_decodes_portable_auth_file() -> None:
         ).encode("utf-8")
     ).decode("ascii")
 
-    normalized = normalize_cloud_credential_payload(
-        provider="claude",
+    normalized = normalize_synced_credential_payload(
+        agent_kind="claude",
         auth_mode="file",
         env_vars=None,
         files=[
@@ -131,9 +131,9 @@ def test_normalize_claude_file_payload_decodes_portable_auth_file() -> None:
 def test_normalize_file_payload_rejects_unapproved_path() -> None:
     encoded = base64.b64encode(b'{"some":"data"}').decode("ascii")
 
-    with pytest.raises(CloudApiError) as exc_info:
-        normalize_cloud_credential_payload(
-            provider="claude",
+    with pytest.raises(AgentAuthError) as exc_info:
+        normalize_synced_credential_payload(
+            agent_kind="claude",
             auth_mode="file",
             env_vars=None,
             files=[

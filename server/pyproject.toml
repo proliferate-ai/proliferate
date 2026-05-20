@@ -103,7 +103,6 @@ module = [
     "proliferate.server.cloud.worker.models",
     "proliferate.server.cloud.workspaces.models",
     "proliferate.server.catalogs.models",
-    "proliferate.server.cloud.credentials.models",
     "proliferate.server.cloud.events.models",
     "proliferate.server.cloud.live.models",
     "proliferate.server.cloud.repos.models",

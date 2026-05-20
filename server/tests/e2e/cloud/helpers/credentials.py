@@ -78,60 +78,77 @@ def build_sync_payload(config: CloudTestConfig, provider: str) -> dict[str, Any]
     raise CloudE2ETestError(f"Unsupported provider {provider!r}")
 
 
-async def sync_cloud_credential(
+async def sync_agent_auth_credential(
     client: httpx.AsyncClient,
     auth: AuthSession,
     config: CloudTestConfig,
     provider: str,
 ) -> list[dict[str, Any]]:
     response = await client.put(
-        f"/v1/cloud/credentials/{provider}",
+        f"/v1/cloud/agent-auth/credentials/synced/{provider}",
         headers=auth.headers,
         json=build_sync_payload(config, provider),
     )
     if response.status_code == 401:
         auth = await refresh_auth_session(client, auth=auth)
         response = await client.put(
-            f"/v1/cloud/credentials/{provider}",
+            f"/v1/cloud/agent-auth/credentials/synced/{provider}",
             headers=auth.headers,
             json=build_sync_payload(config, provider),
         )
     response.raise_for_status()
-    return await list_cloud_credentials(client, auth)
+    return await list_agent_auth_credentials(client, auth)
 
 
-async def list_cloud_credentials(
+async def list_agent_auth_credentials(
     client: httpx.AsyncClient,
     auth: AuthSession,
 ) -> list[dict[str, Any]]:
-    response = await client.get("/v1/cloud/credentials", headers=auth.headers)
+    response = await client.get("/v1/cloud/agent-auth/credentials", headers=auth.headers)
     if response.status_code == 401:
         auth = await refresh_auth_session(client, auth=auth)
-        response = await client.get("/v1/cloud/credentials", headers=auth.headers)
+        response = await client.get("/v1/cloud/agent-auth/credentials", headers=auth.headers)
     response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, list):
-        raise CloudE2ETestError("Cloud credential status response was not a list.")
-    return payload
+        raise CloudE2ETestError("Agent auth credential response was not a list.")
+    return [_status_for_synced_credential(payload, provider) for provider in _SYNC_PROVIDERS]
 
 
-async def delete_cloud_credential(
+async def delete_agent_auth_credential(
     client: httpx.AsyncClient,
     auth: AuthSession,
     provider: str,
 ) -> list[dict[str, Any]]:
+    credentials_response = await client.get(
+        "/v1/cloud/agent-auth/credentials",
+        headers=auth.headers,
+    )
+    credentials_response.raise_for_status()
+    credential_id = next(
+        (
+            credential.get("id")
+            for credential in credentials_response.json()
+            if credential.get("agentKind") == provider
+            and credential.get("credentialKind") == "synced_path"
+            and credential.get("status") != "revoked"
+        ),
+        None,
+    )
+    if credential_id is None:
+        return await list_agent_auth_credentials(client, auth)
     response = await client.delete(
-        f"/v1/cloud/credentials/{provider}",
+        f"/v1/cloud/agent-auth/credentials/{credential_id}",
         headers=auth.headers,
     )
     if response.status_code == 401:
         auth = await refresh_auth_session(client, auth=auth)
         response = await client.delete(
-            f"/v1/cloud/credentials/{provider}",
+            f"/v1/cloud/agent-auth/credentials/{credential_id}",
             headers=auth.headers,
         )
     response.raise_for_status()
-    return await list_cloud_credentials(client, auth)
+    return await list_agent_auth_credentials(client, auth)
 
 
 def status_for_provider(
@@ -142,6 +159,36 @@ def status_for_provider(
         if status.get("provider") == provider:
             return status
     raise AssertionError(f"Missing credential status for {provider}")
+
+
+_SYNC_PROVIDERS = ("claude", "codex", "gemini")
+_DEFAULT_AUTH_MODES = {"claude": "env", "codex": "file", "gemini": "env"}
+
+
+def _status_for_synced_credential(
+    credentials: list[dict[str, Any]],
+    provider: str,
+) -> dict[str, Any]:
+    credential = next(
+        (
+            item
+            for item in credentials
+            if item.get("agentKind") == provider
+            and item.get("credentialKind") == "synced_path"
+            and item.get("status") == "ready"
+        ),
+        None,
+    )
+    summary = credential.get("redactedSummary") if isinstance(credential, dict) else {}
+    auth_mode = summary.get("authMode") if isinstance(summary, dict) else None
+    return {
+        "provider": provider,
+        "authMode": auth_mode if auth_mode in {"env", "file"} else _DEFAULT_AUTH_MODES[provider],
+        "supported": True,
+        "localDetected": False,
+        "synced": credential is not None,
+        "lastSyncedAt": None,
+    }
 
 
 def require_local_auth(

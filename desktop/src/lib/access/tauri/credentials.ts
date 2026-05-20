@@ -1,10 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { RuntimeInfo } from "./runtime";
 
-export type CloudCredentialProvider = "claude" | "codex" | "gemini";
+export type AgentAuthProvider = "claude" | "codex" | "gemini";
 
-export interface LocalCloudCredentialSource {
-  provider: CloudCredentialProvider;
+export interface LocalAgentAuthSource {
+  provider: AgentAuthProvider;
   authMode: "env" | "file";
   detected: boolean;
 }
@@ -46,7 +46,7 @@ export type SyncGeminiCredentialRequest =
   | SyncEnvCredentialRequest
   | SyncGeminiFileCredentialRequest;
 
-export interface SyncCloudCredentialRequestByProvider {
+export interface SyncAgentAuthCredentialRequestByProvider {
   claude: SyncClaudeCredentialRequest;
   codex: SyncCodexCredentialRequest;
   gemini: SyncGeminiCredentialRequest;
@@ -71,15 +71,15 @@ export async function restartRuntime(): Promise<RuntimeInfo> {
   return invoke<RuntimeInfo>("restart_runtime");
 }
 
-export async function listSyncableCloudCredentials(): Promise<LocalCloudCredentialSource[]> {
-  return invoke<LocalCloudCredentialSource[]>("list_syncable_cloud_credentials");
+export async function listSyncableAgentAuthCredentials(): Promise<LocalAgentAuthSource[]> {
+  return invoke<LocalAgentAuthSource[]>("list_syncable_agent_auth_credentials");
 }
 
-export async function exportSyncableCloudCredential<P extends CloudCredentialProvider>(
+export async function exportSyncableAgentAuthCredential<P extends AgentAuthProvider>(
   provider: P,
-): Promise<SyncCloudCredentialRequestByProvider[P]> {
-  return invoke<SyncCloudCredentialRequestByProvider[P]>(
-    "export_syncable_cloud_credential",
+): Promise<SyncAgentAuthCredentialRequestByProvider[P]> {
+  return invoke<SyncAgentAuthCredentialRequestByProvider[P]>(
+    "export_syncable_agent_auth_credential",
     { provider },
   );
 }

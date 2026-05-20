@@ -24,7 +24,6 @@ from proliferate.server.cloud.commands.models import (
     command_response_payload,
 )
 from proliferate.server.cloud.commands.service import enqueue_command
-from proliferate.server.cloud.credentials.service import load_active_cloud_credential_payloads
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime_config.service import (
     refresh_profile_runtime_config,
@@ -67,10 +66,6 @@ def _command_idempotency_key(
     if value:
         return f"target-config:{target_config_id}:v{version}:{value}"
     return f"target-config:{target_config_id}:v{version}"
-
-
-def _credential_snapshot_version(agent_credentials: dict[str, dict[str, object]]) -> int:
-    return len(agent_credentials)
 
 
 def _required_tools(
@@ -269,17 +264,6 @@ async def materialize_target_config(
             email=git_user_email,
         )
 
-    raw_agent_credentials = (
-        await load_active_cloud_credential_payloads(user.id)
-        if body.include_agent_credentials
-        else {}
-    )
-    agent_credentials = {
-        provider: payload
-        for provider, payload in raw_agent_credentials.items()
-        if isinstance(provider, str) and isinstance(payload, dict)
-    }
-
     runtime_config = None
     if target.sandbox_profile_id is not None:
         runtime_config = await runtime_config_fragment_for_profile(
@@ -329,7 +313,6 @@ async def materialize_target_config(
         env_var_count=len(env_vars),
         tracked_file_count=len(tracked_files),
         has_git_credential=git_credential is not None,
-        agent_credential_providers=sorted(agent_credentials),
         mcp_binding_count=binding_count,
         mcp_warning_count=warning_count,
         required_tools=required_tools,
@@ -346,7 +329,6 @@ async def materialize_target_config(
         setup_script=setup_script,
         run_command=run_command,
         git_credential=git_credential,
-        agent_credentials=agent_credentials,
         runtime_config=runtime_config,
         readiness_requirements={tool: True for tool in required_tools},
     )
@@ -363,7 +345,6 @@ async def materialize_target_config(
         summary_json=summary.model_dump_json(),
         env_vars_version=env_vars_version,
         files_version=files_version,
-        credential_snapshot_version=_credential_snapshot_version(agent_credentials),
         mcp_materialization_version=mcp_materialization_version,
     )
 

@@ -27,6 +27,7 @@ from proliferate.constants.cloud import (
     CLAUDE_ALLOWED_AUTH_FILES,
     CODEX_ALLOWED_AUTH_FILES,
     GEMINI_ALLOWED_AUTH_FILES,
+    SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS,
     CloudAgentKind,
     CloudCommandActorKind,
     CloudCommandKind,
@@ -43,12 +44,10 @@ from proliferate.db.store.cloud_agent_auth.records import (
     AgentGatewayPolicyRecord,
     AgentGatewayProviderCredentialRecord,
     AgentGatewayRuntimeGrantRecord,
-    LegacyCloudCredentialRecord,
     SandboxAgentAuthSelectionRecord,
     SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
 )
-from proliferate.db.store.cloud_credentials import get_cloud_credential_by_id
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.integrations.aws import (
     AwsIntegrationError,
@@ -65,11 +64,16 @@ from proliferate.server.cloud.agent_auth.domain.policy import (
     is_supported_agent_kind,
     selection_plan_for_credential,
 )
+from proliferate.server.cloud.agent_auth.domain.synced_payload import (
+    normalize_synced_credential_payload,
+    redacted_synced_payload_summary,
+)
 from proliferate.server.cloud.agent_auth.errors import AgentAuthError
 from proliferate.server.cloud.agent_auth.models import (
     CreateGatewayCredentialRequest,
     EnsureManagedCreditsRequest,
     LiteLLMModelDeploymentRequest,
+    SyncSyncedCredentialRequest,
     WorkerAgentAuthGatewayConfig,
     WorkerAgentAuthMaterializationPlan,
     WorkerAgentAuthSelectionPlan,
@@ -91,9 +95,7 @@ _MANAGED_CREDIT_AGENT_KINDS_V1: tuple[CloudAgentKind, ...] = ("claude",)
 _CLEANUP_SELECTION_ERROR_CODES = {
     "credential_revoked",
     "credential_share_revoked",
-    "legacy_cloud_credential_revoked",
 }
-_LEGACY_CLAUDE_ENV_UNSUPPORTED_CODE = "legacy_claude_env_requires_native_files"
 _OPENCODE_ALLOWED_AUTH_FILES: frozenset[str] = frozenset({".config/opencode/auth.json"})
 
 
@@ -115,6 +117,13 @@ class EnsureManagedCreditsResult:
 class CredentialListItem:
     credential: AgentAuthCredentialRecord
     active_share: AgentAuthCredentialShareRecord | None
+
+
+@dataclass(frozen=True)
+class SyncSyncedCredentialResult:
+    credential: AgentAuthCredentialRecord
+    selection: SandboxAgentAuthSelectionRecord
+    changed: bool
 
 
 @dataclass(frozen=True)
@@ -151,7 +160,6 @@ async def ensure_personal_sandbox_profile(
         user_id=actor_user_id,
         created_by_user_id=actor_user_id,
     )
-    profile = await _backfill_legacy_cloud_credentials(db, actor_user_id, profile)
     await _ensure_profile_target_refresh_if_needed(
         db,
         profile=profile,
@@ -159,25 +167,6 @@ async def ensure_personal_sandbox_profile(
         reason="sandbox_profile_target_attached",
     )
     return profile
-
-
-async def reconcile_legacy_cloud_credentials_for_user(
-    db: AsyncSession,
-    *,
-    actor_user_id: UUID,
-    create_profile: bool,
-) -> SandboxProfileRecord | None:
-    if create_profile:
-        profile = await store.ensure_personal_sandbox_profile(
-            db,
-            user_id=actor_user_id,
-            created_by_user_id=actor_user_id,
-        )
-    else:
-        profile = await store.get_active_personal_sandbox_profile_for_user(db, actor_user_id)
-        if profile is None:
-            return None
-    return await _backfill_legacy_cloud_credentials(db, actor_user_id, profile)
 
 
 async def ensure_organization_sandbox_profile(
@@ -250,6 +239,174 @@ async def list_credentials_for_response(
             )
         items.append(CredentialListItem(credential=credential, active_share=active_share))
     return tuple(items)
+
+
+async def sync_synced_credential_for_user(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    agent_kind: CloudAgentKind,
+    body: SyncSyncedCredentialRequest,
+) -> SyncSyncedCredentialResult:
+    if agent_kind not in SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS:
+        raise AgentAuthError(
+            "Native auth sync is not supported for this agent.",
+            code="unsupported_synced_agent_kind",
+            status_code=400,
+        )
+    normalized = normalize_synced_credential_payload(
+        agent_kind=agent_kind,
+        auth_mode=body.auth_mode,
+        env_vars=getattr(body, "env_vars", None),
+        files=getattr(body, "files", None),
+    )
+    redacted_summary = redacted_synced_payload_summary(
+        agent_kind=agent_kind,
+        payload=normalized.payload,
+    )
+    redacted_summary_json = json.dumps(redacted_summary, sort_keys=True)
+    payload_ciphertext = encrypt_json(normalized.payload)
+
+    profile = await store.ensure_personal_sandbox_profile(
+        db,
+        user_id=actor_user_id,
+        created_by_user_id=actor_user_id,
+    )
+    existing = await store.get_active_personal_synced_credential_for_update(
+        db,
+        user_id=actor_user_id,
+        agent_kind=agent_kind,
+    )
+    payload_changed = True
+    if existing is not None and existing.payload_ciphertext:
+        existing_payload = decrypt_json(existing.payload_ciphertext)
+        payload_changed = (
+            existing.status != "ready"
+            or existing_payload != normalized.payload
+            or existing.redacted_summary_json != redacted_summary_json
+        )
+
+    display_name = f"Synced {agent_kind} auth"
+    if existing is None:
+        credential = await store.create_agent_auth_credential(
+            db,
+            owner_scope="personal",
+            owner_user_id=actor_user_id,
+            organization_id=None,
+            created_by_user_id=actor_user_id,
+            agent_kind=agent_kind,
+            credential_kind="synced_path",
+            display_name=display_name,
+            redacted_summary_json=redacted_summary_json,
+            status="ready",
+            payload_ciphertext=payload_ciphertext,
+            payload_ciphertext_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
+        )
+    else:
+        credential = await store.update_synced_credential_payload(
+            db,
+            credential_id=existing.id,
+            display_name=display_name,
+            redacted_summary_json=redacted_summary_json,
+            payload_ciphertext=payload_ciphertext,
+            payload_ciphertext_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
+            status="ready",
+            increment_revision=payload_changed,
+        )
+        if credential is None:
+            raise AgentAuthError(
+                "Credential not found.",
+                code="credential_not_found",
+                status_code=404,
+            )
+
+    plan = selection_plan_for_credential(
+        agent_kind=agent_kind,
+        credential_kind=credential.credential_kind,
+    )
+    if not isinstance(plan, SelectionPlan):
+        raise AgentAuthError(plan.message, code=plan.code, status_code=plan.status_code)
+    if plan.materialization_mode != "synced_files":
+        raise AgentAuthError(
+            "Synced credentials must materialize as files.",
+            code="invalid_materialization_mode",
+            status_code=500,
+        )
+
+    selections = {
+        selection.agent_kind: selection
+        for selection in await store.list_selections_for_profile(db, profile.id)
+    }
+    existing_selection = selections.get(agent_kind)
+    selection_changed = (
+        existing_selection is None
+        or existing_selection.status != "active"
+        or existing_selection.credential_id != credential.id
+        or existing_selection.credential_share_id is not None
+        or existing_selection.materialization_mode != plan.materialization_mode
+        or existing_selection.selected_revision != credential.revision
+    )
+    selection = await store.upsert_selection(
+        db,
+        sandbox_profile_id=profile.id,
+        owner_scope="personal",
+        agent_kind=agent_kind,
+        credential_id=credential.id,
+        credential_share_id=None,
+        materialization_mode=plan.materialization_mode,
+        selected_revision=credential.revision,
+        status="active",
+        last_error_code=None,
+        last_error_message=None,
+    )
+
+    changed = payload_changed or selection_changed
+    if changed:
+        updated_profile = await store.bump_sandbox_profile_agent_auth_revision(
+            db,
+            sandbox_profile_id=profile.id,
+            reason="synced_credential_sync",
+            actor_user_id=actor_user_id,
+            force_restart=False,
+        )
+        if updated_profile is None:
+            raise AgentAuthError(
+                "Sandbox profile not found.",
+                code="sandbox_profile_not_found",
+                status_code=404,
+            )
+        await _mark_target_pending_and_queue_refresh(
+            db,
+            profile=updated_profile,
+            actor_user_id=actor_user_id,
+            reason="synced_credential_sync",
+            force_restart=False,
+        )
+
+    await store.record_audit_event(
+        db,
+        action="credential.sync",
+        actor_user_id=actor_user_id,
+        owner_scope="personal",
+        owner_user_id=actor_user_id,
+        organization_id=None,
+        credential_id=credential.id,
+        sandbox_profile_id=profile.id,
+        metadata_json=json.dumps(
+            {
+                "agentKind": agent_kind,
+                "authMode": normalized.auth_mode,
+                "changed": changed,
+                "selectionChanged": selection_changed,
+            },
+            sort_keys=True,
+        ),
+    )
+    return SyncSyncedCredentialResult(
+        credential=credential,
+        selection=selection,
+        changed=changed,
+    )
 
 
 async def create_gateway_credential(
@@ -1560,26 +1717,7 @@ async def _worker_synced_files_config(
     credential: AgentAuthCredentialRecord,
     selection: SandboxAgentAuthSelectionRecord,
 ) -> WorkerAgentAuthSyncedFilesConfig:
-    if credential.legacy_cloud_credential_id is None:
-        raise AgentAuthError(
-            "Synced credential is missing its source credential.",
-            code="synced_credential_source_missing",
-            status_code=409,
-        )
-    legacy = await get_cloud_credential_by_id(db, credential.legacy_cloud_credential_id)
-    if legacy is None or legacy.revoked_at is not None or legacy.provider != credential.agent_kind:
-        raise AgentAuthError(
-            "Synced credential source is not active.",
-            code="synced_credential_source_missing",
-            status_code=409,
-        )
-    payload = decrypt_json(legacy.payload_ciphertext)
-    if not isinstance(payload, dict):
-        raise AgentAuthError(
-            "Synced credential payload is invalid.",
-            code="synced_credential_payload_invalid",
-            status_code=409,
-        )
+    payload = _decrypt_synced_payload(credential)
     raw_env_vars = payload.get("envVars")
     env_vars = {
         key: value
@@ -1611,6 +1749,23 @@ async def _worker_synced_files_config(
     )
 
 
+def _decrypt_synced_payload(credential: AgentAuthCredentialRecord) -> dict[str, object]:
+    if credential.payload_ciphertext is None:
+        raise AgentAuthError(
+            "Synced credential is missing its source payload.",
+            code="synced_credential_source_missing",
+            status_code=409,
+        )
+    payload = decrypt_json(credential.payload_ciphertext)
+    if not isinstance(payload, dict) or payload.get("provider") != credential.agent_kind:
+        raise AgentAuthError(
+            "Synced credential payload is invalid.",
+            code="synced_credential_payload_invalid",
+            status_code=409,
+        )
+    return payload
+
+
 def _gateway_base_url() -> str:
     base = settings.agent_gateway_public_base_url.strip().rstrip("/")
     if not base:
@@ -1620,201 +1775,6 @@ def _gateway_base_url() -> str:
             status_code=409,
         )
     return base
-
-
-async def _backfill_legacy_cloud_credentials(
-    db: AsyncSession,
-    actor_user_id: UUID,
-    profile: SandboxProfileRecord,
-) -> SandboxProfileRecord:
-    all_legacy_rows = await store.list_legacy_cloud_credentials_for_user(db, actor_user_id)
-    active_legacy_by_id = {row.id: row for row in all_legacy_rows if row.revoked_at is None}
-    imported_legacy_credentials = await store.list_imported_legacy_credentials_for_user(
-        db,
-        actor_user_id,
-    )
-    imported_credential_ids = {credential.id for credential in imported_legacy_credentials}
-    changed = False
-    for imported in imported_legacy_credentials:
-        legacy = next(
-            (row for row in all_legacy_rows if row.id == imported.legacy_cloud_credential_id),
-            None,
-        )
-        if legacy is None or legacy.revoked_at is not None:
-            await store.revoke_credential(db, credential_id=imported.id)
-            replacement_exists = legacy is not None and any(
-                active.provider == legacy.provider and active.id != legacy.id
-                for active in active_legacy_by_id.values()
-            )
-            if replacement_exists:
-                changed = True
-                continue
-            affected = await store.list_active_selections_for_credential_or_share(
-                db,
-                credential_id=imported.id,
-            )
-            for selection in affected:
-                await store.mark_selection_invalid(
-                    db,
-                    selection_id=selection.id,
-                    error_code="legacy_cloud_credential_revoked",
-                    error_message="Synced cloud credential was revoked.",
-                )
-                await _bump_profile_for_selection(
-                    db,
-                    selection,
-                    actor_user_id=actor_user_id,
-                    reason="legacy_cloud_credential_revoked",
-                    force_restart=True,
-                )
-            changed = True
-    if not active_legacy_by_id:
-        return profile
-    existing_selections = {
-        selection.agent_kind: selection
-        for selection in await store.list_selections_for_profile(db, profile.id)
-    }
-    for legacy in active_legacy_by_id.values():
-        import_status, redacted_summary = _legacy_import_status_and_summary(legacy)
-        credential = await store.find_agent_auth_credential_for_legacy_cloud_credential(
-            db,
-            legacy.id,
-        )
-        if credential is None:
-            credential = await store.create_agent_auth_credential(
-                db,
-                owner_scope="personal",
-                owner_user_id=actor_user_id,
-                organization_id=None,
-                created_by_user_id=actor_user_id,
-                agent_kind=legacy.provider,
-                credential_kind="synced_path",
-                display_name=f"Synced {legacy.provider} auth",
-                redacted_summary_json=json.dumps(redacted_summary, sort_keys=True),
-                status=import_status,
-                legacy_cloud_credential_id=legacy.id,
-            )
-            await store.record_audit_event(
-                db,
-                action="credential.import_legacy",
-                actor_user_id=actor_user_id,
-                owner_scope="personal",
-                owner_user_id=actor_user_id,
-                organization_id=None,
-                credential_id=credential.id,
-                sandbox_profile_id=profile.id,
-                metadata_json=json.dumps(
-                    {"legacyCloudCredentialId": str(legacy.id)}, sort_keys=True
-                ),
-            )
-            imported_credential_ids.add(credential.id)
-        elif (
-            credential.revoked_at is None
-            and legacy.updated_at is not None
-            and legacy.updated_at > credential.updated_at
-        ):
-            credential = (
-                await store.update_credential_status(
-                    db,
-                    credential_id=credential.id,
-                    status=import_status,
-                    redacted_summary_json=json.dumps(
-                        redacted_summary,
-                        sort_keys=True,
-                    ),
-                )
-                or credential
-            )
-            imported_credential_ids.add(credential.id)
-            if import_status == "ready":
-                changed = True
-        if credential.revoked_at is not None:
-            continue
-        if credential.status != "ready":
-            selection = existing_selections.get(legacy.provider)
-            if (
-                selection is not None
-                and selection.credential_id == credential.id
-                and selection.status == "active"
-            ):
-                await store.mark_selection_invalid(
-                    db,
-                    selection_id=selection.id,
-                    error_code=_LEGACY_CLAUDE_ENV_UNSUPPORTED_CODE,
-                    error_message=(
-                        "Legacy Claude environment credentials must be re-synced as "
-                        "native Claude auth files before sandbox use."
-                    ),
-                )
-                await _bump_profile_for_selection(
-                    db,
-                    selection,
-                    actor_user_id=actor_user_id,
-                    reason=_LEGACY_CLAUDE_ENV_UNSUPPORTED_CODE,
-                    force_restart=True,
-                )
-            continue
-        selection = existing_selections.get(legacy.provider)
-        should_select = False
-        if selection is None:
-            should_select = True
-        elif selection.credential_id in imported_credential_ids:
-            should_select = (
-                selection.status != "active"
-                or selection.credential_id != credential.id
-                or selection.selected_revision != credential.revision
-            )
-        if should_select:
-            await store.upsert_selection(
-                db,
-                sandbox_profile_id=profile.id,
-                owner_scope="personal",
-                agent_kind=legacy.provider,
-                credential_id=credential.id,
-                credential_share_id=None,
-                materialization_mode="synced_files",
-                selected_revision=credential.revision,
-                status="active",
-                last_error_code=None,
-                last_error_message=None,
-            )
-            changed = True
-    if not changed:
-        return profile
-    updated = await store.bump_sandbox_profile_agent_auth_revision(
-        db,
-        sandbox_profile_id=profile.id,
-        reason="legacy_cloud_credential_import",
-        actor_user_id=actor_user_id,
-        force_restart=False,
-    )
-    if updated is not None:
-        await _mark_target_pending_and_queue_refresh(
-            db,
-            profile=updated,
-            actor_user_id=actor_user_id,
-            reason="legacy_cloud_credential_import",
-            force_restart=False,
-        )
-    return updated or profile
-
-
-def _legacy_import_status_and_summary(
-    legacy: LegacyCloudCredentialRecord,
-) -> tuple[str, dict[str, object]]:
-    summary: dict[str, object] = {
-        "source": "cloud_credential",
-        "authMode": legacy.auth_mode,
-    }
-    if legacy.provider == "claude" and legacy.auth_mode == "env":
-        summary.update(
-            {
-                "statusReason": _LEGACY_CLAUDE_ENV_UNSUPPORTED_CODE,
-                "needsAction": "sync_claude_native_auth_files",
-            }
-        )
-        return "needs_resync", summary
-    return "ready", summary
 
 
 async def _reconcile_managed_budget_subject(

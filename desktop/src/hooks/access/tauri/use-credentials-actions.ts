@@ -1,30 +1,30 @@
 import { useMemo } from "react";
 import {
   deleteEnvVarSecret,
-  exportSyncableCloudCredential,
+  exportSyncableAgentAuthCredential,
   listConfiguredEnvVarNames,
-  listSyncableCloudCredentials,
+  listSyncableAgentAuthCredentials,
   restartRuntime,
   setEnvVarSecret,
 } from "@/lib/access/tauri/credentials";
 import type {
-  CloudCredentialProvider,
-  LocalCloudCredentialSource,
-  SyncCloudCredentialRequestByProvider,
+  AgentAuthProvider,
+  LocalAgentAuthSource,
+  SyncAgentAuthCredentialRequestByProvider,
 } from "@/lib/access/tauri/credentials";
 
 export type {
-  CloudCredentialProvider,
-  LocalCloudCredentialSource,
-  SyncCloudCredentialRequestByProvider,
+  AgentAuthProvider,
+  LocalAgentAuthSource,
+  SyncAgentAuthCredentialRequestByProvider,
 };
 
 export function useTauriCredentialsActions() {
   return useMemo(() => ({
     deleteEnvVarSecret,
-    exportSyncableCloudCredential,
+    exportSyncableAgentAuthCredential,
     listConfiguredEnvVarNames,
-    listSyncableCloudCredentials,
+    listSyncableAgentAuthCredentials,
     restartRuntime,
     setEnvVarSecret,
   }), []);

@@ -35,7 +35,6 @@ from proliferate.db.store.automations import (
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
 )
-from proliferate.db.store.cloud_credentials import get_user_cloud_credentials
 from proliferate.db.store.cloud_runtime_environments import (
     get_runtime_environment_for_workspace,
     load_runtime_environment_for_workspace,
@@ -72,11 +71,14 @@ from proliferate.server.billing.service import (
     repo_limit_for_billing_snapshot,
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.credentials.domain.status import (
+from proliferate.server.cloud.agent_auth.domain.status import (
     allowed_agent_kinds,
     build_credential_statuses,
 )
-from proliferate.server.cloud.credentials.service import load_cloud_credential_statuses
+from proliferate.server.cloud.agent_auth.session_loader import (
+    list_selected_synced_credentials_for_request,
+    load_synced_credential_statuses,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config.service import (
     bootstrap_repo_config,
@@ -237,7 +239,7 @@ async def list_cloud_workspaces_for_user(
         user_id=user_id,
         cloud_workspace_ids=[workspace.id for workspace in workspaces],
     )
-    credential_records = await get_user_cloud_credentials(db, user_id)
+    credential_records = await list_selected_synced_credentials_for_request(db, user_id)
     credential_revisions = build_credential_revision_state(credential_records)
     snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
     summaries: list[WorkspaceSummary] = []
@@ -357,7 +359,10 @@ async def _build_workspace_detail_for_request(
     workspace: CloudWorkspace,
 ) -> WorkspaceDetail:
     runtime_environment = await get_runtime_environment_for_workspace(db, workspace)
-    credential_records = await get_user_cloud_credentials(db, workspace.user_id)
+    credential_records = await list_selected_synced_credentials_for_request(
+        db,
+        workspace.user_id,
+    )
     credential_revisions = build_credential_revision_state(credential_records)
     credential_freshness = (
         build_credential_freshness_snapshot(runtime_environment, credential_revisions)
@@ -398,7 +403,7 @@ async def _build_workspace_detail(
     credential_freshness = await build_runtime_credential_freshness_snapshot(
         runtime_environment,
     )
-    statuses = await load_cloud_credential_statuses(workspace.user_id)
+    statuses = await load_synced_credential_statuses(workspace.user_id)
     billing = await get_billing_snapshot_for_subject(
         runtime_environment.billing_subject_id
         if runtime_environment is not None
@@ -558,7 +563,7 @@ async def _resolve_new_cloud_workspace_create(
             status_code=400,
         )
 
-    statuses = await load_cloud_credential_statuses(user.id)
+    statuses = await load_synced_credential_statuses(user.id)
     synced_providers = tuple(status.provider for status in statuses if status.synced)
     if required_agent_kind is not None and required_agent_kind not in synced_providers:
         raise CloudApiError(
@@ -850,7 +855,7 @@ async def start_cloud_workspace(
     )
     _raise_if_cloud_workspace_start_denied(authorization)
 
-    statuses = await load_cloud_credential_statuses(user.id)
+    statuses = await load_synced_credential_statuses(user.id)
     if not any(status.synced for status in statuses):
         raise CloudApiError(
             "missing_supported_credentials",

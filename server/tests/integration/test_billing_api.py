@@ -1635,7 +1635,7 @@ class TestBillingApi:
         billing_subject = await ensure_personal_billing_subject(db_session, user_id)
 
         credential_response = await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
             json={
                 "authMode": "env",

@@ -15,10 +15,10 @@ from tests.e2e.cloud.helpers.config import (
 )
 from tests.e2e.cloud.helpers.credentials import (
     build_sync_payload,
-    delete_cloud_credential,
-    list_cloud_credentials,
+    delete_agent_auth_credential,
+    list_agent_auth_credentials,
     require_local_auth,
-    sync_cloud_credential,
+    sync_agent_auth_credential,
     status_for_provider,
 )
 from tests.e2e.cloud.helpers.github import (
@@ -102,7 +102,7 @@ __all__ = [
     "create_ready_cloud_workspace",
     "create_seeded_workspace_and_sandbox",
     "create_user_and_login",
-    "delete_cloud_credential",
+    "delete_agent_auth_credential",
     "delete_cloud_workspace_quietly",
     "discover_github_token",
     "discover_secret",
@@ -118,7 +118,7 @@ __all__ = [
     "is_port_open",
     "assert_workspace_sane",
     "link_github_account",
-    "list_cloud_credentials",
+    "list_agent_auth_credentials",
     "list_e2b_sandbox_events",
     "list_e2b_webhooks",
     "list_ngrok_requests",
@@ -139,7 +139,7 @@ __all__ = [
     "sandbox_event_receipt_count",
     "seed_linked_github_account",
     "status_for_provider",
-    "sync_cloud_credential",
+    "sync_agent_auth_credential",
     "unique_branch_name",
     "usage_segment_count",
     "wait_for_cloud_workspace_status",

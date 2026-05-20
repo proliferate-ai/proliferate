@@ -84,7 +84,7 @@ async def test_shared_personal_synced_credential_lists_active_share_for_org_sele
     organization_id = organizations.json()["organizations"][0]["id"]
 
     response = await client.put(
-        "/v1/cloud/credentials/claude",
+        "/v1/cloud/agent-auth/credentials/synced/claude",
         headers=_headers(tokens),
         json=_claude_file_payload("sk-ant-shared"),
     )

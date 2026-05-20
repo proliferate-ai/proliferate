@@ -19,7 +19,7 @@ import {
   type PendingWorkspaceEntry,
   type PendingWorkspaceInitialSession,
 } from "@/lib/domain/workspaces/creation/pending-entry";
-import { useCloudCredentialCache } from "@/hooks/access/cloud/use-cloud-credential-cache";
+import { useAgentAuthCache } from "@/hooks/access/cloud/use-agent-auth-cache";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useInvalidateCloudBillingState } from "@/hooks/access/cloud/use-cloud-billing";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
@@ -31,8 +31,8 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { useCloudCredentialActions } from "@/hooks/cloud/workflows/use-cloud-credential-actions";
-import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/access/cloud/credential-recovery";
+import { autoSyncDetectedAgentAuthCredentialsIfNeeded } from "@/lib/access/cloud/agent-auth-recovery";
+import { syncLocalAgentAuthCredentialToCloud } from "@/lib/access/cloud/agent-auth-sync";
 import {
   captureTelemetryException,
   trackProductEvent,
@@ -93,8 +93,7 @@ export function useCreateCloudWorkspace() {
   const authUser = useAuthStore((state) => state.user);
   const { selectWorkspace } = useWorkspaceSelection();
   const { beginPendingWorkspace, failPendingEntry, finalizeSelection } = useWorkspaceEntryFlow();
-  const { syncCloudCredential } = useCloudCredentialActions();
-  const { invalidateCloudCredentials } = useCloudCredentialCache();
+  const { invalidateAgentAuth } = useAgentAuthCache();
   const invalidateCloudBillingState = useInvalidateCloudBillingState();
   const { clearCachedCloudWorkspaceConnections } = useCloudWorkspaceConnectionCache();
   const { getWorkspaceCollections } = useWorkspaceCollectionsCache({
@@ -111,9 +110,9 @@ export function useCreateCloudWorkspace() {
       try {
         return await createCloudWorkspace(input);
       } catch (error) {
-        const didSync = await autoSyncDetectedCloudCredentialsIfNeeded(
+        const didSync = await autoSyncDetectedAgentAuthCredentialsIfNeeded(
           error,
-          syncCloudCredential,
+          syncLocalAgentAuthCredentialToCloud,
         );
         if (!didSync) {
           throw error;
@@ -126,7 +125,7 @@ export function useCreateCloudWorkspace() {
       upsertCloudWorkspace(workspace);
       await Promise.all([
         invalidateCloudBillingState(),
-        invalidateCloudCredentials(),
+        invalidateAgentAuth(),
       ]);
     },
   });

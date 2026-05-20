@@ -192,11 +192,8 @@ class AgentAuthCredential(Base):
     redacted_summary_json: Mapped[str] = mapped_column(Text, default="{}")
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     revision: Mapped[int] = mapped_column(Integer, default=1)
-    legacy_cloud_credential_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_credential.id", ondelete="SET NULL"),
-        unique=True,
-        nullable=True,
-    )
+    payload_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload_ciphertext_key_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

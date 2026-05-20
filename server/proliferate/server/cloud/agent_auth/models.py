@@ -18,6 +18,7 @@ from proliferate.db.store.cloud_agent_auth.records import (
     SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
 )
+from proliferate.server.cloud.agent_auth.domain.types import SyncedCredentialAuthMode
 
 AgentKind = Literal["claude", "codex", "opencode", "gemini"]
 OwnerScope = Literal["personal", "organization"]
@@ -53,6 +54,24 @@ class CreateGatewayCredentialRequest(BaseModel):
         "openai_compatible",
     ] = Field(alias="providerKind")
     payload: dict[str, str]
+
+
+class SyncSyncedCredentialEnvRequest(BaseModel):
+    auth_mode: Literal["env"] = Field(alias="authMode")
+    env_vars: dict[str, str] = Field(alias="envVars")
+
+
+class SyncSyncedCredentialFileEntry(BaseModel):
+    relative_path: str = Field(alias="relativePath")
+    content_base64: str = Field(alias="contentBase64")
+
+
+class SyncSyncedCredentialFileRequest(BaseModel):
+    auth_mode: Literal["file"] = Field(alias="authMode")
+    files: list[SyncSyncedCredentialFileEntry]
+
+
+SyncSyncedCredentialRequest = SyncSyncedCredentialEnvRequest | SyncSyncedCredentialFileRequest
 
 
 class ShareCredentialRequest(BaseModel):
@@ -94,7 +113,6 @@ class AgentAuthCredentialResponse(BaseModel):
     redacted_summary: dict[str, object] = Field(alias="redactedSummary")
     status: str
     revision: int
-    legacy_cloud_credential_id: UUID | None = Field(alias="legacyCloudCredentialId")
     active_credential_share_id: UUID | None = Field(
         default=None,
         alias="activeCredentialShareId",
@@ -184,6 +202,15 @@ class SandboxProfileAgentAuthTargetStateResponse(BaseModel):
     last_error_message: str | None = Field(alias="lastErrorMessage")
 
 
+class SyncedCredentialStatus(BaseModel):
+    provider: str
+    auth_mode: SyncedCredentialAuthMode = Field(serialization_alias="authMode")
+    supported: bool
+    local_detected: bool = Field(serialization_alias="localDetected")
+    synced: bool
+    last_synced_at: str | None = Field(default=None, serialization_alias="lastSyncedAt")
+
+
 class WorkerAgentAuthGatewayConfig(BaseModel):
     protocol_facade: str = Field(alias="protocolFacade")
     base_urls: dict[str, str] = Field(alias="baseUrls")
@@ -253,6 +280,13 @@ class CreateGatewayCredentialResponse(BaseModel):
     provider_credential: AgentGatewayProviderCredentialResponse = Field(alias="providerCredential")
 
 
+class SyncSyncedCredentialResponse(BaseModel):
+    ok: bool = True
+    changed: bool
+    credential: AgentAuthCredentialResponse
+    selection: SandboxAgentAuthSelectionResponse
+
+
 class EnsureManagedCreditsResponse(BaseModel):
     budget_subject: AgentGatewayBudgetSubjectResponse = Field(alias="budgetSubject")
     credentials: list[AgentAuthCredentialResponse]
@@ -290,7 +324,6 @@ def credential_response(
         redactedSummary=_json_object(record.redacted_summary_json),
         status=record.status,
         revision=record.revision,
-        legacyCloudCredentialId=record.legacy_cloud_credential_id,
         activeCredentialShareId=active_credential_share_id,
         revokedAt=_iso(record.revoked_at),
     )

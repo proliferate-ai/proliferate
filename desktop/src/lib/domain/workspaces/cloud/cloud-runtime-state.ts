@@ -38,8 +38,8 @@ export function buildSelectedCloudRuntimeViewModel(args: {
       variant,
       tone: "error",
       title: "Credential sync failed",
-      subtitle: freshness.lastError ?? "Retry cloud credential sync.",
-      actionBlockReason: freshness.lastError ?? "Cloud credentials failed to apply. Retry credential sync.",
+      subtitle: freshness.lastError ?? "Retry agent authentication sync.",
+      actionBlockReason: freshness.lastError ?? "Agent authentication failed to apply. Retry sync.",
       preserveVisibleContent: variant === "warm",
       showRetry: true,
     };
@@ -52,7 +52,7 @@ export function buildSelectedCloudRuntimeViewModel(args: {
       tone: "error",
       title: "Credential restart required",
       subtitle: "Close active cloud sessions, then retry to apply updated credentials.",
-      actionBlockReason: "Cloud credentials changed. Close active cloud sessions, then retry to apply them.",
+      actionBlockReason: "Agent authentication changed. Close active cloud sessions, then retry to apply it.",
       preserveVisibleContent: variant === "warm",
       showRetry: true,
     };
@@ -63,7 +63,7 @@ export function buildSelectedCloudRuntimeViewModel(args: {
       phase: "failed",
       variant,
       tone: "error",
-      title: "Cloud credentials required",
+      title: "Agent authentication required",
       subtitle: "Sync an agent credential before starting cloud sessions.",
       actionBlockReason: "Sync an agent credential before starting cloud sessions.",
       preserveVisibleContent: variant === "warm",

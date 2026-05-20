@@ -15,7 +15,7 @@ from proliferate.constants.cloud import (
     CloudRuntimeEnvironmentStatus,
     CloudWorkspaceStatus,
 )
-from proliferate.server.cloud.credentials.domain.status import (
+from proliferate.server.cloud.agent_auth.domain.status import (
     CredentialStatusRecord,
     allowed_agent_kinds,
     ready_agent_kinds,
