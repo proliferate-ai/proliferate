@@ -21,6 +21,8 @@ from proliferate.constants.cloud import (
     CloudTargetUpdateStatus,
     CloudWorkerStatus,
 )
+from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
+from proliferate.db.store.cloud_sandboxes import load_active_slot_for_profile_target
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import inventory as inventory_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -227,6 +229,14 @@ def _target_has_desired_versions(target: targets_store.CloudTargetSnapshot) -> b
     return has_desired_versions(_target_desired_versions(target))
 
 
+def _target_requires_worker_slot(target: targets_store.CloudTargetSnapshot) -> bool:
+    return managed_profile_target_requires_slot(
+        kind=target.kind,
+        sandbox_profile_id=target.sandbox_profile_id,
+        profile_target_role=target.profile_target_role,
+    )
+
+
 def _desired_versions_response(
     *,
     target: targets_store.CloudTargetSnapshot,
@@ -252,9 +262,28 @@ def _require_worker_slot_identity(
     *,
     auth: WorkerAuthContext,
     body: WorkerHeartbeatRequest,
+    target: targets_store.CloudTargetSnapshot,
 ) -> None:
-    if auth.cloud_sandbox_id is None and auth.slot_generation is None:
+    target_requires_slot = _target_requires_worker_slot(target)
+    if not target_requires_slot and auth.cloud_sandbox_id is None and auth.slot_generation is None:
         return
+    if auth.cloud_sandbox_id is None or auth.slot_generation is None:
+        raise CloudApiError(
+            "cloud_worker_slot_identity_required",
+            "Managed cloud worker is missing sandbox slot identity.",
+            status_code=409,
+        )
+    if target_requires_slot:
+        reported_profile_id = _optional_uuid(
+            body.sandbox_profile_id,
+            field_name="sandboxProfileId",
+        )
+        if reported_profile_id is None or reported_profile_id != target.sandbox_profile_id:
+            raise CloudApiError(
+                "cloud_worker_slot_identity_required",
+                "Managed cloud worker heartbeat must include sandboxProfileId.",
+                status_code=409,
+            )
     try:
         reported_sandbox_id = UUID(body.cloud_sandbox_id or "")
     except ValueError as exc:
@@ -270,6 +299,77 @@ def _require_worker_slot_identity(
         raise CloudApiError(
             "cloud_worker_slot_stale",
             "Worker slot identity does not match enrollment.",
+            status_code=409,
+        )
+
+
+async def _require_current_managed_worker_slot(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    target: targets_store.CloudTargetSnapshot,
+) -> None:
+    if not _target_requires_worker_slot(target):
+        return
+    if (
+        target.sandbox_profile_id is None
+        or auth.cloud_sandbox_id is None
+        or auth.slot_generation is None
+    ):
+        raise CloudApiError(
+            "cloud_worker_slot_identity_required",
+            "Managed cloud worker is missing sandbox slot identity.",
+            status_code=409,
+        )
+    active_slot = await load_active_slot_for_profile_target(
+        db,
+        sandbox_profile_id=target.sandbox_profile_id,
+        target_id=target.id,
+    )
+    if (
+        active_slot is None
+        or active_slot.id != auth.cloud_sandbox_id
+        or active_slot.slot_generation != auth.slot_generation
+    ):
+        raise CloudApiError(
+            "cloud_worker_slot_stale",
+            "Worker slot identity is no longer the active sandbox slot.",
+            status_code=409,
+        )
+
+
+async def _require_enrollment_slot_for_target(
+    db: AsyncSession,
+    *,
+    enrollment: worker_auth_store.CloudTargetEnrollmentSnapshot,
+    target: targets_store.CloudTargetSnapshot,
+) -> None:
+    if not _target_requires_worker_slot(target):
+        return
+    if (
+        target.sandbox_profile_id is None
+        or enrollment.sandbox_profile_id != target.sandbox_profile_id
+        or enrollment.cloud_sandbox_id is None
+        or enrollment.slot_generation is None
+    ):
+        raise CloudApiError(
+            "cloud_worker_slot_identity_required",
+            "Managed cloud worker enrollment requires sandbox slot identity.",
+            status_code=409,
+        )
+    active_slot = await load_active_slot_for_profile_target(
+        db,
+        sandbox_profile_id=target.sandbox_profile_id,
+        target_id=target.id,
+    )
+    if (
+        active_slot is None
+        or active_slot.id != enrollment.cloud_sandbox_id
+        or active_slot.slot_generation != enrollment.slot_generation
+    ):
+        raise CloudApiError(
+            "cloud_worker_slot_stale",
+            "Enrollment sandbox slot is no longer active.",
             status_code=409,
         )
 
@@ -307,6 +407,14 @@ async def enroll_worker(
             "Enrollment token is invalid or expired.",
             status_code=401,
         )
+    target = await targets_store.get_target_by_id(db, enrollment.target_id)
+    if target is None:
+        raise CloudApiError(
+            "cloud_worker_target_missing",
+            "Worker target no longer exists.",
+            status_code=401,
+        )
+    await _require_enrollment_slot_for_target(db, enrollment=enrollment, target=target)
     worker_token = secrets.token_urlsafe(48)
     worker = await worker_auth_store.create_worker(
         db,
@@ -437,6 +545,15 @@ async def record_heartbeat(
 ) -> WorkerHeartbeatResponse:
     status_value = validate_worker_status(body.status)
     now = utcnow()
+    target = await targets_store.get_target_by_id(db, auth.target_id)
+    if target is None:
+        raise CloudApiError(
+            "cloud_worker_target_missing",
+            "Worker target no longer exists.",
+            status_code=401,
+        )
+    _require_worker_slot_identity(auth=auth, body=body, target=target)
+    await _require_current_managed_worker_slot(db, auth=auth, target=target)
     worker = await worker_auth_store.record_worker_heartbeat(
         db,
         worker_id=auth.worker_id,
@@ -452,7 +569,6 @@ async def record_heartbeat(
             "Worker not found.",
             status_code=404,
         )
-    _require_worker_slot_identity(auth=auth, body=body)
     await inventory_store.upsert_target_status(
         db,
         target_id=auth.target_id,
@@ -461,14 +577,9 @@ async def record_heartbeat(
         status_detail=body.status_detail,
     )
     await targets_store.set_target_status(db, target_id=auth.target_id, status_value=status_value)
-    target = await targets_store.get_target_by_id(db, auth.target_id)
-    if target is None:
-        raise CloudApiError(
-            "cloud_worker_target_missing",
-            "Worker target no longer exists.",
-            status_code=401,
-        )
-    if auth.cloud_sandbox_id is not None and auth.slot_generation is not None:
+    if _target_requires_worker_slot(target):
+        assert auth.cloud_sandbox_id is not None
+        assert auth.slot_generation is not None
         sandbox_profile_id = _optional_uuid(
             body.sandbox_profile_id,
             field_name="sandboxProfileId",
@@ -554,6 +665,14 @@ async def record_inventory(
     body: WorkerInventoryRequest,
 ) -> WorkerInventoryResponse:
     status_value = validate_worker_status(body.status)
+    target = await targets_store.get_target_by_id(db, auth.target_id)
+    if target is None:
+        raise CloudApiError(
+            "cloud_worker_target_missing",
+            "Worker target no longer exists.",
+            status_code=401,
+        )
+    await _require_current_managed_worker_slot(db, auth=auth, target=target)
     await _record_inventory_payload(
         db,
         target_id=auth.target_id,
@@ -593,6 +712,7 @@ async def record_update_status(
             "Worker target no longer exists.",
             status_code=401,
         )
+    await _require_current_managed_worker_slot(db, auth=auth, target=current_target)
     if not _target_has_desired_versions(current_target):
         raise CloudApiError(
             "cloud_worker_update_not_requested",
@@ -769,5 +889,13 @@ async def record_event_batch(
     auth: WorkerAuthContext,
     body: WorkerEventBatchRequest,
 ) -> WorkerEventBatchResponse:
+    target = await targets_store.get_target_by_id(db, auth.target_id)
+    if target is None:
+        raise CloudApiError(
+            "cloud_worker_target_missing",
+            "Worker target no longer exists.",
+            status_code=401,
+        )
+    await _require_current_managed_worker_slot(db, auth=auth, target=target)
     with defer_live_publishes_until_commit(db):
         return await ingest_worker_event_batch(db, auth=auth, body=body)

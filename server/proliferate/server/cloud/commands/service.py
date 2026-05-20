@@ -17,6 +17,7 @@ from proliferate.constants.cloud import (
 from proliferate.db.models.auth import User
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
+from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.domain.rules import (
@@ -59,6 +60,42 @@ async def _resolve_command_workspace(
     kind: str,
     body: CreateCloudCommandRequest,
 ) -> tuple[str | None, dict[str, object], str | None]:
+    if kind == CloudCommandKind.materialize_workspace.value and _target_requires_cloud_workspace(
+        target
+    ):
+        if body.cloud_workspace_id is None:
+            raise CloudApiError(
+                "cloud_command_cloud_workspace_required",
+                "Managed materialize_workspace commands require cloudWorkspaceId.",
+                status_code=400,
+            )
+        workspace = await cloud_workspaces.get_cloud_workspace_by_id(
+            db,
+            body.cloud_workspace_id,
+        )
+        if workspace is None or workspace.archived_at is not None:
+            raise CloudApiError(
+                "cloud_command_workspace_not_found",
+                "Workspace not found.",
+                status_code=404,
+            )
+        if (
+            workspace.target_id != target.id
+            or workspace.sandbox_profile_id != target.sandbox_profile_id
+            or workspace.owner_scope != target.owner_scope
+            or workspace.owner_user_id != target.owner_user_id
+            or workspace.organization_id != target.organization_id
+        ):
+            raise CloudApiError(
+                "cloud_command_workspace_target_mismatch",
+                "Workspace is not attached to the requested target.",
+                status_code=409,
+            )
+        payload = dict(body.payload)
+        payload["cloudWorkspaceId"] = str(workspace.id)
+        if target.sandbox_profile_id is not None:
+            payload["sandboxProfileId"] = str(target.sandbox_profile_id)
+        return None, payload, str(workspace.id)
     if kind != CloudCommandKind.start_session.value:
         return body.workspace_id, body.payload, None
     if not body.workspace_id:
@@ -127,6 +164,14 @@ def _direct_start_session_workspace_id(payload: dict[str, object]) -> str | None
     if not isinstance(value, str) or not value.strip():
         return None
     return value.strip()
+
+
+def _target_requires_cloud_workspace(target: targets_store.CloudTargetSnapshot) -> bool:
+    return managed_profile_target_requires_slot(
+        kind=target.kind,
+        sandbox_profile_id=target.sandbox_profile_id,
+        profile_target_role=target.profile_target_role,
+    )
 
 
 async def enqueue_command(

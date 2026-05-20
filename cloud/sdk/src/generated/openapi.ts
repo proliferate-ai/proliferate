@@ -914,6 +914,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/sandbox-profiles/personal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ensure Personal Sandbox Profile Endpoint */
+        post: operations["ensure_personal_sandbox_profile_endpoint_v1_cloud_sandbox_profiles_personal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/sandbox-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ensure Organization Sandbox Profile Endpoint */
+        post: operations["ensure_organization_sandbox_profile_endpoint_v1_cloud_organizations__organization_id__sandbox_profile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sandbox Profile Endpoint */
+        get: operations["get_sandbox_profile_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/target-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sandbox Profile Target State Endpoint */
+        get: operations["get_sandbox_profile_target_state_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__target_state_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/enable-cloud": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable Sandbox Profile Cloud Endpoint */
+        post: operations["enable_sandbox_profile_cloud_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__enable_cloud_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/agent-auth/credentials": {
         parameters: {
             query?: never;
@@ -1011,40 +1096,6 @@ export interface paths {
         post?: never;
         /** Revoke Agent Auth Credential Share Endpoint */
         delete: operations["revoke_agent_auth_credential_share_endpoint_v1_cloud_agent_auth_credential_shares__share_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/sandbox-profiles/personal": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Ensure Personal Sandbox Profile Endpoint */
-        post: operations["ensure_personal_sandbox_profile_endpoint_v1_cloud_sandbox_profiles_personal_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/organizations/{organization_id}/sandbox-profile": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Ensure Organization Sandbox Profile Endpoint */
-        post: operations["ensure_organization_sandbox_profile_endpoint_v1_cloud_organizations__organization_id__sandbox_profile_post"];
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3350,6 +3401,8 @@ export interface components {
             targetId: string;
             /** Workspaceid */
             workspaceId?: string | null;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
             /** Sessionid */
             sessionId?: string | null;
             /** Kind */
@@ -3769,6 +3822,10 @@ export interface components {
             status: string;
             /** Ownerscope */
             ownerScope: string;
+            /** Sandboxprofileid */
+            sandboxProfileId?: string | null;
+            /** Profiletargetrole */
+            profileTargetRole: string;
             /** Organizationid */
             organizationId?: string | null;
             /** Defaultworkspaceroot */
@@ -3783,7 +3840,7 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
             /** Owneruserid */
-            ownerUserId: string;
+            ownerUserId?: string | null;
             /** Createdbyuserid */
             createdByUserId: string;
         };
@@ -3885,6 +3942,10 @@ export interface components {
             status: string;
             /** Ownerscope */
             ownerScope: string;
+            /** Sandboxprofileid */
+            sandboxProfileId?: string | null;
+            /** Profiletargetrole */
+            profileTargetRole: string;
             /** Organizationid */
             organizationId?: string | null;
             /** Defaultworkspaceroot */
@@ -4235,6 +4296,8 @@ export interface components {
             targetId: string;
             /** Workspaceid */
             workspaceId?: string | null;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
             /** Sessionid */
             sessionId?: string | null;
             /** Kind */
@@ -4382,16 +4445,6 @@ export interface components {
              * @default local
              */
             ownerHint: string;
-        };
-        /** EnsureOrganizationSandboxProfileRequest */
-        EnsureOrganizationSandboxProfileRequest: {
-            /** Managedtargetid */
-            managedTargetId?: string | null;
-        };
-        /** EnsurePersonalSandboxProfileRequest */
-        EnsurePersonalSandboxProfileRequest: {
-            /** Managedtargetid */
-            managedTargetId?: string | null;
         };
         /** ErrorModel */
         ErrorModel: {
@@ -5292,23 +5345,78 @@ export interface components {
         };
         /** SandboxProfileResponse */
         SandboxProfileResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
+            /** Id */
             id: string;
             /** Ownerscope */
             ownerScope: string;
             /** Owneruserid */
-            ownerUserId: string | null;
+            ownerUserId?: string | null;
             /** Organizationid */
-            organizationId: string | null;
-            /** Managedtargetid */
-            managedTargetId: string | null;
-            /** Agentauthrevision */
-            agentAuthRevision: number;
+            organizationId?: string | null;
+            /** Billingsubjectid */
+            billingSubjectId: string;
+            /** Createdbyuserid */
+            createdByUserId?: string | null;
+            /** Desiredagentauthrevision */
+            desiredAgentAuthRevision: number;
             /** Status */
             status: string;
+            /** Primarytargetid */
+            primaryTargetId?: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** SandboxProfileTargetStateResponse */
+        SandboxProfileTargetStateResponse: {
+            profile: components["schemas"]["SandboxProfileResponse"];
+            target?: components["schemas"]["SandboxTargetSummary"] | null;
+            slot?: components["schemas"]["SandboxSlotSummary"] | null;
+            runtimeAccess?: components["schemas"]["SandboxRuntimeAccessSummary"] | null;
+            /** Ready */
+            ready: boolean;
+        };
+        /** SandboxRuntimeAccessSummary */
+        SandboxRuntimeAccessSummary: {
+            /** Targetid */
+            targetId: string;
+            /** Activesandboxid */
+            activeSandboxId?: string | null;
+            /** Slotgeneration */
+            slotGeneration?: number | null;
+            /** Anyharnessbaseurl */
+            anyharnessBaseUrl?: string | null;
+            /** Lastworkerid */
+            lastWorkerId?: string | null;
+            /** Lastheartbeatat */
+            lastHeartbeatAt?: string | null;
+        };
+        /** SandboxSlotSummary */
+        SandboxSlotSummary: {
+            /** Id */
+            id: string;
+            /** Status */
+            status: string;
+            /** Slotgeneration */
+            slotGeneration?: number | null;
+            /** Provider */
+            provider: string;
+            /** Externalsandboxid */
+            externalSandboxId?: string | null;
+            /** Blockedreason */
+            blockedReason?: string | null;
+        };
+        /** SandboxTargetSummary */
+        SandboxTargetSummary: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Status */
+            status: string;
+            /** Profiletargetrole */
+            profileTargetRole: string;
         };
         /** SaveCloudRepoConfigFile */
         SaveCloudRepoConfigFile: {
@@ -6178,6 +6286,10 @@ export interface components {
         WorkerCommandDeliveryRequest: {
             /** Leaseid */
             leaseId: string;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
+            /** Slotgeneration */
+            slotGeneration?: number | null;
             /**
              * Status
              * @default delivered
@@ -6198,6 +6310,12 @@ export interface components {
             targetId: string;
             /** Workspaceid */
             workspaceId?: string | null;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
+            /** Sandboxprofileid */
+            sandboxProfileId?: string | null;
+            /** Slotgeneration */
+            slotGeneration?: number | null;
             /** Sessionid */
             sessionId?: string | null;
             /** Kind */
@@ -6234,6 +6352,12 @@ export interface components {
         WorkerCommandResultRequest: {
             /** Leaseid */
             leaseId: string;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
+            /** Slotgeneration */
+            slotGeneration?: number | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
             /** Status */
             status: string;
             /** Errorcode */
@@ -6272,6 +6396,12 @@ export interface components {
         WorkerEnrollRequest: {
             /** Enrollmenttoken */
             enrollmentToken: string;
+            /** Sandboxprofileid */
+            sandboxProfileId?: string | null;
+            /** Cloudsandboxid */
+            cloudSandboxId?: string | null;
+            /** Slotgeneration */
+            slotGeneration?: number | null;
             /** Machinefingerprint */
             machineFingerprint?: string | null;
             /** Hostname */
@@ -6288,6 +6418,12 @@ export interface components {
         WorkerEnrollResponse: {
             /** Targetid */
             targetId: string;
+            /** Sandboxprofileid */
+            sandboxProfileId?: string | null;
+            /** Cloudsandboxid */
+            cloudSandboxId?: string | null;
+            /** Slotgeneration */
+            slotGeneration?: number | null;
             /** Workerid */
             workerId: string;
             /** Workertoken */
@@ -6320,6 +6456,12 @@ export interface components {
         };
         /** WorkerHeartbeatRequest */
         WorkerHeartbeatRequest: {
+            /** Sandboxprofileid */
+            sandboxProfileId?: string | null;
+            /** Cloudsandboxid */
+            cloudSandboxId?: string | null;
+            /** Slotgeneration */
+            slotGeneration?: number | null;
             /**
              * Status
              * @default online
@@ -6338,6 +6480,12 @@ export interface components {
         WorkerHeartbeatResponse: {
             /** Targetid */
             targetId: string;
+            /** Sandboxprofileid */
+            sandboxProfileId?: string | null;
+            /** Cloudsandboxid */
+            cloudSandboxId?: string | null;
+            /** Slotgeneration */
+            slotGeneration?: number | null;
             /** Workerid */
             workerId: string;
             /** Status */
@@ -8749,6 +8897,150 @@ export interface operations {
             };
         };
     };
+    ensure_personal_sandbox_profile_endpoint_v1_cloud_sandbox_profiles_personal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxProfileResponse"];
+                };
+            };
+        };
+    };
+    ensure_organization_sandbox_profile_endpoint_v1_cloud_organizations__organization_id__sandbox_profile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_sandbox_profile_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_sandbox_profile_target_state_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__target_state_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxProfileTargetStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_sandbox_profile_cloud_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__enable_cloud_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxProfileTargetStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_agent_auth_credentials_endpoint_v1_cloud_agent_auth_credentials_get: {
         parameters: {
             query?: {
@@ -8933,74 +9225,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentAuthCredentialShareResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    ensure_personal_sandbox_profile_endpoint_v1_cloud_sandbox_profiles_personal_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnsurePersonalSandboxProfileRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SandboxProfileResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    ensure_organization_sandbox_profile_endpoint_v1_cloud_organizations__organization_id__sandbox_profile_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                organization_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnsureOrganizationSandboxProfileRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SandboxProfileResponse"];
                 };
             };
             /** @description Validation Error */

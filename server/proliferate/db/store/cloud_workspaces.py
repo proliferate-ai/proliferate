@@ -20,7 +20,6 @@ from proliferate.constants.cloud import (
     WorkspaceStatus,
 )
 from proliferate.db import engine as db_engine
-from proliferate.db.models.cloud.agent_auth import SandboxProfile
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing import (
@@ -29,6 +28,7 @@ from proliferate.db.store.billing import (
     count_active_cloud_repo_environments,
     ensure_personal_billing_subject,
 )
+from proliferate.db.store.cloud_profile_target_guard import require_primary_managed_profile_target
 from proliferate.db.store.cloud_runtime_environments import ensure_runtime_environment_for_repo
 from proliferate.utils.time import utcnow
 
@@ -273,9 +273,11 @@ async def create_managed_cloud_workspace_for_profile(
     template_version: str,
     repo_env_vars_ciphertext: str | None = None,
 ) -> CloudWorkspace:
-    profile = await db.get(SandboxProfile, sandbox_profile_id)
-    if profile is None or profile.archived_at is not None:
-        raise RuntimeError("Sandbox profile not found.")
+    profile, _target = await require_primary_managed_profile_target(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=target_id,
+    )
     if profile.owner_scope == "personal":
         owner_user_id = profile.owner_user_id
         organization_id = None
