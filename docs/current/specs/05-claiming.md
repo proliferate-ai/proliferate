@@ -30,8 +30,8 @@ In scope:
   scoped to one claimed workspace/session, validated by AnyHarness.
 - Per-token revocation (for lost Desktop, security incidents). The
   *claim* is not revocable; individual *tokens* are.
-- Cloud signing key + JWKS endpoint; AnyHarness JWT verification +
-  scope check on every per-workspace route.
+- Cloud signing key + target-delivered verification key; AnyHarness JWT
+  verification + scope check on every per-workspace route.
 
 Out of scope:
 
@@ -47,9 +47,9 @@ Out of scope:
 - Web/mobile direct AnyHarness access. Cloud-mediated only.
 - Slack inbound webhook (→ spec 07).
 - Automation lifecycle (→ spec 06).
-- JWKS rotation operations (key generation, key store). Spec 05
-  defines the model and endpoint; ops procedures are a deployment
-  doc.
+- Signing-key rotation operations (key generation, key store, rollout
+  cadence). Spec 05 defines the token model and verification-key delivery;
+  ops procedures are a deployment doc.
 - Multi-claimer "team session" sharing. Single-user claim is the
   model.
 - Cross-org workspace migration (different operation; out of
@@ -129,7 +129,7 @@ Soft:
 
 ## 4. Current Repo State
 
-Verified against `/home/user/proliferate` on 2026-05-20.
+Verified against the current repository worktree on 2026-05-20.
 
 ### 4.1 What is shipped
 
@@ -163,7 +163,7 @@ Org-owned workspaces are visible to all org members via
 `server/proliferate/server/cloud/workspaces/access.py`
 `cloud_workspace_user_can_read()`.
 
-**No JWT or JWKS infrastructure exists**:
+**No direct-attach JWT infrastructure exists**:
 
 ```text
 server/proliferate/config.py
@@ -171,8 +171,8 @@ server/proliferate/config.py
   cloud_secret_key        HMAC-SHA256 signing key for runtime grants
                           (agent gateway) and runtime tokens
 
-no jose/PyJWT/rsa in dependencies for signing
-no /.well-known/jwks.json route
+python-jose[cryptography] and cryptography already exist in server deps
+no claim-token verification key delivery to AnyHarness
 no JWT verification anywhere
 ```
 
@@ -204,8 +204,8 @@ There is no scoped per-workspace direct attach today.
 - No claim transition wired into `cloud_workspace_exposure`.
 - No `can_claim_cloud_workspace`,
   `can_request_direct_attach_token` access helpers.
-- No JWT infrastructure: no signing key, no JWKS endpoint, no
-  AnyHarness validation, no jti revocation.
+- No JWT infrastructure: no signing key, no AnyHarness verification-key
+  configuration, no AnyHarness validation, no jti revocation.
 - No claim API endpoint.
 - No Desktop direct-attach client code that uses a scoped JWT.
 
@@ -295,12 +295,12 @@ Durable token row for audit and per-token revocation. The raw JWT
 is never stored.
 
 ```text
-cloud_workspace_claim_token
+  cloud_workspace_claim_token
   id                              uuid pk
   claim_id                        uuid fk cloud_workspace_claim.id   not null
-  token_jti                       text                               not null
   token_jti_hash                  text                               not null
   hash_key_id                     text                               not null
+  token_jti_prefix                text                               nullable
 
   issued_to_user_id               uuid fk user.id                    not null
   target_id                       uuid fk cloud_targets.id           not null
@@ -323,8 +323,8 @@ cloud_workspace_claim_token
 
 Notes:
 
-- Cloud stores only `token_jti` and `token_jti_hash` (HMAC for
-  lookup safety). Raw JWT body is never persisted.
+- Cloud stores only `token_jti_hash` plus an optional display/debug prefix.
+  Raw JWT body and raw `jti` are never persisted.
 - Multiple active tokens per claim are allowed (Desktop may refresh
   while still using the old one). Practical cap: 5 active per
   claim; oldest is revoked on overflow.
@@ -333,7 +333,7 @@ Notes:
   fresh token any time.
 - Expired tokens are pruned on a periodic reconciler.
 
-### 5.4 Cloud signing key + JWKS
+### 5.4 Cloud signing key + verification-key delivery
 
 Spec 05 introduces RS256 JWT signing for direct-attach tokens.
 HMAC-SHA256 (existing `cloud_secret_key`) is not suitable for
@@ -345,24 +345,25 @@ config additions (server/proliferate/config.py):
   cloud_jwt_signing_key_pem         RSA private key (PEM)
   cloud_jwt_signing_key_id          string identifying the active key
                                     (e.g. "k-2026-05")
-  cloud_jwt_signing_key_previous_pem   optional; for grace overlap
-                                       during rotation
-  cloud_jwt_signing_key_previous_id    optional
+  cloud_jwt_verification_keys_json  public keys accepted by AnyHarness,
+                                    including active and previous keys during
+                                    overlap
   cloud_jwt_issuer                  "https://api.proliferate.ai"
   cloud_jwt_audience_anyharness     "anyharness"
   cloud_jwt_direct_attach_ttl_seconds  default 1200 (20 minutes)
 ```
 
-JWKS endpoint:
+Verification-key delivery:
 
 ```text
-GET /v1/cloud/.well-known/jwks.json
-  -> { keys: [ JWK_active, JWK_previous? ] }
-  public, no auth, cache-friendly headers
+Cloud includes cloud_jwt_verification_keys_json in target bootstrap/runtime
+configuration. The worker applies it to AnyHarness through the managed
+runtime configuration path. AnyHarness stores the public keys locally and
+uses kid to select a key when validating a claim token.
 ```
 
-AnyHarness fetches JWKS at startup, refreshes on `kid` miss, and
-periodically every 6 hours.
+AnyHarness does not fetch JWKS or call Cloud. Key rotation is delivered by the
+same worker-mediated config path as other target-scoped runtime settings.
 
 Worker auth path is unchanged (static bearer token via
 `bearer_token` middleware). JWT validation is an additional path.
@@ -401,11 +402,11 @@ JWT validation rules (in order):
 
 ```text
 1. parse 3-part JWT
-2. fetch JWKS (or use cached); resolve kid -> public key
+2. resolve kid against configured local verification key set
 3. verify RS256 signature
 4. validate iss = cloud_jwt_issuer (configured)
 5. validate aud = "anyharness"
-6. validate target_id claim == AppState.target_id
+6. validate target_id claim == configured runtime target id
 7. validate exp >= now (+ small clock skew tolerance)
 8. lookup jti in revoked-jti cache:
      if present -> reject 401 token_revoked
@@ -421,7 +422,7 @@ GET  /v1/workspaces/{id}/sessions        Worker OR scoped UserClaim
 GET  /v1/sessions/{id}                   Worker OR scoped UserClaim
 GET  /v1/sessions/{id}/events            Worker OR scoped UserClaim+read
 POST /v1/sessions/{id}/prompt            Worker OR scoped UserClaim+write
-POST /v1/sessions/{id}/resolve-interaction Worker OR scoped UserClaim+write
+POST /v1/sessions/{id}/interactions/{request_id}/resolve Worker OR scoped UserClaim+write
 POST /v1/sessions/{id}/cancel-turn       Worker OR scoped UserClaim+write
 POST /v1/sessions/{id}/close             Worker OR scoped UserClaim+control
 
@@ -446,16 +447,16 @@ in-memory store inside AnyHarness:
   expires_at = original token exp + small grace
   entries pruned when expires_at < now
 
-push path:
-  PUT /v1/cloud/worker/revoked-jtis      (worker-token-only)
-    body: { jtis: [string] }
-  worker forwards from Cloud reconciliation
+local AnyHarness push path:
+  PUT /v1/auth/revoked-jtis
+    body: { jti_hashes: [string], expires_at }
+    auth: existing target-wide runtime bearer token only
 
-pull path:
+Cloud pull path:
   worker periodically (every 60s) GETs
     /v1/cloud/worker/revoked-jtis?since=<timestamp>
   Cloud returns recent revocations for this target
-  worker pushes into AnyHarness via PUT route
+  worker pushes hashed entries into AnyHarness via PUT /v1/auth/revoked-jtis
 ```
 
 Natural expiry (20m TTL) handles most cases. Push/pull is for
@@ -673,7 +674,6 @@ archive emits the existing workspace archive log.
 
 ```text
 anyharness/crates/anyharness-lib/src/api/auth.rs               (new)
-anyharness/crates/anyharness-lib/src/api/jwks.rs               (new)
 anyharness/crates/anyharness-lib/src/api/middleware/
   worker_or_user.rs           (new) classify + verify + AuthContext
   require_permission.rs       (new) permission gate
@@ -697,7 +697,7 @@ server/proliferate/db/models/cloud/claims.py                   (new)
   CloudWorkspaceClaim
   CloudWorkspaceClaimToken
 
-server/proliferate/db/migrations/versions/<NEW>_claiming.py
+server/alembic/versions/<NEW>_claiming.py
   - cloud_workspace_claim (UNIQUE on cloud_workspace_id)
   - cloud_workspace_claim_token
   - cloud_workspace_exposure.visibility CHECK remains
@@ -726,17 +726,12 @@ server/proliferate/server/cloud/workspaces/api.py
   - GET /workspaces/{id} returns visibility + claimed_by_user_id +
     claim_id if a claim row exists
 
-server/proliferate/server/cloud/commands/access.py
+server/proliferate/server/cloud/commands/service.py
   - command enqueue checks can_interact_cloud_workspace; no admin
     interact override
 
-server/proliferate/server/cloud/well_known/                    (new)
-  api.py
-    GET /v1/cloud/.well-known/jwks.json
-
 server/proliferate/server/cloud/worker/api.py
-  - PUT /worker/revoked-jtis             (push)
-  - GET /worker/revoked-jtis?since=      (pull)
+  - GET /worker/revoked-jtis?since=      (worker pull from Cloud)
 
 server/proliferate/server/cloud/claims/reconciler.py           (new)
   - sweep orphan claims (claimed_by_user_id IS NULL) for audit log
@@ -746,13 +741,13 @@ server/proliferate/server/cloud/claims/reconciler.py           (new)
 server/proliferate/config.py
   - cloud_jwt_signing_key_pem
   - cloud_jwt_signing_key_id
-  - cloud_jwt_signing_key_previous_pem / _id
+  - cloud_jwt_verification_keys_json
   - cloud_jwt_issuer
   - cloud_jwt_audience_anyharness  default 'anyharness'
   - cloud_jwt_direct_attach_ttl_seconds  default 1200
 
 dependencies:
-  pyjwt or python-jose with RSA support
+  use existing python-jose[cryptography] / cryptography deps
 ```
 
 Worker / AnyHarness (Rust):
@@ -764,12 +759,11 @@ anyharness/crates/anyharness-contract/src/v1/auth.rs           (new)
   ClaimError, ScopeError typed responses
 
 anyharness/crates/anyharness-lib/src/api/auth.rs               (new)
-anyharness/crates/anyharness-lib/src/api/jwks.rs               (new)
 anyharness/crates/anyharness-lib/src/api/middleware/**         (new)
 anyharness/crates/anyharness-lib/src/api/revoked_jti.rs        (new)
 anyharness/crates/anyharness-lib/src/api/router.rs
-anyharness/crates/anyharness-lib/src/api/state.rs
-  + JwksClient and RevokedJtiCache on AppState
+anyharness/crates/anyharness-lib/src/app/mod.rs
+  + runtime_target_id, claim verification keys, and RevokedJtiCache on AppState
   + cloud_jwt_audience: "anyharness"
 
 anyharness/crates/proliferate-worker/src/cloud_client/revoked_jti.rs (new)
@@ -831,21 +825,22 @@ Chunk A  Cloud schema + claim service
     can_revoke_claim_token)
   - claim + direct-attach + token-revoke API endpoints
 
-Chunk B  JWKS endpoint + signing key config
+Chunk B  Signing key config + verification-key delivery
   - config additions (cloud_jwt_*)
-  - GET /v1/cloud/.well-known/jwks.json
-  - test JWKS rotation with two keys
+  - target bootstrap/runtime config carries accepted public keys to AnyHarness
+  - test key overlap with two configured public keys
 
 Chunk C  AnyHarness JWT verification
   - anyharness-lib/api/auth.rs classify+verify
   - middleware stack: worker_or_user, require_permission,
     scope_workspace, scope_session
+  - AppState gains runtime_target_id + accepted claim verification keys
   - in-memory revoked-jti cache
-  - PUT /v1/cloud/worker/revoked-jtis endpoint
+  - PUT /v1/auth/revoked-jtis local AnyHarness endpoint
 
 Chunk D  Worker revoked-jti reconciliation
   - worker pulls from Cloud (every 60s)
-  - pushes to AnyHarness on change
+  - pushes hashed entries to AnyHarness on change
 
 Chunk E  Workspace listing + access policy refactor
   - scope filters my | unclaimed | claimable | org-all
@@ -881,19 +876,18 @@ Chunk G  Tests + smoke
    workspaces (audit view).
 6. Listing `scope=org-all` is admin-only and returns claimed and
    archived workspaces alongside others for audit.
-7. `cloud_workspace_claim_token` stores only `token_jti` and
-   `token_jti_hash`; raw JWT bodies are never persisted.
+7. `cloud_workspace_claim_token` stores only `token_jti_hash` plus optional
+   prefix metadata; raw JWT bodies and raw `jti` values are never persisted.
 8. Per-token revoke endpoint (`DELETE /workspaces/{id}/direct-access-tokens/{token_id}`)
-   marks the token row `revoked` and pushes the jti to AnyHarness.
+   marks the token row `revoked` and pushes the token hash to AnyHarness.
    The claim itself is unaffected.
 9. RS256 signing key configured via `cloud_jwt_signing_key_pem`.
-   Optional previous key for rotation overlap.
-10. `GET /v1/cloud/.well-known/jwks.json` returns active (and
-    previous, if configured) keys.
+   Accepted public keys are delivered to AnyHarness through target runtime
+   config for rotation overlap.
 11. AnyHarness `api/auth.rs` classifies tokens (JWT vs static
     bearer). Worker bearer is unchanged for worker traffic.
 12. AnyHarness rejects JWTs whose `aud != 'anyharness'`,
-    `iss != configured`, `target_id != AppState.target_id`, or
+    `iss != configured`, `target_id != configured runtime target id`, or
     `exp < now`.
 13. Per-route middleware enforces permission and workspace/session
     scope. Worker tokens bypass scope.
@@ -915,7 +909,7 @@ Chunk G  Tests + smoke
     `cloud_target_runtime_access.anyharness_base_url` with the
     JWT. AnyHarness scopes reads/writes to the JWT's workspace +
     session.
-20. JWKS rotation works with two active keys; zero downtime.
+20. Signing-key overlap works with two configured public keys; zero downtime.
 21. User deletion sets `claimed_by_user_id` to NULL on the claim
     row and the exposure; the reconciler logs an audit event but
     does not transition the workspace state.
@@ -935,31 +929,30 @@ uv run pytest -q
 Targeted tests:
 
 ```text
-tests/server/cloud/claims/test_claim_one_way.py
+server/tests/cloud/claims/test_claim_one_way.py
   - first claim succeeds
   - second claim returns claim_already_held
   - no release/revoke endpoint exists
 
-tests/server/cloud/claims/test_claim_transition_atomic.py
-tests/server/cloud/claims/test_claim_token_jti_unique.py
-tests/server/cloud/claims/test_token_refresh_caps_at_five.py
-tests/server/cloud/claims/test_per_token_revoke.py
+server/tests/cloud/claims/test_claim_transition_atomic.py
+server/tests/cloud/claims/test_claim_token_jti_unique.py
+server/tests/cloud/claims/test_token_refresh_caps_at_five.py
+server/tests/cloud/claims/test_per_token_revoke.py
   - revoking a token does not transition exposure.visibility
-tests/server/cloud/claims/test_jwt_claims_shape.py
-tests/server/cloud/claims/test_jwks_returns_active_and_previous.py
-tests/server/cloud/claims/test_jwks_rotation_no_downtime.py
-tests/server/cloud/access/test_admin_view_yes_interact_no.py
-tests/server/cloud/access/test_can_claim_excludes_non_org_member.py
-tests/server/cloud/commands/test_command_rejected_post_claim_non_claimer.py
-tests/server/cloud/commands/test_queued_command_preclaim_proceeds.py
-tests/server/cloud/workspaces/test_list_scope_my.py
-tests/server/cloud/workspaces/test_list_scope_unclaimed.py
-tests/server/cloud/workspaces/test_list_scope_org_all_admin_only_audit.py
-tests/server/cloud/worker/test_revoked_jti_push_and_pull.py
-tests/server/cloud/claims/test_direct_attach_desktop_only_header.py
-tests/server/cloud/claims/test_direct_attach_token_returns_runtime_access.py
-tests/server/cloud/claims/test_user_delete_sets_null_no_transition.py
-tests/server/cloud/exposures/test_admin_managed_visibility_rejected.py
+server/tests/cloud/claims/test_jwt_claims_shape.py
+server/tests/cloud/claims/test_signing_key_overlap.py
+server/tests/cloud/access/test_admin_view_yes_interact_no.py
+server/tests/cloud/access/test_can_claim_excludes_non_org_member.py
+server/tests/cloud/commands/test_command_rejected_post_claim_non_claimer.py
+server/tests/cloud/commands/test_queued_command_preclaim_proceeds.py
+server/tests/cloud/workspaces/test_list_scope_my.py
+server/tests/cloud/workspaces/test_list_scope_unclaimed.py
+server/tests/cloud/workspaces/test_list_scope_org_all_admin_only_audit.py
+server/tests/cloud/worker/test_revoked_jti_push_and_pull.py
+server/tests/cloud/claims/test_direct_attach_desktop_only_header.py
+server/tests/cloud/claims/test_direct_attach_token_returns_runtime_access.py
+server/tests/cloud/claims/test_user_delete_sets_null_no_transition.py
+server/tests/cloud/exposures/test_admin_managed_visibility_rejected.py
 ```
 
 AnyHarness:
@@ -968,7 +961,6 @@ AnyHarness:
 cargo test -p anyharness-contract
 cargo test -p anyharness-lib api::auth
 cargo test -p anyharness-lib api::middleware
-cargo test -p anyharness-lib api::jwks
 cargo test -p anyharness-lib api::revoked_jti
 ```
 
@@ -1026,12 +1018,12 @@ Manual smoke:
    - both prompts reach the same AnyHarness session loop
    - serialized; both appear in transcript
 
-5. JWKS rotation
+5. Signing-key overlap
    - operator adds new signing key as active; previous key kept
-   - JWKS returns both
+   - target config delivers both public keys to AnyHarness
    - tokens signed with new key verify
    - tokens signed with previous key (still in TTL) verify
-   - after previous key removed from config + cache pruned, old
+   - after previous key removed from config and local key set updated, old
      tokens fail
 
 6. Web/mobile cannot get JWT
@@ -1067,12 +1059,12 @@ Manual smoke:
    Bias: (c) for V1. Move to (a) when Desktop OAuth client
    identity exists. Track as a follow-up.
 
-3. **JWKS rotation operations**
+3. **Signing-key rotation operations**
 
-   The spec defines the model (active + previous key in config) and
-   the JWKS endpoint. Key generation, rotation cadence, and
-   operator runbook live in deployment docs. Bias: don't bloat the
-   spec; reference the deployment doc when written.
+   The spec defines the model (active signing key + accepted verification key
+   set). Key generation, rotation cadence, and operator runbook live in
+   deployment docs. Bias: don't bloat the spec; reference the deployment doc
+   when written.
 
 4. **Admin viewing a claimed workspace's transcript — read or
    read+events?**

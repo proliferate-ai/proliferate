@@ -136,7 +136,7 @@ Soft:
 
 ## 4. Current Repo State
 
-Verified against `/home/user/proliferate` on 2026-05-20.
+Verified against the current repository worktree on 2026-05-20.
 
 ### 4.1 What is shipped and working
 
@@ -306,7 +306,7 @@ Worker flow:
 AgentAuthExternalScope { provider, id, target_id? }
 AgentAuthSelectionConfig {
   agent_kind, materialization_mode, credential_id, credential_revision,
-  credential_share_id?, expires_at?, protected_env, support_env,
+  credential_share_id?, expires_at?, status, protected_env, support_env,
   protected_config, support_config, synced_file_paths
 }
 ApplyAgentAuthConfigRequest { external_auth_scope?, revision, selections }
@@ -356,7 +356,7 @@ env var name today (the gap in §4.2).
 **Desktop UI**:
 
 ```text
-desktop/src/components/settings/panes/cloud/CloudAgentAuthLibrary.tsx
+desktop/src/components/settings/panes/agent-authentication/CloudAgentAuthLibrary.tsx
 desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.tsx
 desktop/src/hooks/access/cloud/agent-auth/use-agent-auth.ts
   (transitional shim re-exporting from @proliferate/cloud-sdk-react)
@@ -508,14 +508,14 @@ when handling `start_session` and `send_prompt` payloads from Cloud:
 ```text
 let scope = AgentAuthExternalScope {
     provider: "proliferate-cloud".into(),
-    id: command.sandbox_profile_id?.to_string(),
+    id: payload.sandboxProfileId?.to_string(),
     target_id: Some(command.target_id.to_string()),
 };
 
 CreateSessionRequest {
     ...
     agent_auth_scope: Some(scope),
-    required_agent_auth_revision: command.required_agent_auth_revision,
+    required_agent_auth_revision: payload.requiredAgentAuthRevision,
     ...
 }
 ```
@@ -525,11 +525,12 @@ created earlier with the scope persisted on AnyHarness). The worker does
 not re-attach scope on prompts; AnyHarness uses the scope persisted on
 the session row.
 
-Cloud-side, the command builder
+Cloud-side, command admission
 (`server/proliferate/server/cloud/commands/service.py`) populates
-`sandboxProfileId` and `requiredAgentAuthRevision` from
-`sandbox_profile_target_state.desired_agent_auth_revision` (read inside
-the same transaction that creates the command).
+`sandboxProfileId` and `requiredAgentAuthRevision` in the command payload
+from `sandbox_profile_target_state.desired_agent_auth_revision` (read inside
+the same transaction that creates the command). The worker reads these from the
+payload, not from top-level `CloudCommandEnvelope` fields.
 
 Worker and Cloud ship in the same PR. No "supports_scope_synthesis"
 feature flag and no worker-version gating. The wire contract is the
@@ -555,7 +556,7 @@ if agent_auth_scope is present:
   load agent_auth_config row for (scope.provider, scope.id, scope.target_id)
   if row is missing                  -> AGENT_AUTH_SELECTION_REQUIRED (missing)
   if row.revision < required_revision
-                                     -> AGENT_AUTH_SELECTION_REQUIRED (stale)
+                                     -> AGENT_AUTH_SELECTION_REQUIRED (needs_resync)
   decrypt config
   find selection for the requested agent_kind
   if selection is missing            -> AGENT_AUTH_SELECTION_REQUIRED (missing)
@@ -586,7 +587,7 @@ spec defines its semantics and makes the worker execute it:
 ```text
 SyncedFilesPlan.cleanup
   relative_paths: list[string]   -- to delete inside HOME
-  reason: 'credential_revoked' | 'share_revoked' | 'selection_replaced' | 'profile_disabled'
+  reason: 'credential_revoked' | 'share_revoked' | 'profile_disabled'
 ```
 
 Worker enforcement (conservative):
@@ -687,8 +688,8 @@ New reconciler tick:
 server/proliferate/server/cloud/agent_auth/grant_rotation.py    (new)
 
 reconcile_runtime_grant_freshness()
-  threshold = TTL - 2 days   -- so grants are refreshed at ~5 days old
-  for each active grant where expires_at <= now + threshold and
+  refresh_window = 2 days
+  for each active grant where expires_at <= now + refresh_window and
                               policy.status = 'ready' and
                               credential.status = 'ready' and
                               not revoked:
@@ -722,7 +723,8 @@ GET /v1/cloud/capabilities
   response:
     agent_gateway:
       enabled                              bool
-      managed_credits_offered_for_personal bool
+      managed_credits_personal_enabled     bool
+      managed_credits_organization_enabled bool
       byok_enabled                         bool
       byok_providers:
         anthropic_api_key                  bool
@@ -737,9 +739,12 @@ Desktop:
 
 ```text
 desktop/src/hooks/access/cloud/capabilities/use-capabilities.ts   (new)
+desktop/src/lib/domain/agent-auth/capability-presentation.ts       (new)
+  - runtime-derived selectors over capabilities snapshot
+
 desktop/src/config/agent-auth.ts
-  - remove hardcoded AGENT_GATEWAY_BYOK_ENABLED
-  - export selectors that read from capabilities cache
+  - keep only static local constants; remove hardcoded
+    AGENT_GATEWAY_BYOK_ENABLED runtime gate
 ```
 
 The endpoint stays narrow (gateway-related only) in V1. Spec 03 can add
@@ -750,10 +755,10 @@ a broader capabilities surface if needed.
 Strong signals (move credentials to `needs_resync`):
 
 ```text
-provider 401/403 from a real call            -> needs_reauth
+provider 401/403 from a real call            -> needs_resync
 harness-native auth check returns logged_out -> needs_resync
-oauth invalid_grant / token revoked          -> needs_reauth
-auth file fails parse                        -> invalid_config
+oauth invalid_grant / token revoked          -> needs_resync
+auth file fails parse                        -> invalid
 desktop sync stale beyond threshold          -> needs_resync
 ```
 
@@ -776,7 +781,7 @@ server/proliferate/server/cloud/credentials/service.py
 
 desktop/src/hooks/access/cloud/credentials/use-credential-sync.ts
   call apply_signal('desktop_sync_succeeded') on successful sync
-  surface needs_resync / needs_reauth in CloudAgentAuthLibrary
+  surface needs_resync in CloudAgentAuthLibrary
 ```
 
 Spec 02 ships the framework + the desktop_sync signals. Provider 401
@@ -943,9 +948,9 @@ server/proliferate/server/cloud/capabilities/                   (new)
   api.py, service.py, models.py
 
 server/proliferate/server/cloud/commands/service.py
-  - populate sandbox_profile_id and required_agent_auth_revision on
-    start_session / send_prompt commands inside the same transaction
-    that reads sandbox_profile_target_state
+  - populate sandboxProfileId and requiredAgentAuthRevision in the
+    start_session / send_prompt payloads inside the same transaction that
+    reads sandbox_profile_target_state
 
 server/proliferate/server/cloud/credentials/service.py
   - on sync success/failure, call freshness.apply_signal
@@ -976,14 +981,13 @@ AnyHarness (Rust):
 
 ```text
 anyharness/crates/anyharness-contract/src/v1/agent_auth_config.rs
-  - add AgentAuthSelectionConfig.cleanup: Vec<String>           (5.4)
   - add typed error AGENT_AUTH_SELECTION_REQUIRED              (5.3)
   - add ApplyAgentAuthConfigResponse.no_selection_kinds        (5.3)
 
 anyharness/crates/anyharness-lib/src/api/http/agent_auth_config.rs
   - validate protected_env allowlist (defense-in-depth)
-  - return AGENT_AUTH_SELECTION_REQUIRED on apply for any
-    selection with cleanup_only marker (no-op selection)
+  - return AGENT_AUTH_SELECTION_REQUIRED when a required configured
+    harness has no active selection in the external scope
 
 anyharness/crates/anyharness-lib/src/domains/agents/auth_config.rs
   - load_selection_for_scope_and_kind(scope, kind) -> Option<Selection>
@@ -1005,15 +1009,18 @@ Desktop:
 
 ```text
 desktop/src/hooks/access/cloud/capabilities/use-capabilities.ts (new)
+desktop/src/lib/domain/agent-auth/capability-presentation.ts (new)
+  - selectors over capabilities snapshot
+
 desktop/src/config/agent-auth.ts
   - remove hardcoded AGENT_GATEWAY_BYOK_ENABLED
-  - export selectors over capabilities snapshot
+  - remains static local config only
 
-desktop/src/components/settings/panes/cloud/CloudAgentAuthLibrary.tsx
+desktop/src/components/settings/panes/agent-authentication/CloudAgentAuthLibrary.tsx
   - read BYOK from capabilities
   - render unavailable rows for stale selections referencing BYOK
     credentials that are now feature-gated off
-  - surface needs_resync/needs_reauth from the new freshness signals
+  - surface needs_resync from the new freshness signals
   - add 'where used' link per credential
 
 desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.tsx
@@ -1069,7 +1076,7 @@ Chunk D  Protected env allowlist
 
 Chunk E  Proactive grant rotation
   - reconciler tick reconcile_runtime_grant_freshness
-  - threshold = TTL - 2 days
+  - refresh_window = 2 days; refresh when expires_at <= now + refresh_window
   - reuses existing reconciler-enabled gate
 
 Chunk F  Capability API + Desktop selector cleanup
@@ -1081,7 +1088,7 @@ Chunk F  Capability API + Desktop selector cleanup
 Chunk G  Freshness framework + Desktop sync signals
   - freshness.py module
   - apply_signal hooks at Desktop sync sites
-  - CloudAgentAuthLibrary surfaces needs_resync / needs_reauth
+  - CloudAgentAuthLibrary surfaces needs_resync
 
 Follow-ups (separate PRs, scope additions, not migration ceremony)
   - provider 401 detection at the gateway (feeds freshness signals)
@@ -1107,16 +1114,17 @@ Follow-ups (separate PRs, scope additions, not migration ceremony)
 5. AnyHarness session launch fails closed with
    `AGENT_AUTH_SELECTION_REQUIRED { selectionStatus }` when
    `agent_auth_scope` is set but no active selection exists for the
-   requested agent_kind, or the selection is expired/invalid/stale.
+   requested agent_kind, or the selection is expired/invalid/needs_resync.
 6. (was: worker capability gating; removed — worker, server, and
    contract ship in one PR; no version negotiation.)
 7. The materialization plan's `cleanup.relative_paths` is executed by
    the worker. Files are deleted only when the path is in the allowlist
    for the selection's `agent_kind`. Unallowlisted cleanup paths cause
    the apply to fail (not silently skip) with a security audit event.
-8. Worker reports `applied_cleanup_paths` in the status response. The
-   server treats absence of expected cleanup as `apply_partial` and
-   does not mark `applied_agent_auth_revision` complete.
+8. Worker reports `applied_cleanup_paths` in the status response. If expected
+   cleanup is absent, the server records the target-state status as `failed`
+   with a typed cleanup error and does not mark
+   `applied_agent_auth_revision` complete.
 9. Revoking a credential, revoking a share, or disabling a profile
    enqueues `refresh_agent_auth_config` with `force_restart=true` and
    `plan.cleanup` listing every previously-written path for the
@@ -1128,8 +1136,9 @@ Follow-ups (separate PRs, scope additions, not migration ceremony)
     defense-in-depth; AnyHarness rejects them at apply.
 11. Proactive grant rotation runs (when
     `agent_gateway_reconciler_enabled=true`) and re-enqueues
-    `refresh_agent_auth_config` for grants whose `expires_at` is within
-    `TTL - 2 days` of now. Old grants drain naturally.
+    `refresh_agent_auth_config` for grants whose `expires_at <= now + 2 days`.
+    With 7-day grants this refreshes at roughly five days old. Old grants
+    drain naturally.
 12. `GET /v1/cloud/capabilities` returns server-side gateway flags.
     Desktop reads from this endpoint; `desktop/src/config/agent-auth.ts`
     has no hardcoded `AGENT_GATEWAY_BYOK_ENABLED` value.
@@ -1137,16 +1146,16 @@ Follow-ups (separate PRs, scope additions, not migration ceremony)
     `unavailable in hosted cloud` (or self-hosted equivalent) and can
     be replaced; they cannot be re-saved while the capability flag is
     false.
-14. The Desktop `CloudAgentAuthLibrary` surfaces `needs_resync` /
-    `needs_reauth` triggered by Desktop sync signals via the new
-    freshness framework.
+14. The Desktop `CloudAgentAuthLibrary` surfaces `needs_resync` triggered by
+    Desktop sync signals via the new freshness framework.
 15. `ComputeTargetAgentAuthCard` reloads profile state from the server
     after selection changes (component-local cache no longer drops on
     target switch).
 16. BYOK provider credential paths remain feature-gated and unreachable
     when `agent_gateway_byok_enabled=false`. The schema is unchanged.
 17. Gemini gateway requests remain rejected
-    (`gateway_byok_disabled` or `gateway_unsupported_agent_kind`).
+    (`gateway_byok_disabled`, `gateway_not_supported_for_agent`, or
+    `gateway_route_unavailable` depending on the failing layer).
     Gemini synced auth continues to work.
 18. OpenCode gateway is reachable only when
     `agent_gateway_opencode_enabled=true`. Default is false; capability
@@ -1172,19 +1181,19 @@ uv run pytest -q
 Targeted server tests:
 
 ```text
-tests/server/cloud/agent_auth/test_primary_target_derivation.py
-tests/server/cloud/agent_auth/test_target_state_rebind_after_spec00.py
-tests/server/cloud/agent_auth/test_command_carries_profile_and_revision.py
-tests/server/cloud/agent_auth/test_grant_rotation_reconciler.py
-tests/server/cloud/agent_auth/test_protected_env_allowlist.py
-tests/server/cloud/agent_auth/test_cleanup_paths_in_plan.py
-tests/server/cloud/agent_auth/test_revoke_credential_emits_cleanup.py
-tests/server/cloud/agent_auth/test_share_revoke_emits_cleanup.py
-tests/server/cloud/agent_auth/test_freshness_apply_signal.py
-tests/server/cloud/capabilities/test_capabilities_endpoint.py
-tests/server/cloud/agent_auth/test_byok_remains_gated.py
-tests/server/cloud/agent_auth/test_opencode_gated.py
-tests/server/cloud/agent_auth/test_gemini_gateway_rejected.py
+server/tests/cloud/agent_auth/test_primary_target_derivation.py
+server/tests/cloud/agent_auth/test_target_state_rebind_after_spec00.py
+server/tests/cloud/agent_auth/test_command_carries_profile_and_revision.py
+server/tests/cloud/agent_auth/test_grant_rotation_reconciler.py
+server/tests/cloud/agent_auth/test_protected_env_allowlist.py
+server/tests/cloud/agent_auth/test_cleanup_paths_in_plan.py
+server/tests/cloud/agent_auth/test_revoke_credential_emits_cleanup.py
+server/tests/cloud/agent_auth/test_share_revoke_emits_cleanup.py
+server/tests/cloud/agent_auth/test_freshness_apply_signal.py
+server/tests/cloud/capabilities/test_capabilities_endpoint.py
+server/tests/cloud/agent_auth/test_byok_remains_gated.py
+server/tests/cloud/agent_auth/test_opencode_gated.py
+server/tests/cloud/agent_auth/test_gemini_gateway_rejected.py
 ```
 
 AnyHarness:
@@ -1208,7 +1217,7 @@ anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs#tests
   - scope set + selection missing           -> AGENT_AUTH_SELECTION_REQUIRED missing
   - scope set + selection expired           -> AGENT_AUTH_SELECTION_REQUIRED expired
   - scope set + selection invalid           -> AGENT_AUTH_SELECTION_REQUIRED invalid
-  - scope set + revision stale              -> AGENT_AUTH_SELECTION_REQUIRED stale
+  - scope set + revision stale              -> AGENT_AUTH_SELECTION_REQUIRED needs_resync
   - scope absent (legacy)                   -> launches with local default
 
 anyharness/crates/anyharness-lib/src/api/http/agent_auth_config.rs#tests
@@ -1242,10 +1251,10 @@ Targeted Desktop tests:
 
 ```text
 desktop/src/hooks/access/cloud/capabilities/use-capabilities.test.ts
-desktop/src/components/settings/panes/cloud/CloudAgentAuthLibrary.test.tsx
+desktop/src/components/settings/panes/agent-authentication/CloudAgentAuthLibrary.test.tsx
   - BYOK rows hidden when capability flag is false
   - stale BYOK selection shows unavailable + can be replaced
-  - needs_resync / needs_reauth surface from server snapshot
+  - needs_resync surfaces from server snapshot
 desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.test.tsx
   - profile state reloads from server on target switch
   - force-restart action invalidates target state cache
@@ -1266,9 +1275,9 @@ Manual smoke cases:
      -> selection PUT writes new SandboxAgentAuthSelection
      -> bump revision; force_restart=False
      -> worker refresh:
-          plan.cleanup includes .claude/.credentials.json + .claude.json
-          worker deletes them and writes managed-credit env/headers
-     -> next session uses gateway path
+          no cleanup is emitted for plain selection replacement
+          managed-credit env/headers are applied as protected routing overlay
+     -> next session uses gateway path; old synced files are ignored
 
 3. Admin shares personal synced Codex auth with org
      -> AgentAuthCredentialShare created (status=active)
@@ -1293,7 +1302,7 @@ Manual smoke cases:
    ship in the same PR, no version negotiation.)
 
 7. Long-lived shared sandbox
-     -> grant approaches TTL - 2 days
+     -> grant expires_at <= now + 2 days
      -> reconciler enqueues refresh_agent_auth_config(reason='grant_rotation')
      -> worker mints new grant; old grant drains naturally
      -> gateway requests never see expired_grant
@@ -1305,7 +1314,7 @@ Manual smoke cases:
      -> no restart of Desktop required (cache invalidates)
 
 9. Provider 401 from Anthropic
-     -> credential moves to needs_reauth
+     -> credential moves to needs_resync
      -> profile target state apply still 'applied' for that revision but
         the next scoped launch fails closed; UI prompts reconnect
 ```

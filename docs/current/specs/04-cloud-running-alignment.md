@@ -114,7 +114,7 @@ Hard:
   `cloud_sandbox.slot_generation`, `sandbox_profile_target_state`,
   `cloud_target_runtime_access`, plus the new envelope/result wire
   fields.
-- Spec 01: `cloud_sandbox_runtime_config_current.current_sequence`
+- Spec 01: `sandbox_profile_runtime_config_current.current_sequence`
   and `current_revision_id`; the
   `applied_runtime_config_sequence`/`applied_runtime_config_revision_id`
   columns on `sandbox_profile_target_state`. The `materialize_environment`
@@ -132,7 +132,7 @@ Soft:
 
 ## 4. Current Repo State
 
-Verified against `/home/user/proliferate` on 2026-05-20.
+Verified against the current repository worktree on 2026-05-20.
 
 ### 4.1 What is shipped
 
@@ -271,6 +271,10 @@ cloud_workspace.active_sandbox_id   server/cloud/runtime/repo_config_apply.py
 cloud_workspace.runtime_url         server/cloud/runtime/service.py,
                                     server/cloud/runtime/anyharness_api.py
 cloud_workspace.runtime_token_ciphertext  server/cloud/runtime/service.py
+cloud_workspace/runtime_environment direct-access fields are also read
+  through db/store/cloud_workspaces.py, runtime/ensure_running.py,
+  repo_config/service.py, runtime/credential_freshness.py,
+  runtime/provision.py, and runtime/setup_monitor.py.
 ```
 
 These columns are dropped by spec 00. Spec 04 closes the call sites
@@ -466,7 +470,9 @@ cloud_workspace_exposure
   CHECK ck_cloud_workspace_exposure_visibility
   CHECK ck_cloud_workspace_exposure_projection_level
   CHECK ck_cloud_workspace_exposure_claimed_user
-    (visibility = 'claimed' <-> claimed_by_user_id IS NOT NULL)
+    (claimed_by_user_id IS NOT NULL -> visibility = 'claimed')
+    -- visibility='claimed' may have claimed_by_user_id NULL after user
+       deletion; spec 05 treats that as orphan-claimed audit state.
 
   UNIQUE PARTIAL ux_cloud_workspace_exposure_active
     (target_id, cloud_workspace_id) WHERE archived_at IS NULL
@@ -682,8 +688,8 @@ POST /v1/cloud/sandbox-profiles/{profile_id}/wake
               wake_in_flight, last_wake_started_at }
   errors:
     sandbox_wake_blocked  if billing denies (no row created)
-    profile_not_enabled   if profile.status not in
-                           ('enabled','provisioning','active')
+    profile_not_active    if profile.status not in
+                           ('active','provisioning')
 ```
 
 This is a UX convenience. It does the same work `enqueue_command`
@@ -880,7 +886,7 @@ Existing endpoints:
 
 ```text
 POST /v1/cloud/commands                      (existing; payloads gain
-                                              required_runtime_config_*)
+                                              requiredRuntimeConfig*)
 GET  /v1/cloud/commands/{id}                 (existing)
 POST /v1/cloud/worker/commands/lease         (existing; slot-fenced)
 POST /v1/cloud/worker/commands/{id}/result   (existing; echo fields)
@@ -890,9 +896,12 @@ POST /v1/cloud/worker/events/batches         (existing; exposure-gated
 ```
 
 Cloud event ingest accepts batches only for sessions whose
-projection has `status = 'active'`. Batches for revoked/archived
+projection has `projection_status = 'active'`. Batches for revoked/archived
 projections are accepted but discarded with a structured warning
 (useful for diagnostics) — see the per-event ack list.
+Event ingest MUST look up the active exposure/projection before applying
+events and MUST NOT auto-create `cloud_sessions` / projection rows from worker
+event batches.
 
 ## 6. Files To Change
 
@@ -918,7 +927,7 @@ server/proliferate/db/models/cloud/exposures.py        (new)
   CloudWorkspaceExposureRevision (optional audit ring; defer if not
                                   needed by spec 05)
 
-server/proliferate/db/migrations/versions/<NEW>_exposure_projection_and_wake.py
+server/alembic/versions/<NEW>_exposure_projection_and_wake.py
   - cloud_workspace_exposure
   - cloud_sessions projection columns
   - cloud_workspace.origin column
@@ -941,11 +950,6 @@ server/proliferate/server/cloud/commands/service.py
   - on lease: stamp leased_cloud_sandbox_id + leased_slot_generation
   - on result/delivery: reject when slot fence mismatches; mark
     superseded; emit observability event
-
-server/proliferate/server/cloud/commands/access.py
-  - all listing endpoints already filter by org / actor; spec 04
-    adds an exposure-aware check for cross-user reads (claim policy
-    detail lives in spec 05 but the structural check lives here)
 
 server/proliferate/server/cloud/commands/api.py
   - response shape: include exposure_id, projection_id, slot identity
@@ -1058,7 +1062,7 @@ Chunk A  cloud_workspace_id + slot fence on commands
 Chunk B  Runtime config preflight
   - _validate_runtime_config_preflight()
   - enqueue rejects stale; fail-fast V1
-  - test: start_session with stale required_runtime_config_sequence
+  - test: start_session with stale requiredRuntimeConfigSequence
     is rejected before reaching the worker
 
 Chunk C  Exposure + projection model
@@ -1088,8 +1092,11 @@ Chunk E  Workspace metadata + derived fields
   - desktop reads via use-workspace
 
 Chunk F  Direct-access cleanup
-  - repo_config_apply, runtime service, anyharness_api stop reading
-    cloud_workspace.runtime_*
+  - repo_config_apply, runtime service, anyharness_api, ensure_running,
+    credential_freshness, provision, setup_monitor, repo_config/service.py,
+    db/store/cloud_runtime_environments.py, and db/store/cloud_workspaces.py
+    stop reading/writing cloud_workspace/runtime_environment direct-access
+    fields on managed-cloud launch paths
   - cloud_target_runtime_access is the only home
   - grep verifies zero matches
 
@@ -1122,7 +1129,7 @@ All chunks land in one PR.
    `projection_level`, `commandable`, `gap_state_json`,
    `last_uploaded_seq` columns.
 8. Worker tailer is exposure-gated: it tails only sessions whose
-   `cloud_session_projection.status = 'active'` AND parent
+   `cloud_session_projection.projection_status = 'active'` AND parent
    exposure is active. Sessions outside the active set are not
    uploaded.
 9. `enqueue_command` never blocks on E2B. Wake-required commands
@@ -1153,8 +1160,11 @@ All chunks land in one PR.
     agent-auth-scoped kinds (spec 02 §5.2) and attaches
     `expected_runtime_config_revision` on runtime-config-scoped
     kinds (spec 01 §5.10).
-14. `rg "cloud_workspace\.(active_sandbox_id|runtime_url|runtime_token_ciphertext|anyharness_data_key_ciphertext)" server/proliferate`
-    returns no matches. Runtime access reads route through
+14. Managed-cloud launch paths no longer read/write
+    `cloud_workspace.active_sandbox_id`, `cloud_workspace.runtime_url`,
+    `cloud_workspace.runtime_token_ciphertext`, `cloud_runtime_environment`
+    direct-access fields, or runtime access copied through
+    `db/store/cloud_workspaces.py`. Runtime access reads route through
     `cloud_target_runtime_access`.
 15. Passive UI endpoints (§5.9 list) never call
     `kick_off_managed_slot_wake` and never trigger a wake event.
@@ -1187,34 +1197,34 @@ cd server && uv run pytest -q
 Targeted tests:
 
 ```text
-tests/server/cloud/commands/test_cloud_workspace_id_promoted_to_column.py
-tests/server/cloud/commands/test_slot_fence_lease.py
-tests/server/cloud/commands/test_slot_fence_result_rejection.py
-tests/server/cloud/commands/test_stale_worker_marked_after_mismatch.py
-tests/server/cloud/commands/test_runtime_config_preflight_stale.py
-tests/server/cloud/commands/test_runtime_config_preflight_revision_mismatch.py
-tests/server/cloud/commands/test_runtime_config_preflight_ok.py
-tests/server/cloud/commands/test_enqueue_does_not_block_on_e2b.py
-tests/server/cloud/commands/test_wake_kicked_off_for_wake_required_kinds.py
-tests/server/cloud/commands/test_no_wake_for_non_wake_required.py
-tests/server/cloud/commands/test_wake_job_consults_billing_hook.py
-tests/server/cloud/commands/test_wake_failure_transitions_queued_to_failed.py
-tests/server/cloud/commands/test_wake_idempotent_under_concurrent_kicks.py
-tests/server/cloud/sandbox_profiles/test_wake_action_endpoint.py
-tests/server/cloud/exposures/test_exposure_unique_per_workspace.py
-tests/server/cloud/exposures/test_exposure_visibility_check.py
-tests/server/cloud/exposures/test_exposure_default_for_personal_launch.py
-tests/server/cloud/exposures/test_exposure_default_for_automation.py
-tests/server/cloud/exposures/test_exposure_default_for_slack_launch.py
-tests/server/cloud/projections/test_projection_columns_present.py
-tests/server/cloud/projections/test_event_ingest_discards_inactive.py
-tests/server/cloud/projections/test_gap_state_repair_flow.py
-tests/server/cloud/workspaces/test_origin_enum_check.py
-tests/server/cloud/workspaces/test_sandbox_type_derivation.py
-tests/server/cloud/workspaces/test_exposure_state_derivation.py
-tests/server/cloud/runtime/test_no_direct_access_reads_cloud_workspace.py
-tests/server/cloud/passive_ui/test_passive_ui_does_not_wake.py
-tests/server/automations/test_automation_uses_managed_profile_launch.py
+server/tests/cloud/commands/test_cloud_workspace_id_promoted_to_column.py
+server/tests/cloud/commands/test_slot_fence_lease.py
+server/tests/cloud/commands/test_slot_fence_result_rejection.py
+server/tests/cloud/commands/test_stale_worker_marked_after_mismatch.py
+server/tests/cloud/commands/test_runtime_config_preflight_stale.py
+server/tests/cloud/commands/test_runtime_config_preflight_revision_mismatch.py
+server/tests/cloud/commands/test_runtime_config_preflight_ok.py
+server/tests/cloud/commands/test_enqueue_does_not_block_on_e2b.py
+server/tests/cloud/commands/test_wake_kicked_off_for_wake_required_kinds.py
+server/tests/cloud/commands/test_no_wake_for_non_wake_required.py
+server/tests/cloud/commands/test_wake_job_consults_billing_hook.py
+server/tests/cloud/commands/test_wake_failure_transitions_queued_to_failed.py
+server/tests/cloud/commands/test_wake_idempotent_under_concurrent_kicks.py
+server/tests/cloud/sandbox_profiles/test_wake_action_endpoint.py
+server/tests/cloud/exposures/test_exposure_unique_per_workspace.py
+server/tests/cloud/exposures/test_exposure_visibility_check.py
+server/tests/cloud/exposures/test_exposure_default_for_personal_launch.py
+server/tests/cloud/exposures/test_exposure_default_for_automation.py
+server/tests/cloud/exposures/test_exposure_default_for_slack_launch.py
+server/tests/cloud/projections/test_projection_columns_present.py
+server/tests/cloud/projections/test_event_ingest_discards_inactive.py
+server/tests/cloud/projections/test_gap_state_repair_flow.py
+server/tests/cloud/workspaces/test_origin_enum_check.py
+server/tests/cloud/workspaces/test_sandbox_type_derivation.py
+server/tests/cloud/workspaces/test_exposure_state_derivation.py
+server/tests/cloud/runtime/test_no_direct_access_reads_cloud_workspace.py
+server/tests/cloud/passive_ui/test_passive_ui_does_not_wake.py
+server/tests/automations/test_automation_uses_managed_profile_launch.py
 ```
 
 Worker / AnyHarness:
@@ -1285,10 +1295,10 @@ Manual smoke:
    - new launches re-materialize before send_prompt
 
 4. Stale runtime config
-   - bump cloud_sandbox_runtime_config_current to N+1
-   - start_session with required_runtime_config_sequence=N is rejected
+   - bump sandbox_profile_runtime_config_current to N+1
+   - start_session with requiredRuntimeConfigSequence=N is rejected
      by the preflight as 'runtime_config_stale'
-   - re-enqueue with required_runtime_config_sequence=N+1 after
+   - re-enqueue with requiredRuntimeConfigSequence=N+1 after
      materialize_environment applies; succeeds
 
 5. Passive UI on paused sandbox

@@ -117,7 +117,7 @@ Hard:
   `ensure_organization_sandbox_profile`,
   `ensure_primary_profile_target`,
   `sandbox_profile_target_state`.
-- Spec 01: `cloud_sandbox_runtime_config_current`,
+- Spec 01: `sandbox_profile_runtime_config_current`,
   `materialize_environment` carrying the runtime config fragment.
 - Spec 02: `sandbox_profile_agent_auth_revision`,
   `refresh_agent_auth_config`.
@@ -140,7 +140,7 @@ Soft:
 
 ## 4. Current Repo State
 
-Verified against `/home/user/proliferate` on 2026-05-20.
+Verified against `the current repository worktree` on 2026-05-20.
 
 ### 4.1 What is shipped
 
@@ -687,7 +687,7 @@ server/proliferate/db/models/automations.py
 server/proliferate/db/models/cloud/agent_run_config.py            (new)
   CloudAgentRunConfig
 
-server/proliferate/db/migrations/versions/<NEW>_automations_v2.py
+server/alembic/versions/<NEW>_automations_v2.py
   - all of the above; one-PR replacement
 
 server/proliferate/db/store/automations.py
@@ -916,23 +916,23 @@ uv run pytest -q
 Targeted tests:
 
 ```text
-tests/server/automations/test_owner_scope_check.py
-tests/server/automations/test_target_mode_owner_check.py
-tests/server/automations/test_team_automation_admin_gated.py
-tests/server/automations/test_cloud_agent_run_config_crud.py
-tests/server/automations/test_run_config_usable_in_shared_validation.py
-tests/server/automations/test_scheduler_snapshots_agent_run_config.py
-tests/server/automations/test_pipeline_resolve_owner_and_profile.py
-tests/server/automations/test_pipeline_runtime_config_cascade.py
-tests/server/automations/test_pipeline_agent_auth_cascade.py
-tests/server/automations/test_cascade_attempt_capped.py
-tests/server/automations/test_workspace_uses_managed_profile_launch.py
-tests/server/automations/test_personal_run_creates_private_exposure.py
-tests/server/automations/test_team_run_creates_shared_unclaimed_exposure.py
-tests/server/automations/test_shared_cloud_not_ready_fails_fast.py
-tests/server/automations/test_local_only_personal.py
-tests/server/automations/test_run_inherits_owner_fields.py
-tests/server/automations/test_cascade_commands_carry_parent_id.py
+server/tests/automations/test_owner_scope_check.py
+server/tests/automations/test_target_mode_owner_check.py
+server/tests/automations/test_team_automation_admin_gated.py
+server/tests/automations/test_cloud_agent_run_config_crud.py
+server/tests/automations/test_run_config_usable_in_shared_validation.py
+server/tests/automations/test_scheduler_snapshots_agent_run_config.py
+server/tests/automations/test_pipeline_resolve_owner_and_profile.py
+server/tests/automations/test_pipeline_runtime_config_cascade.py
+server/tests/automations/test_pipeline_agent_auth_cascade.py
+server/tests/automations/test_cascade_attempt_capped.py
+server/tests/automations/test_workspace_uses_managed_profile_launch.py
+server/tests/automations/test_personal_run_creates_private_exposure.py
+server/tests/automations/test_team_run_creates_shared_unclaimed_exposure.py
+server/tests/automations/test_shared_cloud_not_ready_fails_fast.py
+server/tests/automations/test_local_only_personal.py
+server/tests/automations/test_run_inherits_owner_fields.py
+server/tests/automations/test_cascade_commands_carry_parent_id.py
 ```
 
 Desktop:
@@ -960,7 +960,7 @@ Manual smoke:
 1. Personal automation with stale runtime config
    - user creates personal automation, target_mode='personal_cloud'
    - admin publishes a new MCP causing the profile's
-     desired_runtime_config_sequence to advance
+     current runtime config sequence to advance
    - scheduler triggers the automation
    - run pipeline: resolve_owner_and_profile -> preflight_runtime_config
      observes stale -> cascade enqueues materialize_environment
