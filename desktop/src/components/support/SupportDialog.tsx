@@ -2,10 +2,12 @@ import { useId, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   Archive,
+  Calendar,
   ChevronDown,
   Copy,
   FileText,
   FolderList,
+  Globe,
   Mail,
 } from "@/components/ui/icons";
 import { ModalShell } from "@/components/ui/ModalShell";
@@ -79,7 +81,7 @@ export function SupportDialog({
               autoFocus
               onClick={() => { void handleGmail(); }}
             >
-              <Mail className="size-3.5 shrink-0" />
+              <Globe className="size-3.5 shrink-0" />
               {CAPABILITY_COPY.supportGmailLabel}
             </Button>
             <Button
@@ -87,7 +89,7 @@ export function SupportDialog({
               size="sm"
               onClick={() => { void handleOutlook(); }}
             >
-              <Mail className="size-3.5 shrink-0" />
+              <Calendar className="size-3.5 shrink-0" />
               {CAPABILITY_COPY.supportOutlookLabel}
             </Button>
             <Button
