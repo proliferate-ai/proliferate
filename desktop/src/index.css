@@ -200,7 +200,7 @@
   --color-prose-border: hsl(25 7% 26%);
 
   /* -- Sidebar -- */
-  --color-sidebar: #141414;
+  --color-sidebar: #1f1f1f;
   --color-sidebar-background: #181818;
   --color-sidebar-foreground: #ffffff;
   --color-sidebar-primary: #ffffff;
@@ -532,7 +532,7 @@
   --color-prose-border: rgba(255, 255, 255, 0.15);
 
   /* -- Sidebar -- */
-  --color-sidebar: #141414;
+  --color-sidebar: #1f1f1f;
   --color-sidebar-background: #181818;
   --color-sidebar-foreground: #ffffff;
   --color-sidebar-primary: #ffffff;
@@ -660,7 +660,7 @@
   --color-composer-background: #212121;
   --color-prose-border: color-mix(in oklab, #ffffff 8%, transparent);
 
-  --color-sidebar: #141414;
+  --color-sidebar: #1f1f1f;
   --color-sidebar-background: #181818;
   --color-sidebar-foreground: #ffffff;
   --color-sidebar-primary: #ffffff;
@@ -1180,8 +1180,8 @@
 
   --color-prose-border: rgba(13, 13, 13, 0.117);
 
-  --color-sidebar: #f5f5f5;
-  --color-sidebar-background: #f5f5f5;
+  --color-sidebar: #f9f9f9;
+  --color-sidebar-background: #f9f9f9;
   --color-sidebar-foreground: rgba(13, 13, 13, 0.74);
   --color-sidebar-primary: #0d0d0d;
   --color-sidebar-primary-foreground: #0d0d0d;
