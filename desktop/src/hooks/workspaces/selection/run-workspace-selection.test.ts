@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { getSessionRecord } from "@/stores/sessions/session-records";
+import {
+  createEmptySessionRecord,
+  getSessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { chatWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import {
+  buildPendingWorkspaceUiKey,
+  buildSubmittingPendingWorkspaceEntry,
+} from "@/lib/domain/workspaces/creation/pending-entry";
 import {
   listActiveLatencyFlows,
   resetLatencyFlowsForTest,
@@ -334,6 +342,81 @@ describe("runWorkspaceSelection", () => {
 
     expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBe("workspace-1");
     expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-explicit");
+  });
+
+  it("does not materialize a pending projected client session during workspace selection", async () => {
+    vi.mocked(resolveCloudWorkspaceReadiness).mockResolvedValueOnce({ kind: "local" });
+    vi.mocked(resolveSelectionConnection).mockResolvedValueOnce({
+      runtimeUrl: "http://runtime.test",
+      workspaceConnection: {
+        runtimeUrl: "http://runtime.test",
+        anyharnessWorkspaceId: "ah-workspace-1",
+      },
+    });
+    const pendingEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "worktree-created",
+        displayName: "workspace-1",
+        request: {
+          kind: "worktree",
+          input: {
+            repoRootId: "repo-1",
+            workspaceName: "workspace-1",
+            branchName: "pablo/workspace-1",
+            baseBranch: "main",
+            targetPath: "/tmp/workspace-1",
+          },
+        },
+      }),
+      workspaceId: "workspace-1",
+    };
+    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(pendingEntry);
+    const projectedSessionId = "client-session:codex:1";
+    useSessionSelectionStore.setState({ pendingWorkspaceEntry: pendingEntry });
+    putSessionRecord(createEmptySessionRecord(projectedSessionId, "codex", {
+      workspaceId: pendingWorkspaceUiKey,
+      materializedSessionId: null,
+      modelId: "gpt-5.5",
+      modeId: "xhigh",
+      sessionRelationship: { kind: "root" },
+    }));
+
+    const bootstrapWorkspace = vi.fn().mockImplementation(async () => {
+      expect(getSessionRecord(projectedSessionId)).toMatchObject({
+        workspaceId: pendingWorkspaceUiKey,
+        materializedSessionId: null,
+      });
+      return { sessions: [] };
+    });
+
+    await runWorkspaceSelection({
+      cache: selectionCache(),
+      logicalWorkspaces,
+      rawWorkspaces: [],
+      setSelectedLogicalWorkspaceId: (id) =>
+        useSessionSelectionStore.getState().setSelectedLogicalWorkspaceId(id),
+      setSelectedWorkspace,
+      removeWorkspaceSlots: vi.fn(),
+      clearSelection: vi.fn(),
+      bootstrapWorkspace,
+      reconcileHotWorkspace: vi.fn(),
+    }, {
+      workspaceId: "workspace-1",
+      options: {
+        force: true,
+        preservePending: true,
+        initialActiveSessionId: projectedSessionId,
+      },
+    });
+
+    expect(bootstrapWorkspace).toHaveBeenCalledTimes(1);
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe(projectedSessionId);
+    expect(getSessionRecord(projectedSessionId)).toMatchObject({
+      workspaceId: pendingWorkspaceUiKey,
+      materializedSessionId: null,
+    });
   });
 });
 

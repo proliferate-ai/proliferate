@@ -36,11 +36,11 @@ describe("workspace chrome classes", () => {
     }).contentShell).toBe("bg-background");
   });
 
-  it("preserves cowork-specific content rounding", () => {
+  it("matches cowork content chrome to the standard shell", () => {
     expect(resolveCoworkWorkspaceChromeClasses({
       transparent: true,
       sidebarOpen: true,
-    }).contentShell).toBe("bg-transparent rounded-tl-lg");
+    }).contentShell).toBe("bg-transparent");
     expect(resolveCoworkWorkspaceChromeClasses({
       transparent: false,
       sidebarOpen: false,
@@ -52,7 +52,7 @@ describe("workspace chrome classes", () => {
     expect(resolveCoworkWorkspaceChromeClasses({
       transparent: false,
       sidebarOpen: true,
-    }).contentShell).toBe("bg-background rounded-tl-lg");
+    }).contentShell).toBe("bg-background rounded-tl-[22px] border-l border-t border-sidebar-border");
   });
 
   it("preserves editor tab classes", () => {

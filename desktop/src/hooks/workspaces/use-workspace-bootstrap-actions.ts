@@ -59,7 +59,9 @@ import {
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
-import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
+import {
+  resolveActiveProjectedSessionForPendingWorkspace,
+} from "@/hooks/workspaces/workflows/pending-workspace-projected-session";
 import { writeChatShellIntentForEmptySurface } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import {
   isOptimisticWorkspaceSessionPlaceholder,
@@ -90,24 +92,6 @@ interface ReconcileHotWorkspaceInput {
 const EMPTY_WORKSPACES = [] as const;
 const WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS = 8_000;
 const WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS = 3_000;
-
-function activeProjectedSessionForPendingWorkspace(workspaceId: string): string | null {
-  const selection = useSessionSelectionStore.getState();
-  const activeSessionId = selection.activeSessionId;
-  const pendingEntry = selection.pendingWorkspaceEntry;
-  if (!activeSessionId || pendingEntry?.workspaceId !== workspaceId) {
-    return null;
-  }
-
-  const activeSession = getSessionRecord(activeSessionId);
-  if (!activeSession || activeSession.materializedSessionId) {
-    return null;
-  }
-
-  return activeSession.workspaceId === buildPendingWorkspaceUiKey(pendingEntry)
-    ? activeSessionId
-    : null;
-}
 
 function findLoadedSessionForClientSession(
   clientSessionId: string,
@@ -454,7 +438,10 @@ export function useWorkspaceBootstrapActions() {
         return { sessions };
       }
 
-      const activeProjectedSessionId = activeProjectedSessionForPendingWorkspace(workspaceId);
+      const activeProjectedSessionId = resolveActiveProjectedSessionForPendingWorkspace(
+        workspaceId,
+        useSessionSelectionStore.getState().pendingWorkspaceEntry,
+      );
       if (activeProjectedSessionId) {
         logLatency("workspace.select.initial_session_open.skipped", {
           workspaceId,
