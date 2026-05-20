@@ -7,50 +7,55 @@ Date: 2026-05-20.
 Depends on: [`00-sandbox-foundation.md`](00-sandbox-foundation.md),
 [`04-cloud-running-alignment.md`](04-cloud-running-alignment.md).
 
-Claiming is the ownership transition where shared/unclaimed work
-created by Slack, automations, or other team paths gets assigned to a
-single user. It narrows Cloud-mediated control to that user and grants
-Desktop a scoped direct-attach to the shared sandbox AnyHarness.
+Claiming is a one-way ownership transition. When work is created
+shared and unclaimed (by Slack, automations, or another team path),
+one org member can claim it. After that, only the claimer can act on
+it via Cloud-mediated APIs, and Desktop can attach directly via a
+scoped token. There is no release. There is no admin revoke. The
+only way to make a claimed workspace inert is to archive the
+workspace itself.
 
 ## 1. Purpose & Scope
 
 In scope:
 
-- `cloud_workspace_claim` table: append-only claim history; one
-  active row per workspace at a time.
-- Claim transitions: `shared_unclaimed → claimed`; `claimed →
-  shared_unclaimed` (release); `claimed → archived` (revoke/admin
-  cleanup).
-- Cloud-mediated access policy: `can_view_cloud_workspace`,
-  `can_interact_cloud_workspace`, `can_claim_cloud_workspace`,
-  `can_request_direct_attach_token` access helpers used by every
-  workspace/command endpoint.
-- Workspace listing rules: personal work + claimed-by-me work; the
-  unclaimed team pool; admin manage view.
+- `cloud_workspace_claim` table: one row per workspace; created at
+  claim time; never updated.
+- One-way claim transition: `shared_unclaimed → claimed`.
+- Cloud-mediated access policy helpers used by every workspace/
+  command/session endpoint.
+- Workspace listing scopes: my work, the team unclaimed pool, and an
+  admin audit listing for org admins.
 - Direct-attach JWT issuance (Desktop only): short-lived RS256 JWT
   scoped to one claimed workspace/session, validated by AnyHarness.
+- Per-token revocation (for lost Desktop, security incidents). The
+  *claim* is not revocable; individual *tokens* are.
 - Cloud signing key + JWKS endpoint; AnyHarness JWT verification +
   scope check on every per-workspace route.
-- Release and revoke flows + claim audit.
-- `admin_managed` visibility state on `cloud_workspace_exposure` (the
-  enum value was reserved by spec 04; spec 05 owns the transitions).
 
 Out of scope:
 
-- Web/mobile direct AnyHarness access. Cloud-mediated only. (→ spec
-  08 if a future product decision changes this.)
+- Release / revoke / undo claim. **Claiming cannot be undone.** Once
+  a user claims, the workspace belongs to that user for its
+  lifetime. Mistakes are recovered by archiving the workspace and
+  creating new work.
+- Admin override of an active claim. Admins cannot reassign or
+  unclaim. Admins can audit (read-only) and archive (workspace-
+  level retention action).
+- An `admin_managed` workspace state. Not needed in this model. The
+  vocabulary in spec 03 §5.3 drops `admin_managed`.
+- Web/mobile direct AnyHarness access. Cloud-mediated only.
 - Slack inbound webhook (→ spec 07).
-- Automation lifecycle (→ spec 06). Spec 05 ensures automation-
-  created workspaces land as `shared_unclaimed` with claim eligible.
+- Automation lifecycle (→ spec 06).
 - JWKS rotation operations (key generation, key store). Spec 05
   defines the model and endpoint; ops procedures are a deployment
   doc.
-- Long-lived "team session" sharing without claim. V1 is single-user
-  claim. Multi-claimer is not on the roadmap.
-- Migrating ownership (changing the org). Different operation;
-  not claim. (→ spec 10 if this surface is ever needed.)
+- Multi-claimer "team session" sharing. Single-user claim is the
+  model.
+- Cross-org workspace migration (different operation; out of
+  roadmap).
 - Replacing the existing `automation_run_claims` executor lease.
-  That is unrelated executor lifecycle and stays as-is.
+  Unrelated executor lifecycle; stays as-is.
 
 ## 2. Mental Model
 
@@ -62,30 +67,17 @@ shared_unclaimed     org-owned work, visible to every org member,
 
 claim                Cloud records that one user claimed the work.
                      Atomic. Persisted in cloud_workspace_claim.
+                     Irreversible.
 
-claimed              exposure.visibility flips to 'claimed'.
+claimed              exposure.visibility = 'claimed'.
                      exposure.claimed_by_user_id is set.
                      Cloud-mediated interaction restricted to the
-                     claiming user + admins (audit/manage only).
-                     Desktop direct-attach allowed for the claiming
-                     user via a scoped JWT.
+                     claiming user. Admins have read-only audit
+                     view. Desktop direct-attach allowed for the
+                     claiming user via a scoped JWT.
 
-release              claimer releases the claim voluntarily.
-                     exposure.visibility -> shared_unclaimed.
-                     Active direct-attach tokens are revoked.
-
-revoke               admin revokes someone else's claim.
-                     exposure.visibility -> shared_unclaimed (or
-                     admin_managed if admin wants exclusive access
-                     before reassignment).
-                     Active direct-attach tokens are revoked.
-
-admin_managed        admin holds the workspace in pre-archive limbo
-                     (e.g. investigating abuse). No org member can
-                     claim or interact via Cloud. Direct-attach
-                     denied. Admin can still see and audit.
-                     Transition to archived or back to
-                     shared_unclaimed at admin's choice.
+archived             workspace-level retention action (separate
+                     concern). The claim row remains for audit.
 ```
 
 Two access surfaces, one set of policy:
@@ -93,7 +85,7 @@ Two access surfaces, one set of policy:
 ```text
 Cloud-mediated (web, mobile, Slack, automation, Desktop "cloud" path)
   -> /v1/cloud/* endpoints
-  -> Cloud authority decides who can view/interact/claim/release
+  -> Cloud authority decides who can view/interact/claim
   -> Worker carries out the command
 
 Desktop direct-attach
@@ -107,28 +99,31 @@ Desktop direct-attach
 Web/mobile never receive the direct-attach JWT. They keep using
 Cloud-mediated commands.
 
+Token-level revocation (e.g. lost Desktop) is supported. *Claim*
+revocation is not.
+
 ## 3. Dependencies
 
 Hard:
 
 - Spec 00: `cloud_target_runtime_access` (Desktop reads AnyHarness
-  base URL from here); `sandbox_profile_target_state` (slot fence
-  used to ensure direct-attach targets a current slot).
+  base URL from here); `sandbox_profile_target_state`.
 - Spec 04: `cloud_workspace_exposure` exists with visibility enum
-  including `shared_unclaimed`, `claimed`, `admin_managed`,
-  `archived` and `claimed_by_user_id` column; `revision` integer
-  for bumping on claim transitions.
+  including `shared_unclaimed` and `claimed`, and
+  `claimed_by_user_id` column; `revision` integer for bumping on
+  claim.
 - Spec 03: `useIsAdmin(organizationId)` hook for Desktop admin
-  gating; `AdminOnlyPlaceholder`; Access vocabulary (`private`,
-  `shared_unclaimed`, `claimed`, `admin_managed`, `archived`).
+  audit-listing gate; `AdminOnlyPlaceholder`; Access vocabulary
+  (`private`, `shared_unclaimed`, `claimed`, `archived` — note
+  `admin_managed` is dropped from spec 03 by this spec).
 
 Soft:
 
 - Spec 06 (automations) and spec 07 (Slack): both set
-  `visibility='shared_unclaimed'` and `origin='automation'` /
-  `origin='slack'` on the exposure they create. Spec 05 doesn't
-  change their flows but documents the claim eligibility.
-- Spec 08 (web/mobile/dispatch): consumes the claim verbs.
+  `visibility='shared_unclaimed'` on the exposure they create.
+  Spec 05 doesn't change their flows but documents claim
+  eligibility.
+- Spec 08 (web/mobile/dispatch): consumes the claim verb.
 - Spec 09 (billing): claim does not change billing identity;
   billing_subject stays org-scoped.
 
@@ -166,8 +161,7 @@ created_by_user_id  always set
 
 Org-owned workspaces are visible to all org members via
 `server/proliferate/server/cloud/workspaces/access.py`
-`cloud_workspace_user_can_read()` which checks
-`owner_scope='organization'` and active org membership.
+`cloud_workspace_user_can_read()`.
 
 **No JWT or JWKS infrastructure exists**:
 
@@ -187,19 +181,11 @@ no JWT verification anywhere
 
 ```text
 require_bearer_auth middleware
-  expects single static bearer token (AppState.bearer_token)
+  expects single static bearer token
   constant-time compare
-  also accepts ?access_token= query param
 no JWT validation; no per-route scope check
-no user-context auth path; only worker-token-style static bearer
+no user-context auth path
 ```
-
-**Workspace access tokens** today are plaintext bearer tokens
-issued by AnyHarness during sandbox provisioning, persisted
-encrypted as `cloud_workspace.runtime_token_ciphertext`, and
-returned via `WorkspaceConnection.access_token` to Desktop. Spec 00
-drops these columns and routes runtime access via
-`cloud_target_runtime_access`.
 
 **Desktop remote-target access**
 (`desktop/src/lib/access/anyharness/runtime-target.ts`):
@@ -210,164 +196,103 @@ runtime location 'cloud'   getCloudWorkspaceConnection() -> bearer
 runtime location 'target'  SSH tunnel; no token
 ```
 
-The "cloud" path uses a plaintext bearer with full sandbox scope.
 There is no scoped per-workspace direct attach today.
 
 ### 4.2 Gaps spec 05 closes
 
 - No `cloud_workspace_claim` user-claim table.
-- No claim transitions wired into `cloud_workspace_exposure`.
-- No `can_claim_cloud_workspace`, `can_request_direct_attach_token`
-  access helpers.
-- No admin manage view filter.
+- No claim transition wired into `cloud_workspace_exposure`.
+- No `can_claim_cloud_workspace`,
+  `can_request_direct_attach_token` access helpers.
 - No JWT infrastructure: no signing key, no JWKS endpoint, no
   AnyHarness validation, no jti revocation.
-- No "claim/release/revoke" API endpoints.
+- No claim API endpoint.
 - No Desktop direct-attach client code that uses a scoped JWT.
 
 ## 5. Target Model
 
 ### 5.1 `cloud_workspace_claim` (new)
 
-Append-only claim history; one row per claim event. Latest active
-row is the current claim.
+One row per workspace per lifetime. Insert-once, never updated.
 
 ```text
 cloud_workspace_claim
   id                              uuid pk
+  cloud_workspace_id              uuid fk cloud_workspace.id         not null unique
+  exposure_id                     uuid fk cloud_workspace_exposure.id not null
   organization_id                 uuid fk organization.id            not null
   target_id                       uuid fk cloud_targets.id           not null
-  exposure_id                     uuid fk cloud_workspace_exposure.id not null
-  cloud_workspace_id              uuid fk cloud_workspace.id         not null
   anyharness_workspace_id         text                               nullable
   cloud_session_id                uuid fk cloud_session.id           nullable
   anyharness_session_id           text                               nullable
 
-  claimed_by_user_id              uuid fk user.id                    not null
-  source_kind                     text
+  claimed_by_user_id              uuid fk user.id ON DELETE SET NULL nullable
+  source_kind                     text   -- audit; survives claim
                                   'slack' | 'automation' | 'api' | 'manual'
-  status                          text
-                                  'active' | 'released' | 'revoked' | 'superseded'
 
   claimed_at                      timestamptz                        not null
-  released_at                     timestamptz                        nullable
-  released_by_user_id             uuid fk user.id                    nullable
-  revoked_at                      timestamptz                        nullable
-  revoked_by_user_id              uuid fk user.id                    nullable
-  revoke_reason                   text                               nullable
-
   created_at                      timestamptz                        not null
 
-  CHECK ck_cloud_workspace_claim_status
   CHECK ck_cloud_workspace_claim_source_kind
-  CHECK ck_cloud_workspace_claim_terminal
-    (status='released'  -> released_at IS NOT NULL)
-    (status='revoked'   -> revoked_at IS NOT NULL)
-
-  UNIQUE PARTIAL ux_cloud_workspace_claim_active
-    (cloud_workspace_id) WHERE status = 'active'
+  UNIQUE (cloud_workspace_id)
 ```
 
 Rules:
 
-- At most one `active` row per `cloud_workspace_id`.
-- A new claim event for an already-claimed workspace fails with
-  `claim_already_held`. Admin override goes through revoke + claim,
-  not concurrent active rows.
-- `released_at` and `revoked_at` are mutually exclusive with each
-  other and with the active state.
-- `source_kind` is the origin that created the unclaimed work
-  (Slack, automation, manual). It survives the claim — claim does
-  not change provenance.
+- Exactly one row per `cloud_workspace_id`. Insert succeeds once;
+  any subsequent claim attempt fails with `claim_already_held`.
+- `claimed_by_user_id` is nullable to survive user deletion (see
+  §5.7); the workspace remains `claimed` even with a null claimer.
+  Admin can archive an orphan-claim workspace.
+- `source_kind` is the origin that created the unclaimed work. It
+  is recorded at claim time for audit and never changes.
+- `cloud_session_id` / `anyharness_session_id` capture the session
+  at claim time, for UI deep links. They do not narrow the claim;
+  the claim covers the workspace including future sessions.
 
-`cloud_workspace_claim` rows are queryable for audit: "who claimed
-this workspace, when, who released/revoked". They are not deleted
-on workspace archival; they are retained for the workspace's
-retention window.
+### 5.2 Claim transition
 
-### 5.2 Claim transitions and exposure interaction
-
-State on `cloud_workspace_exposure` (from spec 04):
-
-```text
-visibility           private | shared_unclaimed | claimed |
-                     admin_managed | archived
-claimed_by_user_id   nullable
-revision             integer; bumped on every transition
-```
-
-Transitions:
+Single transition. No others.
 
 ```text
 shared_unclaimed -> claimed
-  insert cloud_workspace_claim (status='active')
-  set exposure.visibility='claimed'
-  set exposure.claimed_by_user_id=<user>
-  bump exposure.revision
-  emit AgentAuthAuditEvent-style audit row? no — spec 05 uses the
-    cloud_workspace_claim row itself as the audit record.
+  INSERT cloud_workspace_claim (unique by cloud_workspace_id)
+  UPDATE cloud_workspace_exposure
+    SET visibility = 'claimed',
+        claimed_by_user_id = <user>,
+        revision = revision + 1
+  emit audit log entry (structured log; no separate audit table)
 
-claimed -> shared_unclaimed   (release by claimer)
-  update cloud_workspace_claim (status='released', released_at=now,
-                                released_by_user_id=<claimer>)
-  set exposure.visibility='shared_unclaimed'
-  set exposure.claimed_by_user_id=NULL
-  bump exposure.revision
-  revoke active cloud_workspace_claim_token rows
-  invalidate direct-attach JWTs (jti revoke cache push; see 5.5)
+There is no claimed -> shared_unclaimed transition.
+There is no claimed -> admin_managed transition.
+There is no admin_managed state.
 
-claimed -> shared_unclaimed   (revoke by admin)
-  update cloud_workspace_claim (status='revoked', revoked_at=now,
-                                revoked_by_user_id=<admin>,
-                                revoke_reason=<text>)
-  set exposure.visibility='shared_unclaimed'   (or 'admin_managed'
-                                                if admin chooses to
-                                                hold)
-  set exposure.claimed_by_user_id=NULL
-  bump exposure.revision
-  revoke tokens as above
-
-claimed -> archived           (claimer or admin archives)
-  update cloud_workspace_claim (status='released' or 'revoked')
-  set exposure.visibility='archived'
-  set exposure.status='archived'
-  revoke tokens
-
-shared_unclaimed -> admin_managed   (admin hold pre-archive)
-  set exposure.visibility='admin_managed'
-  no claim row needed; admin_managed is a workspace-level state,
-    not a user claim
-  bump exposure.revision
-
-admin_managed -> shared_unclaimed   (admin releases hold)
-  set exposure.visibility='shared_unclaimed'
-  bump exposure.revision
-
-admin_managed -> archived           (admin archives)
-  set exposure.visibility='archived' + exposure.status='archived'
+The only way to make a claimed workspace inert is to archive the
+workspace (workspace-level operation; same path as archiving a
+personal workspace). Archive does not modify the claim row.
 ```
 
-The transitions are wrapped in a transaction. Spec 04's worker
-exposure-gated tailer reads `revision` and reconciles on change.
+Both writes happen in one transaction. Spec 04's worker
+exposure-gated tailer reads `revision` and reconciles on change
+(the revision bumps from claim aren't observable to the worker as
+a meaningful change since the projection_level and commandable
+flags stay the same; but the bump is correct for cache
+invalidation).
 
 **Effect on already-queued commands**:
 
 A command enqueued while the workspace was `shared_unclaimed`
-remains valid after the workspace transitions to `claimed` (the
-authorization context at enqueue time was correct). The lease
-proceeds.
+remains valid (the authorization context at enqueue time was
+correct). The lease proceeds.
 
-Future commands from non-claimer users (post-claim) are rejected at
-enqueue with `claim_held_by_other`. Admin manage operations are
-allowed by `can_interact_cloud_workspace` with the admin override.
-
-Active direct-attach tokens are revoked on every transition that
-changes the claimed_by_user_id (see 5.5).
+Future commands from non-claimer users (post-claim) are rejected
+at enqueue with `claim_held_by_other`. Admins do not get an
+interact override.
 
 ### 5.3 `cloud_workspace_claim_token` (new)
 
-Durable token row for audit and revocation. The raw JWT is never
-stored.
+Durable token row for audit and per-token revocation. The raw JWT
+is never stored.
 
 ```text
 cloud_workspace_claim_token
@@ -384,10 +309,8 @@ cloud_workspace_claim_token
 
   permissions                     text   -- comma-separated
                                   'read' | 'write' | 'control'
-                                  (multi-permission: 'read,write,control')
 
-  status                          text
-                                  'active' | 'expired' | 'revoked'
+  status                          text   'active' | 'expired' | 'revoked'
   issued_at                       timestamptz                        not null
   expires_at                      timestamptz                        not null
   last_used_at                    timestamptz                        nullable
@@ -396,19 +319,19 @@ cloud_workspace_claim_token
 
   UNIQUE (token_jti_hash)
   CHECK ck_cloud_workspace_claim_token_status
-  CHECK ck_cloud_workspace_claim_token_permissions
 ```
 
 Notes:
 
-- Cloud stores only `token_jti` (the unique JTI claim) and
-  `token_jti_hash` (HMAC for lookup safety). The raw JWT body is
-  never stored.
-- Token rows accumulate; expired rows are pruned on a periodic
-  reconciler.
+- Cloud stores only `token_jti` and `token_jti_hash` (HMAC for
+  lookup safety). Raw JWT body is never persisted.
 - Multiple active tokens per claim are allowed (Desktop may refresh
-  the token while still using the old one). Practical cap: 5
-  active per claim at a time; oldest is revoked on overflow.
+  while still using the old one). Practical cap: 5 active per
+  claim; oldest is revoked on overflow.
+- Token revocation **does not** revoke the claim. Revoking a token
+  just invalidates that specific JWT. The claimer can request a
+  fresh token any time.
+- Expired tokens are pruned on a periodic reconciler.
 
 ### 5.4 Cloud signing key + JWKS
 
@@ -435,27 +358,19 @@ JWKS endpoint:
 ```text
 GET /v1/cloud/.well-known/jwks.json
   -> { keys: [ JWK_active, JWK_previous? ] }
-  public, no auth
-  cache-friendly headers
+  public, no auth, cache-friendly headers
 ```
 
-AnyHarness fetches JWKS once at startup and refreshes:
-
-```text
-on startup
-on signature verification failure with kid not in cache
-periodic refresh every 6 hours
-```
+AnyHarness fetches JWKS at startup, refreshes on `kid` miss, and
+periodically every 6 hours.
 
 Worker auth path is unchanged (static bearer token via
-`bearer_token` middleware). JWT validation is an additional path,
-not a replacement.
+`bearer_token` middleware). JWT validation is an additional path.
 
 ### 5.5 AnyHarness JWT verification + scope check
 
-AnyHarness gains a new auth path. The existing single-bearer-token
-behaviour stays for worker traffic; the JWT path is for user-claim
-tokens.
+AnyHarness gains a new auth path. Worker bearer behaviour stays
+for worker traffic.
 
 ```text
 anyharness/crates/anyharness-lib/src/api/auth.rs           (new file)
@@ -477,7 +392,7 @@ pub enum AuthContext {
 }
 
 fn classify_token(token_str: &str) -> TokenKind {
-    if looks_like_jwt(token_str) { TokenKind::Jwt }
+    if token_str.split('.').count() == 3 { TokenKind::Jwt }
     else { TokenKind::StaticBearer }
 }
 ```
@@ -501,8 +416,7 @@ Per-route auth requirement:
 
 ```text
 GET  /v1/workspaces                      Worker OR (UserClaim+read)
-GET  /v1/workspaces/{id}                 Worker OR (UserClaim and id
-                                                    matches token scope)
+GET  /v1/workspaces/{id}                 Worker OR scoped UserClaim
 GET  /v1/workspaces/{id}/sessions        Worker OR scoped UserClaim
 GET  /v1/sessions/{id}                   Worker OR scoped UserClaim
 GET  /v1/sessions/{id}/events            Worker OR scoped UserClaim+read
@@ -518,12 +432,11 @@ PUT  /v1/agents/auth-config              Worker only       (spec 02)
 POST /v1/workspaces/{id}/mobility/*      Worker only       (spec 10)
 ```
 
-The scope check: when AuthContext is UserClaim, the requested
-workspace_id MUST equal `auth.anyharness_workspace_id`, and when a
+Scope check: when AuthContext is UserClaim, the requested
+workspace_id MUST equal `auth.anyharness_workspace_id`. When a
 session is in the path, the session id MUST equal
-`auth.anyharness_session_id` (or `auth.anyharness_session_id` is
-unset, meaning workspace-wide scope — V1 we always set
-session_id when we have one).
+`auth.anyharness_session_id` (or the JWT was issued workspace-wide
+with no session narrowing).
 
 **Revoked-jti cache**:
 
@@ -534,7 +447,7 @@ in-memory store inside AnyHarness:
   entries pruned when expires_at < now
 
 push path:
-  POST /v1/cloud/worker/revoked-jtis      (worker-token-only)
+  PUT /v1/cloud/worker/revoked-jtis      (worker-token-only)
     body: { jtis: [string] }
   worker forwards from Cloud reconciliation
 
@@ -543,13 +456,12 @@ pull path:
     /v1/cloud/worker/revoked-jtis?since=<timestamp>
   Cloud returns recent revocations for this target
   worker pushes into AnyHarness via PUT route
-
-Most revocations are detected by natural expiry (20m TTL).
-The push/pull path is for cases where immediate cutoff matters
-(release/revoke action).
 ```
 
-### 5.6 Direct-attach token issuance API
+Natural expiry (20m TTL) handles most cases. Push/pull is for
+explicit per-token revocation.
+
+### 5.6 Claim and direct-attach API
 
 ```text
 POST /v1/cloud/workspaces/{cloud_workspace_id}/claim
@@ -557,28 +469,22 @@ POST /v1/cloud/workspaces/{cloud_workspace_id}/claim
   preconditions:
     can_claim_cloud_workspace(user, workspace)
     exposure.visibility == 'shared_unclaimed'
-    no active claim
   response: ClaimResponse {
     claim_id,
     cloud_workspace_id,
     exposure_revision (new value),
     claimed_at,
+    claimed_by_user_id
   }
-
-DELETE /v1/cloud/workspaces/{cloud_workspace_id}/claim
-  preconditions:
-    can_release_cloud_workspace(user, workspace)
-       = (user is the claimer) OR (user is admin and revoke flow)
-  body: { reason? }   -- for revoke
-  response: ReleaseResponse { released_at | revoked_at }
-  side effects: tokens revoked (see 5.5)
+  errors:
+    claim_already_held       claim row exists for this workspace
+    not_org_member           user is not in workspace.organization_id
+    workspace_not_unclaimed  exposure.visibility != 'shared_unclaimed'
 
 POST /v1/cloud/workspaces/{cloud_workspace_id}/direct-access-token
   client requirements:
     X-Client-Kind: desktop                 (header required in V1)
-    user has an active claim on the workspace
-  preconditions:
-    can_request_direct_attach_token(user, workspace)
+    user has the active claim on the workspace
   body: {
     target_anyharness_workspace_id   echoed back for sanity
     session_id?                       optional narrow-to-session
@@ -596,14 +502,19 @@ POST /v1/cloud/workspaces/{cloud_workspace_id}/direct-access-token
     anyharness_session_id?,
     permissions
   }
+
+POST /v1/cloud/workspaces/{cloud_workspace_id}/direct-access-token/refresh
+  -- same shape; new token row created; old token row remains
+     active until natural expiry, capped at 5 active per claim.
+
+DELETE /v1/cloud/workspaces/{cloud_workspace_id}/direct-access-tokens/{token_id}
+  -- explicit per-token revoke (e.g. lost Desktop, security
+     incident). Requires the claimer (or admin for emergency).
+  -- the claim itself is NOT affected
+  -- jti added to push cache; AnyHarness gets it via worker pull
 ```
 
-The `X-Client-Kind: desktop` header gate is V1 best-effort; a
-non-Desktop caller could spoof it. The deeper protection is that
-web/mobile clients have no AnyHarness HTTP client and no way to
-reach a managed cloud sandbox's HTTP. AnyHarness URLs are not
-exposed to web/mobile. Hardening the gate is a future step (e.g.
-client OAuth scope).
+There is **no** `DELETE /v1/cloud/workspaces/{id}/claim` endpoint.
 
 JWT claims:
 
@@ -626,27 +537,9 @@ claim_id                cloud_workspace_claim.id
 permissions             ['read','write','control'] subset
 ```
 
-Token refresh:
-
-```text
-POST /v1/cloud/workspaces/{cloud_workspace_id}/direct-access-token
-  -- same endpoint; new token row created; old token row remains
-     active until natural expiry, capped at 5 active tokens per
-     claim.
-```
-
-Token revocation:
-
-```text
-DELETE /v1/cloud/workspaces/{cloud_workspace_id}/direct-access-tokens/{token_id}
-  -- explicit revoke (e.g. lost Desktop)
-  -- requires can_release_cloud_workspace or admin
-  -- jti added to push cache; AnyHarness gets it via worker pull
-```
-
 ### 5.7 Cloud-mediated access policy
 
-New / consolidated access helpers in
+Access helpers in
 `server/proliferate/server/cloud/workspaces/access.py`:
 
 ```text
@@ -656,38 +549,42 @@ can_view_cloud_workspace(user, workspace, exposure?) -> bool
   - shared_unclaimed: user in workspace.organization_id members
   - claimed:
       user == exposure.claimed_by_user_id OR is_admin(org)
-  - admin_managed: is_admin(org) only
-  - archived: org admin only (and retention policy)
+        -- admin gets view (audit-only)
+  - archived: org admin only (retention policy)
 
 can_interact_cloud_workspace(user, workspace, exposure) -> bool
-  - same shape but stricter; admins do not get write on claimed work
-    unless they go through admin override (claim revoke first)
+  - personal / private: owner only
   - shared_unclaimed: any org member
-  - claimed: only claimed_by_user_id (admin needs to revoke to act)
-  - admin_managed: admin can interact (audit/manage); regular members no
+  - claimed: ONLY exposure.claimed_by_user_id
+              -- admin does NOT get interact override
   - archived: nobody
 
 can_claim_cloud_workspace(user, workspace, exposure) -> bool
   - exposure.visibility == 'shared_unclaimed'
   - user in workspace.organization_id members
-  - no active claim
+  - no existing cloud_workspace_claim row for this workspace
   - workspace not archived
 
-can_release_cloud_workspace(user, workspace, claim) -> bool
-  - claim.status == 'active' AND
-  - (user == claim.claimed_by_user_id    -- self release
-     OR is_admin(workspace.organization_id))  -- admin revoke
-
 can_request_direct_attach_token(user, workspace, claim) -> bool
-  - claim is active and held by this user
+  - claim row exists for this workspace
+  - claim.claimed_by_user_id == user.id
   - workspace.target.kind == 'managed_cloud'
   - cloud_target_runtime_access exists for the target
   - client_kind == 'desktop'  (from request header)
   - billing_subject not blocked (spec 09 hook)
+
+can_revoke_claim_token(user, workspace, token) -> bool
+  - user == claim.claimed_by_user_id OR is_admin(org)
+  - token.status == 'active'
 ```
 
-These helpers replace inline checks. Every workspace, command,
-session, and transcript endpoint calls one of them.
+There is no `can_release_cloud_workspace` and no
+`can_revoke_claim`. Those operations do not exist.
+
+User deletion: if `claimed_by_user_id` is SET NULL by the cascade
+(see §5.7's "user deletion" sub-rule below), `can_view_cloud_workspace`
+returns false for everyone except admins; admins can audit-view
+and archive.
 
 ### 5.8 Workspace listing rules
 
@@ -702,148 +599,77 @@ GET /v1/cloud/workspaces?scope=unclaimed&organization_id=<id>
   -- ordered by created_at desc
 
 GET /v1/cloud/workspaces?scope=org-all&organization_id=<id>
-  -- admin only (useIsAdmin gate per spec 03)
-  -- returns ALL org workspaces including claimed_by_other,
-     admin_managed, archived
-  -- used by admin manage view
+  -- admin only (useIsAdmin gate per spec 03); audit-only
+  -- returns ALL org workspaces including claimed_by_other and
+     archived
+  -- response includes visibility + claimed_by_user_id so the UI
+     can show "claimed by Alice" badges
+  -- admin can view + archive; cannot interact or unclaim
 
 GET /v1/cloud/workspaces?scope=claimable&organization_id=<id>
   -- syntactic sugar for scope=unclaimed
-  -- intended for Mobile/Web "team work" tabs
 ```
 
-All list endpoints accept pagination + filters. Filters supported in
-V1:
+Filters supported in V1:
 
 ```text
 origin       in ('manual_desktop','manual_web','manual_mobile',
                   'automation','slack','cowork_api')
-visibility   in ('private','shared_unclaimed','claimed',
-                  'admin_managed','archived')
+visibility   in ('private','shared_unclaimed','claimed','archived')
 sandbox_type in ('local','ssh','managed_personal','managed_shared')
 since        timestamp
 until        timestamp
 ```
 
-Vocabulary strings come from spec 03 §5.3.
+Vocabulary strings come from spec 03 §5.3 (the `admin_managed` value
+is dropped by this spec).
 
-### 5.9 Release / revoke / unclaim flow
+### 5.9 User deletion
 
-User-driven release:
-
-```text
-DELETE /v1/cloud/workspaces/{id}/claim
-  -- claimer releases
-  -- claim.status -> 'released'
-  -- exposure.visibility -> 'shared_unclaimed'
-  -- active direct-attach tokens revoked; jti pushed to AnyHarness
-  -- the workspace returns to the unclaimed pool; any org member
-     can claim again
-```
-
-Admin revoke:
+If a user account is deleted/disabled:
 
 ```text
-DELETE /v1/cloud/workspaces/{id}/claim
-  body: { reason: text }
-  -- admin (useIsAdmin) revokes another user's claim
-  -- claim.status -> 'revoked' with revoked_by_user_id, revoke_reason
-  -- exposure.visibility -> 'shared_unclaimed' OR 'admin_managed' if
-     the admin wants to hold (query param ?hold=true)
-  -- tokens revoked
+ON DELETE SET NULL on cloud_workspace_claim.claimed_by_user_id
+                     cloud_workspace_exposure.claimed_by_user_id
 
-Audit:
-  cloud_workspace_claim row is the audit record. revoke_reason is
-  required for admin revoke.
+Reconciler sweep (spec 05 ships):
+  for each cloud_workspace_claim where claimed_by_user_id IS NULL
+       AND cloud_workspace_exposure.visibility = 'claimed':
+    -- the workspace is now "orphan-claimed"
+    -- DO NOT transition exposure.visibility (claim is irreversible)
+    -- log an audit event "claimer deleted"
+    -- admin can archive the workspace through the normal archive
+       path
+
+The reconciler does not return the workspace to shared_unclaimed.
+The product invariant ("claim is irreversible") wins over "the
+workspace is now usable again." Admins archive orphaned workspaces.
 ```
 
-Admin archive:
+This is a deliberate product choice: ensure that claim history is
+durable and never silently undone, even by user lifecycle events.
+
+### 5.10 Audit
+
+`cloud_workspace_claim` is the audit record:
 
 ```text
-POST /v1/cloud/workspaces/{id}/archive
-  -- admin archives the workspace (admin_managed -> archived)
-  -- exposure.visibility = 'archived'
-  -- claim row updated to revoked if still active
-  -- worker stops projecting (exposure.status = 'archived')
+who claimed:    claimed_by_user_id (may become NULL after user delete)
+when:           claimed_at
+provenance:     source_kind ('slack' | 'automation' | 'api' | 'manual')
 ```
 
-### 5.10 Audit events
-
-Claim transitions are auditable via the `cloud_workspace_claim`
-rows themselves:
+For per-token revocation:
 
 ```text
-who claimed     claimed_by_user_id, claimed_at
-who released    released_by_user_id, released_at
-who revoked     revoked_by_user_id, revoked_at, revoke_reason
-source provenance survives via source_kind (slack | automation | api | manual)
+cloud_workspace_claim_token.revoked_at + revoked_reason
 ```
 
-For admin manage actions:
-
-```text
-cloud_workspace_admin_event             (new — optional in V1)
-  workspace_id, organization_id,
-  actor_user_id (admin), action
-    ('admin_hold','admin_release','admin_archive','revoke_claim'),
-  metadata_json, created_at
-```
-
-If V1 wants to keep the audit footprint small, defer
-`cloud_workspace_admin_event` and rely on `cloud_workspace_claim`
-rows + structured logs. Bias: defer the separate audit table to a
-follow-up; the `cloud_workspace_claim` row + structured logs are
-sufficient for V1.
+No separate `cloud_workspace_admin_event` table. Admin actions are
+limited to view (audit listing) and archive (workspace-level);
+archive emits the existing workspace archive log.
 
 ### 5.11 Implementation notes for AnyHarness
-
-Token classification:
-
-```text
-fn classify_token(token: &str) -> TokenKind {
-    if token.split('.').count() == 3 {
-        TokenKind::Jwt
-    } else {
-        TokenKind::StaticBearer
-    }
-}
-```
-
-Static bearer remains constant-time compared with the configured
-worker token. JWT goes through verification.
-
-Permissions enforcement:
-
-```text
-fn route_requires(perm: Permission) -> impl Fn(&AuthContext) -> Result<()> {
-    move |ctx| match ctx {
-        AuthContext::Worker { .. } => Ok(()),
-        AuthContext::UserClaim { permissions, .. } => {
-            permissions.contains(perm).then_some(()).ok_or(unauthorized)
-        }
-    }
-}
-```
-
-Scope check (workspace/session match) is a separate middleware
-layer applied to per-workspace routes:
-
-```text
-fn route_scoped_to_workspace(req, ctx) -> Result<()> {
-    let path_workspace_id = extract_from_path(req);
-    match ctx {
-        AuthContext::Worker { .. } => Ok(()),
-        AuthContext::UserClaim { anyharness_workspace_id, .. } => {
-            if path_workspace_id != anyharness_workspace_id {
-                return Err(forbidden_scope);
-            }
-            Ok(())
-        }
-    }
-}
-```
-
-Implementation files:
 
 ```text
 anyharness/crates/anyharness-lib/src/api/auth.rs               (new)
@@ -854,11 +680,13 @@ anyharness/crates/anyharness-lib/src/api/middleware/
   scope_workspace.rs          (new) workspace scope gate
   scope_session.rs            (new) session scope gate
 anyharness/crates/anyharness-lib/src/api/router.rs
-  rewire routes to use the new middleware stack instead of the
-  single require_bearer_auth
+  rewire routes to use the new middleware stack
 anyharness/crates/anyharness-lib/src/api/revoked_jti.rs        (new)
-  in-memory revocation cache + worker-token-only POST endpoint
 ```
+
+Token classification, permissions enforcement, and scope check
+mechanics are identical to the earlier draft of this spec; only the
+top-level claim model has been simplified.
 
 ## 6. Files To Change
 
@@ -870,43 +698,50 @@ server/proliferate/db/models/cloud/claims.py                   (new)
   CloudWorkspaceClaimToken
 
 server/proliferate/db/migrations/versions/<NEW>_claiming.py
-  - cloud_workspace_claim
+  - cloud_workspace_claim (UNIQUE on cloud_workspace_id)
   - cloud_workspace_claim_token
-  - cloud_workspace_exposure visibility CHECK update to include
-    'admin_managed' (if spec 04 hasn't already)
+  - cloud_workspace_exposure.visibility CHECK remains
+    ('private','shared_unclaimed','claimed','archived');
+    'admin_managed' is dropped from the enum
 
 server/proliferate/db/store/cloud_claims/                      (new)
-  claims.py             insert/list/get_active/transition
+  claims.py             insert_claim, load_claim_for_workspace,
+                        list_claims_for_user
   tokens.py             insert/list/revoke/expire/prune
 
 server/proliferate/server/cloud/claims/                        (new)
-  api.py                claim/release/direct-attach endpoints
-  service.py            transition logic + JWT issuance
+  api.py                claim + direct-attach + token-revoke endpoints
+  service.py            claim insert + JWT issuance
   models.py             pydantic request/response
-  access.py             can_claim, can_release, can_request_direct_attach
-  domain/policy.py      pure transition validity rules
+  access.py             can_claim, can_request_direct_attach, can_revoke_claim_token
+  domain/policy.py      pure invariants
   domain/jwt.py         pure JWT claim builders
 
 server/proliferate/server/cloud/workspaces/access.py
   - rewrite can_view_cloud_workspace, can_interact_cloud_workspace
     to consume cloud_workspace_exposure + cloud_workspace_claim
-  - admin override hooks
 
 server/proliferate/server/cloud/workspaces/api.py
   - GET /workspaces?scope=my|unclaimed|org-all|claimable filters
   - GET /workspaces/{id} returns visibility + claimed_by_user_id +
-    claim_id if active
+    claim_id if a claim row exists
 
 server/proliferate/server/cloud/commands/access.py
-  - command enqueue checks can_interact_cloud_workspace
+  - command enqueue checks can_interact_cloud_workspace; no admin
+    interact override
 
 server/proliferate/server/cloud/well_known/                    (new)
   api.py
     GET /v1/cloud/.well-known/jwks.json
 
 server/proliferate/server/cloud/worker/api.py
-  - POST /worker/revoked-jtis          (push)
-  - GET  /worker/revoked-jtis?since=   (pull)
+  - PUT /worker/revoked-jtis             (push)
+  - GET /worker/revoked-jtis?since=      (pull)
+
+server/proliferate/server/cloud/claims/reconciler.py           (new)
+  - sweep orphan claims (claimed_by_user_id IS NULL) for audit log
+    (no transition)
+  - prune expired claim tokens
 
 server/proliferate/config.py
   - cloud_jwt_signing_key_pem
@@ -915,10 +750,6 @@ server/proliferate/config.py
   - cloud_jwt_issuer
   - cloud_jwt_audience_anyharness  default 'anyharness'
   - cloud_jwt_direct_attach_ttl_seconds  default 1200
-
-server/proliferate/server/automations/worker/cloud_execution/**
-  - team automation workspaces stamp source_kind for the claim flow
-    when they create the exposure
 
 dependencies:
   pyjwt or python-jose with RSA support
@@ -940,11 +771,9 @@ anyharness/crates/anyharness-lib/src/api/router.rs
 anyharness/crates/anyharness-lib/src/api/state.rs
   + JwksClient and RevokedJtiCache on AppState
   + cloud_jwt_audience: "anyharness"
-  + target_id (already set by spec 00)
+
 anyharness/crates/proliferate-worker/src/cloud_client/revoked_jti.rs (new)
-  worker poll + push to AnyHarness
-anyharness/crates/proliferate-worker/src/sync/revoked_jti.rs
-  reconciler tick: pull from Cloud, push to AnyHarness
+anyharness/crates/proliferate-worker/src/sync/revoked_jti.rs   (new)
 
 new Rust deps:
   jsonwebtoken with RS256
@@ -966,35 +795,41 @@ desktop/src/hooks/access/cloud/claims/                         (new)
   use-workspace-claim.ts
   use-claim-mutations.ts
   use-direct-attach-token.ts
+  use-revoke-token.ts             per-token revoke for security
 
 desktop/src/lib/access/anyharness/runtime-target.ts
   - new runtime location 'shared_cloud' that uses
     cloud_target_runtime_access.anyharness_base_url +
     Bearer <direct-attach JWT>
-  - lookup flow: claimed-by-me workspace -> fetch JWT -> connect
 
 desktop/src/components/workspaces/*
-  - "Claim" / "Release" buttons in workspace headers when
-    visibility='shared_unclaimed' (claim) or 'claimed' by me (release)
+  - "Claim" button in workspace headers when
+    visibility='shared_unclaimed' AND user is org member
+  - No "Release" button.
   - "Open in Desktop (direct)" CTA appears only when:
-      claim active AND
+      claim is held by current user AND
       workspace.sandbox_type in ('managed_personal','managed_shared')
-  - Cloud-mediated CTAs (open in web/mobile) remain available
+  - For admins viewing claimed-by-other work: "Audit view" mode
+    that disables prompt input and shows a banner with
+    "Claimed by Alice on Mar 12. To take over, archive and
+    recreate."
 
 desktop/src/lib/storage/direct-attach-tokens.ts                (new)
-  - store JWT in OS keychain (electron / tauri secure storage)
+  - store JWT in OS keychain
   - refresh on expiry
+  - revoke on user logout
 ```
 
 ## 7. Implementation Chunks
 
 ```text
-Chunk A  Cloud schema + service
+Chunk A  Cloud schema + claim service
   - cloud_workspace_claim + cloud_workspace_claim_token migrations
   - claims store
-  - claims service (transitions + JWT issuance with PyJWT/jose)
-  - claims/access.py helpers
-  - claims api endpoints
+  - claims service (insert; JWT issuance; per-token revoke)
+  - claims/access.py helpers (can_claim, can_request_direct_attach,
+    can_revoke_claim_token)
+  - claim + direct-attach + token-revoke API endpoints
 
 Chunk B  JWKS endpoint + signing key config
   - config additions (cloud_jwt_*)
@@ -1005,101 +840,88 @@ Chunk C  AnyHarness JWT verification
   - anyharness-lib/api/auth.rs classify+verify
   - middleware stack: worker_or_user, require_permission,
     scope_workspace, scope_session
-  - rewire router to apply per-route
   - in-memory revoked-jti cache
   - PUT /v1/cloud/worker/revoked-jtis endpoint
 
 Chunk D  Worker revoked-jti reconciliation
   - worker pulls from Cloud (every 60s)
   - pushes to AnyHarness on change
-  - Cloud-side endpoint GET/POST /worker/revoked-jtis
 
 Chunk E  Workspace listing + access policy refactor
   - scope filters my | unclaimed | claimable | org-all
   - access helpers (can_view / can_interact / can_claim /
-    can_release / can_request_direct_attach_token)
+    can_request_direct_attach_token / can_revoke_claim_token)
   - cmd enqueue uses can_interact
 
 Chunk F  Desktop direct-attach
-  - claim/release mutations
-  - direct-attach-token mutation
+  - claim mutation (one-way)
+  - direct-attach-token + refresh + per-token revoke mutations
   - new runtime location 'shared_cloud'
   - JWT storage in OS keychain
-  - UI: claim CTA, release CTA, "Open in Desktop (direct)" CTA
+  - UI: claim CTA, audit view for admin, "Open in Desktop (direct)"
 
-Chunk G  Admin manage view
-  - admin scope=org-all listing
-  - admin revoke with reason
-  - admin_managed hold/release
-  - admin archive
-
-Chunk H  Tests + smoke
+Chunk G  Tests + smoke
 ```
 
 ## 8. Acceptance Criteria
 
-1. `cloud_workspace_claim` exists with append-only history. At most
-   one `active` row per workspace, enforced by partial unique index.
-2. Claim transitions update `cloud_workspace_exposure.visibility`
-   and `claimed_by_user_id` in the same transaction as the claim
-   row, and bump `exposure.revision`.
-3. `cloud_workspace_claim_token` stores only `token_jti` and
+1. `cloud_workspace_claim` has UNIQUE(`cloud_workspace_id`).
+   Inserting a second claim row for the same workspace fails with
+   `claim_already_held`.
+2. There is no DELETE endpoint for the claim. The Cloud API surface
+   contains no operation that transitions a workspace out of
+   `claimed`.
+3. Claim transition atomically inserts the claim row AND sets
+   `cloud_workspace_exposure.visibility='claimed'`,
+   `claimed_by_user_id=<user>`, and bumps `revision`, in one
+   transaction.
+4. `can_interact_cloud_workspace` returns false for admins on
+   claimed workspaces (no admin interact override).
+5. `can_view_cloud_workspace` returns true for admins on claimed
+   workspaces (audit view).
+6. Listing `scope=org-all` is admin-only and returns claimed and
+   archived workspaces alongside others for audit.
+7. `cloud_workspace_claim_token` stores only `token_jti` and
    `token_jti_hash`; raw JWT bodies are never persisted.
-4. RS256 signing key configured via `cloud_jwt_signing_key_pem` +
-   `cloud_jwt_signing_key_id`. Optional previous key for rotation
-   overlap.
-5. `GET /v1/cloud/.well-known/jwks.json` returns the active key (and
-   previous key when configured) as JWKs. Public, cacheable.
-6. AnyHarness `api/auth.rs` classifies tokens into Worker /
-   UserClaim and applies separate verification. The single-bearer
-   worker auth path is unchanged for worker traffic.
-7. AnyHarness rejects JWTs whose `aud != 'anyharness'`,
-   `iss != configured`, `target_id != AppState.target_id`, or
-   `exp < now`. Returns 401 with typed `error_code`.
-8. Per-route middleware enforces permission (read/write/control)
-   and workspace/session scope. Worker tokens bypass the scope
-   check (target-wide auth).
-9. Revoked-jti cache exists in AnyHarness. Worker push endpoint
-   `PUT /v1/cloud/worker/revoked-jtis` and worker reconciliation
-   pull from `GET /v1/cloud/worker/revoked-jtis?since=` both work.
-10. `POST /v1/cloud/workspaces/{id}/claim` creates an active claim
-    when preconditions hold; returns 409 `claim_already_held`
-    otherwise.
-11. `DELETE /v1/cloud/workspaces/{id}/claim` releases (self) or
-    revokes (admin with reason); old tokens are revoked; visibility
-    flips back to `shared_unclaimed` (or `admin_managed` with
-    `?hold=true`).
-12. `POST /v1/cloud/workspaces/{id}/direct-access-token` requires
+8. Per-token revoke endpoint (`DELETE /workspaces/{id}/direct-access-tokens/{token_id}`)
+   marks the token row `revoked` and pushes the jti to AnyHarness.
+   The claim itself is unaffected.
+9. RS256 signing key configured via `cloud_jwt_signing_key_pem`.
+   Optional previous key for rotation overlap.
+10. `GET /v1/cloud/.well-known/jwks.json` returns active (and
+    previous, if configured) keys.
+11. AnyHarness `api/auth.rs` classifies tokens (JWT vs static
+    bearer). Worker bearer is unchanged for worker traffic.
+12. AnyHarness rejects JWTs whose `aud != 'anyharness'`,
+    `iss != configured`, `target_id != AppState.target_id`, or
+    `exp < now`.
+13. Per-route middleware enforces permission and workspace/session
+    scope. Worker tokens bypass scope.
+14. Revoked-jti cache exists in AnyHarness; worker push + pull
+    reconciliation both work; natural expiry handles routine
+    rotation.
+15. `POST /v1/cloud/workspaces/{id}/claim` is one-way. Repeated
+    calls return `claim_already_held`.
+16. `POST /v1/cloud/workspaces/{id}/direct-access-token` requires
     `X-Client-Kind: desktop`, an active claim by the calling user,
-    and a managed-cloud target. Returns RAW JWT + JTI + expires_at
-    + `anyharness_base_url` from `cloud_target_runtime_access`.
-13. Web and mobile callers never receive a JWT. `X-Client-Kind`
+    and a managed-cloud target. Returns RAW JWT, JTI, expires_at,
+    `anyharness_base_url`.
+17. Web and mobile callers never receive a JWT. `X-Client-Kind`
     other than `desktop` gets 403 `direct_attach_desktop_only`.
-14. `can_view_cloud_workspace`, `can_interact_cloud_workspace`,
-    `can_claim_cloud_workspace`, `can_release_cloud_workspace`,
-    `can_request_direct_attach_token` exist and are called by every
-    workspace/command/session endpoint.
-15. Already-queued commands enqueued before a claim continue to
-    lease successfully. Future commands from non-claimers are
-    rejected at enqueue with `claim_held_by_other`.
-16. Workspace listing supports `scope=my | unclaimed | org-all |
-    claimable` with the documented semantics. `org-all` requires
-    org admin.
-17. Admin revoke requires a `reason` string; `cloud_workspace_claim`
-    row records `revoked_by_user_id` + `revoke_reason`.
-18. `admin_managed` is reachable only by admin action and renders
-    the workspace inert for non-admins (no view, no interact, no
-    claim).
-19. Desktop new runtime location `shared_cloud` connects to
-    `cloud_target_runtime_access.anyharness_base_url` with `Authorization:
-    Bearer <direct-attach JWT>`. AnyHarness accepts and scopes
-    reads/writes to the JWT's workspace + session.
-20. Desktop refreshes the direct-attach token before expiry; old
-    token rows are revoked on natural expiry by the prune
-    reconciler.
-21. JWKS rotation works: signing-key change with both old and new
-    in JWKS results in zero downtime; old tokens verify until
-    natural expiry, new tokens verify with the new key.
+18. Already-queued commands enqueued before a claim continue to
+    lease. Future commands from non-claimers are rejected at
+    enqueue with `claim_held_by_other`.
+19. Desktop runtime location `shared_cloud` connects to
+    `cloud_target_runtime_access.anyharness_base_url` with the
+    JWT. AnyHarness scopes reads/writes to the JWT's workspace +
+    session.
+20. JWKS rotation works with two active keys; zero downtime.
+21. User deletion sets `claimed_by_user_id` to NULL on the claim
+    row and the exposure; the reconciler logs an audit event but
+    does not transition the workspace state.
+22. `admin_managed` is not a valid value of
+    `cloud_workspace_exposure.visibility`. The CHECK constraint
+    rejects it.
 
 ## 9. Verification / Tests
 
@@ -1113,28 +935,31 @@ uv run pytest -q
 Targeted tests:
 
 ```text
-tests/server/cloud/claims/test_claim_inserts_active_row.py
-tests/server/cloud/claims/test_one_active_claim_per_workspace.py
-tests/server/cloud/claims/test_release_transitions_to_shared_unclaimed.py
-tests/server/cloud/claims/test_admin_revoke_requires_reason.py
-tests/server/cloud/claims/test_admin_revoke_hold_to_admin_managed.py
-tests/server/cloud/claims/test_admin_archive.py
+tests/server/cloud/claims/test_claim_one_way.py
+  - first claim succeeds
+  - second claim returns claim_already_held
+  - no release/revoke endpoint exists
+
+tests/server/cloud/claims/test_claim_transition_atomic.py
 tests/server/cloud/claims/test_claim_token_jti_unique.py
 tests/server/cloud/claims/test_token_refresh_caps_at_five.py
+tests/server/cloud/claims/test_per_token_revoke.py
+  - revoking a token does not transition exposure.visibility
 tests/server/cloud/claims/test_jwt_claims_shape.py
 tests/server/cloud/claims/test_jwks_returns_active_and_previous.py
 tests/server/cloud/claims/test_jwks_rotation_no_downtime.py
-tests/server/cloud/access/test_can_view_claim_states.py
-tests/server/cloud/access/test_can_interact_admin_override.py
+tests/server/cloud/access/test_admin_view_yes_interact_no.py
 tests/server/cloud/access/test_can_claim_excludes_non_org_member.py
 tests/server/cloud/commands/test_command_rejected_post_claim_non_claimer.py
 tests/server/cloud/commands/test_queued_command_preclaim_proceeds.py
 tests/server/cloud/workspaces/test_list_scope_my.py
 tests/server/cloud/workspaces/test_list_scope_unclaimed.py
-tests/server/cloud/workspaces/test_list_scope_org_all_admin_only.py
+tests/server/cloud/workspaces/test_list_scope_org_all_admin_only_audit.py
 tests/server/cloud/worker/test_revoked_jti_push_and_pull.py
 tests/server/cloud/claims/test_direct_attach_desktop_only_header.py
 tests/server/cloud/claims/test_direct_attach_token_returns_runtime_access.py
+tests/server/cloud/claims/test_user_delete_sets_null_no_transition.py
+tests/server/cloud/exposures/test_admin_managed_visibility_rejected.py
 ```
 
 AnyHarness:
@@ -1147,33 +972,9 @@ cargo test -p anyharness-lib api::jwks
 cargo test -p anyharness-lib api::revoked_jti
 ```
 
-Targeted Rust tests:
-
-```text
-anyharness/crates/anyharness-lib/src/api/auth.rs#tests
-  - classify_token splits jwt vs static bearer
-  - worker bearer constant-time compare unchanged
-  - JWT happy path -> AuthContext::UserClaim
-  - aud mismatch -> 401
-  - target_id mismatch -> 401
-  - exp expired -> 401
-  - jti revoked -> 401
-  - kid not in JWKS -> refresh JWKS -> retry; permanent miss -> 401
-
-anyharness/crates/anyharness-lib/src/api/middleware/scope_workspace.rs#tests
-  - worker passes scope check
-  - user_claim wrong workspace_id -> 403
-
-anyharness/crates/anyharness-lib/src/api/middleware/scope_session.rs#tests
-  - user_claim with session-scoped JWT denied on other session
-  - user_claim with workspace-scoped JWT allowed on any session of
-    that workspace
-
-anyharness/crates/anyharness-lib/src/api/revoked_jti.rs#tests
-  - push adds to cache
-  - cache prunes after expiry
-  - JWT with revoked jti rejected
-```
+Targeted Rust tests are identical to the prior draft (token
+classification, JWT happy/error paths, scope middleware, revoked
+jti cache).
 
 Desktop:
 
@@ -1185,46 +986,45 @@ Targeted Desktop tests:
 
 ```text
 desktop/src/hooks/access/cloud/claims/use-workspace-claim.test.ts
+  - claim mutation hits POST /claim
+  - no release mutation exists
 desktop/src/hooks/access/cloud/claims/use-direct-attach-token.test.ts
 desktop/src/lib/access/anyharness/runtime-target.test.ts
   - shared_cloud target uses cloud_target_runtime_access + JWT
 desktop/src/lib/storage/direct-attach-tokens.test.ts
-  - keychain put/get/delete round-trip
-  - refresh before expiry
+desktop/src/components/workspaces/AdminAuditView.test.tsx
+  - admin sees claimed-by-other workspace
+  - prompt input disabled
+  - banner shows claimed_by + claimed_at
 ```
 
 Manual smoke:
 
 ```text
-1. Slack creates shared work; org member claims
-   - visibility flips shared_unclaimed -> claimed
-   - other org members lose interact via Cloud
-   - admin still sees in scope=org-all
-   - claimer's web/mobile session works through Cloud
-   - claimer's Desktop calls direct-attach-token
-   - Desktop opens shared_cloud target; AnyHarness validates JWT;
-     prompt sent via Desktop direct path appears in transcript
+1. Slack creates shared work; org member claims; nobody can undo
+   - visibility shared_unclaimed -> claimed
+   - other org members lose interact via Cloud (see audit view as
+     admin)
+   - claimer's web/mobile/Slack continue via Cloud
+   - claimer's Desktop calls direct-attach-token; opens shared_cloud
+   - admin tries DELETE /claim -> 404 / 405 (no such endpoint)
 
-2. Concurrent prompts from Desktop direct + Cloud
+2. Claimer requests a fresh token (lost Desktop)
+   - claimer DELETE /direct-access-tokens/{old} -> token revoked
+   - claimer POST /direct-access-token -> new token issued
+   - old token rejected by AnyHarness via revoked-jti cache
+   - claim itself unaffected
+
+3. User leaves the org / account deleted
+   - claimed_by_user_id SET NULL on claim row + exposure
+   - workspace remains visibility='claimed'
+   - admin sees it in scope=org-all with "claimed by (deleted)" label
+   - admin can archive the workspace (workspace-level retention
+     action)
+
+4. Concurrent prompts from Desktop direct + Cloud
    - both prompts reach the same AnyHarness session loop
    - serialized; both appear in transcript
-   - worker projects events for the Cloud path; Desktop sees them
-     via direct-attach SSE (in addition to its own writes)
-
-3. Release
-   - claimer hits DELETE /claim
-   - visibility flips back to shared_unclaimed
-   - Desktop direct-attach token revoked
-   - within revocation-cache propagation (60s pull, instant push)
-     AnyHarness rejects the token with token_revoked
-   - other org members can claim
-
-4. Admin revoke
-   - admin hits DELETE /claim with reason
-   - claim.status = 'revoked'; revoke_reason saved
-   - visibility -> shared_unclaimed (or admin_managed if ?hold=true)
-   - tokens revoked
-   - claim history still queryable
 
 5. JWKS rotation
    - operator adds new signing key as active; previous key kept
@@ -1234,98 +1034,71 @@ Manual smoke:
    - after previous key removed from config + cache pruned, old
      tokens fail
 
-6. Token refresh
-   - Desktop calls direct-attach-token again before expiry
-   - new token issued; old token row still active
-   - 5-token cap: 6th request triggers oldest revoke
-
-7. Web/mobile cannot get JWT
+6. Web/mobile cannot get JWT
    - X-Client-Kind != 'desktop' -> 403 direct_attach_desktop_only
 ```
 
 ## 10. Open Questions
 
-1. **Should `admin_managed` be a separate visibility state, or just
-   an attribute (e.g. `admin_held: bool`)?**
-
-   Bias: keep it as a visibility state. It's mutually exclusive with
-   the others and the access policy differs (no member view, no
-   member claim). An attribute would force every read to compose
-   two columns.
-
-2. **Token TTL: 20 minutes default, configurable. Right value?**
+1. **Token TTL: 20 minutes default, configurable. Right value?**
 
    Tradeoffs:
-     short  better revocation latency, more refresh traffic
-     long   fewer refresh, slower revocation cutoff (until natural
-            expiry)
+     short  better per-token revocation latency, more refresh traffic
+     long   fewer refresh, slower per-token revocation (until natural
+            expiry); push-cache mitigates
 
-   Bias: 20 minutes. With the push-based jti revocation cache,
-   immediate cutoff is supported anyway; long TTL doesn't help.
+   Bias: 20 minutes. With push-based jti revocation cache,
+   immediate cutoff is supported anyway.
 
-3. **JWT permissions: comma-separated string or array?**
-
-   Storage: text comma-separated for simplicity in the DB.
-   On the wire (JWT claim): array `["read","write","control"]`.
-   Parsing happens in the access helper.
-
-4. **What if the AnyHarness URL changes during a claim (slot
-   replacement)?**
-
-   The JWT carries `target_id`. AnyHarness validates `target_id ==
-   AppState.target_id`. If the slot is replaced and a new AnyHarness
-   process boots with a new state.target_id, old JWTs fail target
-   check.
-
-   But `target_id` is supposed to be stable across slot replacement
-   (spec 00 invariant). Worker re-enrollment preserves target_id.
-   So slot replacement should not invalidate JWTs.
-
-   Open: what about slot replacement that changes target_id (rare,
-   e.g. provisioning a new managed target)? Bias: yes, JWTs fail;
-   Desktop refreshes; new JWT carries the new target_id. The
-   refresh flow handles this transparently.
-
-5. **Hardening `X-Client-Kind: desktop` gate**
+2. **`X-Client-Kind: desktop` gate hardening**
 
    The header is spoofable. A user with a valid claim could
    request the JWT from a non-Desktop client. The downside is
    bounded: the JWT only works against the AnyHarness URL, which
-   is not exposed to web/mobile UI (they have no AnyHarness HTTP
-   client). Still, "spoofable" is a real concern.
+   is not exposed to web/mobile UI (no AnyHarness HTTP client).
+   Still, "spoofable" is a real concern.
 
-   Hardening options:
+   Options:
      (a) Tie to Desktop OAuth client_id
      (b) Require a Desktop-only auth method (e.g. session token
          issued by the Desktop installer)
-     (c) Accept the spoofability since the attack surface is small
+     (c) Accept the spoofability since attack surface is small
 
    Bias: (c) for V1. Move to (a) when Desktop OAuth client
    identity exists. Track as a follow-up.
 
-6. **`cloud_workspace_admin_event` audit table — V1 or follow-up?**
+3. **JWKS rotation operations**
 
-   Bias: follow-up. `cloud_workspace_claim` + structured logs are
-   sufficient for V1. The separate audit table is useful when admin
-   manage actions multiply beyond claim revoke (e.g. abuse manage,
-   data export, retention overrides). Spec 05 defers.
+   The spec defines the model (active + previous key in config) and
+   the JWKS endpoint. Key generation, rotation cadence, and
+   operator runbook live in deployment docs. Bias: don't bloat the
+   spec; reference the deployment doc when written.
 
-7. **What happens to the workspace if the claimer's user account is
-   deleted/disabled?**
+4. **Admin viewing a claimed workspace's transcript — read or
+   read+events?**
 
-   The active claim row references `claimed_by_user_id`. If the
-   user is hard-deleted, the FK CASCADE/SET NULL behavior decides.
+   Admin gets `can_view` for audit. Should admin also see live
+   event projection or just static transcript? Bias: full live
+   projection (events stream) but no interaction. Implementation
+   already supports this via projection_level + commandable; the
+   admin path uses the same projection_level=live, commandable=false
+   for their view session. No extra schema needed.
 
-   Bias: ON DELETE SET NULL on `claimed_by_user_id`, with a
-   reconciler that sweeps claims with NULL claimer + sets status
-   to `'revoked'` with `revoke_reason='user_deleted'`. Exposure
-   transitions to `shared_unclaimed` or `archived` based on policy
-   (V1: `shared_unclaimed`).
+5. **What if the claimer's user account is reinstated after
+   `claimed_by_user_id` became NULL?**
 
-8. **Claim survives session changes?**
+   Bias: do not auto-restore. If a deleted user is reinstated and
+   their claim was orphaned, the workspace remains orphan-claimed
+   with NULL claimer. Admin manually archives or the user creates
+   new work. Reactivation would require explicit product UX which
+   we don't have.
 
-   A workspace may have multiple sessions over time. The claim is
-   on the workspace, not a session. So yes, claim survives.
-   `cloud_workspace_claim.cloud_session_id` is just the session at
-   claim time (for audit/UI); it does not narrow the claim to that
-   session.
+6. **`cloud_workspace_claim.cloud_session_id` — necessary?**
+
+   The claim is workspace-scoped. The captured session id is just
+   "the session at claim time" for UI deep-link convenience. If we
+   never use it, we can drop the column.
+
+   Bias: keep. It costs almost nothing and lets the post-claim UI
+   route the user back to the session they were looking at when
+   they clicked Claim.

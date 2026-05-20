@@ -446,8 +446,7 @@ cloud_workspace_exposure
   organization_id                 uuid fk organization.id             nullable
 
   visibility                      text   'private' | 'shared_unclaimed'
-                                          | 'claimed' | 'admin_managed'
-                                          | 'archived'
+                                          | 'claimed' | 'archived'
   claimed_by_user_id              uuid fk user.id                     nullable
 
   default_projection_level        text   'index_only' | 'session_summaries'
