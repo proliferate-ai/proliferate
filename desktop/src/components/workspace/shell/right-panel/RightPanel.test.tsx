@@ -176,8 +176,12 @@ describe("RightPanel terminal activation", () => {
 
     expect(screen.queryByTestId("browser-panel")).toBeNull();
 
-    requestRightPanelBrowserTab();
+    let handled = false;
+    act(() => {
+      handled = requestRightPanelBrowserTab();
+    });
 
+    expect(handled).toBe(true);
     await waitFor(() => {
       expect(screen.getByTestId("browser-panel").dataset.visible).toBe("true");
     });
@@ -193,8 +197,12 @@ describe("RightPanel terminal activation", () => {
       />,
     );
 
-    requestRightPanelBrowserTab();
+    let handled = false;
+    act(() => {
+      handled = requestRightPanelBrowserTab();
+    });
 
+    expect(handled).toBe(true);
     await waitFor(() => expect(onOpenPanel).toHaveBeenCalledTimes(1));
   });
 
@@ -395,7 +403,11 @@ describe("RightPanel viewer routing", () => {
 
 describe("RightPanel tab shortcuts", () => {
   it("activates right-panel entries by option-number shortcut requests", async () => {
-    render(<RightPanelHarness isWorkspaceReady />);
+    const { container } = render(<RightPanelHarness isWorkspaceReady />);
+    const root = container.querySelector("[data-right-panel-root='true']");
+    if (!(root instanceof HTMLElement)) {
+      throw new Error("Expected right panel root");
+    }
     let handled = false;
 
     act(() => {
@@ -403,6 +415,7 @@ describe("RightPanel tab shortcuts", () => {
     });
 
     expect(handled).toBe(true);
+    expect(document.activeElement).toBe(root);
     await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
   });
 

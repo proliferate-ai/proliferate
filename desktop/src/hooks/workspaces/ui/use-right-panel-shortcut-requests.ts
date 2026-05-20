@@ -15,11 +15,13 @@ export function useRightPanelShortcutRequests({
   entries,
   isOpen,
   onActivateEntry,
+  onHandledRequest,
 }: {
   activeEntryKey: RightPanelHeaderEntryKey;
   entries: readonly RightPanelHeaderEntry[];
   isOpen: boolean;
   onActivateEntry: (entryKey: RightPanelHeaderEntryKey) => boolean;
+  onHandledRequest?: () => void;
 }): void {
   useEffect(() => {
     const handleShortcutRequest = (event: Event) => {
@@ -44,6 +46,7 @@ export function useRightPanelShortcutRequests({
       }
 
       if (onActivateEntry(nextEntryKey)) {
+        onHandledRequest?.();
         event.preventDefault();
       }
     };
@@ -57,5 +60,6 @@ export function useRightPanelShortcutRequests({
     entries,
     isOpen,
     onActivateEntry,
+    onHandledRequest,
   ]);
 }

@@ -18,8 +18,9 @@ export function requestRightPanelNewTabMenu(
 }
 
 export function requestRightPanelBrowserTab(): boolean {
-  window.dispatchEvent(new Event(RIGHT_PANEL_BROWSER_TAB_EVENT));
-  return true;
+  return !window.dispatchEvent(new Event(RIGHT_PANEL_BROWSER_TAB_EVENT, {
+    cancelable: true,
+  }));
 }
 
 export function rightPanelNewTabMenuDefaultFromEvent(
