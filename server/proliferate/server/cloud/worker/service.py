@@ -778,6 +778,7 @@ async def record_command_delivery(
             command_id=command_id,
             worker_id=auth.worker_id,
             lease_id=body.lease_id,
+            slot_generation=body.slot_generation,
             error_code=body.error_code,
             error_message=body.error_message,
             now=now,
@@ -788,6 +789,7 @@ async def record_command_delivery(
             command_id=command_id,
             worker_id=auth.worker_id,
             lease_id=body.lease_id,
+            slot_generation=body.slot_generation,
             now=now,
         )
     if command is None:

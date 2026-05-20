@@ -9,7 +9,11 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.cloud import CLOUD_WORKER_TOKEN_DOMAIN, CloudWorkspaceStatus
+from proliferate.constants.cloud import (
+    CLOUD_WORKER_TOKEN_DOMAIN,
+    CloudCommandKind,
+    CloudWorkspaceStatus,
+)
 from proliferate.db.models.cloud.agent_auth import SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
@@ -18,6 +22,7 @@ from proliferate.db.store.cloud_runtime_config import revisions as runtime_confi
 from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
+from proliferate.server.cloud.commands import service as command_service
 from proliferate.server.cloud.worker import service as worker_service
 from proliferate.utils.crypto import encrypt_json
 from proliferate.utils.time import utcnow
@@ -162,6 +167,47 @@ async def _mark_minimal_runtime_config_applied(
     await db_session.flush()
 
 
+async def _mark_agent_auth_applied(
+    db_session: AsyncSession,
+    *,
+    target_id: UUID,
+    profile,
+) -> None:
+    await agent_auth_store.upsert_target_state(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=target_id,
+        desired_revision=profile.agent_auth_revision,
+        applied_revision=profile.agent_auth_revision,
+        status="applied",
+        force_restart_required=False,
+        last_command_id=None,
+        last_worker_id=None,
+        last_error_code=None,
+        last_error_message=None,
+    )
+
+
+async def _mark_agent_and_runtime_config_applied(
+    db_session: AsyncSession,
+    *,
+    target_id: UUID,
+    profile,
+    user_id: UUID,
+) -> None:
+    await _mark_agent_auth_applied(
+        db_session,
+        target_id=target_id,
+        profile=profile,
+    )
+    await _mark_minimal_runtime_config_applied(
+        db_session,
+        target_id=target_id,
+        profile_id=profile.id,
+        user_id=user_id,
+    )
+
+
 async def _accept_initial_git_identity_command(
     client: AsyncClient,
     worker_headers: dict[str, str],
@@ -220,6 +266,35 @@ async def _create_ready_cloud_workspace(
         target_id=UUID(target_id),
     )
     await db_session.commit()
+    return str(workspace.id)
+
+
+async def _create_ready_managed_cloud_workspace(
+    db_session: AsyncSession,
+    *,
+    profile_id: UUID,
+    target_id: UUID,
+    user_id: UUID,
+    suffix: str,
+) -> str:
+    workspace = await cloud_workspaces.create_managed_cloud_workspace_for_profile(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        created_by_user_id=user_id,
+        display_name=f"Managed Command Workspace {suffix}",
+        git_provider="github",
+        git_owner="proliferate-ai",
+        git_repo_name="proliferate",
+        git_branch=f"command-{suffix}",
+        git_base_branch="main",
+        worktree_path=f"/workspace/proliferate-{suffix}",
+        origin_json=None,
+        template_version="test",
+    )
+    workspace.status = CloudWorkspaceStatus.ready.value
+    workspace.anyharness_workspace_id = f"anyharness-managed-{suffix}"
+    await db_session.flush()
     return str(workspace.id)
 
 
@@ -900,6 +975,308 @@ class TestCloudCommandsApi:
         )
         assert result.status_code == 200
         assert result.json()["status"] == "accepted"
+
+    @pytest.mark.asyncio
+    async def test_managed_send_prompt_stamps_cloud_workspace_and_kicks_wake(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-managed-workspace",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="managed-workspace",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="stamp",
+        )
+        await db_session.commit()
+
+        wake_calls: list[tuple[UUID, UUID | None]] = []
+
+        def _record_wake(target_id: UUID, command_id: UUID | None = None) -> None:
+            wake_calls.append((target_id, command_id))
+
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", _record_wake)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-send-prompt-workspace",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-managed-1",
+                "kind": "send_prompt",
+                "payload": {"blocks": [{"type": "text", "text": "hello"}]},
+            },
+        )
+
+        assert created.status_code == 200
+        payload = created.json()
+        assert payload["cloudWorkspaceId"] == cloud_workspace_id
+        assert wake_calls == [(target_uuid, UUID(payload["commandId"]))]
+        command = await db_session.get(CloudCommand, UUID(payload["commandId"]))
+        assert command is not None
+        assert command.cloud_workspace_id == UUID(cloud_workspace_id)
+        command_payload = json.loads(command.payload_json)
+        assert command_payload["sandboxProfileId"] == str(profile.id)
+        assert command_payload["requiredRuntimeConfigSequence"] == 1
+        assert command_payload["requiredRuntimeConfigRevisionId"]
+        assert command_payload["requiredRuntimeConfigContentHash"]
+
+    @pytest.mark.asyncio
+    async def test_managed_slot_fence_rejects_delivery_generation_mismatch(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-delivery-slot",
+        )
+        target_id, worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="delivery-slot",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        await db_session.commit()
+        monkeypatch.setattr(
+            command_service,
+            "kick_off_managed_slot_wake",
+            lambda _target_id, _command_id=None: None,
+        )
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-delivery-slot-mismatch",
+                "targetId": target_id,
+                "sessionId": "session-slot-delivery",
+                "kind": "send_prompt",
+                "payload": {"text": "slot delivery"},
+            },
+        )
+        assert created.status_code == 200
+        command_id = created.json()["commandId"]
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["send_prompt", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert lease.status_code == 200
+        leased = lease.json()["command"]
+        assert leased["commandId"] == command_id
+        assert leased["slotGeneration"] is not None
+
+        delivery = await client.post(
+            f"/v1/cloud/worker/commands/{command_id}/delivery",
+            headers=worker_headers,
+            json={
+                "leaseId": leased["leaseId"],
+                "slotGeneration": leased["slotGeneration"] + 1,
+                "status": "delivered",
+            },
+        )
+        assert delivery.status_code == 200
+        assert delivery.json()["status"] == "superseded"
+
+    @pytest.mark.asyncio
+    async def test_managed_slot_fence_rejects_result_generation_mismatch(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-result-slot",
+        )
+        target_id, worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="result-slot",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        await db_session.commit()
+        monkeypatch.setattr(
+            command_service,
+            "kick_off_managed_slot_wake",
+            lambda _target_id, _command_id=None: None,
+        )
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-result-slot-mismatch",
+                "targetId": target_id,
+                "sessionId": "session-slot-result",
+                "kind": "send_prompt",
+                "payload": {"text": "slot result"},
+            },
+        )
+        assert created.status_code == 200
+        command_id = created.json()["commandId"]
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["send_prompt", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert lease.status_code == 200
+        leased = lease.json()["command"]
+        assert leased["commandId"] == command_id
+
+        result = await client.post(
+            f"/v1/cloud/worker/commands/{command_id}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": leased["leaseId"],
+                "slotGeneration": leased["slotGeneration"] + 1,
+                "status": "accepted",
+            },
+        )
+        assert result.status_code == 200
+        assert result.json()["status"] == "superseded"
+
+    @pytest.mark.asyncio
+    async def test_runtime_config_preflight_fails_fast_when_not_applied(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-runtime-fast-fail",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="runtime-fast-fail",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_auth_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+        )
+        await target_config_store.upsert_target_config(
+            db_session,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            organization_id=None,
+            git_provider="github",
+            git_owner="proliferate-ai",
+            git_repo_name="proliferate",
+            workspace_root="~/proliferate-workspaces/proliferate",
+            payload_ciphertext=encrypt_json({"pending": True}),
+            summary_json=json.dumps(
+                {
+                    "env_var_count": 0,
+                    "tracked_file_count": 0,
+                    "has_git_credential": False,
+                    "mcp_binding_count": 0,
+                    "mcp_warning_count": 0,
+                    "required_tools": [],
+                }
+            ),
+            env_vars_version=0,
+            files_version=0,
+            mcp_materialization_version=1,
+        )
+        await runtime_config_store.upsert_revision_and_current(
+            db_session,
+            sandbox_profile_id=profile.id,
+            content_hash=f"sha256:{profile.id.hex}:runtime-config-pending",
+            manifest_json='{"mcpServers":[],"skills":[],"blockingErrors":[]}',
+            warnings_json=None,
+            source="test",
+            generated_by_user_id=UUID(auth.user_id),
+        )
+        await db_session.commit()
+        monkeypatch.setattr(
+            command_service,
+            "kick_off_managed_slot_wake",
+            lambda _target_id, _command_id=None: None,
+        )
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "runtime-config-not-applied",
+                "targetId": target_id,
+                "kind": "start_session",
+                "payload": {
+                    "workspaceId": "anyharness-workspace-1",
+                    "agentKind": "claude",
+                },
+            },
+        )
+
+        assert created.status_code == 409
+        assert created.json()["detail"]["code"] == "cloud_command_runtime_config_not_ready"
+        queued = (
+            (
+                await db_session.execute(
+                    select(CloudCommand).where(
+                        CloudCommand.target_id == target_uuid,
+                        CloudCommand.kind == CloudCommandKind.materialize_environment.value,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert queued == []
 
     @pytest.mark.asyncio
     async def test_idempotency_key_is_scoped_to_target(

@@ -16,7 +16,7 @@ from proliferate.constants.cloud import (
     CloudWorkspaceStatus,
 )
 from proliferate.db.models.auth import User
-from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
+from proliferate.db.store import cloud_runtime_environments, cloud_sandboxes, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
@@ -33,6 +33,8 @@ from proliferate.server.cloud.commands.domain.rules import (
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
+from proliferate.server.cloud.runtime.domain.wake import command_kind_requires_wake
+from proliferate.server.cloud.runtime.wake import kick_off_managed_slot_wake
 
 
 def _idempotency_scope_for_command(
@@ -72,31 +74,21 @@ async def _resolve_command_workspace(
                 "Managed materialize_workspace commands require cloudWorkspaceId.",
                 status_code=400,
             )
-        workspace = await cloud_workspaces.get_cloud_workspace_by_id(
+        cloud_workspace_id = await _resolve_cloud_workspace_id_for_target(
             db,
-            body.cloud_workspace_id,
+            target=target,
+            cloud_workspace_id=body.cloud_workspace_id,
         )
-        if workspace is None or workspace.archived_at is not None:
-            raise CloudApiError(
-                "cloud_command_workspace_not_found",
-                "Workspace not found.",
-                status_code=404,
-            )
-        if (
-            workspace.target_id != target.id
-            or workspace.sandbox_profile_id != target.sandbox_profile_id
-            or workspace.owner_scope != target.owner_scope
-            or workspace.owner_user_id != target.owner_user_id
-            or workspace.organization_id != target.organization_id
-        ):
-            raise CloudApiError(
-                "cloud_command_workspace_target_mismatch",
-                "Workspace is not attached to the requested target.",
-                status_code=409,
-            )
-        return None, body.payload, str(workspace.id)
+        return None, body.payload, cloud_workspace_id
     if kind != CloudCommandKind.start_session.value:
-        return body.workspace_id, body.payload, None
+        cloud_workspace_id = None
+        if body.cloud_workspace_id is not None:
+            cloud_workspace_id = await _resolve_cloud_workspace_id_for_target(
+                db,
+                target=target,
+                cloud_workspace_id=body.cloud_workspace_id,
+            )
+        return body.workspace_id, body.payload, cloud_workspace_id
     if not body.workspace_id:
         workspace_id = _direct_start_session_workspace_id(body.payload)
         if workspace_id is None:
@@ -156,6 +148,37 @@ async def _resolve_command_workspace(
     payload = dict(body.payload)
     payload["workspaceId"] = workspace.anyharness_workspace_id
     return workspace.anyharness_workspace_id, payload, str(workspace.id)
+
+
+async def _resolve_cloud_workspace_id_for_target(
+    db: AsyncSession,
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    cloud_workspace_id: UUID,
+) -> str:
+    workspace = await cloud_workspaces.get_cloud_workspace_by_id(
+        db,
+        cloud_workspace_id,
+    )
+    if workspace is None or workspace.archived_at is not None:
+        raise CloudApiError(
+            "cloud_command_workspace_not_found",
+            "Workspace not found.",
+            status_code=404,
+        )
+    if (
+        workspace.target_id != target.id
+        or workspace.sandbox_profile_id != target.sandbox_profile_id
+        or workspace.owner_scope != target.owner_scope
+        or workspace.owner_user_id != target.owner_user_id
+        or workspace.organization_id != target.organization_id
+    ):
+        raise CloudApiError(
+            "cloud_command_workspace_target_mismatch",
+            "Workspace is not attached to the requested target.",
+            status_code=409,
+        )
+    return str(workspace.id)
 
 
 async def _populate_agent_auth_preflight_payload(
@@ -300,6 +323,7 @@ async def enqueue_command(
     )
     if existing is not None:
         await publish_command_status_after_commit(db, existing)
+        _kick_off_managed_slot_wake_if_required(target=target, command=existing)
         return existing
     authorization_context_json = compact_command_json(
         {
@@ -332,6 +356,7 @@ async def enqueue_command(
                 authorization_context_json=authorization_context_json,
             )
         await publish_command_status_after_commit(db, command)
+        _kick_off_managed_slot_wake_if_required(target=target, command=command)
         return command
     except IntegrityError:
         duplicate = await commands_store.get_command_by_idempotency(
@@ -507,11 +532,26 @@ async def _validate_runtime_config_preflight(
         sandbox_profile_id=profile_id,
         target_id=target.id,
     )
+    active_slot = None
+    if _target_requires_cloud_workspace(target):
+        active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
+            db,
+            sandbox_profile_id=profile_id,
+            target_id=target.id,
+        )
     if (
         state is None
         or state.runtime_config_status != "applied"
         or state.applied_runtime_config_revision_id != required_revision_id
         or state.applied_runtime_config_sequence < required_sequence
+        or (
+            active_slot is not None
+            and (
+                state.active_sandbox_id != active_slot.id
+                or state.slot_generation != active_slot.slot_generation
+            )
+        )
+        or (active_slot is None and _target_requires_cloud_workspace(target))
     ):
         raise CloudApiError(
             "cloud_command_runtime_config_not_ready",
@@ -555,6 +595,7 @@ async def _stamp_managed_runtime_config_preflight(
     kind: str,
     payload: dict[str, object],
 ) -> dict[str, object]:
+    del actor_user_id
     if kind not in {CloudCommandKind.start_session.value, CloudCommandKind.send_prompt.value}:
         return payload
     if target.sandbox_profile_id is None:
@@ -566,25 +607,10 @@ async def _stamp_managed_runtime_config_preflight(
             "Managed targets require a materialized target config before sessions can start.",
             status_code=409,
         )
-    from proliferate.server.cloud.runtime_config.service import (  # noqa: PLC0415
-        refresh_profile_runtime_config,
-    )
-
     _current, current_revision = await runtime_config_store.get_current(
         db,
         sandbox_profile_id=target.sandbox_profile_id,
     )
-    if current_revision is None:
-        await refresh_profile_runtime_config(
-            db,
-            sandbox_profile_id=target.sandbox_profile_id,
-            actor_user_id=actor_user_id,
-            reason="runtime_config_preflight_missing",
-        )
-        _current, current_revision = await runtime_config_store.get_current(
-            db,
-            sandbox_profile_id=target.sandbox_profile_id,
-        )
     if current_revision is None:
         raise CloudApiError(
             "cloud_command_runtime_config_missing",
@@ -597,29 +623,25 @@ async def _stamp_managed_runtime_config_preflight(
         sandbox_profile_id=target.sandbox_profile_id,
         target_id=target.id,
     )
+    active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
+        db,
+        sandbox_profile_id=target.sandbox_profile_id,
+        target_id=target.id,
+    )
     if (
         state is None
         or state.runtime_config_status != "applied"
         or state.applied_runtime_config_revision_id != str(current_revision.id)
         or state.applied_runtime_config_sequence < current_revision.sequence
+        or active_slot is None
+        or state.active_sandbox_id != active_slot.id
+        or state.slot_generation != active_slot.slot_generation
     ):
-        await refresh_profile_runtime_config(
-            db,
-            sandbox_profile_id=target.sandbox_profile_id,
-            actor_user_id=actor_user_id,
-            reason="runtime_config_preflight_not_applied",
+        raise CloudApiError(
+            "cloud_command_runtime_config_not_ready",
+            "Runtime config has not been applied to this target.",
+            status_code=409,
         )
-        _current, current_revision = await runtime_config_store.get_current(
-            db,
-            sandbox_profile_id=target.sandbox_profile_id,
-        )
-        if current_revision is None:
-            raise CloudApiError(
-                "cloud_command_runtime_config_missing",
-                "Runtime config has not been compiled for this sandbox profile.",
-                status_code=409,
-            )
-        _raise_runtime_config_blocked_if_needed(current_revision)
     stamped = dict(payload)
     stamped["sandboxProfileId"] = str(target.sandbox_profile_id)
     stamped["requiredRuntimeConfigRevisionId"] = str(current_revision.id)
@@ -694,6 +716,20 @@ def _runtime_config_blocking_errors(manifest_json: str) -> list[dict[str, object
     if not isinstance(blocking_errors, list):
         return []
     return [item for item in blocking_errors if isinstance(item, dict)]
+
+
+def _kick_off_managed_slot_wake_if_required(
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    command: commands_store.CloudCommandSnapshot,
+) -> None:
+    if is_terminal_command_status(command.status):
+        return
+    if not _target_requires_cloud_workspace(target):
+        return
+    if not command_kind_requires_wake(command.kind):
+        return
+    kick_off_managed_slot_wake(target.id, command.id)
 
 
 def is_terminal_command_status(status: str) -> bool:

@@ -461,6 +461,7 @@ async def _runtime_config_lease_blocker(
         or state.runtime_config_status != "applied"
         or state.applied_runtime_config_revision_id != str(revision_id)
         or state.applied_runtime_config_sequence < required_sequence
+        or await _target_state_slot_is_stale(db, state=state, target=target)
     ):
         return (
             CloudCommandStatus.superseded.value,
@@ -558,6 +559,7 @@ async def _agent_auth_lease_blocker(
         or state.agent_auth_status != "applied"
         or state.applied_agent_auth_revision is None
         or state.applied_agent_auth_revision < required_revision
+        or await _target_state_slot_is_stale(db, state=state, target=target)
     ):
         return (
             CloudCommandStatus.superseded.value,
@@ -579,6 +581,7 @@ async def mark_command_delivered(
     command_id: UUID,
     worker_id: UUID,
     lease_id: str,
+    slot_generation: int | None,
     now: datetime,
 ) -> CloudCommandSnapshot | None:
     row = await _get_worker_leased_command(
@@ -600,6 +603,13 @@ async def mark_command_delivered(
         row.updated_at = now
         await db.flush()
         return _snapshot(row)
+    if await _leased_slot_echo_is_stale(db, row, slot_generation=slot_generation):
+        row.status = CloudCommandStatus.superseded.value
+        row.error_code = "stale_slot"
+        row.error_message = "Command delivery did not echo the leased sandbox slot generation."
+        row.updated_at = now
+        await db.flush()
+        return _snapshot(row)
     row.status = CloudCommandStatus.delivered.value
     row.delivered_at = now
     row.updated_at = now
@@ -613,6 +623,7 @@ async def mark_command_failed_delivery(
     command_id: UUID,
     worker_id: UUID,
     lease_id: str,
+    slot_generation: int | None,
     error_code: str | None,
     error_message: str | None,
     now: datetime,
@@ -636,6 +647,13 @@ async def mark_command_failed_delivery(
         row.status = CloudCommandStatus.superseded.value
         row.error_code = "stale_slot"
         row.error_message = "Command delivery came from a stale sandbox slot."
+        row.updated_at = now
+        await db.flush()
+        return _snapshot(row)
+    if await _leased_slot_echo_is_stale(db, row, slot_generation=slot_generation):
+        row.status = CloudCommandStatus.superseded.value
+        row.error_code = "stale_slot"
+        row.error_message = "Command delivery did not echo the leased sandbox slot generation."
         row.updated_at = now
         await db.flush()
         return _snapshot(row)
@@ -810,6 +828,44 @@ async def _leased_slot_is_stale(
         )
     ).scalar_one_or_none()
     return active_slot is None
+
+
+async def _leased_slot_echo_is_stale(
+    db: AsyncSession,
+    row: CloudCommand,
+    *,
+    slot_generation: int | None,
+) -> bool:
+    command_requires_slot = await _command_requires_slot(db, row)
+    return command_requires_slot and slot_generation != row.leased_slot_generation
+
+
+async def _target_state_slot_is_stale(
+    db: AsyncSession,
+    *,
+    state: SandboxProfileTargetState,
+    target: CloudTarget | None,
+) -> bool:
+    if not _target_requires_slot(target):
+        return False
+    if target is None or target.sandbox_profile_id is None:
+        return True
+    active_slot = (
+        await db.execute(
+            select(CloudSandbox).where(
+                CloudSandbox.sandbox_profile_id == target.sandbox_profile_id,
+                CloudSandbox.target_id == target.id,
+                CloudSandbox.superseded_at.is_(None),
+                CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
+            )
+        )
+    ).scalar_one_or_none()
+    if active_slot is None:
+        return True
+    return (
+        state.active_sandbox_id != active_slot.id
+        or state.slot_generation != active_slot.slot_generation
+    )
 
 
 async def _command_requires_slot(db: AsyncSession, row: CloudCommand) -> bool:
