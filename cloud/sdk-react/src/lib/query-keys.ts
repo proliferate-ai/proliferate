@@ -14,10 +14,6 @@ export function controlPlaneHealthKey(apiBaseUrl: string) {
   return [...cloudRootKey(), "control-plane-health", apiBaseUrl] as const;
 }
 
-export function cloudCredentialsKey() {
-  return [...cloudRootKey(), "credentials"] as const;
-}
-
 export function agentAuthRootKey() {
   return [...cloudRootKey(), "agent-auth"] as const;
 }

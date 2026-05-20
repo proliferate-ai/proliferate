@@ -14,7 +14,7 @@ from tests.e2e.cloud.helpers import (
     create_user_and_login,
     link_github_account,
     load_cloud_test_config,
-    sync_cloud_credential,
+    sync_agent_auth_credential,
 )
 
 
@@ -54,7 +54,7 @@ async def _bootstrap_runtime_env(args: argparse.Namespace) -> dict[str, Any]:
         synced_providers: list[str] = []
         for provider in selected_providers:
             try:
-                await sync_cloud_credential(client, auth, config, provider)
+                await sync_agent_auth_credential(client, auth, config, provider)
             except CloudE2ETestError:
                 continue
             synced_providers.append(provider)

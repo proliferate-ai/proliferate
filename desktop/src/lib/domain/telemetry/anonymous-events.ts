@@ -125,11 +125,6 @@ export function deriveAnonymousTelemetryDirectives<
         { kind: "mark_activation", milestone: "first_cloud_workspace_created" },
         { kind: "increment_usage", counter: "workspacesCreatedCloud" },
       ];
-    case "cloud_credential_synced":
-      return [
-        { kind: "mark_activation", milestone: "first_credential_synced" },
-        { kind: "increment_usage", counter: "credentialsSynced" },
-      ];
     case "connector_install_succeeded":
       return [
         { kind: "mark_activation", milestone: "first_connector_installed" },

@@ -23,7 +23,6 @@ async def assert_current_schema(
         "cloud_mcp_oauth_flow",
         "cloud_plugin_configured_item",
         "cloud_skill_configured_item",
-        "cloud_credential",
         "cloud_workspace_mobility_event",
         "cloud_workspace_handoff_op",
         "cloud_workspace_mobility",

@@ -1,1 +1,0 @@
-"""Cloud credential feature package."""

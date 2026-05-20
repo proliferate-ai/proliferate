@@ -10,8 +10,8 @@ platform APIs directly.
 lib/access/
   cloud/
     client.ts
-    credential-sync.ts
-    credential-recovery.ts
+    agent-auth-sync.ts
+    agent-auth-recovery.ts
     health.ts
     timing.ts
   anyharness/
@@ -99,10 +99,10 @@ hooks/access/
       query-keys.ts
       use-cloud-billing.ts
       use-cloud-billing-mutations.ts
-    credentials/
+    agent-auth/
       query-keys.ts
-      use-cloud-credentials.ts
-      use-cloud-credential-mutations.ts
+      use-agent-auth.ts
+      use-agent-auth-mutations.ts
     mobility/
       query-keys.ts
       use-cloud-mobility-workspaces.ts
@@ -202,7 +202,7 @@ bridges:
 - auth/refresh middleware
 - Desktop auth/session storage integration
 - Desktop base-url resolution
-- Desktop-only credential sync/recovery helpers
+- Desktop-only agent-auth sync/recovery helpers
 - control-plane health checks used during Desktop startup
 - request timing integration
 
@@ -210,8 +210,8 @@ File naming:
 
 - `client.ts` for client setup, auth/refresh middleware, and shared transport
   error types
-- `credential-sync.ts` and `credential-recovery.ts` for Desktop-native
-  credential export/import coordination
+- `agent-auth-sync.ts` and `agent-auth-recovery.ts` for Desktop-native
+  agent-auth export/import coordination
 - `health.ts` for Desktop control-plane reachability checks
 - `timing.ts` for Desktop request measurement wiring
 - no React hooks, Zustand stores, query invalidation, navigation, or JSX

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AgentAuthCredential } from "@proliferate/cloud-sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -10,7 +10,12 @@ import {
   useAgentAuthMutations,
   useCloudCapabilities,
 } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
+import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";
 import { useOrganizations } from "@/hooks/access/cloud/organizations/use-organizations";
+import type {
+  AgentAuthProvider,
+  LocalAgentAuthSource,
+} from "@/lib/access/tauri/credentials";
 import {
   AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,
@@ -33,9 +38,17 @@ export function CloudAgentAuthLibrary() {
   const { data: capabilities } = useCloudCapabilities();
   const agentGatewayCapabilities = capabilities?.agentGateway ?? null;
   const mutations = useAgentAuthMutations();
+  const {
+    exportSyncableAgentAuthCredential,
+    listSyncableAgentAuthCredentials,
+  } = useTauriCredentialsActions();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [sharingCredentialId, setSharingCredentialId] = useState<string | null>(null);
   const [revokingCredentialId, setRevokingCredentialId] = useState<string | null>(null);
+  const [localSources, setLocalSources] = useState<LocalAgentAuthSource[]>([]);
+  const [syncingLocalProvider, setSyncingLocalProvider] = useState<AgentAuthProvider | null>(
+    null,
+  );
   const currentUserId = useAuthStore((state) => state.user?.id ?? null);
   const adminOrganizationIds = useMemo(
     () => new Set(
@@ -56,6 +69,38 @@ export function CloudAgentAuthLibrary() {
     [agentGatewayCapabilities, credentials],
   );
   const grouped = useMemo(() => groupCredentialsByAgent(visibleCredentials), [visibleCredentials]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listSyncableAgentAuthCredentials()
+      .then((sources) => {
+        if (!cancelled) {
+          setLocalSources(sources);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLocalSources([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [listSyncableAgentAuthCredentials]);
+
+  async function handleSyncLocalCredential(provider: AgentAuthProvider) {
+    setSyncingLocalProvider(provider);
+    setFeedback(null);
+    try {
+      const body = await exportSyncableAgentAuthCredential(provider);
+      const result = await mutations.syncSyncedCredential({ agentKind: provider, body });
+      setFeedback(`${result.credential.displayName} synced.`);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Could not sync local auth.");
+    } finally {
+      setSyncingLocalProvider(null);
+    }
+  }
 
   async function handleShareCredential(credential: AgentAuthCredential) {
     if (!libraryOrganizationId) {
@@ -105,6 +150,33 @@ export function CloudAgentAuthLibrary() {
         onLibraryOrganizationChange={setLibraryOrganizationId}
         agentGatewayCapabilities={agentGatewayCapabilities}
       />
+
+      <SettingsCard>
+        {localSources.length === 0 ? (
+          <div className="p-3 text-sm text-muted-foreground">
+            No local agent auth sources detected.
+          </div>
+        ) : (
+          localSources.map((source) => (
+            <SettingsCardRow
+              key={source.provider}
+              label={agentAuthAgentLabel(source.provider)}
+              description={source.detected ? "Local auth source detected." : "No local auth source detected."}
+            >
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={!source.detected}
+                loading={syncingLocalProvider === source.provider}
+                onClick={() => void handleSyncLocalCredential(source.provider)}
+              >
+                Sync
+              </Button>
+            </SettingsCardRow>
+          ))
+        )}
+      </SettingsCard>
 
       {feedback && <p className="text-xs text-muted-foreground">{feedback}</p>}
 

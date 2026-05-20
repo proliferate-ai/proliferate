@@ -53,7 +53,9 @@ from proliferate.integrations.sandbox import (
 )
 from proliferate.server.billing.service import authorize_sandbox_start
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.credentials.session_loader import load_cloud_credentials_for_user
+from proliferate.server.cloud.agent_auth.session_loader import (
+    load_selected_synced_credentials_for_user,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.anyharness_api import (
     prepare_remote_mobility_destination,
@@ -223,7 +225,7 @@ async def _load_provision_input(
         )
     git_user_name, git_user_email = _resolve_git_identity(user, github_grant)
 
-    credential_records = await load_cloud_credentials_for_user(workspace.user_id)
+    credential_records = await load_selected_synced_credentials_for_user(workspace.user_id)
     credential_revision_state = build_credential_revision_state(credential_records)
     if credential_revision_state.missing_credentials:
         raise CloudApiError(

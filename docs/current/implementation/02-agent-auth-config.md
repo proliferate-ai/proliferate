@@ -284,7 +284,7 @@ created_at
 ```
 
 `force_restart` lives here. Selection writes, credential revokes, share revokes,
-and legacy credential imports bump this revision. Runtime apply commands carry
+and synced credential writes bump this revision. Runtime apply commands carry
 the revision and `forceRestart`.
 
 ### `agent_auth_credential`
@@ -302,7 +302,8 @@ display_name
 redacted_summary_json
 status                      pending | ready | needs_resync | invalid | revoked
 revision
-legacy_cloud_credential_id  bridge from old cloud_credential rows
+payload_ciphertext          encrypted synced native auth source payload
+payload_ciphertext_key_id
 revoked_at
 ```
 
@@ -564,29 +565,15 @@ created_at
 This is especially important for personal synced credential shares into shared
 organization sandboxes.
 
-## Legacy Sync Bridge
+## Synced Native Auth
 
-The old model still exists:
-
-```text
-cloud_credential
-  user_id
-  provider              claude | codex | gemini
-  auth_mode
-  payload_ciphertext
-  payload_format
-  revoked_at
-```
-
-The new stack bridges it instead of leaving an unrelated path:
+Agent auth owns synced native auth source payloads directly:
 
 ```text
 Desktop syncs native auth
-  -> /v1/cloud/credentials/{provider}
-  -> cloud_credential row changes
-  -> reconcile_legacy_cloud_credentials_for_user(...)
-  -> personal sandbox_profile is ensured/backfilled
-  -> agent_auth_credential(credential_kind=synced_path) is created/updated
+  -> /v1/cloud/agent-auth/credentials/synced/{agent_kind}
+  -> agent_auth_credential(credential_kind=synced_path) stores encrypted payload
+  -> personal sandbox_profile is ensured
   -> sandbox_agent_auth_selection is defaulted for that personal profile
   -> profile agent_auth_revision is bumped
   -> refresh_agent_auth_config is queued if the profile has a target
@@ -601,8 +588,7 @@ gemini
 ```
 
 `opencode` exists as an agent-auth kind, and worker has an allowlisted
-OpenCode auth file path, but old CloudCredential sync/status APIs do not yet
-advertise OpenCode native sync.
+OpenCode auth file path, but Desktop does not yet export OpenCode native sync.
 
 ## Cloud APIs
 
@@ -611,6 +597,7 @@ User/admin APIs under `/v1/cloud`:
 ```text
 GET    /agent-auth/credentials
 POST   /agent-auth/credentials/gateway
+PUT    /agent-auth/credentials/synced/{agent_kind}
 DELETE /agent-auth/credentials/{credential_id}
 
 POST   /agent-auth/credentials/{credential_id}/shares
@@ -1135,7 +1122,7 @@ LiteLLM mirror reconciliation keeps budget/policy mirror state up to date.
 Synced native auth:
 
 ```text
-CloudCredential sync changes are imported into agent_auth_credential.
+Desktop sync changes write agent_auth_credential payloads directly.
 If a native auth file expires but Desktop has not resynced it, the harness or
 provider will fail. Product should surface needs_resync/invalid when detection
 is available, but current code is mostly best-effort for native expiry.
@@ -1222,7 +1209,7 @@ These are the places the reference/spec should still call out as real work:
 3. Hosted-cloud capability API so Desktop does not need a hardcoded
    `AGENT_GATEWAY_BYOK_ENABLED = false`.
 
-4. OpenCode native credential sync support in the legacy CloudCredential export
+4. OpenCode native credential sync support in the Desktop agent-auth export
    path, if we want OpenCode synced auth before gateway auth.
 
 5. Gemini gateway support, or a clear statement that Gemini remains

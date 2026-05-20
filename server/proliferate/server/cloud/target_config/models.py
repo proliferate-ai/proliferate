@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any, Literal, cast
+from typing import Literal, cast
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -30,7 +30,6 @@ class MaterializeTargetConfigRequest(BaseModel):
     git_owner: str = Field(alias="gitOwner", min_length=1)
     git_repo_name: str = Field(alias="gitRepoName", min_length=1)
     workspace_root: str | None = Field(default=None, alias="workspaceRoot")
-    include_agent_credentials: bool = Field(default=True, alias="includeAgentCredentials")
     include_git_credentials: bool = Field(default=True, alias="includeGitCredentials")
     source: str | None = None
     idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
@@ -80,11 +79,6 @@ class TargetConfigMaterializationPlan(BaseModel):
         alias="gitCredential",
         repr=False,
     )
-    agent_credentials: dict[str, dict[str, Any]] = Field(
-        default_factory=dict,
-        alias="agentCredentials",
-        repr=False,
-    )
     runtime_config: RuntimeConfigMaterializationFragment | None = Field(
         default=None,
         alias="runtimeConfig",
@@ -100,7 +94,6 @@ class TargetConfigSummaryModel(BaseModel):
     env_var_count: int = Field(serialization_alias="envVarCount")
     tracked_file_count: int = Field(serialization_alias="trackedFileCount")
     has_git_credential: bool = Field(serialization_alias="hasGitCredential")
-    agent_credential_providers: list[str] = Field(serialization_alias="agentCredentialProviders")
     mcp_binding_count: int = Field(serialization_alias="mcpBindingCount")
     mcp_warning_count: int = Field(serialization_alias="mcpWarningCount")
     required_tools: list[str] = Field(serialization_alias="requiredTools")
@@ -116,7 +109,6 @@ class CloudTargetConfigResponse(BaseModel):
     config_version: int = Field(serialization_alias="configVersion")
     env_vars_version: int = Field(serialization_alias="envVarsVersion")
     files_version: int = Field(serialization_alias="filesVersion")
-    credential_snapshot_version: int = Field(serialization_alias="credentialSnapshotVersion")
     mcp_materialization_version: int = Field(serialization_alias="mcpMaterializationVersion")
     materialization_status: str = Field(serialization_alias="materializationStatus")
     last_command_id: str | None = Field(default=None, serialization_alias="lastCommandId")
@@ -162,7 +154,6 @@ def target_config_payload(value: CloudTargetConfigSnapshot) -> CloudTargetConfig
         config_version=value.config_version,
         env_vars_version=value.env_vars_version,
         files_version=value.files_version,
-        credential_snapshot_version=value.credential_snapshot_version,
         mcp_materialization_version=value.mcp_materialization_version,
         materialization_status=value.materialization_status,
         last_command_id=str(value.last_command_id) if value.last_command_id else None,
