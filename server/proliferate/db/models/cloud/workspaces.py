@@ -62,6 +62,11 @@ class CloudWorkspace(Base):
             "created_by_user_id IS NOT NULL",
             name="ck_cloud_workspace_created_by_user_id",
         ),
+        CheckConstraint(
+            "origin IN ('manual_desktop', 'manual_web', 'manual_mobile', "
+            "'automation', 'slack', 'cowork_api')",
+            name="ck_cloud_workspace_origin",
+        ),
     )
 
     def __init__(self, **kwargs: object) -> None:
@@ -70,6 +75,7 @@ class CloudWorkspace(Base):
         kwargs.setdefault("owner_user_id", user_id)
         kwargs.setdefault("organization_id", None)
         kwargs.setdefault("created_by_user_id", user_id)
+        kwargs.setdefault("origin", "manual_desktop")
         super().__init__(**kwargs)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -107,6 +113,11 @@ class CloudWorkspace(Base):
     git_branch: Mapped[str] = mapped_column(String(255))
     git_base_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
     worktree_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    origin: Mapped[str] = mapped_column(
+        String(32),
+        default="manual_desktop",
+        server_default=text("'manual_desktop'"),
+    )
     origin_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     status: Mapped[str] = mapped_column(String(32))
