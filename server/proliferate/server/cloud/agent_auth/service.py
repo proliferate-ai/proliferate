@@ -15,6 +15,7 @@ from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import PolicyDenied
@@ -24,6 +25,10 @@ from proliferate.constants.cloud import (
     AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN,
     AGENT_GATEWAY_TOKEN_HASH_KEY_ID,
     CloudAgentKind,
+    CloudCommandActorKind,
+    CloudCommandKind,
+    CloudCommandSource,
+    CloudCommandStatus,
 )
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.db.store import organizations as organization_store
@@ -39,6 +44,8 @@ from proliferate.db.store.cloud_agent_auth.records import (
     SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
 )
+from proliferate.db.store.cloud_credentials import get_cloud_credential_by_id
+from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.integrations.aws import (
     AwsIntegrationError,
     validate_bedrock_assume_role_payload,
@@ -59,8 +66,17 @@ from proliferate.server.cloud.agent_auth.models import (
     CreateGatewayCredentialRequest,
     EnsureManagedCreditsRequest,
     LiteLLMModelDeploymentRequest,
+    WorkerAgentAuthGatewayConfig,
+    WorkerAgentAuthMaterializationPlan,
+    WorkerAgentAuthSelectionPlan,
+    WorkerAgentAuthStatusRequest,
+    WorkerAgentAuthStatusResponse,
+    WorkerAgentAuthSyncedFilesConfig,
 )
-from proliferate.utils.crypto import encrypt_json, encrypt_text
+from proliferate.server.cloud.commands.domain.rules import compact_command_json
+from proliferate.server.cloud.live.service import publish_command_status_after_commit
+from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
+from proliferate.utils.crypto import decrypt_json, encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
 
 _ORG_ADMIN_ROLES = {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN}
@@ -98,7 +114,14 @@ async def ensure_personal_sandbox_profile(
         user_id=actor_user_id,
         managed_target_id=managed_target_id,
     )
-    return await _backfill_legacy_cloud_credentials(db, actor_user_id, profile)
+    profile = await _backfill_legacy_cloud_credentials(db, actor_user_id, profile)
+    await _ensure_profile_target_refresh_if_needed(
+        db,
+        profile=profile,
+        actor_user_id=actor_user_id,
+        reason="sandbox_profile_target_attached",
+    )
+    return profile
 
 
 async def reconcile_legacy_cloud_credentials_for_user(
@@ -128,11 +151,18 @@ async def ensure_organization_sandbox_profile(
     managed_target_id: UUID | None,
 ) -> SandboxProfileRecord:
     await _require_organization_admin(db, actor_user_id, organization_id)
-    return await store.ensure_organization_sandbox_profile(
+    profile = await store.ensure_organization_sandbox_profile(
         db,
         organization_id=organization_id,
         managed_target_id=managed_target_id,
     )
+    await _ensure_profile_target_refresh_if_needed(
+        db,
+        profile=profile,
+        actor_user_id=actor_user_id,
+        reason="sandbox_profile_target_attached",
+    )
+    return profile
 
 
 async def list_credentials(
@@ -713,20 +743,13 @@ async def select_credential_for_profile(
         raise AgentAuthError(
             "Sandbox profile not found.", code="sandbox_profile_not_found", status_code=404
         )
-    if profile.managed_target_id is not None:
-        await store.upsert_target_state(
-            db,
-            sandbox_profile_id=profile.id,
-            target_id=profile.managed_target_id,
-            desired_revision=updated_profile.agent_auth_revision,
-            applied_revision=None,
-            status="pending",
-            force_restart_required=force_restart,
-            last_command_id=None,
-            last_worker_id=None,
-            last_error_code=None,
-            last_error_message=None,
-        )
+    await _mark_target_pending_and_queue_refresh(
+        db,
+        profile=updated_profile,
+        actor_user_id=actor_user_id,
+        reason="selection_changed",
+        force_restart=force_restart,
+    )
     await store.record_audit_event(
         db,
         action="selection.write",
@@ -831,6 +854,451 @@ async def issue_runtime_grant_for_selection(
         expires_at=now + _GATEWAY_GRANT_TTL,
     )
     return RuntimeGrantIssueResult(grant=grant, raw_token=raw_token)
+
+
+async def worker_agent_auth_materialization_plan(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    sandbox_profile_id: UUID,
+    command_id: UUID,
+    revision: int,
+    lease_id: str,
+) -> WorkerAgentAuthMaterializationPlan:
+    command = await _require_agent_auth_refresh_command(
+        db,
+        auth=auth,
+        sandbox_profile_id=sandbox_profile_id,
+        command_id=command_id,
+        revision=revision,
+        lease_id=lease_id,
+    )
+    profile = await store.get_sandbox_profile(db, sandbox_profile_id)
+    if profile is None:
+        raise AgentAuthError(
+            "Sandbox profile not found.",
+            code="sandbox_profile_not_found",
+            status_code=404,
+        )
+    if revision < profile.agent_auth_revision:
+        return WorkerAgentAuthMaterializationPlan(
+            applied=False,
+            reason="superseded",
+            currentRevision=profile.agent_auth_revision,
+            targetId=auth.target_id,
+            sandboxProfileId=profile.id,
+            revision=revision,
+            selections=[],
+        )
+    if revision != profile.agent_auth_revision:
+        raise AgentAuthError(
+            "Requested agent-auth revision does not match the profile.",
+            code="agent_auth_revision_mismatch",
+            status_code=409,
+        )
+    await _require_agent_auth_target_state(
+        db,
+        profile=profile,
+        auth=auth,
+        command=command,
+    )
+    selections = []
+    for selection in await store.list_selections_for_profile(db, profile.id):
+        if selection.status != "active":
+            continue
+        selections.append(
+            await _worker_selection_plan(
+                db,
+                auth=auth,
+                profile=profile,
+                selection=selection,
+            )
+        )
+    return WorkerAgentAuthMaterializationPlan(
+        applied=True,
+        reason=None,
+        currentRevision=profile.agent_auth_revision,
+        targetId=auth.target_id,
+        sandboxProfileId=profile.id,
+        revision=revision,
+        selections=selections,
+    )
+
+
+async def record_worker_agent_auth_status(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    sandbox_profile_id: UUID,
+    body: WorkerAgentAuthStatusRequest,
+) -> WorkerAgentAuthStatusResponse:
+    command = await _require_agent_auth_refresh_command(
+        db,
+        auth=auth,
+        sandbox_profile_id=sandbox_profile_id,
+        command_id=body.command_id,
+        revision=body.revision,
+        lease_id=body.lease_id,
+    )
+    if body.status not in {"materializing", "applied", "superseded", "failed"}:
+        raise AgentAuthError(
+            "Agent auth status is invalid.",
+            code="agent_auth_status_invalid",
+            status_code=400,
+        )
+    profile = await store.get_sandbox_profile(db, sandbox_profile_id)
+    if profile is None:
+        raise AgentAuthError(
+            "Sandbox profile not found.",
+            code="sandbox_profile_not_found",
+            status_code=404,
+        )
+    _validate_worker_status_revisions(body, profile)
+    await _require_agent_auth_target_state(
+        db,
+        profile=profile,
+        auth=auth,
+        command=command,
+    )
+    existing = await store.get_target_state(
+        db,
+        sandbox_profile_id=profile.id,
+        target_id=auth.target_id,
+    )
+    existing_applied = existing.applied_revision if existing is not None else None
+    desired_revision = max(profile.agent_auth_revision, body.current_revision or body.revision)
+    applied_revision = existing_applied
+    status = body.status
+    error_code = None
+    error_message = None
+    if body.status == "applied":
+        applied_revision = (
+            body.applied_revision if body.applied_revision is not None else body.revision
+        )
+        if applied_revision < desired_revision:
+            status = "superseded"
+        else:
+            desired_revision = applied_revision
+    elif body.status == "superseded":
+        status = "superseded"
+    elif body.status == "failed":
+        error_code = body.error_code or "agent_auth_materialization_failed"
+        error_message = _worker_status_error_message(error_code)
+    if applied_revision is not None and applied_revision > desired_revision:
+        desired_revision = applied_revision
+    force_restart_required = existing.force_restart_required if existing is not None else False
+    if status == "applied" and applied_revision == desired_revision:
+        force_restart_required = False
+    state = await store.upsert_target_state(
+        db,
+        sandbox_profile_id=profile.id,
+        target_id=auth.target_id,
+        desired_revision=desired_revision,
+        applied_revision=applied_revision,
+        status=status,
+        force_restart_required=force_restart_required,
+        last_command_id=body.command_id,
+        last_worker_id=auth.worker_id,
+        last_error_code=error_code,
+        last_error_message=error_message,
+    )
+    return WorkerAgentAuthStatusResponse(
+        sandboxProfileId=profile.id,
+        targetId=auth.target_id,
+        desiredRevision=state.desired_revision,
+        appliedRevision=state.applied_revision,
+        status=state.status,
+    )
+
+
+def _validate_worker_status_revisions(
+    body: WorkerAgentAuthStatusRequest,
+    profile: SandboxProfileRecord,
+) -> None:
+    current_revision = body.current_revision
+    applied_revision = body.applied_revision
+    if current_revision is not None and current_revision > profile.agent_auth_revision:
+        raise AgentAuthError(
+            "Worker reported an unknown agent-auth revision.",
+            code="agent_auth_revision_mismatch",
+            status_code=409,
+        )
+    if applied_revision is not None and applied_revision > profile.agent_auth_revision:
+        raise AgentAuthError(
+            "Worker reported an unknown applied agent-auth revision.",
+            code="agent_auth_revision_mismatch",
+            status_code=409,
+        )
+
+
+def _worker_status_error_message(error_code: str) -> str:
+    return f"Agent auth materialization failed ({error_code})."
+
+
+async def _require_agent_auth_refresh_command(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    sandbox_profile_id: UUID,
+    command_id: UUID,
+    revision: int,
+    lease_id: str,
+) -> commands_store.CloudCommandSnapshot:
+    command = await commands_store.get_command_by_id(db, command_id)
+    if (
+        command is None
+        or command.target_id != auth.target_id
+        or command.leased_by_worker_id != auth.worker_id
+        or command.kind != CloudCommandKind.refresh_agent_auth_config.value
+        or command.status != CloudCommandStatus.leased.value
+        or command.lease_id != lease_id
+    ):
+        raise AgentAuthError(
+            "Agent auth config command is not leased by this worker.",
+            code="agent_auth_command_not_found",
+            status_code=404,
+        )
+    try:
+        payload = json.loads(command.payload_json)
+    except json.JSONDecodeError as exc:
+        raise AgentAuthError(
+            "Agent auth config command payload is invalid.",
+            code="agent_auth_command_invalid",
+            status_code=409,
+        ) from exc
+    if not isinstance(payload, dict) or payload.get("sandboxProfileId") != str(
+        sandbox_profile_id
+    ):
+        raise AgentAuthError(
+            "Agent auth config command does not match the requested profile.",
+            code="agent_auth_command_mismatch",
+            status_code=409,
+        )
+    if payload.get("revision") != revision:
+        raise AgentAuthError(
+            "Agent auth config command does not match the requested revision.",
+            code="agent_auth_command_mismatch",
+            status_code=409,
+        )
+    return command
+
+
+async def _require_agent_auth_target_state(
+    db: AsyncSession,
+    *,
+    profile: SandboxProfileRecord,
+    auth: WorkerAuthContext,
+    command: commands_store.CloudCommandSnapshot,
+) -> SandboxProfileAgentAuthTargetStateRecord:
+    state = await store.get_target_state(
+        db,
+        sandbox_profile_id=profile.id,
+        target_id=auth.target_id,
+    )
+    if state is None or state.last_command_id != command.id:
+        raise AgentAuthError(
+            "Agent auth config command is not current for this profile and target.",
+            code="agent_auth_command_mismatch",
+            status_code=409,
+        )
+    return state
+
+
+async def _worker_selection_plan(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    profile: SandboxProfileRecord,
+    selection: SandboxAgentAuthSelectionRecord,
+) -> WorkerAgentAuthSelectionPlan:
+    credential = await store.get_credential(db, selection.credential_id)
+    if credential is None or credential.revoked_at is not None:
+        raise AgentAuthError("Credential not found.", code="credential_not_found", status_code=404)
+    if selection.selected_revision != credential.revision:
+        raise AgentAuthError(
+            "Selection is stale.",
+            code="selection_revision_stale",
+            status_code=409,
+        )
+    await _require_credential_ready_for_selection(db, credential)
+    if selection.materialization_mode == "gateway_env":
+        gateway = await _worker_gateway_config(
+            db,
+            auth=auth,
+            profile=profile,
+            selection=selection,
+        )
+        return WorkerAgentAuthSelectionPlan(
+            agentKind=selection.agent_kind,
+            materializationMode=selection.materialization_mode,
+            credentialId=credential.id,
+            credentialRevision=credential.revision,
+            credentialShareId=selection.credential_share_id,
+            gateway=gateway,
+            syncedFiles=None,
+        )
+    if selection.materialization_mode == "synced_files":
+        synced_files = await _worker_synced_files_config(db, credential, selection)
+        return WorkerAgentAuthSelectionPlan(
+            agentKind=selection.agent_kind,
+            materializationMode=selection.materialization_mode,
+            credentialId=credential.id,
+            credentialRevision=credential.revision,
+            credentialShareId=selection.credential_share_id,
+            gateway=None,
+            syncedFiles=synced_files,
+        )
+    raise AgentAuthError(
+        "Unsupported materialization mode.",
+        code="unsupported_materialization_mode",
+        status_code=400,
+    )
+
+
+async def _worker_gateway_config(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    profile: SandboxProfileRecord,
+    selection: SandboxAgentAuthSelectionRecord,
+) -> WorkerAgentAuthGatewayConfig:
+    result = await issue_runtime_grant_for_selection(
+        db,
+        selection=selection,
+        profile=profile,
+        target_id=auth.target_id,
+    )
+    base = _gateway_base_url()
+    if selection.agent_kind == "claude":
+        facade_base = f"{base}/anthropic"
+        return WorkerAgentAuthGatewayConfig(
+            protocolFacade="anthropic",
+            baseUrls={"anthropic": facade_base},
+            runtimeGrantToken=result.raw_token,
+            expiresAt=result.grant.expires_at.isoformat(),
+            protectedEnv={
+                "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST": "1",
+                "ANTHROPIC_BASE_URL": facade_base,
+                "ANTHROPIC_CUSTOM_HEADERS": f"Authorization: Bearer {result.raw_token}",
+                "ANTHROPIC_AUTH_TOKEN": "",
+            },
+            supportEnv={},
+            protectedConfig={},
+            supportConfig={},
+        )
+    if selection.agent_kind == "codex":
+        facade_base = f"{base}/openai/v1"
+        return WorkerAgentAuthGatewayConfig(
+            protocolFacade="openai",
+            baseUrls={"openai": facade_base},
+            runtimeGrantToken=result.raw_token,
+            expiresAt=result.grant.expires_at.isoformat(),
+            protectedEnv={"CODEX_API_KEY": result.raw_token},
+            supportEnv={},
+            protectedConfig={
+                "codex": {
+                    "model_provider_id": "proliferate",
+                    "model_providers": {
+                        "proliferate": {
+                            "name": "Proliferate Gateway",
+                            "base_url": facade_base,
+                            "env_key": "CODEX_API_KEY",
+                            "wire_api": "responses",
+                            "requires_openai_auth": False,
+                        }
+                    },
+                }
+            },
+            supportConfig={},
+        )
+    if selection.agent_kind == "opencode":
+        facade_base = f"{base}/openai/v1"
+        return WorkerAgentAuthGatewayConfig(
+            protocolFacade="openai",
+            baseUrls={"openai": facade_base},
+            runtimeGrantToken=result.raw_token,
+            expiresAt=result.grant.expires_at.isoformat(),
+            protectedEnv={
+                "OPENAI_API_KEY": result.raw_token,
+                "OPENAI_BASE_URL": facade_base,
+            },
+            supportEnv={},
+            protectedConfig={},
+            supportConfig={},
+        )
+    raise AgentAuthError(
+        "Gateway auth is not supported for this agent.",
+        code="gateway_not_supported_for_agent",
+        status_code=400,
+    )
+
+
+async def _worker_synced_files_config(
+    db: AsyncSession,
+    credential: AgentAuthCredentialRecord,
+    selection: SandboxAgentAuthSelectionRecord,
+) -> WorkerAgentAuthSyncedFilesConfig:
+    if credential.legacy_cloud_credential_id is None:
+        raise AgentAuthError(
+            "Synced credential is missing its source credential.",
+            code="synced_credential_source_missing",
+            status_code=409,
+        )
+    legacy = await get_cloud_credential_by_id(db, credential.legacy_cloud_credential_id)
+    if (
+        legacy is None
+        or legacy.revoked_at is not None
+        or legacy.provider != credential.agent_kind
+    ):
+        raise AgentAuthError(
+            "Synced credential source is not active.",
+            code="synced_credential_source_missing",
+            status_code=409,
+        )
+    payload = decrypt_json(legacy.payload_ciphertext)
+    if not isinstance(payload, dict):
+        raise AgentAuthError(
+            "Synced credential payload is invalid.",
+            code="synced_credential_payload_invalid",
+            status_code=409,
+        )
+    raw_env_vars = payload.get("envVars")
+    env_vars = {
+        key: value
+        for key, value in (raw_env_vars if isinstance(raw_env_vars, dict) else {}).items()
+        if isinstance(key, str) and isinstance(value, str)
+    }
+    raw_files = payload.get("files")
+    files = [
+        {"relativePath": relative_path, "content": content}
+        for relative_path, content in (
+            raw_files if isinstance(raw_files, dict) else {}
+        ).items()
+        if isinstance(relative_path, str) and isinstance(content, str)
+    ]
+    if not env_vars and not files:
+        raise AgentAuthError(
+            "Synced credential payload is empty.",
+            code="synced_credential_payload_invalid",
+            status_code=409,
+        )
+    return WorkerAgentAuthSyncedFilesConfig(
+        credentialShareId=selection.credential_share_id,
+        envVars=env_vars,
+        files=files,
+        cleanup=[],
+    )
+
+
+def _gateway_base_url() -> str:
+    base = settings.agent_gateway_public_base_url.strip().rstrip("/")
+    if not base:
+        raise AgentAuthError(
+            "Agent gateway public base URL is not configured.",
+            code="agent_gateway_public_base_url_missing",
+            status_code=409,
+        )
+    return base
 
 
 async def _backfill_legacy_cloud_credentials(
@@ -982,6 +1450,14 @@ async def _backfill_legacy_cloud_credentials(
         actor_user_id=actor_user_id,
         force_restart=False,
     )
+    if updated is not None:
+        await _mark_target_pending_and_queue_refresh(
+            db,
+            profile=updated,
+            actor_user_id=actor_user_id,
+            reason="legacy_cloud_credential_import",
+            force_restart=False,
+        )
     return updated or profile
 
 
@@ -1481,21 +1957,152 @@ async def _bump_profile_for_selection(
         actor_user_id=actor_user_id,
         force_restart=force_restart,
     )
-    if updated_profile is not None and updated_profile.managed_target_id is not None:
-        await store.upsert_target_state(
+    if updated_profile is not None:
+        await _mark_target_pending_and_queue_refresh(
             db,
-            sandbox_profile_id=updated_profile.id,
-            target_id=updated_profile.managed_target_id,
-            desired_revision=updated_profile.agent_auth_revision,
-            applied_revision=None,
-            status="pending",
-            force_restart_required=force_restart,
-            last_command_id=None,
-            last_worker_id=None,
-            last_error_code=None,
-            last_error_message=None,
+            profile=updated_profile,
+            actor_user_id=actor_user_id,
+            reason=reason,
+            force_restart=force_restart,
         )
     await store.revoke_runtime_grants_for_selection(db, selection_id=selection.id)
+
+
+async def _mark_target_pending_and_queue_refresh(
+    db: AsyncSession,
+    *,
+    profile: SandboxProfileRecord,
+    actor_user_id: UUID | None,
+    reason: str,
+    force_restart: bool,
+) -> None:
+    if profile.managed_target_id is None:
+        return
+    command = await _queue_agent_auth_refresh_command(
+        db,
+        profile=profile,
+        target_id=profile.managed_target_id,
+        actor_user_id=actor_user_id,
+        reason=reason,
+        force_restart=force_restart,
+    )
+    await store.upsert_target_state(
+        db,
+        sandbox_profile_id=profile.id,
+        target_id=profile.managed_target_id,
+        desired_revision=profile.agent_auth_revision,
+        applied_revision=None,
+        status="pending",
+        force_restart_required=force_restart,
+        last_command_id=command.id,
+        last_worker_id=None,
+        last_error_code=None,
+        last_error_message=None,
+    )
+
+
+async def _ensure_profile_target_refresh_if_needed(
+    db: AsyncSession,
+    *,
+    profile: SandboxProfileRecord,
+    actor_user_id: UUID | None,
+    reason: str,
+) -> None:
+    if profile.managed_target_id is None:
+        return
+    if profile.agent_auth_revision == 0:
+        selections = await store.list_selections_for_profile(db, profile.id)
+        if not selections:
+            return
+    state = await store.get_target_state(
+        db,
+        sandbox_profile_id=profile.id,
+        target_id=profile.managed_target_id,
+    )
+    if (
+        state is not None
+        and state.desired_revision == profile.agent_auth_revision
+        and state.last_command_id is not None
+    ):
+        return
+    await _mark_target_pending_and_queue_refresh(
+        db,
+        profile=profile,
+        actor_user_id=actor_user_id,
+        reason=reason,
+        force_restart=False,
+    )
+
+
+async def _queue_agent_auth_refresh_command(
+    db: AsyncSession,
+    *,
+    profile: SandboxProfileRecord,
+    target_id: UUID,
+    actor_user_id: UUID | None,
+    reason: str,
+    force_restart: bool,
+) -> commands_store.CloudCommandSnapshot:
+    idempotency_scope = f"target:{target_id}:agent-auth-config:{profile.id}"
+    idempotency_key = f"agent-auth-config:{target_id}:{profile.id}:{profile.agent_auth_revision}"
+    existing = await commands_store.get_command_by_idempotency(
+        db,
+        idempotency_scope=idempotency_scope,
+        idempotency_key=idempotency_key,
+    )
+    if existing is not None:
+        await publish_command_status_after_commit(db, existing)
+        return existing
+    payload = {
+        "sandboxProfileId": str(profile.id),
+        "revision": profile.agent_auth_revision,
+        "reason": reason,
+        "forceRestart": force_restart,
+    }
+    actor_kind = (
+        CloudCommandActorKind.user.value
+        if actor_user_id is not None
+        else CloudCommandActorKind.system.value
+    )
+    try:
+        async with db.begin_nested():
+            command = await commands_store.create_command(
+                db,
+                idempotency_scope=idempotency_scope,
+                idempotency_key=idempotency_key,
+                target_id=target_id,
+                organization_id=profile.organization_id,
+                actor_user_id=actor_user_id,
+                actor_kind=actor_kind,
+                source=CloudCommandSource.api.value,
+                workspace_id=None,
+                session_id=None,
+                kind=CloudCommandKind.refresh_agent_auth_config.value,
+                payload_json=compact_command_json(payload) or "{}",
+                observed_event_seq=None,
+                preconditions_json=None,
+                authorization_context_json=compact_command_json(
+                    {
+                        "actorUserId": str(actor_user_id) if actor_user_id else None,
+                        "sandboxProfileId": str(profile.id),
+                        "targetOwnerScope": profile.owner_scope,
+                        "targetOrganizationId": (
+                            str(profile.organization_id) if profile.organization_id else None
+                        ),
+                    }
+                ),
+            )
+    except IntegrityError:
+        duplicate = await commands_store.get_command_by_idempotency(
+            db,
+            idempotency_scope=idempotency_scope,
+            idempotency_key=idempotency_key,
+        )
+        if duplicate is None:
+            raise
+        command = duplicate
+    await publish_command_status_after_commit(db, command)
+    return command
 
 
 def _hash_token(raw_token: str) -> str:

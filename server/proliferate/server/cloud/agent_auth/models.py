@@ -179,6 +179,66 @@ class SandboxProfileAgentAuthTargetStateResponse(BaseModel):
     last_error_message: str | None = Field(alias="lastErrorMessage")
 
 
+class WorkerAgentAuthGatewayConfig(BaseModel):
+    protocol_facade: str = Field(alias="protocolFacade")
+    base_urls: dict[str, str] = Field(alias="baseUrls")
+    runtime_grant_token: str = Field(alias="runtimeGrantToken")
+    expires_at: str = Field(alias="expiresAt")
+    protected_env: dict[str, str] = Field(default_factory=dict, alias="protectedEnv")
+    support_env: dict[str, str] = Field(default_factory=dict, alias="supportEnv")
+    protected_config: dict[str, object] = Field(default_factory=dict, alias="protectedConfig")
+    support_config: dict[str, object] = Field(default_factory=dict, alias="supportConfig")
+
+
+class WorkerAgentAuthSyncedFilesConfig(BaseModel):
+    credential_share_id: UUID | None = Field(default=None, alias="credentialShareId")
+    env_vars: dict[str, str] = Field(default_factory=dict, alias="envVars")
+    files: list[dict[str, object]] = Field(default_factory=list)
+    cleanup: list[dict[str, object]] = Field(default_factory=list)
+
+
+class WorkerAgentAuthSelectionPlan(BaseModel):
+    agent_kind: str = Field(alias="agentKind")
+    materialization_mode: str = Field(alias="materializationMode")
+    credential_id: UUID = Field(alias="credentialId")
+    credential_revision: int = Field(alias="credentialRevision")
+    credential_share_id: UUID | None = Field(default=None, alias="credentialShareId")
+    gateway: WorkerAgentAuthGatewayConfig | None = None
+    synced_files: WorkerAgentAuthSyncedFilesConfig | None = Field(
+        default=None,
+        alias="syncedFiles",
+    )
+
+
+class WorkerAgentAuthMaterializationPlan(BaseModel):
+    applied: bool = True
+    reason: str | None = None
+    current_revision: int | None = Field(default=None, alias="currentRevision")
+    target_id: UUID | None = Field(default=None, alias="targetId")
+    sandbox_profile_id: UUID = Field(alias="sandboxProfileId")
+    revision: int
+    selections: list[WorkerAgentAuthSelectionPlan] = Field(default_factory=list)
+
+
+class WorkerAgentAuthStatusRequest(BaseModel):
+    status: str
+    command_id: UUID = Field(alias="commandId")
+    revision: int
+    lease_id: str = Field(alias="leaseId")
+    applied_revision: int | None = Field(default=None, alias="appliedRevision")
+    current_revision: int | None = Field(default=None, alias="currentRevision")
+    error_code: str | None = Field(default=None, alias="errorCode")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+
+
+class WorkerAgentAuthStatusResponse(BaseModel):
+    sandbox_profile_id: UUID = Field(alias="sandboxProfileId")
+    target_id: UUID = Field(alias="targetId")
+    desired_revision: int = Field(alias="desiredRevision")
+    applied_revision: int | None = Field(alias="appliedRevision")
+    status: str
+
+
 class CreateGatewayCredentialResponse(BaseModel):
     credential: AgentAuthCredentialResponse
     policy: AgentGatewayPolicyResponse

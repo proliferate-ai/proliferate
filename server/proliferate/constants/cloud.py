@@ -435,6 +435,7 @@ class CloudCommandKind(StrEnum):
     ensure_repo_checkout = "ensure_repo_checkout"
     materialize_workspace = "materialize_workspace"
     materialize_environment = "materialize_environment"
+    refresh_agent_auth_config = "refresh_agent_auth_config"
     resume_session = "resume_session"
     send_prompt = "send_prompt"
     resolve_interaction = "resolve_interaction"
@@ -486,6 +487,7 @@ ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.ensure_repo_checkout.value,
     CloudCommandKind.materialize_workspace.value,
     CloudCommandKind.materialize_environment.value,
+    CloudCommandKind.refresh_agent_auth_config.value,
     CloudCommandKind.send_prompt.value,
     CloudCommandKind.resolve_interaction.value,
     CloudCommandKind.update_session_config.value,

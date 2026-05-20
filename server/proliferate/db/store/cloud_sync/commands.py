@@ -357,7 +357,7 @@ async def record_command_result(
     row.status = effective_status
     row.error_code = effective_error_code
     row.error_message = effective_error_message
-    row.result_json = result_json
+    row.result_json = _safe_result_json(kind=row.kind, result_json=result_json)
     if materialized_workspace_id is not None:
         row.workspace_id = materialized_workspace_id
     row.updated_at = now
@@ -404,6 +404,28 @@ def _materialized_workspace_id(
     if not isinstance(workspace_id, str) or not workspace_id.strip():
         return None
     return workspace_id.strip()
+
+
+def _safe_result_json(*, kind: str, result_json: str | None) -> str | None:
+    if kind != CloudCommandKind.refresh_agent_auth_config.value:
+        return result_json
+    try:
+        result = json.loads(result_json or "{}")
+    except ValueError:
+        return None
+    if not isinstance(result, dict):
+        return None
+    safe: dict[str, object] = {}
+    if isinstance(result.get("applied"), bool):
+        safe["applied"] = result["applied"]
+    if isinstance(result.get("reason"), str):
+        safe["reason"] = str(result["reason"])[:128]
+    if isinstance(result.get("currentRevision"), int) and not isinstance(
+        result.get("currentRevision"),
+        bool,
+    ):
+        safe["currentRevision"] = result["currentRevision"]
+    return json.dumps(safe, separators=(",", ":"), sort_keys=True) if safe else None
 
 
 def _is_terminal_status(status: str) -> bool:

@@ -32,6 +32,12 @@ _MATERIALIZE_WORKTREE_FIELDS = {
 }
 _CONFIGURE_GIT_IDENTITY_FIELDS = {"targetGitIdentityId", "configVersion"}
 _ENSURE_REPO_CHECKOUT_FIELDS = {"provider", "owner", "name", "path", "baseBranch"}
+_REFRESH_AGENT_AUTH_CONFIG_FIELDS = {
+    "sandboxProfileId",
+    "revision",
+    "reason",
+    "forceRestart",
+}
 _MAX_MATERIALIZE_WORKSPACE_DISPLAY_NAME_CHARS = 160
 
 
@@ -81,6 +87,7 @@ def validate_command_shape(
         CloudCommandKind.configure_git_identity.value,
         CloudCommandKind.ensure_repo_checkout.value,
         CloudCommandKind.materialize_environment.value,
+        CloudCommandKind.refresh_agent_auth_config.value,
     } and (workspace_id or session_id):
         raise CloudApiError(
             "cloud_command_target_only",
@@ -123,6 +130,12 @@ def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
         return
     if kind == CloudCommandKind.ensure_repo_checkout.value:
         _validate_ensure_repo_checkout_payload(payload)
+        return
+    if kind == CloudCommandKind.refresh_agent_auth_config.value:
+        _validate_refresh_agent_auth_config_payload(payload)
+        return
+    if kind in {CloudCommandKind.start_session.value, CloudCommandKind.send_prompt.value}:
+        _validate_optional_agent_auth_preflight_payload(kind=kind, payload=payload)
         return
     if kind != CloudCommandKind.materialize_workspace.value:
         return
@@ -224,6 +237,75 @@ def _validate_ensure_repo_checkout_payload(payload: dict[str, object]) -> None:
             message=f"ensure_repo_checkout payload must contain {field}.",
         )
     _optional_string(payload, "baseBranch")
+
+
+def _validate_refresh_agent_auth_config_payload(payload: dict[str, object]) -> None:
+    _reject_unknown_fields(
+        payload,
+        _REFRESH_AGENT_AUTH_CONFIG_FIELDS,
+        code="cloud_command_refresh_agent_auth_payload_unknown",
+        message_prefix="refresh_agent_auth_config payload contains unsupported field(s): ",
+    )
+    _required_string(
+        payload,
+        "sandboxProfileId",
+        code="cloud_command_refresh_agent_auth_profile_required",
+        message="refresh_agent_auth_config payload must contain sandboxProfileId.",
+    )
+    revision = _required_int(
+        payload,
+        "revision",
+        code="cloud_command_refresh_agent_auth_revision_required",
+        message="refresh_agent_auth_config payload must contain revision.",
+    )
+    if revision < 0:
+        raise CloudApiError(
+            "cloud_command_refresh_agent_auth_revision_invalid",
+            "refresh_agent_auth_config revision must be non-negative.",
+            status_code=400,
+        )
+    _required_string(
+        payload,
+        "reason",
+        code="cloud_command_refresh_agent_auth_reason_required",
+        message="refresh_agent_auth_config payload must contain reason.",
+    )
+    value = payload.get("forceRestart")
+    if not isinstance(value, bool):
+        raise CloudApiError(
+            "cloud_command_refresh_agent_auth_force_restart_required",
+            "refresh_agent_auth_config payload must contain boolean forceRestart.",
+            status_code=400,
+        )
+
+
+def _validate_optional_agent_auth_preflight_payload(
+    *,
+    kind: str,
+    payload: dict[str, object],
+) -> None:
+    has_profile = "sandboxProfileId" in payload
+    has_revision = "requiredAgentAuthRevision" in payload
+    if not has_profile and not has_revision:
+        return
+    _required_string(
+        payload,
+        "sandboxProfileId",
+        code="cloud_command_agent_auth_profile_required",
+        message=f"{kind} payload must contain sandboxProfileId with auth preflight.",
+    )
+    revision = _required_int(
+        payload,
+        "requiredAgentAuthRevision",
+        code="cloud_command_agent_auth_revision_required",
+        message=f"{kind} payload must contain requiredAgentAuthRevision with auth preflight.",
+    )
+    if revision < 0:
+        raise CloudApiError(
+            "cloud_command_agent_auth_revision_invalid",
+            f"{kind} requiredAgentAuthRevision must be non-negative.",
+            status_code=400,
+        )
 
 
 def _required_string(

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import uuid
+from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.models.auth import OAuthAccount, User
+from proliferate.utils.crypto import encrypt_text
+from tests.e2e.cloud.helpers.github import seed_linked_github_account
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 
@@ -50,6 +54,39 @@ async def _create_user_and_get_tokens(
 
 def _headers(tokens: dict[str, str]) -> dict[str, str]:
     return {"Authorization": f"Bearer {tokens['access_token']}"}
+
+
+async def _create_enrolled_target(
+    client: AsyncClient,
+    headers: dict[str, str],
+    *,
+    suffix: str,
+) -> tuple[str, dict[str, str]]:
+    create = await client.post(
+        "/v1/cloud/targets/enrollments",
+        headers=headers,
+        json={
+            "displayName": f"Agent Auth Target {suffix}",
+            "kind": "ssh",
+            "ownerScope": "personal",
+            "defaultWorkspaceRoot": "~/proliferate-workspaces",
+        },
+    )
+    assert create.status_code == 200
+    enrollment = create.json()
+    enrolled = await client.post(
+        "/v1/cloud/worker/enroll",
+        json={
+            "enrollmentToken": enrollment["enrollmentToken"],
+            "machineFingerprint": f"agent-auth-{suffix}-{uuid.uuid4()}",
+            "hostname": f"agent-auth-{suffix}",
+            "workerVersion": "0.1.0",
+        },
+    )
+    assert enrolled.status_code == 200
+    return enrollment["target"]["id"], {
+        "Authorization": f"Bearer {enrolled.json()['workerToken']}"
+    }
 
 
 @pytest.mark.asyncio
@@ -324,3 +361,178 @@ async def test_managed_credits_route_is_not_customer_accessible(
     )
 
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_agent_auth_selection_queues_secret_safe_worker_materialization(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_public_base_url",
+        "https://gateway.test",
+    )
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-worker-materialization@example.com",
+    )
+    await seed_linked_github_account(
+        db_session,
+        user_id=tokens["user_id"],
+        access_token="gh-agent-auth-worker-token",
+        account_email="agent-auth-worker@example.com",
+    )
+    target_id, worker_headers = await _create_enrolled_target(
+        client,
+        _headers(tokens),
+        suffix="materialization",
+    )
+
+    actor_user_id = UUID(tokens["user_id"])
+    credential = await store.create_agent_auth_credential(
+        db_session,
+        owner_scope="personal",
+        owner_user_id=actor_user_id,
+        organization_id=None,
+        created_by_user_id=actor_user_id,
+        agent_kind="claude",
+        credential_kind="managed_gateway",
+        display_name="Ready Claude gateway",
+        redacted_summary_json='{"providerKind":"anthropic_api_key"}',
+        status="ready",
+    )
+    await store.ensure_gateway_policy(
+        db_session,
+        credential_id=credential.id,
+        policy_kind="personal_byok",
+        owner_scope="personal",
+        owner_user_id=actor_user_id,
+        organization_id=None,
+        budget_subject_id=None,
+        litellm_team_id="team-agent-auth",
+        litellm_virtual_key_id="key-agent-auth",
+        litellm_virtual_key_ciphertext=encrypt_text("litellm-secret-key"),
+        litellm_virtual_key_ciphertext_key_id="local",
+        litellm_sync_status="synced",
+        litellm_sync_fingerprint="fingerprint-agent-auth",
+        status="ready",
+        last_error_code=None,
+        last_error_message=None,
+    )
+    await db_session.commit()
+
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+        json={"managedTargetId": target_id},
+    )
+    assert profile_response.status_code == 200
+    profile = profile_response.json()
+
+    select_response = await client.put(
+        f"/v1/cloud/sandbox-profiles/{profile['id']}/agent-auth-selections/claude",
+        headers=_headers(tokens),
+        json={"credentialId": str(credential.id), "forceRestart": True},
+    )
+    assert select_response.status_code == 200
+
+    lease = await client.post(
+        "/v1/cloud/worker/commands/lease",
+        headers=worker_headers,
+        json={"supportedKinds": ["refresh_agent_auth_config"], "leaseTimeoutSeconds": 30},
+    )
+    assert lease.status_code == 200
+    command = lease.json()["command"]
+    assert command["kind"] == "refresh_agent_auth_config"
+    assert command["payload"]["sandboxProfileId"] == profile["id"]
+    assert command["payload"]["revision"] == 1
+    assert command["payload"]["forceRestart"] is True
+    assert "litellm-secret-key" not in str(command)
+
+    materializing = await client.post(
+        f"/v1/cloud/worker/agent-auth-configs/{profile['id']}/status",
+        headers=worker_headers,
+        json={
+            "status": "materializing",
+            "commandId": command["commandId"],
+            "revision": command["payload"]["revision"],
+            "leaseId": command["leaseId"],
+        },
+    )
+    assert materializing.status_code == 200
+    assert materializing.json()["status"] == "materializing"
+
+    materialization = await client.get(
+        f"/v1/cloud/worker/agent-auth-configs/{profile['id']}/materialization",
+        headers=worker_headers,
+        params={
+            "command_id": command["commandId"],
+            "revision": command["payload"]["revision"],
+            "lease_id": command["leaseId"],
+        },
+    )
+    assert materialization.status_code == 200
+    plan = materialization.json()
+    assert plan["applied"] is True
+    assert plan["sandboxProfileId"] == profile["id"]
+    selection = plan["selections"][0]
+    assert selection["agentKind"] == "claude"
+    assert selection["gateway"]["protocolFacade"] == "anthropic"
+    assert selection["gateway"]["baseUrls"]["anthropic"] == "https://gateway.test/anthropic"
+    token = selection["gateway"]["runtimeGrantToken"]
+    assert token
+    assert selection["gateway"]["protectedEnv"]["ANTHROPIC_BASE_URL"] == (
+        "https://gateway.test/anthropic"
+    )
+    assert selection["gateway"]["protectedEnv"]["ANTHROPIC_CUSTOM_HEADERS"] == (
+        f"Authorization: Bearer {token}"
+    )
+
+    applied = await client.post(
+        f"/v1/cloud/worker/agent-auth-configs/{profile['id']}/status",
+        headers=worker_headers,
+        json={
+            "status": "applied",
+            "commandId": command["commandId"],
+            "revision": command["payload"]["revision"],
+            "leaseId": command["leaseId"],
+        },
+    )
+    assert applied.status_code == 200
+    assert applied.json()["status"] == "applied"
+    assert applied.json()["appliedRevision"] == 1
+
+    result = await client.post(
+        f"/v1/cloud/worker/commands/{command['commandId']}/result",
+        headers=worker_headers,
+        json={
+            "status": "accepted",
+            "leaseId": command["leaseId"],
+            "result": {
+                "applied": True,
+                "runtimeGrantToken": token,
+                "protectedEnv": selection["gateway"]["protectedEnv"],
+            },
+        },
+    )
+    assert result.status_code == 200
+    command_status = await client.get(
+        f"/v1/cloud/commands/{command['commandId']}",
+        headers=_headers(tokens),
+    )
+    assert command_status.status_code == 200
+    assert command_status.json()["result"] is None
+    assert token not in str(command_status.json())
+
+    target_states = await client.get(
+        f"/v1/cloud/sandbox-profiles/{profile['id']}/agent-auth-target-states",
+        headers=_headers(tokens),
+    )
+    assert target_states.status_code == 200
+    state = target_states.json()[0]
+    assert state["desiredRevision"] == 1
+    assert state["appliedRevision"] == 1
+    assert state["status"] == "applied"
+    assert state["forceRestartRequired"] is False

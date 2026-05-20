@@ -1090,6 +1090,23 @@ async def list_target_states_for_profile(
     return tuple(_target_state_record(row) for row in rows)
 
 
+async def get_target_state(
+    db: AsyncSession,
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+) -> SandboxProfileAgentAuthTargetStateRecord | None:
+    row = (
+        await db.execute(
+            select(SandboxProfileAgentAuthTargetState).where(
+                SandboxProfileAgentAuthTargetState.sandbox_profile_id == sandbox_profile_id,
+                SandboxProfileAgentAuthTargetState.target_id == target_id,
+            )
+        )
+    ).scalar_one_or_none()
+    return _target_state_record(row) if row is not None else None
+
+
 async def upsert_target_state(
     db: AsyncSession,
     *,
