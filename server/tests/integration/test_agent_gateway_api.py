@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from dataclasses import dataclass
 from unittest.mock import ANY
@@ -179,6 +180,57 @@ async def test_anthropic_gateway_forwards_valid_grant_to_litellm(
         "policy_id": str(seed.policy_id),
         "user_id": ANY,
     }
+
+
+@pytest.mark.asyncio
+async def test_gateway_request_logging_is_privacy_safe(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    seed = await _seed_gateway_grant(db_session)
+    fake_client = _FakeRuntimeClient()
+    monkeypatch.setattr(
+        "proliferate.server.agent_gateway.service.LiteLLMRuntimeClient",
+        lambda: fake_client,
+    )
+    caplog.set_level(logging.INFO, logger="proliferate.agent_gateway")
+    gateway_logger = logging.getLogger("proliferate.agent_gateway")
+    gateway_logger.addHandler(caplog.handler)
+
+    try:
+        response = await client.post(
+            "/anthropic/v1/messages",
+            headers={"Authorization": f"Bearer {seed.raw_token}"},
+            json={
+                "model": "us.anthropic.claude-sonnet-4-6",
+                "messages": [{"role": "user", "content": "super-secret-prompt"}],
+            },
+        )
+    finally:
+        gateway_logger.removeHandler(caplog.handler)
+
+    assert response.status_code == 200
+    records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "agent_gateway_request"
+    ]
+    assert len(records) == 1
+    record = records[0]
+    assert record.outcome == "success"
+    assert record.policy_hash != str(seed.policy_id)
+    assert not hasattr(record, "policy_id")
+    assert not hasattr(record, "target_id")
+    assert not hasattr(record, "sandbox_profile_id")
+    assert record.model_hash != "us.anthropic.claude-sonnet-4-6"
+    assert "super-secret-prompt" not in caplog.text
+    assert str(seed.policy_id) not in caplog.text
+    assert str(seed.target_id) not in caplog.text
+    assert str(seed.sandbox_profile_id) not in caplog.text
+    assert seed.raw_token not in caplog.text
+    assert "litellm-runtime-key" not in caplog.text
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
+import time
 from collections.abc import Mapping
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +41,9 @@ from proliferate.server.agent_gateway.models import (
     GatewayModelsResponse,
 )
 from proliferate.utils.crypto import decrypt_text
-from proliferate.utils.time import utcnow
+from proliferate.utils.time import duration_ms, utcnow
+
+logger = logging.getLogger("proliferate.agent_gateway")
 
 
 async def list_gateway_models(
@@ -71,31 +75,36 @@ async def forward_gateway_request(
     content_type: str | None,
     protocol_headers: Mapping[str, str],
 ) -> GatewayForwardResponse | GatewayForwardStream:
-    if len(body) > settings.agent_gateway_max_request_bytes:
-        raise AgentGatewayError(
-            "Gateway request body is too large.",
-            code="gateway_request_too_large",
-            status_code=413,
-        )
-    body_json = _json_body(body)
-    request_model = model_from_body(body_json)
-    if request_model is None:
-        raise AgentGatewayError(
-            "Gateway request model is required.",
-            code="invalid_model",
-            status_code=400,
-        )
-    authorized = await authorize_gateway_request(
-        db,
-        raw_token=raw_token,
-        gateway_path=gateway_path,
-        request_model=request_model,
-    )
-    client = LiteLLMRuntimeClient()
-    metadata = _metadata_for_request(authorized)
-    litellm_path = litellm_path_for_gateway_path(gateway_path)
+    started = time.perf_counter()
+    authorized: AuthorizedGatewayRequest | None = None
+    request_model: str | None = None
+    stream = False
     try:
-        if request_wants_stream(body_json):
+        if len(body) > settings.agent_gateway_max_request_bytes:
+            raise AgentGatewayError(
+                "Gateway request body is too large.",
+                code="gateway_request_too_large",
+                status_code=413,
+            )
+        body_json = _json_body(body)
+        request_model = model_from_body(body_json)
+        if request_model is None:
+            raise AgentGatewayError(
+                "Gateway request model is required.",
+                code="invalid_model",
+                status_code=400,
+            )
+        stream = request_wants_stream(body_json)
+        authorized = await authorize_gateway_request(
+            db,
+            raw_token=raw_token,
+            gateway_path=gateway_path,
+            request_model=request_model,
+        )
+        client = LiteLLMRuntimeClient()
+        metadata = _metadata_for_request(authorized)
+        litellm_path = litellm_path_for_gateway_path(gateway_path)
+        if stream:
             response_stream = await client.open_stream(
                 method=method,
                 path=litellm_path,
@@ -105,6 +114,16 @@ async def forward_gateway_request(
                 content_type=content_type,
                 protocol_headers=protocol_headers,
                 metadata=metadata,
+            )
+            _log_gateway_request(
+                started=started,
+                gateway_path=gateway_path,
+                method=method,
+                request_model=request_model,
+                stream=stream,
+                authorized=authorized,
+                outcome="success",
+                status_code=response_stream.status_code,
             )
             return GatewayForwardStream(
                 status_code=response_stream.status_code,
@@ -121,19 +140,66 @@ async def forward_gateway_request(
             protocol_headers=protocol_headers,
             metadata=metadata,
         )
+        _log_gateway_request(
+            started=started,
+            gateway_path=gateway_path,
+            method=method,
+            request_model=request_model,
+            stream=stream,
+            authorized=authorized,
+            outcome="success",
+            status_code=response.status_code,
+        )
         return GatewayForwardResponse(
             status_code=response.status_code,
             headers=response.headers,
             content=response.content,
         )
+    except AgentGatewayError as exc:
+        _log_gateway_request(
+            started=started,
+            gateway_path=gateway_path,
+            method=method,
+            request_model=request_model,
+            stream=stream,
+            authorized=authorized,
+            outcome="error",
+            status_code=exc.status_code,
+            error_code=exc.code,
+        )
+        raise
     except LiteLLMRuntimeStatusError as exc:
-        raise _map_litellm_error(exc) from exc
+        mapped = _map_litellm_error(exc)
+        _log_gateway_request(
+            started=started,
+            gateway_path=gateway_path,
+            method=method,
+            request_model=request_model,
+            stream=stream,
+            authorized=authorized,
+            outcome="error",
+            status_code=mapped.status_code,
+            error_code=mapped.code,
+        )
+        raise mapped from exc
     except LiteLLMIntegrationError as exc:
-        raise AgentGatewayError(
+        mapped = AgentGatewayError(
             "LiteLLM is unavailable.",
             code="litellm_unavailable",
             status_code=503,
-        ) from exc
+        )
+        _log_gateway_request(
+            started=started,
+            gateway_path=gateway_path,
+            method=method,
+            request_model=request_model,
+            stream=stream,
+            authorized=authorized,
+            outcome="error",
+            status_code=mapped.status_code,
+            error_code=mapped.code,
+        )
+        raise mapped from exc
 
 
 async def authorize_gateway_request(
@@ -347,6 +413,65 @@ def _metadata_for_request(authorized: AuthorizedGatewayRequest) -> dict[str, str
     if authorized.user_id is not None:
         metadata["user_id"] = str(authorized.user_id)
     return metadata
+
+
+def _log_gateway_request(
+    *,
+    started: float,
+    gateway_path: str,
+    method: str,
+    request_model: str | None,
+    stream: bool,
+    authorized: AuthorizedGatewayRequest | None,
+    outcome: str,
+    status_code: int,
+    error_code: str | None = None,
+) -> None:
+    logger.info(
+        "agent gateway request completed",
+        extra={
+            "event": "agent_gateway_request",
+            "outcome": outcome,
+            "status_code": status_code,
+            "error_code": error_code,
+            "elapsed_ms": duration_ms(started),
+            "method": method,
+            "protocol_facade": (
+                authorized.protocol_facade if authorized else protocol_for_path(gateway_path)
+            ),
+            "stream": stream,
+            "model_hash": _privacy_hash(request_model),
+            "agent_kind": authorized.agent_kind if authorized else None,
+            "policy_hash": _privacy_hash_id("policy", authorized.policy_id)
+            if authorized
+            else None,
+            "organization_hash": _privacy_hash_id("organization", authorized.organization_id)
+            if authorized and authorized.organization_id is not None
+            else None,
+            "user_hash": _privacy_hash_id("user", authorized.user_id)
+            if authorized and authorized.user_id is not None
+            else None,
+            "target_hash": _privacy_hash_id("target", authorized.target_id)
+            if authorized
+            else None,
+            "sandbox_profile_hash": _privacy_hash_id(
+                "sandbox_profile",
+                authorized.sandbox_profile_id,
+            )
+            if authorized
+            else None,
+        },
+    )
+
+
+def _privacy_hash(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return hashlib.sha256(f"agent-gateway:{value}".encode()).hexdigest()[:16]
+
+
+def _privacy_hash_id(scope: str, value: object) -> str:
+    return _privacy_hash(f"{scope}:{value}") or ""
 
 
 def _map_litellm_error(error: LiteLLMRuntimeStatusError) -> AgentGatewayError:

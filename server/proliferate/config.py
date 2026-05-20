@@ -151,6 +151,9 @@ class Settings(BaseSettings):
     agent_gateway_max_request_bytes: int = 4_194_304
     agent_gateway_request_timeout_seconds: float = 120.0
     agent_gateway_opencode_enabled: bool = False
+    agent_gateway_reconciler_enabled: bool = False
+    agent_gateway_reconciler_interval_seconds: float = 300.0
+    agent_gateway_reconciler_batch_size: int = 50
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""
