@@ -402,8 +402,11 @@ creates the new one with the same primary identity columns plus new
 runtime-config and slot-fencing columns. See 5.6 for the exact shape and FK
 updates.
 
-`cloud_runtime_environment` stays physically present for non-managed
-callers and tests. Managed-cloud code stops reading or writing it.
+`cloud_runtime_environment` is dropped in this PR. Every existing caller
+is classified during implementation; managed-cloud callers are rewritten
+around `sandbox_profile` + `cloud_targets` + `cloud_target_runtime_access`,
+and any non-managed callers are either rewritten to the new model or
+deleted as dead code. See §6 for the call-site map.
 
 ### 5.2 `sandbox_profile` (extend)
 
@@ -424,31 +427,29 @@ archived_at          timestamptz nullable
                      replaces deleted_at semantically; new code reads archived_at
 ```
 
-Rename in code only (no physical rename in V1):
+Rename column:
 
 ```text
-agent_auth_revision (existing integer)  ->  semantically "desired_agent_auth_sequence"
+agent_auth_revision  ->  desired_agent_auth_revision
 ```
 
-Keep the column name `agent_auth_revision` for one PR cycle to avoid a
-churn rename. Spec 02 owns the eventual rename of the column itself if
-desired. The append-only revision row remains
-`sandbox_profile_agent_auth_revision`.
+The append-only revision row remains `sandbox_profile_agent_auth_revision`.
+All readers (`server/proliferate/server/cloud/agent_auth/**`,
+`server/proliferate/db/store/cloud_agent_auth/**`) are updated in this PR.
 
 Drop column:
 
 ```text
-managed_target_id     dropped (was denormalized; now derived from
+managed_target_id     primary target derived from
                       cloud_targets.sandbox_profile_id +
-                      profile_target_role = 'primary')
+                      profile_target_role = 'primary'
 ```
 
 Status widening (see §2.1 for the full state machine):
 
 ```text
-existing CHECK ck_sandbox_profile_status uses SUPPORTED_SANDBOX_PROFILE_STATUSES.
-extend that constant to:
-  configuring | provisioning | enabled | disabled | blocked | error | active
+SUPPORTED_SANDBOX_PROFILE_STATUSES becomes:
+  configuring | provisioning | enabled | disabled | blocked | error
 
   configuring   row exists, no primary target yet (sync ensure succeeded)
   provisioning  primary target exists, slot creation is in flight (background)
@@ -456,10 +457,9 @@ extend that constant to:
   disabled      explicit user/admin disable
   blocked       billing/policy block; reactivatable when cleared
   error         provisioning failed in a way the reconciler cannot self-heal
-  active        compatibility alias for 'enabled'; new code reads 'enabled'
 
-unique partial indexes continue to use status IN ('active','enabled') so
-the existing one-per-user / one-per-org invariant survives the rename.
+partial unique indexes are updated to key on status='enabled' in this PR.
+existing rows are mapped 'active' -> 'enabled' in the migration.
 ```
 
 Invariants (unchanged):
@@ -552,14 +552,12 @@ Slot replacement rule:
 3. Old slot rows remain for audit/billing.
 ```
 
-`runtime_environment_id` on `cloud_sandbox` is **no longer required** for
-managed-cloud lookups. Managed-cloud slot lookup uses `(sandbox_profile_id,
-target_id) WHERE superseded_at IS NULL`. If `runtime_environment_id` still has
-non-managed callers, leave it physically present and unset by managed-cloud
-writers; otherwise drop it.
+`runtime_environment_id` on `cloud_sandbox` is removed in this PR.
+Managed-cloud slot lookup uses `(sandbox_profile_id, target_id) WHERE
+superseded_at IS NULL`.
 
-`cloud_sandbox.cloud_workspace_id` is removed in this PR. It was a
-compatibility-only field; slots belong to a target, not to a workspace.
+`cloud_sandbox.cloud_workspace_id` is removed in this PR. Slots belong to
+a target, not to a workspace.
 
 ### 5.5 `cloud_target_runtime_access` (new)
 
@@ -714,14 +712,22 @@ required_runtime_config_revision_id text    nullable
 required_agent_auth_revision        integer nullable
 ```
 
+Drop columns (managed-cloud runtime access moves to
+`cloud_target_runtime_access`):
+
+```text
+cloud_workspace.runtime_environment_id
+cloud_workspace.active_sandbox_id
+cloud_workspace.runtime_url
+cloud_workspace.runtime_token_ciphertext
+cloud_workspace.anyharness_data_key_ciphertext
+```
+
 Managed-cloud writes:
 
 ```text
 managed cloud_workspace rows MUST set:
   sandbox_profile_id, target_id, normalized_repo_key
-managed cloud_workspace rows MUST NOT set:
-  runtime_environment_id, active_sandbox_id, runtime_url,
-  runtime_token_ciphertext, anyharness_data_key_ciphertext
 
 billing_subject_id (already present on cloud_workspace) MUST equal
 sandbox_profile.billing_subject_id at write time
@@ -1334,8 +1340,9 @@ Chunk 3b  Background slot provisioning + reconciler
 Chunk 4  Worker wire contract
   - extend envelope, result, delivery, enroll, heartbeat
   - regenerate anyharness/sdk
-  - worker code passes new fields through; preserves backward compat on
-    None values so non-managed targets do not regress
+  - new fields are Option<T> only because non-managed targets (SSH,
+    local) have no sandbox_profile_id / cloud_sandbox_id / slot_generation
+    to send; managed-cloud commands MUST set them
 
 Chunk 5  Managed workspace creation rewrite
   - cloud_workspace creation under (sandbox_profile_id, target_id) BEFORE
@@ -1498,7 +1505,7 @@ Targeted Rust tests to add:
 ```text
 anyharness/crates/anyharness-contract/src/v1/commands.rs#tests
   - envelope round-trips with new fields
-  - back-compat: None values for non-managed targets
+  - Option<T> fields hold None for non-managed (SSH, local) targets
 
 anyharness/crates/proliferate-worker/src/cloud_client/commands.rs#tests
   - command result echoes cloud_workspace_id and anyharness_workspace_id
@@ -1582,26 +1589,7 @@ Manual smoke:
 
 ## 10. Open Questions
 
-1. **Should `cloud_workspace.runtime_environment_id` be dropped immediately?**
-
-   Bias: keep it physically present and unset by managed-cloud writers in
-   this PR if any non-managed callers still read it. Drop in spec 04 cleanup
-   if no callers remain after this PR's call-site rewrite. State the
-   decision in the migration file rather than carrying ambiguity forward.
-
-2. **Should `sandbox_profile.status` rename `active` to `enabled` in this PR?**
-
-   Bias: no. Keep `'active'` as a compatibility alias for `'enabled'`; the
-   partial unique indexes continue to accept both. A future cosmetic PR can
-   rename.
-
-3. **Should the `agent_auth_revision` column on `sandbox_profile` be renamed
-   to `desired_agent_auth_sequence` in this PR?**
-
-   Bias: no in V1. Spec 02 owns that rename. Keep the existing column name to
-   avoid a churn rename in the foundation PR.
-
-4. **Should we model "ssh / desktop_dispatch / self_hosted_cloud" targets as
+1. **Should we model "ssh / desktop_dispatch / self_hosted_cloud" targets as
    also having a profile?**
 
    Bias: no. The foundation keeps non-managed targets target-first with
@@ -1609,15 +1597,15 @@ Manual smoke:
    `cloud_target.policy_profile_id` if non-managed targets need shared
    policy defaults.
 
-5. **Which queue/scheduler does `provision_profile_slot` run on?**
+2. **Which queue/scheduler does `provision_profile_slot` run on?**
 
    The repo already has automation scheduling (`server/proliferate/server/
    automations/**`) and runtime scheduling (`server/proliferate/server/cloud/
-   runtime/scheduler.py`). The foundation should reuse one of those rather
-   than inventing a new mechanism. Decision needed during implementation:
-   audit both and pick the one that already handles bounded retry + dedupe.
+   runtime/scheduler.py`). The foundation reuses one of those rather than
+   inventing a new mechanism. Decision needed during implementation: audit
+   both and pick the one that already handles bounded retry + dedupe.
 
-6. **Does the foundation add a profile-events SSE stream, or just polling?**
+3. **Does the foundation add a profile-events SSE stream, or just polling?**
 
    Polling (`GET /sandbox-profiles/{id}` + `…/target-state`) is sufficient
    for V1. SSE is a UX-latency improvement and may already be available
@@ -1625,7 +1613,7 @@ Manual smoke:
    not add a new SSE channel; spec 04 can fold profile/slot events into
    the existing channel if it exists.
 
-7. **Should `ensure_*_sandbox_profile` always also call
+4. **Should `ensure_*_sandbox_profile` always also call
    `ensure_primary_profile_target`?**
 
    Two shapes:

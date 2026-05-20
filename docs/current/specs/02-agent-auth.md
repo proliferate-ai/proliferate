@@ -531,12 +531,9 @@ Cloud-side, the command builder
 `sandbox_profile_target_state.desired_agent_auth_revision` (read inside
 the same transaction that creates the command).
 
-If a worker advertises a version that does not include scope synthesis,
-Cloud must withhold scoped-launch commands from that worker. The
-foundation's `supported_command_kinds` carries a feature flag that the
-spec extends: `supports_scope_synthesis: bool`. Workers without the flag
-receive non-scoped launches and the corresponding launch fails closed at
-preflight rather than silently launching without auth.
+Worker and Cloud ship in the same PR. No "supports_scope_synthesis"
+feature flag and no worker-version gating. The wire contract is the
+contract.
 
 ### 5.3 AnyHarness fail-closed for no-selection (gap #3)
 
@@ -592,28 +589,34 @@ SyncedFilesPlan.cleanup
   reason: 'credential_revoked' | 'share_revoked' | 'selection_replaced' | 'profile_disabled'
 ```
 
-Worker enforcement:
+Worker enforcement (conservative):
 
 ```text
 for path in plan.cleanup.relative_paths:
   resolve to absolute path under HOME
   if path is NOT in ALLOWED_NATIVE_AUTH_PATHS[selection.agent_kind]:
-    skip + log; do not delete
+    log security warning and abort the apply (do not delete anything)
   if path exists:
     delete file
-    write tombstone tag so next ls / repair can confirm cleanup happened
-  emit observability event with selection_id and old credential_id
+  emit audit event with selection_id and the credential_id being cleaned
 report applied_cleanup_paths in /worker/agent-auth-configs/{id}/status
 ```
 
-Server constructs `cleanup` when:
+Server constructs `cleanup` only when the intent is unambiguous and the
+old paths are clearly orphaned:
 
 ```text
 - a personal credential is revoked
 - a credential share is revoked
-- a selection is replaced (new credential file paths must not collide
-  with old; emit cleanup for paths the replacement does not also write)
 - a profile is disabled / blocked
+
+NOT on plain selection replacement. If a user switches between two
+synced credentials for the same agent_kind, the new selection writes
+its files and any overlapping paths overwrite naturally. Paths that no
+longer apply but are not clearly orphaned are left in place. Aggressive
+cleanup on replacement risks destructive removal in edge cases
+(shared paths across agents, user-modified files, race with parallel
+write); the conservative path is to delete only on explicit revoke.
 ```
 
 Server fail-closed rule:
@@ -621,8 +624,9 @@ Server fail-closed rule:
 ```text
 For a synced_files selection, the worker must not report applied
 unless every cleanup_paths entry succeeded or was already absent.
-If any cleanup_path is in an unallowlisted location, report failed
-and surface a security warning in the audit event.
+If any cleanup_path resolves outside the per-agent allowlist, abort
+the apply, mark it failed, and emit a security audit event. Never
+half-clean.
 ```
 
 Slot replacement is a separate path (the new sandbox starts empty —
@@ -884,16 +888,10 @@ The materialization plan response gains:
 plan.selections[].synced.cleanup: SyncedFilesCleanupActions     (5.4)
 plan.target_id                                                    (already present)
 plan.slot_generation                                              (new — from spec 00)
-plan.required_runtime_capabilities: {                             (new)
-  scope_synthesis: bool,
-  cleanup_actions: bool,
-  protected_env_allowlist: bool
-}
 ```
 
-Worker advertises supported capabilities at enrollment / heartbeat so
-Cloud can withhold materialization plans whose required capabilities
-exceed the worker's version.
+Worker, server, contract, and SDK ship in one PR; there is no capability
+flag negotiation.
 
 ## 6. Files To Change
 
@@ -960,14 +958,9 @@ server/proliferate/config.py
 Worker (Rust):
 
 ```text
-anyharness/crates/proliferate-worker/src/cloud_client/mod.rs
-  - advertise required_runtime_capabilities support flags at enrollment
-
 anyharness/crates/proliferate-worker/src/commands/dispatcher.rs
   - synthesize AgentAuthExternalScope on start_session  (5.2)
   - thread required_agent_auth_revision into AnyHarness session create
-  - reject command if scope synthesis is enabled but Cloud sent
-    inconsistent fields
 
 anyharness/crates/proliferate-worker/src/materialization/agent_auth.rs
   - execute cleanup.relative_paths under allowlist check       (5.4)
@@ -1040,61 +1033,61 @@ Tests in §9.
 ## 7. Implementation Phases
 
 ```text
-Phase 0  Rebind to spec 00
-  - apply spec 00's sandbox_profile_target_state rename in agent_auth service
-  - drop SandboxProfile.managed_target_id readers
-  - update API responses to new column names (or keep old names if more
-    convenient — pick one and apply consistently)
-  - migration tests verify agent-auth target state still resolves
+All chunks land in one PR. Phases here describe build-order inside that
+PR, not staged rollout.
 
-Phase 1  Worker scope synthesis + AnyHarness no-selection fail-closed
-  - command builder populates sandboxProfileId + requiredAgentAuthRevision
-  - dispatcher synthesizes AgentAuthExternalScope on start_session
+```text
+Chunk A  Rebind to spec 00
+  - drop SandboxProfile.managed_target_id readers
+  - load_primary_target_for_profile helper using
+    cloud_targets.profile_target_role = 'primary'
+  - update all agent-auth store/service references to the renamed
+    sandbox_profile_target_state columns
+
+Chunk B  Worker scope synthesis + AnyHarness no-selection fail-closed
+  - Cloud command builder populates sandboxProfileId +
+    requiredAgentAuthRevision on start_session / send_prompt
+  - worker dispatcher synthesizes AgentAuthExternalScope on start_session
   - AnyHarness AGENT_AUTH_SELECTION_REQUIRED typed error
-  - workers without supports_scope_synthesis are withheld scoped commands
   - end-to-end test: scoped launch fails closed when no selection
 
-Phase 2  Cleanup-on-revoke
-  - server emits cleanup_paths in plan on revoke / replace / disable
-  - worker executes cleanup under allowlist
+Chunk C  Cleanup-on-revoke (conservative)
+  - server emits cleanup_paths in plan ONLY on revoke / share-revoke /
+    profile-disabled
+  - worker executes cleanup under allowlist; aborts apply on
+    out-of-allowlist paths
   - status report includes applied_cleanup_paths
   - tests for revoke -> file removed; share revoke -> file removed;
-    selection replacement -> only orphan paths removed
+    selection replacement -> no cleanup emitted
 
-Phase 3  Protected env allowlist
+Chunk D  Protected env allowlist
   - per (agent_kind, materialization_mode) allowlist module
   - server validates before persisting plan
-  - worker validates as defense-in-depth
+  - worker validates defense-in-depth
   - AnyHarness validates on apply
   - tests for valid combos pass; invalid combos rejected
 
-Phase 4  Proactive grant rotation
+Chunk E  Proactive grant rotation
   - reconciler tick reconcile_runtime_grant_freshness
-  - threshold tuned to TTL - 2 days
+  - threshold = TTL - 2 days
   - reuses existing reconciler-enabled gate
-  - tests with frozen time
 
-Phase 5  Capability API + Desktop selector cleanup
+Chunk F  Capability API + Desktop selector cleanup
   - GET /v1/cloud/capabilities
-  - Desktop hooks + selectors
+  - Desktop hooks + selectors over capabilities snapshot
   - remove hardcoded AGENT_GATEWAY_BYOK_ENABLED
   - operator runbook update (docs/reference/deployment-self-hosting.md)
 
-Phase 6  Freshness framework + Desktop sync signals
+Chunk G  Freshness framework + Desktop sync signals
   - freshness.py module
   - apply_signal hooks at Desktop sync sites
   - CloudAgentAuthLibrary surfaces needs_resync / needs_reauth
-  - provider 401 detection and harness-native checks are follow-ups
 
-Phase 7  (optional) OpenCode native sync
-  - extend CloudCredential export to emit OpenCode
-  - worker import allowlist already supports it
-
-Phase 8  (V2) BYOK enablement
-  - live validation
-  - LiteLLM team-scoped routing or isolated routers
-  - Desktop selectors enabled
-  - this phase is product-decision-gated, not a follow-up of spec 02
+Follow-ups (separate PRs, scope additions, not migration ceremony)
+  - provider 401 detection at the gateway (feeds freshness signals)
+  - OpenCode native sync via legacy CloudCredential export
+  - BYOK enablement (V2 product decision; live validation, LiteLLM
+    team-scoped routing or isolated routers)
 ```
 
 ## 8. Acceptance Criteria
@@ -1115,9 +1108,8 @@ Phase 8  (V2) BYOK enablement
    `AGENT_AUTH_SELECTION_REQUIRED { selectionStatus }` when
    `agent_auth_scope` is set but no active selection exists for the
    requested agent_kind, or the selection is expired/invalid/stale.
-6. Workers without `supports_scope_synthesis` do not lease scoped-launch
-   commands; the corresponding launch fails preflight on the server side
-   rather than silently launching unauthenticated.
+6. (was: worker capability gating; removed — worker, server, and
+   contract ship in one PR; no version negotiation.)
 7. The materialization plan's `cleanup.relative_paths` is executed by
    the worker. Files are deleted only when the path is in the allowlist
    for the selection's `agent_kind`. Unallowlisted cleanup paths cause
@@ -1125,10 +1117,11 @@ Phase 8  (V2) BYOK enablement
 8. Worker reports `applied_cleanup_paths` in the status response. The
    server treats absence of expected cleanup as `apply_partial` and
    does not mark `applied_agent_auth_revision` complete.
-9. Revoking a credential or share enqueues
-   `refresh_agent_auth_config` with `force_restart=true` and
-   `plan.cleanup` listing every previously-written path that the
-   replacement does not also write.
+9. Revoking a credential, revoking a share, or disabling a profile
+   enqueues `refresh_agent_auth_config` with `force_restart=true` and
+   `plan.cleanup` listing every previously-written path for the
+   affected agent_kind. Plain selection replacement does NOT emit
+   cleanup; overlapping paths overwrite naturally.
 10. `protected_env` keys are validated per
     `(agent_kind, materialization_mode)` allowlist. Server rejects
     invalid plans before persistence; worker rejects them
@@ -1162,10 +1155,10 @@ Phase 8  (V2) BYOK enablement
     `sandbox_profile_target_state.applied_agent_auth_revision`. Next
     `refresh_agent_auth_config` re-applies on the new slot before the
     next scoped launch.
-20. Worker materialization plan carries `target_id`, `slot_generation`,
-    and `required_runtime_capabilities`. Cloud withholds plans whose
-    required capabilities exceed the leasing worker's advertised
-    capabilities.
+20. Worker materialization plan carries `target_id` and `slot_generation`
+    so the worker fences applies against the active slot. No capability
+    flag negotiation; worker/server/contract are version-locked by the
+    PR that ships them.
 
 ## 9. Verification / Tests
 
@@ -1224,7 +1217,6 @@ anyharness/crates/anyharness-lib/src/api/http/agent_auth_config.rs#tests
 
 anyharness/crates/proliferate-worker/src/commands/dispatcher.rs#tests
   - synthesize AgentAuthExternalScope on start_session
-  - withhold scoped commands without capability flag
   - send_prompt does not re-attach scope
 
 anyharness/crates/proliferate-worker/src/materialization/agent_auth.rs#tests
@@ -1297,9 +1289,8 @@ Manual smoke cases:
      -> worker dispatcher synthesizes AgentAuthExternalScope
      -> AnyHarness finds scoped config, applies, launches
 
-6. Worker without supports_scope_synthesis
-     -> Cloud withholds scoped-launch commands
-     -> launch preflight returns SCOPED_LAUNCH_NOT_AVAILABLE
+6. (was: worker version-skew smoke test; removed — worker and server
+   ship in the same PR, no version negotiation.)
 
 7. Long-lived shared sandbox
      -> grant approaches TTL - 2 days
@@ -1335,10 +1326,12 @@ Manual smoke cases:
 
 3. **Where does the freshness framework run for provider 401 detection?**
 
-   Bias: Phase 6+; intercept at the gateway response layer
-   (`agent_gateway/service.py:forward_gateway_request`) and feed back via
-   `freshness.apply_signal` on the credential. That keeps the
-   gateway/auth domains coupled only through a typed signal.
+   Deferred to a follow-up PR after this spec ships. When added, the
+   integration point will be the gateway response layer
+   (`agent_gateway/service.py:forward_gateway_request`) feeding back via
+   `freshness.apply_signal` on the credential. Spec 02 ships the
+   framework + Desktop sync signals only; the 401 path is a clean
+   addition with no rework needed.
 
 4. **Cleanup of revoked synced files in a new sandbox slot?**
 
