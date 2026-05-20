@@ -296,6 +296,19 @@ async def _create_ready_managed_cloud_workspace(
     )
     workspace.status = CloudWorkspaceStatus.ready.value
     workspace.anyharness_workspace_id = f"anyharness-managed-{suffix}"
+    await exposures_store.upsert_workspace_exposure(
+        db_session,
+        target_id=target_id,
+        cloud_workspace_id=workspace.id,
+        anyharness_workspace_id=workspace.anyharness_workspace_id,
+        owner_scope="personal",
+        owner_user_id=user_id,
+        organization_id=None,
+        visibility="private",
+        default_projection_level="live",
+        commandable=True,
+        origin="manual_web",
+    )
     await db_session.flush()
     return str(workspace.id)
 
@@ -1123,11 +1136,47 @@ class TestCloudCommandsApi:
             user_id=UUID(auth.user_id),
             suffix="exposure-cursor",
         )
+        unexposed_cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="materialize-without-exposure",
+        )
+        unexposed = await exposures_store.get_active_workspace_exposure(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=UUID(unexposed_cloud_workspace_id),
+        )
+        assert unexposed is not None
+        await exposures_store.archive_workspace_exposure(db_session, exposure_id=unexposed.id)
         await db_session.commit()
         monkeypatch.setattr(
             command_service,
             "kick_off_managed_slot_wake",
             lambda _target_id, _command_id=None: None,
+        )
+
+        unexposed_materialize = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-materialize-without-exposure",
+                "targetId": target_id,
+                "cloudWorkspaceId": unexposed_cloud_workspace_id,
+                "kind": "materialize_workspace",
+                "payload": {
+                    "mode": "worktree",
+                    "repoRootId": "repo-root-1",
+                    "targetPath": "/workspace/unexposed",
+                    "newBranchName": "proliferate/unexposed",
+                    "baseBranch": "main",
+                },
+            },
+        )
+        assert unexposed_materialize.status_code == 409
+        assert (
+            unexposed_materialize.json()["detail"]["code"] == "cloud_command_exposure_not_active"
         )
 
         materialize = await client.post(
@@ -1188,13 +1237,32 @@ class TestCloudCommandsApi:
         assert exposure is not None
         assert exposure.anyharness_workspace_id == "workspace-exposure-cursor"
 
+        direct_runtime_workspace = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-start-session-direct-runtime-workspace",
+                "targetId": target_id,
+                "kind": "start_session",
+                "payload": {
+                    "workspaceId": "workspace-exposure-cursor",
+                    "agentKind": "claude",
+                },
+            },
+        )
+        assert direct_runtime_workspace.status_code == 400
+        assert (
+            direct_runtime_workspace.json()["detail"]["code"]
+            == "cloud_command_cloud_workspace_required"
+        )
+
         start = await client.post(
             "/v1/cloud/commands",
             headers=auth.headers,
             json={
                 "idempotencyKey": "managed-start-session-exposure-cursor",
                 "targetId": target_id,
-                "workspaceId": cloud_workspace_id,
+                "cloudWorkspaceId": cloud_workspace_id,
                 "kind": "start_session",
                 "payload": {"agentKind": "claude"},
             },
@@ -1233,6 +1301,70 @@ class TestCloudCommandsApi:
         assert cursors[0].exposure_id == exposure.id
         assert cursors[0].anyharness_workspace_id == "workspace-exposure-cursor"
         assert cursors[0].anyharness_session_id == "session-exposure-cursor"
+
+        revoked_cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="exposure-revoked-before-result",
+        )
+        revoked_exposure = await exposures_store.get_active_workspace_exposure(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=UUID(revoked_cloud_workspace_id),
+        )
+        assert revoked_exposure is not None
+        await db_session.commit()
+        revoked_start = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-start-session-exposure-revoked-before-result",
+                "targetId": target_id,
+                "workspaceId": revoked_cloud_workspace_id,
+                "kind": "start_session",
+                "payload": {"agentKind": "claude"},
+            },
+        )
+        assert revoked_start.status_code == 200
+        revoked_start_id = revoked_start.json()["commandId"]
+        revoked_lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["start_session", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert revoked_lease.status_code == 200
+        leased_revoked = revoked_lease.json()["command"]
+        assert leased_revoked["commandId"] == revoked_start_id
+        await exposures_store.archive_workspace_exposure(
+            db_session,
+            exposure_id=revoked_exposure.id,
+        )
+        await db_session.commit()
+        revoked_result = await client.post(
+            f"/v1/cloud/worker/commands/{revoked_start_id}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": leased_revoked["leaseId"],
+                "slotGeneration": leased_revoked["slotGeneration"],
+                "cloudWorkspaceId": revoked_cloud_workspace_id,
+                "status": "accepted",
+                "result": {"body": {"sessionId": "session-exposure-revoked"}},
+            },
+        )
+        assert revoked_result.status_code == 200
+        assert (
+            await projections_store.get_session_projection_metadata(
+                db_session,
+                target_id=target_uuid,
+                session_id="session-exposure-revoked",
+            )
+            is None
+        )
 
     @pytest.mark.asyncio
     async def test_managed_slot_fence_rejects_delivery_generation_mismatch(
@@ -1496,6 +1628,80 @@ class TestCloudCommandsApi:
             .all()
         )
         assert queued == []
+
+    @pytest.mark.asyncio
+    async def test_runtime_config_preflight_does_not_overwrite_caller_revision(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-runtime-stale-preflight",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="runtime-stale-preflight",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        _current, first_revision = await runtime_config_store.get_current(
+            db_session,
+            sandbox_profile_id=profile.id,
+        )
+        assert first_revision is not None
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="runtime-stale-preflight",
+        )
+        await runtime_config_store.upsert_revision_and_current(
+            db_session,
+            sandbox_profile_id=profile.id,
+            content_hash=f"sha256:{profile.id.hex}:runtime-config-next",
+            manifest_json='{"mcpServers":[],"skills":[],"blockingErrors":[]}',
+            warnings_json=None,
+            source="test",
+            generated_by_user_id=UUID(auth.user_id),
+        )
+        await db_session.commit()
+        monkeypatch.setattr(
+            command_service,
+            "kick_off_managed_slot_wake",
+            lambda _target_id, _command_id=None: None,
+        )
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "runtime-config-stale-caller-revision",
+                "targetId": target_id,
+                "workspaceId": cloud_workspace_id,
+                "kind": "start_session",
+                "payload": {
+                    "agentKind": "claude",
+                    "sandboxProfileId": str(profile.id),
+                    "requiredRuntimeConfigRevisionId": str(first_revision.id),
+                    "requiredRuntimeConfigSequence": first_revision.sequence,
+                    "requiredRuntimeConfigContentHash": first_revision.content_hash,
+                },
+            },
+        )
+
+        assert created.status_code == 409
+        assert created.json()["detail"]["code"] == "cloud_command_runtime_config_revision_stale"
 
     @pytest.mark.asyncio
     async def test_idempotency_key_is_scoped_to_target(
@@ -1801,6 +2007,19 @@ class TestCloudCommandsApi:
             last_error_code=None,
             last_error_message=None,
         )
+        await _mark_minimal_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile_id=profile.id,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="agent-auth-preflight",
+        )
         await db_session.commit()
 
         ready = await client.post(
@@ -1809,9 +2028,9 @@ class TestCloudCommandsApi:
             json={
                 "idempotencyKey": "agent-auth-preflight-ready",
                 "targetId": target_id,
+                "workspaceId": cloud_workspace_id,
                 "kind": "start_session",
                 "payload": {
-                    "workspaceId": "anyharness-workspace-1",
                     "agentKind": "claude",
                     "sandboxProfileId": str(profile.id),
                     "requiredAgentAuthRevision": profile.agent_auth_revision,
@@ -1826,9 +2045,9 @@ class TestCloudCommandsApi:
             json={
                 "idempotencyKey": "agent-auth-preflight-auto-populated",
                 "targetId": target_id,
+                "workspaceId": cloud_workspace_id,
                 "kind": "start_session",
                 "payload": {
-                    "workspaceId": "anyharness-workspace-1",
                     "agentKind": "claude",
                 },
             },
@@ -1854,9 +2073,9 @@ class TestCloudCommandsApi:
             json={
                 "idempotencyKey": "agent-auth-preflight-untrusted-scope",
                 "targetId": target_id,
+                "workspaceId": cloud_workspace_id,
                 "kind": "start_session",
                 "payload": {
-                    "workspaceId": "anyharness-workspace-1",
                     "agentKind": "claude",
                     "sandboxProfileId": str(UUID(int=1)),
                     "requiredAgentAuthRevision": 0,
@@ -1962,6 +2181,19 @@ class TestCloudCommandsApi:
             last_error_code=None,
             last_error_message=None,
         )
+        await _mark_minimal_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile_id=profile.id,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="agent-auth-worker-capability",
+        )
         await db_session.commit()
 
         created = await client.post(
@@ -1970,9 +2202,9 @@ class TestCloudCommandsApi:
             json={
                 "idempotencyKey": "agent-auth-preflight-worker-capability",
                 "targetId": target_id,
+                "workspaceId": cloud_workspace_id,
                 "kind": "start_session",
                 "payload": {
-                    "workspaceId": "anyharness-workspace-1",
                     "agentKind": "claude",
                     "sandboxProfileId": str(profile.id),
                     "requiredAgentAuthRevision": profile.agent_auth_revision,

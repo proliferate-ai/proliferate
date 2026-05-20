@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import (
@@ -192,12 +192,22 @@ async def _find_workspace_by_anyharness_id(
     return (
         await db.execute(
             select(CloudWorkspace)
-            .join(
+            .outerjoin(
                 CloudSyncedWorkspace,
                 CloudSyncedWorkspace.cloud_workspace_id == CloudWorkspace.id,
             )
-            .where(CloudSyncedWorkspace.target_id == target_id)
-            .where(CloudSyncedWorkspace.workspace_id == anyharness_workspace_id)
+            .where(
+                or_(
+                    (
+                        (CloudSyncedWorkspace.target_id == target_id)
+                        & (CloudSyncedWorkspace.workspace_id == anyharness_workspace_id)
+                    ),
+                    (
+                        (CloudWorkspace.target_id == target_id)
+                        & (CloudWorkspace.anyharness_workspace_id == anyharness_workspace_id)
+                    ),
+                )
+            )
             .where(CloudWorkspace.archived_at.is_(None))
             .order_by(CloudWorkspace.updated_at.desc())
             .limit(1)

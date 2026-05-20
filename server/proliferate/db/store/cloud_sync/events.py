@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -240,6 +241,18 @@ async def resolve_cloud_workspace_id(
     ).scalar_one_or_none()
     if synced_row is not None:
         return synced_row
+    direct_row = (
+        await db.execute(
+            select(CloudWorkspace.id)
+            .where(CloudWorkspace.target_id == target_id)
+            .where(CloudWorkspace.anyharness_workspace_id == workspace_id)
+            .where(CloudWorkspace.archived_at.is_(None))
+            .order_by(CloudWorkspace.updated_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if direct_row is not None:
+        return direct_row
     row = (
         await db.execute(
             select(CloudWorkspace.id)
@@ -309,9 +322,26 @@ async def upsert_ingest_cursor(
             projection.last_uploaded_seq or 0,
             row.last_contiguous_seq,
         )
+        if _gap_state_repaired(projection.gap_state_json, row.last_contiguous_seq):
+            projection.gap_state_json = None
         projection.updated_at = now
     await db.flush()
     return int(row.last_contiguous_seq)
+
+
+def _gap_state_repaired(gap_state_json: str | None, last_contiguous_seq: int) -> bool:
+    if gap_state_json is None:
+        return False
+    try:
+        parsed = json.loads(gap_state_json)
+    except ValueError:
+        return last_contiguous_seq > 0
+    if not isinstance(parsed, dict):
+        return last_contiguous_seq > 0
+    expected_seq = parsed.get("expectedSeq")
+    if not isinstance(expected_seq, int) or isinstance(expected_seq, bool):
+        return last_contiguous_seq > 0
+    return last_contiguous_seq >= expected_seq
 
 
 async def get_session_event_usage(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 from proliferate.constants.cloud import CloudTargetUpdateChannel
@@ -185,3 +187,22 @@ class WorkerExposureSnapshotResponse(BaseModel):
 
 class WorkerExposureListResponse(BaseModel):
     exposures: list[WorkerExposureSnapshotResponse]
+
+
+class WorkerProjectionGapRequest(BaseModel):
+    exposure_id: UUID = Field(serialization_alias="exposureId", alias="exposureId")
+    session_projection_id: UUID = Field(
+        serialization_alias="sessionProjectionId",
+        alias="sessionProjectionId",
+    )
+    session_id: str = Field(serialization_alias="sessionId", alias="sessionId")
+    expected_seq: int = Field(serialization_alias="expectedSeq", alias="expectedSeq")
+    first_observed_seq: int = Field(
+        serialization_alias="firstObservedSeq",
+        alias="firstObservedSeq",
+    )
+    last_uploaded_seq: int = Field(serialization_alias="lastUploadedSeq", alias="lastUploadedSeq")
+
+
+class WorkerProjectionGapResponse(BaseModel):
+    updated: bool

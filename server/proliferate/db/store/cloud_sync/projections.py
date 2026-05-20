@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
@@ -201,15 +201,7 @@ async def list_active_projection_cursors_for_target(
             select(CloudSessionProjection, CloudWorkspaceExposure)
             .join(
                 CloudWorkspaceExposure,
-                or_(
-                    CloudWorkspaceExposure.id == CloudSessionProjection.exposure_id,
-                    and_(
-                        CloudSessionProjection.exposure_id.is_(None),
-                        CloudWorkspaceExposure.target_id == CloudSessionProjection.target_id,
-                        CloudWorkspaceExposure.cloud_workspace_id
-                        == CloudSessionProjection.cloud_workspace_id,
-                    ),
-                ),
+                CloudWorkspaceExposure.id == CloudSessionProjection.exposure_id,
             )
             .where(CloudWorkspaceExposure.target_id == target_id)
             .where(CloudWorkspaceExposure.archived_at.is_(None))

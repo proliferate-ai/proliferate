@@ -123,11 +123,17 @@ async def create_command(
     now = utcnow()
     target = await db.get(CloudTarget, target_id)
     if (
-        kind == CloudCommandKind.materialize_workspace.value
+        kind
+        in {
+            CloudCommandKind.materialize_workspace.value,
+            CloudCommandKind.backfill_exposed_workspace.value,
+        }
         and _target_requires_slot(target)
         and cloud_workspace_id is None
     ):
-        raise RuntimeError("Managed materialize_workspace commands require cloud_workspace_id.")
+        raise RuntimeError(f"Managed {kind} commands require cloud_workspace_id.")
+    if kind == CloudCommandKind.backfill_exposed_workspace.value and cloud_workspace_id is None:
+        raise RuntimeError("backfill_exposed_workspace commands require cloud_workspace_id.")
     row = CloudCommand(
         idempotency_scope=idempotency_scope,
         idempotency_key=idempotency_key,
@@ -317,6 +323,17 @@ async def lease_next_command(
             row.updated_at = now
             await db.flush()
             continue
+        exposure_error = await _exposure_lease_blocker(db, row)
+        if exposure_error is not None:
+            status, code, message = exposure_error
+            row.status = status
+            row.error_code = code
+            row.error_message = message
+            if status == CloudCommandStatus.rejected.value:
+                row.rejected_at = now
+            row.updated_at = now
+            await db.flush()
+            continue
         runtime_config_error = await _runtime_config_lease_blocker(db, row, target=target)
         if runtime_config_error is not None:
             status, code, message = runtime_config_error
@@ -469,6 +486,59 @@ async def _runtime_config_lease_blocker(
             CloudCommandStatus.superseded.value,
             "runtime_config_not_ready",
             "Launch command runtime config was no longer current before dispatch.",
+        )
+    return None
+
+
+async def _exposure_lease_blocker(
+    db: AsyncSession,
+    row: CloudCommand,
+) -> tuple[str, str, str] | None:
+    if row.kind not in {
+        CloudCommandKind.backfill_exposed_workspace.value,
+        CloudCommandKind.materialize_workspace.value,
+    }:
+        return None
+    if (
+        row.kind == CloudCommandKind.materialize_workspace.value
+        and not await _command_requires_slot(
+            db,
+            row,
+        )
+    ):
+        return None
+    if row.cloud_workspace_id is None:
+        return (
+            CloudCommandStatus.rejected.value,
+            "cloud_workspace_required",
+            f"{row.kind} command is missing Cloud workspace.",
+        )
+    exposure = await _load_active_workspace_exposure(
+        db,
+        target_id=row.target_id,
+        cloud_workspace_id=row.cloud_workspace_id,
+    )
+    if exposure is None or exposure.status != "active":
+        return (
+            CloudCommandStatus.rejected.value,
+            "cloud_exposure_not_active",
+            f"{row.kind} command does not reference an active exposure.",
+        )
+    if row.kind == CloudCommandKind.materialize_workspace.value:
+        if not exposure.commandable:
+            return (
+                CloudCommandStatus.rejected.value,
+                "cloud_exposure_not_commandable",
+                "materialize_workspace exposure is read-only.",
+            )
+        return None
+    if not exposure.anyharness_workspace_id or (
+        row.workspace_id is not None and row.workspace_id != exposure.anyharness_workspace_id
+    ):
+        return (
+            CloudCommandStatus.rejected.value,
+            "cloud_exposure_not_active",
+            "backfill_exposed_workspace command does not reference an active exposure.",
         )
     return None
 
@@ -906,7 +976,14 @@ async def _cloud_workspace_matches_command(db: AsyncSession, row: CloudCommand) 
         return False
     target = await db.get(CloudTarget, row.target_id)
     if _target_requires_slot(target):
-        return workspace.sandbox_profile_id == target.sandbox_profile_id
+        if workspace.sandbox_profile_id != target.sandbox_profile_id:
+            return False
+        exposure = await _load_active_workspace_exposure(
+            db,
+            target_id=row.target_id,
+            cloud_workspace_id=workspace.id,
+        )
+        return exposure is not None and exposure.status == "active" and exposure.commandable
     return True
 
 
@@ -933,40 +1010,14 @@ async def _record_materialized_cloud_workspace(
             target_id=workspace.target_id,
             cloud_workspace_id=workspace.id,
         )
-        visibility = "shared_unclaimed" if workspace.owner_scope == "organization" else "private"
-        origin = workspace.origin
-        if exposure is None:
-            db.add(
-                CloudWorkspaceExposure(
-                    target_id=workspace.target_id,
-                    cloud_workspace_id=workspace.id,
-                    anyharness_workspace_id=anyharness_workspace_id,
-                    owner_scope=workspace.owner_scope,
-                    owner_user_id=workspace.owner_user_id,
-                    organization_id=workspace.organization_id,
-                    visibility=visibility,
-                    claimed_by_user_id=None,
-                    default_projection_level="live",
-                    commandable=True,
-                    status="active",
-                    revision=1,
-                    origin=origin,
-                    created_at=now,
-                    updated_at=now,
-                )
-            )
-        else:
+        if exposure is not None and exposure.status == "active":
             changed = False
-            for attr, value in (
-                ("anyharness_workspace_id", anyharness_workspace_id),
-                ("visibility", visibility),
-                ("status", "active"),
-                ("commandable", True),
-                ("origin", origin),
-            ):
-                if getattr(exposure, attr) != value:
-                    setattr(exposure, attr, value)
-                    changed = True
+            if exposure.anyharness_workspace_id != anyharness_workspace_id:
+                exposure.anyharness_workspace_id = anyharness_workspace_id
+                changed = True
+            if exposure.origin != workspace.origin:
+                exposure.origin = workspace.origin
+                changed = True
             if changed:
                 exposure.revision += 1
                 exposure.updated_at = now
@@ -990,6 +1041,8 @@ async def _record_started_cloud_session_projection(
         target_id=row.target_id,
         cloud_workspace_id=row.cloud_workspace_id,
     )
+    if exposure is None or exposure.status != "active" or not exposure.anyharness_workspace_id:
+        return
     projection = (
         await db.execute(
             select(CloudSessionProjection)

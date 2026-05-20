@@ -54,6 +54,7 @@ async def dispatch_prompt_stage(ctx: AutomationExecutionContext) -> None:
         command = await enqueue_send_prompt(
             ctx.with_claim(dispatching),
             target_id=ctx.target.target_id,
+            cloud_workspace_id=ctx.workspace.cloud_workspace_id,
             workspace_id=ctx.workspace.anyharness_workspace_id,
             session_id=ctx.session.anyharness_session_id,
             payload=SendPromptPayload(

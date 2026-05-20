@@ -137,6 +137,16 @@ async def test_worker_exposures_returns_active_projection_cursors(
         session_id="session-2",
         last_uploaded_seq=3,
     )
+    await projections_store.upsert_session_projection_metadata(
+        db_session,
+        target_id=target_id,
+        session_id="session-unexposed",
+        exposure_id=None,
+        cloud_workspace_id=workspace.id,
+        workspace_id="workspace-1",
+        projection_level="live",
+        commandable=True,
+    )
     await db_session.commit()
 
     response = await client.get(
@@ -175,3 +185,60 @@ async def test_worker_exposures_returns_active_projection_cursors(
             "lastUploadedSeq": 3,
         },
     ]
+
+    gap = await client.post(
+        "/v1/cloud/worker/events/gaps",
+        headers=worker_headers,
+        json={
+            "exposureId": str(exposure.id),
+            "sessionProjectionId": str(projection.id),
+            "sessionId": "session-1",
+            "expectedSeq": 8,
+            "firstObservedSeq": 10,
+            "lastUploadedSeq": 7,
+        },
+    )
+    assert gap.status_code == 200
+    assert gap.json() == {"updated": True}
+    updated = await projections_store.get_session_projection_metadata(
+        db_session,
+        target_id=target_id,
+        session_id="session-1",
+    )
+    assert updated is not None
+    assert updated.gap_state_json is not None
+    assert "anyharness_event_sequence_gap" in updated.gap_state_json
+
+    await projections_store.clear_projection_gap_state(
+        db_session,
+        target_id=target_id,
+        session_id="session-1",
+    )
+    await projections_store.update_projection_last_uploaded_seq(
+        db_session,
+        target_id=target_id,
+        session_id="session-1",
+        last_uploaded_seq=12,
+    )
+    await db_session.commit()
+    stale_gap = await client.post(
+        "/v1/cloud/worker/events/gaps",
+        headers=worker_headers,
+        json={
+            "exposureId": str(exposure.id),
+            "sessionProjectionId": str(projection.id),
+            "sessionId": "session-1",
+            "expectedSeq": 8,
+            "firstObservedSeq": 10,
+            "lastUploadedSeq": 7,
+        },
+    )
+    assert stale_gap.status_code == 200
+    assert stale_gap.json() == {"updated": False}
+    repaired = await projections_store.get_session_projection_metadata(
+        db_session,
+        target_id=target_id,
+        session_id="session-1",
+    )
+    assert repaired is not None
+    assert repaired.gap_state_json is None

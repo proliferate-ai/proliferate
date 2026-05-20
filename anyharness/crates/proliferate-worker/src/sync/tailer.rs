@@ -6,7 +6,7 @@ use crate::{
         events::SessionEventEnvelope, health as anyharness_health, AnyHarnessClient,
     },
     cloud_client::{
-        events::{EventBatchRequest, WorkerSessionEventEnvelope},
+        events::{EventBatchRequest, ProjectionGapRequest, WorkerSessionEventEnvelope},
         exposures::WorkerExposureSnapshot,
         CloudClient,
     },
@@ -133,6 +133,19 @@ async fn sync_projection_cursor(
         return Ok(());
     }
     if let Some(gap) = first_sequence_gap(cursor.last_uploaded_seq, &events) {
+        let response = cloud
+            .report_projection_gap(
+                &identity.worker_token,
+                &ProjectionGapRequest {
+                    exposure_id: cursor.exposure_id.clone(),
+                    session_projection_id: cursor.session_projection_id.clone(),
+                    session_id: cursor.anyharness_session_id.clone(),
+                    expected_seq: gap.expected_seq,
+                    first_observed_seq: gap.first_observed_seq,
+                    last_uploaded_seq: cursor.last_uploaded_seq,
+                },
+            )
+            .await?;
         store.record_projection_cursor_gap(
             &cursor.session_projection_id,
             gap.expected_seq,
@@ -143,6 +156,7 @@ async fn sync_projection_cursor(
             session_id = %cursor.anyharness_session_id,
             expected_seq = gap.expected_seq,
             first_observed_seq = gap.first_observed_seq,
+            cloud_updated = response.updated,
             "worker event sync paused for projection cursor after sequence gap"
         );
         return Ok(());

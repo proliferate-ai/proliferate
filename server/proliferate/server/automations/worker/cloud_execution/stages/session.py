@@ -70,6 +70,7 @@ async def start_session_stage(
         command = await enqueue_start_session(
             ctx.with_claim(current),
             target_id=ctx.target.target_id,
+            cloud_workspace_id=ctx.workspace.cloud_workspace_id,
             workspace_id=ctx.workspace.anyharness_workspace_id,
             payload=StartSessionPayload(
                 workspace_id=ctx.workspace.anyharness_workspace_id,
@@ -119,6 +120,7 @@ async def apply_session_config_stage(
         command = await enqueue_update_session_config(
             ctx,
             target_id=ctx.target.target_id,
+            cloud_workspace_id=ctx.workspace.cloud_workspace_id,
             workspace_id=ctx.workspace.anyharness_workspace_id,
             session_id=ctx.session.anyharness_session_id,
             stage="update-reasoning-effort",
