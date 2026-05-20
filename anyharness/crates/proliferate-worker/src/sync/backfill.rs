@@ -33,7 +33,7 @@ const MAX_WORKSPACES_PER_BACKFILL: usize = 200;
 const MAX_SESSIONS_PER_BACKFILL: usize = 500;
 const MAX_PENDING_INTERACTIONS_PER_SESSION: usize = 100;
 
-pub async fn sync_existing_workspace(
+pub async fn backfill_exposed_workspace(
     store: &WorkerStore,
     anyharness: &AnyHarnessClient,
     cloud: &CloudClient,

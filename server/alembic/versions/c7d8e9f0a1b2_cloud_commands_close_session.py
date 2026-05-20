@@ -21,7 +21,7 @@ NEW_KIND_CHECK = (
     "'resolve_interaction', 'update_session_config', 'cancel_turn', "
     "'close_session', 'cancel_session', 'stop_workspace', 'hibernate_workspace', "
     "'resume_workspace', 'prune_workspace', 'extend_workspace_ttl', "
-    "'sync_existing_workspace')"
+    "'backfill_exposed_workspace')"
 )
 
 OLD_KIND_CHECK = (
@@ -29,7 +29,7 @@ OLD_KIND_CHECK = (
     "'resolve_interaction', 'update_session_config', 'cancel_turn', "
     "'cancel_session', 'stop_workspace', 'hibernate_workspace', "
     "'resume_workspace', 'prune_workspace', 'extend_workspace_ttl', "
-    "'sync_existing_workspace')"
+    "'backfill_exposed_workspace')"
 )
 
 
