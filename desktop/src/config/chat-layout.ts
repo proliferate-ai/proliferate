@@ -31,12 +31,14 @@ export function computeChatSurfaceBottomInsetPx({
 
 export function computeChatStableBottomInsetPx({
   composerSurfaceHeightPx,
+  composerSurfaceOffsetTopPx = 0,
   composerFooterHeightPx = 0,
-}: Pick<ChatSurfaceBottomInsetArgs, "composerSurfaceHeightPx" | "composerFooterHeightPx">): number {
+}: Pick<ChatSurfaceBottomInsetArgs, "composerSurfaceHeightPx" | "composerSurfaceOffsetTopPx" | "composerFooterHeightPx">): number {
+  const surfaceOffsetTop = Math.max(0, Math.ceil(composerSurfaceOffsetTopPx));
   const surfaceHeight = Math.max(0, Math.ceil(composerSurfaceHeightPx));
   const footerHeight = Math.max(0, Math.ceil(composerFooterHeightPx));
 
-  return surfaceHeight + footerHeight + CHAT_SCROLL_BASE_BOTTOM_PADDING_PX;
+  return surfaceOffsetTop + surfaceHeight + footerHeight + CHAT_SCROLL_BASE_BOTTOM_PADDING_PX;
 }
 
 export function computeChatDockLowerBackdropTopPx({

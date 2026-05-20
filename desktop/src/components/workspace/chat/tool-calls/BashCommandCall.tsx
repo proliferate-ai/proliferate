@@ -9,7 +9,6 @@ interface BashCommandCallProps {
   output?: string;
   status: "running" | "completed" | "failed";
   duration?: string;
-  defaultExpanded?: boolean;
 }
 
 export function BashCommandCall({
@@ -18,7 +17,6 @@ export function BashCommandCall({
   output,
   status,
   duration,
-  defaultExpanded = false,
 }: BashCommandCallProps) {
   const label = description
     ?? (status === "failed" ? "Command" : "Running command");
@@ -32,7 +30,6 @@ export function BashCommandCall({
       hint={command}
       status={status}
       duration={duration}
-      defaultExpanded={defaultExpanded}
     >
       {output && (
         <ToolActionDetailsPanel>

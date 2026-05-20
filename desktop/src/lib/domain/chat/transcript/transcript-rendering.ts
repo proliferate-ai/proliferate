@@ -1,6 +1,7 @@
 import type {
   TranscriptItem,
   TranscriptState,
+  ToolCallItem,
   TurnRecord,
 } from "@anyharness/sdk";
 import { summarizeCollapsedActions } from "@/lib/domain/chat/transcript/transcript-collapsed-actions";
@@ -80,11 +81,21 @@ export function collectToolCallIdsWithProposedPlan(
 ): Set<string> {
   const toolCallIds = new Set<string>();
   for (const item of Object.values(transcript.itemsById)) {
-    if (item.kind === "proposed_plan" && item.plan.sourceToolCallId) {
-      toolCallIds.add(item.plan.sourceToolCallId);
+    if (item.kind === "proposed_plan") {
+      addProposedPlanSourceIds(item.plan, toolCallIds);
     }
   }
   return toolCallIds;
+}
+
+export function hasProposedPlanForToolCallItem(
+  proposedPlanToolCallIds: ReadonlySet<string>,
+  item: Pick<ToolCallItem, "itemId" | "toolCallId">,
+): boolean {
+  return Boolean(
+    (item.toolCallId && proposedPlanToolCallIds.has(item.toolCallId))
+      || proposedPlanToolCallIds.has(item.itemId),
+  );
 }
 
 export function collectToolCallIdsWithProposedPlanForBlocks(
@@ -126,8 +137,8 @@ function collectToolCallIdsWithProposedPlanFromItem(
   output: Set<string>,
 ): void {
   const item = transcript.itemsById[itemId];
-  if (item?.kind === "proposed_plan" && item.plan.sourceToolCallId) {
-    output.add(item.plan.sourceToolCallId);
+  if (item?.kind === "proposed_plan") {
+    addProposedPlanSourceIds(item.plan, output);
   }
   for (const childId of childrenByParentId.get(itemId) ?? []) {
     collectToolCallIdsWithProposedPlanFromItem(
@@ -136,6 +147,18 @@ function collectToolCallIdsWithProposedPlanFromItem(
       childrenByParentId,
       output,
     );
+  }
+}
+
+function addProposedPlanSourceIds(
+  plan: Extract<TranscriptItem, { kind: "proposed_plan" }>["plan"],
+  output: Set<string>,
+): void {
+  if (plan.sourceToolCallId) {
+    output.add(plan.sourceToolCallId);
+  }
+  if (plan.sourceItemId) {
+    output.add(plan.sourceItemId);
   }
 }
 

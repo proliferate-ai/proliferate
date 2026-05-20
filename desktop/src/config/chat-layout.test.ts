@@ -45,10 +45,11 @@ describe("chat layout", () => {
     })).toBeNull();
   });
 
-  it("keeps sticky transcript scrolling above the stable composer reserve", () => {
+  it("keeps sticky transcript scrolling above the full composer dock reserve", () => {
     expect(computeChatStableBottomInsetPx({
       composerSurfaceHeightPx: 120,
+      composerSurfaceOffsetTopPx: 80,
       composerFooterHeightPx: 24,
-    })).toBe(184);
+    })).toBe(264);
   });
 });

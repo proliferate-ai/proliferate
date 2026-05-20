@@ -13,12 +13,12 @@ import { SubagentCreationGroupBlock } from "./SubagentCreationGroupBlock";
 export function ScopedTranscriptBlocks({
   displayBlocks,
   transcript,
-  forceExpandedCollapsedActionBlockId,
+  autoFollowCollapsedActionBlockId,
   renderItem,
 }: {
   displayBlocks: readonly TurnDisplayBlock[];
   transcript: TranscriptState;
-  forceExpandedCollapsedActionBlockId?: string | null;
+  autoFollowCollapsedActionBlockId?: string | null;
   renderItem: (itemId: string) => ReactNode;
 }) {
   return (
@@ -28,7 +28,7 @@ export function ScopedTranscriptBlocks({
           key={getTurnDisplayBlockKey(block)}
           block={block}
           transcript={transcript}
-          forceExpandedCollapsedActionBlockId={forceExpandedCollapsedActionBlockId}
+          autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
           renderItem={renderItem}
         />
       ))}
@@ -39,12 +39,12 @@ export function ScopedTranscriptBlocks({
 export function TurnDisplayBlockNode({
   block,
   transcript,
-  forceExpandedCollapsedActionBlockId,
+  autoFollowCollapsedActionBlockId,
   renderItem,
 }: {
   block: TurnDisplayBlock;
   transcript: TranscriptState;
-  forceExpandedCollapsedActionBlockId?: string | null;
+  autoFollowCollapsedActionBlockId?: string | null;
   renderItem: (itemId: string) => ReactNode;
 }) {
   if (block.kind === "collapsed_actions") {
@@ -52,7 +52,7 @@ export function TurnDisplayBlockNode({
       <CollapsedActions
         itemIds={block.itemIds}
         transcript={transcript}
-        forceExpanded={block.blockId === forceExpandedCollapsedActionBlockId}
+        autoFollow={block.blockId === autoFollowCollapsedActionBlockId}
       />
     );
   }

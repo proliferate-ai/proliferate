@@ -119,12 +119,12 @@ export function TranscriptAgentGroupBlock({
   const hasLaunchLedger = !!normalizedPrompt || hasProvisioningLedger;
   const hasBodyContent = hasWork || hasLaunchLedger || !!normalizedAgentResult;
   const renderScopedWork = (
-    forceExpandedCollapsedActionBlockId: string | null,
+    autoFollowCollapsedActionBlockId: string | null,
   ) => (
     <ScopedTranscriptBlocks
       displayBlocks={scopedDisplayBlocks}
       transcript={transcript}
-      forceExpandedCollapsedActionBlockId={forceExpandedCollapsedActionBlockId}
+      autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
       renderItem={renderChild}
     />
   );

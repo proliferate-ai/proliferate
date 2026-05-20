@@ -33,7 +33,6 @@ export function renderPlaygroundToolTranscript(
             output="RUN  src/config/playground.test.ts\n"
             status="running"
             duration="for 12s"
-            defaultExpanded
           />
         </TranscriptPreviewShell>
       );
@@ -45,7 +44,6 @@ export function renderPlaygroundToolTranscript(
             output="Done in 4.2s\n"
             status="completed"
             duration="for 4s"
-            defaultExpanded
           />
         </TranscriptPreviewShell>
       );
@@ -57,7 +55,6 @@ export function renderPlaygroundToolTranscript(
             output="error TS2322: Type 'string' is not assignable to type 'number'.\n"
             status="failed"
             duration="for 7s"
-            defaultExpanded
           />
         </TranscriptPreviewShell>
       );

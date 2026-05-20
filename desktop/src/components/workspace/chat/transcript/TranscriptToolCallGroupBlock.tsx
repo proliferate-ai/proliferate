@@ -71,7 +71,6 @@ export function TranscriptToolCallGroupBlock({
       icon={<ToolKindIcon iconKey={display.iconKey} />}
       label={display.label}
       summary={summary}
-      defaultExpanded={item.status === "in_progress"}
       itemCount={renderableItemCount}
       typeIcons={buildCollapsedSummaryIcons({
         messages: messageCount,

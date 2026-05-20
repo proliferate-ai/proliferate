@@ -50,6 +50,11 @@ type ComposerConfigSubmenu =
 const COMPOSER_SUBMENU_GAP_PX = 4;
 const COMPOSER_SUBMENU_VIEWPORT_MARGIN_PX = 8;
 
+interface ComposerSubmenuPosition {
+  left: number;
+  top: number;
+}
+
 export function ComposerModelConfigSelector({
   modelSelectorProps,
   agentKind,
@@ -60,7 +65,8 @@ export function ComposerModelConfigSelector({
   const [search, setSearch] = useState("");
   const [addProviderOpen, setAddProviderOpen] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<ComposerConfigSubmenu | null>(null);
-  const [submenuLeft, setSubmenuLeft] = useState<number | null>(null);
+  const [submenuAnchorTop, setSubmenuAnchorTop] = useState<number | null>(null);
+  const [submenuPosition, setSubmenuPosition] = useState<ComposerSubmenuPosition | null>(null);
   const [setupAgent, setSetupAgent] = useState<ModelSelectorProps["notReadyAgents"][number] | null>(null);
   const {
     connectionState,
@@ -101,11 +107,12 @@ export function ComposerModelConfigSelector({
 
   useLayoutEffect(() => {
     if (!activeSubmenu) {
-      setSubmenuLeft(null);
+      setSubmenuAnchorTop(null);
+      setSubmenuPosition(null);
       return;
     }
 
-    const updateSubmenuOffset = () => {
+    const updateSubmenuPosition = () => {
       const root = menuRootRef.current;
       const submenu = submenuRef.current;
       if (!root || !submenu) {
@@ -115,10 +122,16 @@ export function ComposerModelConfigSelector({
       const rootRect = root.getBoundingClientRect();
       const submenuRect = submenu.getBoundingClientRect();
       const viewportLeft = window.visualViewport?.offsetLeft ?? 0;
+      const viewportTop = window.visualViewport?.offsetTop ?? 0;
       const viewportRight = viewportLeft + (
         window.visualViewport?.width
         ?? document.documentElement.clientWidth
         ?? window.innerWidth
+      );
+      const viewportBottom = viewportTop + (
+        window.visualViewport?.height
+        ?? document.documentElement.clientHeight
+        ?? window.innerHeight
       );
       const preferredRightLeft = rootRect.width + COMPOSER_SUBMENU_GAP_PX;
       const preferredLeftLeft = -submenuRect.width - COMPOSER_SUBMENU_GAP_PX;
@@ -132,18 +145,31 @@ export function ComposerModelConfigSelector({
         - COMPOSER_SUBMENU_VIEWPORT_MARGIN_PX
         - rootRect.left
         - submenuRect.width;
+      const preferredTop = submenuAnchorTop ?? 0;
+      const minTop = viewportTop + COMPOSER_SUBMENU_VIEWPORT_MARGIN_PX - rootRect.top;
+      const maxTop = viewportBottom
+        - COMPOSER_SUBMENU_VIEWPORT_MARGIN_PX
+        - rootRect.top
+        - submenuRect.height;
 
-      setSubmenuLeft(clamp(
-        preferredLeft,
-        Math.min(minLeft, maxLeft),
-        Math.max(minLeft, maxLeft),
-      ));
+      setSubmenuPosition({
+        left: clamp(
+          preferredLeft,
+          Math.min(minLeft, maxLeft),
+          Math.max(minLeft, maxLeft),
+        ),
+        top: clamp(
+          preferredTop,
+          Math.min(minTop, maxTop),
+          Math.max(minTop, maxTop),
+        ),
+      });
     };
 
-    updateSubmenuOffset();
-    window.addEventListener("resize", updateSubmenuOffset);
-    return () => window.removeEventListener("resize", updateSubmenuOffset);
-  }, [activeSubmenu]);
+    updateSubmenuPosition();
+    window.addEventListener("resize", updateSubmenuPosition);
+    return () => window.removeEventListener("resize", updateSubmenuPosition);
+  }, [activeSubmenu, submenuAnchorTop]);
 
   if (!selectorEnabled) {
     return (
@@ -185,6 +211,8 @@ export function ComposerModelConfigSelector({
             setSearch("");
             setAddProviderOpen(false);
             setActiveSubmenu(null);
+            setSubmenuAnchorTop(null);
+            setSubmenuPosition(null);
           }
         }}
       >
@@ -231,9 +259,10 @@ export function ComposerModelConfigSelector({
                         <ComposerSubmenuMenuItem
                           active={activeSubmenu?.kind === "harness"}
                           label={harnessLabel}
-                          onOpen={() => {
+                          onOpen={(anchorElement) => {
                             setAddProviderOpen(false);
-                            setSubmenuLeft(null);
+                            setSubmenuPosition(null);
+                            setSubmenuAnchorTop(resolveSubmenuAnchorTop(menuRootRef.current, anchorElement));
                             setActiveSubmenu({ kind: "harness" });
                           }}
                         />
@@ -244,9 +273,10 @@ export function ComposerModelConfigSelector({
                           key={control.key}
                           active={activeSubmenu?.kind === "control" && activeSubmenu.key === control.key}
                           label={resolveControlSubmenuLabel(control)}
-                          onOpen={() => {
+                          onOpen={(anchorElement) => {
                             setAddProviderOpen(false);
-                            setSubmenuLeft(null);
+                            setSubmenuPosition(null);
+                            setSubmenuAnchorTop(resolveSubmenuAnchorTop(menuRootRef.current, anchorElement));
                             setActiveSubmenu({ kind: "control", key: control.key });
                           }}
                         />
@@ -258,10 +288,11 @@ export function ComposerModelConfigSelector({
 
               <div
                 ref={submenuRef}
-                className="absolute bottom-0 z-10"
+                className="absolute z-10"
                 style={{
-                  left: submenuLeft ?? 0,
-                  visibility: activeSubmenu && submenuLeft === null ? "hidden" : undefined,
+                  left: submenuPosition?.left ?? 0,
+                  top: submenuPosition?.top ?? 0,
+                  visibility: activeSubmenu && submenuPosition === null ? "hidden" : undefined,
                 }}
               >
                 {activeSubmenu?.kind === "harness" && (
@@ -343,7 +374,7 @@ function ComposerSubmenuMenuItem({
   active: boolean;
   icon?: ReactNode;
   label: string;
-  onOpen: () => void;
+  onOpen: (anchorElement: HTMLElement) => void;
 }) {
   return (
     <PopoverMenuItem
@@ -354,9 +385,9 @@ function ComposerSubmenuMenuItem({
       icon={icon}
       label={label}
       trailing={<ChevronDown className="-rotate-90 size-3.5 shrink-0" />}
-      onClick={onOpen}
-      onFocus={onOpen}
-      onMouseEnter={onOpen}
+      onClick={(event) => onOpen(event.currentTarget)}
+      onFocus={(event) => onOpen(event.currentTarget)}
+      onMouseEnter={(event) => onOpen(event.currentTarget)}
     />
   );
 }
@@ -512,7 +543,7 @@ function ComposerModelGroup({
   return (
     <>
       {showSeparator && <div className="mx-2 my-1 border-t border-border/60" />}
-      <div className="min-h-6 truncate px-2 py-1 text-sm font-[430] leading-4 text-muted-foreground/70">
+      <div className="min-h-5 truncate px-2 py-0.5 text-sm font-[430] leading-4 text-muted-foreground/70">
         {group.providerDisplayName}
       </div>
       {group.models.map((model) => (
@@ -538,10 +569,22 @@ function ComposerModelGroup({
 
 function ComposerMenuSeparator() {
   return (
-    <div className="w-full px-2 py-1">
+    <div className="w-full px-2 py-0.5">
       <div className="h-px w-full bg-border/60" />
     </div>
   );
+}
+
+function resolveSubmenuAnchorTop(
+  root: HTMLElement | null,
+  anchorElement: HTMLElement,
+): number {
+  if (!root) {
+    return 0;
+  }
+  const rootRect = root.getBoundingClientRect();
+  const anchorRect = anchorElement.getBoundingClientRect();
+  return anchorRect.top - rootRect.top;
 }
 
 function sortComposerConfigSubmenuControls(

@@ -55,7 +55,7 @@ export function PopoverMenuItem({
       </span>
       {hasDescription && (
         <span className={`mt-0.5 flex w-full items-center gap-2 ${icon ? "pl-6" : ""}`}>
-          <span className="min-w-0 flex-1 text-left text-sm leading-5 text-muted-foreground [&_*]:text-sm [&_*]:leading-5">
+          <span className="min-w-0 flex-1 text-left text-xs leading-4 text-muted-foreground [&>*]:!mt-0 [&_*]:text-xs [&_*]:leading-4">
             {children}
           </span>
         </span>
