@@ -36,7 +36,10 @@ export function OrganizationInvitationsSection({
   onRevoke: (invitationId: string) => void;
 }) {
   return (
-    <OrganizationSection title="Invitations">
+    <OrganizationSection
+      title="Invitations"
+      description="Invite teammates and manage pending organization invites."
+    >
       <SettingsCard>
         {canManage ? (
           <form
@@ -44,7 +47,7 @@ export function OrganizationInvitationsSection({
               event.preventDefault();
               void onInviteSubmit();
             }}
-            className="flex gap-2 p-3"
+            className="flex flex-col gap-2 border-b border-border-light p-4 sm:flex-row"
           >
             <Input
               type="email"
@@ -52,16 +55,18 @@ export function OrganizationInvitationsSection({
               onChange={(event) => onInviteEmailChange(event.currentTarget.value)}
               placeholder="name@company.com"
               aria-label="Invite email"
+              className="min-w-0 flex-1"
             />
-            <Select
-              value={inviteRole}
-              onChange={(event) => onInviteRoleChange(event.currentTarget.value as "admin" | "member")}
-              aria-label="Invite role"
-              className="w-32"
-            >
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-            </Select>
+            <div className="w-full sm:w-32">
+              <Select
+                value={inviteRole}
+                onChange={(event) => onInviteRoleChange(event.currentTarget.value as "admin" | "member")}
+                aria-label="Invite role"
+              >
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </Select>
+            </div>
             <Button type="submit" disabled={!inviteEmail.trim()} loading={creatingInvitation}>
               <Mail className="size-4" />
               Invite
@@ -79,7 +84,7 @@ export function OrganizationInvitationsSection({
           />
         ))}
         {invitations.length === 0 ? (
-          <div className="p-3 text-sm text-muted-foreground">No pending invitations.</div>
+          <div className="p-4 text-sm text-muted-foreground">No pending invitations.</div>
         ) : null}
       </SettingsCard>
     </OrganizationSection>
@@ -102,26 +107,28 @@ function InvitationRow({
   const status = invitationStatusBadge(invitation.status);
 
   return (
-    <div className="flex items-center gap-3 p-3">
+    <div className="flex flex-col gap-3 border-b border-border-light px-4 py-3 last:border-b-0 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{invitation.email}</div>
+        <div className="truncate text-sm font-medium text-foreground">{invitation.email}</div>
         <div className="truncate text-sm text-muted-foreground">
           {invitation.role} - {invitation.deliveryStatus}
         </div>
       </div>
-      <Badge tone={status.tone}>{status.label}</Badge>
-      {canManage && invitation.status === "pending" ? (
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="ghost" disabled={working} onClick={onResend}>
-            <RefreshCw className="size-4" />
-            Resend
-          </Button>
-          <Button type="button" variant="ghost" disabled={working} onClick={onRevoke}>
-            <Trash className="size-4" />
-            Revoke
-          </Button>
-        </div>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        <Badge tone={status.tone}>{status.label}</Badge>
+        {canManage && invitation.status === "pending" ? (
+          <>
+            <Button type="button" variant="ghost" disabled={working} onClick={onResend}>
+              <RefreshCw className="size-4" />
+              Resend
+            </Button>
+            <Button type="button" variant="ghost" disabled={working} onClick={onRevoke}>
+              <Trash className="size-4" />
+              Revoke
+            </Button>
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import {
   useMemo,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -162,15 +163,11 @@ export function OrganizationPane() {
       />
 
       {statusMessage ? (
-        <div className="rounded-lg border border-border bg-surface-elevated-secondary px-3 py-2 text-sm text-muted-foreground">
-          {statusMessage}
-        </div>
+        <OrganizationNotice>{statusMessage}</OrganizationNotice>
       ) : null}
 
       {unauthenticatedHandoff ? (
-        <div className="rounded-lg border border-border bg-surface-elevated-secondary px-3 py-2 text-sm text-muted-foreground">
-          Sign in, then reopen the invitation email link to accept it.
-        </div>
+        <OrganizationNotice>Sign in, then reopen the invitation email link to accept it.</OrganizationNotice>
       ) : null}
 
       {organizations.length > 0 ? (
@@ -179,26 +176,27 @@ export function OrganizationPane() {
             label="Active organization"
             description="Choose which organization to view and manage here."
           >
-            <Select
-              value={activeOrganizationId ?? ""}
-              onChange={(event) => setActiveOrganizationId(event.currentTarget.value || null)}
-              aria-label="Active organization"
-              className="min-w-48"
-            >
-              {organizations.map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </Select>
+            <div className="w-56 max-w-full">
+              <Select
+                value={activeOrganizationId ?? ""}
+                onChange={(event) => setActiveOrganizationId(event.currentTarget.value || null)}
+                aria-label="Active organization"
+              >
+                {organizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </SettingsCardRow>
         </SettingsCard>
       ) : null}
 
       {shouldShowSignInState ? (
-        <OrganizationSection title="Membership">
+        <OrganizationSection title="Membership" description="Organization access is tied to your signed-in account.">
           <SettingsCard>
-            <div className="p-3 text-sm text-muted-foreground">
+            <div className="p-4 text-sm text-muted-foreground">
               Sign in to view your organization.
             </div>
           </SettingsCard>
@@ -212,7 +210,7 @@ export function OrganizationPane() {
       {shouldShowErrorState ? (
         <OrganizationSection title="Membership">
           <SettingsCard>
-            <div className="flex items-center justify-between gap-3 p-3">
+            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-muted-foreground">
                 Organization settings could not be loaded.
               </div>
@@ -233,7 +231,7 @@ export function OrganizationPane() {
       {shouldShowEmptyState ? (
         <OrganizationSection title="Membership">
           <SettingsCard>
-            <div className="p-3 text-sm text-muted-foreground">
+            <div className="p-4 text-sm text-muted-foreground">
               Organization setup is still being prepared for this account.
             </div>
           </SettingsCard>
@@ -289,5 +287,13 @@ export function OrganizationPane() {
         </>
       ) : null}
     </section>
+  );
+}
+
+function OrganizationNotice({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border-light bg-foreground/5 px-4 py-3 text-sm text-muted-foreground">
+      {children}
+    </div>
   );
 }
