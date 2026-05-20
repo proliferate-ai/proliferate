@@ -207,6 +207,7 @@ class WorkerAgentAuthSelectionPlan(BaseModel):
     materialization_mode: str = Field(alias="materializationMode")
     credential_id: UUID = Field(alias="credentialId")
     credential_revision: int = Field(alias="credentialRevision")
+    status: str | None = None
     credential_share_id: UUID | None = Field(default=None, alias="credentialShareId")
     gateway: WorkerAgentAuthGatewayConfig | None = None
     synced_files: WorkerAgentAuthSyncedFilesConfig | None = Field(

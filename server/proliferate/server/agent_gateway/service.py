@@ -260,6 +260,24 @@ async def authorize_gateway_request(
             code="invalid_gateway_token",
             status_code=401,
         )
+    target_state = await store.get_target_state(
+        db,
+        sandbox_profile_id=grant.sandbox_profile_id,
+        target_id=grant.target_id,
+    )
+    if (
+        target_state is None
+        or target_state.status != "applied"
+        or target_state.applied_revision is None
+        or target_state.applied_revision < grant.issued_profile_revision
+        or target_state.active_sandbox_id != grant.cloud_sandbox_id
+        or target_state.slot_generation != grant.slot_generation
+    ):
+        raise AgentGatewayError(
+            "Gateway token is stale.",
+            code="invalid_gateway_token",
+            status_code=401,
+        )
     selection = await store.get_selection(db, grant.selection_id)
     if selection is None or selection.status != "active":
         raise AgentGatewayError(

@@ -234,6 +234,8 @@ def _runtime_grant_record(row: AgentGatewayRuntimeGrant) -> AgentGatewayRuntimeG
         issued_profile_revision=row.issued_profile_revision,
         target_id=row.target_id,
         sandbox_profile_id=row.sandbox_profile_id,
+        cloud_sandbox_id=row.cloud_sandbox_id,
+        slot_generation=row.slot_generation,
         organization_id=row.organization_id,
         user_id=row.user_id,
         agent_kind=row.agent_kind,
@@ -1366,6 +1368,8 @@ async def create_runtime_grant(
     issued_profile_revision: int,
     target_id: UUID,
     sandbox_profile_id: UUID,
+    cloud_sandbox_id: UUID | None,
+    slot_generation: int | None,
     organization_id: UUID | None,
     user_id: UUID | None,
     agent_kind: str,
@@ -1382,6 +1386,8 @@ async def create_runtime_grant(
         issued_profile_revision=issued_profile_revision,
         target_id=target_id,
         sandbox_profile_id=sandbox_profile_id,
+        cloud_sandbox_id=cloud_sandbox_id,
+        slot_generation=slot_generation,
         organization_id=organization_id,
         user_id=user_id,
         agent_kind=agent_kind,
@@ -1555,6 +1561,32 @@ async def revoke_runtime_grants_by_ids(
             await db.execute(
                 select(AgentGatewayRuntimeGrant).where(
                     AgentGatewayRuntimeGrant.id.in_(grant_ids),
+                    AgentGatewayRuntimeGrant.revoked_at.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    now = utcnow()
+    for row in rows:
+        row.revoked_at = now
+    await db.flush()
+    return len(rows)
+
+
+async def revoke_runtime_grants_for_profile_target(
+    db: AsyncSession,
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+) -> int:
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayRuntimeGrant).where(
+                    AgentGatewayRuntimeGrant.sandbox_profile_id == sandbox_profile_id,
+                    AgentGatewayRuntimeGrant.target_id == target_id,
                     AgentGatewayRuntimeGrant.revoked_at.is_(None),
                 )
             )

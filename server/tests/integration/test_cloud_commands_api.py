@@ -6,15 +6,20 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CLOUD_WORKER_TOKEN_DOMAIN, CloudWorkspaceStatus
+from proliferate.db.models.cloud.agent_auth import SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
+from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
 from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
+from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.worker import service as worker_service
+from proliferate.utils.crypto import encrypt_json
 from proliferate.utils.time import utcnow
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
@@ -101,6 +106,60 @@ async def _create_managed_profile_target(
     rebound = await agent_auth_store.get_sandbox_profile(db_session, profile_id)
     assert rebound is not None
     return str(target_id), {"Authorization": f"Bearer {worker_token}"}, rebound
+
+
+async def _mark_minimal_runtime_config_applied(
+    db_session: AsyncSession,
+    *,
+    target_id: UUID,
+    profile_id: UUID,
+    user_id: UUID,
+) -> None:
+    await target_config_store.upsert_target_config(
+        db_session,
+        target_id=target_id,
+        user_id=user_id,
+        organization_id=None,
+        git_provider="github",
+        git_owner="proliferate-ai",
+        git_repo_name="proliferate",
+        workspace_root="~/proliferate-workspaces/proliferate",
+        payload_ciphertext=encrypt_json({"pending": True}),
+        summary_json=json.dumps(
+            {
+                "env_var_count": 0,
+                "tracked_file_count": 0,
+                "has_git_credential": False,
+                "mcp_binding_count": 0,
+                "mcp_warning_count": 0,
+                "required_tools": [],
+            }
+        ),
+        env_vars_version=0,
+        files_version=0,
+        mcp_materialization_version=1,
+    )
+    revision, _created = await runtime_config_store.upsert_revision_and_current(
+        db_session,
+        sandbox_profile_id=profile_id,
+        content_hash=f"sha256:{profile_id.hex}:runtime-config",
+        manifest_json='{"mcpServers":[],"skills":[],"blockingErrors":[]}',
+        warnings_json=None,
+        source="test",
+        generated_by_user_id=user_id,
+    )
+    state = (
+        await db_session.execute(
+            select(SandboxProfileTargetState).where(
+                SandboxProfileTargetState.sandbox_profile_id == profile_id,
+                SandboxProfileTargetState.target_id == target_id,
+            )
+        )
+    ).scalar_one()
+    state.runtime_config_status = "applied"
+    state.applied_runtime_config_revision_id = str(revision.id)
+    state.applied_runtime_config_sequence = revision.sequence
+    await db_session.flush()
 
 
 async def _accept_initial_git_identity_command(
@@ -966,6 +1025,42 @@ class TestCloudCommandsApi:
         assert created.json()["detail"]["code"] == "cloud_command_internal_only"
 
     @pytest.mark.asyncio
+    async def test_managed_profile_preflight_blocks_revision_zero_without_state(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-agent-auth-revision-zero",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="agent-auth-revision-zero",
+        )
+        assert profile.agent_auth_revision == 0
+        await db_session.commit()
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "agent-auth-preflight-revision-zero",
+                "targetId": target_id,
+                "kind": "start_session",
+                "payload": {
+                    "workspaceId": "anyharness-workspace-1",
+                    "agentKind": "claude",
+                },
+            },
+        )
+        assert created.status_code == 409
+        assert created.json()["detail"]["code"] == "cloud_command_agent_auth_not_ready"
+
+    @pytest.mark.asyncio
     async def test_managed_runtime_config_preflight_requires_target_config(
         self,
         client: AsyncClient,
@@ -976,12 +1071,26 @@ class TestCloudCommandsApi:
             db_session,
             email_prefix="cloud-command-runtime-config-target-config",
         )
-        target_id, _worker_headers, _profile = await _create_managed_profile_target(
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
             client,
             db_session,
             auth,
             suffix="runtime-config-target-config",
         )
+        await agent_auth_store.upsert_target_state(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=UUID(target_id),
+            desired_revision=profile.agent_auth_revision,
+            applied_revision=profile.agent_auth_revision,
+            status="applied",
+            force_restart_required=False,
+            last_command_id=None,
+            last_worker_id=None,
+            last_error_code=None,
+            last_error_message=None,
+        )
+        await db_session.commit()
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -1057,6 +1166,12 @@ class TestCloudCommandsApi:
             last_error_code=None,
             last_error_message=None,
         )
+        await _mark_minimal_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile_id=profile.id,
+            user_id=UUID(auth.user_id),
+        )
         await db_session.commit()
 
         pending = await client.post(
@@ -1131,6 +1246,86 @@ class TestCloudCommandsApi:
         payload = json.loads(command.payload_json)
         assert payload["sandboxProfileId"] == str(profile.id)
         assert payload["requiredAgentAuthRevision"] == profile.agent_auth_revision
+        assert payload["agentAuthScope"] == {
+            "provider": "proliferate-cloud",
+            "id": str(profile.id),
+            "targetId": target_id,
+        }
+
+        untrusted_scope = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "agent-auth-preflight-untrusted-scope",
+                "targetId": target_id,
+                "kind": "start_session",
+                "payload": {
+                    "workspaceId": "anyharness-workspace-1",
+                    "agentKind": "claude",
+                    "sandboxProfileId": str(UUID(int=1)),
+                    "requiredAgentAuthRevision": 0,
+                    "agentAuthScope": {
+                        "provider": "local",
+                        "id": "default",
+                        "targetId": "wrong-target",
+                    },
+                },
+            },
+        )
+        assert untrusted_scope.status_code == 200
+        command = await db_session.get(
+            CloudCommand,
+            UUID(untrusted_scope.json()["commandId"]),
+        )
+        assert command is not None
+        payload = json.loads(command.payload_json)
+        assert payload["sandboxProfileId"] == str(profile.id)
+        assert payload["requiredAgentAuthRevision"] == profile.agent_auth_revision
+        assert payload["agentAuthScope"] == {
+            "provider": "proliferate-cloud",
+            "id": str(profile.id),
+            "targetId": target_id,
+        }
+
+        await agent_auth_store.upsert_target_state(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+            desired_revision=profile.agent_auth_revision,
+            applied_revision=profile.agent_auth_revision,
+            status="applied",
+            force_restart_required=True,
+            last_command_id=None,
+            last_worker_id=None,
+            last_error_code=None,
+            last_error_message=None,
+        )
+        await _mark_minimal_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile_id=profile.id,
+            user_id=UUID(auth.user_id),
+        )
+        await db_session.commit()
+
+        restart_required = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "agent-auth-preflight-restart-required",
+                "targetId": target_id,
+                "kind": "send_prompt",
+                "sessionId": "session-1",
+                "payload": {
+                    "text": "hello",
+                },
+            },
+        )
+        assert restart_required.status_code == 409
+        assert (
+            restart_required.json()["detail"]["code"]
+            == "cloud_command_agent_auth_restart_required"
+        )
 
     @pytest.mark.asyncio
     async def test_agent_auth_preflight_command_requires_refresh_capable_worker(

@@ -4,16 +4,16 @@ import type {
   AgentAuthCredential,
   SandboxProfile,
 } from "@proliferate/cloud-sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge } from "@/components/ui/Badge";
-import { Select } from "@/components/ui/Select";
 import {
   useAgentAuthCredentials,
   useAgentAuthMutations,
   useCloudCapabilities,
   useSandboxAgentAuthSelections,
   useSandboxAgentAuthTargetStates,
-} from "@/hooks/access/cloud/agent-auth/use-agent-auth";
+} from "@proliferate/cloud-sdk-react/hooks/agent-auth";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Select } from "@/components/ui/Select";
 import {
   AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,

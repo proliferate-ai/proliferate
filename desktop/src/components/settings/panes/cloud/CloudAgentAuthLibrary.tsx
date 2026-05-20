@@ -9,7 +9,7 @@ import {
   useAgentAuthCredentials,
   useAgentAuthMutations,
   useCloudCapabilities,
-} from "@/hooks/access/cloud/agent-auth/use-agent-auth";
+} from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 import { useOrganizations } from "@/hooks/access/cloud/organizations/use-organizations";
 import {
   AGENT_AUTH_AGENT_ORDER,

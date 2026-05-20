@@ -961,7 +961,15 @@ async def issue_runtime_grant_for_selection(
     selection: SandboxAgentAuthSelectionRecord,
     profile: SandboxProfileRecord,
     target_id: UUID,
+    cloud_sandbox_id: UUID | None,
+    slot_generation: int | None,
 ) -> RuntimeGrantIssueResult:
+    if cloud_sandbox_id is None or slot_generation is None:
+        raise AgentAuthError(
+            "Gateway runtime grants require an active sandbox slot.",
+            code="agent_gateway_slot_required",
+            status_code=409,
+        )
     if selection.status != "active":
         raise AgentAuthError(
             "Selection is not active.", code="selection_not_active", status_code=409
@@ -1027,6 +1035,8 @@ async def issue_runtime_grant_for_selection(
         issued_profile_revision=profile.agent_auth_revision,
         target_id=target_id,
         sandbox_profile_id=profile.id,
+        cloud_sandbox_id=cloud_sandbox_id,
+        slot_generation=slot_generation,
         organization_id=profile.organization_id,
         user_id=profile.owner_user_id,
         agent_kind=selection.agent_kind,
@@ -1344,6 +1354,7 @@ async def _worker_selection_plan(
             materializationMode=selection.materialization_mode,
             credentialId=credential.id,
             credentialRevision=credential.revision,
+            status=selection.status,
             credentialShareId=selection.credential_share_id,
             gateway=gateway,
             syncedFiles=None,
@@ -1355,6 +1366,7 @@ async def _worker_selection_plan(
             materializationMode=selection.materialization_mode,
             credentialId=credential.id,
             credentialRevision=credential.revision,
+            status=selection.status,
             credentialShareId=selection.credential_share_id,
             gateway=None,
             syncedFiles=synced_files,
@@ -1389,6 +1401,7 @@ def _worker_cleanup_selection_plan(
         materializationMode=selection.materialization_mode,
         credentialId=selection.credential_id,
         credentialRevision=selection.selected_revision,
+        status=selection.status,
         credentialShareId=selection.credential_share_id,
         gateway=None,
         syncedFiles=WorkerAgentAuthSyncedFilesConfig(
@@ -1454,6 +1467,8 @@ async def _worker_gateway_config(
         selection=selection,
         profile=profile,
         target_id=auth.target_id,
+        cloud_sandbox_id=auth.cloud_sandbox_id,
+        slot_generation=auth.slot_generation,
     )
     base = _gateway_base_url()
     if selection.agent_kind == "claude":

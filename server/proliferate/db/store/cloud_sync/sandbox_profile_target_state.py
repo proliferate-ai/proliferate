@@ -7,7 +7,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.agent_auth import SandboxProfileTargetState
+from proliferate.db.models.cloud.agent_auth import (
+    AgentGatewayRuntimeGrant,
+    SandboxProfileTargetState,
+)
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.utils.time import utcnow
 
@@ -49,6 +52,21 @@ async def invalidate_applied_on_slot_replacement(
         state.applied_runtime_config_revision_id = None
         state.runtime_config_status = "pending"
         state.updated_at = now
+    grants = (
+        (
+            await db.execute(
+                select(AgentGatewayRuntimeGrant).where(
+                    AgentGatewayRuntimeGrant.sandbox_profile_id == sandbox_profile_id,
+                    AgentGatewayRuntimeGrant.target_id == target_id,
+                    AgentGatewayRuntimeGrant.revoked_at.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for grant in grants:
+        grant.revoked_at = now
     rows = (
         (
             await db.execute(

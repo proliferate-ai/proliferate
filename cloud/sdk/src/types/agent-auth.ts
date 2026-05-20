@@ -79,16 +79,7 @@ export interface SelectAgentAuthCredentialInput {
   forceRestart?: boolean;
 }
 
-export interface AgentGatewayCapabilities {
-  enabled: boolean;
-  byokEnabled: boolean;
-  anthropicByokEnabled: boolean;
-  openaiByokEnabled: boolean;
-  bedrockByokEnabled: boolean;
-  openaiCompatibleByokEnabled: boolean;
-  opencodeEnabled: boolean;
-}
-
-export interface CloudCapabilities {
-  agentGateway: AgentGatewayCapabilities;
-}
+export type AgentGatewayCapabilities =
+  components["schemas"]["AgentGatewayCapabilities"];
+export type CloudCapabilities =
+  components["schemas"]["CloudCapabilitiesResponse"];
