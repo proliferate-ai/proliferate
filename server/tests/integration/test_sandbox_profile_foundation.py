@@ -10,23 +10,81 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
+from proliferate.constants.cloud import (
+    CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
+    CloudCommandKind,
+    CloudCommandStatus,
+)
 from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_ROLE_OWNER,
 )
+from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.models.cloud.agent_auth import SandboxProfile
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.organizations import Organization, OrganizationMembership
+from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_sandboxes import ensure_profile_slot, supersede_slot
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.db.store.cloud_workspaces import create_managed_cloud_workspace_for_profile
+from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.worker import service as worker_service
+from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
+from proliferate.server.cloud.worker.models import WorkerInventoryRequest
 from proliferate.utils.time import utcnow
 from tests.e2e.cloud.helpers.auth import create_user_and_login
+
+
+async def _create_personal_profile(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    *,
+    email_prefix: str,
+) -> tuple[object, uuid.UUID, uuid.UUID]:
+    auth = await create_user_and_login(
+        client,
+        db_session,
+        email_prefix=email_prefix,
+    )
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=auth.headers,
+    )
+    assert profile_response.status_code == 200
+    profile = profile_response.json()
+    return auth, uuid.UUID(profile["id"]), uuid.UUID(profile["primaryTargetId"])
+
+
+async def _create_profile_slot_worker(
+    db_session: AsyncSession,
+    *,
+    profile_id: uuid.UUID,
+    target_id: uuid.UUID,
+    worker_name: str,
+) -> tuple[object, object]:
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    worker = await worker_auth_store.create_worker(
+        db_session,
+        target_id=target_id,
+        cloud_sandbox_id=slot.id,
+        slot_generation=slot.slot_generation,
+        token_hash=f"{worker_name}-token-hash",
+        machine_fingerprint=worker_name,
+        hostname=worker_name,
+        worker_version="0.1.0",
+        anyharness_version="0.1.0",
+        supervisor_version=None,
+        now=utcnow(),
+    )
+    return slot, worker
 
 
 @pytest.mark.asyncio
@@ -210,6 +268,50 @@ async def test_slot_generation_and_runtime_access_reject_stale_slot_reports(
     assert current_access.active_sandbox_id == second_slot.id
     assert current_access.slot_generation == 2
 
+    touched_access = await targets_store.update_target_runtime_access(
+        db_session,
+        target_id=target_id,
+        sandbox_profile_id=profile_id,
+        active_sandbox_id=second_slot.id,
+        slot_generation=second_slot.slot_generation or 0,
+        anyharness_base_url=None,
+        runtime_token_ciphertext=None,
+        anyharness_data_key_ciphertext=None,
+        worker_id=None,
+        heartbeat_at=utcnow(),
+    )
+    assert touched_access is not None
+    assert touched_access.anyharness_base_url == "http://127.0.0.1:11002"
+    assert touched_access.runtime_token_ciphertext == "token-2"
+    assert touched_access.anyharness_data_key_ciphertext == "key-2"
+
+    state = await agent_auth_store.upsert_target_state(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        desired_revision=3,
+        applied_revision=3,
+        status="applied",
+        force_restart_required=False,
+        last_command_id=None,
+        last_worker_id=None,
+        last_error_code=None,
+        last_error_message=None,
+    )
+    assert state.active_sandbox_id == second_slot.id
+    assert state.slot_generation == second_slot.slot_generation
+
+    await supersede_slot(db_session, sandbox_id=second_slot.id)
+    invalidated_state = await agent_auth_store.get_target_state(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    assert invalidated_state is not None
+    assert invalidated_state.active_sandbox_id is None
+    assert invalidated_state.slot_generation is None
+    assert invalidated_state.agent_auth_status == "pending"
+
 
 @pytest.mark.asyncio
 async def test_materialize_workspace_rejects_mismatched_cloud_workspace_result(
@@ -328,3 +430,343 @@ async def test_materialize_workspace_rejects_mismatched_cloud_workspace_result(
     assert workspace.materialized_slot_generation is None
     workspace_count = await db_session.scalar(select(func.count(CloudWorkspace.id)))
     assert workspace_count == 1
+
+
+@pytest.mark.asyncio
+async def test_managed_materialize_workspace_requires_cloud_workspace_id(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth, _profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="sandbox-profile-materialize-requires-cloud-workspace",
+    )
+
+    response = await client.post(
+        "/v1/cloud/commands",
+        headers=auth.headers,
+        json={
+            "idempotencyKey": "missing-cloud-workspace",
+            "targetId": str(target_id),
+            "kind": "materialize_workspace",
+            "payload": {
+                "mode": "worktree",
+                "repoRootId": "repo-root-1",
+                "targetPath": "/workspace/feature",
+                "newBranchName": "proliferate/missing-cloud-workspace",
+            },
+            "source": "automation",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "cloud_command_cloud_workspace_required"
+
+
+@pytest.mark.asyncio
+async def test_managed_worker_without_slot_cannot_lease_or_report_result(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth, _profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="sandbox-profile-null-slot-worker",
+    )
+    worker = await worker_auth_store.create_worker(
+        db_session,
+        target_id=target_id,
+        cloud_sandbox_id=None,
+        slot_generation=None,
+        token_hash="null-slot-worker-token-hash",
+        machine_fingerprint="null-slot-worker",
+        hostname="null-slot-worker",
+        worker_version="0.1.0",
+        anyharness_version="0.1.0",
+        supervisor_version=None,
+        now=utcnow(),
+    )
+    command = await commands_store.create_command(
+        db_session,
+        idempotency_scope="null-slot-worker",
+        idempotency_key="ensure-repo-null-slot",
+        target_id=target_id,
+        organization_id=None,
+        actor_user_id=uuid.UUID(auth.user_id),
+        actor_kind="user",
+        source="api",
+        workspace_id=None,
+        cloud_workspace_id=None,
+        session_id=None,
+        kind=CloudCommandKind.ensure_repo_checkout.value,
+        payload_json=json.dumps({"provider": "github", "owner": "acme", "name": "rocket"}),
+        observed_event_seq=None,
+        preconditions_json=None,
+        authorization_context_json=None,
+    )
+
+    leased = await commands_store.lease_next_command(
+        db_session,
+        target_id=target_id,
+        worker_id=worker.id,
+        supported_kinds=(CloudCommandKind.ensure_repo_checkout.value,),
+        lease_id="null-slot-lease",
+        lease_expires_at=utcnow() + timedelta(minutes=5),
+        now=utcnow(),
+    )
+    assert leased is None
+
+    row = await db_session.get(CloudCommand, command.id)
+    assert row is not None
+    row.status = CloudCommandStatus.leased.value
+    row.lease_id = "legacy-null-slot-lease"
+    row.leased_by_worker_id = worker.id
+    row.leased_cloud_sandbox_id = None
+    row.leased_slot_generation = None
+    await db_session.flush()
+
+    result = await commands_store.record_command_result(
+        db_session,
+        command_id=command.id,
+        worker_id=worker.id,
+        lease_id="legacy-null-slot-lease",
+        status=CloudCommandStatus.accepted.value,
+        error_code=None,
+        error_message=None,
+        result_json=None,
+        cloud_workspace_id=None,
+        slot_generation=None,
+        anyharness_workspace_id=None,
+        now=utcnow(),
+    )
+
+    assert result is not None
+    assert result.status == CloudCommandStatus.superseded.value
+    assert result.error_code == "stale_slot"
+
+
+@pytest.mark.asyncio
+async def test_managed_profile_target_enrollment_requires_slot_identity(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth, _profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="sandbox-profile-null-slot-enrollment",
+    )
+    token = "profile-target-null-slot-enrollment"
+    await worker_auth_store.create_enrollment(
+        db_session,
+        target_id=target_id,
+        token_hash=worker_service._hash_token(
+            domain=CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
+            token=token,
+        ),
+        created_by_user_id=uuid.UUID(auth.user_id),
+        expires_at=utcnow() + timedelta(minutes=5),
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        "/v1/cloud/worker/enroll",
+        json={
+            "enrollmentToken": token,
+            "machineFingerprint": "null-slot-enrollment",
+            "hostname": "null-slot-enrollment",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "cloud_worker_slot_identity_required"
+
+
+@pytest.mark.asyncio
+async def test_managed_command_result_requires_leased_slot_generation_echo(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth, profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="sandbox-profile-slot-generation-echo",
+    )
+    slot, worker = await _create_profile_slot_worker(
+        db_session,
+        profile_id=profile_id,
+        target_id=target_id,
+        worker_name="slot-generation-worker",
+    )
+    for index, reported_generation in enumerate((None, (slot.slot_generation or 0) + 1), start=1):
+        command = await commands_store.create_command(
+            db_session,
+            idempotency_scope=f"slot-generation-echo-{index}",
+            idempotency_key=f"ensure-repo-slot-generation-{index}",
+            target_id=target_id,
+            organization_id=None,
+            actor_user_id=uuid.UUID(auth.user_id),
+            actor_kind="user",
+            source="api",
+            workspace_id=None,
+            cloud_workspace_id=None,
+            session_id=None,
+            kind=CloudCommandKind.ensure_repo_checkout.value,
+            payload_json=json.dumps({"provider": "github", "owner": "acme", "name": "rocket"}),
+            observed_event_seq=None,
+            preconditions_json=None,
+            authorization_context_json=None,
+        )
+        lease_id = f"slot-generation-lease-{index}"
+        leased = await commands_store.lease_next_command(
+            db_session,
+            target_id=target_id,
+            worker_id=worker.id,
+            supported_kinds=(CloudCommandKind.ensure_repo_checkout.value,),
+            lease_id=lease_id,
+            lease_expires_at=utcnow() + timedelta(minutes=5),
+            now=utcnow(),
+        )
+        assert leased is not None
+        assert leased.id == command.id
+        assert leased.leased_slot_generation == slot.slot_generation
+
+        result = await commands_store.record_command_result(
+            db_session,
+            command_id=command.id,
+            worker_id=worker.id,
+            lease_id=lease_id,
+            status=CloudCommandStatus.accepted.value,
+            error_code=None,
+            error_message=None,
+            result_json=None,
+            cloud_workspace_id=None,
+            slot_generation=reported_generation,
+            anyharness_workspace_id=None,
+            now=utcnow(),
+        )
+
+        assert result is not None
+        assert result.status == CloudCommandStatus.superseded.value
+        assert result.error_code == "stale_slot"
+
+
+@pytest.mark.asyncio
+async def test_profile_target_writes_reject_cross_owner_and_mismatched_targets(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth_one, profile_one_id, target_one_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="sandbox-profile-owner-one",
+    )
+    _auth_two, profile_two_id, target_two_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="sandbox-profile-owner-two",
+    )
+
+    with pytest.raises(RuntimeError):
+        await ensure_profile_slot(
+            db_session,
+            sandbox_profile_id=profile_one_id,
+            target_id=target_two_id,
+        )
+    with pytest.raises(RuntimeError):
+        await create_managed_cloud_workspace_for_profile(
+            db_session,
+            sandbox_profile_id=profile_one_id,
+            target_id=target_two_id,
+            created_by_user_id=uuid.UUID(auth_one.user_id),
+            display_name="acme/rocket",
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_branch="feature/mismatch",
+            git_base_branch="main",
+            worktree_path="/workspace/mismatch",
+            origin_json=None,
+            template_version="managed-cloud-v1",
+        )
+
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile_one_id,
+        target_id=target_one_id,
+    )
+    mismatched_access = await targets_store.update_target_runtime_access(
+        db_session,
+        target_id=target_two_id,
+        sandbox_profile_id=profile_one_id,
+        active_sandbox_id=slot.id,
+        slot_generation=slot.slot_generation or 0,
+        anyharness_base_url="http://127.0.0.1:11000",
+        runtime_token_ciphertext="token",
+        anyharness_data_key_ciphertext="key",
+        worker_id=None,
+        heartbeat_at=utcnow(),
+    )
+    assert mismatched_access is None
+
+    target_one = await db_session.get(CloudTarget, target_one_id)
+    assert target_one is not None
+    target_one.owner_user_id = uuid.UUID(_auth_two.user_id)
+    await db_session.flush()
+    with pytest.raises(RuntimeError):
+        await create_managed_cloud_workspace_for_profile(
+            db_session,
+            sandbox_profile_id=profile_one_id,
+            target_id=target_one_id,
+            created_by_user_id=uuid.UUID(auth_one.user_id),
+            display_name="acme/rocket",
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_branch="feature/owner-mismatch",
+            git_base_branch="main",
+            worktree_path="/workspace/owner-mismatch",
+            origin_json=None,
+            template_version="managed-cloud-v1",
+        )
+
+    assert profile_two_id != profile_one_id
+
+
+@pytest.mark.asyncio
+async def test_managed_worker_inventory_requires_current_slot(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    _auth, _profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="sandbox-profile-inventory-slot",
+    )
+    worker = await worker_auth_store.create_worker(
+        db_session,
+        target_id=target_id,
+        cloud_sandbox_id=None,
+        slot_generation=None,
+        token_hash="inventory-null-slot-token-hash",
+        machine_fingerprint="inventory-null-slot",
+        hostname="inventory-null-slot",
+        worker_version="0.1.0",
+        anyharness_version="0.1.0",
+        supervisor_version=None,
+        now=utcnow(),
+    )
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await worker_service.record_inventory(
+            db_session,
+            auth=WorkerAuthContext(
+                worker_id=worker.id,
+                target_id=target_id,
+                cloud_sandbox_id=None,
+                slot_generation=None,
+            ),
+            body=WorkerInventoryRequest.model_validate({"status": "online"}),
+        )
+
+    assert exc_info.value.code == "cloud_worker_slot_identity_required"

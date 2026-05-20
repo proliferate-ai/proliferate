@@ -24,6 +24,10 @@ from proliferate.db.models.cloud.targets import (
     CloudTargetStatus as CloudTargetStatusRow,
 )
 from proliferate.db.models.organizations import OrganizationMembership
+from proliferate.db.store.cloud_profile_target_guard import (
+    ProfileTargetInvariantError,
+    require_primary_managed_profile_target,
+)
 from proliferate.utils.time import utcnow
 
 
@@ -568,6 +572,14 @@ async def update_target_runtime_access(
     worker_id: UUID | None,
     heartbeat_at: datetime,
 ) -> CloudTargetRuntimeAccessSnapshot | None:
+    try:
+        await require_primary_managed_profile_target(
+            db,
+            sandbox_profile_id=sandbox_profile_id,
+            target_id=target_id,
+        )
+    except ProfileTargetInvariantError:
+        return None
     active_slot = (
         await db.execute(
             select(CloudSandbox.id)
@@ -622,9 +634,12 @@ async def update_target_runtime_access(
         row.sandbox_profile_id = sandbox_profile_id
         row.active_sandbox_id = active_sandbox_id
         row.slot_generation = slot_generation
-        row.anyharness_base_url = anyharness_base_url
-        row.runtime_token_ciphertext = runtime_token_ciphertext
-        row.anyharness_data_key_ciphertext = anyharness_data_key_ciphertext
+        if anyharness_base_url is not None:
+            row.anyharness_base_url = anyharness_base_url
+        if runtime_token_ciphertext is not None:
+            row.runtime_token_ciphertext = runtime_token_ciphertext
+        if anyharness_data_key_ciphertext is not None:
+            row.anyharness_data_key_ciphertext = anyharness_data_key_ciphertext
         row.last_worker_id = worker_id
         row.last_heartbeat_at = heartbeat_at
         row.updated_at = now

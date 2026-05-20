@@ -5,13 +5,15 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudWorkspaceStatus
 from proliferate.db.models.cloud.commands import CloudCommand
-from proliferate.db.models.cloud.targets import CloudTarget
+from proliferate.db.models.cloud.targets import CloudTarget, CloudWorker
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
+from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 from tests.e2e.cloud.helpers.shared import AuthSession
@@ -71,6 +73,24 @@ async def _create_personal_profile_bound_to_target(
     assert target is not None
     target.sandbox_profile_id = profile.id
     target.profile_target_role = "primary"
+    await db_session.flush()
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=target_id,
+    )
+    workers = (
+        (
+            await db_session.execute(
+                select(CloudWorker).where(CloudWorker.target_id == target_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for worker in workers:
+        worker.cloud_sandbox_id = slot.id
+        worker.slot_generation = slot.slot_generation
     await db_session.flush()
     rebound = await agent_auth_store.get_sandbox_profile(db_session, profile.id)
     assert rebound is not None
