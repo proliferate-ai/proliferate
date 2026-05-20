@@ -46,10 +46,12 @@ def compile_runtime_config_manifest(
         "mcpServers": [_mcp_server_payload(server) for server in plan.mcp_servers],
         "mcpBindingSummaries": [
             {
-                "serverId": binding.server_id,
+                "id": binding.server_id,
                 "serverName": binding.server_name,
-                "connectionId": binding.connection_id,
-                "catalogEntryId": binding.catalog_entry_id,
+                "displayName": binding.display_name,
+                "transport": binding.transport,
+                "outcome": "applied",
+                "reason": None,
             }
             for binding in plan.mcp_binding_summaries
         ],

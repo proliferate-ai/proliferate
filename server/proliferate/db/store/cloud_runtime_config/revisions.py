@@ -5,6 +5,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.runtime_config import (
@@ -116,6 +117,26 @@ async def upsert_revision_and_current(
     source: str,
     generated_by_user_id: UUID | None,
 ) -> tuple[SandboxProfileRuntimeConfigRevisionSnapshot, bool]:
+    now = utcnow()
+    await db.execute(
+        pg_insert(SandboxProfileRuntimeConfigCurrent)
+        .values(
+            sandbox_profile_id=sandbox_profile_id,
+            current_sequence=0,
+            current_revision_id=None,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(
+            index_elements=[SandboxProfileRuntimeConfigCurrent.sandbox_profile_id]
+        )
+    )
+    current = (
+        await db.execute(
+            select(SandboxProfileRuntimeConfigCurrent)
+            .where(SandboxProfileRuntimeConfigCurrent.sandbox_profile_id == sandbox_profile_id)
+            .with_for_update()
+        )
+    ).scalar_one()
     existing = await get_revision_by_hash(
         db,
         sandbox_profile_id=sandbox_profile_id,
@@ -140,7 +161,7 @@ async def upsert_revision_and_current(
             warnings_json=warnings_json,
             source=source,
             generated_by_user_id=generated_by_user_id,
-            created_at=utcnow(),
+            created_at=now,
         )
         db.add(row)
         await db.flush()
@@ -150,19 +171,8 @@ async def upsert_revision_and_current(
     else:
         revision = existing
 
-    current = await db.get(SandboxProfileRuntimeConfigCurrent, sandbox_profile_id)
-    now = utcnow()
-    if current is None:
-        current = SandboxProfileRuntimeConfigCurrent(
-            sandbox_profile_id=sandbox_profile_id,
-            current_sequence=revision.sequence,
-            current_revision_id=revision.id,
-            updated_at=now,
-        )
-        db.add(current)
-    else:
-        current.current_sequence = revision.sequence
-        current.current_revision_id = revision.id
-        current.updated_at = now
+    current.current_sequence = revision.sequence
+    current.current_revision_id = revision.id
+    current.updated_at = now
     await db.flush()
     return revision, created

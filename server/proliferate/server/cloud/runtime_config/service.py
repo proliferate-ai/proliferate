@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.cloud import CloudCommandActorKind, CloudCommandKind, CloudCommandSource
 from proliferate.db.models.cloud.agent_auth import SandboxProfileTargetState
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.cloud_mcp.connections import (
@@ -25,8 +26,12 @@ from proliferate.db.store.cloud_skills.configured_items import (
     list_enabled_skills_for_organization_profile,
     list_enabled_skills_for_personal_profile,
 )
+from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.server.cloud.commands.domain.rules import compact_command_json
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
 from proliferate.server.cloud.mcp_catalog.catalog import build_connector_catalog
 from proliferate.server.cloud.plugins.catalog.service import plugin_packages_for_catalog_entries
@@ -51,6 +56,10 @@ from proliferate.server.cloud.runtime_config.models import (
     WorkerRuntimeConfigStatusResponse,
     parse_json_dict,
     runtime_config_revision_model,
+)
+from proliferate.server.cloud.target_config.models import (
+    TargetConfigMaterializationPlan,
+    TargetConfigSummaryModel,
 )
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 from proliferate.server.cloud.worker.slot_guard import require_current_managed_worker_slot
@@ -98,6 +107,12 @@ async def refresh_profile_runtime_config(
         profile_id=profile.id,
         sequence=revision.sequence,
         revision_id=revision.id,
+    )
+    await _queue_primary_target_runtime_config_materialization(
+        db,
+        profile=profile,
+        revision=revision,
+        actor_user_id=actor_user_id,
     )
     return RuntimeConfigStatusResponse(
         sandbox_profile_id=str(profile.id),
@@ -229,6 +244,7 @@ async def runtime_config_fragment_for_revision(
     return RuntimeConfigMaterializationFragment(
         revision_id=str(revision.id),
         sandbox_profile_id=str(revision.sandbox_profile_id),
+        target_id=None,
         sequence=revision.sequence,
         content_hash=revision.content_hash,
         manifest=manifest,
@@ -280,6 +296,7 @@ async def worker_runtime_config_artifact(
         hash=artifact.artifact_hash,
         content_type=artifact.content_type,
         byte_size=artifact.byte_size,
+        source_ref=str(payload["sourceRef"]) if payload.get("sourceRef") is not None else None,
         content=content,
     )
 
@@ -456,13 +473,221 @@ async def _mark_primary_target_runtime_config_pending(
             .with_for_update()
         )
     ).scalar_one_or_none()
+    now = utcnow()
     if row is None:
+        row = SandboxProfileTargetState(
+            sandbox_profile_id=profile_id,
+            target_id=target_id,
+            desired_agent_auth_revision=0,
+            applied_agent_auth_revision=None,
+            agent_auth_status="applied",
+            agent_auth_force_restart_required=False,
+            applied_runtime_config_sequence=0,
+            applied_runtime_config_revision_id=None,
+            runtime_config_status="pending",
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(row)
+        await db.flush()
         return
     if (
         row.applied_runtime_config_revision_id == str(revision_id)
         and row.applied_runtime_config_sequence >= sequence
     ):
         return
+    row.runtime_config_status = "pending"
+    row.updated_at = now
+    await db.flush()
+
+
+async def _queue_primary_target_runtime_config_materialization(
+    db: AsyncSession,
+    *,
+    profile: sandbox_profile_store.SandboxProfileSnapshot,
+    revision: SandboxProfileRuntimeConfigRevisionSnapshot,
+    actor_user_id: UUID | None,
+) -> None:
+    target_id = await sandbox_profile_store.load_primary_target_id(db, profile.id)
+    if target_id is None:
+        return
+    target = await targets_store.get_target_by_id(db, target_id)
+    if target is None:
+        return
+    configs = await target_config_store.list_target_configs(db, target_id=target.id)
+    for config in configs:
+        updated = await _update_target_config_runtime_fragment(
+            db,
+            config=config,
+            revision=revision,
+        )
+        if updated is None:
+            continue
+        command = await _enqueue_runtime_config_materialization_command(
+            db,
+            target=target,
+            config=updated,
+            revision=revision,
+            actor_user_id=actor_user_id,
+        )
+        queued = await target_config_store.mark_target_config_queued(
+            db,
+            config_id=updated.id,
+            command_id=command.id,
+        )
+        if queued is None:
+            continue
+        await _record_runtime_config_command(
+            db,
+            profile_id=profile.id,
+            target_id=target.id,
+            command_id=command.id,
+        )
+        await publish_command_status_after_commit(db, command)
+
+
+async def _update_target_config_runtime_fragment(
+    db: AsyncSession,
+    *,
+    config: target_config_store.CloudTargetConfigSnapshot,
+    revision: SandboxProfileRuntimeConfigRevisionSnapshot,
+) -> target_config_store.CloudTargetConfigSnapshot | None:
+    try:
+        payload = decrypt_json(config.payload_ciphertext)
+        plan = TargetConfigMaterializationPlan.model_validate(payload)
+    except (TypeError, ValueError):
+        return None
+    runtime_config = await runtime_config_fragment_for_revision(db, revision_id=revision.id)
+    runtime_config = runtime_config.model_copy(update={"target_id": str(config.target_id)})
+    manifest = runtime_config.manifest
+    mcp_servers = manifest.get("mcpServers")
+    warnings = manifest.get("warnings")
+    skills = manifest.get("skills")
+    binding_count = len(mcp_servers) if isinstance(mcp_servers, list) else 0
+    warning_count = len(warnings) if isinstance(warnings, list) else 0
+    skill_count = len(skills) if isinstance(skills, list) else 0
+    new_version = config.config_version + 1
+    updated_plan = plan.model_copy(
+        update={
+            "config_version": new_version,
+            "runtime_config": runtime_config,
+            "mcp": None,
+            "skills": [],
+        }
+    )
+    summary = _runtime_config_summary(
+        config.summary_json,
+        binding_count=binding_count,
+        warning_count=warning_count,
+        skill_count=skill_count,
+    )
+    return await target_config_store.replace_target_config_payload_for_runtime_config(
+        db,
+        config_id=config.id,
+        payload_ciphertext=encrypt_json(updated_plan.model_dump(mode="json", by_alias=True)),
+        summary_json=summary.model_dump_json(),
+        mcp_materialization_version=revision.sequence,
+    )
+
+
+def _runtime_config_summary(
+    summary_json: str,
+    *,
+    binding_count: int,
+    warning_count: int,
+    skill_count: int,
+) -> TargetConfigSummaryModel:
+    try:
+        summary = TargetConfigSummaryModel.model_validate_json(summary_json)
+    except (TypeError, ValueError):
+        summary = TargetConfigSummaryModel(
+            env_var_count=0,
+            tracked_file_count=0,
+            has_git_credential=False,
+            agent_credential_providers=[],
+            mcp_binding_count=0,
+            mcp_warning_count=0,
+            required_tools=[],
+        )
+    required_tools = set(summary.required_tools)
+    if binding_count or skill_count:
+        required_tools.add("node")
+    return summary.model_copy(
+        update={
+            "mcp_binding_count": binding_count,
+            "mcp_warning_count": warning_count,
+            "required_tools": sorted(required_tools),
+        }
+    )
+
+
+async def _enqueue_runtime_config_materialization_command(
+    db: AsyncSession,
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    config: target_config_store.CloudTargetConfigSnapshot,
+    revision: SandboxProfileRuntimeConfigRevisionSnapshot,
+    actor_user_id: UUID | None,
+) -> commands_store.CloudCommandSnapshot:
+    idempotency_scope = f"target:{target.id}:runtime-config:config:{config.id}"
+    idempotency_key = f"runtime-config:{revision.id}:config-v{config.config_version}"
+    existing = await commands_store.get_command_by_idempotency(
+        db,
+        idempotency_scope=idempotency_scope,
+        idempotency_key=idempotency_key,
+    )
+    if existing is not None:
+        return existing
+    return await commands_store.create_command(
+        db,
+        idempotency_scope=idempotency_scope,
+        idempotency_key=idempotency_key,
+        target_id=target.id,
+        organization_id=target.organization_id,
+        actor_user_id=actor_user_id,
+        actor_kind=CloudCommandActorKind.system.value,
+        source=CloudCommandSource.automation.value,
+        workspace_id=None,
+        session_id=None,
+        cloud_workspace_id=None,
+        kind=CloudCommandKind.materialize_environment.value,
+        payload_json=compact_command_json(
+            {
+                "targetConfigId": str(config.id),
+                "configVersion": config.config_version,
+            }
+        ),
+        observed_event_seq=None,
+        preconditions_json=None,
+        authorization_context_json=compact_command_json(
+            {
+                "actorUserId": str(actor_user_id) if actor_user_id else None,
+                "runtimeConfigRevisionId": str(revision.id),
+            }
+        ),
+    )
+
+
+async def _record_runtime_config_command(
+    db: AsyncSession,
+    *,
+    profile_id: UUID,
+    target_id: UUID,
+    command_id: UUID,
+) -> None:
+    row = (
+        await db.execute(
+            select(SandboxProfileTargetState)
+            .where(
+                SandboxProfileTargetState.sandbox_profile_id == profile_id,
+                SandboxProfileTargetState.target_id == target_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return
+    row.last_runtime_config_command_id = command_id
     row.runtime_config_status = "pending"
     row.updated_at = utcnow()
     await db.flush()

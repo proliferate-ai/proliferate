@@ -77,8 +77,38 @@ pub async fn create_session(
     let model_id = req.model_id.clone();
     let mode_id = req.mode_id.clone();
     let origin = request_origin_or_api_default(req.origin.clone(), "create_session");
-    let mcp_servers = bindings_from_contract(req.mcp_servers.clone().unwrap_or_default());
-    if let Some(summaries) = req.mcp_binding_summaries.as_deref() {
+    let runtime_inputs = if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
+        if req.mcp_servers.is_some()
+            || req.mcp_binding_summaries.is_some()
+            || req.plugin_bundle.is_some()
+        {
+            return Err(ApiError::bad_request(
+                "legacy MCP/plugin launch fields are not allowed with expectedRuntimeConfigRevision",
+                "RUNTIME_CONFIG_LEGACY_FIELDS_REJECTED",
+            ));
+        }
+        Some(
+            state
+                .runtime_config_service
+                .session_inputs_for_expected(expected)
+                .map_err(super::runtime_config::map_runtime_config_error)?,
+        )
+    } else {
+        None
+    };
+    let mcp_servers = runtime_inputs
+        .as_ref()
+        .map(|inputs| inputs.mcp_servers.clone())
+        .unwrap_or_else(|| bindings_from_contract(req.mcp_servers.clone().unwrap_or_default()));
+    let mcp_binding_summaries = runtime_inputs
+        .as_ref()
+        .and_then(|inputs| inputs.mcp_binding_summaries.clone())
+        .or(req.mcp_binding_summaries);
+    let plugin_bundle = runtime_inputs
+        .as_ref()
+        .and_then(|inputs| inputs.plugin_bundle.clone())
+        .or(req.plugin_bundle);
+    if let Some(summaries) = mcp_binding_summaries.as_deref() {
         validate_binding_summaries(summaries)
             .map_err(|error| ApiError::bad_request(error.to_string(), "INVALID_MCP_SUMMARY"))?;
     }
@@ -114,8 +144,8 @@ pub async fn create_session(
             mode_id.as_deref(),
             req.system_prompt_append,
             mcp_servers,
-            req.mcp_binding_summaries,
-            req.plugin_bundle,
+            mcp_binding_summaries,
+            plugin_bundle,
             req.subagents_enabled.unwrap_or(true),
             req.agent_auth_scope,
             req.required_agent_auth_revision,
@@ -577,6 +607,21 @@ pub async fn resume_session(
 ) -> Result<Json<Session>, ApiError> {
     let latency = LatencyRequestContext::from_headers(&headers);
     let req = parse_optional_resume_request(body)?;
+    if req.expected_runtime_config_revision.is_some() {
+        if req.mcp_servers.is_some()
+            || req.mcp_binding_summaries.is_some()
+            || req.plugin_bundle.is_some()
+        {
+            return Err(ApiError::bad_request(
+                "legacy MCP/plugin resume fields are not allowed with expectedRuntimeConfigRevision",
+                "RUNTIME_CONFIG_LEGACY_FIELDS_REJECTED",
+            ));
+        }
+        return Err(ApiError::conflict(
+            "runtime config changes require starting a new session",
+            "RUNTIME_CONFIG_RESUME_UNSUPPORTED",
+        ));
+    }
     if let Some(summaries) = req.mcp_binding_summaries.as_deref() {
         validate_binding_summaries(summaries)
             .map_err(|error| ApiError::bad_request(error.to_string(), "INVALID_MCP_SUMMARY"))?;

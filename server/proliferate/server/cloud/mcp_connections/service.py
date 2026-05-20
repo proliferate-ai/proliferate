@@ -535,6 +535,13 @@ async def put_cloud_mcp_connection_secret_auth(
         actor_user_id=record.user_id,
         reason="mcp_connection_auth_updated",
     )
+    if updated.public_organization_id is not None:
+        await _refresh_org_runtime_config(
+            db,
+            organization_id=updated.public_organization_id,
+            actor_user_id=record.user_id,
+            reason="mcp_connection_auth_updated",
+        )
     return _connection_payload(updated)
 
 

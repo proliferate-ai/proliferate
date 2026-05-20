@@ -1,3 +1,4 @@
+use anyharness_contract::v1::ApplyRuntimeConfigRequest;
 use reqwest::StatusCode;
 use serde_json::Value;
 use tokio::time::{sleep, Duration, Instant};
@@ -28,6 +29,21 @@ impl AnyHarnessCommandResponse {
 }
 
 impl AnyHarnessClient {
+    pub async fn apply_runtime_config(
+        &self,
+        body: &ApplyRuntimeConfigRequest,
+    ) -> Result<AnyHarnessCommandResponse, WorkerError> {
+        let response = self
+            .authenticate(
+                self.http()
+                    .put(format!("{}/v1/runtime-config", self.base_url())),
+            )
+            .json(body)
+            .send()
+            .await?;
+        parse_anyharness_response(response).await
+    }
+
     pub async fn start_session(
         &self,
         body: &Value,

@@ -31,6 +31,7 @@ use crate::domains::reviews::mcp::{
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::ReviewStore;
+use crate::domains::runtime_config::service::{RuntimeConfigService, RuntimeConfigStore};
 use crate::persistence::Db;
 use crate::repo_roots::service::RepoRootService;
 use crate::repo_roots::store::RepoRootStore;
@@ -94,6 +95,7 @@ pub struct AppState {
     pub agent_auth_config_service: Arc<AgentAuthConfigService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub dynamic_model_registry_service: Arc<DynamicModelRegistryService>,
+    pub runtime_config_service: Arc<RuntimeConfigService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub files_runtime: Arc<WorkspaceFilesRuntime>,
@@ -158,6 +160,9 @@ impl AppState {
             WorkspaceStore::new(db.clone()),
             runtime_home.clone(),
         ));
+        let runtime_config_service = Arc::new(RuntimeConfigService::new(RuntimeConfigStore::new(
+            db.clone(),
+        )));
         let process_service = Arc::new(ProcessService::new());
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
@@ -400,6 +405,7 @@ impl AppState {
             agent_auth_config_service,
             agent_reconcile_service,
             dynamic_model_registry_service,
+            runtime_config_service,
             repo_root_service,
             workspace_runtime,
             files_runtime,

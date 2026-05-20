@@ -135,6 +135,8 @@ class ResolvedMcpBinding:
     server_name: str
     connection_id: str
     catalog_entry_id: str
+    display_name: str | None
+    transport: str
     source: SourceRowRef
 
 
@@ -241,10 +243,28 @@ def resolve_runtime_config(inputs: ResolverInput) -> ResolvedRuntimeConfigPlan:
             server_name=server.server_name,
             connection_id=server.connection_id,
             catalog_entry_id=server.catalog_entry_id,
+            display_name=server.catalog_entry.name,
+            transport=server.transport,
             source=server.source,
         )
         for server in mcp_servers
     )
+
+    visible_plugins = [
+        plugin
+        for plugin in inputs.plugin_configured_items
+        if _is_visible_to_profile(
+            inputs.sandbox_profile,
+            owner_scope=plugin.owner_scope,
+            owner_user_id=plugin.owner_user_id,
+            organization_id=plugin.organization_id,
+            public_to_org=plugin.public_to_org,
+            public_organization_id=plugin.public_organization_id,
+            public_status=plugin.public_status,
+            enabled=plugin.enabled,
+        )
+    ]
+    visible_plugin_ids = {plugin.plugin_id for plugin in visible_plugins}
 
     resolved_skills: list[ResolvedSkill] = []
     resolved_artifacts: list[ResolvedArtifactRef] = []
@@ -261,6 +281,10 @@ def resolve_runtime_config(inputs: ResolverInput) -> ResolvedRuntimeConfigPlan:
             public_organization_id=skill.public_organization_id,
             public_status=skill.public_status,
             enabled=skill.enabled,
+        )
+        and (
+            skill.skill_source_kind != "plugin"
+            or skill.plugin_id in visible_plugin_ids
         )
     ]
     for skill_item in sorted(
@@ -280,20 +304,6 @@ def resolve_runtime_config(inputs: ResolverInput) -> ResolvedRuntimeConfigPlan:
             resolved_artifacts.append(skill.instruction_artifact)
             resolved_artifacts.extend(skill.resources)
 
-    visible_plugins = [
-        plugin
-        for plugin in inputs.plugin_configured_items
-        if _is_visible_to_profile(
-            inputs.sandbox_profile,
-            owner_scope=plugin.owner_scope,
-            owner_user_id=plugin.owner_user_id,
-            organization_id=plugin.organization_id,
-            public_to_org=plugin.public_to_org,
-            public_organization_id=plugin.public_organization_id,
-            public_status=plugin.public_status,
-            enabled=plugin.enabled,
-        )
-    ]
     for plugin_item in sorted(visible_plugins, key=lambda item: (item.plugin_id, item.id)):
         package = packages_by_id.get(plugin_item.plugin_id)
         if package is None:
@@ -375,6 +385,8 @@ def _is_visible_to_profile(
     if profile.organization_id is None:
         return False
     return (owner_scope == "organization" and organization_id == profile.organization_id) or (
+        owner_scope == "personal"
+        and
         public_to_org
         and public_organization_id == profile.organization_id
         and public_status == "public"
