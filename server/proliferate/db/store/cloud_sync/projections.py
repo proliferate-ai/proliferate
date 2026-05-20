@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
@@ -201,14 +201,27 @@ async def list_active_projection_cursors_for_target(
             select(CloudSessionProjection, CloudWorkspaceExposure)
             .join(
                 CloudWorkspaceExposure,
-                CloudWorkspaceExposure.id == CloudSessionProjection.exposure_id,
+                or_(
+                    CloudWorkspaceExposure.id == CloudSessionProjection.exposure_id,
+                    and_(
+                        CloudSessionProjection.exposure_id.is_(None),
+                        CloudWorkspaceExposure.target_id == CloudSessionProjection.target_id,
+                        CloudWorkspaceExposure.cloud_workspace_id
+                        == CloudSessionProjection.cloud_workspace_id,
+                    ),
+                ),
             )
             .where(CloudWorkspaceExposure.target_id == target_id)
             .where(CloudWorkspaceExposure.archived_at.is_(None))
             .where(CloudWorkspaceExposure.status == "active")
             .where(CloudSessionProjection.target_id == target_id)
             .where(CloudSessionProjection.ended_at.is_(None))
-            .where(CloudSessionProjection.workspace_id.is_not(None))
+            .where(
+                or_(
+                    CloudSessionProjection.workspace_id.is_not(None),
+                    CloudWorkspaceExposure.anyharness_workspace_id.is_not(None),
+                )
+            )
             .order_by(CloudWorkspaceExposure.updated_at.desc())
         )
     ).all()
@@ -218,7 +231,9 @@ async def list_active_projection_cursors_for_target(
             session_projection_id=projection.id,
             target_id=projection.target_id,
             cloud_workspace_id=exposure.cloud_workspace_id,
-            anyharness_workspace_id=projection.workspace_id or "",
+            anyharness_workspace_id=(
+                projection.workspace_id or exposure.anyharness_workspace_id or ""
+            ),
             anyharness_session_id=projection.session_id,
             projection_level=projection.projection_level,
             commandable=projection.commandable,
