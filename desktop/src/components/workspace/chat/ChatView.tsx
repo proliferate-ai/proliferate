@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useMemo,
+  useRef,
   useState,
   type DragEvent,
   type JSX,
@@ -26,6 +27,7 @@ import {
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useChatDockInset } from "@/hooks/chat/ui/use-chat-dock-inset";
 import { useChatPromptAttachments } from "@/hooks/chat/ui/use-chat-prompt-attachments";
+import { useChatRootFocus } from "@/hooks/chat/ui/use-chat-root-focus";
 import { useCloudWorkspacePolling } from "@/hooks/chat/use-cloud-workspace-polling";
 import { useComposerDockSlots } from "@/hooks/chat/ui/use-composer-dock-slots";
 import { useQueuedPromptEditStatus } from "@/hooks/chat/use-queued-prompt-edit";
@@ -137,6 +139,7 @@ export const ChatView = memo(function ChatView({
     canAttachFiles: canAcceptFileDrop,
   });
   const [fileDragOver, setFileDragOver] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const {
     dockRef,
     dockSafeAreaPx,
@@ -192,11 +195,16 @@ export const ChatView = memo(function ChatView({
     }
     setFileDragOver(false);
   }, []);
+  const handleRootPointerDownCapture = useChatRootFocus(rootRef);
 
   return (
     <DebugProfiler id="chat-surface">
       <div
-        className="chat-selection-root relative flex h-full min-h-0 flex-1 flex-col select-none overflow-hidden"
+        ref={rootRef}
+        data-focus-zone="chat"
+        tabIndex={-1}
+        className="chat-selection-root relative flex h-full min-h-0 flex-1 flex-col select-none overflow-hidden outline-none"
+        onPointerDownCapture={handleRootPointerDownCapture}
         onDragEnter={handleFileDrag}
         onDragOver={handleFileDrag}
         onDragLeave={handleDragLeave}
