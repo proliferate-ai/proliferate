@@ -114,6 +114,13 @@ async def create_command(
     authorization_context_json: str | None,
 ) -> CloudCommandSnapshot:
     now = utcnow()
+    target = await db.get(CloudTarget, target_id)
+    if (
+        kind == CloudCommandKind.materialize_workspace.value
+        and _target_requires_slot(target)
+        and cloud_workspace_id is None
+    ):
+        raise RuntimeError("Managed materialize_workspace commands require cloud_workspace_id.")
     row = CloudCommand(
         idempotency_scope=idempotency_scope,
         idempotency_key=idempotency_key,
@@ -269,6 +276,18 @@ async def lease_next_command(
     if worker is None:
         return None
     target = await db.get(CloudTarget, target_id)
+    if (
+        row.kind == CloudCommandKind.materialize_workspace.value
+        and _target_requires_slot(target)
+        and row.cloud_workspace_id is None
+    ):
+        row.status = CloudCommandStatus.rejected.value
+        row.error_code = "cloud_workspace_required"
+        row.error_message = "Managed materialize_workspace command is missing Cloud workspace."
+        row.rejected_at = now
+        row.updated_at = now
+        await db.flush()
+        return None
     if _target_requires_slot(target) and (
         worker.cloud_sandbox_id is None or worker.slot_generation is None
     ):

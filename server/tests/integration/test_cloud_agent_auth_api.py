@@ -8,12 +8,15 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.store.cloud_agent_auth import store
+from proliferate.constants.cloud import CLOUD_WORKER_TOKEN_DOMAIN
 from proliferate.db.models.auth import OAuthAccount, User
+from proliferate.db.store.cloud_agent_auth import store
+from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
+from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.agent_auth import service as agent_auth_service
+from proliferate.server.cloud.worker import service as worker_service
 from proliferate.utils.crypto import decrypt_text, encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
-from tests.e2e.cloud.helpers.github import seed_linked_github_account
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 
@@ -936,18 +939,6 @@ async def test_agent_auth_selection_queues_secret_safe_worker_materialization(
         db_session,
         email="agent-auth-worker-materialization@example.com",
     )
-    await seed_linked_github_account(
-        db_session,
-        user_id=tokens["user_id"],
-        access_token="gh-agent-auth-worker-token",
-        account_email="agent-auth-worker@example.com",
-    )
-    target_id, worker_headers = await _create_enrolled_target(
-        client,
-        _headers(tokens),
-        suffix="materialization",
-    )
-
     actor_user_id = UUID(tokens["user_id"])
     credential = await store.create_agent_auth_credential(
         db_session,
@@ -996,10 +987,35 @@ async def test_agent_auth_selection_queues_secret_safe_worker_materialization(
     profile_response = await client.post(
         "/v1/cloud/sandbox-profiles/personal",
         headers=_headers(tokens),
-        json={"managedTargetId": target_id},
     )
     assert profile_response.status_code == 200
     profile = profile_response.json()
+    profile_id = UUID(profile["id"])
+    target_id = UUID(profile["primaryTargetId"])
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    worker_token = f"agent-auth-materialization-{uuid.uuid4()}"
+    await worker_auth_store.create_worker(
+        db_session,
+        target_id=target_id,
+        cloud_sandbox_id=slot.id,
+        slot_generation=slot.slot_generation,
+        token_hash=worker_service._hash_token(
+            domain=CLOUD_WORKER_TOKEN_DOMAIN,
+            token=worker_token,
+        ),
+        machine_fingerprint="agent-auth-materialization",
+        hostname="agent-auth-materialization",
+        worker_version="0.1.0",
+        anyharness_version="0.1.0",
+        supervisor_version=None,
+        now=utcnow(),
+    )
+    await db_session.commit()
+    worker_headers = {"Authorization": f"Bearer {worker_token}"}
 
     select_response = await client.put(
         f"/v1/cloud/sandbox-profiles/{profile['id']}/agent-auth-selections/claude",
@@ -1080,6 +1096,7 @@ async def test_agent_auth_selection_queues_secret_safe_worker_materialization(
         json={
             "status": "accepted",
             "leaseId": command["leaseId"],
+            "slotGeneration": command["slotGeneration"],
             "result": {
                 "applied": True,
                 "runtimeGrantToken": token,

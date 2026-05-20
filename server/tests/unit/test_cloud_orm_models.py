@@ -35,3 +35,14 @@ def test_cloud_orm_package_registers_all_cloud_tables() -> None:
     }
 
     assert expected_tables <= set(Base.metadata.tables)
+
+
+def test_cloud_target_runtime_access_uses_named_target_unique_constraint() -> None:
+    table = Base.metadata.tables["cloud_target_runtime_access"]
+
+    assert "uq_cloud_target_runtime_access_target_id" in {
+        constraint.name for constraint in table.constraints
+    }
+    assert "ix_cloud_target_runtime_access_target_id" not in {
+        index.name for index in table.indexes
+    }

@@ -412,7 +412,6 @@ SUPPORTED_CLOUD_TARGET_PROFILE_ROLES: tuple[str, ...] = tuple(
     role.value for role in CloudTargetProfileRole
 )
 SUPPORTED_ENROLLABLE_CLOUD_TARGET_KINDS: tuple[str, ...] = (
-    CloudTargetKind.managed_cloud.value,
     CloudTargetKind.ssh.value,
     CloudTargetKind.desktop_dispatch.value,
     CloudTargetKind.self_hosted_cloud.value,

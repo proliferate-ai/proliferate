@@ -76,6 +76,7 @@ from proliferate.server.cloud.agent_auth.models import (
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
+from proliferate.server.cloud.worker.slot_guard import require_current_managed_worker_slot
 from proliferate.utils.crypto import decrypt_json, encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
 
@@ -972,6 +973,7 @@ async def worker_agent_auth_materialization_plan(
     revision: int,
     lease_id: str,
 ) -> WorkerAgentAuthMaterializationPlan:
+    await require_current_managed_worker_slot(db, auth=auth)
     command = await _require_agent_auth_refresh_command(
         db,
         auth=auth,
@@ -1039,6 +1041,7 @@ async def record_worker_agent_auth_status(
     sandbox_profile_id: UUID,
     body: WorkerAgentAuthStatusRequest,
 ) -> WorkerAgentAuthStatusResponse:
+    await require_current_managed_worker_slot(db, auth=auth)
     command = await _require_agent_auth_refresh_command(
         db,
         auth=auth,

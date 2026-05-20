@@ -44,6 +44,7 @@ async def enqueue_materialize_workspace(
     target_id: UUID,
     stage: str,
     payload: MaterializeWorkspacePayload,
+    cloud_workspace_id: UUID | None = None,
 ) -> CloudCommandSnapshot:
     return await enqueue_automation_command(
         ctx.claim,
@@ -52,6 +53,7 @@ async def enqueue_materialize_workspace(
         stage=stage,
         kind=CloudCommandKind.materialize_workspace.value,
         payload=payload.to_json(),
+        cloud_workspace_id=cloud_workspace_id,
     )
 
 

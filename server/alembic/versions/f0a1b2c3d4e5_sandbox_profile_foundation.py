@@ -343,6 +343,8 @@ def _upgrade_cloud_targets() -> None:
 
 
 def _upgrade_cloud_sandbox() -> None:
+    if _has_column("cloud_sandbox", "external_sandbox_id"):
+        op.alter_column("cloud_sandbox", "external_sandbox_id", nullable=True)
     _add_column_once("cloud_sandbox", sa.Column("sandbox_profile_id", sa.Uuid(), nullable=True))
     _add_column_once("cloud_sandbox", sa.Column("target_id", sa.Uuid(), nullable=True))
     _add_column_once("cloud_sandbox", sa.Column("billing_subject_id", sa.Uuid(), nullable=True))
@@ -454,10 +456,9 @@ def _create_cloud_target_runtime_access() -> None:
         ),
         sa.ForeignKeyConstraint(["target_id"], ["cloud_targets.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("target_id"),
+        sa.UniqueConstraint("target_id", name="uq_cloud_target_runtime_access_target_id"),
     )
     for index_name, columns in (
-        ("ix_cloud_target_runtime_access_target_id", ["target_id"]),
         ("ix_cloud_target_runtime_access_sandbox_profile_id", ["sandbox_profile_id"]),
         ("ix_cloud_target_runtime_access_active_sandbox_id", ["active_sandbox_id"]),
         ("ix_cloud_target_runtime_access_last_worker_id", ["last_worker_id"]),

@@ -346,7 +346,7 @@ async def assert_current_schema(
 
     sandbox_columns = await conn.run_sync(
         lambda sync_conn: {
-            column["name"] for column in inspect(sync_conn).get_columns("cloud_sandbox")
+            column["name"]: column for column in inspect(sync_conn).get_columns("cloud_sandbox")
         }
     )
     assert {
@@ -360,7 +360,8 @@ async def assert_current_schema(
         "lifecycle_auto_resume",
         "provider_timeout_seconds",
         "blocked_reason",
-    } <= sandbox_columns
+    } <= set(sandbox_columns)
+    assert sandbox_columns["external_sandbox_id"]["nullable"] is True
     sandbox_indexes = await conn.run_sync(
         lambda sync_conn: {
             index["name"] for index in inspect(sync_conn).get_indexes("cloud_sandbox")
@@ -383,6 +384,22 @@ async def assert_current_schema(
         "runtime_token_ciphertext",
         "anyharness_data_key_ciphertext",
     } <= runtime_access_columns
+    runtime_access_uniques = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_unique_constraints(
+                "cloud_target_runtime_access"
+            )
+        }
+    )
+    assert "uq_cloud_target_runtime_access_target_id" in runtime_access_uniques
+    runtime_access_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("cloud_target_runtime_access")
+        }
+    )
+    assert "ix_cloud_target_runtime_access_target_id" not in runtime_access_indexes
 
     target_state_indexes = await conn.run_sync(
         lambda sync_conn: {

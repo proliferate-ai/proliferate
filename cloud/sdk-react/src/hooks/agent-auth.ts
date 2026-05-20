@@ -108,18 +108,13 @@ export function useAgentAuthMutations() {
   });
 
   const ensurePersonalProfile = useMutation({
-    mutationFn: (input: { managedTargetId?: string | null } = {}) =>
-      ensurePersonalSandboxProfile(input, client),
+    mutationFn: () => ensurePersonalSandboxProfile(client),
     onSuccess: invalidateAgentAuth,
   });
 
   const ensureOrganizationProfile = useMutation({
-    mutationFn: (input: { organizationId: string; managedTargetId?: string | null }) =>
-      ensureOrganizationSandboxProfile(
-        input.organizationId,
-        { managedTargetId: input.managedTargetId ?? null },
-        client,
-      ),
+    mutationFn: (input: { organizationId: string }) =>
+      ensureOrganizationSandboxProfile(input.organizationId, client),
     onSuccess: invalidateAgentAuth,
   });
 
@@ -158,9 +153,7 @@ export function useAgentAuthMutations() {
     isCreatingShare: createShare.isPending,
     deleteShare: deleteShare.mutateAsync,
     isDeletingShare: deleteShare.isPending,
-    ensurePersonalProfile: ensurePersonalProfile.mutateAsync as (
-      input?: { managedTargetId?: string | null },
-    ) => Promise<SandboxProfile>,
+    ensurePersonalProfile: ensurePersonalProfile.mutateAsync as () => Promise<SandboxProfile>,
     ensureOrganizationProfile: ensureOrganizationProfile.mutateAsync,
     isEnsuringProfile: ensurePersonalProfile.isPending || ensureOrganizationProfile.isPending,
     selectCredential: selectCredential.mutateAsync,
