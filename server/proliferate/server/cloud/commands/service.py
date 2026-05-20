@@ -97,16 +97,26 @@ async def _resolve_command_workspace(
             "Workspace is not ready for cloud commands.",
             status_code=409,
         )
-    runtime_environment = await cloud_runtime_environments.get_runtime_environment_for_workspace(
-        db,
-        workspace,
-    )
-    if runtime_environment is None or runtime_environment.target_id != target.id:
-        raise CloudApiError(
-            "cloud_command_workspace_target_mismatch",
-            "Workspace is not attached to the requested target.",
-            status_code=409,
+    if workspace.target_id is not None:
+        if workspace.target_id != target.id:
+            raise CloudApiError(
+                "cloud_command_workspace_target_mismatch",
+                "Workspace is not attached to the requested target.",
+                status_code=409,
+            )
+    else:
+        runtime_environment = (
+            await cloud_runtime_environments.get_runtime_environment_for_workspace(
+                db,
+                workspace,
+            )
         )
+        if runtime_environment is None or runtime_environment.target_id != target.id:
+            raise CloudApiError(
+                "cloud_command_workspace_target_mismatch",
+                "Workspace is not attached to the requested target.",
+                status_code=409,
+            )
     payload = dict(body.payload)
     payload["workspaceId"] = workspace.anyharness_workspace_id
     return workspace.anyharness_workspace_id, payload, str(workspace.id)
@@ -207,6 +217,7 @@ async def enqueue_command(
                 source=source,
                 workspace_id=resolved_workspace_id,
                 session_id=body.session_id,
+                cloud_workspace_id=UUID(cloud_workspace_id) if cloud_workspace_id else None,
                 kind=kind,
                 payload_json=compact_command_json(payload) or "{}",
                 observed_event_seq=body.observed_event_seq,
@@ -258,7 +269,7 @@ async def _validate_agent_auth_preflight(
             "Agent auth sandbox profile not found.",
             status_code=404,
         )
-    if profile.managed_target_id != target.id:
+    if profile.primary_target_id != target.id:
         raise CloudApiError(
             "cloud_command_agent_auth_target_mismatch",
             "Agent auth sandbox profile is not attached to this target.",

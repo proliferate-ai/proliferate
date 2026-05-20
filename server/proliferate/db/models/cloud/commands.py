@@ -65,6 +65,11 @@ class CloudCommand(Base):
     actor_kind: Mapped[str] = mapped_column(String(32))
     source: Mapped[str] = mapped_column(String(32))
     workspace_id: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
+    cloud_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_workspace.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
     session_id: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
     kind: Mapped[str] = mapped_column(String(64), index=True)
     payload_json: Mapped[str] = mapped_column(Text)
@@ -78,6 +83,12 @@ class CloudCommand(Base):
         index=True,
         nullable=True,
     )
+    leased_cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    leased_slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

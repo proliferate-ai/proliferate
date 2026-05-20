@@ -19,11 +19,8 @@ from proliferate.server.cloud.agent_auth.models import (
     CreateGatewayCredentialResponse,
     EnsureManagedCreditsRequest,
     EnsureManagedCreditsResponse,
-    EnsureOrganizationSandboxProfileRequest,
-    EnsurePersonalSandboxProfileRequest,
     SandboxAgentAuthSelectionResponse,
     SandboxProfileAgentAuthTargetStateResponse,
-    SandboxProfileResponse,
     SelectAgentAuthCredentialRequest,
     ShareCredentialRequest,
     WorkerAgentAuthMaterializationPlan,
@@ -34,15 +31,12 @@ from proliferate.server.cloud.agent_auth.models import (
     credential_share_response,
     policy_response,
     provider_credential_response,
-    sandbox_profile_response,
     selection_response,
     target_state_response,
 )
 from proliferate.server.cloud.agent_auth.service import (
     create_gateway_credential,
     ensure_managed_credits_for_organization,
-    ensure_organization_sandbox_profile,
-    ensure_personal_sandbox_profile,
     list_credentials_for_response,
     list_selections,
     list_target_states,
@@ -154,36 +148,6 @@ async def revoke_agent_auth_credential_share_endpoint(
 ) -> AgentAuthCredentialShareResponse:
     share = await revoke_credential_share(db, actor_user_id=user.id, share_id=share_id)
     return credential_share_response(share)
-
-
-@router.post("/sandbox-profiles/personal")
-async def ensure_personal_sandbox_profile_endpoint(
-    body: EnsurePersonalSandboxProfileRequest,
-    user: User = Depends(current_active_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> SandboxProfileResponse:
-    profile = await ensure_personal_sandbox_profile(
-        db,
-        actor_user_id=user.id,
-        managed_target_id=body.managed_target_id,
-    )
-    return sandbox_profile_response(profile)
-
-
-@router.post("/organizations/{organization_id}/sandbox-profile")
-async def ensure_organization_sandbox_profile_endpoint(
-    organization_id: UUID,
-    body: EnsureOrganizationSandboxProfileRequest,
-    user: User = Depends(current_active_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> SandboxProfileResponse:
-    profile = await ensure_organization_sandbox_profile(
-        db,
-        actor_user_id=user.id,
-        organization_id=organization_id,
-        managed_target_id=body.managed_target_id,
-    )
-    return sandbox_profile_response(profile)
 
 
 @router.get(

@@ -20,6 +20,9 @@ pub struct SyncSession {
 pub struct PendingCommandResult {
     pub command_id: String,
     pub lease_id: String,
+    pub cloud_workspace_id: Option<String>,
+    pub slot_generation: Option<i64>,
+    pub anyharness_workspace_id: Option<String>,
     pub status: String,
     pub error_code: Option<String>,
     pub error_message: Option<String>,
@@ -68,6 +71,9 @@ impl WorkerStore {
             CREATE TABLE IF NOT EXISTS identity (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 target_id TEXT NOT NULL,
+                sandbox_profile_id TEXT,
+                cloud_sandbox_id TEXT,
+                slot_generation INTEGER,
                 worker_id TEXT NOT NULL,
                 worker_token TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -86,6 +92,9 @@ impl WorkerStore {
             CREATE TABLE IF NOT EXISTS pending_command_results (
                 command_id TEXT PRIMARY KEY,
                 lease_id TEXT NOT NULL,
+                cloud_workspace_id TEXT,
+                slot_generation INTEGER,
+                anyharness_workspace_id TEXT,
                 status TEXT NOT NULL,
                 error_code TEXT,
                 error_message TEXT,
@@ -94,6 +103,42 @@ impl WorkerStore {
             );
             "#,
         )?;
+        add_column_if_missing(
+            &conn,
+            "identity",
+            "sandbox_profile_id",
+            "sandbox_profile_id TEXT",
+        )?;
+        add_column_if_missing(
+            &conn,
+            "identity",
+            "cloud_sandbox_id",
+            "cloud_sandbox_id TEXT",
+        )?;
+        add_column_if_missing(
+            &conn,
+            "identity",
+            "slot_generation",
+            "slot_generation INTEGER",
+        )?;
+        add_column_if_missing(
+            &conn,
+            "pending_command_results",
+            "cloud_workspace_id",
+            "cloud_workspace_id TEXT",
+        )?;
+        add_column_if_missing(
+            &conn,
+            "pending_command_results",
+            "slot_generation",
+            "slot_generation INTEGER",
+        )?;
+        add_column_if_missing(
+            &conn,
+            "pending_command_results",
+            "anyharness_workspace_id",
+            "anyharness_workspace_id TEXT",
+        )?;
         Ok(())
     }
 
@@ -101,13 +146,16 @@ impl WorkerStore {
         let conn = self.connection()?;
         let value = conn
             .query_row(
-                "SELECT target_id, worker_id, worker_token FROM identity WHERE id = 1",
+                "SELECT target_id, sandbox_profile_id, cloud_sandbox_id, slot_generation, worker_id, worker_token FROM identity WHERE id = 1",
                 [],
                 |row| {
                     Ok(WorkerIdentity {
                         target_id: row.get(0)?,
-                        worker_id: row.get(1)?,
-                        worker_token: row.get(2)?,
+                        sandbox_profile_id: row.get(1)?,
+                        cloud_sandbox_id: row.get(2)?,
+                        slot_generation: row.get(3)?,
+                        worker_id: row.get(4)?,
+                        worker_token: row.get(5)?,
                     })
                 },
             )
@@ -119,16 +167,31 @@ impl WorkerStore {
         let conn = self.connection()?;
         conn.execute(
             r#"
-            INSERT INTO identity (id, target_id, worker_id, worker_token, updated_at)
-            VALUES (1, ?1, ?2, ?3, CURRENT_TIMESTAMP)
+            INSERT INTO identity (
+                id,
+                target_id,
+                sandbox_profile_id,
+                cloud_sandbox_id,
+                slot_generation,
+                worker_id,
+                worker_token,
+                updated_at
+            )
+            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 target_id = excluded.target_id,
+                sandbox_profile_id = excluded.sandbox_profile_id,
+                cloud_sandbox_id = excluded.cloud_sandbox_id,
+                slot_generation = excluded.slot_generation,
                 worker_id = excluded.worker_id,
                 worker_token = excluded.worker_token,
                 updated_at = CURRENT_TIMESTAMP
             "#,
             params![
                 identity.target_id,
+                identity.sandbox_profile_id,
+                identity.cloud_sandbox_id,
+                identity.slot_generation,
                 identity.worker_id,
                 identity.worker_token
             ],
@@ -241,15 +304,21 @@ impl WorkerStore {
             INSERT INTO pending_command_results (
                 command_id,
                 lease_id,
+                cloud_workspace_id,
+                slot_generation,
+                anyharness_workspace_id,
                 status,
                 error_code,
                 error_message,
                 result_json,
                 updated_at
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, CURRENT_TIMESTAMP)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, CURRENT_TIMESTAMP)
             ON CONFLICT(command_id) DO UPDATE SET
                 lease_id = excluded.lease_id,
+                cloud_workspace_id = excluded.cloud_workspace_id,
+                slot_generation = excluded.slot_generation,
+                anyharness_workspace_id = excluded.anyharness_workspace_id,
                 status = excluded.status,
                 error_code = excluded.error_code,
                 error_message = excluded.error_message,
@@ -259,6 +328,9 @@ impl WorkerStore {
             params![
                 result.command_id,
                 result.lease_id,
+                result.cloud_workspace_id,
+                result.slot_generation,
+                result.anyharness_workspace_id,
                 result.status,
                 result.error_code,
                 result.error_message,
@@ -272,17 +344,26 @@ impl WorkerStore {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             r#"
-            SELECT command_id, lease_id, status, error_code, error_message, result_json
+            SELECT
+                command_id,
+                lease_id,
+                cloud_workspace_id,
+                slot_generation,
+                anyharness_workspace_id,
+                status,
+                error_code,
+                error_message,
+                result_json
             FROM pending_command_results
             ORDER BY updated_at ASC
             "#,
         )?;
         let rows = stmt.query_map([], |row| {
-            let result_json: Option<String> = row.get(5)?;
+            let result_json: Option<String> = row.get(8)?;
             let result = match result_json {
                 Some(value) => Some(serde_json::from_str(&value).map_err(|error| {
                     rusqlite::Error::FromSqlConversionFailure(
-                        5,
+                        8,
                         rusqlite::types::Type::Text,
                         Box::new(error),
                     )
@@ -292,9 +373,12 @@ impl WorkerStore {
             Ok(PendingCommandResult {
                 command_id: row.get(0)?,
                 lease_id: row.get(1)?,
-                status: row.get(2)?,
-                error_code: row.get(3)?,
-                error_message: row.get(4)?,
+                cloud_workspace_id: row.get(2)?,
+                slot_generation: row.get(3)?,
+                anyharness_workspace_id: row.get(4)?,
+                status: row.get(5)?,
+                error_code: row.get(6)?,
+                error_message: row.get(7)?,
                 result,
             })
         })?;
@@ -313,6 +397,26 @@ impl WorkerStore {
         )?;
         Ok(())
     }
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    column_definition: &str,
+) -> Result<(), WorkerError> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+    for row in rows {
+        if row? == column {
+            return Ok(());
+        }
+    }
+    conn.execute(
+        &format!("ALTER TABLE {table} ADD COLUMN {column_definition}"),
+        [],
+    )?;
+    Ok(())
 }
 
 #[cfg(unix)]

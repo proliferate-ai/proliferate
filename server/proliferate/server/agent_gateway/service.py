@@ -248,7 +248,7 @@ async def authorize_gateway_request(
             code="agent_auth_not_configured",
             status_code=403,
         )
-    if profile.managed_target_id is not None and grant.target_id != profile.managed_target_id:
+    if profile.primary_target_id is not None and grant.target_id != profile.primary_target_id:
         raise AgentGatewayError(
             "Gateway token is stale.",
             code="invalid_gateway_token",

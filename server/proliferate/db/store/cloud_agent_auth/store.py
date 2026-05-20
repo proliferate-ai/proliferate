@@ -20,9 +20,14 @@ from proliferate.db.models.cloud.agent_auth import (
     SandboxAgentAuthSelection,
     SandboxProfile,
     SandboxProfileAgentAuthRevision,
-    SandboxProfileAgentAuthTargetState,
+    SandboxProfileTargetState,
 )
 from proliferate.db.models.cloud.credentials import CloudCredential
+from proliferate.db.models.cloud.targets import CloudTarget
+from proliferate.db.store.billing import (
+    ensure_organization_billing_subject,
+    ensure_personal_billing_subject,
+)
 from proliferate.db.store.cloud_agent_auth.records import (
     AgentAuthAuditEventRecord,
     AgentAuthCredentialRecord,
@@ -35,21 +40,29 @@ from proliferate.db.store.cloud_agent_auth.records import (
     SandboxAgentAuthSelectionRecord,
     SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
+    SandboxProfileTargetStateRecord,
 )
 from proliferate.utils.time import utcnow
 
 
-def _profile_record(row: SandboxProfile) -> SandboxProfileRecord:
+def _profile_record(
+    row: SandboxProfile,
+    *,
+    primary_target_id: UUID | None,
+) -> SandboxProfileRecord:
     return SandboxProfileRecord(
         id=row.id,
         owner_scope=row.owner_scope,
         owner_user_id=row.owner_user_id,
         organization_id=row.organization_id,
-        managed_target_id=row.managed_target_id,
-        agent_auth_revision=row.agent_auth_revision,
+        billing_subject_id=row.billing_subject_id,
+        created_by_user_id=row.created_by_user_id,
+        primary_target_id=primary_target_id,
+        desired_agent_auth_revision=row.desired_agent_auth_revision,
         status=row.status,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        archived_at=row.archived_at,
         deleted_at=row.deleted_at,
     )
 
@@ -177,22 +190,33 @@ def _selection_record(row: SandboxAgentAuthSelection) -> SandboxAgentAuthSelecti
 
 
 def _target_state_record(
-    row: SandboxProfileAgentAuthTargetState,
-) -> SandboxProfileAgentAuthTargetStateRecord:
-    return SandboxProfileAgentAuthTargetStateRecord(
+    row: SandboxProfileTargetState,
+) -> SandboxProfileTargetStateRecord:
+    return SandboxProfileTargetStateRecord(
         id=row.id,
         sandbox_profile_id=row.sandbox_profile_id,
         target_id=row.target_id,
-        desired_revision=row.desired_revision,
-        applied_revision=row.applied_revision,
-        status=row.status,
-        force_restart_required=row.force_restart_required,
-        last_command_id=row.last_command_id,
-        last_worker_id=row.last_worker_id,
-        last_attempted_at=row.last_attempted_at,
-        last_applied_at=row.last_applied_at,
-        last_error_code=row.last_error_code,
-        last_error_message=row.last_error_message,
+        active_sandbox_id=row.active_sandbox_id,
+        slot_generation=row.slot_generation,
+        desired_agent_auth_revision=row.desired_agent_auth_revision,
+        applied_agent_auth_revision=row.applied_agent_auth_revision,
+        agent_auth_status=row.agent_auth_status,
+        agent_auth_force_restart_required=row.agent_auth_force_restart_required,
+        last_agent_auth_command_id=row.last_agent_auth_command_id,
+        last_agent_auth_worker_id=row.last_agent_auth_worker_id,
+        last_agent_auth_attempted_at=row.last_agent_auth_attempted_at,
+        last_agent_auth_applied_at=row.last_agent_auth_applied_at,
+        last_agent_auth_error_code=row.last_agent_auth_error_code,
+        last_agent_auth_error_message=row.last_agent_auth_error_message,
+        applied_runtime_config_sequence=row.applied_runtime_config_sequence,
+        applied_runtime_config_revision_id=row.applied_runtime_config_revision_id,
+        runtime_config_status=row.runtime_config_status,
+        last_runtime_config_command_id=row.last_runtime_config_command_id,
+        last_runtime_config_worker_id=row.last_runtime_config_worker_id,
+        last_runtime_config_attempted_at=row.last_runtime_config_attempted_at,
+        last_runtime_config_applied_at=row.last_runtime_config_applied_at,
+        last_runtime_config_error_code=row.last_runtime_config_error_code,
+        last_runtime_config_error_message=row.last_runtime_config_error_message,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -251,9 +275,12 @@ async def get_sandbox_profile(
     sandbox_profile_id: UUID,
 ) -> SandboxProfileRecord | None:
     row = await db.get(SandboxProfile, sandbox_profile_id)
-    if row is None or row.deleted_at is not None:
+    if row is None or row.archived_at is not None:
         return None
-    return _profile_record(row)
+    return _profile_record(
+        row,
+        primary_target_id=await _load_primary_target_id(db, row.id),
+    )
 
 
 async def get_active_personal_sandbox_profile_for_user(
@@ -265,19 +292,23 @@ async def get_active_personal_sandbox_profile_for_user(
             select(SandboxProfile).where(
                 SandboxProfile.owner_scope == "personal",
                 SandboxProfile.owner_user_id == user_id,
-                SandboxProfile.deleted_at.is_(None),
-                SandboxProfile.status == "active",
+                SandboxProfile.archived_at.is_(None),
             )
         )
     ).scalar_one_or_none()
-    return _profile_record(row) if row is not None else None
+    if row is None:
+        return None
+    return _profile_record(
+        row,
+        primary_target_id=await _load_primary_target_id(db, row.id),
+    )
 
 
 async def ensure_personal_sandbox_profile(
     db: AsyncSession,
     *,
     user_id: UUID,
-    managed_target_id: UUID | None = None,
+    created_by_user_id: UUID | None = None,
 ) -> SandboxProfileRecord:
     row = (
         await db.execute(
@@ -285,39 +316,40 @@ async def ensure_personal_sandbox_profile(
             .where(
                 SandboxProfile.owner_scope == "personal",
                 SandboxProfile.owner_user_id == user_id,
-                SandboxProfile.deleted_at.is_(None),
-                SandboxProfile.status == "active",
+                SandboxProfile.archived_at.is_(None),
             )
             .with_for_update()
         )
     ).scalar_one_or_none()
     now = utcnow()
     if row is None:
+        billing_subject = await ensure_personal_billing_subject(db, user_id)
         row = SandboxProfile(
             owner_scope="personal",
             owner_user_id=user_id,
             organization_id=None,
-            managed_target_id=managed_target_id,
-            agent_auth_revision=0,
-            status="active",
+            billing_subject_id=billing_subject.id,
+            created_by_user_id=created_by_user_id or user_id,
+            desired_agent_auth_revision=0,
+            status="configuring",
             created_at=now,
             updated_at=now,
+            archived_at=None,
             deleted_at=None,
         )
         db.add(row)
         await db.flush()
-    elif managed_target_id is not None and row.managed_target_id != managed_target_id:
-        row.managed_target_id = managed_target_id
-        row.updated_at = now
-        await db.flush()
-    return _profile_record(row)
+    return _profile_record(
+        row,
+        primary_target_id=await _load_primary_target_id(db, row.id),
+    )
 
 
 async def ensure_organization_sandbox_profile(
     db: AsyncSession,
     *,
     organization_id: UUID,
-    managed_target_id: UUID | None = None,
+    created_by_user_id: UUID | None = None,
 ) -> SandboxProfileRecord:
     row = (
         await db.execute(
@@ -325,32 +357,33 @@ async def ensure_organization_sandbox_profile(
             .where(
                 SandboxProfile.owner_scope == "organization",
                 SandboxProfile.organization_id == organization_id,
-                SandboxProfile.deleted_at.is_(None),
-                SandboxProfile.status == "active",
+                SandboxProfile.archived_at.is_(None),
             )
             .with_for_update()
         )
     ).scalar_one_or_none()
     now = utcnow()
     if row is None:
+        billing_subject = await ensure_organization_billing_subject(db, organization_id)
         row = SandboxProfile(
             owner_scope="organization",
             owner_user_id=None,
             organization_id=organization_id,
-            managed_target_id=managed_target_id,
-            agent_auth_revision=0,
-            status="active",
+            billing_subject_id=billing_subject.id,
+            created_by_user_id=created_by_user_id,
+            desired_agent_auth_revision=0,
+            status="configuring",
             created_at=now,
             updated_at=now,
+            archived_at=None,
             deleted_at=None,
         )
         db.add(row)
         await db.flush()
-    elif managed_target_id is not None and row.managed_target_id != managed_target_id:
-        row.managed_target_id = managed_target_id
-        row.updated_at = now
-        await db.flush()
-    return _profile_record(row)
+    return _profile_record(
+        row,
+        primary_target_id=await _load_primary_target_id(db, row.id),
+    )
 
 
 async def bump_sandbox_profile_agent_auth_revision(
@@ -366,7 +399,7 @@ async def bump_sandbox_profile_agent_auth_revision(
             select(SandboxProfile)
             .where(
                 SandboxProfile.id == sandbox_profile_id,
-                SandboxProfile.deleted_at.is_(None),
+                SandboxProfile.archived_at.is_(None),
             )
             .with_for_update()
         )
@@ -374,12 +407,12 @@ async def bump_sandbox_profile_agent_auth_revision(
     if row is None:
         return None
     now = utcnow()
-    row.agent_auth_revision += 1
+    row.desired_agent_auth_revision += 1
     row.updated_at = now
     db.add(
         SandboxProfileAgentAuthRevision(
             sandbox_profile_id=row.id,
-            revision=row.agent_auth_revision,
+            revision=row.desired_agent_auth_revision,
             reason=reason,
             force_restart=force_restart,
             created_by_user_id=actor_user_id,
@@ -387,7 +420,22 @@ async def bump_sandbox_profile_agent_auth_revision(
         )
     )
     await db.flush()
-    return _profile_record(row)
+    return _profile_record(
+        row,
+        primary_target_id=await _load_primary_target_id(db, row.id),
+    )
+
+
+async def _load_primary_target_id(db: AsyncSession, sandbox_profile_id: UUID) -> UUID | None:
+    return await db.scalar(
+        select(CloudTarget.id)
+        .where(
+            CloudTarget.sandbox_profile_id == sandbox_profile_id,
+            CloudTarget.profile_target_role == "primary",
+            CloudTarget.archived_at.is_(None),
+        )
+        .limit(1)
+    )
 
 
 async def list_visible_credentials(
@@ -1191,9 +1239,9 @@ async def list_target_states_for_profile(
     rows = (
         (
             await db.execute(
-                select(SandboxProfileAgentAuthTargetState)
-                .where(SandboxProfileAgentAuthTargetState.sandbox_profile_id == sandbox_profile_id)
-                .order_by(SandboxProfileAgentAuthTargetState.updated_at.desc())
+                select(SandboxProfileTargetState)
+                .where(SandboxProfileTargetState.sandbox_profile_id == sandbox_profile_id)
+                .order_by(SandboxProfileTargetState.updated_at.desc())
             )
         )
         .scalars()
@@ -1210,9 +1258,9 @@ async def get_target_state(
 ) -> SandboxProfileAgentAuthTargetStateRecord | None:
     row = (
         await db.execute(
-            select(SandboxProfileAgentAuthTargetState).where(
-                SandboxProfileAgentAuthTargetState.sandbox_profile_id == sandbox_profile_id,
-                SandboxProfileAgentAuthTargetState.target_id == target_id,
+            select(SandboxProfileTargetState).where(
+                SandboxProfileTargetState.sandbox_profile_id == sandbox_profile_id,
+                SandboxProfileTargetState.target_id == target_id,
             )
         )
     ).scalar_one_or_none()
@@ -1235,10 +1283,10 @@ async def upsert_target_state(
 ) -> SandboxProfileAgentAuthTargetStateRecord:
     row = (
         await db.execute(
-            select(SandboxProfileAgentAuthTargetState)
+            select(SandboxProfileTargetState)
             .where(
-                SandboxProfileAgentAuthTargetState.sandbox_profile_id == sandbox_profile_id,
-                SandboxProfileAgentAuthTargetState.target_id == target_id,
+                SandboxProfileTargetState.sandbox_profile_id == sandbox_profile_id,
+                SandboxProfileTargetState.target_id == target_id,
             )
             .with_for_update()
         )
@@ -1247,36 +1295,39 @@ async def upsert_target_state(
     attempted_at = now if status in {"materializing", "failed", "applied"} else None
     applied_at = now if status == "applied" else None
     if row is None:
-        row = SandboxProfileAgentAuthTargetState(
+        row = SandboxProfileTargetState(
             sandbox_profile_id=sandbox_profile_id,
             target_id=target_id,
-            desired_revision=desired_revision,
-            applied_revision=applied_revision,
-            status=status,
-            force_restart_required=force_restart_required,
-            last_command_id=last_command_id,
-            last_worker_id=last_worker_id,
-            last_attempted_at=attempted_at,
-            last_applied_at=applied_at,
-            last_error_code=last_error_code,
-            last_error_message=last_error_message,
+            desired_agent_auth_revision=desired_revision,
+            applied_agent_auth_revision=applied_revision,
+            agent_auth_status=status,
+            agent_auth_force_restart_required=force_restart_required,
+            last_agent_auth_command_id=last_command_id,
+            last_agent_auth_worker_id=last_worker_id,
+            last_agent_auth_attempted_at=attempted_at,
+            last_agent_auth_applied_at=applied_at,
+            last_agent_auth_error_code=last_error_code,
+            last_agent_auth_error_message=last_error_message,
+            applied_runtime_config_sequence=0,
+            applied_runtime_config_revision_id=None,
+            runtime_config_status="applied",
             created_at=now,
             updated_at=now,
         )
         db.add(row)
     else:
-        row.desired_revision = desired_revision
-        row.applied_revision = applied_revision
-        row.status = status
-        row.force_restart_required = force_restart_required
-        row.last_command_id = last_command_id
-        row.last_worker_id = last_worker_id
+        row.desired_agent_auth_revision = desired_revision
+        row.applied_agent_auth_revision = applied_revision
+        row.agent_auth_status = status
+        row.agent_auth_force_restart_required = force_restart_required
+        row.last_agent_auth_command_id = last_command_id
+        row.last_agent_auth_worker_id = last_worker_id
         if attempted_at is not None:
-            row.last_attempted_at = attempted_at
+            row.last_agent_auth_attempted_at = attempted_at
         if applied_at is not None:
-            row.last_applied_at = applied_at
-        row.last_error_code = last_error_code
-        row.last_error_message = last_error_message
+            row.last_agent_auth_applied_at = applied_at
+        row.last_agent_auth_error_code = last_error_code
+        row.last_agent_auth_error_message = last_error_message
         row.updated_at = now
     await db.flush()
     return _target_state_record(row)

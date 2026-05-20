@@ -68,7 +68,6 @@ async def create_target_enrollment(
         organization_id=body.organization_id,
     )
     display_name = normalize_target_display_name(body.display_name)
-    owner_user_id = user.id
     organization_id = body.organization_id if owner_scope == "organization" else None
     if organization_id is not None:
         membership = await organizations_store.get_active_membership(
@@ -77,6 +76,7 @@ async def create_target_enrollment(
             user_id=user.id,
         )
         require_target_admin_membership(membership)
+    owner_user_id = user.id if owner_scope == "personal" else None
     await require_user_github_auth(db, user_id=user.id)
     target = await targets_store.create_target(
         db,

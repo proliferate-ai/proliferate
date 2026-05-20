@@ -61,6 +61,15 @@ def _has_index(table_name: str, index_name: str) -> bool:
     return index_name in {index["name"] for index in inspector.get_indexes(table_name)}
 
 
+def _has_columns(table_name: str, columns: list[str]) -> bool:
+    if not _has_table(table_name):
+        return False
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing = {column["name"] for column in inspector.get_columns(table_name)}
+    return set(columns) <= existing
+
+
 def _create_table_once(
     table_name: str,
     *columns: sa.SchemaItem,
@@ -76,7 +85,7 @@ def _create_index_once(
     columns: list[str],
     **kwargs: object,
 ) -> None:
-    if not _has_index(table_name, index_name):
+    if _has_columns(table_name, columns) and not _has_index(table_name, index_name):
         op.create_index(index_name, table_name, columns, **kwargs)
 
 

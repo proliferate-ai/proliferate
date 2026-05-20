@@ -29,6 +29,22 @@ class CloudWorkspace(Base):
             unique=True,
             postgresql_where=text("archived_at IS NULL"),
         ),
+        Index(
+            "ux_cloud_workspace_active_per_branch",
+            "sandbox_profile_id",
+            "target_id",
+            "normalized_repo_key",
+            "git_branch",
+            unique=True,
+            postgresql_where=text("archived_at IS NULL AND sandbox_profile_id IS NOT NULL"),
+        ),
+        Index(
+            "ux_cloud_workspace_active_worktree_path",
+            "target_id",
+            "worktree_path",
+            unique=True,
+            postgresql_where=text("archived_at IS NULL AND worktree_path IS NOT NULL"),
+        ),
         CheckConstraint(
             "owner_scope IN ('personal', 'organization')",
             name="ck_cloud_workspace_owner_scope",
@@ -72,13 +88,25 @@ class CloudWorkspace(Base):
         index=True,
         nullable=True,
     )
+    sandbox_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("sandbox_profile.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    target_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_targets.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
 
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     git_provider: Mapped[str] = mapped_column(String(32))
     git_owner: Mapped[str] = mapped_column(String(255))
     git_repo_name: Mapped[str] = mapped_column(String(255))
+    normalized_repo_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     git_branch: Mapped[str] = mapped_column(String(255))
     git_base_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    worktree_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     origin_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     status: Mapped[str] = mapped_column(String(32))
@@ -96,6 +124,10 @@ class CloudWorkspace(Base):
     runtime_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     anyharness_data_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     anyharness_workspace_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    materialized_slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    required_runtime_config_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    required_runtime_config_revision_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    required_agent_auth_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
     repo_env_vars_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     repo_files_applied_version: Mapped[int] = mapped_column(Integer, default=0)
     repo_setup_applied_version: Mapped[int] = mapped_column(Integer, default=0)

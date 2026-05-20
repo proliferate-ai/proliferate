@@ -125,6 +125,9 @@ async fn process_command(
         kind = %command.kind,
         session_id = command.session_id.as_deref(),
         target_id = %command.target_id,
+        sandbox_profile_id = command.sandbox_profile_id.as_deref(),
+        cloud_workspace_id = command.cloud_workspace_id.as_deref(),
+        slot_generation = command.slot_generation,
         workspace_id = command.workspace_id.as_deref(),
         observed_event_seq = command.observed_event_seq,
         has_preconditions = command.preconditions.is_some(),
@@ -162,13 +165,13 @@ async fn process_command(
         .await;
     }
     let Some(anyharness) = anyharness else {
-        let result = CommandResultRequest {
-            lease_id: command.lease_id.clone(),
-            status: "failed_delivery".to_string(),
-            error_code: Some("anyharness_unavailable".to_string()),
-            error_message: Some("AnyHarness is not configured or healthy.".to_string()),
-            result: None,
-        };
+        let result = command_result_request(
+            &command,
+            "failed_delivery",
+            Some("anyharness_unavailable".to_string()),
+            Some("AnyHarness is not configured or healthy.".to_string()),
+            None,
+        );
         report_command_result(cloud, identity, store, &command.command_id, &result).await?;
         return Ok(());
     };
@@ -192,13 +195,13 @@ async fn process_command(
     let mapped = match map_cloud_command(&command) {
         Ok(mapped) => mapped,
         Err(error) => {
-            let result = CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: "rejected".to_string(),
-                error_code: Some(error.code.to_string()),
-                error_message: Some(error.message),
-                result: None,
-            };
+            let result = command_result_request(
+                &command,
+                "rejected",
+                Some(error.code.to_string()),
+                Some(error.message),
+                None,
+            );
             report_command_result(cloud, identity, store, &command.command_id, &result).await?;
             return Ok(());
         }
@@ -208,12 +211,7 @@ async fn process_command(
         .report_command_delivery(
             &identity.worker_token,
             &command.command_id,
-            &CommandDeliveryRequest {
-                lease_id: command.lease_id.clone(),
-                status: "delivered".to_string(),
-                error_code: None,
-                error_message: None,
-            },
+            &command_delivery_request(&command, "delivered", None, None),
         )
         .await?;
 
@@ -240,13 +238,13 @@ async fn process_refresh_agent_auth_config_command(
     let payload = match parse_refresh_agent_auth_config_payload(&command.payload) {
         Ok(payload) => payload,
         Err(error) => {
-            let result = CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: "rejected".to_string(),
-                error_code: Some("invalid_refresh_agent_auth_config_payload".to_string()),
-                error_message: Some(error.to_string()),
-                result: None,
-            };
+            let result = command_result_request(
+                &command,
+                "rejected",
+                Some("invalid_refresh_agent_auth_config_payload".to_string()),
+                Some(error.to_string()),
+                None,
+            );
             report_command_result(cloud, identity, store, &command.command_id, &result).await?;
             return Ok(());
         }
@@ -333,13 +331,13 @@ async fn process_refresh_agent_auth_config_command(
     }
     .await;
     let result = match response {
-        Ok(outcome) => CommandResultRequest {
-            lease_id: command.lease_id.clone(),
-            status: "accepted".to_string(),
-            error_code: None,
-            error_message: None,
-            result: Some(serde_json::to_value(outcome)?),
-        },
+        Ok(outcome) => command_result_request(
+            &command,
+            "accepted",
+            None,
+            None,
+            Some(serde_json::to_value(outcome)?),
+        ),
         Err(error) => {
             warn!(
                 ?error,
@@ -364,13 +362,13 @@ async fn process_refresh_agent_auth_config_command(
                     },
                 )
                 .await;
-            CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: "failed_delivery".to_string(),
-                error_code: Some("agent_auth_materialization_failed".to_string()),
-                error_message: Some(SAFE_AGENT_AUTH_REFRESH_ERROR.to_string()),
-                result: None,
-            }
+            command_result_request(
+                &command,
+                "failed_delivery",
+                Some("agent_auth_materialization_failed".to_string()),
+                Some(SAFE_AGENT_AUTH_REFRESH_ERROR.to_string()),
+                None,
+            )
         }
     };
     report_command_result(cloud, identity, store, &command.command_id, &result).await
@@ -386,13 +384,13 @@ async fn process_configure_git_identity_command(
     let payload = match parse_configure_git_identity_payload(&command.payload) {
         Ok(payload) => payload,
         Err(error) => {
-            let result = CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: "rejected".to_string(),
-                error_code: Some("invalid_configure_git_identity_payload".to_string()),
-                error_message: Some(error.to_string()),
-                result: None,
-            };
+            let result = command_result_request(
+                &command,
+                "rejected",
+                Some("invalid_configure_git_identity_payload".to_string()),
+                Some(error.to_string()),
+                None,
+            );
             report_command_result(cloud, identity, store, &command.command_id, &result).await?;
             return Ok(());
         }
@@ -441,13 +439,13 @@ async fn process_configure_git_identity_command(
                 )
                 .await
                 .ok();
-            CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: "accepted".to_string(),
-                error_code: None,
-                error_message: None,
-                result: Some(serde_json::to_value(outcome)?),
-            }
+            command_result_request(
+                &command,
+                "accepted",
+                None,
+                None,
+                Some(serde_json::to_value(outcome)?),
+            )
         }
         Err(error) => {
             let message = error.to_string();
@@ -465,13 +463,13 @@ async fn process_configure_git_identity_command(
                     },
                 )
                 .await;
-            CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: "failed_delivery".to_string(),
-                error_code: Some("target_git_identity_failed".to_string()),
-                error_message: Some(message),
-                result: None,
-            }
+            command_result_request(
+                &command,
+                "failed_delivery",
+                Some("target_git_identity_failed".to_string()),
+                Some(message),
+                None,
+            )
         }
     };
     report_command_result(cloud, identity, store, &command.command_id, &result).await
@@ -487,26 +485,26 @@ async fn process_ensure_repo_checkout_command(
     let payload = match parse_ensure_repo_checkout_payload(&command.payload) {
         Ok(payload) => payload,
         Err(error) => {
-            let result = CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: "rejected".to_string(),
-                error_code: Some("invalid_ensure_repo_checkout_payload".to_string()),
-                error_message: Some(error.to_string()),
-                result: None,
-            };
+            let result = command_result_request(
+                &command,
+                "rejected",
+                Some("invalid_ensure_repo_checkout_payload".to_string()),
+                Some(error.to_string()),
+                None,
+            );
             report_command_result(cloud, identity, store, &command.command_id, &result).await?;
             return Ok(());
         }
     };
     let response = ensure_repo_checkout(materialization_root, &payload);
     let result = match response {
-        Ok(outcome) => CommandResultRequest {
-            lease_id: command.lease_id.clone(),
-            status: "accepted".to_string(),
-            error_code: None,
-            error_message: None,
-            result: Some(serde_json::to_value(outcome)?),
-        },
+        Ok(outcome) => command_result_request(
+            &command,
+            "accepted",
+            None,
+            None,
+            Some(serde_json::to_value(outcome)?),
+        ),
         Err(error) => {
             let message = error.to_string();
             let error_code = if message.contains("target_git_not_ready") {
@@ -518,13 +516,13 @@ async fn process_ensure_repo_checkout_command(
             } else {
                 "repo_clone_failed"
             };
-            CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: "failed_delivery".to_string(),
-                error_code: Some(error_code.to_string()),
-                error_message: Some(message),
-                result: None,
-            }
+            command_result_request(
+                &command,
+                "failed_delivery",
+                Some(error_code.to_string()),
+                Some(message),
+                None,
+            )
         }
     };
     report_command_result(cloud, identity, store, &command.command_id, &result).await
@@ -540,13 +538,13 @@ async fn process_materialize_environment_command(
     let payload = match parse_materialize_environment_payload(&command.payload) {
         Ok(payload) => payload,
         Err(error) => {
-            let result = CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: "rejected".to_string(),
-                error_code: Some("invalid_materialize_environment_payload".to_string()),
-                error_message: Some(error.to_string()),
-                result: None,
-            };
+            let result = command_result_request(
+                &command,
+                "rejected",
+                Some("invalid_materialize_environment_payload".to_string()),
+                Some(error.to_string()),
+                None,
+            );
             report_command_result(cloud, identity, store, &command.command_id, &result).await?;
             return Ok(());
         }
@@ -595,13 +593,13 @@ async fn process_materialize_environment_command(
                 )
                 .await
                 .ok();
-            CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: "accepted".to_string(),
-                error_code: None,
-                error_message: None,
-                result: Some(serde_json::to_value(outcome)?),
-            }
+            command_result_request(
+                &command,
+                "accepted",
+                None,
+                None,
+                Some(serde_json::to_value(outcome)?),
+            )
         }
         Err(error) => {
             let message = error.to_string();
@@ -619,13 +617,13 @@ async fn process_materialize_environment_command(
                     },
                 )
                 .await;
-            CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: "failed_delivery".to_string(),
-                error_code: Some("target_materialization_failed".to_string()),
-                error_message: Some(message),
-                result: None,
-            }
+            command_result_request(
+                &command,
+                "failed_delivery",
+                Some("target_materialization_failed".to_string()),
+                Some(message),
+                None,
+            )
         }
     };
     report_command_result(cloud, identity, store, &command.command_id, &result).await
@@ -642,12 +640,7 @@ async fn process_sync_existing_workspace_command(
         .report_command_delivery(
             &identity.worker_token,
             &command.command_id,
-            &CommandDeliveryRequest {
-                lease_id: command.lease_id.clone(),
-                status: "delivered".to_string(),
-                error_code: None,
-                error_message: None,
-            },
+            &command_delivery_request(&command, "delivered", None, None),
         )
         .await?;
     let response = sync::backfill::sync_existing_workspace(
@@ -659,23 +652,23 @@ async fn process_sync_existing_workspace_command(
     )
     .await;
     let result = match response {
-        Ok(result) => CommandResultRequest {
-            lease_id: command.lease_id.clone(),
-            status: "accepted".to_string(),
-            error_code: None,
-            error_message: None,
-            result: Some(json!({
+        Ok(result) => command_result_request(
+            &command,
+            "accepted",
+            None,
+            None,
+            Some(json!({
                 "mappedWorkspaceCount": result.mapped_workspace_count,
                 "mappedSessionCount": result.mapped_session_count,
             })),
-        },
-        Err(error) => CommandResultRequest {
-            lease_id: command.lease_id.clone(),
-            status: "failed_delivery".to_string(),
-            error_code: Some("backfill_failed".to_string()),
-            error_message: Some(error.to_string()),
-            result: None,
-        },
+        ),
+        Err(error) => command_result_request(
+            &command,
+            "failed_delivery",
+            Some("backfill_failed".to_string()),
+            Some(error.to_string()),
+            None,
+        ),
     };
     report_command_result(cloud, identity, store, &command.command_id, &result).await
 }
@@ -688,6 +681,9 @@ async fn flush_pending_command_results(
     for pending in store.list_pending_command_results()? {
         let request = CommandResultRequest {
             lease_id: pending.lease_id,
+            cloud_workspace_id: pending.cloud_workspace_id,
+            slot_generation: pending.slot_generation,
+            anyharness_workspace_id: pending.anyharness_workspace_id,
             status: pending.status,
             error_code: pending.error_code,
             error_message: pending.error_message,
@@ -711,6 +707,9 @@ async fn report_command_result(
     let pending = PendingCommandResult {
         command_id: command_id.to_string(),
         lease_id: result.lease_id.clone(),
+        cloud_workspace_id: result.cloud_workspace_id.clone(),
+        slot_generation: result.slot_generation,
+        anyharness_workspace_id: result.anyharness_workspace_id.clone(),
         status: result.status.clone(),
         error_code: result.error_code.clone(),
         error_message: result.error_message.clone(),
@@ -764,27 +763,65 @@ async fn dispatch_anyharness(
     }
 }
 
+fn command_delivery_request(
+    command: &CloudCommandEnvelope,
+    status: &str,
+    error_code: Option<String>,
+    error_message: Option<String>,
+) -> CommandDeliveryRequest {
+    CommandDeliveryRequest {
+        lease_id: command.lease_id.clone(),
+        cloud_workspace_id: command.cloud_workspace_id.clone(),
+        slot_generation: command.slot_generation,
+        status: status.to_string(),
+        error_code,
+        error_message,
+    }
+}
+
+fn command_result_request(
+    command: &CloudCommandEnvelope,
+    status: &str,
+    error_code: Option<String>,
+    error_message: Option<String>,
+    result: Option<Value>,
+) -> CommandResultRequest {
+    let anyharness_workspace_id = result
+        .as_ref()
+        .and_then(anyharness_workspace_id_from_result);
+    CommandResultRequest {
+        lease_id: command.lease_id.clone(),
+        cloud_workspace_id: command.cloud_workspace_id.clone(),
+        slot_generation: command.slot_generation,
+        anyharness_workspace_id,
+        status: status.to_string(),
+        error_code,
+        error_message,
+        result,
+    }
+}
+
 fn command_result(
     command: &CloudCommandEnvelope,
     mapped: &AnyHarnessCommand,
     response: Result<AnyHarnessCommandResponse, WorkerError>,
 ) -> CommandResultRequest {
     match response {
-        Ok(response) if response.is_success() => match success_result(mapped, &response) {
-            Ok(result) => CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: accepted_status(mapped, &response).to_string(),
-                error_code: None,
-                error_message: None,
-                result: Some(result),
-            },
-            Err(error) => CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: "rejected".to_string(),
-                error_code: Some(error.code),
-                error_message: Some(error.message),
-                result: Some(error.result),
-            },
+        Ok(response) if response.is_success() => match success_result(command, mapped, &response) {
+            Ok(result) => command_result_request(
+                command,
+                accepted_status(mapped, &response),
+                None,
+                None,
+                Some(result),
+            ),
+            Err(error) => command_result_request(
+                command,
+                "rejected",
+                Some(error.code),
+                Some(error.message),
+                Some(error.result),
+            ),
         },
         Ok(response) => {
             let status_code = response.status.as_u16();
@@ -799,24 +836,24 @@ fn command_result(
             } else {
                 ("rejected", "anyharness_rejected")
             };
-            CommandResultRequest {
-                lease_id: command.lease_id.clone(),
-                status: status.to_string(),
-                error_code: Some(error_code.to_string()),
-                error_message: Some(format!("AnyHarness returned HTTP {}", response.status)),
-                result: Some(json!({
+            command_result_request(
+                command,
+                status,
+                Some(error_code.to_string()),
+                Some(format!("AnyHarness returned HTTP {}", response.status)),
+                Some(json!({
                     "anyharnessStatusCode": response.status.as_u16(),
                     "body": response.body,
                 })),
-            }
+            )
         }
-        Err(error) => CommandResultRequest {
-            lease_id: command.lease_id.clone(),
-            status: "failed_delivery".to_string(),
-            error_code: Some("anyharness_delivery_failed".to_string()),
-            error_message: Some(error.to_string()),
-            result: None,
-        },
+        Err(error) => command_result_request(
+            command,
+            "failed_delivery",
+            Some("anyharness_delivery_failed".to_string()),
+            Some(error.to_string()),
+            None,
+        ),
     }
 }
 
@@ -827,6 +864,7 @@ struct SuccessResultError {
 }
 
 fn success_result(
+    envelope: &CloudCommandEnvelope,
     command: &AnyHarnessCommand,
     response: &AnyHarnessCommandResponse,
 ) -> Result<Value, SuccessResultError> {
@@ -840,6 +878,12 @@ fn success_result(
                             "anyharnessStatusCode".to_string(),
                             Value::from(response.status.as_u16()),
                         );
+                        if let Some(cloud_workspace_id) = &envelope.cloud_workspace_id {
+                            object.insert(
+                                "cloudWorkspaceId".to_string(),
+                                Value::from(cloud_workspace_id.clone()),
+                            );
+                        }
                         object.insert("body".to_string(), response.body.clone());
                     }
                     Ok(value)
@@ -860,6 +904,15 @@ fn success_result(
             "body": response.body.clone(),
         })),
     }
+}
+
+fn anyharness_workspace_id_from_result(result: &Value) -> Option<String> {
+    result
+        .get("anyharnessWorkspaceId")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 fn accepted_status(
@@ -966,12 +1019,61 @@ mod tests {
         );
     }
 
+    #[test]
+    fn materialize_workspace_result_echoes_cloud_workspace_and_slot() {
+        let command = test_command();
+        let mapped = AnyHarnessCommand::MaterializeWorkspace {
+            request: MaterializeWorkspaceRequest::ExistingPath {
+                path: "/workspace/proliferate".to_string(),
+                display_name: None,
+                origin: None,
+                creator_context: None,
+            },
+        };
+        let result = command_result(
+            &command,
+            &mapped,
+            Ok(AnyHarnessCommandResponse {
+                status: StatusCode::OK,
+                body: json!({
+                    "workspace": {
+                        "id": "workspace-1",
+                        "repoRootId": "repo-root-1",
+                        "path": "/workspace/proliferate",
+                        "kind": "local"
+                    }
+                }),
+            }),
+        );
+        assert_eq!(result.status, "accepted");
+        assert_eq!(
+            result.cloud_workspace_id.as_deref(),
+            Some("cloud-workspace-1")
+        );
+        assert_eq!(result.slot_generation, Some(7));
+        assert_eq!(
+            result.anyharness_workspace_id.as_deref(),
+            Some("workspace-1")
+        );
+        assert_eq!(
+            result
+                .result
+                .as_ref()
+                .and_then(|value| value.get("cloudWorkspaceId"))
+                .and_then(serde_json::Value::as_str),
+            Some("cloud-workspace-1")
+        );
+    }
+
     fn test_command() -> CloudCommandEnvelope {
         CloudCommandEnvelope {
             command_id: "command-1".to_string(),
             idempotency_key: "key-1".to_string(),
             target_id: "target-1".to_string(),
             workspace_id: None,
+            cloud_workspace_id: Some("cloud-workspace-1".to_string()),
+            sandbox_profile_id: Some("sandbox-profile-1".to_string()),
+            slot_generation: Some(7),
             session_id: None,
             kind: "materialize_workspace".to_string(),
             payload: json!({}),

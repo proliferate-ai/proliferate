@@ -66,8 +66,12 @@ class SandboxProfileOwnerScope(StrEnum):
 
 
 class SandboxProfileStatus(StrEnum):
+    configuring = "configuring"
+    provisioning = "provisioning"
     active = "active"
-    archived = "archived"
+    disabled = "disabled"
+    blocked = "blocked"
+    error = "error"
 
 
 class AgentAuthOwnerScope(StrEnum):
@@ -211,6 +215,9 @@ SUPPORTED_SANDBOX_AGENT_AUTH_SELECTION_STATUSES: tuple[str, ...] = tuple(
 SUPPORTED_SANDBOX_AGENT_AUTH_TARGET_STATE_STATUSES: tuple[str, ...] = tuple(
     status.value for status in SandboxAgentAuthTargetStateStatus
 )
+SUPPORTED_SANDBOX_PROFILE_TARGET_STATE_STATUSES: tuple[str, ...] = (
+    SUPPORTED_SANDBOX_AGENT_AUTH_TARGET_STATE_STATUSES
+)
 SUPPORTED_AGENT_GATEWAY_PROTOCOL_FACADES: tuple[str, ...] = tuple(
     facade.value for facade in AgentGatewayProtocolFacade
 )
@@ -261,6 +268,7 @@ class CloudRuntimeEnvironmentStatus(StrEnum):
 class CloudWorkspaceStatus(StrEnum):
     pending = "pending"
     materializing = "materializing"
+    needs_rematerialization = "needs_rematerialization"
     ready = "ready"
     archived = "archived"
     error = "error"
@@ -355,6 +363,11 @@ class CloudTargetKind(StrEnum):
     self_hosted_cloud = "self_hosted_cloud"
 
 
+class CloudTargetProfileRole(StrEnum):
+    primary = "primary"
+    none = "none"
+
+
 class CloudTargetStatus(StrEnum):
     enrolling = "enrolling"
     online = "online"
@@ -395,6 +408,9 @@ class CloudTargetUpdateChannel(StrEnum):
 
 
 SUPPORTED_CLOUD_TARGET_KINDS: tuple[str, ...] = tuple(kind.value for kind in CloudTargetKind)
+SUPPORTED_CLOUD_TARGET_PROFILE_ROLES: tuple[str, ...] = tuple(
+    role.value for role in CloudTargetProfileRole
+)
 SUPPORTED_ENROLLABLE_CLOUD_TARGET_KINDS: tuple[str, ...] = (
     CloudTargetKind.managed_cloud.value,
     CloudTargetKind.ssh.value,
