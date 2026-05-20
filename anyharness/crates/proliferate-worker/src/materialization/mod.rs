@@ -5,6 +5,7 @@ pub mod git;
 pub mod git_identity;
 pub mod mcp;
 pub mod repo_checkout;
+pub mod runtime_config;
 pub mod skills;
 
 use std::{
@@ -19,6 +20,7 @@ use sha2::{Digest, Sha256};
 use crate::error::WorkerError;
 
 use files::{decode_base64, expand_home, materialization_error, safe_join, write_file};
+use runtime_config::{RuntimeConfigMaterializationFragment, RuntimeConfigProjectionSummary};
 
 const CLAUDE_ALLOWED_AUTH_FILES: &[&str] = &[".claude/.credentials.json", ".claude.json"];
 const CODEX_ALLOWED_AUTH_FILES: &[&str] = &[".codex/auth.json"];
@@ -50,6 +52,7 @@ pub struct TargetConfigMaterializationPlan {
     pub git_credential: Option<GitCredential>,
     #[serde(default)]
     pub agent_credentials: BTreeMap<String, Value>,
+    pub runtime_config: Option<RuntimeConfigMaterializationFragment>,
     pub mcp: Option<Value>,
     #[serde(default)]
     pub skills: Vec<Value>,
@@ -95,6 +98,7 @@ pub struct MaterializationOutcome {
     pub git_configured: bool,
     pub mcp_configured: bool,
     pub skills_configured: bool,
+    pub runtime_config: Option<RuntimeConfigProjectionSummary>,
 }
 
 pub fn parse_materialize_environment_payload(
@@ -124,8 +128,21 @@ pub fn materialize_plan(
     write_repo_files(&workspace_root, &plan.tracked_files)?;
     let git_configured =
         git::write_git_materialization(&workspace_root, plan.git_credential.as_ref())?;
-    let mcp_configured = mcp::write_mcp_materialization(&workspace_root, plan.mcp.as_ref())?;
-    let skills_configured = skills::write_skill_refs(&workspace_root, &plan.skills)?;
+    let runtime_config = runtime_config::write_runtime_config_projection(
+        &workspace_root,
+        plan.runtime_config.as_ref(),
+    )?;
+    let (mcp_configured, skills_configured) = if runtime_config.is_some() {
+        let summary = runtime_config
+            .as_ref()
+            .expect("runtime config summary exists");
+        (summary.mcp_server_count > 0, summary.skill_count > 0)
+    } else {
+        (
+            mcp::write_mcp_materialization(&workspace_root, plan.mcp.as_ref())?,
+            skills::write_skill_refs(&workspace_root, &plan.skills)?,
+        )
+    };
     write_manifest(&workspace_root, plan)?;
     Ok(MaterializationOutcome {
         target_config_id: plan.target_config_id.clone(),
@@ -137,6 +154,7 @@ pub fn materialize_plan(
         git_configured,
         mcp_configured,
         skills_configured,
+        runtime_config,
     })
 }
 
@@ -245,6 +263,7 @@ fn write_manifest(
         },
         "setupScript": plan.setup_script,
         "runCommand": plan.run_command,
+        "runtimeConfig": plan.runtime_config.as_ref().map(|fragment| fragment.summary()),
         "readinessRequirements": plan.readiness_requirements,
     });
     let contents = serde_json::to_vec_pretty(&manifest)?;
@@ -372,6 +391,7 @@ mod tests {
                 email: Some("pablo@example.com".to_string()),
             }),
             agent_credentials: BTreeMap::new(),
+            runtime_config: None,
             mcp: Some(json!({"mcpServers": []})),
             skills: vec![],
             readiness_requirements: BTreeMap::new(),
@@ -405,6 +425,67 @@ mod tests {
     }
 
     #[test]
+    fn runtime_config_fragment_skips_legacy_mcp_and_skill_files() {
+        let root = std::env::temp_dir().join(format!(
+            "proliferate-worker-runtime-config-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let plan = TargetConfigMaterializationPlan {
+            target_config_id: "cfg_1".to_string(),
+            target_id: "target_1".to_string(),
+            config_version: 3,
+            workspace_root: root.to_string_lossy().to_string(),
+            repo: TargetConfigRepo {
+                provider: "github".to_string(),
+                owner: "proliferate-ai".to_string(),
+                name: "proliferate".to_string(),
+            },
+            env_vars: BTreeMap::new(),
+            tracked_files: vec![],
+            setup_script: "".to_string(),
+            run_command: "".to_string(),
+            git_credential: None,
+            agent_credentials: BTreeMap::new(),
+            runtime_config: Some(
+                super::runtime_config::RuntimeConfigMaterializationFragment {
+                    revision_id: "rev_1".to_string(),
+                    sandbox_profile_id: "profile_1".to_string(),
+                    sequence: 7,
+                    content_hash: "sha256:test".to_string(),
+                    manifest: json!({
+                        "mcpServers": [{"id": "mcp:1"}],
+                        "skills": [{"id": "skill:1"}],
+                    }),
+                    artifact_refs: vec![],
+                    credential_refs: vec![],
+                },
+            ),
+            mcp: Some(json!({"legacy": true})),
+            skills: vec![json!({"legacy": true})],
+            readiness_requirements: BTreeMap::new(),
+        };
+
+        let outcome = materialize_plan(Some(&root), 3, &plan).expect("materialization succeeds");
+
+        assert!(outcome.mcp_configured);
+        assert!(outcome.skills_configured);
+        assert_eq!(
+            outcome
+                .runtime_config
+                .as_ref()
+                .map(|summary| summary.sequence),
+            Some(7)
+        );
+        assert!(root
+            .join(".proliferate/runtime-config/manifest.json")
+            .exists());
+        assert!(!root.join(".proliferate/mcp/materialization.json").exists());
+        assert!(!root.join(".proliferate/skills/refs.json").exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn rejects_tracked_files_that_escape_workspace() {
         let root = std::env::temp_dir().join(format!(
             "proliferate-worker-materialization-escape-{}",
@@ -433,6 +514,7 @@ mod tests {
             run_command: "".to_string(),
             git_credential: None,
             agent_credentials: BTreeMap::new(),
+            runtime_config: None,
             mcp: None,
             skills: vec![],
             readiness_requirements: BTreeMap::new(),

@@ -7,6 +7,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
+from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.analytics import (
     CloudMcpConnectionEventInsert,
     record_cloud_mcp_connection_event,
@@ -49,9 +51,11 @@ from proliferate.server.cloud.mcp_connections.models import (
     CloudMcpAuthStatus,
     CreateCloudMcpConnectionRequest,
     PatchCloudMcpConnectionRequest,
+    PublicizeCloudMcpConnectionRequest,
     PutCloudMcpSecretAuthRequest,
     SyncCloudMcpConnectionRequest,
 )
+from proliferate.server.cloud.targets.domain.policy import require_target_admin_membership
 from proliferate.utils.crypto import decrypt_json, encrypt_json
 
 
@@ -191,6 +195,54 @@ def _connection_secret_fields_match(
     return False
 
 
+async def _refresh_personal_runtime_config(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    actor_user_id: UUID,
+    reason: str,
+) -> None:
+    from proliferate.server.cloud.runtime_config.service import (  # noqa: PLC0415
+        refresh_profile_runtime_config,
+    )
+
+    profile = await sandbox_profile_store.ensure_personal_sandbox_profile(
+        db,
+        user_id=user_id,
+        created_by_user_id=actor_user_id,
+    )
+    await refresh_profile_runtime_config(
+        db,
+        sandbox_profile_id=profile.id,
+        actor_user_id=actor_user_id,
+        reason=reason,
+    )
+
+
+async def _refresh_org_runtime_config(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    actor_user_id: UUID,
+    reason: str,
+) -> None:
+    from proliferate.server.cloud.runtime_config.service import (  # noqa: PLC0415
+        refresh_profile_runtime_config,
+    )
+
+    profile = await sandbox_profile_store.ensure_organization_sandbox_profile(
+        db,
+        organization_id=organization_id,
+        created_by_user_id=actor_user_id,
+    )
+    await refresh_profile_runtime_config(
+        db,
+        sandbox_profile_id=profile.id,
+        actor_user_id=actor_user_id,
+        reason=reason,
+    )
+
+
 async def list_cloud_mcp_connections(
     db: AsyncSession,
     user_id: UUID,
@@ -257,11 +309,19 @@ async def create_cloud_mcp_connection(
             auth_status="ready",
             enabled=record.enabled,
         )
+    await _refresh_personal_runtime_config(
+        db,
+        user_id=user_id,
+        actor_user_id=user_id,
+        reason="mcp_connection_created",
+    )
     return _connection_payload(record)
 
 
 async def patch_cloud_mcp_connection(
     db: AsyncSession,
+    *,
+    actor_user_id: UUID,
     existing: CloudMcpConnectionRecord,
     body: PatchCloudMcpConnectionRequest,
 ) -> CloudMcpConnectionPayload:
@@ -284,6 +344,27 @@ async def patch_cloud_mcp_connection(
             ):
                 _invalid_payload("Reconnect this MCP before changing URL-affecting settings.")
         settings_json = connection_settings_json(new_settings)
+    old_public_org_id = existing.public_organization_id
+    new_public_org_id = old_public_org_id
+    if body.public_to_org is True:
+        if body.public_organization_id is None:
+            _invalid_payload("organizationId is required when publicizing an MCP connection.")
+        membership = await organizations_store.get_active_membership(
+            db,
+            organization_id=body.public_organization_id,
+            user_id=actor_user_id,
+        )
+        require_target_admin_membership(membership)
+        new_public_org_id = body.public_organization_id
+    elif body.public_to_org is False:
+        if old_public_org_id is not None:
+            membership = await organizations_store.get_active_membership(
+                db,
+                organization_id=old_public_org_id,
+                user_id=actor_user_id,
+            )
+            require_target_admin_membership(membership)
+        new_public_org_id = None
     record = await patch_user_connection(
         db,
         user_id=existing.user_id,
@@ -291,6 +372,20 @@ async def patch_cloud_mcp_connection(
         enabled=body.enabled,
         settings_json=settings_json,
         catalog_entry_version=entry.version if settings_json is not None else None,
+        public_to_org=body.public_to_org,
+        public_organization_id=new_public_org_id,
+        public_status=(
+            "public"
+            if body.public_to_org
+            else "private"
+            if body.public_to_org is not None
+            else None
+        ),
+        public_updated_by_user_id=(
+            actor_user_id
+            if body.public_to_org is not None
+            else existing.public_updated_by_user_id
+        ),
     )
     if record is None:
         _not_found()
@@ -300,6 +395,104 @@ async def patch_cloud_mcp_connection(
             record,
             event_type="enabled" if body.enabled else "disabled",
             enabled=record.enabled,
+        )
+    await _refresh_personal_runtime_config(
+        db,
+        user_id=record.user_id,
+        actor_user_id=actor_user_id,
+        reason="mcp_connection_updated",
+    )
+    refresh_org_ids = {
+        org_id
+        for org_id in (old_public_org_id, record.public_organization_id)
+        if org_id is not None
+    }
+    for organization_id in refresh_org_ids:
+        await _refresh_org_runtime_config(
+            db,
+            organization_id=organization_id,
+            actor_user_id=actor_user_id,
+            reason="mcp_connection_publicized",
+        )
+    return _connection_payload(record)
+
+
+async def publicize_cloud_mcp_connection(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    existing: CloudMcpConnectionRecord,
+    body: PublicizeCloudMcpConnectionRequest,
+) -> CloudMcpConnectionPayload:
+    membership = await organizations_store.get_active_membership(
+        db,
+        organization_id=body.organization_id,
+        user_id=actor_user_id,
+    )
+    require_target_admin_membership(membership)
+    record = await patch_user_connection(
+        db,
+        user_id=existing.user_id,
+        connection_id=existing.connection_id,
+        public_to_org=True,
+        public_organization_id=body.organization_id,
+        public_status="public",
+        public_updated_by_user_id=actor_user_id,
+    )
+    if record is None:
+        _not_found()
+    await _refresh_personal_runtime_config(
+        db,
+        user_id=record.user_id,
+        actor_user_id=actor_user_id,
+        reason="mcp_connection_publicized",
+    )
+    await _refresh_org_runtime_config(
+        db,
+        organization_id=body.organization_id,
+        actor_user_id=actor_user_id,
+        reason="mcp_connection_publicized",
+    )
+    return _connection_payload(record)
+
+
+async def unpublicize_cloud_mcp_connection(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    existing: CloudMcpConnectionRecord,
+) -> CloudMcpConnectionPayload:
+    org_id = existing.public_organization_id
+    if org_id is not None:
+        membership = await organizations_store.get_active_membership(
+            db,
+            organization_id=org_id,
+            user_id=actor_user_id,
+        )
+        require_target_admin_membership(membership)
+    record = await patch_user_connection(
+        db,
+        user_id=existing.user_id,
+        connection_id=existing.connection_id,
+        public_to_org=False,
+        public_organization_id=None,
+        public_status="private",
+        public_updated_by_user_id=actor_user_id,
+    )
+    if record is None:
+        _not_found()
+    await _refresh_personal_runtime_config(
+        db,
+        user_id=record.user_id,
+        actor_user_id=actor_user_id,
+        reason="mcp_connection_unpublicized",
+    )
+    if org_id is not None:
+        await _refresh_org_runtime_config(
+            db,
+            organization_id=org_id,
+            actor_user_id=actor_user_id,
+            reason="mcp_connection_unpublicized",
         )
     return _connection_payload(record)
 
@@ -336,6 +529,12 @@ async def put_cloud_mcp_connection_secret_auth(
         auth_status="ready",
         enabled=updated.enabled,
     )
+    await _refresh_personal_runtime_config(
+        db,
+        user_id=record.user_id,
+        actor_user_id=record.user_id,
+        reason="mcp_connection_auth_updated",
+    )
     return _connection_payload(updated)
 
 
@@ -343,6 +542,7 @@ async def delete_cloud_mcp_connection_for_user(
     db: AsyncSession,
     connection: CloudMcpConnectionRecord,
 ) -> None:
+    public_org_id = connection.public_organization_id
     await _record_mcp_connection_event(
         db,
         connection,
@@ -350,6 +550,19 @@ async def delete_cloud_mcp_connection_for_user(
         enabled=connection.enabled,
     )
     await delete_user_connection(db, connection.user_id, connection.connection_id)
+    await _refresh_personal_runtime_config(
+        db,
+        user_id=connection.user_id,
+        actor_user_id=connection.user_id,
+        reason="mcp_connection_deleted",
+    )
+    if public_org_id is not None:
+        await _refresh_org_runtime_config(
+            db,
+            organization_id=public_org_id,
+            actor_user_id=connection.user_id,
+            reason="mcp_connection_deleted",
+        )
 
 
 async def list_cloud_mcp_connection_statuses(
