@@ -66,7 +66,7 @@ export const CHAT_LINE_HEIGHTS: Record<UiFontSizeId, string> = {
 export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
   xxsmall: {
     xs: { fontSize: "0.40625rem", lineHeight: "0.625rem" },
-    sm: { fontSize: "0.4375rem", lineHeight: "0.75rem" },
+    sm: { fontSize: "0.46875rem", lineHeight: "0.75rem" },
     base: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
     chat: { fontSize: "9px", lineHeight: CHAT_LINE_HEIGHTS.xxsmall },
     lg: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },

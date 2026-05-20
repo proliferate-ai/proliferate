@@ -60,7 +60,7 @@ describe("appearance preferences", () => {
     expect(UI_FONT_SCALES).toEqual({
       xxsmall: {
         xs: { fontSize: "0.40625rem", lineHeight: "0.625rem" },
-        sm: { fontSize: "0.4375rem", lineHeight: "0.75rem" },
+        sm: { fontSize: "0.46875rem", lineHeight: "0.75rem" },
         base: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
         chat: { fontSize: "9px", lineHeight: "17px" },
         lg: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
