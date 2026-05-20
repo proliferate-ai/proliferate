@@ -85,6 +85,8 @@ export function initializeDesktopTelemetry(): void {
     telemetryMode: runtimeState.telemetryMode,
   });
   initializeDesktopPostHog({
+    environment: config.environment,
+    release: config.release,
     posthog: config.posthog,
   });
 }

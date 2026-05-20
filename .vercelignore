@@ -1,0 +1,42 @@
+# Build outputs and caches (these are what bloated the upload to 4.4GB)
+node_modules
+**/node_modules
+target
+**/target
+dist
+**/dist
+build
+**/build
+.next
+.cache
+.turbo
+coverage
+**/coverage
+
+# Python
+.venv
+**/.venv
+.pytest_cache
+**/.pytest_cache
+__pycache__
+**/__pycache__
+*.pyc
+
+# OS / editor / VCS
+.DS_Store
+**/.DS_Store
+.git
+tmp
+*.log
+
+# Local dev state
+.proliferate-local
+.claude
+
+# Not needed by the web build — anchor to repo root only (leading /)
+# so we don't accidentally strip nested e.g. packages/design/scripts.
+/reference
+/docs
+/scripts
+/install
+/catalogs
