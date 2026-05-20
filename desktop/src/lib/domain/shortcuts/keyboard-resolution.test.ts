@@ -32,6 +32,19 @@ describe("resolveKeyboardShortcut", () => {
       code: "KeyN",
       metaKey: false,
       ctrlKey: true,
+      shiftKey: true,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.new-worktree",
+      shortcut: expect.objectContaining({ id: "workspace.new-worktree" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "n",
+      code: "KeyN",
+      metaKey: false,
+      ctrlKey: true,
       shiftKey: false,
       altKey: true,
     } as KeyboardEvent)).toEqual({
@@ -39,6 +52,15 @@ describe("resolveKeyboardShortcut", () => {
       shortcut: expect.objectContaining({ id: "workspace.new-cloud" }),
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
+
+    expect(resolveKeyboardShortcut({
+      key: "n",
+      code: "KeyN",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toBeNull();
   });
 
   it("opens top-level app shortcuts on mac", () => {
@@ -57,6 +79,19 @@ describe("resolveKeyboardShortcut", () => {
     } as KeyboardEvent)).toEqual({
       id: "workspace.open-command-palette",
       shortcut: expect.objectContaining({ id: "workspace.open-command-palette" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "?",
+      code: "Slash",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "app.show-keyboard-shortcuts",
+      shortcut: expect.objectContaining({ id: "app.show-keyboard-shortcuts" }),
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
 
@@ -83,6 +118,19 @@ describe("resolveKeyboardShortcut", () => {
     } as KeyboardEvent)).toEqual({
       id: "app.go-automations",
       shortcut: expect.objectContaining({ id: "app.go-automations" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "s",
+      code: "KeyS",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "app.open-support",
+      shortcut: expect.objectContaining({ id: "app.open-support" }),
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
 
@@ -140,6 +188,15 @@ describe("resolveKeyboardShortcut", () => {
       shortcut: expect.objectContaining({ id: "app.go-home" }),
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
+
+    expect(resolveKeyboardShortcut({
+      key: "n",
+      code: "KeyN",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toBeNull();
   });
 
   it("resolves command-option workspace and tab shortcuts on mac", () => {
@@ -162,12 +219,12 @@ describe("resolveKeyboardShortcut", () => {
     });
 
     expect(resolveKeyboardShortcut({
-      key: ">",
-      code: "Period",
+      key: "}",
+      code: "BracketRight",
       metaKey: true,
       ctrlKey: false,
       shiftKey: true,
-      altKey: true,
+      altKey: false,
     } as KeyboardEvent)).toEqual({
       id: "workspace.next-tab",
       shortcut: expect.objectContaining({ id: "workspace.next-tab" }),

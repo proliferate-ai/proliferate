@@ -103,7 +103,7 @@ export function RepoGroup({
                 label="New local workspace"
                 trailing={(
                   <ShortcutBadge
-                    label={SHORTCUTS.newLocal.label}
+                    label={getShortcutDisplayLabel(SHORTCUTS.newLocal)}
                     className={CREATE_WORKSPACE_SHORTCUT_CLASS}
                   />
                 )}
@@ -114,7 +114,7 @@ export function RepoGroup({
                 label="New worktree"
                 trailing={(
                   <ShortcutBadge
-                    label={SHORTCUTS.newWorktree.label}
+                    label={getShortcutDisplayLabel(SHORTCUTS.newWorktree)}
                     className={CREATE_WORKSPACE_SHORTCUT_CLASS}
                   />
                 )}

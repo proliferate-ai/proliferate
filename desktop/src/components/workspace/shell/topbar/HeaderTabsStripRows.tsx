@@ -9,6 +9,8 @@ import {
   TAB_GROUP_PILL_WIDTH,
 } from "@/lib/domain/workspaces/tabs/chrome-layout";
 import type { ManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
+import { SHORTCUTS } from "@/config/shortcuts";
+import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
 
 interface HeaderTabsDragControls {
   getRowDragProps: (rowId: string) => { "data-tab-drag-row-id": string };
@@ -53,6 +55,7 @@ interface HeaderTabsStripRowsProps {
   onCloseOtherChatTabs: (sessionId: string) => void;
   onCloseChatTabsToRight: (sessionId: string) => void;
   onDismissChatSession: (sessionId: string) => void;
+  shortcutRevealVisible: boolean;
   clearSelection: () => void;
   toggleSelection: (sessionId: string) => void;
   suppressNextSelectClick: (sessionId: string) => void;
@@ -86,11 +89,21 @@ export function HeaderTabsStripRows({
   onCloseOtherChatTabs,
   onCloseChatTabsToRight,
   onDismissChatSession,
+  shortcutRevealVisible,
   clearSelection,
   toggleSelection,
   suppressNextSelectClick,
   consumeSuppressedSelectClick,
 }: HeaderTabsStripRowsProps) {
+  const shortcutLabelBySessionId = buildShortcutRangeLabelById(
+    shellRows.flatMap((shellRow) =>
+      shellRow.kind === "chat" && shellRow.row.kind === "tab"
+        ? [shellRow.row.tab.id]
+        : []
+    ),
+    SHORTCUTS.tabByIndex,
+  );
+
   return (
     <>
       {shellRows.map((shellRow, index) => {
@@ -128,6 +141,7 @@ export function HeaderTabsStripRows({
           );
         }
 
+        const shortcutLabel = shortcutLabelBySessionId.get(row.tab.id) ?? null;
         const tab = urgentHighlightedChatSessionId
           ? {
             ...row.tab,
@@ -172,6 +186,8 @@ export function HeaderTabsStripRows({
             onCloseOthers={onCloseOtherChatTabs}
             onCloseRight={onCloseChatTabsToRight}
             onDismiss={onDismissChatSession}
+            shortcutLabel={shortcutLabel}
+            shortcutRevealVisible={shortcutRevealVisible}
             clearSelection={clearSelection}
             toggleSelection={toggleSelection}
             suppressNextSelectClick={suppressNextSelectClick}

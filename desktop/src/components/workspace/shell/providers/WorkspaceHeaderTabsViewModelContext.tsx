@@ -18,6 +18,7 @@ type WorkspaceContentTabsViewModel = Pick<
   | "visibleChatSessionIds"
   | "liveChatSessionIds"
   | "childToParent"
+  | "shellRows"
   | "orderedTabs"
 >;
 
@@ -62,6 +63,7 @@ function EnabledWorkspaceHeaderTabsViewModelProvider({
     visibleChatSessionIds: viewModel.visibleChatSessionIds,
     liveChatSessionIds: viewModel.liveChatSessionIds,
     childToParent: viewModel.childToParent,
+    shellRows: viewModel.shellRows,
     orderedTabs: viewModel.orderedTabs,
   }), [
     viewModel.activeShellTab,
@@ -72,6 +74,7 @@ function EnabledWorkspaceHeaderTabsViewModelProvider({
     viewModel.materializedWorkspaceId,
     viewModel.orderedTabs,
     viewModel.selectedWorkspaceId,
+    viewModel.shellRows,
     viewModel.visibleChatSessionIds,
     viewModel.workspaceUiKey,
   ]);

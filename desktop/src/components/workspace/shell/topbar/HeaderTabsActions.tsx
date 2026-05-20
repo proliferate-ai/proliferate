@@ -8,7 +8,6 @@ import {
 import type {
   HeaderChatMenuEntry,
 } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
-import { SHORTCUTS } from "@/config/shortcuts";
 
 const HEADER_ICON_BUTTON_CLASS =
   "workspace-shell-icon-button workspace-shell-toolbar-button shrink-0 disabled:pointer-events-none disabled:opacity-40";
@@ -57,11 +56,11 @@ export function HeaderTabsActions({
         disabled={!canOpenNewSessionTab}
         onClick={onOpenNewSessionTab}
         data-chat-new-tab-button
-        className={HEADER_ICON_BUTTON_CLASS}
+        className={`${HEADER_ICON_BUTTON_CLASS} relative`}
       >
         <Plus className="size-3.5" />
         <span className="sr-only">
-          {newSessionDisabledReason ?? `New chat (${SHORTCUTS.newSessionTab.label})`}
+          {newSessionDisabledReason ?? "New chat"}
         </span>
       </Button>
 

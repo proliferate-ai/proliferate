@@ -1,7 +1,6 @@
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import { getFocusZone } from "@/lib/domain/focus-zone";
-import { requestRightPanelNewTabMenu } from "@/lib/infra/right-panel-new-tab-menu";
+import { requestRightPanelBrowserTab } from "@/lib/infra/right-panel-new-tab-menu";
 import type { WorkspaceTabActions } from "@/hooks/workspaces/tabs/use-workspace-tab-actions";
 
 type WorkspaceContentShortcutActions = Pick<
@@ -9,7 +8,6 @@ type WorkspaceContentShortcutActions = Pick<
   | "activateRelativeTab"
   | "activateTabByShortcutIndex"
   | "closeActiveWorkspaceTab"
-  | "openNewSessionTab"
   | "restoreLastDismissedTab"
 >;
 
@@ -23,7 +21,6 @@ export function useWorkspaceContentShortcuts(
     activateRelativeTab,
     activateTabByShortcutIndex,
     closeActiveWorkspaceTab,
-    openNewSessionTab,
     restoreLastDismissedTab,
   } = actions;
 
@@ -47,13 +44,8 @@ export function useWorkspaceContentShortcuts(
     return activateTabByShortcutIndex(String(digit));
   }, { enabled });
 
-  useShortcutHandler("workspace.new-session-tab", () => {
-    const focusZone = getFocusZone();
-    if (focusZone === "terminal" || focusZone === "browser") {
-      return requestRightPanelNewTabMenu("terminal");
-    }
-
-    return openNewSessionTab();
+  useShortcutHandler("workspace.open-browser-tab", () => {
+    return requestRightPanelBrowserTab();
   }, { enabled });
 
   useShortcutHandler("workspace.close-active-tab", () => {

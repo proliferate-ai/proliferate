@@ -9,6 +9,7 @@ import {
   parseWorkspaceShellTabKey,
   resolveFallbackWorkspaceShellTab,
   resolveRelativeWorkspaceShellTab,
+  resolveWorkspaceShellTabByShortcutIndex,
   sanitizeWorkspaceShellTabOrder,
   type WorkspaceShellTab,
 } from "./shell-tabs";
@@ -116,6 +117,22 @@ describe("workspace shell tab ordering", () => {
       activeTab: null,
       delta: 1,
     })).toEqual(tabs[0]);
+  });
+
+  it("resolves numeric shortcuts against chat tabs only", () => {
+    const mixedTabs: WorkspaceShellTab[] = [
+      { kind: "viewer", target: fileViewerTarget("src/a.ts") },
+      { kind: "chat", sessionId: "a" },
+      { kind: "viewer", target: fileViewerTarget("src/b.ts") },
+      { kind: "chat", sessionId: "b" },
+    ];
+
+    expect(resolveWorkspaceShellTabByShortcutIndex(mixedTabs, "1"))
+      .toEqual({ kind: "chat", sessionId: "a" });
+    expect(resolveWorkspaceShellTabByShortcutIndex(mixedTabs, "2"))
+      .toEqual({ kind: "chat", sessionId: "b" });
+    expect(resolveWorkspaceShellTabByShortcutIndex(mixedTabs, "9"))
+      .toEqual({ kind: "chat", sessionId: "b" });
   });
 
   it("exposes stable keys for tab identities", () => {

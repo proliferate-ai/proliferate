@@ -19,6 +19,8 @@ import {
   type FileViewerMode,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 import type { WorkspaceFileBuffer } from "@/stores/editor/workspace-file-buffers-store";
+import { SHORTCUTS } from "@/config/shortcuts";
+import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 
 interface RightPanelHeaderEntryListProps {
   entries: readonly RightPanelHeaderEntry[];
@@ -28,6 +30,7 @@ interface RightPanelHeaderEntryListProps {
   tabModes: Record<string, FileViewerMode>;
   isWorkspaceReady: boolean;
   drag: RightPanelHeaderDragController;
+  shortcutRevealVisible: boolean;
   onActivateTool: (tool: RightPanelTool) => void;
   onSelectTerminal: (terminalId: string) => void;
   onSelectBrowser: (browserId: string) => void;
@@ -46,6 +49,7 @@ export function RightPanelHeaderEntryList({
   tabModes,
   isWorkspaceReady,
   drag,
+  shortcutRevealVisible,
   onActivateTool,
   onSelectTerminal,
   onSelectBrowser,
@@ -108,6 +112,10 @@ export function RightPanelHeaderEntryList({
                 isRuntimeReady={isWorkspaceReady && Boolean(entry.terminal)}
                 isDragging={drag.draggedHeaderKey === entry.key}
                 shouldSuppressClick={drag.shouldSuppressHeaderClick}
+                shortcutLabel={isWorkspaceReady
+                  ? getShortcutDisplayLabel(SHORTCUTS.openTerminal)
+                  : null}
+                shortcutRevealVisible={shortcutRevealVisible}
                 onSelect={() => onSelectTerminal(entry.terminalId)}
                 onClose={() => onCloseTerminal(entry.terminalId)}
                 onRename={(title) => onRenameTerminal(entry.terminalId, title)}

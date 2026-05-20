@@ -16,7 +16,10 @@ import {
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { isApplePlatform } from "@/lib/domain/shortcuts/matching";
 import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
-import { requestRightPanelNewTabMenu } from "@/lib/infra/right-panel-new-tab-menu";
+import {
+  requestRightPanelBrowserTab,
+  requestRightPanelNewTabMenu,
+} from "@/lib/infra/right-panel-new-tab-menu";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 
 const terminalActionsMocks = vi.hoisted(() => ({
@@ -162,6 +165,18 @@ describe("RightPanel terminal activation", () => {
 
     fireEvent.keyDown(browserButton, { key: "ArrowUp" });
     expect(document.activeElement).toBe(terminalButton);
+  });
+
+  it("creates and activates a browser tab from a right-panel browser request", async () => {
+    render(<RightPanelHarness isWorkspaceReady />);
+
+    expect(screen.queryByTestId("browser-panel")).toBeNull();
+
+    requestRightPanelBrowserTab();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("browser-panel").dataset.visible).toBe("true");
+    });
   });
 
   it("replays no-id terminal activation once workspace content becomes renderable", async () => {
@@ -377,7 +392,7 @@ describe("RightPanel tab shortcuts", () => {
     expect(screen.queryByTestId("git-panel")).toBeNull();
   });
 
-  it("does not intercept angle tab-cycle shell shortcuts after clicking panel content", async () => {
+  it("does not intercept bracket tab-cycle shell shortcuts after clicking panel content", async () => {
     const { container } = render(<RightPanelHarness isWorkspaceReady />);
     const root = container.querySelector("[data-right-panel-root='true']");
     if (!(root instanceof HTMLElement)) {
@@ -387,8 +402,8 @@ describe("RightPanel tab shortcuts", () => {
     fireEvent.pointerDown(root);
     expect(document.activeElement).toBe(root);
 
-    fireEvent.keyDown(window, angleTabEvent("next"));
-    fireEvent.keyDown(window, angleTabEvent("previous"));
+    fireEvent.keyDown(window, bracketTabEvent("next"));
+    fireEvent.keyDown(window, bracketTabEvent("previous"));
 
     await Promise.resolve();
 
@@ -409,15 +424,15 @@ describe("RightPanel tab shortcuts", () => {
     expect(screen.queryByTestId("git-panel")).toBeNull();
   });
 
-  it("does not intercept angle tab-cycle shell shortcuts from right-panel text inputs", async () => {
+  it("does not intercept bracket tab-cycle shell shortcuts from right-panel text inputs", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
     const input = screen.getByTestId("scratch-panel-input");
 
     input.focus();
     expect(document.activeElement).toBe(input);
 
-    fireEvent.keyDown(window, angleTabEvent("next"));
-    fireEvent.keyDown(window, angleTabEvent("previous"));
+    fireEvent.keyDown(window, bracketTabEvent("next"));
+    fireEvent.keyDown(window, bracketTabEvent("previous"));
 
     await Promise.resolve();
 
@@ -563,12 +578,11 @@ function primaryDigitEvent(digit: number) {
   };
 }
 
-function angleTabEvent(direction: "next" | "previous") {
+function bracketTabEvent(direction: "next" | "previous") {
   return {
-    key: direction === "next" ? ">" : "<",
-    code: direction === "next" ? "Period" : "Comma",
+    key: direction === "next" ? "}" : "{",
+    code: direction === "next" ? "BracketRight" : "BracketLeft",
     shiftKey: true,
-    altKey: true,
     ...(isApplePlatform() ? { metaKey: true } : { ctrlKey: true }),
   };
 }

@@ -277,10 +277,11 @@ export function resolveWorkspaceShellTabByShortcutIndex(
     return null;
   }
 
+  const chatTabs = tabs.filter((tab) => tab.kind === "chat");
   const requestedIndex = Number.parseInt(key, 10);
   if (requestedIndex === 9) {
-    return tabs[tabs.length - 1] ?? null;
+    return chatTabs[chatTabs.length - 1] ?? null;
   }
 
-  return tabs[requestedIndex - 1] ?? null;
+  return chatTabs[requestedIndex - 1] ?? null;
 }

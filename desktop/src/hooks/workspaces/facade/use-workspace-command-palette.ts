@@ -17,6 +17,7 @@ import {
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { runShortcutHandler } from "@/lib/domain/shortcuts/registry";
+import { requestRightPanelBrowserTab } from "@/lib/infra/right-panel-new-tab-menu";
 
 interface RunCommandState {
   onRun: () => void;
@@ -193,9 +194,8 @@ export function useWorkspaceCommandPalette({
       id: "workspace.new-session-tab",
       value: commandPaletteCommandValue("workspace.new-session-tab"),
       group: "tabs",
-      label: "New Chat Tab",
+      label: "New Chat",
       icon: "chat-plus",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.newSessionTab),
       disabledReason: canOpenNewSessionTab ? null : newSessionDisabledReason,
       execute: () => {
         openNewSessionTab();
@@ -238,6 +238,18 @@ export function useWorkspaceCommandPalette({
       },
     },
     {
+      id: "workspace.open-browser-tab",
+      value: commandPaletteCommandValue("workspace.open-browser-tab"),
+      group: "tabs",
+      label: "Open Browser Tab",
+      icon: "panel-bottom",
+      shortcut: getShortcutDisplayLabel(SHORTCUTS.openBrowserTab),
+      disabledReason: selectedWorkspaceId ? null : "Workspace is still opening.",
+      execute: () => {
+        requestRightPanelBrowserTab();
+      },
+    },
+    {
       id: "session.rename",
       value: commandPaletteCommandValue("session.rename"),
       group: "tabs",
@@ -260,6 +272,16 @@ export function useWorkspaceCommandPalette({
       execute: () => appActions.openSettings.execute("palette"),
     },
     {
+      id: "app.show-keyboard-shortcuts",
+      value: commandPaletteCommandValue("app.show-keyboard-shortcuts"),
+      group: "app",
+      label: "Show Keyboard Shortcuts",
+      icon: "keyboard",
+      shortcut: getShortcutDisplayLabel(SHORTCUTS.showKeyboardShortcuts),
+      disabledReason: appActions.showKeyboardShortcuts.disabledReason,
+      execute: () => appActions.showKeyboardShortcuts.execute("palette"),
+    },
+    {
       id: "app.go-home",
       value: commandPaletteCommandValue("app.go-home"),
       group: "app",
@@ -268,6 +290,36 @@ export function useWorkspaceCommandPalette({
       shortcut: getShortcutDisplayLabel(SHORTCUTS.goHome),
       disabledReason: appActions.goHome.disabledReason,
       execute: () => appActions.goHome.execute("palette"),
+    },
+    {
+      id: "app.go-plugins",
+      value: commandPaletteCommandValue("app.go-plugins"),
+      group: "app",
+      label: "Go to Plugins",
+      icon: "command",
+      shortcut: getShortcutDisplayLabel(SHORTCUTS.goPlugins),
+      disabledReason: appActions.goPlugins.disabledReason,
+      execute: () => appActions.goPlugins.execute("palette"),
+    },
+    {
+      id: "app.go-automations",
+      value: commandPaletteCommandValue("app.go-automations"),
+      group: "app",
+      label: "Go to Automations",
+      icon: "command",
+      shortcut: getShortcutDisplayLabel(SHORTCUTS.goAutomations),
+      disabledReason: appActions.goAutomations.disabledReason,
+      execute: () => appActions.goAutomations.execute("palette"),
+    },
+    {
+      id: "app.open-support",
+      value: commandPaletteCommandValue("app.open-support"),
+      group: "app",
+      label: "Open Support",
+      icon: "command",
+      shortcut: getShortcutDisplayLabel(SHORTCUTS.openSupport),
+      disabledReason: appActions.openSupport.disabledReason,
+      execute: () => appActions.openSupport.execute("palette"),
     },
     {
       id: "workspace.add-repository",

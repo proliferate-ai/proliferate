@@ -103,10 +103,10 @@ fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu
         .accelerator("CmdOrCtrl+W")
         .build(app)?;
     let previous_tab_item = MenuItemBuilder::with_id(PREVIOUS_TAB_MENU_ID, "Previous Tab")
-        .accelerator("CmdOrCtrl+Alt+Left")
+        .accelerator("CmdOrCtrl+Shift+[")
         .build(app)?;
     let next_tab_item = MenuItemBuilder::with_id(NEXT_TAB_MENU_ID, "Next Tab")
-        .accelerator("CmdOrCtrl+Alt+Right")
+        .accelerator("CmdOrCtrl+Shift+]")
         .build(app)?;
     let open_settings_item = MenuItemBuilder::with_id(OPEN_SETTINGS_MENU_ID, "Settings...")
         .accelerator("CmdOrCtrl+Comma")

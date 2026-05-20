@@ -46,6 +46,10 @@ export function useAppShortcuts(actions: AppCommandActions): void {
     actions.openSupport.execute("shortcut");
   });
 
+  useShortcutHandler("app.show-keyboard-shortcuts", () => {
+    actions.showKeyboardShortcuts.execute("shortcut");
+  });
+
   useShortcutHandler("app.increase-text-size", () => {
     stepTextSizePreference(1);
   });

@@ -9,7 +9,7 @@ export function ShortcutBadge({ label, className = "", ...props }: ShortcutBadge
   return (
     <span
       className={twMerge(
-        "inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-border bg-background px-1.5 font-mono text-[10px] leading-none text-muted-foreground",
+        "inline-flex min-h-3.5 items-center justify-center rounded-md border-0 bg-current/10 px-1 py-[1px] font-sans text-[10px] leading-3 text-current shadow-none",
         className,
       )}
       {...props}

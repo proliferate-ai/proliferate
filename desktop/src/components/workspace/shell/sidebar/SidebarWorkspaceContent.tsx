@@ -37,6 +37,8 @@ interface SidebarWorkspaceContentProps {
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
   onMarkWorkspaceDone: (workspaceId: string, logicalWorkspaceId: string) => void;
   onWorkspaceHover?: () => void;
+  shortcutRevealVisible: boolean;
+  shortcutLabelByWorkspaceId: ReadonlyMap<string, string>;
   onArchiveWorkspace: (workspaceId: string) => void;
   onUnarchiveWorkspace: (workspaceId: string) => void;
   onRenameWorkspace: (
@@ -78,6 +80,8 @@ export function SidebarWorkspaceContent({
   onIndicatorAction,
   onMarkWorkspaceDone,
   onWorkspaceHover,
+  shortcutRevealVisible,
+  shortcutLabelByWorkspaceId,
   onArchiveWorkspace,
   onUnarchiveWorkspace,
   onRenameWorkspace,
@@ -189,6 +193,8 @@ export function SidebarWorkspaceContent({
                 detailIndicators={item.detailIndicators}
                 cloudStatus={item.cloudStatus}
                 lastInteracted={item.lastInteracted}
+                shortcutLabel={shortcutLabelByWorkspaceId.get(item.id) ?? null}
+                shortcutRevealVisible={shortcutRevealVisible}
                 onSelect={() => onSelectWorkspace(item.id)}
                 onIndicatorAction={onIndicatorAction}
                 onMarkDone={

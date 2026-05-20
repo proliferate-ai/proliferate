@@ -15,40 +15,10 @@ type KeyboardShortcutEventLike = Pick<
   code?: string;
 };
 
-function isReloadBlockedRShortcut(
-  shortcut: Pick<ShortcutDef, "id">,
-  event: KeyboardShortcutEventLike,
-): boolean {
-  // Tauri/browser shells reserve reload shortcuts before our app shortcut
-  // dispatcher sees them, so the two intentional R commands need this bypass.
-  if (
-    !event.defaultPrevented
-    || !(event.metaKey || event.ctrlKey)
-    || event.altKey
-    || event.key.toLowerCase() !== "r"
-  ) {
-    return false;
-  }
-
-  if (shortcut.id === SHORTCUTS.renameSession.id) {
-    return !event.shiftKey;
-  }
-
-  if (shortcut.id === SHORTCUTS.closeTabsToRight.id) {
-    return event.shiftKey;
-  }
-
-  return false;
-}
-
 function canBypassDefaultPrevented(
   shortcut: Pick<ShortcutDef, "id">,
   event: KeyboardShortcutEventLike,
 ): boolean {
-  if (isReloadBlockedRShortcut(shortcut, event)) {
-    return true;
-  }
-
   if (
     shortcut.id === SHORTCUTS.openSettings.id
     && (event.metaKey || event.ctrlKey)
@@ -65,6 +35,16 @@ function canBypassDefaultPrevented(
     && !event.altKey
     && !event.shiftKey
     && (event.key.toLowerCase() === "b" || event.code === "KeyB")
+  ) {
+    return true;
+  }
+
+  if (
+    shortcut.id === SHORTCUTS.showKeyboardShortcuts.id
+    && (event.metaKey || event.ctrlKey)
+    && !event.altKey
+    && event.shiftKey
+    && event.code === "Slash"
   ) {
     return true;
   }
@@ -113,7 +93,18 @@ function canBypassDefaultPrevented(
     shortcut.id === SHORTCUTS.closeOtherTabs.id
     && (event.metaKey || event.ctrlKey)
     && event.key.toLowerCase() === "o"
-    && ((event.altKey && !event.shiftKey) || (!event.altKey && event.shiftKey))
+    && event.altKey
+    && !event.shiftKey
+  ) {
+    return true;
+  }
+
+  if (
+    shortcut.id === SHORTCUTS.openBrowserTab.id
+    && (event.metaKey || event.ctrlKey)
+    && !event.altKey
+    && !event.shiftKey
+    && event.key.toLowerCase() === "t"
   ) {
     return true;
   }
@@ -140,22 +131,16 @@ function isTabCyclingShortcut(
   shortcut: Pick<ShortcutDef, "id">,
   event: KeyboardShortcutEventLike,
 ): boolean {
-  if (!(event.metaKey || event.ctrlKey) || !event.altKey) {
+  if (!(event.metaKey || event.ctrlKey) || event.altKey || !event.shiftKey) {
     return false;
   }
 
   return (
     shortcut.id === SHORTCUTS.previousTab.id
-    && (
-      (!event.shiftKey && event.key === "ArrowLeft")
-      || (event.shiftKey && event.code === "Comma")
-    )
+    && event.code === "BracketLeft"
   ) || (
     shortcut.id === SHORTCUTS.nextTab.id
-    && (
-      (!event.shiftKey && event.key === "ArrowRight")
-      || (event.shiftKey && event.code === "Period")
-    )
+    && event.code === "BracketRight"
   );
 }
 

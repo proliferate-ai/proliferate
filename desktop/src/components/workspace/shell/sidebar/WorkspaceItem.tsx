@@ -45,6 +45,8 @@ interface WorkspaceItemProps {
   statusIndicator?: SidebarStatusIndicator | null;
   detailIndicators?: SidebarDetailIndicator[];
   lastInteracted?: string | null;
+  shortcutLabel?: string | null;
+  shortcutRevealVisible?: boolean;
   onSelect?: () => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
@@ -71,6 +73,8 @@ export function WorkspaceItem({
   statusIndicator = null,
   detailIndicators = [],
   lastInteracted,
+  shortcutLabel = null,
+  shortcutRevealVisible = false,
   onSelect,
   onArchive,
   onUnarchive,
@@ -149,6 +153,8 @@ export function WorkspaceItem({
       label={name}
       detail={detail}
       trailingLabel={timestampLabel}
+      shortcutLabel={shortcutLabel}
+      shortcutRevealVisible={shortcutRevealVisible}
       hoverAction={archiveAction}
       onSelect={onSelect}
       onContextMenuCapture={onContextMenuCapture}

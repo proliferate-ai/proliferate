@@ -38,6 +38,7 @@ export interface SidebarWorkspaceRowView {
   status?: ReactNode;
   detail?: ReactNode;
   trailingLabel?: string | null;
+  shortcutLabel?: string | null;
   actions: SidebarActionView[];
 }
 
@@ -92,6 +93,7 @@ export interface ProductSidebarProps {
   chatRows?: SidebarChatRowView[];
   account?: SidebarAccountView | null;
   footerActions?: SidebarActionView[];
+  shortcutRevealVisible?: boolean;
   onNavSelect: (id: string) => void;
   onWorkspaceSelect: (id: string) => void;
   onChatSelect?: (id: string) => void;
@@ -110,6 +112,7 @@ export function ProductSidebar({
   chatRows = [],
   account = null,
   footerActions = [],
+  shortcutRevealVisible = false,
   onNavSelect,
   onWorkspaceSelect,
   onChatSelect,
@@ -141,6 +144,7 @@ export function ProductSidebar({
         <ProductSidebarPrimaryNavigation
           navItems={navItems}
           onNavSelect={onNavSelect}
+          shortcutRevealVisible={shortcutRevealVisible}
         />
 
         <ProductSidebarScrollableContent>
@@ -157,6 +161,7 @@ export function ProductSidebar({
             onGroupToggle={onGroupToggle}
             onWorkspaceSelect={onWorkspaceSelect}
             onAction={onAction}
+            shortcutRevealVisible={shortcutRevealVisible}
           />
         </ProductSidebarScrollableContent>
       </ProductSidebarBody>
@@ -256,10 +261,12 @@ export function ProductSidebarScrollableContent({ children }: { children: ReactN
 export function ProductSidebarPrimaryNavigation({
   navItems,
   onNavSelect,
+  shortcutRevealVisible = false,
   className = "",
 }: {
   navItems: SidebarNavItemView[];
   onNavSelect: (id: string) => void;
+  shortcutRevealVisible?: boolean;
   className?: string;
 }) {
   return (
@@ -270,6 +277,7 @@ export function ProductSidebarPrimaryNavigation({
             key={item.id}
             item={item}
             onSelect={onNavSelect}
+            shortcutRevealVisible={shortcutRevealVisible}
           />
         ))}
       </div>
@@ -315,11 +323,13 @@ function ProductSidebarHeader({
 export function ProductSidebarNavRow({
   item,
   onSelect,
+  shortcutRevealVisible = false,
   className = "",
   ...props
 }: {
   item: SidebarNavItemView;
   onSelect: (id: string) => void;
+  shortcutRevealVisible?: boolean;
 } & Omit<HTMLAttributes<HTMLElement>, "children" | "onClick" | "onSelect">) {
   return (
     <SidebarRowSurface
@@ -343,7 +353,9 @@ export function ProductSidebarNavRow({
       ) : item.shortcutLabel ? (
         <ShortcutBadge
           label={item.shortcutLabel}
-          className="shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          className={`shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity ${
+            shortcutRevealVisible ? "opacity-100" : "group-hover:opacity-100 group-focus-within:opacity-100"
+          }`}
         />
       ) : null}
     </SidebarRowSurface>
@@ -381,11 +393,13 @@ function ProductSidebarRepositoriesSection({
   onGroupToggle,
   onWorkspaceSelect,
   onAction,
+  shortcutRevealVisible,
 }: {
   groups: SidebarWorkspaceGroupView[];
   onGroupToggle: (id: string) => void;
   onWorkspaceSelect: (id: string) => void;
   onAction: (event: SidebarActionEvent) => void;
+  shortcutRevealVisible: boolean;
 }) {
   return (
     <section>
@@ -398,6 +412,7 @@ function ProductSidebarRepositoriesSection({
             onGroupToggle={onGroupToggle}
             onWorkspaceSelect={onWorkspaceSelect}
             onAction={onAction}
+            shortcutRevealVisible={shortcutRevealVisible}
           />
         ))}
       </div>
@@ -431,11 +446,13 @@ function WorkspaceGroup({
   onGroupToggle,
   onWorkspaceSelect,
   onAction,
+  shortcutRevealVisible,
 }: {
   group: SidebarWorkspaceGroupView;
   onGroupToggle: (id: string) => void;
   onWorkspaceSelect: (id: string) => void;
   onAction: (event: SidebarActionEvent) => void;
+  shortcutRevealVisible: boolean;
 }) {
   const groupAction = group.actions[0];
 
@@ -468,6 +485,7 @@ function WorkspaceGroup({
               row={row}
               onSelect={onWorkspaceSelect}
               onAction={onAction}
+              shortcutRevealVisible={shortcutRevealVisible}
             />
           ))}
           {group.rows.length === 0 ? (
@@ -551,10 +569,12 @@ function WorkspaceRow({
   row,
   onSelect,
   onAction,
+  shortcutRevealVisible,
 }: {
   row: SidebarWorkspaceRowView;
   onSelect: (id: string) => void;
   onAction: (event: SidebarActionEvent) => void;
+  shortcutRevealVisible: boolean;
 }) {
   const hoverAction = row.actions.slice(0, 1).map((action) => (
     <SidebarActionIconButton
@@ -575,6 +595,8 @@ function WorkspaceRow({
       label={row.label}
       detail={row.detail}
       trailingLabel={row.trailingLabel}
+      shortcutLabel={row.shortcutLabel}
+      shortcutRevealVisible={shortcutRevealVisible}
       hoverAction={hoverAction.length > 0 ? hoverAction : null}
       onSelect={() => onSelect(row.id)}
     />
@@ -588,6 +610,8 @@ export interface ProductSidebarWorkspaceRowProps extends Omit<HTMLAttributes<HTM
   label: string;
   detail?: ReactNode;
   trailingLabel?: string | null;
+  shortcutLabel?: string | null;
+  shortcutRevealVisible?: boolean;
   hoverAction?: ReactNode;
   onSelect?: () => void;
 }
@@ -599,6 +623,8 @@ export function ProductSidebarWorkspaceRow({
   label,
   detail = null,
   trailingLabel = null,
+  shortcutLabel = null,
+  shortcutRevealVisible = false,
   hoverAction = null,
   onSelect,
   className = "",
@@ -630,18 +656,32 @@ export function ProductSidebarWorkspaceRow({
             </span>
           </div>
           {detail ? (
-            <div className="flex min-w-[24px] shrink-0 items-center justify-end gap-1 text-sidebar-muted-foreground">
+            <div className={`flex min-w-[24px] shrink-0 items-center justify-end gap-1.5 text-sidebar-muted-foreground ${
+              shortcutLabel ? "mr-2" : ""
+            }`}>
               {detail}
             </div>
           ) : null}
         </div>
 
-        {(trailingLabel || hoverAction) ? (
-          <div className="relative ml-[3px] h-5 min-w-[26px] shrink-0">
+        {(trailingLabel || shortcutLabel || hoverAction) ? (
+          <div className="ml-1.5 grid h-5 min-w-[26px] shrink-0 items-center justify-items-end">
             {trailingLabel ? (
-              <div className="absolute inset-y-0 right-0 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground transition-opacity duration-150 group-hover:opacity-0 group-focus-within:opacity-0">
+              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground transition-opacity duration-150 ${
+                shortcutLabel && shortcutRevealVisible
+                  ? "opacity-0"
+                  : "group-hover:opacity-0 group-focus-within:opacity-0"
+              }`}>
                 {trailingLabel}
               </div>
+            ) : null}
+            {shortcutLabel ? (
+              <ShortcutBadge
+                label={shortcutLabel}
+                className={`col-start-1 row-start-1 h-fit min-w-[30px] shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity duration-150 ${
+                  shortcutRevealVisible ? "opacity-100" : ""
+                }`}
+              />
             ) : null}
           </div>
         ) : null}

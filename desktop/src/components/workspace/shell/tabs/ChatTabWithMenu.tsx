@@ -44,6 +44,8 @@ export function ChatTabWithMenu({
   onCloseOthers,
   onCloseRight,
   onDismiss,
+  shortcutLabel,
+  shortcutRevealVisible,
 }: {
   tab: HeaderChatTabEntry;
   width: number;
@@ -64,6 +66,8 @@ export function ChatTabWithMenu({
   onCloseOthers: () => void;
   onCloseRight: () => void;
   onDismiss: () => void;
+  shortcutLabel: string | null;
+  shortcutRevealVisible: boolean;
 }) {
   const isReviewAgentChild = tab.isReviewAgentChild;
   const menuItems = buildChatTabContextMenuItems({
@@ -125,6 +129,8 @@ export function ChatTabWithMenu({
       onSelectPointerDownCapture={onSelectPointerDownCapture}
       onClose={onClose}
       badge={renderChatTabStatusBadge(tab)}
+      shortcutLabel={shortcutLabel}
+      shortcutRevealVisible={shortcutRevealVisible}
       data-chat-tab
       data-chat-tab-id={tab.id}
       data-chat-tab-active={tab.isActive ? "true" : "false"}
