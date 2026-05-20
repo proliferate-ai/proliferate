@@ -532,11 +532,58 @@ to `phase='cleanup_failed'` and UI surfaces retry.
 `MAX_CLEANUP_ATTEMPTS` = 5 (configurable via
 `settings.workspace_move_cleanup_max_attempts`).
 
-Server reconciler (every 5 minutes) re-picks failed items past
-their `next_attempt_at` with bounded exponential backoff. The
-reconciler does NOT itself execute the cleanup (Desktop does);
-it surfaces stale items in the Desktop UI so the user can
-retry.
+**Cleanup execution responsibility splits by item kind**:
+
+```text
+item_kind                       executor      requires Desktop online?
+-------------------------------  -----------  ------------------------
+anyharness_workspace            Desktop      yes (it talks to AnyHarness)
+cloud_workspace                 Server       no — Cloud-only mutation
+cloud_exposure                  Server       no — Cloud-only mutation
+cloud_session_projection        Server       no — Cloud-only mutation
+worker_projection_cursor        Server       no — passive (worker reconciles)
+```
+
+Server-side cleanup reconciler
+(`server/proliferate/server/cloud/mobility/reconciler.py`):
+
+```text
+every workspace_move_cleanup_reconciler_interval_seconds (default 300):
+  load pending cleanup_items where next_attempt_at <= now AND
+    status IN ('pending','failed') AND
+    item_kind IN ('cloud_workspace','cloud_exposure',
+                  'cloud_session_projection','worker_projection_cursor')
+  for each:
+    execute via the cleanup_executor module (§5.4)
+    on success: status='completed', completed_at=now
+    on failure: status='failed', attempt_count++,
+                next_attempt_at = now + exp_backoff(attempt_count)
+    if attempt_count >= MAX_CLEANUP_ATTEMPTS:
+      mark the handoff_op phase='cleanup_failed'
+
+  load pending cleanup_items where next_attempt_at <= now AND
+    status IN ('pending','failed') AND
+    item_kind = 'anyharness_workspace':
+  these are Desktop-driven; do NOT execute them server-side.
+  Instead, surface them in the Desktop UI when the user reopens
+  the workspace (the next GET on the mobility row returns the
+  pending items in the response).
+```
+
+Result: if Desktop closes after `cutover_committed`, the
+Cloud-side cleanup items (`cloud_workspace`, `cloud_exposure`,
+`cloud_session_projection`, `worker_projection_cursor`) complete
+on their own in the background. Only the AnyHarness-side
+`anyharness_workspace` destroy waits for Desktop to come back.
+The handoff phase advances to `cleanup_pending` and stays there
+until Desktop completes the AnyHarness destroy; the user sees a
+non-blocking notification on next Desktop open.
+
+If the user never returns, the orphan source AnyHarness workspace
+is eventually pruned by AnyHarness's own retention policy
+(outside spec 10 scope). The cleanup item stays pending
+indefinitely until either Desktop completes it or the workspace
+is hard-archived by ops.
 
 ### 5.4 Spec 04 exposure cleanup integration
 
@@ -668,7 +715,7 @@ desktop/src/components/workspace/shell/sidebar/
     add "Move to another target..." item
     visible when:
       - workspace.target.kind in ('local','managed_cloud','ssh')
-      - workspace.exposure.visibility not in ('shared_unclaimed','admin_managed','archived')
+      - workspace.exposure.visibility not in ('shared_unclaimed','archived')
       - active claim is by current user (if claimed)
       - no active CloudWorkspaceHandoffOp
       - no active session turn / pending interaction

@@ -449,6 +449,32 @@ free_cloud_allocation
   CHECK ck_free_cloud_allocation_status
 ```
 
+`period_start` and `period_end` semantics (server-computed at
+issuance time):
+
+```text
+period_start = the start of the current monthly billing window
+               for free allocations. V1 uses a fixed
+               billing_subject.created_at-anchored rolling
+               30-day window:
+                 floor_to_30d(billing_subject.created_at, now)
+               i.e. align to the same calendar day each month
+                 (UTC).
+period_end   = period_start + 30 days (UTC).
+allocation_kind: 'personal_free' uses this 30d window.
+                 'team_trial' uses the same shape today but is
+                 not exercised in V1.
+
+If the trial concept later moves to calendar-month or to a
+subscription-period anchor, period_start/end shift accordingly.
+The schema accommodates either; only the helper that computes
+the window changes.
+
+Helper: server/proliferate/server/billing/free_trial_window.py
+  current_free_trial_period(billing_subject) -> (start, end)
+  pure function over billing_subject.created_at + now.
+```
+
 The `(github_provider_user_id, allocation_kind, period_start)`
 uniqueness is the abuse gate: a single Proliferate-internal
 free-trial period (typically a calendar month) keyed by GitHub
@@ -578,6 +604,29 @@ target -> sandbox_profile (via cloud_targets.sandbox_profile_id)
 Spec 00 already wired `sandbox_profile.billing_subject_id`. Spec
 09 uses it.
 
+`start_block_reason` → command `error_code` mapping (for the
+wake-hook failure path):
+
+```text
+start_block_reason                error_code on the queued command
+---------------------------------  --------------------------------
+'credits_exhausted'                'sandbox_wake_blocked'
+'overage_disabled'                 'sandbox_wake_blocked'
+'cap_exhausted'                    'sandbox_wake_blocked'
+'payment_failed'                   'sandbox_wake_blocked'
+'unlimited_disabled'               'sandbox_wake_blocked'
+'plan_not_allowed'                 'sandbox_wake_blocked'
+'subscription_required_for_team'   'sandbox_wake_blocked'
+'subject_not_allowed_for_cloud'    'sandbox_wake_blocked'
+(authorization_response.allowed=true but slot create fails)
+                                   'sandbox_wake_failed'
+(authorization_response.allowed=true but heartbeat times out)
+                                   'sandbox_wake_timeout'
+```
+
+The `start_block_reason` itself is preserved in the command's
+`error_message` for UI display.
+
 ### 5.5 Billing-blocked state in workspace responses + SSE patches
 
 Workspace listing responses (spec 04 §5.2 / spec 08 §5.2) include
@@ -664,22 +713,61 @@ budget downgrade timing on the reason.
 
 ### 5.6 New Stripe webhook events
 
-```text
-invoice.upcoming
-  fire 3-7 days before the invoice
-  insert billing_decision_event(kind='upcoming_invoice')
-  emit a typed product event the future push spec (spec 08 §5.11)
-    can consume
+Handler bodies (in
+`server/proliferate/server/billing/stripe_webhooks.py`):
 
-customer.subscription.trial_will_end
-  fire 3 days before trial end
-  same shape; surface a banner in UI
+```text
+handle_invoice_upcoming(event):
+  invoice = event.data.object
+  billing_subject = load_billing_subject_by_stripe_customer(invoice.customer)
+  if billing_subject is None:
+    log + return       (orphan webhook; no-op)
+  insert billing_decision_event(
+    billing_subject_id = billing_subject.id,
+    kind = 'upcoming_invoice',
+    payload_json = {
+      'invoice_id':         invoice.id,
+      'period_start':       invoice.period_start,
+      'period_end':         invoice.period_end,
+      'amount_due_cents':   invoice.amount_due,
+      'currency':           invoice.currency,
+      'days_until_due':     (invoice.due_date - now()).days,
+    }
+  )
+  publish_billing_patch_for_subject(billing_subject.id)
+  -- web/mobile/Desktop UIs read the next workspace response and
+     see block_status='warn' + a hold_kind='upcoming_invoice'
+     equivalent (informational; never blocks launch)
+
+handle_customer_subscription_trial_will_end(event):
+  subscription = event.data.object
+  billing_subject = load_billing_subject_by_stripe_subscription(subscription.id)
+  if billing_subject is None:
+    log + return
+  insert billing_decision_event(
+    billing_subject_id = billing_subject.id,
+    kind = 'trial_will_end',
+    payload_json = {
+      'subscription_id':    subscription.id,
+      'trial_end':          subscription.trial_end,
+      'days_until_end':     (subscription.trial_end - now()).days,
+    }
+  )
+  publish_billing_patch_for_subject(billing_subject.id)
+  -- UI surfaces a "Your trial ends in N days" banner; never
+     blocks. Acts as a soft deadline for the user to add a
+     payment method.
 ```
 
-The current handler dispatch
-(`server/proliferate/server/billing/stripe_webhooks.py`) gains
-two new branches; both insert decision-event rows and publish
-billing patches. No new tables.
+Neither event applies a `billing_hold` or affects launch. Both
+are informational. The published billing_patch carries the
+relevant fields (e.g. `upcoming_invoice_amount_cents`,
+`trial_ends_at`) so the UI banner can render without an extra
+fetch.
+
+No new tables. Three lines added to the
+`_dispatch_stripe_event` switch in
+`server/proliferate/server/billing/stripe_webhooks.py`.
 
 ### 5.7 E2B `timeout` event
 
