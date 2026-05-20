@@ -15,9 +15,7 @@ class AgentGatewayByokProviderCapabilities(BaseModel):
 class AgentGatewayCapabilities(BaseModel):
     enabled: bool
     managed_credits_personal_enabled: bool = Field(alias="managedCreditsPersonalEnabled")
-    managed_credits_organization_enabled: bool = Field(
-        alias="managedCreditsOrganizationEnabled"
-    )
+    managed_credits_organization_enabled: bool = Field(alias="managedCreditsOrganizationEnabled")
     default_managed_budget_usd: str | None = Field(alias="defaultManagedBudgetUsd")
     byok_enabled: bool = Field(alias="byokEnabled")
     byok_providers: AgentGatewayByokProviderCapabilities = Field(alias="byokProviders")

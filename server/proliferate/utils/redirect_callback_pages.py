@@ -401,10 +401,8 @@ def _render_action_block(
     visible = "true" if action_visible else "false"
     link = ""
     if action_label and action_href:
-        link = (
-            f"""
+        link = f"""
         <a class="action" href="{escape(action_href, quote=True)}">{escape(action_label)}</a>"""
-        )
     hint = (
         f"""
         <p class="hint">{escape(action_hint)}</p>"""

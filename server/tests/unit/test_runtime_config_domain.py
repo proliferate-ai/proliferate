@@ -16,6 +16,7 @@ from proliferate.server.cloud.plugins.catalog.domain.types import (
     PluginSkillResource,
 )
 from proliferate.server.cloud.runtime_config.domain.manifest import (
+    _content_hash,
     compile_runtime_config_manifest,
 )
 from proliferate.server.cloud.runtime_config.domain.resolver import (
@@ -349,8 +350,13 @@ def test_manifest_hash_is_stable_and_redacts_secret_values() -> None:
 
     first = compile_runtime_config_manifest(plan, sandbox_profile_id="profile-1")
     second = compile_runtime_config_manifest(plan, sandbox_profile_id="profile-1")
+    wire_manifest = {
+        key: first.manifest[key]
+        for key in ("mcpServers", "mcpBindingSummaries", "skills", "artifacts", "warnings")
+    }
 
     assert first.content_hash == second.content_hash
+    assert first.content_hash == _content_hash(wire_manifest)
     assert "Bearer secret" not in first.manifest_json
     assert "api_key" in first.manifest_json
     assert "Use the configured MCP carefully." not in first.manifest_json

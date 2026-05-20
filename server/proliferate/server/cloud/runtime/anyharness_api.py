@@ -305,9 +305,9 @@ async def reconcile_remote_agents(
     agent_summaries = (
         await _list_remote_agents(
             runtime_url,
-        access_token,
-        workspace_id=workspace_id,
-    )
+            access_token,
+            workspace_id=workspace_id,
+        )
         if agent_kinds_to_install
         else initial_summaries
     )

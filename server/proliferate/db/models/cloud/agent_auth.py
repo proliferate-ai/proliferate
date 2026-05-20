@@ -51,17 +51,13 @@ class SandboxProfile(Base):
             "uq_sandbox_profile_active_personal_user",
             "owner_user_id",
             unique=True,
-            postgresql_where=text(
-                "owner_scope = 'personal' AND archived_at IS NULL"
-            ),
+            postgresql_where=text("owner_scope = 'personal' AND archived_at IS NULL"),
         ),
         Index(
             "uq_sandbox_profile_active_organization",
             "organization_id",
             unique=True,
-            postgresql_where=text(
-                "owner_scope = 'organization' AND archived_at IS NULL"
-            ),
+            postgresql_where=text("owner_scope = 'organization' AND archived_at IS NULL"),
         ),
     )
 

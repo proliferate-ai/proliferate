@@ -47,6 +47,7 @@ mod tests {
         RuntimeConfigRevisionExpectation, RuntimeConfigSource, RuntimeSkill,
         RuntimeSkillSourceKind,
     };
+    use sha2::{Digest, Sha256};
 
     use super::auth::SkillsMcpAuth;
     use super::SkillsProductMcpServer;
@@ -111,18 +112,22 @@ mod tests {
     }
 
     fn apply_request() -> ApplyRuntimeConfigRequest {
+        let instruction_content = "# Runtime config skill\n";
+        let instruction_hash = runtime_artifact_hash(instruction_content);
+        let guide_content = "Use issues.";
+        let guide_hash = runtime_artifact_hash(guide_content);
         let instruction = RuntimeArtifactRef {
-            hash: "sha256:instructions".to_string(),
+            hash: instruction_hash.clone(),
             content_type: "text/markdown".to_string(),
-            byte_size: 23,
+            byte_size: instruction_content.as_bytes().len() as i64,
             source_ref: Some("plugin:github:triage:instructions".to_string()),
             resource_id: None,
             display_name: None,
         };
         let resource = RuntimeArtifactRef {
-            hash: "sha256:guide".to_string(),
+            hash: guide_hash.clone(),
             content_type: "text/markdown".to_string(),
-            byte_size: 11,
+            byte_size: guide_content.as_bytes().len() as i64,
             source_ref: Some("plugin:github:triage:resource:triage-guide".to_string()),
             resource_id: Some("triage-guide".to_string()),
             display_name: Some("Triage guide".to_string()),
@@ -156,27 +161,31 @@ mod tests {
             },
             artifact_payloads: vec![
                 RuntimeArtifactPayload {
-                    hash: "sha256:instructions".to_string(),
+                    hash: instruction_hash,
                     content_type: "text/markdown".to_string(),
-                    byte_size: 23,
+                    byte_size: instruction_content.as_bytes().len() as i64,
                     source_ref: Some("plugin:github:triage:instructions".to_string()),
                     resource_id: None,
                     display_name: None,
-                    content: "# Runtime config skill\n".to_string(),
+                    content: instruction_content.to_string(),
                 },
                 RuntimeArtifactPayload {
-                    hash: "sha256:guide".to_string(),
+                    hash: guide_hash,
                     content_type: "text/markdown".to_string(),
-                    byte_size: 11,
+                    byte_size: guide_content.as_bytes().len() as i64,
                     source_ref: Some("plugin:github:triage:resource:triage-guide".to_string()),
                     resource_id: Some("triage-guide".to_string()),
                     display_name: Some("Triage guide".to_string()),
-                    content: "Use issues.".to_string(),
+                    content: guide_content.to_string(),
                 },
             ],
             credential_values: Vec::new(),
             source: RuntimeConfigSource::Worker,
         }
+    }
+
+    fn runtime_artifact_hash(content: &str) -> String {
+        format!("sha256:{:x}", Sha256::digest(content.as_bytes()))
     }
 
     fn expectation(revision: &RuntimeConfigRevision) -> RuntimeConfigRevisionExpectation {

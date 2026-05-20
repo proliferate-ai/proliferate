@@ -927,6 +927,104 @@ async def test_lease_supersedes_launch_when_runtime_config_revision_stales(
 
 
 @pytest.mark.asyncio
+async def test_stale_worker_runtime_config_status_does_not_regress_target_state(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth, profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="stale-runtime-config-status",
+    )
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    worker_token = "stale-runtime-config-status-token"
+    worker = await worker_auth_store.create_worker(
+        db_session,
+        target_id=target_id,
+        cloud_sandbox_id=slot.id,
+        slot_generation=slot.slot_generation,
+        token_hash=worker_service._hash_token(
+            domain=CLOUD_WORKER_TOKEN_DOMAIN,
+            token=worker_token,
+        ),
+        machine_fingerprint="stale-runtime-config-status",
+        hostname="stale-runtime-config-status",
+        worker_version="0.1.0",
+        anyharness_version="0.1.0",
+        supervisor_version=None,
+        now=utcnow(),
+    )
+    first_revision, _created = await runtime_config_store.upsert_revision_and_current(
+        db_session,
+        sandbox_profile_id=profile_id,
+        content_hash="sha256:stale-status-v1",
+        manifest_json='{"mcpServers":[],"skills":[],"artifacts":[],"warnings":[]}',
+        warnings_json=None,
+        source="test",
+        generated_by_user_id=uuid.UUID(auth.user_id),
+    )
+    second_revision, _created = await runtime_config_store.upsert_revision_and_current(
+        db_session,
+        sandbox_profile_id=profile_id,
+        content_hash="sha256:stale-status-v2",
+        manifest_json='{"mcpServers":[],"skills":[],"artifacts":[],"warnings":[]}',
+        warnings_json=None,
+        source="test",
+        generated_by_user_id=uuid.UUID(auth.user_id),
+    )
+    await agent_auth_store.upsert_target_state(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        desired_revision=0,
+        applied_revision=0,
+        status="applied",
+        force_restart_required=False,
+        last_command_id=None,
+        last_worker_id=worker.id,
+        last_error_code=None,
+        last_error_message=None,
+    )
+    state = (
+        await db_session.execute(
+            select(SandboxProfileTargetState).where(
+                SandboxProfileTargetState.sandbox_profile_id == profile_id,
+                SandboxProfileTargetState.target_id == target_id,
+            )
+        )
+    ).scalar_one()
+    state.runtime_config_status = "pending"
+    state.applied_runtime_config_sequence = second_revision.sequence
+    state.applied_runtime_config_revision_id = str(second_revision.id)
+    await db_session.commit()
+
+    response = await client.post(
+        f"/v1/cloud/worker/runtime-configs/{first_revision.id}/status",
+        headers={"Authorization": f"Bearer {worker_token}"},
+        json={
+            "status": "applied",
+            "missingArtifacts": [],
+            "missingCredentials": [],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "revisionId": str(first_revision.id),
+        "status": "stale",
+        "updated": False,
+    }
+    await db_session.refresh(state)
+    assert state.runtime_config_status == "pending"
+    assert state.applied_runtime_config_revision_id == str(second_revision.id)
+    assert state.applied_runtime_config_sequence == second_revision.sequence
+
+
+@pytest.mark.asyncio
 async def test_managed_worker_without_slot_cannot_lease_or_report_result(
     client: AsyncClient,
     db_session: AsyncSession,

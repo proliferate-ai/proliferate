@@ -1346,9 +1346,8 @@ async def record_worker_agent_auth_status(
             status = "failed"
             applied_revision = existing_applied
             error_code = "agent_auth_cleanup_incomplete"
-            error_message = (
-                "Agent auth cleanup did not report all required paths: "
-                + ", ".join(missing_cleanup_paths)
+            error_message = "Agent auth cleanup did not report all required paths: " + ", ".join(
+                missing_cleanup_paths
             )
         elif applied_revision < desired_revision:
             status = "superseded"
@@ -1729,13 +1728,7 @@ async def _cleanup_paths_from_credential_payload(
     if not isinstance(files, dict):
         return ()
     allowed_paths = set(_native_auth_file_paths(selection.agent_kind))
-    return tuple(
-        sorted(
-            path
-            for path in files
-            if isinstance(path, str) and path in allowed_paths
-        )
-    )
+    return tuple(sorted(path for path in files if isinstance(path, str) and path in allowed_paths))
 
 
 def _native_auth_file_paths(agent_kind: str) -> tuple[str, ...]:

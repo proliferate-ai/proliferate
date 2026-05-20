@@ -287,9 +287,7 @@ async def list_cloud_sandboxes_for_subject(
     return list(
         (
             await db.execute(
-                select(CloudSandbox).where(
-                    CloudSandbox.billing_subject_id == billing_subject_id
-                )
+                select(CloudSandbox).where(CloudSandbox.billing_subject_id == billing_subject_id)
             )
         )
         .scalars()

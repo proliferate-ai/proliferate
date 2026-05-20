@@ -63,9 +63,7 @@ class CloudTarget(Base):
             "ux_cloud_target_primary_per_profile",
             "sandbox_profile_id",
             unique=True,
-            postgresql_where=text(
-                "profile_target_role = 'primary' AND archived_at IS NULL"
-            ),
+            postgresql_where=text("profile_target_role = 'primary' AND archived_at IS NULL"),
         ),
     )
 
