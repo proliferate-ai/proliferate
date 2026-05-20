@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SHORTCUTS } from "@/config/shortcuts";
 import {
   buildShortcutRangeLabelById,
+  resolveShortcutRangeDigitTarget,
   shortcutDigitForRangeIndex,
 } from "@/lib/domain/shortcuts/presentation";
 
@@ -28,5 +29,14 @@ describe("shortcut presentation", () => {
     expect(labels.get("workspace-8")).toBe("⌘⌥8");
     expect(labels.has("workspace-9")).toBe(false);
     expect(labels.get("workspace-10")).toBe("⌘⌥9");
+  });
+
+  it("resolves range shortcut digits from the same first-eight-and-final rule", () => {
+    const targets = Array.from({ length: 10 }, (_, index) => `target-${index + 1}`);
+
+    expect(resolveShortcutRangeDigitTarget(targets, 1)).toBe("target-1");
+    expect(resolveShortcutRangeDigitTarget(targets, 8)).toBe("target-8");
+    expect(resolveShortcutRangeDigitTarget(targets, 9)).toBe("target-10");
+    expect(resolveShortcutRangeDigitTarget([], 9)).toBeNull();
   });
 });

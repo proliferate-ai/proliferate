@@ -1,15 +1,19 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { ArrowLeft } from "@/components/ui/icons";
 import { SidebarNavRow } from "@/components/ui/SidebarNavRow";
 import { SupportDialog } from "@/components/support/SupportDialog";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
+import { SHORTCUTS } from "@/config/shortcuts";
 import type { SettingsSection } from "@/config/settings";
 import {
   SETTINGS_NAV_GROUPS,
   type SettingsNavItem,
 } from "@/components/settings/settings-navigation";
 import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
+import { useSettingsSectionShortcuts } from "@/hooks/settings/ui/use-settings-section-shortcuts";
+import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
+import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
 import { subscribeSupportDialogRequest } from "@/lib/infra/support/support-dialog-request";
 import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
@@ -92,6 +96,18 @@ function settingsItemStatus(
   return null;
 }
 
+function settingsShortcutSectionIds(
+  disabledSections: Partial<Record<SettingsSection, boolean>> | undefined,
+): SettingsSection[] {
+  return SETTINGS_NAV_GROUPS.flatMap((group) =>
+    group.items.flatMap((item) =>
+      item.kind === "section" && !disabledSections?.[item.id]
+        ? [item.id]
+        : []
+    )
+  );
+}
+
 export function SettingsSidebar({
   activeSection,
   disabledSections,
@@ -105,6 +121,19 @@ export function SettingsSidebar({
   const location = useLocation();
   const [supportOpen, setSupportOpen] = useState(false);
   const appVersion = useAppVersion().data?.trim();
+  const shortcutRevealVisible = useShortcutRevealVisible();
+  const shortcutSectionIds = useMemo(
+    () => settingsShortcutSectionIds(disabledSections),
+    [disabledSections],
+  );
+  const shortcutLabelBySection = useMemo(
+    () => buildShortcutRangeLabelById(shortcutSectionIds, SHORTCUTS.tabByIndex),
+    [shortcutSectionIds],
+  );
+  useSettingsSectionShortcuts({
+    sections: shortcutSectionIds,
+    onSelectSection,
+  });
   useEffect(() => subscribeSupportDialogRequest(() => setSupportOpen(true)), []);
 
   function handleItemClick(item: SettingsNavItem) {
@@ -190,7 +219,7 @@ export function SettingsSidebar({
           icon={<ArrowLeft className="size-4" />}
           label={SETTINGS_COPY.back}
           onPress={onNavigateHome}
-          className={`w-fit ${SETTINGS_BACK_ROW_CLASS}`}
+          className={SETTINGS_BACK_ROW_CLASS}
         />
       </div>
 
@@ -218,11 +247,17 @@ export function SettingsSidebar({
                       icon={<Icon className="size-4" />}
                       label={item.label}
                       status={settingsItemStatus(item, updateActionState)}
+                      shortcutLabel={
+                        item.kind === "section"
+                          ? shortcutLabelBySection.get(item.id)
+                          : undefined
+                      }
                       onPress={() => handleItemClick(item)}
                       active={active}
                       disabled={disabled}
                       aria-current={active ? "page" : undefined}
                       className={settingsRowClass(active, disabled)}
+                      shortcutRevealVisible={shortcutRevealVisible}
                     />
                     {item.kind === "action" && item.id === "checkForUpdates"
                       ? renderUpdateCommand()

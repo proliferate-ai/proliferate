@@ -24,6 +24,14 @@ export function getShortcutRangeItemDisplayLabel(
   return getShortcutDisplayLabel(shortcut).replace("1-9", String(digit));
 }
 
+export function resolveShortcutRangeDigitTarget<T>(
+  targets: readonly T[],
+  digit: ShortcutDigit,
+): T | null {
+  const index = digit === 9 ? targets.length - 1 : digit - 1;
+  return targets[index] ?? null;
+}
+
 export function buildShortcutRangeLabelById(
   ids: readonly string[],
   shortcut: Pick<ShortcutDef, "label" | "nonMacLabel">,

@@ -1,4 +1,5 @@
 import type { ShortcutDigit } from "@/lib/domain/shortcuts/matching";
+import { resolveShortcutRangeDigitTarget } from "@/lib/domain/shortcuts/presentation";
 import type { SidebarGroupState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
 import { visibleSidebarGroupItems } from "@/lib/domain/workspaces/sidebar/sidebar-visible-items";
 
@@ -32,8 +33,7 @@ export function resolveSidebarShortcutDigitTarget(
   targetIds: readonly string[],
   digit: ShortcutDigit,
 ): string | null {
-  const index = digit === 9 ? targetIds.length - 1 : digit - 1;
-  return targetIds[index] ?? null;
+  return resolveShortcutRangeDigitTarget(targetIds, digit);
 }
 
 export function resolveAdjacentSidebarShortcutTarget(
