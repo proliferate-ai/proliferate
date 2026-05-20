@@ -296,12 +296,9 @@ async def list_cloud_sandboxes_for_subject(
     return list(
         (
             await db.execute(
-                select(CloudSandbox)
-                .join(
-                    CloudRuntimeEnvironment,
-                    CloudSandbox.runtime_environment_id == CloudRuntimeEnvironment.id,
+                select(CloudSandbox).where(
+                    CloudSandbox.billing_subject_id == billing_subject_id
                 )
-                .where(CloudRuntimeEnvironment.billing_subject_id == billing_subject_id)
             )
         )
         .scalars()

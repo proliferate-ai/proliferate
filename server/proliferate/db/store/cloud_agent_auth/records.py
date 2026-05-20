@@ -13,12 +13,19 @@ class SandboxProfileRecord:
     owner_scope: str
     owner_user_id: UUID | None
     organization_id: UUID | None
-    managed_target_id: UUID | None
-    agent_auth_revision: int
+    billing_subject_id: UUID
+    created_by_user_id: UUID | None
+    primary_target_id: UUID | None
+    desired_agent_auth_revision: int
     status: str
     created_at: datetime
     updated_at: datetime
+    archived_at: datetime | None
     deleted_at: datetime | None
+
+    @property
+    def agent_auth_revision(self) -> int:
+        return self.desired_agent_auth_revision
 
 
 @dataclass(frozen=True)
@@ -136,22 +143,68 @@ class SandboxAgentAuthSelectionRecord:
 
 
 @dataclass(frozen=True)
-class SandboxProfileAgentAuthTargetStateRecord:
+class SandboxProfileTargetStateRecord:
     id: UUID
     sandbox_profile_id: UUID
     target_id: UUID
-    desired_revision: int
-    applied_revision: int | None
-    status: str
-    force_restart_required: bool
-    last_command_id: UUID | None
-    last_worker_id: UUID | None
-    last_attempted_at: datetime | None
-    last_applied_at: datetime | None
-    last_error_code: str | None
-    last_error_message: str | None
+    active_sandbox_id: UUID | None
+    slot_generation: int | None
+    desired_agent_auth_revision: int
+    applied_agent_auth_revision: int | None
+    agent_auth_status: str
+    agent_auth_force_restart_required: bool
+    last_agent_auth_command_id: UUID | None
+    last_agent_auth_worker_id: UUID | None
+    last_agent_auth_attempted_at: datetime | None
+    last_agent_auth_applied_at: datetime | None
+    last_agent_auth_error_code: str | None
+    last_agent_auth_error_message: str | None
+    applied_runtime_config_sequence: int
+    applied_runtime_config_revision_id: str | None
+    runtime_config_status: str
+    last_runtime_config_command_id: UUID | None
+    last_runtime_config_worker_id: UUID | None
+    last_runtime_config_attempted_at: datetime | None
+    last_runtime_config_applied_at: datetime | None
+    last_runtime_config_error_code: str | None
+    last_runtime_config_error_message: str | None
     created_at: datetime
     updated_at: datetime
+
+    @property
+    def desired_revision(self) -> int:
+        return self.desired_agent_auth_revision
+
+    @property
+    def applied_revision(self) -> int | None:
+        return self.applied_agent_auth_revision
+
+    @property
+    def status(self) -> str:
+        return self.agent_auth_status
+
+    @property
+    def force_restart_required(self) -> bool:
+        return self.agent_auth_force_restart_required
+
+    @property
+    def last_command_id(self) -> UUID | None:
+        return self.last_agent_auth_command_id
+
+    @property
+    def last_worker_id(self) -> UUID | None:
+        return self.last_agent_auth_worker_id
+
+    @property
+    def last_error_code(self) -> str | None:
+        return self.last_agent_auth_error_code
+
+    @property
+    def last_error_message(self) -> str | None:
+        return self.last_agent_auth_error_message
+
+
+SandboxProfileAgentAuthTargetStateRecord = SandboxProfileTargetStateRecord
 
 
 @dataclass(frozen=True)

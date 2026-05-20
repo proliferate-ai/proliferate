@@ -3,12 +3,13 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.constants.cloud import (
     SUPPORTED_CLOUD_TARGET_ENROLLMENT_STATUSES,
     SUPPORTED_CLOUD_TARGET_KINDS,
+    SUPPORTED_CLOUD_TARGET_PROFILE_ROLES,
     SUPPORTED_CLOUD_TARGET_STATUSES,
     SUPPORTED_CLOUD_TARGET_UPDATE_CHANNELS,
     SUPPORTED_CLOUD_TARGET_UPDATE_STATUSES,
@@ -29,8 +30,24 @@ class CloudTarget(Base):
             name="ck_cloud_targets_owner_scope",
         ),
         CheckConstraint(
+            "((owner_scope = 'personal' AND owner_user_id IS NOT NULL "
+            "AND organization_id IS NULL) OR "
+            "(owner_scope = 'organization' AND organization_id IS NOT NULL "
+            "AND owner_user_id IS NULL))",
+            name="ck_cloud_target_owner_fields",
+        ),
+        CheckConstraint(
             f"status IN {SUPPORTED_CLOUD_TARGET_STATUSES}",
             name="ck_cloud_targets_status",
+        ),
+        CheckConstraint(
+            f"profile_target_role IN {SUPPORTED_CLOUD_TARGET_PROFILE_ROLES}",
+            name="ck_cloud_target_profile_role",
+        ),
+        CheckConstraint(
+            "profile_target_role != 'primary' "
+            "OR (kind = 'managed_cloud' AND sandbox_profile_id IS NOT NULL)",
+            name="ck_cloud_target_primary_requires_profile",
         ),
         CheckConstraint(
             f"update_status IS NULL OR update_status IN {SUPPORTED_CLOUD_TARGET_UPDATE_STATUSES}",
@@ -42,6 +59,14 @@ class CloudTarget(Base):
         ),
         Index("ix_cloud_targets_owner_user_status", "owner_user_id", "status"),
         Index("ix_cloud_targets_organization_status", "organization_id", "status"),
+        Index(
+            "ux_cloud_target_primary_per_profile",
+            "sandbox_profile_id",
+            unique=True,
+            postgresql_where=text(
+                "profile_target_role = 'primary' AND archived_at IS NULL"
+            ),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -49,9 +74,10 @@ class CloudTarget(Base):
     kind: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32), default="enrolling", index=True)
     owner_scope: Mapped[str] = mapped_column(String(32), default="personal")
-    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
+        nullable=True,
     )
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("organization.id", ondelete="CASCADE"),
@@ -62,6 +88,12 @@ class CloudTarget(Base):
         ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
     )
+    sandbox_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("sandbox_profile.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    profile_target_role: Mapped[str] = mapped_column(String(32), default="none")
     default_workspace_root: Mapped[str | None] = mapped_column(Text, nullable=True)
     update_channel: Mapped[str] = mapped_column(String(32), default="stable")
     update_generation: Mapped[int] = mapped_column(default=0)
@@ -101,6 +133,12 @@ class CloudWorker(Base):
         ForeignKey("cloud_targets.id", ondelete="CASCADE"),
         index=True,
     )
+    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     machine_fingerprint: Mapped[str | None] = mapped_column(String(255), nullable=True)
     hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -137,6 +175,17 @@ class CloudTargetEnrollment(Base):
         ForeignKey("cloud_targets.id", ondelete="CASCADE"),
         index=True,
     )
+    sandbox_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("sandbox_profile.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(

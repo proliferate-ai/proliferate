@@ -24,11 +24,11 @@ OwnerScope = Literal["personal", "organization"]
 
 
 class EnsurePersonalSandboxProfileRequest(BaseModel):
-    managed_target_id: UUID | None = Field(default=None, alias="managedTargetId")
+    pass
 
 
 class EnsureOrganizationSandboxProfileRequest(BaseModel):
-    managed_target_id: UUID | None = Field(default=None, alias="managedTargetId")
+    pass
 
 
 class LiteLLMModelDeploymentRequest(BaseModel):
@@ -75,8 +75,10 @@ class SandboxProfileResponse(BaseModel):
     owner_scope: str = Field(alias="ownerScope")
     owner_user_id: UUID | None = Field(alias="ownerUserId")
     organization_id: UUID | None = Field(alias="organizationId")
-    managed_target_id: UUID | None = Field(alias="managedTargetId")
-    agent_auth_revision: int = Field(alias="agentAuthRevision")
+    billing_subject_id: UUID = Field(alias="billingSubjectId")
+    created_by_user_id: UUID | None = Field(alias="createdByUserId")
+    primary_target_id: UUID | None = Field(alias="primaryTargetId")
+    desired_agent_auth_revision: int = Field(alias="desiredAgentAuthRevision")
     status: str
 
 
@@ -260,8 +262,10 @@ def sandbox_profile_response(record: SandboxProfileRecord) -> SandboxProfileResp
         ownerScope=record.owner_scope,
         ownerUserId=record.owner_user_id,
         organizationId=record.organization_id,
-        managedTargetId=record.managed_target_id,
-        agentAuthRevision=record.agent_auth_revision,
+        billingSubjectId=record.billing_subject_id,
+        createdByUserId=record.created_by_user_id,
+        primaryTargetId=record.primary_target_id,
+        desiredAgentAuthRevision=record.desired_agent_auth_revision,
         status=record.status,
     )
 

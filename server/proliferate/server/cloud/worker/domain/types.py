@@ -10,3 +10,5 @@ from uuid import UUID
 class WorkerAuthContext:
     worker_id: UUID
     target_id: UUID
+    cloud_sandbox_id: UUID | None = None
+    slot_generation: int | None = None

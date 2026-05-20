@@ -19,6 +19,9 @@ pub struct CloudCommandEnvelope {
     pub idempotency_key: String,
     pub target_id: String,
     pub workspace_id: Option<String>,
+    pub cloud_workspace_id: Option<String>,
+    pub sandbox_profile_id: Option<String>,
+    pub slot_generation: Option<i64>,
     pub session_id: Option<String>,
     pub kind: String,
     pub payload: Value,
@@ -39,6 +42,10 @@ pub struct LeaseCommandResponse {
 #[serde(rename_all = "camelCase")]
 pub struct CommandDeliveryRequest {
     pub lease_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cloud_workspace_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot_generation: Option<i64>,
     pub status: String,
     pub error_code: Option<String>,
     pub error_message: Option<String>,
@@ -48,6 +55,12 @@ pub struct CommandDeliveryRequest {
 #[serde(rename_all = "camelCase")]
 pub struct CommandResultRequest {
     pub lease_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cloud_workspace_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot_generation: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anyharness_workspace_id: Option<String>,
     pub status: String,
     pub error_code: Option<String>,
     pub error_message: Option<String>,
