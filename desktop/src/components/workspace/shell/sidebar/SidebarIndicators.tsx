@@ -2,7 +2,6 @@ import type { MouseEvent, ReactNode } from "react";
 import { useState } from "react";
 import {
   ArrowRight,
-  BrailleSweepBadge,
   CircleAlert,
   Clock,
   GitMerge,
@@ -43,11 +42,7 @@ export function SidebarStatusGlyph({
     case "waiting_input":
     case "waiting_plan":
     case "needs_review":
-      return (
-        <BrailleSweepBadge
-          className="h-3 text-[11px] text-info [line-height:0.75rem]"
-        />
-      );
+      return <Clock className="size-3 text-info" />;
     case "iterating":
     case "queued_prompt":
       return <Spinner className="size-3.5 text-sidebar-foreground" />;

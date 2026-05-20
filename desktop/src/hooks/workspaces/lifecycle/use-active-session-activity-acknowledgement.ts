@@ -9,8 +9,10 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 export function useActiveSessionActivityAcknowledgement(
   renderSurface: WorkspaceRenderSurface,
+  options: { enabled?: boolean } = {},
 ): void {
   const focusVisibilityNonce = useDocumentFocusVisibilityNonce();
+  const enabled = options.enabled ?? true;
   const activeSessionId = sessionIdFromRenderSurface(renderSurface);
   const {
     markSessionViewedAt,
@@ -29,6 +31,9 @@ export function useActiveSessionActivityAcknowledgement(
     : null;
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     if (!activeSessionId || !latestActivityAt || !isDocumentVisibleAndFocused()) {
       return;
     }
@@ -42,6 +47,7 @@ export function useActiveSessionActivityAcknowledgement(
     markSessionViewedAt(activeSessionId, latestActivityAt);
   }, [
     activeSessionId,
+    enabled,
     focusVisibilityNonce,
     latestActivityAt,
     latestViewedAt,

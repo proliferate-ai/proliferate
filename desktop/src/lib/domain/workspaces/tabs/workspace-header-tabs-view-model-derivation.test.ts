@@ -98,6 +98,7 @@ describe("workspace header tab view model derivation", () => {
     });
 
     expect(tabs[0]?.hasUnreadActivity).toBe(true);
+    expect(tabs[0]?.isResolvingSession).toBe(true);
   });
 
   it("clears unread activity on the highlighted chat tab", () => {
@@ -168,6 +169,7 @@ describe("buildHeaderClosedChatTabs", () => {
       id: "b",
       isActive: true,
       isVisible: false,
+      isResolvingSession: true,
     });
   });
 });
@@ -233,6 +235,7 @@ function baseHeaderTab(sessionId: string) {
     visualGroupId: null,
     manualGroupId: null,
     isHierarchyResolved: true,
+    isResolvingSession: false,
     delegatedAgent: null,
     delegatedIndicators: [],
   };

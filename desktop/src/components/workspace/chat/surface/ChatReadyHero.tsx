@@ -1,11 +1,9 @@
 import { CHAT_PRE_MESSAGE_LABELS } from "@/copy/chat/chat-copy";
 
 /**
- * Hero variant shown when a session is hydrated but has no turns yet. The
- * braille loading sweep from ChatLoadingHero unmounts at its landed frame
- * (⣿⣿) and this hero mounts in its place — the brand mark resolves
- * outward from its center, so the loading → ready transition reads as
- * "the sweep settles into the brand" rather than a flat swap.
+ * Hero variant shown when a session is hydrated but has no turns yet. Loading
+ * and agent-thinking affordances stay in their own surfaces, so this component
+ * intentionally remains visually quiet.
  */
 export function ChatReadyHero() {
   return (

@@ -1663,6 +1663,37 @@ body {
   animation: streaming-fade 180ms ease-out;
 }
 
+@keyframes thinking-text-sweep {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+.thinking-text {
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-muted-foreground) 58%, transparent),
+    var(--color-foreground) 48%,
+    color-mix(in oklab, var(--color-muted-foreground) 58%, transparent)
+  );
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: thinking-text-sweep 1.55s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-text {
+    color: var(--color-muted-foreground);
+    background-image: none;
+    animation: none;
+  }
+}
+
 /* ---- Loading illustration animations ---- */
 @keyframes loading-line {
   0%, 100% { opacity: 0.15; transform: scaleX(0.7); }
@@ -1757,8 +1788,8 @@ body {
 /* ---- Proliferate icon: one-shot resolve animation ----
    8 orbit nodes fade in clockwise from top, then the center node lands
    last as the punctuation. Each node fades over 0.25s with a 0.05s
-   stagger and holds lit (forwards fill mode). Used as the "braille
-   sweep landed → brand resolves" beat in ChatReadyHero. */
+   stagger and holds lit (forwards fill mode). Used by auth loading surfaces
+   when the brand mark resolves. */
 @keyframes proliferate-resolve {
   0%   { opacity: 0; }
   100% { opacity: 1; }
@@ -1784,8 +1815,7 @@ body {
 }
 
 /* ---- Compact spinner ----
-   Shared current-color spinner for small controls. Keep this separate from
-   the braille/session loading vocabulary below. */
+   Shared current-color spinner for small controls. */
 @keyframes proliferate-spinner-rotate {
   to {
     transform: rotate(360deg);
@@ -1807,8 +1837,7 @@ body {
 }
 
 /* ---- Braille sweep loading text ----
-   This must stay CSS-driven. The previous React ticker updated every 60ms and
-   forced the chat shell to commit continuously while a loader was visible. */
+   Retained as a CSS-driven auth-only mark. */
 @keyframes braille-sweep-content {
   0%,
   6.249% { content: "⠁⠀"; }

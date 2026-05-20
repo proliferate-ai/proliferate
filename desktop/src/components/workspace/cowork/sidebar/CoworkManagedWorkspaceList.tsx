@@ -1,5 +1,5 @@
 import type { CoworkManagedWorkspaceSummary } from "@anyharness/sdk";
-import { BrailleSweepBadge } from "@/components/ui/icons";
+import { SkeletonBlock } from "@/components/feedback/Skeleton";
 import { SidebarRowSurface } from "@/components/ui/SidebarRowSurface";
 
 function workspaceLabel(workspace: CoworkManagedWorkspaceSummary, index: number): string {
@@ -54,9 +54,9 @@ export function CoworkManagedWorkspaceList({
 }: CoworkManagedWorkspaceListProps) {
   if (isLoading) {
     return (
-      <div className="flex h-[30px] items-center gap-2 pl-6 pr-2 text-sm text-sidebar-muted-foreground">
-        <BrailleSweepBadge className="text-sm" />
-        <span>Loading coding workspaces</span>
+      <div className="flex h-[30px] items-center gap-2 pl-6 pr-2" aria-label="Loading coding workspaces" role="status">
+        <SkeletonBlock className="h-3 w-36 bg-sidebar-accent" />
+        <span className="sr-only">Loading coding workspaces</span>
       </div>
     );
   }

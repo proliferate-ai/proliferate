@@ -1,12 +1,12 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   ArrowRight,
-  BrailleSweepBadge,
   CircleAlert,
   CloudIcon,
   FolderOpen,
   GitBranch,
   GitCommit,
+  Spinner,
 } from "@/components/ui/icons";
 import { mobilityReconnectCopy } from "@/lib/domain/workspaces/mobility/presentation";
 import { ComposerPopoverSurface } from "./ComposerPopoverSurface";
@@ -81,7 +81,7 @@ export function WorkspaceMobilityLocationPopover({
   onPrimaryAction: () => void | Promise<void>;
 }) {
   const leading = prompt.variant === "loading"
-    ? <BrailleSweepBadge className="text-base text-foreground" />
+    ? <Spinner className="size-4 text-foreground" />
     : prompt.variant === "blocked"
       ? <CircleAlert className="size-4 text-destructive" />
       : null;

@@ -8,7 +8,6 @@ import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { MacWindowControlsSafeArea } from "@/components/ui/MacWindowControlsSafeArea"
 import { applyAppearancePreference, initializeTheme } from "@/config/theme"
-import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes"
 import { useExportRunningAgentCount } from "@/hooks/app/lifecycle/use-export-running-agent-count"
 import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions"
@@ -40,12 +39,8 @@ import { AppErrorBoundary } from "@/components/ui/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
 import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
 import { logRendererEvent } from "@/lib/access/tauri/diagnostics"
-import { AutomationDetailPage } from "@/pages/AutomationDetailPage"
-import { AutomationsPage } from "@/pages/AutomationsPage"
+import { AuthenticatedAppHost } from "@/pages/AuthenticatedAppHost"
 import { LoginPage } from "@/pages/LoginPage"
-import { MainPage } from "@/pages/MainPage"
-import { PluginsPage } from "@/pages/PluginsPage"
-import { SettingsPage } from "@/pages/SettingsPage"
 import { useAuthStore } from "@/stores/auth/auth-store"
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store"
 import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
@@ -300,15 +295,7 @@ function AppRuntime() {
             <Route element={<AuthRequiredGate />}>
               <Route path="/setup" element={<Navigate to="/" replace />} />
               <Route element={<UserPreferencesGate />}>
-                <Route path={APP_ROUTES.home} element={<MainPage />} />
-                <Route
-                  path={LEGACY_APP_ROUTES.powers}
-                  element={<Navigate to={APP_ROUTES.plugins} replace />}
-                />
-                <Route path={APP_ROUTES.plugins} element={<PluginsPage />} />
-                <Route path={APP_ROUTES.automations} element={<AutomationsPage />} />
-                <Route path="/automations/:automationId" element={<AutomationDetailPage />} />
-                <Route path={APP_ROUTES.settings} element={<SettingsPage />} />
+                <Route path="*" element={<AuthenticatedAppHost />} />
               </Route>
             </Route>
           </Route>

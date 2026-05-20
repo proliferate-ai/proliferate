@@ -21,6 +21,7 @@ describe("UserPreferencesGate", () => {
 
     expect(html).toContain("Restoring your setup")
     expect(html).not.toContain("data-testid=\"product\"")
+    expect(html).not.toContain("data-jank-canary=\"braille\"")
   })
 
   it("renders product routes after user preferences hydrate", () => {
