@@ -20,6 +20,7 @@ from proliferate.constants.cloud import (
     WorkspaceStatus,
 )
 from proliferate.db import engine as db_engine
+from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing import (
@@ -337,6 +338,28 @@ async def create_managed_cloud_workspace_for_profile(
         updated_at=now,
     )
     db.add(workspace)
+    await db.flush()
+    db.add(
+        CloudWorkspaceExposure(
+            target_id=target_id,
+            cloud_workspace_id=workspace.id,
+            anyharness_workspace_id=None,
+            owner_scope=profile.owner_scope,
+            owner_user_id=owner_user_id,
+            organization_id=organization_id,
+            visibility=(
+                "shared_unclaimed" if profile.owner_scope == "organization" else "private"
+            ),
+            claimed_by_user_id=None,
+            default_projection_level="live",
+            commandable=True,
+            status="active",
+            revision=1,
+            origin=workspace.origin,
+            created_at=now,
+            updated_at=now,
+        )
+    )
     await db.flush()
     return workspace
 

@@ -78,6 +78,8 @@ from proliferate.server.cloud.worker.models import (
     WorkerInventoryPayload,
     WorkerInventoryRequest,
     WorkerInventoryResponse,
+    WorkerProjectionGapRequest,
+    WorkerProjectionGapResponse,
     WorkerUpdateStatusRequest,
     WorkerUpdateStatusResponse,
 )
@@ -918,3 +920,64 @@ async def record_event_batch(
     await require_current_managed_worker_slot(db, auth=auth, target=target)
     with defer_live_publishes_until_commit(db):
         return await ingest_worker_event_batch(db, auth=auth, body=body)
+
+
+async def record_projection_gap(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    body: WorkerProjectionGapRequest,
+) -> WorkerProjectionGapResponse:
+    target = await targets_store.get_target_by_id(db, auth.target_id)
+    if target is None:
+        raise CloudApiError(
+            "cloud_worker_target_missing",
+            "Worker target no longer exists.",
+            status_code=401,
+        )
+    await require_current_managed_worker_slot(db, auth=auth, target=target)
+    projection = await projections_store.get_session_projection_metadata(
+        db,
+        target_id=auth.target_id,
+        session_id=body.session_id,
+    )
+    if (
+        projection is None
+        or projection.id != body.session_projection_id
+        or projection.exposure_id != body.exposure_id
+    ):
+        raise CloudApiError(
+            "cloud_projection_gap_projection_mismatch",
+            "Projection gap does not match an active Cloud projection.",
+            status_code=409,
+        )
+    exposure = await exposures_store.get_workspace_exposure_by_id(db, body.exposure_id)
+    if exposure is None or exposure.archived_at is not None or exposure.status != "active":
+        raise CloudApiError(
+            "cloud_projection_gap_exposure_inactive",
+            "Projection exposure is no longer active.",
+            status_code=409,
+        )
+    if (projection.last_uploaded_seq or 0) > body.last_uploaded_seq or (
+        projection.last_uploaded_seq or 0
+    ) >= body.expected_seq:
+        return WorkerProjectionGapResponse(updated=False)
+    gap_state_json = compact_json(
+        {
+            "reason": "anyharness_event_sequence_gap",
+            "expectedSeq": body.expected_seq,
+            "firstObservedSeq": body.first_observed_seq,
+            "lastUploadedSeq": body.last_uploaded_seq,
+            "exposureId": str(body.exposure_id),
+            "sessionProjectionId": str(body.session_projection_id),
+            "reportedByWorkerId": str(auth.worker_id),
+            "reportedAt": utcnow().isoformat(),
+        }
+    )
+    await projections_store.set_projection_gap_state(
+        db,
+        target_id=auth.target_id,
+        session_id=body.session_id,
+        gap_state_json=gap_state_json or "{}",
+    )
+    return WorkerProjectionGapResponse(updated=True)

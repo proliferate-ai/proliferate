@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing import ensure_personal_billing_subject
+from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.integrations.pubsub.models import PubSubMessage
@@ -188,6 +189,62 @@ async def _seed_exposed_session_projection(
         commandable=True,
     )
     await db_session.commit()
+
+
+async def _seed_exposed_workspace(
+    db_session: AsyncSession,
+    *,
+    target_id: str,
+    auth: AuthSession,
+    workspace_id: str,
+) -> tuple[UUID, UUID]:
+    target_uuid = UUID(target_id)
+    billing_subject = await ensure_personal_billing_subject(db_session, auth.user_id)
+    workspace = CloudWorkspace(
+        user_id=auth.user_id,
+        owner_scope="personal",
+        owner_user_id=auth.user_id,
+        organization_id=None,
+        created_by_user_id=auth.user_id,
+        billing_subject_id=billing_subject.id,
+        target_id=target_uuid,
+        display_name=f"Workspace {workspace_id}",
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name=workspace_id,
+        normalized_repo_key=f"github/acme/{workspace_id}",
+        git_branch="main",
+        git_base_branch="main",
+        worktree_path=f"/workspace/{workspace_id}",
+        origin="manual_web",
+        origin_json='{"kind":"human","entrypoint":"cloud"}',
+        status="ready",
+        status_detail="Ready",
+        template_version="v1",
+        runtime_generation=0,
+        anyharness_workspace_id=workspace_id,
+        repo_post_ready_phase="idle",
+        repo_post_ready_files_total=0,
+        repo_post_ready_files_applied=0,
+        cleanup_state="none",
+    )
+    db_session.add(workspace)
+    await db_session.flush()
+    exposure = await exposures_store.upsert_workspace_exposure(
+        db_session,
+        target_id=target_uuid,
+        cloud_workspace_id=workspace.id,
+        anyharness_workspace_id=workspace_id,
+        owner_scope="personal",
+        owner_user_id=auth.user_id,
+        organization_id=None,
+        visibility="private",
+        default_projection_level="live",
+        commandable=True,
+        origin="manual_web",
+    )
+    await db_session.commit()
+    return workspace.id, exposure.id
 
 
 class TestCloudEventSyncApi:
@@ -466,9 +523,23 @@ class TestCloudEventSyncApi:
         assert uploaded.status_code == 200
         assert uploaded.json()["acceptedEvents"] == 0
         assert uploaded.json()["liveOnlyEvents"] == 1
-        assert uploaded.json()["sessionAcks"] == [
-            {"sessionId": "session-revoked", "lastContiguousSeq": 1}
+        assert uploaded.json()["sessionAcks"] == []
+        assert uploaded.json()["eventAcks"] == [
+            {
+                "sessionId": "session-revoked",
+                "seq": 1,
+                "action": "discarded",
+                "reason": "inactive_projection",
+            }
         ]
+        assert (
+            await events_store.get_ingest_cursor(
+                db_session,
+                target_id=target_uuid,
+                session_id="session-revoked",
+            )
+            == 0
+        )
         snapshot = await client.get(
             f"/v1/cloud/sessions/session-revoked/snapshot?targetId={target_id}",
             headers=auth.headers,
@@ -476,6 +547,76 @@ class TestCloudEventSyncApi:
         assert snapshot.status_code == 200
         assert snapshot.json()["transcriptItems"] == []
         assert snapshot.json()["pendingInteractions"] == []
+
+    @pytest.mark.asyncio
+    async def test_worker_event_batch_discards_workspace_mismatch(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-event-sync-workspace-mismatch",
+        )
+        target_id, worker_headers = await _create_enrolled_target(
+            client,
+            db_session,
+            auth,
+            suffix="workspace-mismatch",
+        )
+        target_uuid = UUID(target_id)
+        await _seed_exposed_session_projection(
+            db_session,
+            target_id=target_id,
+            auth=auth,
+            workspace_id="workspace-authorized",
+            session_id="session-mismatch",
+        )
+
+        uploaded = await client.post(
+            "/v1/cloud/worker/events/batches",
+            headers=worker_headers,
+            json={
+                "events": [
+                    {
+                        "workspaceId": "workspace-other",
+                        "sessionId": "session-mismatch",
+                        "seq": 1,
+                        "timestamp": "2026-05-13T00:00:00Z",
+                        "itemId": "item-mismatch",
+                        "event": {
+                            "type": "item_completed",
+                            "item": {
+                                "kind": "assistant_message",
+                                "status": "completed",
+                                "contentParts": [{"type": "text", "text": "wrong workspace"}],
+                            },
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert uploaded.status_code == 200
+        assert uploaded.json()["acceptedEvents"] == 0
+        assert uploaded.json()["sessionAcks"] == []
+        assert uploaded.json()["eventAcks"] == [
+            {
+                "sessionId": "session-mismatch",
+                "seq": 1,
+                "action": "discarded",
+                "reason": "workspace_mismatch",
+            }
+        ]
+        assert (
+            await events_store.get_ingest_cursor(
+                db_session,
+                target_id=target_uuid,
+                session_id="session-mismatch",
+            )
+            == 0
+        )
 
     @pytest.mark.asyncio
     async def test_session_stream_emits_snapshot_and_live_projection_patch(
@@ -594,6 +735,13 @@ class TestCloudEventSyncApi:
             auth,
             suffix="workspace-stream",
         )
+        cloud_workspace_uuid, exposure_id = await _seed_exposed_workspace(
+            db_session,
+            target_id=target_id,
+            auth=auth,
+            workspace_id="workspace-live",
+        )
+        cloud_workspace_id = str(cloud_workspace_uuid)
         target_stream = cast(
             "AsyncGenerator[str, None]",
             stream_target_events(target_id=UUID(target_id), after_seq=0),
@@ -645,6 +793,7 @@ class TestCloudEventSyncApi:
                     "idempotencyKey": "target-stream-command",
                     "targetId": target_id,
                     "workspaceId": "workspace-live",
+                    "cloudWorkspaceId": cloud_workspace_id,
                     "kind": "backfill_exposed_workspace",
                     "payload": {},
                     "source": "desktop_cloud_view",
@@ -687,7 +836,18 @@ class TestCloudEventSyncApi:
             },
         )
         assert backfill.status_code == 200
-        cloud_workspace_id = backfill.json()["mappedWorkspaces"][0]["cloudWorkspaceId"]
+        assert backfill.json()["mappedWorkspaces"][0]["cloudWorkspaceId"] == cloud_workspace_id
+        await projections_store.upsert_session_projection_metadata(
+            db_session,
+            target_id=UUID(target_id),
+            session_id="session-live",
+            exposure_id=exposure_id,
+            cloud_workspace_id=UUID(cloud_workspace_id),
+            workspace_id="workspace-live",
+            projection_level="live",
+            commandable=True,
+        )
+        await db_session.commit()
 
         uploaded = await client.post(
             "/v1/cloud/worker/events/batches",

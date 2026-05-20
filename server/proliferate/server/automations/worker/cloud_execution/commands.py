@@ -120,6 +120,7 @@ async def enqueue_start_session(
     ctx: AutomationExecutionContext,
     *,
     target_id: UUID,
+    cloud_workspace_id: UUID,
     workspace_id: str,
     payload: StartSessionPayload,
 ) -> CloudCommandSnapshot:
@@ -130,6 +131,7 @@ async def enqueue_start_session(
         stage="start-session",
         kind=CloudCommandKind.start_session.value,
         workspace_id=workspace_id,
+        cloud_workspace_id=cloud_workspace_id,
         payload=payload.to_json(),
     )
 
@@ -170,6 +172,7 @@ async def enqueue_update_session_config(
     ctx: AutomationExecutionContext,
     *,
     target_id: UUID,
+    cloud_workspace_id: UUID,
     workspace_id: str,
     session_id: str,
     stage: str,
@@ -182,6 +185,7 @@ async def enqueue_update_session_config(
         stage=stage,
         kind=CloudCommandKind.update_session_config.value,
         workspace_id=workspace_id,
+        cloud_workspace_id=cloud_workspace_id,
         session_id=session_id,
         payload=payload,
     )
@@ -191,6 +195,7 @@ async def enqueue_send_prompt(
     ctx: AutomationExecutionContext,
     *,
     target_id: UUID,
+    cloud_workspace_id: UUID,
     workspace_id: str,
     session_id: str,
     payload: SendPromptPayload,
@@ -202,6 +207,7 @@ async def enqueue_send_prompt(
         stage="send-prompt",
         kind=CloudCommandKind.send_prompt.value,
         workspace_id=workspace_id,
+        cloud_workspace_id=cloud_workspace_id,
         session_id=session_id,
         payload=payload.to_json(),
     )

@@ -130,6 +130,7 @@ async def resolve_target_stage(
             default_workspace_root=target.default_workspace_root,
             organization_id=target.organization_id,
             status=target.status,
+            sandbox_profile_id=target.sandbox_profile_id,
             ready_agent_kinds=ready_agent_kinds,
         )
     )

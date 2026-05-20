@@ -28,6 +28,7 @@ from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.automation_cloud_workspace_claims import (
     create_cloud_workspace_for_claimed_run,
+    create_managed_cloud_workspace_for_claimed_run,
 )
 from proliferate.db.store.automations import (
     AutomationRunValue,
@@ -694,9 +695,12 @@ async def create_cloud_workspace_for_automation_run(
     *,
     run_id: UUID,
     claim_id: UUID,
+    target_id: UUID | None = None,
+    sandbox_profile_id: UUID | None = None,
     git_owner: str,
     git_repo_name: str,
     branch_name: str,
+    worktree_path: str | None = None,
     display_name: str | None,
     required_agent_kind: str,
 ) -> CloudWorkspace | None:
@@ -711,23 +715,44 @@ async def create_cloud_workspace_for_automation_run(
         required_agent_kind=required_agent_kind,
     )
     try:
-        workspace = await create_cloud_workspace_for_claimed_run(
-            run_id=run_id,
-            claim_id=claim_id,
-            user_id=user.id,
-            display_name=resolved.display_name,
-            git_provider=resolved.git_provider,
-            git_owner=resolved.git_owner,
-            git_repo_name=resolved.git_repo_name,
-            git_branch=resolved.git_branch,
-            git_base_branch=resolved.git_base_branch,
-            origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
-            template_version=get_configured_sandbox_provider().template_version,
-            now=utcnow(),
-            transition=CLOUD_WORKSPACE_CREATION_TRANSITION,
-            claim_is_active=claim_is_active,
-            cloud_repo_limit=resolved.cloud_repo_limit,
-        )
+        if target_id is not None and sandbox_profile_id is not None:
+            workspace = await create_managed_cloud_workspace_for_claimed_run(
+                run_id=run_id,
+                claim_id=claim_id,
+                sandbox_profile_id=sandbox_profile_id,
+                target_id=target_id,
+                user_id=user.id,
+                display_name=resolved.display_name,
+                git_provider=resolved.git_provider,
+                git_owner=resolved.git_owner,
+                git_repo_name=resolved.git_repo_name,
+                git_branch=resolved.git_branch,
+                git_base_branch=resolved.git_base_branch,
+                worktree_path=worktree_path,
+                origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
+                template_version=get_configured_sandbox_provider().template_version,
+                now=utcnow(),
+                transition=CLOUD_WORKSPACE_CREATION_TRANSITION,
+                claim_is_active=claim_is_active,
+            )
+        else:
+            workspace = await create_cloud_workspace_for_claimed_run(
+                run_id=run_id,
+                claim_id=claim_id,
+                user_id=user.id,
+                display_name=resolved.display_name,
+                git_provider=resolved.git_provider,
+                git_owner=resolved.git_owner,
+                git_repo_name=resolved.git_repo_name,
+                git_branch=resolved.git_branch,
+                git_base_branch=resolved.git_base_branch,
+                origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
+                template_version=get_configured_sandbox_provider().template_version,
+                now=utcnow(),
+                transition=CLOUD_WORKSPACE_CREATION_TRANSITION,
+                claim_is_active=claim_is_active,
+                cloud_repo_limit=resolved.cloud_repo_limit,
+            )
     except CloudRepoLimitExceededError as error:
         _raise_repo_limit_exceeded(error)
     if workspace is not None:
