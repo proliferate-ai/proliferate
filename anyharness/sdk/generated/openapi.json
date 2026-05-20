@@ -7637,24 +7637,6 @@
               "null"
             ]
           },
-          "mcpBindingSummaries": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/SessionMcpBindingSummary"
-            }
-          },
-          "mcpServers": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/SessionMcpServer"
-            }
-          },
           "modeId": {
             "type": [
               "string",
@@ -7667,7 +7649,8 @@
               "null"
             ]
           }
-        }
+        },
+        "additionalProperties": false
       },
       "CreateCoworkThreadResponse": {
         "type": "object",
@@ -7792,24 +7775,6 @@
               }
             ]
           },
-          "mcpBindingSummaries": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/SessionMcpBindingSummary"
-            }
-          },
-          "mcpServers": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/SessionMcpServer"
-            }
-          },
           "modeId": {
             "type": [
               "string",
@@ -7829,16 +7794,6 @@
               },
               {
                 "$ref": "#/components/schemas/OriginContext"
-              }
-            ]
-          },
-          "pluginBundle": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SessionPluginBundle"
               }
             ]
           },
@@ -7867,7 +7822,8 @@
           "workspaceId": {
             "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "CreateTerminalRequest": {
         "type": "object",
@@ -12485,36 +12441,9 @@
                 "$ref": "#/components/schemas/RuntimeConfigRevisionExpectation"
               }
             ]
-          },
-          "mcpBindingSummaries": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/SessionMcpBindingSummary"
-            }
-          },
-          "mcpServers": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/SessionMcpServer"
-            }
-          },
-          "pluginBundle": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SessionPluginBundle"
-              }
-            ]
           }
-        }
+        },
+        "additionalProperties": false
       },
       "RetryReviewAssignmentRequest": {
         "type": "object",
@@ -14842,154 +14771,6 @@
           "http",
           "stdio"
         ]
-      },
-      "SessionPlugin": {
-        "type": "object",
-        "required": [
-          "pluginId"
-        ],
-        "properties": {
-          "credentialBindings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionPluginCredentialBinding"
-            }
-          },
-          "mcpBindingSummaries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionMcpBindingSummary"
-            }
-          },
-          "mcpServers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionMcpServer"
-            }
-          },
-          "pluginId": {
-            "type": "string"
-          },
-          "skills": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionPluginSkill"
-            }
-          },
-          "version": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "SessionPluginBundle": {
-        "type": "object",
-        "properties": {
-          "plugins": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionPlugin"
-            }
-          }
-        }
-      },
-      "SessionPluginCredentialBinding": {
-        "type": "object",
-        "required": [
-          "id",
-          "status"
-        ],
-        "properties": {
-          "displayName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/SessionPluginCredentialBindingStatus"
-          }
-        }
-      },
-      "SessionPluginCredentialBindingStatus": {
-        "type": "string",
-        "enum": [
-          "ready",
-          "missing",
-          "needs_reconnect",
-          "unsupported_target"
-        ]
-      },
-      "SessionPluginSkill": {
-        "type": "object",
-        "required": [
-          "skillId",
-          "displayName",
-          "description",
-          "instructions"
-        ],
-        "properties": {
-          "credentialBindingIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "description": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": "string"
-          },
-          "instructions": {
-            "type": "string"
-          },
-          "requiredMcpServers": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "resources": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionPluginSkillResource"
-            }
-          },
-          "skillId": {
-            "type": "string"
-          }
-        }
-      },
-      "SessionPluginSkillResource": {
-        "type": "object",
-        "required": [
-          "resourceId",
-          "contentType",
-          "content"
-        ],
-        "properties": {
-          "content": {
-            "type": "string"
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "resourceId": {
-            "type": "string"
-          }
-        }
       },
       "SessionRawNotificationEnvelope": {
         "type": "object",

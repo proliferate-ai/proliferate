@@ -1,16 +1,14 @@
 use std::sync::Arc;
 
-use anyharness_contract::v1::SessionPluginBundle;
-
 use crate::domains::plugins::mcp::{auth::SkillsMcpAuth, definition};
 use crate::domains::plugins::registry::PluginBundleRegistry;
 use crate::domains::plugins::skills::{
     bundle_has_skills, effective_bundle_with_product_skills, product_skills_for_session,
     render_skill_index, SKILLS_MCP_CONNECTION_ID, SKILLS_MCP_SERVER_NAME,
 };
+use crate::domains::plugins::SessionPluginBundle;
 use crate::integrations::mcp::product_server::PRODUCT_MCP_TOKEN_HEADER_NAME;
 use crate::sessions::extensions::{SessionExtension, SessionLaunchContext, SessionLaunchExtras};
-use crate::sessions::mcp_bindings::contract::bindings_from_contract;
 use crate::sessions::mcp_bindings::model::{
     SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
 };
@@ -50,15 +48,18 @@ mod tests {
     use std::sync::Arc;
 
     use anyharness_contract::v1::{
-        SessionMcpBindingOutcome, SessionMcpBindingSummary, SessionMcpHttpServer, SessionMcpServer,
-        SessionMcpTransport, SessionPlugin, SessionPluginBundle, SessionPluginCredentialBinding,
-        SessionPluginCredentialBindingStatus, SessionPluginSkill,
+        SessionMcpBindingOutcome, SessionMcpBindingSummary, SessionMcpTransport,
     };
 
     use super::PluginSessionLaunchExtension;
     use crate::domains::plugins::mcp::auth::SkillsMcpAuth;
     use crate::domains::plugins::registry::PluginBundleRegistry;
+    use crate::domains::plugins::{
+        SessionPlugin, SessionPluginBundle, SessionPluginCredentialBinding,
+        SessionPluginCredentialBindingStatus, SessionPluginSkill,
+    };
     use crate::sessions::extensions::{SessionExtension, SessionLaunchContext};
+    use crate::sessions::mcp_bindings::model::{SessionMcpHttpServer, SessionMcpServer};
     use crate::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
     use crate::workspaces::model::WorkspaceRecord;
 
@@ -194,7 +195,7 @@ mod tests {
                 plugin_id: "connector.conn_github".to_string(),
                 version: Some("1".to_string()),
                 skills: Vec::new(),
-                mcp_servers: vec![contract_mcp_server()],
+                mcp_servers: vec![plugin_mcp_server()],
                 mcp_binding_summaries: vec![summary()],
                 credential_bindings: vec![credential_binding()],
             }],
@@ -215,7 +216,7 @@ mod tests {
         bundle
     }
 
-    fn contract_mcp_server() -> SessionMcpServer {
+    fn plugin_mcp_server() -> SessionMcpServer {
         SessionMcpServer::Http(SessionMcpHttpServer {
             connection_id: "conn_github".to_string(),
             catalog_entry_id: Some("github".to_string()),
@@ -331,9 +332,7 @@ impl SessionExtension for PluginSessionLaunchExtension {
 
         let mut extras = SessionLaunchExtras::default();
         for plugin in &bundle.plugins {
-            extras
-                .mcp_servers
-                .extend(bindings_from_contract(plugin.mcp_servers.clone()));
+            extras.mcp_servers.extend(plugin.mcp_servers.clone());
             extras
                 .mcp_binding_summaries
                 .extend(plugin.mcp_binding_summaries.clone());

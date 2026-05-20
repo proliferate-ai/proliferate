@@ -1,12 +1,17 @@
 use anyharness_contract::v1::{
     SessionMcpBindingNotAppliedReason, SessionMcpBindingOutcome, SessionMcpBindingSummary,
-    SessionMcpEnvVar, SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
-    SessionMcpStdioServer, SessionMcpTransport, SessionPlugin, SessionPluginBundle,
-    SessionPluginCredentialBinding, SessionPluginCredentialBindingStatus, SessionPluginSkill,
-    SessionPluginSkillResource,
+    SessionMcpTransport,
 };
 
 use super::validate_session_plugin_bundle;
+use crate::domains::plugins::{
+    SessionPlugin, SessionPluginBundle, SessionPluginCredentialBinding,
+    SessionPluginCredentialBindingStatus, SessionPluginSkill, SessionPluginSkillResource,
+};
+use crate::sessions::mcp_bindings::model::{
+    SessionMcpEnvVar, SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
+    SessionMcpStdioServer,
+};
 
 #[test]
 fn accepts_valid_bundle() {

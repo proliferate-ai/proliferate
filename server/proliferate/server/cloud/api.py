@@ -12,7 +12,6 @@ from proliferate.server.cloud.events.api import router as events_router
 from proliferate.server.cloud.live.api import router as live_router
 from proliferate.server.cloud.mcp_catalog.api import router as mcp_catalog_router
 from proliferate.server.cloud.mcp_connections.api import router as mcp_connections_router
-from proliferate.server.cloud.mcp_materialization.api import router as mcp_materialization_router
 from proliferate.server.cloud.mcp_oauth.api import router as mcp_oauth_router
 from proliferate.server.cloud.mobility.api import router as mobility_router
 from proliferate.server.cloud.plugins.api import router as plugins_router
@@ -46,7 +45,6 @@ router.include_router(sandbox_profiles_router)
 router.include_router(agent_auth_router)
 router.include_router(mcp_catalog_router)
 router.include_router(mcp_connections_router)
-router.include_router(mcp_materialization_router)
 router.include_router(mcp_oauth_router)
 router.include_router(plugins_router)
 router.include_router(skills_router)

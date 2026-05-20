@@ -4,7 +4,6 @@ pub mod tools;
 
 use std::sync::Arc;
 
-use anyharness_contract::v1::SessionPluginBundle;
 use async_trait::async_trait;
 use serde_json::Value;
 
@@ -14,6 +13,7 @@ use crate::domains::plugins::skills::{
     activate_skill, get_skill_resource, list_available_skills, ActivateSkillArgs,
     GetSkillResourceArgs,
 };
+use crate::domains::plugins::SessionPluginBundle;
 use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition, ProductMcpRequestContext,
     ProductMcpServer, ProductMcpTokenValidation,
