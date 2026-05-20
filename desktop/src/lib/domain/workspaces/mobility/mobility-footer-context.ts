@@ -176,6 +176,10 @@ export function buildMobilityFooterContext(args: {
 export function buildPendingMobilityFooterContext(
   entry: PendingWorkspaceEntry,
 ): MobilityFooterContext | null {
+  if (entry.request.kind === "cowork") {
+    return null;
+  }
+
   const locationKind = pendingLocationKind(entry);
   const detailValue = pendingDetailValue(entry, locationKind);
   const branchValue = pendingBranchValue(entry);

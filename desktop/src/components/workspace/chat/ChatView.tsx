@@ -98,8 +98,10 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
 
 export const ChatView = memo(function ChatView({
   shellRenderSurface = null,
+  showWorkspaceFooter = true,
 }: {
   shellRenderSurface?: WorkspaceRenderSurface | null;
+  showWorkspaceFooter?: boolean;
 }) {
   useDebugRenderCount("chat-surface");
   const { mode } = useChatSurfaceState(shellRenderSurface);
@@ -151,7 +153,10 @@ export const ChatView = memo(function ChatView({
       suppressActiveSessionState={suppressComposerActiveSessionState}
     />
   ), [promptAttachments, suppressComposerActiveSessionState]);
-  const footerSlot = useMemo(() => <WorkspaceMobilityFooterRow />, []);
+  const footerSlot = useMemo(
+    () => showWorkspaceFooter ? <WorkspaceMobilityFooterRow /> : null,
+    [showWorkspaceFooter],
+  );
 
   const handleFileDrag = useCallback((event: DragEvent<HTMLDivElement>) => {
     const dragInput = readFileDragInput(event.dataTransfer);

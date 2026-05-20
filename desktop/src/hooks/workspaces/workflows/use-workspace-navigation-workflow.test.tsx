@@ -12,8 +12,8 @@ const routerMocks = vi.hoisted(() => ({
 const harnessMocks = vi.hoisted(() => ({
   state: {
     pendingWorkspaceEntry: null as unknown,
+    selectedLogicalWorkspaceId: null as string | null,
     selectedWorkspaceId: null as string | null,
-    setPendingWorkspaceEntry: vi.fn(),
     deselectWorkspacePreservingSessions: vi.fn(),
   },
 }));
@@ -88,6 +88,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   routerMocks.location.pathname = "/";
   harnessMocks.state.pendingWorkspaceEntry = null;
+  harnessMocks.state.selectedLogicalWorkspaceId = null;
   harnessMocks.state.selectedWorkspaceId = null;
   mobilityMocks.state.selectionLocked = false;
   mobilityMocks.state.selectedLogicalWorkspaceId = null;
@@ -102,19 +103,28 @@ describe("useWorkspaceNavigationWorkflow", () => {
     act(() => result.current.goToTopLevelRoute("/"));
 
     expect(harnessMocks.state.deselectWorkspacePreservingSessions).toHaveBeenCalledTimes(1);
-    expect(harnessMocks.state.setPendingWorkspaceEntry).not.toHaveBeenCalled();
     expect(editorMocks.resetWorkspaceEditorState).toHaveBeenCalledTimes(1);
     expect(routerMocks.navigate).toHaveBeenCalledWith("/");
   });
 
-  it("clears pending workspace state before top-level navigation", () => {
+  it("deselects pending workspace state before top-level navigation", () => {
     harnessMocks.state.pendingWorkspaceEntry = { id: "pending-1" };
     const { result } = renderHook(() => useWorkspaceNavigationWorkflow());
 
     act(() => result.current.goToTopLevelRoute("/"));
 
-    expect(harnessMocks.state.setPendingWorkspaceEntry).toHaveBeenCalledWith(null);
-    expect(harnessMocks.state.deselectWorkspacePreservingSessions).not.toHaveBeenCalled();
+    expect(harnessMocks.state.deselectWorkspacePreservingSessions).toHaveBeenCalledTimes(1);
+    expect(editorMocks.resetWorkspaceEditorState).toHaveBeenCalledTimes(1);
+    expect(routerMocks.navigate).toHaveBeenCalledWith("/");
+  });
+
+  it("deselects logical-only workspace state before top-level navigation", () => {
+    harnessMocks.state.selectedLogicalWorkspaceId = "logical-1";
+    const { result } = renderHook(() => useWorkspaceNavigationWorkflow());
+
+    act(() => result.current.goToTopLevelRoute("/"));
+
+    expect(harnessMocks.state.deselectWorkspacePreservingSessions).toHaveBeenCalledTimes(1);
     expect(editorMocks.resetWorkspaceEditorState).toHaveBeenCalledTimes(1);
     expect(routerMocks.navigate).toHaveBeenCalledWith("/");
   });

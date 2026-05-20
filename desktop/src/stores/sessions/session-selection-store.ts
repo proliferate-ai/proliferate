@@ -147,6 +147,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
   deselectWorkspacePreservingSessions: () => set((state) => {
     return {
       pendingWorkspaceEntry: null,
+      selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
       workspaceArrivalEvent: null,

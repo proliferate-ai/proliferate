@@ -14,12 +14,14 @@ import { useToastStore } from "@/stores/toast/toast-store";
 export function useWorkspaceNavigationWorkflow() {
   const location = useLocation();
   const navigate = useNavigate();
-  const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
   const deselectWorkspacePreservingSessions = useSessionSelectionStore(
     (state) => state.deselectWorkspacePreservingSessions,
   );
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
   const mobility = useWorkspaceMobilityState();
   const { selectWorkspace } = useWorkspaceSelection();
   const showToast = useToastStore((state) => state.show);
@@ -36,11 +38,8 @@ export function useWorkspaceNavigationWorkflow() {
       return;
     }
 
-    if (selectedWorkspaceId) {
+    if (selectedWorkspaceId || selectedLogicalWorkspaceId || pendingWorkspaceEntry) {
       deselectWorkspacePreservingSessions();
-      resetWorkspaceEditorState();
-    } else if (pendingWorkspaceEntry) {
-      setPendingWorkspaceEntry(null);
       resetWorkspaceEditorState();
     }
     navigate(path);
@@ -49,8 +48,8 @@ export function useWorkspaceNavigationWorkflow() {
     mobility.selectionLocked,
     navigate,
     pendingWorkspaceEntry,
+    selectedLogicalWorkspaceId,
     selectedWorkspaceId,
-    setPendingWorkspaceEntry,
     showToast,
   ]);
 
