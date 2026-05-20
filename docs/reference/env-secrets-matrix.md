@@ -79,6 +79,7 @@ timers on this branch. These values are defined in
 | `CUSTOMERIO_API_KEY` | Yes | No | Customer.io API auth |
 | `CUSTOMERIO_APP_API_KEY` | Yes | No | Customer.io app API auth |
 | `CUSTOMERIO_FROM_EMAIL` | No | No | Customer.io sender email address |
+| `CUSTOMERIO_WELCOME_TRANSACTIONAL_MESSAGE_ID` | No | No | Customer.io transactional message ID for the desktop welcome email; blank disables the welcome email |
 | `FRONTEND_BASE_URL` | No | No | Frontend base URL for email links etc. |
 | `PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT` | No | No | First-party anonymous telemetry collector endpoint |
 | `PROLIFERATE_ANONYMOUS_TELEMETRY_DISABLED` | No | No | Disable server-side anonymous telemetry emission |

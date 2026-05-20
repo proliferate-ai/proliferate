@@ -342,13 +342,21 @@ async def test_sync_customerio_desktop_authenticated_user_calls_identify_then_tr
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user = _make_user("desktop-github@example.com", display_name="Display Name")
+    user.github_login = "octocat"
+    user.avatar_url = "https://avatars.githubusercontent.com/u/583231?v=4"
     identify_mock = AsyncMock()
     track_mock = AsyncMock()
+    welcome_mock = AsyncMock()
     monkeypatch.setattr(desktop_service, "identify_customerio_user", identify_mock)
     monkeypatch.setattr(
         desktop_service,
         "track_customerio_desktop_authenticated",
         track_mock,
+    )
+    monkeypatch.setattr(
+        desktop_service,
+        "_send_customerio_welcome_email_once",
+        welcome_mock,
     )
 
     await desktop_service.sync_customerio_desktop_authenticated_user(user)
@@ -357,5 +365,166 @@ async def test_sync_customerio_desktop_authenticated_user_calls_identify_then_tr
         user_id=str(user.id),
         email="desktop-github@example.com",
         display_name="Display Name",
+        github_login="octocat",
+        github_avatar_url="https://avatars.githubusercontent.com/u/583231?v=4",
+        created_at=user.created_at,
     )
     track_mock.assert_awaited_once_with(user_id=str(user.id))
+    welcome_mock.assert_awaited_once_with(user)
+
+
+@pytest.mark.asyncio
+async def test_send_customerio_welcome_email_once_sends_when_claim_wins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _make_user("desktop-github@example.com", display_name="Display Name")
+    user.github_login = "octocat"
+
+    claim_mock = AsyncMock(return_value=True)
+    clear_mock = AsyncMock()
+    welcome_send_mock = AsyncMock(return_value=True)
+    monkeypatch.setattr(desktop_service, "claim_customerio_welcome_send", claim_mock)
+    monkeypatch.setattr(desktop_service, "clear_customerio_welcome_send", clear_mock)
+    monkeypatch.setattr(desktop_service, "send_customerio_welcome_email", welcome_send_mock)
+    monkeypatch.setattr(desktop_service, "customerio_welcome_email_enabled", lambda: True)
+    monkeypatch.setattr(
+        desktop_service,
+        "async_session_factory",
+        _stub_session_factory(),
+    )
+
+    await desktop_service._send_customerio_welcome_email_once(user)
+
+    claim_mock.assert_awaited_once()
+    welcome_send_mock.assert_awaited_once_with(
+        user_id=str(user.id),
+        email="desktop-github@example.com",
+        display_name="Display Name",
+        github_login="octocat",
+    )
+    clear_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_send_customerio_welcome_email_once_skips_when_claim_loses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _make_user("desktop-github@example.com", display_name="Display Name")
+
+    claim_mock = AsyncMock(return_value=False)
+    clear_mock = AsyncMock()
+    welcome_send_mock = AsyncMock(return_value=True)
+    monkeypatch.setattr(desktop_service, "claim_customerio_welcome_send", claim_mock)
+    monkeypatch.setattr(desktop_service, "clear_customerio_welcome_send", clear_mock)
+    monkeypatch.setattr(desktop_service, "send_customerio_welcome_email", welcome_send_mock)
+    monkeypatch.setattr(desktop_service, "customerio_welcome_email_enabled", lambda: True)
+    monkeypatch.setattr(
+        desktop_service,
+        "async_session_factory",
+        _stub_session_factory(),
+    )
+
+    await desktop_service._send_customerio_welcome_email_once(user)
+
+    claim_mock.assert_awaited_once()
+    welcome_send_mock.assert_not_awaited()
+    clear_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_send_customerio_welcome_email_once_skips_when_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing App API config must NOT burn the dedupe claim; the function
+    should return without touching the DB so a later configured deploy can
+    still send."""
+    user = _make_user("desktop-github@example.com", display_name="Display Name")
+
+    claim_mock = AsyncMock(return_value=True)
+    clear_mock = AsyncMock()
+    welcome_send_mock = AsyncMock(return_value=True)
+    monkeypatch.setattr(desktop_service, "claim_customerio_welcome_send", claim_mock)
+    monkeypatch.setattr(desktop_service, "clear_customerio_welcome_send", clear_mock)
+    monkeypatch.setattr(desktop_service, "send_customerio_welcome_email", welcome_send_mock)
+    monkeypatch.setattr(desktop_service, "customerio_welcome_email_enabled", lambda: False)
+
+    await desktop_service._send_customerio_welcome_email_once(user)
+
+    claim_mock.assert_not_awaited()
+    welcome_send_mock.assert_not_awaited()
+    clear_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_send_customerio_welcome_email_once_clears_claim_on_send_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If send_customerio_welcome_email raises (e.g. cancellation, network),
+    the claim must be cleared so a later auth can retry instead of leaving the
+    user permanently flagged as sent."""
+    user = _make_user("desktop-github@example.com", display_name="Display Name")
+
+    claim_mock = AsyncMock(return_value=True)
+    clear_mock = AsyncMock()
+    welcome_send_mock = AsyncMock(side_effect=RuntimeError("boom"))
+    monkeypatch.setattr(desktop_service, "claim_customerio_welcome_send", claim_mock)
+    monkeypatch.setattr(desktop_service, "clear_customerio_welcome_send", clear_mock)
+    monkeypatch.setattr(desktop_service, "send_customerio_welcome_email", welcome_send_mock)
+    monkeypatch.setattr(desktop_service, "customerio_welcome_email_enabled", lambda: True)
+    monkeypatch.setattr(
+        desktop_service,
+        "async_session_factory",
+        _stub_session_factory(),
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await desktop_service._send_customerio_welcome_email_once(user)
+
+    claim_mock.assert_awaited_once()
+    welcome_send_mock.assert_awaited_once()
+    clear_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_send_customerio_welcome_email_once_clears_claim_on_send_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _make_user("desktop-github@example.com", display_name="Display Name")
+
+    claim_mock = AsyncMock(return_value=True)
+    clear_mock = AsyncMock()
+    welcome_send_mock = AsyncMock(return_value=False)
+    monkeypatch.setattr(desktop_service, "claim_customerio_welcome_send", claim_mock)
+    monkeypatch.setattr(desktop_service, "clear_customerio_welcome_send", clear_mock)
+    monkeypatch.setattr(desktop_service, "send_customerio_welcome_email", welcome_send_mock)
+    monkeypatch.setattr(desktop_service, "customerio_welcome_email_enabled", lambda: True)
+    monkeypatch.setattr(
+        desktop_service,
+        "async_session_factory",
+        _stub_session_factory(),
+    )
+
+    await desktop_service._send_customerio_welcome_email_once(user)
+
+    claim_mock.assert_awaited_once()
+    welcome_send_mock.assert_awaited_once()
+    clear_mock.assert_awaited_once()
+
+
+def _stub_session_factory():
+    """Build a session factory whose sessions are no-op async context managers."""
+
+    class _StubSession:
+        async def __aenter__(self) -> _StubSession:
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def begin(self) -> _StubSession:
+            return self
+
+    def factory() -> _StubSession:
+        return _StubSession()
+
+    return factory

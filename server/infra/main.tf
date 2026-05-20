@@ -105,6 +105,29 @@ variable "cloud_target_sentry_traces_sample_rate" {
   default = "1.0"
 }
 
+variable "customerio_site_id" {
+  sensitive = true
+  default   = ""
+}
+
+variable "customerio_api_key" {
+  sensitive = true
+  default   = ""
+}
+
+variable "customerio_app_api_key" {
+  sensitive = true
+  default   = ""
+}
+
+variable "customerio_from_email" {
+  default = "hello@proliferate.com"
+}
+
+variable "customerio_welcome_transactional_message_id" {
+  default = ""
+}
+
 # ── VPC (use default for now, swap for dedicated VPC later) ──
 
 data "aws_vpc" "default" {
@@ -301,6 +324,11 @@ resource "aws_ecs_task_definition" "server" {
         { name = "CLOUD_TARGET_SENTRY_ENVIRONMENT", value = var.cloud_target_sentry_environment },
         { name = "CLOUD_TARGET_SENTRY_RELEASE", value = var.cloud_target_sentry_release },
         { name = "CLOUD_TARGET_SENTRY_TRACES_SAMPLE_RATE", value = var.cloud_target_sentry_traces_sample_rate },
+        { name = "CUSTOMERIO_SITE_ID", value = var.customerio_site_id },
+        { name = "CUSTOMERIO_API_KEY", value = var.customerio_api_key },
+        { name = "CUSTOMERIO_APP_API_KEY", value = var.customerio_app_api_key },
+        { name = "CUSTOMERIO_FROM_EMAIL", value = var.customerio_from_email },
+        { name = "CUSTOMERIO_WELCOME_TRANSACTIONAL_MESSAGE_ID", value = var.customerio_welcome_transactional_message_id },
       ]
 
       logConfiguration = {
