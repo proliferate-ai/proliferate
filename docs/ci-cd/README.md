@@ -34,6 +34,8 @@ scripts/
   build-agent-seed.mjs
   generate-desktop-installer-manifest.mjs
   generate-updater-manifest.mjs
+vercel.json                  # web app deploy config (Vercel project proliferate-web)
+.vercelignore                # excludes Rust target/, node_modules/, etc. from web upload
 ```
 
 ## 2. Non-Negotiable Rules
@@ -457,3 +459,4 @@ Current boundary:
 | Desktop updater infra and publish permissions | `desktop/infra/main.tf` |
 | Cloud API infra | `server/infra/main.tf` |
 | Self-hosted production deploy | `server/deploy/**` |
+| Hosted web app | Vercel project `proliferate-web` (team `getonyx`), serving `https://web.proliferate.com/`. Build config: `vercel.json` + `.vercelignore` at repo root. PR previews auto-created via Vercel's GitHub integration. |
