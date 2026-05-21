@@ -57,7 +57,7 @@ export function TerminalPanel({
           onNewTerminal={onNewTerminal}
         />
       )}
-      <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-background">
+      <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-sidebar">
         {isLoading ? (
           <TerminalEmptyState label="Loading terminals" />
         ) : errorMessage ? (
