@@ -66,6 +66,184 @@ def _drop_column_once(table_name: str, column_name: str) -> None:
         op.drop_column(table_name, column_name)
 
 
+def _backfill_automation_agent_run_configs() -> None:
+    required_columns = {
+        "id",
+        "owner_user_id",
+        "created_by_user_id",
+        "title",
+        "agent_kind",
+        "model_id",
+        "mode_id",
+        "reasoning_effort",
+        "cloud_agent_run_config_id",
+        "created_at",
+        "updated_at",
+    }
+    if not _has_table("automation") or not _has_table("cloud_agent_run_config"):
+        return
+    if not all(_has_column("automation", column_name) for column_name in required_columns):
+        return
+
+    op.execute(
+        sa.text(
+            """
+            WITH legacy AS (
+              SELECT
+                id AS automation_id,
+                owner_user_id,
+                created_by_user_id,
+                LEFT(
+                  'Legacy automation config: ' || COALESCE(NULLIF(title, ''), id::text),
+                  255
+                ) AS config_name,
+                CASE
+                  WHEN lower(NULLIF(agent_kind, '')) IN (
+                    'claude',
+                    'codex',
+                    'opencode',
+                    'gemini',
+                    'cursor'
+                  )
+                    THEN lower(NULLIF(agent_kind, ''))
+                  ELSE 'claude'
+                END AS normalized_agent_kind,
+                NULLIF(model_id, '') AS legacy_model_id,
+                NULLIF(mode_id, '') AS legacy_mode_id,
+                NULLIF(reasoning_effort, '') AS legacy_reasoning_effort,
+                COALESCE(created_at, now()) AS created_at,
+                COALESCE(updated_at, now()) AS updated_at
+              FROM automation
+              WHERE cloud_agent_run_config_id IS NULL
+            ),
+            legacy_configs AS (
+              SELECT
+                automation_id,
+                gen_random_uuid() AS config_id,
+                owner_user_id,
+                created_by_user_id,
+                config_name,
+                normalized_agent_kind,
+                COALESCE(
+                  legacy_model_id,
+                  CASE normalized_agent_kind
+                    WHEN 'claude' THEN 'us.anthropic.claude-sonnet-4-6'
+                    WHEN 'codex' THEN 'gpt-5.5'
+                    WHEN 'opencode' THEN 'opencode/big-pickle'
+                    WHEN 'gemini' THEN 'auto-gemini-2.5'
+                    WHEN 'cursor' THEN 'composer-2-fast'
+                    ELSE 'us.anthropic.claude-sonnet-4-6'
+                  END
+                ) AS model_id,
+                jsonb_strip_nulls(
+                  jsonb_build_object(
+                    'mode', legacy_mode_id,
+                    'effort', legacy_reasoning_effort
+                  )
+                ) AS control_values_json,
+                created_at,
+                updated_at
+              FROM legacy
+            ),
+            inserted AS (
+              INSERT INTO cloud_agent_run_config (
+                id,
+                owner_scope,
+                owner_user_id,
+                organization_id,
+                created_by_user_id,
+                name,
+                agent_kind,
+                model_id,
+                control_values_json,
+                usable_in_personal_sandboxes,
+                usable_in_shared_sandboxes,
+                seed_key,
+                system_default_rank,
+                status,
+                archived_at,
+                created_at,
+                updated_at
+              )
+              SELECT
+                config_id,
+                'personal',
+                owner_user_id,
+                NULL,
+                created_by_user_id,
+                config_name,
+                normalized_agent_kind,
+                model_id,
+                control_values_json,
+                true,
+                false,
+                NULL,
+                NULL,
+                'active',
+                NULL,
+                created_at,
+                updated_at
+              FROM legacy_configs
+              RETURNING id
+            )
+            UPDATE automation AS automation_row
+            SET cloud_agent_run_config_id = inserted.id
+            FROM legacy_configs
+            JOIN inserted ON inserted.id = legacy_configs.config_id
+            WHERE automation_row.id = legacy_configs.automation_id
+            """
+        )
+    )
+
+
+def _backfill_automation_run_agent_snapshots() -> None:
+    required_columns = {
+        "agent_run_config_snapshot_json",
+        "agent_kind_snapshot",
+        "model_id_snapshot",
+        "mode_id_snapshot",
+        "reasoning_effort_snapshot",
+    }
+    if (
+        not _has_table("automation_run")
+        or not _has_table("automation")
+        or not _has_table("cloud_agent_run_config")
+    ):
+        return
+    if not all(_has_column("automation_run", column_name) for column_name in required_columns):
+        return
+    if not _has_column("automation", "cloud_agent_run_config_id"):
+        return
+
+    op.execute(
+        sa.text(
+            """
+            UPDATE automation_run AS run
+            SET agent_run_config_snapshot_json = jsonb_strip_nulls(
+              jsonb_build_object(
+                'config_id', config.id::text,
+                'config_name', config.name,
+                'agent_kind', COALESCE(NULLIF(run.agent_kind_snapshot, ''), config.agent_kind),
+                'model_id', COALESCE(NULLIF(run.model_id_snapshot, ''), config.model_id),
+                'control_values', jsonb_strip_nulls(
+                  jsonb_build_object(
+                    'mode', NULLIF(run.mode_id_snapshot, ''),
+                    'effort', NULLIF(run.reasoning_effort_snapshot, '')
+                  )
+                ),
+                'owner_scope_at_snapshot', config.owner_scope
+              )
+            )
+            FROM automation
+            JOIN cloud_agent_run_config AS config
+              ON config.id = automation.cloud_agent_run_config_id
+            WHERE run.automation_id = automation.id
+              AND run.agent_run_config_snapshot_json IS NULL
+            """
+        )
+    )
+
+
 def _create_agent_run_config_tables() -> None:
     if not _has_table("cloud_agent_run_config"):
         op.create_table(
@@ -250,6 +428,7 @@ def _upgrade_automation_tables() -> None:
                 """
             )
         )
+        _backfill_automation_agent_run_configs()
         _drop_column_once("automation", "execution_target")
         _drop_column_once("automation", "cloud_target_id")
         _drop_column_once("automation", "cloud_target_kind_snapshot")
@@ -399,6 +578,7 @@ def _upgrade_automation_tables() -> None:
                 """
             )
         )
+        _backfill_automation_run_agent_snapshots()
         _drop_column_once("automation_run", "execution_target")
         _drop_column_once("automation_run", "agent_kind_snapshot")
         _drop_column_once("automation_run", "model_id_snapshot")

@@ -335,8 +335,28 @@ async def get_default_config(
     ]
     if owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL:
         predicates.append(CloudAgentRunConfigDefault.owner_user_id == owner_user_id)
+        predicates.append(
+            or_(
+                CloudAgentRunConfig.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
+                and_(
+                    CloudAgentRunConfig.owner_scope
+                    == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL,
+                    CloudAgentRunConfig.owner_user_id == owner_user_id,
+                ),
+            )
+        )
     else:
         predicates.append(CloudAgentRunConfigDefault.organization_id == organization_id)
+        predicates.append(
+            or_(
+                CloudAgentRunConfig.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
+                and_(
+                    CloudAgentRunConfig.owner_scope
+                    == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
+                    CloudAgentRunConfig.organization_id == organization_id,
+                ),
+            )
+        )
     row = (
         await db.execute(
             select(CloudAgentRunConfig)
