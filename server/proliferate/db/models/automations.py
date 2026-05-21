@@ -5,7 +5,18 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, String, Text, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.db.models.base import Base, utcnow
@@ -15,16 +26,34 @@ class Automation(Base):
     __tablename__ = "automation"
     __table_args__ = (
         CheckConstraint(
-            "execution_target IN ('cloud', 'local')",
-            name="ck_automation_execution_target",
+            "owner_scope IN ('personal', 'organization')",
+            name="ck_automation_owner_scope",
+        ),
+        CheckConstraint(
+            "((owner_scope = 'personal' AND owner_user_id IS NOT NULL "
+            "AND organization_id IS NULL) OR "
+            "(owner_scope = 'organization' AND organization_id IS NOT NULL "
+            "AND owner_user_id IS NULL))",
+            name="ck_automation_owner_fields",
+        ),
+        CheckConstraint(
+            "target_mode IN ('local', 'personal_cloud', 'shared_cloud')",
+            name="ck_automation_target_mode",
+        ),
+        CheckConstraint(
+            "((owner_scope = 'personal' AND target_mode IN ('local', 'personal_cloud')) "
+            "OR (owner_scope = 'organization' AND target_mode = 'shared_cloud'))",
+            name="ck_automation_target_mode_owner",
         ),
         CheckConstraint(
             "length(schedule_timezone) > 0 AND schedule_timezone NOT LIKE '% %'",
             name="ck_automation_schedule_timezone_shape",
         ),
-        Index("ix_automation_user_id", "user_id"),
+        Index("ix_automation_owner_user_id", "owner_user_id"),
+        Index("ix_automation_organization_id", "organization_id"),
+        Index("ix_automation_created_by_user_id", "created_by_user_id"),
         Index("ix_automation_cloud_repo_config_id", "cloud_repo_config_id"),
-        Index("ix_automation_cloud_target_id", "cloud_target_id"),
+        Index("ix_automation_cloud_agent_run_config_id", "cloud_agent_run_config_id"),
         Index(
             "ix_automation_scheduler_due",
             "next_run_at",
@@ -33,7 +62,18 @@ class Automation(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(index=False)
+    owner_scope: Mapped[str] = mapped_column(String(32))
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+    )
     cloud_repo_config_id: Mapped[uuid.UUID] = mapped_column(
         # Repo-config deletes must reject or explicitly clean up automations before deletion.
         ForeignKey("cloud_repo_config.id", ondelete="RESTRICT"),
@@ -45,16 +85,10 @@ class Automation(Base):
     # Trusted invariant: service validates this as an IANA timezone before write.
     schedule_timezone: Mapped[str] = mapped_column(String(64))
     schedule_summary: Mapped[str] = mapped_column(String(255))
-    execution_target: Mapped[str] = mapped_column(String(32))
-    cloud_target_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_targets.id", ondelete="SET NULL"),
-        nullable=True,
+    target_mode: Mapped[str] = mapped_column(String(32))
+    cloud_agent_run_config_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_agent_run_config.id", ondelete="RESTRICT"),
     )
-    cloud_target_kind_snapshot: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    agent_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    model_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    mode_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    reasoning_effort: Mapped[str | None] = mapped_column(String(64), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -78,8 +112,19 @@ class AutomationRun(Base):
             name="ck_automation_run_trigger_kind",
         ),
         CheckConstraint(
-            "execution_target IN ('cloud', 'local')",
-            name="ck_automation_run_execution_target",
+            "owner_scope IN ('personal', 'organization')",
+            name="ck_automation_run_owner_scope",
+        ),
+        CheckConstraint(
+            "((owner_scope = 'personal' AND owner_user_id IS NOT NULL "
+            "AND organization_id IS NULL) OR "
+            "(owner_scope = 'organization' AND organization_id IS NOT NULL "
+            "AND owner_user_id IS NULL))",
+            name="ck_automation_run_owner_fields",
+        ),
+        CheckConstraint(
+            "target_mode IN ('local', 'personal_cloud', 'shared_cloud')",
+            name="ck_automation_run_target_mode",
         ),
         CheckConstraint(
             "status IN ("
@@ -103,7 +148,9 @@ class AutomationRun(Base):
             ")",
             name="ck_automation_run_trigger_scheduled_for",
         ),
-        Index("ix_automation_run_user_id", "user_id"),
+        Index("ix_automation_run_owner_user_id", "owner_user_id"),
+        Index("ix_automation_run_organization_id", "organization_id"),
+        Index("ix_automation_run_created_by_user_id", "created_by_user_id"),
         Index(
             "ix_automation_run_automation_created",
             "automation_id",
@@ -120,7 +167,7 @@ class AutomationRun(Base):
             "ix_automation_run_cloud_claimable",
             "created_at",
             postgresql_where=text(
-                "execution_target = 'cloud' "
+                "target_mode IN ('personal_cloud', 'shared_cloud') "
                 "AND status IN ("
                 "'queued', "
                 "'claimed', "
@@ -134,7 +181,7 @@ class AutomationRun(Base):
             "ix_automation_run_cloud_claim_expiry",
             "claim_expires_at",
             postgresql_where=text(
-                "execution_target = 'cloud' "
+                "target_mode IN ('personal_cloud', 'shared_cloud') "
                 "AND status IN ("
                 "'claimed', "
                 "'creating_workspace', "
@@ -147,13 +194,13 @@ class AutomationRun(Base):
         ),
         Index(
             "ix_automation_run_local_claimable",
-            "user_id",
+            "owner_user_id",
             "git_provider_snapshot",
             "git_owner_snapshot",
             "git_repo_name_snapshot",
             "created_at",
             postgresql_where=text(
-                "execution_target = 'local' "
+                "target_mode = 'local' "
                 "AND status IN ("
                 "'queued', "
                 "'claimed', "
@@ -167,7 +214,7 @@ class AutomationRun(Base):
             "ix_automation_run_local_claim_expiry",
             "claim_expires_at",
             postgresql_where=text(
-                "execution_target = 'local' "
+                "target_mode = 'local' "
                 "AND status IN ("
                 "'claimed', "
                 "'creating_workspace', "
@@ -185,16 +232,29 @@ class AutomationRun(Base):
         ),
         Index("ix_automation_run_cloud_workspace_id", "cloud_workspace_id"),
         Index("ix_automation_run_cloud_target_id_snapshot", "cloud_target_id_snapshot"),
+        Index("ix_automation_run_sandbox_profile_id", "sandbox_profile_id"),
+        Index("ix_automation_run_cloud_workspace_exposure_id", "cloud_workspace_exposure_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     automation_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("automation.id", ondelete="CASCADE"),
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(index=False)
+    owner_scope: Mapped[str] = mapped_column(String(32))
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+    )
     trigger_kind: Mapped[str] = mapped_column(String(32))
     scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    execution_target: Mapped[str] = mapped_column(String(32))
+    target_mode: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32))
     title_snapshot: Mapped[str] = mapped_column(String(255))
     prompt_snapshot: Mapped[str] = mapped_column(Text)
@@ -209,10 +269,21 @@ class AutomationRun(Base):
         nullable=True,
     )
     cloud_target_kind_snapshot: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    agent_kind_snapshot: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    model_id_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    mode_id_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    reasoning_effort_snapshot: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sandbox_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("sandbox_profile.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    cloud_workspace_exposure_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_workspace_exposure.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    agent_run_config_snapshot_json: Mapped[dict[str, object] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+    cascade_attempt: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    last_cascade_command_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    last_cascade_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     executor_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
     executor_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     claim_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)

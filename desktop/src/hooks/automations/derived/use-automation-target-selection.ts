@@ -11,7 +11,12 @@ import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
 const EMPTY_REPO_CONFIGS: CloudRepoConfigSummary[] = [];
 
 interface UseAutomationTargetSelectionInput {
-  automation: AutomationTargetSelection | null;
+  automation: {
+    executionTarget?: AutomationTargetSelection["executionTarget"];
+    targetMode?: "local" | "personal_cloud" | "shared_cloud";
+    gitOwner: string;
+    gitRepoName: string;
+  } | null;
   selectedTarget: AutomationTargetSelection | null;
   enabled?: boolean;
 }
@@ -34,7 +39,8 @@ export function useAutomationTargetSelection({
     selectedTarget,
     savedTarget: automation
       ? {
-        executionTarget: automation.executionTarget,
+        executionTarget: automation.executionTarget
+          ?? (automation.targetMode === "local" ? "local" : "cloud"),
         gitOwner: automation.gitOwner,
         gitRepoName: automation.gitRepoName,
       }
@@ -47,6 +53,7 @@ export function useAutomationTargetSelection({
       : null,
   }), [
     automation?.executionTarget,
+    automation?.targetMode,
     automation?.gitOwner,
     automation?.gitRepoName,
     cloudWorkspaces,

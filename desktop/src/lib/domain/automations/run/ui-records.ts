@@ -1,4 +1,5 @@
 import type { AutomationExecutionTarget } from "@/lib/domain/automations/target/records";
+import type { AutomationOwnerScope, AutomationTargetMode } from "@/lib/access/cloud/client";
 
 export type { AutomationExecutionTarget };
 
@@ -19,11 +20,17 @@ export interface AutomationRecord {
   title: string;
   prompt: string;
   schedule: AutomationScheduleRecord;
-  executionTarget: AutomationExecutionTarget;
-  agentKind: string | null;
-  modelId: string | null;
-  modeId: string | null;
-  reasoningEffort: string | null;
+  ownerScope: AutomationOwnerScope;
+  ownerUserId: string | null;
+  organizationId: string | null;
+  createdByUserId: string;
+  targetMode: AutomationTargetMode;
+  cloudAgentRunConfigId: string;
+  executionTarget?: AutomationExecutionTarget;
+  agentKind?: string | null;
+  modelId?: string | null;
+  modeId?: string | null;
+  reasoningEffort?: string | null;
   enabled: boolean;
   pausedAt: string | null;
   lastScheduledAt: string | null;
@@ -36,9 +43,12 @@ export interface AutomationRunRecord {
   automationId: string;
   triggerKind: "scheduled" | "manual";
   scheduledFor: string | null;
-  executionTarget: AutomationExecutionTarget;
-  targetIdSnapshot: string | null;
-  targetKindSnapshot: string | null;
+  targetMode: AutomationTargetMode;
+  cloudTargetIdSnapshot: string | null;
+  cloudTargetKindSnapshot: string | null;
+  targetIdSnapshot?: string | null;
+  targetKindSnapshot?: string | null;
+  executionTarget?: AutomationExecutionTarget;
   status:
     | "queued"
     | "claimed"
@@ -50,10 +60,11 @@ export interface AutomationRunRecord {
     | "failed"
     | "cancelled";
   titleSnapshot: string;
-  agentKindSnapshot: string | null;
-  modelIdSnapshot: string | null;
-  modeIdSnapshot: string | null;
-  reasoningEffortSnapshot: string | null;
+  agentRunConfigSnapshot: Record<string, unknown> | null;
+  agentKindSnapshot?: string | null;
+  modelIdSnapshot?: string | null;
+  modeIdSnapshot?: string | null;
+  reasoningEffortSnapshot?: string | null;
   claimExpiresAt: string | null;
   dispatchStartedAt: string | null;
   dispatchedAt: string | null;
@@ -74,11 +85,10 @@ export interface CreateAutomationInput {
   gitOwner: string;
   gitRepoName: string;
   schedule: AutomationScheduleInput;
-  executionTarget: AutomationExecutionTarget;
-  agentKind?: string | null;
-  modelId?: string | null;
-  modeId?: string | null;
-  reasoningEffort?: string | null;
+  ownerScope?: AutomationOwnerScope;
+  organizationId?: string | null;
+  targetMode: AutomationTargetMode;
+  cloudAgentRunConfigId: string;
 }
 
 export interface UpdateAutomationInput {
@@ -87,9 +97,6 @@ export interface UpdateAutomationInput {
   gitOwner?: string | null;
   gitRepoName?: string | null;
   schedule?: AutomationScheduleInput | null;
-  executionTarget?: AutomationExecutionTarget | null;
-  agentKind?: string | null;
-  modelId?: string | null;
-  modeId?: string | null;
-  reasoningEffort?: string | null;
+  targetMode?: AutomationTargetMode | null;
+  cloudAgentRunConfigId?: string | null;
 }

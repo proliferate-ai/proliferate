@@ -1,6 +1,7 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   AutomationListResponse,
+  AutomationOwnerScope,
   AutomationResponse,
   AutomationRunListResponse,
   AutomationRunResponse,
@@ -15,65 +16,92 @@ import type {
   UpdateAutomationRequest,
 } from "../types/index.js";
 
+export interface ListAutomationsOptions {
+  ownerScope?: AutomationOwnerScope;
+  organizationId?: string | null;
+}
+
 export async function listAutomations(
-  client: ProliferateCloudClient = getProliferateClient(),
+  client?: ProliferateCloudClient,
+): Promise<AutomationListResponse>;
+export async function listAutomations(
+  options?: ListAutomationsOptions,
+  client?: ProliferateCloudClient,
+): Promise<AutomationListResponse>;
+export async function listAutomations(
+  optionsOrClient: ListAutomationsOptions | ProliferateCloudClient = {},
+  maybeClient?: ProliferateCloudClient,
 ): Promise<AutomationListResponse> {
-  return (await client.GET("/v1/automations")).data!;
+  const { options, client } = resolveListArgs(optionsOrClient, maybeClient);
+  return client.requestJson<AutomationListResponse>({
+    method: "GET",
+    path: "/v1/automations",
+    query: {
+      ownerScope: options.ownerScope,
+      organizationId: options.organizationId,
+    },
+  });
 }
 
 export async function createAutomation(
   body: CreateAutomationRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AutomationResponse> {
-  return (await getProliferateClient().POST("/v1/automations", { body })).data!;
+  return client.requestJson<AutomationResponse>({
+    method: "POST",
+    path: "/v1/automations",
+    body,
+  });
 }
 
 export async function getAutomation(
   automationId: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AutomationResponse> {
-  return (
-    await client.GET("/v1/automations/{automation_id}", {
-      params: { path: { automation_id: automationId } },
-    })
-  ).data!;
+  return client.requestJson<AutomationResponse>({
+    method: "GET",
+    path: "/v1/automations/{automation_id}",
+    pathParams: { automation_id: automationId },
+  });
 }
 
 export async function updateAutomation(
   automationId: string,
   body: UpdateAutomationRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AutomationResponse> {
-  return (
-    await getProliferateClient().PATCH("/v1/automations/{automation_id}", {
-      params: { path: { automation_id: automationId } },
-      body,
-    })
-  ).data!;
+  return client.requestJson<AutomationResponse>({
+    method: "PATCH",
+    path: "/v1/automations/{automation_id}",
+    pathParams: { automation_id: automationId },
+    body,
+  });
 }
 
 export async function pauseAutomation(automationId: string): Promise<AutomationResponse> {
-  return (
-    await getProliferateClient().POST("/v1/automations/{automation_id}/pause", {
-      params: { path: { automation_id: automationId } },
-    })
-  ).data!;
+  return getProliferateClient().requestJson<AutomationResponse>({
+    method: "POST",
+    path: "/v1/automations/{automation_id}/pause",
+    pathParams: { automation_id: automationId },
+  });
 }
 
 export async function resumeAutomation(automationId: string): Promise<AutomationResponse> {
-  return (
-    await getProliferateClient().POST("/v1/automations/{automation_id}/resume", {
-      params: { path: { automation_id: automationId } },
-    })
-  ).data!;
+  return getProliferateClient().requestJson<AutomationResponse>({
+    method: "POST",
+    path: "/v1/automations/{automation_id}/resume",
+    pathParams: { automation_id: automationId },
+  });
 }
 
 export async function runAutomationNow(
   automationId: string,
 ): Promise<AutomationRunResponse> {
-  return (
-    await getProliferateClient().POST("/v1/automations/{automation_id}/run-now", {
-      params: { path: { automation_id: automationId } },
-    })
-  ).data!;
+  return getProliferateClient().requestJson<AutomationRunResponse>({
+    method: "POST",
+    path: "/v1/automations/{automation_id}/run-now",
+    pathParams: { automation_id: automationId },
+  });
 }
 
 export async function listAutomationRuns(
@@ -81,125 +109,153 @@ export async function listAutomationRuns(
   limit = 50,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AutomationRunListResponse> {
-  return (
-    await client.GET("/v1/automations/{automation_id}/runs", {
-      params: { path: { automation_id: automationId }, query: { limit } },
-    })
-  ).data!;
+  return client.requestJson<AutomationRunListResponse>({
+    method: "GET",
+    path: "/v1/automations/{automation_id}/runs",
+    pathParams: { automation_id: automationId },
+    query: { limit },
+  });
 }
 
 export async function claimLocalAutomationRuns(
   body: LocalAutomationClaimRequest,
 ): Promise<LocalAutomationClaimListResponse> {
-  return (
-    await getProliferateClient().POST("/v1/automations/executor/local/claims", { body })
-  ).data!;
+  return getProliferateClient().requestJson<LocalAutomationClaimListResponse>({
+    method: "POST",
+    path: "/v1/automations/executor/local/claims",
+    body,
+  });
 }
 
 export async function heartbeatLocalAutomationRun(
   runId: string,
   body: LocalAutomationClaimActionRequest,
 ): Promise<LocalAutomationMutationResponse> {
-  return (
-    await getProliferateClient().POST(
-      "/v1/automations/executor/local/runs/{run_id}/heartbeat",
-      { params: { path: { run_id: runId } }, body },
-    )
-  ).data!;
+  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+    method: "POST",
+    path: "/v1/automations/executor/local/runs/{run_id}/heartbeat",
+    pathParams: { run_id: runId },
+    body,
+  });
 }
 
 export async function markLocalAutomationRunCreatingWorkspace(
   runId: string,
   body: LocalAutomationClaimActionRequest,
 ): Promise<LocalAutomationMutationResponse> {
-  return (
-    await getProliferateClient().POST(
-      "/v1/automations/executor/local/runs/{run_id}/creating-workspace",
-      { params: { path: { run_id: runId } }, body },
-    )
-  ).data!;
+  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+    method: "POST",
+    path: "/v1/automations/executor/local/runs/{run_id}/creating-workspace",
+    pathParams: { run_id: runId },
+    body,
+  });
 }
 
 export async function attachLocalAutomationRunWorkspace(
   runId: string,
   body: LocalAutomationAttachWorkspaceRequest,
 ): Promise<LocalAutomationMutationResponse> {
-  return (
-    await getProliferateClient().POST(
-      "/v1/automations/executor/local/runs/{run_id}/attach-workspace",
-      { params: { path: { run_id: runId } }, body },
-    )
-  ).data!;
+  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+    method: "POST",
+    path: "/v1/automations/executor/local/runs/{run_id}/attach-workspace",
+    pathParams: { run_id: runId },
+    body,
+  });
 }
 
 export async function markLocalAutomationRunProvisioningWorkspace(
   runId: string,
   body: LocalAutomationClaimActionRequest,
 ): Promise<LocalAutomationMutationResponse> {
-  return (
-    await getProliferateClient().POST(
-      "/v1/automations/executor/local/runs/{run_id}/provisioning-workspace",
-      { params: { path: { run_id: runId } }, body },
-    )
-  ).data!;
+  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+    method: "POST",
+    path: "/v1/automations/executor/local/runs/{run_id}/provisioning-workspace",
+    pathParams: { run_id: runId },
+    body,
+  });
 }
 
 export async function markLocalAutomationRunCreatingSession(
   runId: string,
   body: LocalAutomationAttachWorkspaceRequest,
 ): Promise<LocalAutomationMutationResponse> {
-  return (
-    await getProliferateClient().POST(
-      "/v1/automations/executor/local/runs/{run_id}/creating-session",
-      { params: { path: { run_id: runId } }, body },
-    )
-  ).data!;
+  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+    method: "POST",
+    path: "/v1/automations/executor/local/runs/{run_id}/creating-session",
+    pathParams: { run_id: runId },
+    body,
+  });
 }
 
 export async function attachLocalAutomationRunSession(
   runId: string,
   body: LocalAutomationAttachSessionRequest,
 ): Promise<LocalAutomationMutationResponse> {
-  return (
-    await getProliferateClient().POST(
-      "/v1/automations/executor/local/runs/{run_id}/attach-session",
-      { params: { path: { run_id: runId } }, body },
-    )
-  ).data!;
+  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+    method: "POST",
+    path: "/v1/automations/executor/local/runs/{run_id}/attach-session",
+    pathParams: { run_id: runId },
+    body,
+  });
 }
 
 export async function markLocalAutomationRunDispatching(
   runId: string,
   body: LocalAutomationClaimActionRequest,
 ): Promise<LocalAutomationMutationResponse> {
-  return (
-    await getProliferateClient().POST(
-      "/v1/automations/executor/local/runs/{run_id}/dispatching",
-      { params: { path: { run_id: runId } }, body },
-    )
-  ).data!;
+  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+    method: "POST",
+    path: "/v1/automations/executor/local/runs/{run_id}/dispatching",
+    pathParams: { run_id: runId },
+    body,
+  });
 }
 
 export async function markLocalAutomationRunDispatched(
   runId: string,
   body: LocalAutomationAttachSessionRequest,
 ): Promise<LocalAutomationMutationResponse> {
-  return (
-    await getProliferateClient().POST(
-      "/v1/automations/executor/local/runs/{run_id}/dispatched",
-      { params: { path: { run_id: runId } }, body },
-    )
-  ).data!;
+  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+    method: "POST",
+    path: "/v1/automations/executor/local/runs/{run_id}/dispatched",
+    pathParams: { run_id: runId },
+    body,
+  });
 }
 
 export async function markLocalAutomationRunFailed(
   runId: string,
   body: LocalAutomationFailRequest,
 ): Promise<LocalAutomationMutationResponse> {
-  return (
-    await getProliferateClient().POST(
-      "/v1/automations/executor/local/runs/{run_id}/failed",
-      { params: { path: { run_id: runId } }, body },
-    )
-  ).data!;
+  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+    method: "POST",
+    path: "/v1/automations/executor/local/runs/{run_id}/failed",
+    pathParams: { run_id: runId },
+    body,
+  });
+}
+
+function resolveListArgs(
+  optionsOrClient: ListAutomationsOptions | ProliferateCloudClient,
+  maybeClient?: ProliferateCloudClient,
+): {
+  options: ListAutomationsOptions;
+  client: ProliferateCloudClient;
+} {
+  if (isProliferateCloudClient(optionsOrClient)) {
+    return { options: {}, client: optionsOrClient };
+  }
+  return {
+    options: optionsOrClient,
+    client: maybeClient ?? getProliferateClient(),
+  };
+}
+
+function isProliferateCloudClient(value: unknown): value is ProliferateCloudClient {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && "requestJson" in value
+    && "buildUrl" in value,
+  );
 }

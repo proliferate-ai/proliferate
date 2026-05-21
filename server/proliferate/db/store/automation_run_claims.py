@@ -18,6 +18,9 @@ from proliferate.constants.automations import (
     AUTOMATION_RUN_STATUS_CLAIMED,
     AUTOMATION_RUN_STATUS_FAILED,
     AUTOMATION_RUN_STATUS_QUEUED,
+    AUTOMATION_TARGET_MODE_LOCAL,
+    AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+    AUTOMATION_TARGET_MODE_SHARED_CLOUD,
 )
 from proliferate.db import engine as db_engine
 from proliferate.db.models.automations import AutomationRun
@@ -68,15 +71,22 @@ async def load_claimed_run_for_update(
     claim_is_active: ClaimActivePredicate,
     user_id: UUID | None = None,
 ) -> AutomationRun | None:
+    target_mode_predicate = (
+        AutomationRun.target_mode == AUTOMATION_TARGET_MODE_LOCAL
+        if execution_target == AUTOMATION_EXECUTION_TARGET_LOCAL
+        else AutomationRun.target_mode.in_(
+            [AUTOMATION_TARGET_MODE_PERSONAL_CLOUD, AUTOMATION_TARGET_MODE_SHARED_CLOUD]
+        )
+    )
     predicates = [
         AutomationRun.id == run_id,
         AutomationRun.claim_id == claim_id,
-        AutomationRun.execution_target == execution_target,
+        target_mode_predicate,
         AutomationRun.executor_kind == executor_kind,
         AutomationRun.status.in_(allowed_statuses),
     ]
     if user_id is not None:
-        predicates.append(AutomationRun.user_id == user_id)
+        predicates.append(AutomationRun.owner_user_id == user_id)
 
     run = (
         await db.execute(select(AutomationRun).where(*predicates).with_for_update())
@@ -187,7 +197,13 @@ async def _claim_automation_runs(
     repo_identities: list[tuple[str, str, str]] | None,
 ) -> list[AutomationRunClaimValue]:
     predicates = [
-        AutomationRun.execution_target == execution_target,
+        (
+            AutomationRun.target_mode == AUTOMATION_TARGET_MODE_LOCAL
+            if execution_target == AUTOMATION_EXECUTION_TARGET_LOCAL
+            else AutomationRun.target_mode.in_(
+                [AUTOMATION_TARGET_MODE_PERSONAL_CLOUD, AUTOMATION_TARGET_MODE_SHARED_CLOUD]
+            )
+        ),
         or_(
             AutomationRun.status == AUTOMATION_RUN_STATUS_QUEUED,
             (
@@ -198,7 +214,7 @@ async def _claim_automation_runs(
         ),
     ]
     if user_id is not None:
-        predicates.append(AutomationRun.user_id == user_id)
+        predicates.append(AutomationRun.owner_user_id == user_id)
     if repo_identities is not None:
         predicates.append(
             or_(
@@ -229,7 +245,7 @@ async def _claim_automation_runs(
     expires_at = now + claim_ttl
     values: list[AutomationRunClaimValue] = []
     for run in rows:
-        if run.agent_kind_snapshot is None:
+        if run.agent_run_config_snapshot_json is None:
             _fail_unconfigured_agent(run, now, unconfigured_agent_failure)
             continue
         run.status = AUTOMATION_RUN_STATUS_CLAIMED

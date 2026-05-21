@@ -116,8 +116,10 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     if (!run.anyharnessWorkspaceId) {
       return;
     }
-    const workspaceId = run.targetKindSnapshot === "ssh" && run.targetIdSnapshot
-      ? targetWorkspaceSyntheticId(run.targetIdSnapshot, run.anyharnessWorkspaceId)
+    const targetKind = run.targetKindSnapshot ?? run.cloudTargetKindSnapshot;
+    const targetId = run.targetIdSnapshot ?? run.cloudTargetIdSnapshot;
+    const workspaceId = targetKind === "ssh" && targetId
+      ? targetWorkspaceSyntheticId(targetId, run.anyharnessWorkspaceId)
       : run.anyharnessWorkspaceId;
     try {
       await refetchWorkspaces();
