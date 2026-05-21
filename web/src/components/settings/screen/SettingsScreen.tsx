@@ -1,7 +1,7 @@
-import { Apple, Cloud, Github, LifeBuoy, Monitor, ShieldCheck } from "lucide-react";
+import { Apple, Cloud, CreditCard, Github, LifeBuoy, Monitor, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
-import type { AuthProviderName } from "@proliferate/cloud-sdk";
+import type { AuthProviderName, BillingPlanInfo, CloudOwnerSelection } from "@proliferate/cloud-sdk";
 import type {
   AccountProviderView,
   AccountSettingsPaneProps,
@@ -12,12 +12,17 @@ import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
 import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsShell } from "@proliferate/product-ui/settings/SettingsShell";
-import { useAuthViewer } from "@proliferate/cloud-sdk-react";
+import {
+  useAuthViewer,
+  useCloudBilling,
+  useCloudBillingActions,
+  useOrganizations,
+} from "@proliferate/cloud-sdk-react";
 
 import { startWebAuthFlow } from "../../../lib/access/cloud/auth/web-auth-flow";
 import { useAuthToken } from "../../../providers/WebCloudProvider";
 
-type SettingsSectionId = "account" | "appearance" | "cloud" | "support";
+type SettingsSectionId = "account" | "appearance" | "cloud" | "billing" | "support";
 
 export function SettingsScreen() {
   const viewer = useAuthViewer();
@@ -76,6 +81,11 @@ export function SettingsScreen() {
                 icon: <Cloud size={15} />,
               },
               {
+                id: "billing",
+                label: "Billing",
+                icon: <CreditCard size={15} />,
+              },
+              {
                 id: "support",
                 label: "Support",
                 icon: <LifeBuoy size={15} />,
@@ -97,6 +107,8 @@ export function SettingsScreen() {
               signOut: () => void signOut(),
             })}
           />
+        ) : activeSection === "billing" ? (
+          <BillingSection />
         ) : (
           <PlaceholderSection id={activeSection} />
         )}
@@ -117,7 +129,195 @@ function AccountSection({ props }: { props: AccountSettingsPaneProps }) {
   );
 }
 
-function PlaceholderSection({ id }: { id: Exclude<SettingsSectionId, "account"> }) {
+function BillingSection() {
+  const organizations = useOrganizations();
+  const adminOrganizations = (organizations.data?.organizations ?? []).filter((organization) => {
+    const role = organization.membership?.role;
+    return organization.membership?.status === "active" && (role === "owner" || role === "admin");
+  });
+
+  return (
+    <section className="space-y-6">
+      <SettingsPageHeader
+        title="Billing"
+        description="Manage cloud access, included runtime, and billing status."
+      />
+      <BillingOwnerCard title="Personal billing" />
+      {organizations.isLoading ? (
+        <SettingsCard>
+          <SettingsCardRow label="Organization billing" description="Loading organizations..." />
+        </SettingsCard>
+      ) : null}
+      {adminOrganizations.map((organization) => (
+        <BillingOwnerCard
+          key={organization.id}
+          title={`${organization.name} billing`}
+          owner={{ ownerScope: "organization", organizationId: organization.id }}
+        />
+      ))}
+    </section>
+  );
+}
+
+function BillingOwnerCard({
+  title,
+  owner,
+}: {
+  title: string;
+  owner?: CloudOwnerSelection;
+}) {
+  const billing = useCloudBilling(owner);
+  const billingActions = useCloudBillingActions(owner);
+  const billingPlan = billing.data;
+  const busy = billingActions.creatingBillingPortal || billingActions.creatingCloudCheckout;
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  async function openBillingAction(action: "checkout" | "portal") {
+    setActionError(null);
+    try {
+      const response = action === "portal"
+        ? await billingActions.createBillingPortal()
+        : await billingActions.createCloudCheckout();
+      window.location.assign(response.url);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Billing action could not start.");
+    }
+  }
+
+  return (
+    <SettingsCard>
+      {billing.isLoading && !billingPlan ? (
+        <SettingsCardRow label={title} description="Loading billing state..." />
+      ) : null}
+      {billing.isError ? (
+        <SettingsCardRow
+          label={title}
+          description="Billing details could not be loaded."
+        >
+          <ActionButton onClick={() => void billing.refetch()}>Retry</ActionButton>
+        </SettingsCardRow>
+      ) : null}
+      {actionError ? (
+        <SettingsCardRow label="Billing action failed" description={actionError} />
+      ) : null}
+      {billingPlan ? (
+        <>
+          <SettingsCardRow
+            label={`${title}: ${planLabel(billingPlan)}`}
+            description={billingDescription(billingPlan)}
+          >
+            {billingPlan.isPaidCloud ? (
+              <ActionButton
+                disabled={busy}
+                onClick={() => void openBillingAction("portal")}
+              >
+                Manage
+              </ActionButton>
+            ) : (
+              <ActionButton
+                disabled={busy}
+                onClick={() => void openBillingAction("checkout")}
+              >
+                Upgrade
+              </ActionButton>
+            )}
+          </SettingsCardRow>
+          <SettingsCardRow
+            label="Cloud runtime"
+            description={`${formatHours(runtimeRemainingHours(billingPlan))} remaining · ${
+              billingPlan.activeSandboxCount
+            } active`}
+          />
+          {billingPlan.billingMode === "enforce" && billingPlan.startBlocked ? (
+            <SettingsCardRow
+              label="Cloud is paused"
+              description={startBlockLabel(billingPlan.startBlockReason)}
+            />
+          ) : null}
+        </>
+      ) : null}
+    </SettingsCard>
+  );
+}
+
+function ActionButton({
+  children,
+  disabled,
+  onClick,
+}: {
+  children: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="rounded-md border border-border-light bg-surface px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-border-heavy disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+function planLabel(plan: BillingPlanInfo): string {
+  if (plan.isUnlimited) {
+    return "Unlimited";
+  }
+  if (plan.isPaidCloud) {
+    return "Pro";
+  }
+  return "Free";
+}
+
+function billingDescription(plan: BillingPlanInfo): string {
+  if (plan.billingMode === "enforce" && plan.startBlocked) {
+    return startBlockLabel(plan.startBlockReason);
+  }
+  if (plan.isPaidCloud) {
+    return "Personal cloud billing is active.";
+  }
+  return "Upgrade when you need more included cloud runtime.";
+}
+
+function runtimeRemainingHours(plan: BillingPlanInfo): number | null {
+  return (
+    plan.proBillingEnabled && plan.isPaidCloud
+      ? plan.remainingManagedCloudHours
+      : plan.remainingSandboxHours
+  ) ?? null;
+}
+
+function formatHours(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "Unlimited";
+  }
+  return `${Math.max(value, 0).toFixed(value < 10 ? 1 : 0)}h`;
+}
+
+function startBlockLabel(reason: string | null | undefined): string {
+  switch (reason) {
+    case "credits_exhausted":
+      return "Included cloud runtime has been used.";
+    case "overage_disabled":
+      return "Overage billing is off.";
+    case "cap_exhausted":
+      return "The overage cap has been reached.";
+    case "payment_failed":
+      return "Payment needs attention.";
+    case "concurrency_limit":
+      return "The active sandbox limit has been reached.";
+    default:
+      return "Cloud usage is blocked until billing is resolved.";
+  }
+}
+
+function PlaceholderSection({
+  id,
+}: {
+  id: Exclude<SettingsSectionId, "account" | "billing">;
+}) {
   const copy = {
     appearance: {
       title: "Appearance",

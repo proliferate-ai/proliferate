@@ -30,6 +30,8 @@ from proliferate.constants.billing import (
     BILLING_USAGE_EXPORT_STATUS_SENDING,
     BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
     BILLING_USAGE_EXPORT_STATUS_WRITTEN_OFF,
+    FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL,
+    FREE_CLOUD_ALLOCATION_PERIOD_V2,
     FREE_INCLUDED_GRANT_TYPE,
     FREE_TRIAL_V2_GRANT_TYPE,
     PRO_FREE_TRIAL_HOURS,
@@ -37,6 +39,7 @@ from proliferate.constants.billing import (
 )
 from proliferate.constants.organizations import ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
 from proliferate.db import engine as db_engine
+from proliferate.db.models.auth import AuthIdentity
 from proliferate.db.models.billing import (
     BillingDecisionEvent,
     BillingEntitlement,
@@ -49,6 +52,7 @@ from proliferate.db.models.billing import (
     BillingSubscription,
     BillingUsageCursor,
     BillingUsageExport,
+    FreeCloudAllocation,
     UsageSegment,
     WebhookEventReceipt,
 )
@@ -252,6 +256,15 @@ async def ensure_free_included_grant(db: AsyncSession, user_id: UUID) -> bool:
 async def ensure_free_trial_v2_grant(db: AsyncSession, subject: BillingSubject) -> bool:
     if subject.kind != BILLING_SUBJECT_KIND_PERSONAL or subject.user_id is None:
         return False
+    github_provider_user_id = await _linked_github_provider_user_id(db, subject.user_id)
+    if github_provider_user_id is None:
+        return False
+    if not await _ensure_free_trial_allocation(
+        db,
+        subject=subject,
+        github_provider_user_id=github_provider_user_id,
+    ):
+        return False
     now = utcnow()
     used_seconds = await sum_all_time_billable_usage_seconds(db, subject.id, now=now)
     remaining_seconds = max(PRO_FREE_TRIAL_HOURS * 3600.0 - used_seconds, 0.0)
@@ -285,8 +298,94 @@ async def ensure_free_trial_v2_grant(db: AsyncSession, subject: BillingSubject) 
             updated_at=now,
         )
         .on_conflict_do_nothing(index_elements=[BillingGrant.source_ref])
+        .returning(BillingGrant.id)
     )
-    return (result.rowcount or 0) > 0
+    grant_id = result.scalar_one_or_none()
+    if grant_id is not None:
+        allocation = await _load_free_trial_allocation_for_subject(db, subject)
+        if allocation is not None and allocation.issued_billing_grant_id is None:
+            allocation.issued_billing_grant_id = grant_id
+            allocation.updated_at = now
+            await db.flush()
+        return True
+    return False
+
+
+async def _linked_github_provider_user_id(db: AsyncSession, user_id: UUID) -> str | None:
+    return await db.scalar(
+        select(AuthIdentity.provider_subject)
+        .where(
+            AuthIdentity.user_id == user_id,
+            AuthIdentity.provider == "github",
+        )
+        .order_by(AuthIdentity.linked_at.desc(), AuthIdentity.created_at.desc())
+        .limit(1)
+    )
+
+
+async def _load_free_trial_allocation_for_subject(
+    db: AsyncSession,
+    subject: BillingSubject,
+) -> FreeCloudAllocation | None:
+    return (
+        await db.execute(
+            select(FreeCloudAllocation)
+            .where(
+                FreeCloudAllocation.billing_subject_id == subject.id,
+                FreeCloudAllocation.allocation_kind == FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL,
+                FreeCloudAllocation.period_key == FREE_CLOUD_ALLOCATION_PERIOD_V2,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+
+
+async def _ensure_free_trial_allocation(
+    db: AsyncSession,
+    *,
+    subject: BillingSubject,
+    github_provider_user_id: str,
+) -> bool:
+    if subject.user_id is None:
+        return False
+    now = utcnow()
+    result = await db.execute(
+        pg_insert(FreeCloudAllocation)
+        .values(
+            allocation_kind=FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL,
+            github_provider_user_id=github_provider_user_id,
+            billing_subject_id=subject.id,
+            user_id=subject.user_id,
+            issued_billing_grant_id=None,
+            period_key=FREE_CLOUD_ALLOCATION_PERIOD_V2,
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(
+            index_elements=[
+                FreeCloudAllocation.allocation_kind,
+                FreeCloudAllocation.github_provider_user_id,
+                FreeCloudAllocation.period_key,
+            ]
+        )
+        .returning(FreeCloudAllocation.id)
+    )
+    created_id = result.scalar_one_or_none()
+    if created_id is not None:
+        return True
+    existing = (
+        await db.execute(
+            select(FreeCloudAllocation)
+            .where(
+                FreeCloudAllocation.allocation_kind == FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL,
+                FreeCloudAllocation.github_provider_user_id == github_provider_user_id,
+                FreeCloudAllocation.period_key == FREE_CLOUD_ALLOCATION_PERIOD_V2,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    return existing is not None and existing.billing_subject_id == subject.id
 
 
 async def list_cloud_sandboxes_for_subject(

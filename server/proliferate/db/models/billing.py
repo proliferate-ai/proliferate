@@ -159,6 +159,39 @@ class BillingGrant(Base):
     )
 
 
+class FreeCloudAllocation(Base):
+    __tablename__ = "free_cloud_allocation"
+    __table_args__ = (
+        UniqueConstraint(
+            "allocation_kind",
+            "github_provider_user_id",
+            "period_key",
+            name="uq_free_cloud_allocation_github_period",
+        ),
+        UniqueConstraint(
+            "issued_billing_grant_id",
+            name="uq_free_cloud_allocation_billing_grant",
+        ),
+        Index("ix_free_cloud_allocation_billing_subject_id", "billing_subject_id"),
+        Index("ix_free_cloud_allocation_user_id", "user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    allocation_kind: Mapped[str] = mapped_column(String(64), index=True)
+    github_provider_user_id: Mapped[str] = mapped_column(Text)
+    billing_subject_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    issued_billing_grant_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    period_key: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32), default="active", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
 class BillingGrantConsumption(Base):
     __tablename__ = "billing_grant_consumption"
 

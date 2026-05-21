@@ -168,7 +168,9 @@ class Settings(BaseSettings):
     agent_gateway_litellm_base_url: str = "http://127.0.0.1:4000"
     agent_gateway_litellm_master_key: str = ""
     agent_gateway_public_base_url: str = ""
-    agent_gateway_default_managed_budget_usd: str = "0"
+    agent_gateway_managed_budget_free_usd: str = "0"
+    agent_gateway_managed_budget_pro_usd: str = "0"
+    agent_gateway_managed_budget_unlimited_usd: str = "0"
     agent_gateway_max_request_bytes: int = 4_194_304
     agent_gateway_request_timeout_seconds: float = 120.0
     agent_gateway_byok_enabled: bool = False
