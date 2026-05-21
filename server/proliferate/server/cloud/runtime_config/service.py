@@ -442,9 +442,6 @@ def _mcp_resolver_snapshot(record) -> McpConnectionSnapshot:  # noqa: ANN001
     auth_kind = record.auth.auth_kind if record.auth else None
     auth_status = record.auth.auth_status if record.auth else None
     auth_version = record.auth.auth_version if record.auth else None
-    if auth_status is None and record.payload_ciphertext:
-        auth_kind = "secret"
-        auth_status = "ready"
     return McpConnectionSnapshot(
         id=str(record.id),
         owner_scope=record.owner_scope,
@@ -883,14 +880,10 @@ async def _resolve_runtime_credential_ref(
         db,
         connection_db_id=connection_db_id,
     )
-    payload_ciphertext: str | None = None
     if auth is not None and auth.auth_status == "ready" and auth.payload_ciphertext:
-        payload_ciphertext = auth.payload_ciphertext
-    elif connection.payload_ciphertext:
-        payload_ciphertext = connection.payload_ciphertext
-    if not payload_ciphertext:
+        payload = decrypt_json(auth.payload_ciphertext)
+    else:
         return None
-    payload = decrypt_json(payload_ciphertext)
     if not isinstance(payload, dict):
         return None
     return _credential_value_from_payload(payload, field_name)
