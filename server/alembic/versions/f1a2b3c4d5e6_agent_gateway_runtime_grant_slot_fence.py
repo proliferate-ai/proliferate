@@ -1,7 +1,7 @@
 """Slot-fence agent gateway runtime grants.
 
 Revision ID: f1a2b3c4d5e6
-Revises: f0a1b2c3d4e5
+Revises: a9b8c7d6e5f4
 Create Date: 2026-05-20 13:00:00.000000
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "f1a2b3c4d5e6"
-down_revision: str | None = "f0a1b2c3d4e5"
+down_revision: str | None = "a9b8c7d6e5f4"
 branch_labels: str | None = None
 depends_on: str | None = None
 
