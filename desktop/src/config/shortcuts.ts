@@ -366,6 +366,15 @@ export const SHORTCUTS = {
     match: { kind: "fixed", key: "k", meta: true, shift: false, alt: false },
     allowInInputs: true,
   },
+  findContent: {
+    id: "workspace.find-content",
+    label: "⌘F",
+    nonMacLabel: "Ctrl+F",
+    description: "Find in chat and diffs",
+    owner: "js",
+    match: { kind: "fixed", key: "f", meta: true, shift: false, alt: false },
+    allowInInputs: true,
+  },
   renameSession: {
     id: "session.rename",
     label: "⌘⌥R",
@@ -462,6 +471,7 @@ export const SHORTCUT_GROUPS = [
       "toggleLeftSidebar",
       "toggleRightPanel",
       "openCommandPalette",
+      "findContent",
       "renameSession",
     ],
   },

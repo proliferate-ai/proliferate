@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createElement } from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   fileViewerTarget,
@@ -8,6 +8,7 @@ import {
   viewerTargetKey,
   type ViewerTarget,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
+import { useContentSearchStore } from "@/stores/search/content-search-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { FileEditorView } from "./FileEditorView";
 
@@ -16,7 +17,6 @@ const gitDiffQuery = vi.fn();
 const workspaceFilesQuery = vi.fn();
 const searchWorkspaceFilesQuery = vi.fn();
 const openFileMock = vi.fn();
-const getWorkspaceRuntimeBlockReasonMock = vi.fn();
 let workspaceFileContext = {
   workspaceUiKey: "workspace-1",
   materializedWorkspaceId: "workspace-1",
@@ -66,12 +66,6 @@ vi.mock("@/hooks/workspaces/files/workflows/use-workspace-file-target-actions", 
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
-  useWorkspaceRuntimeBlock: () => ({
-    getWorkspaceRuntimeBlockReason: getWorkspaceRuntimeBlockReasonMock,
-  }),
-}));
-
 vi.mock("@anyharness/sdk-react", () => ({
   useReadWorkspaceFileQuery: (options: unknown) => readWorkspaceFileQuery(options),
   useGitDiffQuery: (options: unknown) => gitDiffQuery(options),
@@ -104,8 +98,6 @@ describe("FileEditorView", () => {
     workspaceFilesQuery.mockReset();
     searchWorkspaceFilesQuery.mockReset();
     openFileMock.mockReset();
-    getWorkspaceRuntimeBlockReasonMock.mockReset();
-    getWorkspaceRuntimeBlockReasonMock.mockReturnValue(null);
     workspaceFileContext = {
       workspaceUiKey: "workspace-1",
       materializedWorkspaceId: "workspace-1",
@@ -144,6 +136,15 @@ describe("FileEditorView", () => {
       isLoading: false,
     });
     useWorkspaceViewerTabsStore.getState().reset();
+    useContentSearchStore.setState({
+      open: false,
+      query: "",
+      scope: "diffs",
+      activeMatchIndex: 0,
+      activeMatchId: null,
+      unitsById: {},
+      nextUnitOrder: 0,
+    });
   });
 
   it("renders focused diffs without requiring a current file read", () => {
@@ -297,8 +298,7 @@ describe("FileEditorView", () => {
     });
   });
 
-  it("searches workspace files from the file viewer and opens a selected result", () => {
-    vi.useFakeTimers();
+  it("opens session content search from the file viewer toolbar", () => {
     const target = fileViewerTarget("package.json");
     const targetKey = viewerTargetKey(target);
     useWorkspaceViewerTabsStore.setState({
@@ -317,80 +317,16 @@ describe("FileEditorView", () => {
       error: null,
       isLoading: false,
     });
-    searchWorkspaceFilesQuery.mockReturnValue({
-      data: {
-        results: [
-          { name: "README.md", path: "docs/README.md" },
-        ],
-      },
-      isLoading: false,
-      isError: false,
-    });
-
     render(createElement(FileEditorView, {
       filePath: "package.json",
       targetKey,
     }));
 
-    fireEvent.click(screen.getByLabelText("Search files"));
-    const input = screen.getByPlaceholderText("Search workspace files...");
-    fireEvent.change(input, { target: { value: "readme" } });
-    act(() => {
-      vi.advanceTimersByTime(120);
-    });
-
-    const result = screen.getByText("README.md");
-    fireEvent.click(result);
-    act(() => {
-      vi.runOnlyPendingTimers();
-    });
-
-    expect(openFileMock).toHaveBeenCalledWith("docs/README.md");
+    expect(screen.queryByLabelText("Search files")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Find in file"));
+    expect(useContentSearchStore.getState().open).toBe(true);
+    expect(useContentSearchStore.getState().scope).toBe("diffs");
     expect(screen.queryByRole("dialog", { name: "Search workspace files" })).toBeNull();
-    expect(searchWorkspaceFilesQuery).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      query: "readme",
-      limit: 80,
-      enabled: true,
-    });
-  });
-
-  it("shows runtime-blocked state in file search without enabling search", () => {
-    vi.useFakeTimers();
-    getWorkspaceRuntimeBlockReasonMock.mockReturnValue("Cloud workspace is reconnecting.");
-    const target = fileViewerTarget("package.json");
-    const targetKey = viewerTargetKey(target);
-    useWorkspaceViewerTabsStore.setState({
-      materializedWorkspaceId: "workspace-1",
-    });
-    useWorkspaceViewerTabsStore.getState().openTarget(target);
-    readWorkspaceFileQuery.mockReturnValue({
-      data: {
-        content: "{\"ok\":true}",
-        isText: true,
-        path: "package.json",
-        sizeBytes: 11,
-        tooLarge: false,
-        versionToken: "v1",
-      },
-      error: null,
-      isLoading: false,
-    });
-
-    render(createElement(FileEditorView, {
-      filePath: "package.json",
-      targetKey,
-    }));
-
-    fireEvent.click(screen.getByLabelText("Search files"));
-    expect(screen.getByText("Cloud workspace is reconnecting.")).toBeTruthy();
-    fireEvent.change(screen.getByPlaceholderText("Search workspace files..."), {
-      target: { value: "readme" },
-    });
-    act(() => {
-      vi.advanceTimersByTime(120);
-    });
-
     expect(searchWorkspaceFilesQuery.mock.calls.some(([options]) => options?.enabled === true))
       .toBe(false);
   });

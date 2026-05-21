@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useEffect,
   useMemo,
   useState,
   type CSSProperties,
@@ -7,6 +8,10 @@ import {
 } from "react";
 import { DiffLineContent } from "@/components/ui/content/diff/DiffLineContent";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
+import {
+  buildContentSearchLineMatchIds,
+  normalizeContentSearchQuery,
+} from "@/lib/domain/content-search/content-search";
 import { chainVerticalWheelScroll } from "@/lib/infra/dom/scroll-chain";
 import type {
   CollapsedContext,
@@ -14,6 +19,7 @@ import type {
   ParsedPatch,
 } from "@/lib/domain/files/diff-parser";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
+import { useContentSearchStore } from "@/stores/search/content-search-store";
 
 type ChatDiffRow =
   | { kind: "line"; key: string; line: DiffLine }
@@ -122,10 +128,16 @@ function ChatContentCell({
   line,
   tokens,
   wrapLongLines,
+  contentSearchQuery,
+  activeMatchId,
+  contentSearchUnitId,
 }: {
   line: DiffLine;
   tokens: HighlightedToken[][] | null;
   wrapLongLines: boolean;
+  contentSearchQuery: string;
+  activeMatchId: string | null;
+  contentSearchUnitId: string;
 }) {
   const lineType = getChatLineType(line);
   const lineNumber = getChatLineNumber(line);
@@ -144,7 +156,13 @@ function ChatContentCell({
           : "flex min-w-max items-center whitespace-pre"
       }`}
     >
-      <DiffLineContent line={line} tokens={tokens} />
+      <DiffLineContent
+        line={line}
+        tokens={tokens}
+        contentSearchQuery={contentSearchQuery}
+        activeMatchId={activeMatchId}
+        contentSearchLineId={`${contentSearchUnitId}:line:${line.tokenIndex}`}
+      />
     </div>
   );
 }
@@ -181,6 +199,8 @@ export function ChatDiffViewer({
   className,
   viewportClassName,
   wrapLongLines,
+  filePath,
+  contentSearchUnitId: contentSearchUnitIdProp,
   overscrollBehavior = "none",
   overscrollBehaviorX,
   overscrollBehaviorY,
@@ -191,6 +211,8 @@ export function ChatDiffViewer({
   className?: string;
   viewportClassName?: string;
   wrapLongLines: boolean;
+  filePath?: string;
+  contentSearchUnitId?: string;
   overscrollBehavior?: CSSProperties["overscrollBehavior"];
   overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
@@ -203,6 +225,31 @@ export function ChatDiffViewer({
   const rows = useMemo(
     () => getChatRows(parsed, expandedCollapsedKeys),
     [parsed, expandedCollapsedKeys],
+  );
+  const contentSearchQuery = useContentSearchStore((state) => state.query);
+  const activeMatchId = useContentSearchStore((state) => state.activeMatchId);
+  const registerContentSearchUnit = useContentSearchStore((state) => state.registerUnit);
+  const unregisterContentSearchUnit = useContentSearchStore((state) => state.unregisterUnit);
+  const contentSearchUnitId = useMemo(
+    () => contentSearchUnitIdProp ?? `diff:${filePath ?? "inline"}:${parsed.allCodeLines.length}`,
+    [contentSearchUnitIdProp, filePath, parsed.allCodeLines.length],
+  );
+  const contentSearchMatchIds = useMemo(
+    () => {
+      const normalizedQuery = normalizeContentSearchQuery(contentSearchQuery);
+      if (!normalizedQuery) {
+        return [];
+      }
+
+      return parsed.allCodeLines.flatMap((line, lineIndex) =>
+        buildContentSearchLineMatchIds({
+          idPrefix: `${contentSearchUnitId}:line:${lineIndex}`,
+          tokens: tokens?.[lineIndex] ?? [{ content: line }],
+          query: normalizedQuery,
+        })
+      );
+    },
+    [contentSearchQuery, contentSearchUnitId, parsed.allCodeLines, tokens],
   );
   const lineNumberDigits = getChatLineNumberDigits(rows);
   const codeStyle = useMemo(
@@ -237,14 +284,31 @@ export function ChatDiffViewer({
     }
   };
 
+  useEffect(() => {
+    registerContentSearchUnit({
+      unitId: contentSearchUnitId,
+      scope: "diffs",
+      query: contentSearchQuery,
+      matchIds: contentSearchMatchIds,
+    });
+
+    return () => unregisterContentSearchUnit(contentSearchUnitId);
+  }, [
+    contentSearchMatchIds,
+    contentSearchQuery,
+    contentSearchUnitId,
+    registerContentSearchUnit,
+    unregisterContentSearchUnit,
+  ]);
+
   return (
     <div className={className ?? ""}>
       <div
         style={viewportStyle}
         onWheel={handleViewportWheel}
-        className={`relative [contain:content] composer-diff-simple-line overflow-y-auto ${
+        className={`relative [contain:content] composer-diff-simple-line ${
           wrapLongLines ? "overflow-x-hidden" : "overflow-x-auto"
-        } ${
+        } overflow-y-auto ${
           viewportClassName ?? ""
         }`}
       >
@@ -281,6 +345,9 @@ export function ChatDiffViewer({
                     line={row.line}
                     tokens={tokens}
                     wrapLongLines={wrapLongLines}
+                    contentSearchQuery={contentSearchQuery}
+                    activeMatchId={activeMatchId}
+                    contentSearchUnitId={contentSearchUnitId}
                   />
                 </Fragment>
               ) : (

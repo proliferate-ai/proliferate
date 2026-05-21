@@ -15,6 +15,7 @@ interface DiffViewerProps {
   variant?: "default" | "chat";
   layout?: "unified" | "split";
   operationId?: MeasurementOperationId | null;
+  contentSearchUnitId?: string;
   overscrollBehavior?: CSSProperties["overscrollBehavior"];
   overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
@@ -33,6 +34,7 @@ export function DiffViewer({
   variant = "default",
   layout = "unified",
   operationId,
+  contentSearchUnitId,
   overscrollBehavior,
   overscrollBehaviorX,
   overscrollBehaviorY,
@@ -49,6 +51,8 @@ export function DiffViewer({
           className={className}
           viewportClassName={viewportClassName}
           wrapLongLines={wrapLongLines}
+          filePath={filePath}
+          contentSearchUnitId={contentSearchUnitId}
           overscrollBehavior={overscrollBehavior}
           overscrollBehaviorX={overscrollBehaviorX}
           overscrollBehaviorY={overscrollBehaviorY}
