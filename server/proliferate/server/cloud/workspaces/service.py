@@ -38,6 +38,8 @@ from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
 )
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
+from proliferate.db.store.cloud_claims import claims as claims_store
+from proliferate.db.store.cloud_claims import tokens as claim_tokens_store
 from proliferate.db.store.cloud_runtime_environments import (
     get_runtime_environment_for_workspace,
     load_runtime_environment_for_workspace,
@@ -46,6 +48,9 @@ from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
     create_cloud_workspace_for_user,
     delete_cloud_workspace_records_for_workspace,
+    list_claimed_organization_workspaces_for_user,
+    list_organization_workspaces_for_admin_audit,
+    list_unclaimed_organization_workspaces,
     load_active_sandbox_for_workspace,
     load_any_cloud_workspace_for_repo,
     load_cloud_workspace_by_id,
@@ -75,6 +80,8 @@ from proliferate.server.billing.service import (
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
+from proliferate.server.cloud.claims.access import load_workspace_exposure_and_claim
+from proliferate.server.cloud.claims.domain.policy import is_org_admin_role
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config.service import (
     bootstrap_repo_config,
@@ -96,6 +103,9 @@ from proliferate.server.cloud.runtime.service import (
     get_workspace_connection,
 )
 from proliferate.server.cloud.workspaces.access import (
+    cloud_workspace_user_can_archive,
+    cloud_workspace_user_can_interact,
+    cloud_workspace_user_can_interact_with_db,
     cloud_workspace_user_can_read,
     cloud_workspace_user_can_read_with_db,
 )
@@ -216,8 +226,14 @@ async def list_cloud_workspaces_for_user(
     *,
     user: User | None = None,
     owner_selection: OwnerSelection | None = None,
+    scope: str | None = None,
 ) -> list[WorkspaceSummary]:
-    if owner_selection is not None and owner_selection.owner_scope == "organization":
+    list_scope = scope or (
+        "unclaimed"
+        if owner_selection is not None and owner_selection.owner_scope == "organization"
+        else "my"
+    )
+    if list_scope in {"unclaimed", "claimable", "org-all"}:
         if user is None:
             raise CloudApiError(
                 "organization_not_found",
@@ -225,11 +241,62 @@ async def list_cloud_workspaces_for_user(
                 status_code=404,
             )
         try:
-            await resolve_owner_context(user, owner_selection, db=db)
+            owner_context = await resolve_owner_context(
+                user,
+                owner_selection or OwnerSelection(owner_scope="organization"),
+                db=db,
+            )
         except OrganizationServiceError as error:
             _map_owner_context_error(error)
-        return []
+        if owner_context.organization_id is None:
+            raise CloudApiError(
+                "organization_not_found",
+                "Organization not found.",
+                status_code=404,
+            )
+        if list_scope == "org-all" and not is_org_admin_role(owner_context.membership_role):
+            raise CloudApiError(
+                "organization_permission_denied",
+                "You do not have permission to view organization workspace audit data.",
+                status_code=403,
+            )
+        if list_scope == "org-all":
+            workspaces = await list_organization_workspaces_for_admin_audit(
+                db,
+                organization_id=owner_context.organization_id,
+            )
+        else:
+            workspaces = await list_unclaimed_organization_workspaces(
+                db,
+                organization_id=owner_context.organization_id,
+            )
+        return await _workspace_summaries_for_request(db, user_id=user_id, workspaces=workspaces)
+
+    if list_scope != "my":
+        raise CloudApiError(
+            "invalid_workspace_scope",
+            "Unsupported workspace scope.",
+            status_code=400,
+        )
     workspaces = await list_cloud_workspaces_store(db, user_id)
+    claimed_workspaces = await list_claimed_organization_workspaces_for_user(
+        db,
+        user_id=user_id,
+    )
+    workspaces = sorted(
+        [*workspaces, *claimed_workspaces],
+        key=lambda workspace: workspace.updated_at,
+        reverse=True,
+    )
+    return await _workspace_summaries_for_request(db, user_id=user_id, workspaces=workspaces)
+
+
+async def _workspace_summaries_for_request(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    workspaces: list[CloudWorkspace],
+) -> list[WorkspaceSummary]:
     automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
         user_id=user_id,
         cloud_workspace_ids=[workspace.id for workspace in workspaces],
@@ -237,6 +304,11 @@ async def list_cloud_workspaces_for_user(
     snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
     summaries: list[WorkspaceSummary] = []
     for workspace in workspaces:
+        exposure, claim = await load_workspace_exposure_and_claim(
+            db,
+            target_id=workspace.target_id,
+            cloud_workspace_id=workspace.id,
+        )
         runtime_environment = await get_runtime_environment_for_workspace(db, workspace)
         runtime_auth = await build_workspace_runtime_auth_snapshot(
             db,
@@ -266,6 +338,8 @@ async def list_cloud_workspaces_for_user(
                 direct_target_context=_direct_target_context_for_automation_run(
                     automation_runs_by_workspace.get(workspace.id)
                 ),
+                exposure=exposure,
+                claim=claim,
             )
         )
     return summaries
@@ -392,6 +466,11 @@ async def _build_workspace_detail_for_request(
     db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> WorkspaceDetail:
+    exposure, claim = await load_workspace_exposure_and_claim(
+        db,
+        target_id=workspace.target_id,
+        cloud_workspace_id=workspace.id,
+    )
     runtime_environment = await get_runtime_environment_for_workspace(db, workspace)
     runtime_auth = await build_workspace_runtime_auth_snapshot(
         db,
@@ -422,12 +501,22 @@ async def _build_workspace_detail_for_request(
         direct_target_context=_direct_target_context_for_automation_run(
             automation_runs_by_workspace.get(workspace.id)
         ),
+        exposure=exposure,
+        claim=claim,
     )
 
 
 async def _build_workspace_detail(
     workspace: CloudWorkspace,
 ) -> WorkspaceDetail:
+    exposure = None
+    claim = None
+    async with db_engine.async_session_factory() as db:
+        exposure, claim = await load_workspace_exposure_and_claim(
+            db,
+            target_id=workspace.target_id,
+            cloud_workspace_id=workspace.id,
+        )
     runtime_environment = await load_runtime_environment_for_workspace(workspace)
     runtime_auth = await load_workspace_runtime_auth_snapshot(
         workspace=workspace,
@@ -457,6 +546,8 @@ async def _build_workspace_detail(
         direct_target_context=_direct_target_context_for_automation_run(
             automation_runs_by_workspace.get(workspace.id)
         ),
+        exposure=exposure,
+        claim=claim,
     )
 
 
@@ -884,7 +975,7 @@ async def start_cloud_workspace(
     *,
     requested_base_sha: str | None = None,
 ) -> WorkspaceDetail:
-    workspace = await cloud_workspace_user_can_read(user.id, workspace_id)
+    workspace = await cloud_workspace_user_can_interact(user.id, workspace_id)
     if start_request_should_return_existing(workspace.status):
         return await _build_workspace_detail(workspace)
 
@@ -1008,7 +1099,7 @@ async def sync_cloud_workspace_branch(
             status_code=400,
         )
 
-    workspace = await cloud_workspace_user_can_read_with_db(db, user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_interact_with_db(db, user_id, workspace_id)
     workspace = await update_workspace_branch(db, workspace, cleaned_branch_name)
     return await _build_workspace_detail_for_request(db, workspace)
 
@@ -1041,7 +1132,7 @@ async def sync_cloud_workspace_display_name(
                 status_code=400,
             )
 
-    workspace = await cloud_workspace_user_can_read_with_db(db, user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_interact_with_db(db, user_id, workspace_id)
     workspace = await update_workspace_display_name(db, workspace, cleaned)
     return await _build_workspace_detail_for_request(db, workspace)
 
@@ -1050,8 +1141,9 @@ async def stop_cloud_workspace(
     user_id: UUID,
     workspace_id: UUID,
 ) -> WorkspaceDetail:
-    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_archive(user_id, workspace_id)
     await _stop_workspace_runtime(workspace)
+    await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_archived")
     workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
     return await _build_workspace_detail(workspace)
 
@@ -1060,8 +1152,26 @@ async def delete_cloud_workspace(
     user_id: UUID,
     workspace_id: UUID,
 ) -> None:
-    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_archive(user_id, workspace_id)
+    await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_deleted")
     await delete_cloud_workspace_records_for_workspace(workspace)
+
+
+async def _revoke_claim_tokens_for_workspace(
+    workspace: CloudWorkspace,
+    *,
+    reason: str,
+) -> None:
+    async with db_engine.async_session_factory() as db:
+        claim = await claims_store.get_claim_for_workspace(db, workspace.id)
+        if claim is None:
+            return
+        await claim_tokens_store.revoke_active_tokens_for_claim(
+            db,
+            claim_id=claim.id,
+            reason=reason,
+        )
+        await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -1171,7 +1281,8 @@ async def get_cloud_connection(
     user_id: UUID,
     workspace_id: UUID,
 ) -> WorkspaceConnection:
-    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_interact(user_id, workspace_id)
+    await _reject_shared_workspace_static_connection(workspace)
     automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
         user_id=user_id,
         cloud_workspace_ids=[workspace.id],
@@ -1243,3 +1354,27 @@ async def get_cloud_connection(
         ready_agent_kinds=target.ready_agent_kinds,
         runtime_auth=runtime_auth_payload(target.runtime_auth),
     )
+
+
+async def _reject_shared_workspace_static_connection(workspace: CloudWorkspace) -> None:
+    if workspace.owner_scope != "organization":
+        return
+    async with db_engine.async_session_factory() as db:
+        exposure, _claim = await load_workspace_exposure_and_claim(
+            db,
+            target_id=workspace.target_id,
+            cloud_workspace_id=workspace.id,
+        )
+    visibility = exposure.visibility if exposure else None
+    if visibility == "shared_unclaimed":
+        raise CloudApiError(
+            "direct_attach_claim_required",
+            "Claim the workspace before opening it directly in Desktop.",
+            status_code=409,
+        )
+    if visibility == "claimed":
+        raise CloudApiError(
+            "direct_attach_token_required",
+            "Claimed shared workspaces require a scoped direct-attach token.",
+            status_code=409,
+        )

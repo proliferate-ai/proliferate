@@ -3,11 +3,17 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{env, fs};
 
+use anyharness_contract::v1::{
+    RuntimeConfigExternalScope, RuntimeConfigManifest, RuntimeConfigRevision,
+    RuntimeDirectAttachAuthConfig, RuntimeJwtVerificationKey,
+};
 use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use tower::util::ServiceExt;
 use uuid::Uuid;
 
@@ -65,6 +71,125 @@ fn test_state(require_bearer_auth: bool) -> AppState {
     )
     .expect("expected app state")
 }
+
+fn seed_workspace(state: &AppState, workspace_id: &str, path: &str) {
+    state
+        .db
+        .with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
+                 VALUES (?1, 'worktree', ?2, ?2, ?3, ?3)",
+                rusqlite::params![workspace_id, path, "2026-03-25T00:00:00Z"],
+            )?;
+            Ok(())
+        })
+        .expect("seed workspace");
+}
+
+fn configure_direct_attach_auth(state: &AppState, target_id: &str) {
+    state.auth_manager.apply_runtime_config(
+        &RuntimeConfigRevision {
+            id: "rev-direct-attach".to_string(),
+            sequence: 1,
+            content_hash: "sha256:direct-attach".to_string(),
+            external_scope: Some(RuntimeConfigExternalScope {
+                provider: "proliferate-cloud".to_string(),
+                id: "profile-1".to_string(),
+                target_id: Some(target_id.to_string()),
+            }),
+        },
+        &RuntimeConfigManifest {
+            mcp_servers: Vec::new(),
+            mcp_binding_summaries: Vec::new(),
+            skills: Vec::new(),
+            artifacts: Vec::new(),
+            direct_attach_auth: Some(RuntimeDirectAttachAuthConfig {
+                issuer: "https://api.test.proliferate".to_string(),
+                audience: "anyharness".to_string(),
+                target_id: Some(target_id.to_string()),
+                verification_keys: vec![RuntimeJwtVerificationKey {
+                    kid: "test-kid".to_string(),
+                    algorithm: "RS256".to_string(),
+                    public_key_pem: TEST_PUBLIC_KEY.to_string(),
+                }],
+            }),
+            warnings: Vec::new(),
+        },
+    );
+}
+
+fn direct_attach_token(workspace_id: &str, session_id: Option<&str>, jti: &str) -> String {
+    let now = chrono::Utc::now().timestamp();
+    let mut claims = json!({
+        "iss": "https://api.test.proliferate",
+        "aud": "anyharness",
+        "sub": "user-1",
+        "exp": now + 1200,
+        "nbf": now - 5,
+        "iat": now,
+        "jti": jti,
+        "org_id": "org-1",
+        "target_id": "target-1",
+        "cloud_workspace_id": "cloud-workspace-1",
+        "anyharness_workspace_id": workspace_id,
+        "claim_id": "claim-1",
+        "permissions": ["read", "write", "control"],
+    });
+    if let Some(session_id) = session_id {
+        claims["anyharness_session_id"] = json!(session_id);
+    }
+    let mut header = Header::new(Algorithm::RS256);
+    header.kid = Some("test-kid".to_string());
+    encode(
+        &header,
+        &claims,
+        &EncodingKey::from_rsa_pem(TEST_PRIVATE_KEY.as_bytes()).expect("test private key"),
+    )
+    .expect("sign direct attach token")
+}
+
+fn sha256_hex(value: &str) -> String {
+    format!("{:x}", Sha256::digest(value.as_bytes()))
+}
+
+const TEST_PRIVATE_KEY: &str = r#"-----BEGIN PRIVATE KEY-----
+MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDWDDceH/FIgRwh
+otxNut5v/a30ZzoVe9EMNB1R/FHKth2O18U++zxw3bXoA10CALuWUhP0mUgN2WZh
+noEVqCZUkj1KKbXILsRFdMzmAq+8xPdMiItcZdxYdqVsgF2W0MapFwiOszgv7fqE
+LgJnk7PBLoTzwPLgpb80GdCh9tJmzt0E5T8//OuqwfUO2iykuzAGKMKubiexfLIZ
+HdY11+/8NGGb1PZnUqyW7l52qFZVxaZuhYpms0xDnzHkSSsoWztifN/32GhCntzh
+4pRZV31hbXnhtN0xxTCz/2sNc9EmLuqzN1vSpGpFXT/xxlYpUe1A88eaqHdpOuHb
+PnQ/zjuvAgMBAAECggEAKdOoP6BBT4g/PYlsIFpYVi0NvZkgXgtcbdSPODKkrwaI
+Xx3l4ulIRcvlXImvtpD7FyRB1wXO8TneykulcNxzZQpQpLni1lPhMath0L6Mpcgd
+hRyXkv4qoTTKHZo1758reuZP20bFP4Ry9DpjaOcRdLoI6/Lz4xcwdldnEAdB1SnS
+n3a1Nzz7QjjGRa2f+h2mo74TpP3mv6Jc+iZd0YWfQs1JcsiNDh28r8UDGnxB25iM
+hC9BhHw0Ly9K024yjk2liMbgsDA23wo7KyBgg3JFqfNXVlRfLW02O/lp/kkuEuYo
+0xRP7ApY2dPtkbC1L8U5IOeWSL/896+8TLjKOTUAnQKBgQD3xOuWuOuijYnVeOWe
+yVxZNLeIdR00PS2glTBINSEuW1thVfnOjWKRT8scrX0j7DC4KENuvONzZ3JcWr+X
+qnmY2wfi1G3b443mU5McZS41YpDkW8slMpEvi/PZ4YOT1ehbIiQb3f8iSabjK1Gv
+5Kn9ysdHaFmbgMw+NiKghjMO2wKBgQDdKIVA+zRgumOFfrWLA3ew/91I6kFk4tIM
+t69Ok8U5LdrntDXF25TL/315RIdkq3rr9gDoOYEnV6mzVIYbsUqOCoMfUdWnGkoF
+HIHew9wtnU+jz/suAtBDDyozwUyTTu6ARQqDpOu1JPIiVSCvQQolxX/OABFvlFdA
+WzHG6V4MvQKBgQDK3P2zs4ai2lZfZZREFUQ6edJHtPQLYIfqMhyNEosvZHeGU5ms
+R9DLf1SjD10lu24MalMD6T4lsC5PdbHnIRpcUAG99AZbAo6dZhJOLn3OEfzmLE5B
+D40WK/WlkGJl+b88VtDPzEzoKvushjxk0sloVc4iJksv6h3QVgy1+Ar3/wKBgQCs
+91wAjndQj3X2mjryFiwuSm6O8Gdkt+EAAUkic3/0UGC8hrznmeyt/4vqpCYgHd1t
+XmEnPpI8attWXezlC6v7m00h2ab3oh/yD3GjABvbsQTwYWFZgunPCLVA9RUmwLzX
+pSer/fg7HEIjh+CgMIX3NJfYTUVVtvbmZmxv3WSpIQKBgQCDtIRI5q0P/RImEp4h
+Wno58XSZDnHUhof02dPCPPOZyAWuicNjZ9OxpUDaJUziDub1OaypKd0Za/OlA03q
+/6qxmLJlovxRgvxZnpnv27oStvH84H3JFlaFc1RFqKr67KbyWf/fwxEGSK1IOLk4
+XQQBYX0ud0uD/Bf8nur29MM9Iw==
+-----END PRIVATE KEY-----"#;
+
+const TEST_PUBLIC_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1gw3Hh/xSIEcIaLcTbre
+b/2t9Gc6FXvRDDQdUfxRyrYdjtfFPvs8cN216ANdAgC7llIT9JlIDdlmYZ6BFagm
+VJI9Sim1yC7ERXTM5gKvvMT3TIiLXGXcWHalbIBdltDGqRcIjrM4L+36hC4CZ5Oz
+wS6E88Dy4KW/NBnQofbSZs7dBOU/P/zrqsH1DtospLswBijCrm4nsXyyGR3WNdfv
+/DRhm9T2Z1Kslu5edqhWVcWmboWKZrNMQ58x5EkrKFs7Ynzf99hoQp7c4eKUWVd9
+YW154bTdMcUws/9rDXPRJi7qszdb0qRqRV0/8cZWKVHtQPPHmqh3aTrh2z50P847
+rwIDAQAB
+-----END PUBLIC KEY-----"#;
 
 fn init_repo(path: &Path) {
     run_git(path, ["init", "-b", "main"]);
@@ -154,6 +279,88 @@ async fn protected_routes_allow_matching_bearer_auth_when_token_is_configured() 
         .expect("expected response");
 
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn scoped_direct_attach_jwt_filters_workspaces_and_honors_revocation() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("worker-secret"));
+    let state = test_state(false);
+    seed_workspace(&state, "workspace-claimed", "/tmp/claimed-workspace");
+    seed_workspace(&state, "workspace-other", "/tmp/other-workspace");
+    configure_direct_attach_auth(&state, "target-1");
+    let app = build_router(state);
+    let token = direct_attach_token("workspace-claimed", None, "jti-claimed");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/workspaces")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    let workspaces = payload.as_array().expect("workspace list");
+    assert_eq!(workspaces.len(), 1);
+    assert_eq!(workspaces[0]["id"], "workspace-claimed");
+
+    let worker_only_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/runtime-config")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(worker_only_response.status(), StatusCode::FORBIDDEN);
+
+    let revoke_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/v1/auth/revoked-jtis")
+                .header(header::AUTHORIZATION, "Bearer worker-secret")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "jtiHashes": [sha256_hex("jti-claimed")],
+                        "expiresAt": chrono::Utc::now().timestamp() + 1200,
+                    })
+                    .to_string(),
+                ))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(revoke_response.status(), StatusCode::OK);
+
+    let revoked_response = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/workspaces")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(revoked_response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]

@@ -21,10 +21,19 @@ pub async fn apply_runtime_config(
     State(state): State<AppState>,
     Json(req): Json<ApplyRuntimeConfigRequest>,
 ) -> Result<Json<ApplyRuntimeConfigResponse>, ApiError> {
+    let revision = req.revision.clone();
+    let manifest = req.manifest.clone();
     state
         .runtime_config_service
         .apply_config(req)
-        .map(Json)
+        .map(|response| {
+            if response.applied {
+                state
+                    .auth_manager
+                    .apply_runtime_config(&revision, &manifest);
+            }
+            Json(response)
+        })
         .map_err(map_runtime_config_error)
 }
 

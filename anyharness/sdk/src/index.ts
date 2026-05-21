@@ -37,6 +37,8 @@ export type {
   ApplyRuntimeConfigResponse,
   RuntimeConfigStatusResponse,
   RuntimeConfigManifest,
+  RuntimeDirectAttachAuthConfig,
+  RuntimeJwtVerificationKey,
   RuntimeMcpServer,
   RuntimeMcpTransport,
   RuntimeMcpLaunch,

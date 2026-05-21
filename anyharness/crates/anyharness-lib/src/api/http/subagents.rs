@@ -4,11 +4,12 @@ use anyharness_contract::v1::{
 };
 use axum::{
     extract::{Path, State},
-    Json,
+    Extension, Json,
 };
 
-use super::access::assert_workspace_mutable;
+use super::access::{assert_session_auth_scope, assert_workspace_mutable};
 use super::error::ApiError;
+use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::sessions::subagents::service::SubagentError;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
@@ -25,8 +26,10 @@ use crate::workspaces::operation_gate::WorkspaceOperationKind;
 )]
 pub async fn get_session_subagents(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(session_id): Path<String>,
 ) -> Result<Json<SessionSubagentsResponse>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let context = state
         .subagent_service
         .subagent_context(&session_id)
@@ -52,9 +55,11 @@ pub async fn get_session_subagents(
 )]
 pub async fn schedule_subagent_wake(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((session_id, child_session_id)): Path<(String, String)>,
     Json(_body): Json<ScheduleSubagentWakeRequest>,
 ) -> Result<Json<ScheduleSubagentWakeResponse>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let parent = state
         .session_service
         .get_session(&session_id)

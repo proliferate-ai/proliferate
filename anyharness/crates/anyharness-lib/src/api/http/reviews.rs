@@ -5,11 +5,14 @@ use anyharness_contract::v1::{
 };
 use axum::{
     extract::{Path, State},
-    Json,
+    Extension, Json,
 };
 
-use super::access::assert_workspace_mutable;
+use super::access::{
+    assert_session_auth_scope, assert_workspace_auth_scope, assert_workspace_mutable,
+};
 use super::error::ApiError;
+use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::reviews::service::ReviewError;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
@@ -31,9 +34,11 @@ use crate::workspaces::operation_gate::WorkspaceOperationKind;
 )]
 pub async fn start_plan_review(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((workspace_id, plan_id)): Path<(String, String)>,
     Json(req): Json<StartPlanReviewRequest>,
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
+    assert_workspace_auth_scope(&auth, &workspace_id)?;
     let _lease = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::ReviewWrite)
@@ -60,9 +65,11 @@ pub async fn start_plan_review(
 )]
 pub async fn start_code_review(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(workspace_id): Path<String>,
     Json(req): Json<StartCodeReviewRequest>,
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
+    assert_workspace_auth_scope(&auth, &workspace_id)?;
     let _lease = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::ReviewWrite)
@@ -88,8 +95,10 @@ pub async fn start_code_review(
 )]
 pub async fn get_session_reviews(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(session_id): Path<String>,
 ) -> Result<Json<SessionReviewsResponse>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let reviews = state
         .review_service
         .list_session_reviews(&session_id)

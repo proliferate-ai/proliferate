@@ -76,6 +76,23 @@ impl ApiError {
         )
     }
 
+    pub fn forbidden(detail: impl Into<String>, code: &str) -> Self {
+        Self(
+            StatusCode::FORBIDDEN,
+            ProblemDetails {
+                type_url: "about:blank".into(),
+                title: "Forbidden".into(),
+                status: 403,
+                detail: Some(detail.into()),
+                instance: None,
+                code: Some(code.into()),
+                resolution_scope: None,
+                agent_kind: None,
+                selection_status: None,
+            },
+        )
+    }
+
     pub fn internal(detail: impl Into<String>) -> Self {
         Self(
             StatusCode::INTERNAL_SERVER_ERROR,

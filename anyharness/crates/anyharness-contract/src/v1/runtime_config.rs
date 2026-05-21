@@ -86,8 +86,29 @@ pub struct RuntimeConfigManifest {
     pub skills: Vec<RuntimeSkill>,
     #[serde(default)]
     pub artifacts: Vec<RuntimeArtifactRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direct_attach_auth: Option<RuntimeDirectAttachAuthConfig>,
     #[serde(default)]
     pub warnings: Vec<Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeDirectAttachAuthConfig {
+    pub issuer: String,
+    pub audience: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_id: Option<String>,
+    #[serde(default)]
+    pub verification_keys: Vec<RuntimeJwtVerificationKey>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeJwtVerificationKey {
+    pub kid: String,
+    pub algorithm: String,
+    pub public_key_pem: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]

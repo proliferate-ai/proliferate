@@ -180,6 +180,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/revoked-jtis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["push_revoked_jtis"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cowork": {
         parameters: {
             query?: never;
@@ -3144,6 +3160,14 @@ export interface components {
             published: boolean;
             remote: string;
         };
+        PushRevokedJtisRequest: {
+            /** Format: int64 */
+            expiresAt: number;
+            jtiHashes?: string[];
+        };
+        PushRevokedJtisResponse: {
+            accepted: number;
+        };
         /**
          * @description A raw ACP session configuration option as exposed by the active session.
          *
@@ -3481,6 +3505,7 @@ export interface components {
         };
         RuntimeConfigManifest: {
             artifacts?: components["schemas"]["RuntimeArtifactRef"][];
+            directAttachAuth?: null | components["schemas"]["RuntimeDirectAttachAuthConfig"];
             mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][];
             mcpServers?: components["schemas"]["RuntimeMcpServer"][];
             skills?: components["schemas"]["RuntimeSkill"][];
@@ -3518,6 +3543,17 @@ export interface components {
         RuntimeCredentialValue: {
             credentialRef: string;
             value: string;
+        };
+        RuntimeDirectAttachAuthConfig: {
+            audience: string;
+            issuer: string;
+            targetId?: string | null;
+            verificationKeys?: components["schemas"]["RuntimeJwtVerificationKey"][];
+        };
+        RuntimeJwtVerificationKey: {
+            algorithm: string;
+            kid: string;
+            publicKeyPem: string;
         };
         RuntimeMcpLaunch: {
             headers?: components["schemas"]["RuntimeMcpNamedValue"][];
@@ -4694,6 +4730,39 @@ export interface operations {
             };
             /** @description Agent not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    push_revoked_jtis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushRevokedJtisRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted revoked direct-attach token ids */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushRevokedJtisResponse"];
+                };
+            };
+            /** @description Invalid revocation payload */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

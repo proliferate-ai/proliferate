@@ -67,6 +67,7 @@ function cloudWorkspaceFixture(
       baseBranch: "main",
       branch: "feature/cloud-status",
     },
+    visibility: overrides.visibility ?? "private",
     ...overrides,
   };
 }

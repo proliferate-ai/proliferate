@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::acp::manager::AcpManager;
 use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::processes::ProcessService;
+use crate::api::auth::AuthManager;
 use crate::domains::agents::auth_config::{AgentAuthConfigService, AgentAuthConfigStore};
 use crate::domains::agents::model_registry::service::DynamicModelRegistryService;
 use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
@@ -91,6 +92,7 @@ pub struct AppState {
     pub runtime_base_url: String,
     pub db: Db,
     pub bearer_token: Option<String>,
+    pub auth_manager: AuthManager,
     pub agent_seed_store: AgentSeedStore,
     pub agent_auth_config_service: Arc<AgentAuthConfigService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
@@ -136,6 +138,7 @@ impl AppState {
         agent_seed_store: AgentSeedStore,
     ) -> Result<Self, AppStateInitError> {
         let bearer_token = load_bearer_token(require_bearer_auth)?;
+        let auth_manager = AuthManager::new(load_runtime_target_id());
         let session_data_cipher =
             load_data_cipher_from_env().map_err(AppStateInitError::InvalidDataKey)?;
         let repo_root_service = Arc::new(RepoRootService::new(RepoRootStore::new(db.clone())));
@@ -163,6 +166,11 @@ impl AppState {
         let runtime_config_service = Arc::new(RuntimeConfigService::new(RuntimeConfigStore::new(
             db.clone(),
         )));
+        if let Ok(status) = runtime_config_service.status() {
+            if let (Some(revision), Some(manifest)) = (status.current_revision, status.manifest) {
+                auth_manager.apply_runtime_config(&revision, &manifest);
+            }
+        }
         let process_service = Arc::new(ProcessService::new());
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
@@ -400,6 +408,7 @@ impl AppState {
             runtime_base_url,
             db,
             bearer_token,
+            auth_manager,
             agent_seed_store,
             agent_auth_config_service,
             agent_reconcile_service,
@@ -436,6 +445,13 @@ impl AppState {
             terminal_service,
         })
     }
+}
+
+fn load_runtime_target_id() -> Option<String> {
+    std::env::var("ANYHARNESS_RUNTIME_TARGET_ID")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
 }
 
 fn load_bearer_token(require_bearer_auth: bool) -> Result<Option<String>, AppStateInitError> {
