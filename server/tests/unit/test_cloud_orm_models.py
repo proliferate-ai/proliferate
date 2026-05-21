@@ -12,7 +12,6 @@ def test_cloud_orm_package_registers_all_cloud_tables() -> None:
         "cloud_workspace_mobility",
         "cloud_workspace_handoff_op",
         "cloud_sandbox",
-        "cloud_credential",
         "cloud_worktree_retention_policy",
         "cloud_mcp_connection",
         "cloud_mcp_connection_auth",

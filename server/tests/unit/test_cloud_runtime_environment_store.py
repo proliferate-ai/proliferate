@@ -26,7 +26,6 @@ def _environment() -> CloudRuntimeEnvironment:
         runtime_url="https://old.invalid",
         runtime_token_ciphertext="old-token",
         runtime_generation=7,
-        credential_snapshot_version=0,
         repo_env_applied_version=0,
     )
 

@@ -14,7 +14,7 @@ from tests.e2e.cloud.helpers import (
     require_local_auth,
     seed_linked_github_account,
     status_for_provider,
-    sync_cloud_credential,
+    sync_agent_auth_credential,
     workspace_status,
 )
 
@@ -57,7 +57,7 @@ async def test_provisioned_workspace_is_sane(
 
     # Sync Claude into the control plane before provisioning so the cloud
     # runtime should come up with at least one ready agent.
-    statuses = await sync_cloud_credential(cloud_client, auth, cloud_test_config, "claude")
+    statuses = await sync_agent_auth_credential(cloud_client, auth, cloud_test_config, "claude")
     assert status_for_provider(statuses, "claude")["synced"] is True
 
     # Create the workspace through the normal API, wait for the control plane to

@@ -23,7 +23,6 @@ async def assert_current_schema(
         "cloud_mcp_oauth_flow",
         "cloud_plugin_configured_item",
         "cloud_skill_configured_item",
-        "cloud_credential",
         "cloud_workspace_mobility_event",
         "cloud_workspace_handoff_op",
         "cloud_workspace_mobility",
@@ -470,6 +469,13 @@ async def assert_current_schema(
     )
     assert "ix_cloud_target_runtime_access_target_id" not in runtime_access_indexes
 
+    target_state_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("sandbox_profile_target_state")
+        }
+    )
+    assert "pending_agent_auth_cleanup_json" in target_state_columns
     target_state_indexes = await conn.run_sync(
         lambda sync_conn: {
             index["name"]
@@ -487,6 +493,8 @@ async def assert_current_schema(
     assert {
         "uq_agent_gateway_runtime_grant_token_hash",
         "ix_agent_gateway_runtime_grant_target_profile_agent",
+        "ix_agent_gateway_runtime_grant_cloud_sandbox_id",
+        "ix_agent_gateway_runtime_grant_slot",
     } <= runtime_grant_indexes
 
     client_daily_activity_indexes = await conn.run_sync(

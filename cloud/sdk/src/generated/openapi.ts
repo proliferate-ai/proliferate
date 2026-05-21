@@ -571,6 +571,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cloud Capabilities Endpoint */
+        get: operations["cloud_capabilities_endpoint_v1_cloud_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workspaces": {
         parameters: {
             query?: never;
@@ -690,23 +707,6 @@ export interface paths {
         head?: never;
         /** Update Cloud Workspace Display Name Endpoint */
         patch: operations["update_cloud_workspace_display_name_endpoint_v1_cloud_workspaces__workspace_id__display_name_patch"];
-        trace?: never;
-    };
-    "/v1/cloud/workspaces/{workspace_id}/sync-credentials": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Sync Cloud Workspace Credentials Endpoint */
-        post: operations["sync_cloud_workspace_credentials_endpoint_v1_cloud_workspaces__workspace_id__sync_credentials_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/v1/cloud/mobility/workspaces": {
@@ -879,41 +879,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/credentials": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Cloud Credentials Endpoint */
-        get: operations["list_cloud_credentials_endpoint_v1_cloud_credentials_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/credentials/{provider}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Sync Cloud Credential Endpoint */
-        put: operations["sync_cloud_credential_endpoint_v1_cloud_credentials__provider__put"];
-        post?: never;
-        /** Delete Cloud Credential Endpoint */
-        delete: operations["delete_cloud_credential_endpoint_v1_cloud_credentials__provider__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/cloud/sandbox-profiles/personal": {
         parameters: {
             query?: never;
@@ -1027,6 +992,23 @@ export interface paths {
         put?: never;
         /** Create Gateway Credential Endpoint */
         post: operations["create_gateway_credential_endpoint_v1_cloud_agent_auth_credentials_gateway_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-auth/credentials/synced/{agent_kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sync Synced Agent Auth Credential Endpoint */
+        put: operations["sync_synced_agent_auth_credential_endpoint_v1_cloud_agent_auth_credentials_synced__agent_kind__put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2804,8 +2786,6 @@ export interface components {
             status: string;
             /** Revision */
             revision: number;
-            /** Legacycloudcredentialid */
-            legacyCloudCredentialId: string | null;
             /** Activecredentialshareid */
             activeCredentialShareId?: string | null;
             /** Revokedat */
@@ -3107,6 +3087,33 @@ export interface components {
             lastErrorCode: string | null;
             /** Lasterrormessage */
             lastErrorMessage: string | null;
+        };
+        /** AgentGatewayByokProviderCapabilities */
+        AgentGatewayByokProviderCapabilities: {
+            /** Anthropicapikey */
+            anthropicApiKey: boolean;
+            /** Openaiapikey */
+            openaiApiKey: boolean;
+            /** Bedrockassumerole */
+            bedrockAssumeRole: boolean;
+            /** Openaicompatible */
+            openaiCompatible: boolean;
+        };
+        /** AgentGatewayCapabilities */
+        AgentGatewayCapabilities: {
+            /** Enabled */
+            enabled: boolean;
+            /** Managedcreditspersonalenabled */
+            managedCreditsPersonalEnabled: boolean;
+            /** Managedcreditsorganizationenabled */
+            managedCreditsOrganizationEnabled: boolean;
+            /** Defaultmanagedbudgetusd */
+            defaultManagedBudgetUsd: string | null;
+            /** Byokenabled */
+            byokEnabled: boolean;
+            byokProviders: components["schemas"]["AgentGatewayByokProviderCapabilities"];
+            /** Opencodegatewayenabled */
+            opencodeGatewayEnabled: boolean;
         };
         /** AgentGatewayPolicyResponse */
         AgentGatewayPolicyResponse: {
@@ -3563,6 +3570,10 @@ export interface components {
             /** User */
             user?: string | null;
         };
+        /** CloudCapabilitiesResponse */
+        CloudCapabilitiesResponse: {
+            agentGateway: components["schemas"]["AgentGatewayCapabilities"];
+        };
         /** CloudCommandResponse */
         CloudCommandResponse: {
             /** Commandid */
@@ -3605,16 +3616,6 @@ export interface components {
             result?: {
                 [key: string]: unknown;
             } | null;
-        };
-        /** CloudCredentialMutationResponse */
-        CloudCredentialMutationResponse: {
-            /**
-             * Ok
-             * @default true
-             */
-            ok: boolean;
-            /** Changed */
-            changed: boolean;
         };
         /** CloudMcpConnectionResponse */
         CloudMcpConnectionResponse: {
@@ -3929,8 +3930,6 @@ export interface components {
             envVarsVersion: number;
             /** Filesversion */
             filesVersion: number;
-            /** Credentialsnapshotversion */
-            credentialSnapshotVersion: number;
             /** Mcpmaterializationversion */
             mcpMaterializationVersion: number;
             /** Materializationstatus */
@@ -4574,24 +4573,6 @@ export interface components {
              */
             enabled: boolean;
         };
-        /** CredentialStatus */
-        CredentialStatus: {
-            /** Provider */
-            provider: string;
-            /**
-             * Authmode
-             * @enum {string}
-             */
-            authMode: "env" | "file";
-            /** Supported */
-            supported: boolean;
-            /** Localdetected */
-            localDetected: boolean;
-            /** Synced */
-            synced: boolean;
-            /** Lastsyncedat */
-            lastSyncedAt?: string | null;
-        };
         /** E2BWebhookReceipt */
         E2BWebhookReceipt: {
             /**
@@ -4815,11 +4796,6 @@ export interface components {
             gitRepoName: string;
             /** Workspaceroot */
             workspaceRoot?: string | null;
-            /**
-             * Includeagentcredentials
-             * @default true
-             */
-            includeAgentCredentials: boolean;
             /**
              * Includegitcredentials
              * @default true
@@ -5897,8 +5873,8 @@ export interface components {
              */
             ok: boolean;
         };
-        /** SyncClaudeEnvCredentialRequest */
-        SyncClaudeEnvCredentialRequest: {
+        /** SyncSyncedCredentialEnvRequest */
+        SyncSyncedCredentialEnvRequest: {
             /**
              * Authmode
              * @constant
@@ -5909,68 +5885,34 @@ export interface components {
                 [key: string]: string;
             };
         };
-        /** SyncClaudeFileCredentialRequest */
-        SyncClaudeFileCredentialRequest: {
+        /** SyncSyncedCredentialFileEntry */
+        SyncSyncedCredentialFileEntry: {
+            /** Relativepath */
+            relativePath: string;
+            /** Contentbase64 */
+            contentBase64: string;
+        };
+        /** SyncSyncedCredentialFileRequest */
+        SyncSyncedCredentialFileRequest: {
             /**
              * Authmode
              * @constant
              */
             authMode: "file";
             /** Files */
-            files: components["schemas"]["SyncClaudeFileEntry"][];
+            files: components["schemas"]["SyncSyncedCredentialFileEntry"][];
         };
-        /** SyncClaudeFileEntry */
-        SyncClaudeFileEntry: {
-            /** Relativepath */
-            relativePath: string;
-            /** Contentbase64 */
-            contentBase64: string;
-        };
-        /** SyncCodexCredentialRequest */
-        SyncCodexCredentialRequest: {
+        /** SyncSyncedCredentialResponse */
+        SyncSyncedCredentialResponse: {
             /**
-             * Authmode
-             * @constant
+             * Ok
+             * @default true
              */
-            authMode: "file";
-            /** Files */
-            files: components["schemas"]["SyncCodexFile"][];
-        };
-        /** SyncCodexFile */
-        SyncCodexFile: {
-            /** Relativepath */
-            relativePath: string;
-            /** Contentbase64 */
-            contentBase64: string;
-        };
-        /** SyncGeminiEnvCredentialRequest */
-        SyncGeminiEnvCredentialRequest: {
-            /**
-             * Authmode
-             * @constant
-             */
-            authMode: "env";
-            /** Envvars */
-            envVars: {
-                [key: string]: string;
-            };
-        };
-        /** SyncGeminiFileCredentialRequest */
-        SyncGeminiFileCredentialRequest: {
-            /**
-             * Authmode
-             * @constant
-             */
-            authMode: "file";
-            /** Files */
-            files: components["schemas"]["SyncGeminiFileEntry"][];
-        };
-        /** SyncGeminiFileEntry */
-        SyncGeminiFileEntry: {
-            /** Relativepath */
-            relativePath: string;
-            /** Contentbase64 */
-            contentBase64: string;
+            ok: boolean;
+            /** Changed */
+            changed: boolean;
+            credential: components["schemas"]["AgentAuthCredentialResponse"];
+            selection: components["schemas"]["SandboxAgentAuthSelectionResponse"];
         };
         /** TargetConfigGitCredentialModel */
         TargetConfigGitCredentialModel: {
@@ -6015,12 +5957,6 @@ export interface components {
              */
             runCommand: string;
             gitCredential?: components["schemas"]["TargetConfigGitCredentialModel"] | null;
-            /** Agentcredentials */
-            agentCredentials?: {
-                [key: string]: {
-                    [key: string]: unknown;
-                };
-            };
             runtimeConfig?: components["schemas"]["RuntimeConfigMaterializationFragment"] | null;
             /** Readinessrequirements */
             readinessRequirements?: {
@@ -6048,8 +5984,6 @@ export interface components {
             trackedFileCount: number;
             /** Hasgitcredential */
             hasGitCredential: boolean;
-            /** Agentcredentialproviders */
-            agentCredentialProviders: string[];
             /** Mcpbindingcount */
             mcpBindingCount: number;
             /** Mcpwarningcount */
@@ -6292,6 +6226,8 @@ export interface components {
             currentRevision?: number | null;
             /** Targetid */
             targetId?: string | null;
+            /** Slotgeneration */
+            slotGeneration?: number | null;
             /**
              * Sandboxprofileid
              * Format: uuid
@@ -6315,6 +6251,8 @@ export interface components {
             credentialId: string;
             /** Credentialrevision */
             credentialRevision: number;
+            /** Status */
+            status?: string | null;
             /** Credentialshareid */
             credentialShareId?: string | null;
             gateway?: components["schemas"]["WorkerAgentAuthGatewayConfig"] | null;
@@ -6341,6 +6279,8 @@ export interface components {
             errorCode?: string | null;
             /** Errormessage */
             errorMessage?: string | null;
+            /** Appliedcleanuppaths */
+            appliedCleanupPaths?: string[];
         };
         /** WorkerAgentAuthStatusResponse */
         WorkerAgentAuthStatusResponse: {
@@ -6944,7 +6884,7 @@ export interface components {
             allowedAgentKinds: ("claude" | "codex" | "opencode" | "gemini")[];
             /** Readyagentkinds */
             readyAgentKinds: string[];
-            credentialFreshness: components["schemas"]["WorkspaceCredentialFreshness"];
+            runtimeAuth: components["schemas"]["WorkspaceRuntimeAuthState"];
         };
         /**
          * WorkspaceCreatorContext
@@ -6970,28 +6910,6 @@ export interface components {
             sourceWorkspaceId?: string | null;
             /** Label */
             label?: string | null;
-        };
-        /** WorkspaceCredentialFreshness */
-        WorkspaceCredentialFreshness: {
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "current" | "stale" | "restart_required" | "apply_failed" | "missing_credentials";
-            /** Filescurrent */
-            filesCurrent: boolean;
-            /** Processcurrent */
-            processCurrent: boolean;
-            /** Requiresrestart */
-            requiresRestart: boolean;
-            /** Lasterror */
-            lastError?: string | null;
-            /** Lasterrorat */
-            lastErrorAt?: string | null;
-            /** Filesappliedat */
-            filesAppliedAt?: string | null;
-            /** Processappliedat */
-            processAppliedAt?: string | null;
         };
         /** WorkspaceDetail */
         WorkspaceDetail: {
@@ -7073,6 +6991,32 @@ export interface components {
             excludedPaths: string[];
             workspace: components["schemas"]["MobilityWorkspaceDetail"];
         };
+        /** WorkspaceRuntimeAuthState */
+        WorkspaceRuntimeAuthState: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "current" | "stale" | "restart_required" | "apply_failed" | "missing_credentials";
+            /** Configcurrent */
+            configCurrent: boolean;
+            /** Targetcurrent */
+            targetCurrent: boolean;
+            /** Requiresrestart */
+            requiresRestart: boolean;
+            /** Desiredrevision */
+            desiredRevision?: number | null;
+            /** Appliedrevision */
+            appliedRevision?: number | null;
+            /** Lasterror */
+            lastError?: string | null;
+            /** Lasterrorat */
+            lastErrorAt?: string | null;
+            /** Lastattemptedat */
+            lastAttemptedAt?: string | null;
+            /** Lastappliedat */
+            lastAppliedAt?: string | null;
+        };
         /** WorkspaceRuntimeSummary */
         WorkspaceRuntimeSummary: {
             /** Environmentid */
@@ -7084,7 +7028,7 @@ export interface components {
             status: "pending" | "provisioning" | "running" | "paused" | "error" | "disabled";
             /** Generation */
             generation: number;
-            credentialFreshness?: components["schemas"]["WorkspaceCredentialFreshness"] | null;
+            runtimeAuth?: components["schemas"]["WorkspaceRuntimeAuthState"] | null;
             /** Actionblockkind */
             actionBlockKind?: string | null;
             /** Actionblockreason */
@@ -8399,6 +8343,26 @@ export interface operations {
             };
         };
     };
+    cloud_capabilities_endpoint_v1_cloud_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudCapabilitiesResponse"];
+                };
+            };
+        };
+    };
     list_cloud_workspaces_endpoint_v1_cloud_workspaces_get: {
         parameters: {
             query?: {
@@ -8670,37 +8634,6 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateCloudWorkspaceDisplayNameRequest"];
             };
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    sync_cloud_workspace_credentials_endpoint_v1_cloud_workspaces__workspace_id__sync_credentials_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -9048,92 +8981,6 @@ export interface operations {
             };
         };
     };
-    list_cloud_credentials_endpoint_v1_cloud_credentials_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CredentialStatus"][];
-                };
-            };
-        };
-    };
-    sync_cloud_credential_endpoint_v1_cloud_credentials__provider__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider: "claude" | "codex" | "opencode" | "gemini";
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SyncClaudeEnvCredentialRequest"] | components["schemas"]["SyncClaudeFileCredentialRequest"] | components["schemas"]["SyncCodexCredentialRequest"] | components["schemas"]["SyncGeminiEnvCredentialRequest"] | components["schemas"]["SyncGeminiFileCredentialRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudCredentialMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_cloud_credential_endpoint_v1_cloud_credentials__provider__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider: "claude" | "codex" | "opencode" | "gemini";
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudCredentialMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     ensure_personal_sandbox_profile_endpoint_v1_cloud_sandbox_profiles_personal_post: {
         parameters: {
             query?: never;
@@ -9330,6 +9177,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreateGatewayCredentialResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_synced_agent_auth_credential_endpoint_v1_cloud_agent_auth_credentials_synced__agent_kind__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_kind: "claude" | "codex" | "opencode" | "gemini";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncSyncedCredentialEnvRequest"] | components["schemas"]["SyncSyncedCredentialFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncSyncedCredentialResponse"];
                 };
             };
             /** @description Validation Error */

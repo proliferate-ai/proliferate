@@ -719,6 +719,97 @@ async def test_stale_managed_worker_agent_auth_side_channel_fails_closed(
 
 
 @pytest.mark.asyncio
+async def test_lease_supersedes_launch_when_agent_auth_revision_stales(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth, profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="stale-agent-auth-lease",
+    )
+    slot, worker = await _create_profile_slot_worker(
+        db_session,
+        profile_id=profile_id,
+        target_id=target_id,
+        worker_name="stale-agent-auth-lease-worker",
+    )
+    profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
+        db_session,
+        sandbox_profile_id=profile_id,
+        reason="initial",
+        actor_user_id=uuid.UUID(auth.user_id),
+        force_restart=False,
+    )
+    assert profile is not None
+    await agent_auth_store.upsert_target_state(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        desired_revision=profile.agent_auth_revision,
+        applied_revision=profile.agent_auth_revision,
+        status="applied",
+        force_restart_required=False,
+        last_command_id=None,
+        last_worker_id=worker.id,
+        last_error_code=None,
+        last_error_message=None,
+    )
+    command = await commands_store.create_command(
+        db_session,
+        idempotency_scope="stale-agent-auth-lease",
+        idempotency_key="stale-agent-auth-lease",
+        target_id=target_id,
+        organization_id=None,
+        actor_user_id=uuid.UUID(auth.user_id),
+        actor_kind="user",
+        source="api",
+        workspace_id=None,
+        cloud_workspace_id=None,
+        session_id=None,
+        kind=CloudCommandKind.start_session.value,
+        payload_json=json.dumps(
+            {
+                "workspaceId": "workspace-auth-stale",
+                "agent": "claude",
+                "sandboxProfileId": str(profile_id),
+                "requiredAgentAuthRevision": profile.agent_auth_revision,
+            }
+        ),
+        observed_event_seq=None,
+        preconditions_json=None,
+        authorization_context_json=None,
+    )
+    stale_profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
+        db_session,
+        sandbox_profile_id=profile_id,
+        reason="revoked",
+        actor_user_id=uuid.UUID(auth.user_id),
+        force_restart=True,
+    )
+    assert stale_profile is not None
+    leased = await commands_store.lease_next_command(
+        db_session,
+        target_id=target_id,
+        worker_id=worker.id,
+        supported_kinds=(
+            CloudCommandKind.start_session.value,
+            CloudCommandKind.refresh_agent_auth_config.value,
+        ),
+        lease_id="stale-agent-auth-lease",
+        lease_expires_at=utcnow() + timedelta(minutes=5),
+        now=utcnow(),
+    )
+    assert leased is None
+    row = await db_session.get(CloudCommand, command.id)
+    assert row is not None
+    assert row.status == CloudCommandStatus.superseded.value
+    assert row.error_code == "agent_auth_revision_stale"
+    assert row.leased_cloud_sandbox_id is None
+    assert slot.slot_generation is not None
+
+
+@pytest.mark.asyncio
 async def test_managed_worker_without_slot_cannot_lease_or_report_result(
     client: AsyncClient,
     db_session: AsyncSession,

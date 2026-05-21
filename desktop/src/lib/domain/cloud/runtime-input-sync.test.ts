@@ -10,7 +10,7 @@ import {
 
 describe("runtime input sync domain", () => {
   it("filters supported cloud credential env vars", () => {
-    expect(credentialProviderForEnvVar("ANTHROPIC_API_KEY")).toBe("claude");
+    expect(credentialProviderForEnvVar("ANTHROPIC_API_KEY")).toBeNull();
     expect(credentialProviderForEnvVar("GEMINI_API_KEY")).toBe("gemini");
     expect(credentialProviderForEnvVar("GOOGLE_API_KEY")).toBe("gemini");
     expect(credentialProviderForEnvVar("GOOGLE_GENAI_USE_VERTEXAI")).toBe("gemini");

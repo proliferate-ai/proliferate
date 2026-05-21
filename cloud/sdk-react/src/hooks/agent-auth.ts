@@ -7,24 +7,29 @@ import {
   ensureManagedCreditsForOrganization,
   ensureOrganizationSandboxProfile,
   ensurePersonalSandboxProfile,
+  getCloudCapabilities,
   getSandboxAgentAuthSelections,
   getSandboxAgentAuthTargetStates,
   listAgentAuthCredentials,
   putSandboxAgentAuthSelection,
+  syncSyncedAgentAuthCredential,
   type AgentAuthAgentKind,
   type AgentAuthCredential,
   type AgentAuthCredentialListOptions,
+  type CloudCapabilities,
   type CreateGatewayCredentialRequest,
   type EnsureManagedCreditsRequest,
   type SandboxAgentAuthSelection,
   type SandboxAgentAuthTargetState,
   type SandboxProfile,
   type SelectAgentAuthCredentialInput,
+  type SyncSyncedCredentialRequest,
 } from "@proliferate/cloud-sdk";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 import {
   agentAuthCredentialsKey,
   agentAuthRootKey,
+  cloudCapabilitiesKey,
   sandboxAgentAuthSelectionsKey,
   sandboxAgentAuthTargetStatesKey,
 } from "../lib/query-keys.js";
@@ -32,6 +37,15 @@ import {
 const EMPTY_CREDENTIALS: AgentAuthCredential[] = [];
 const EMPTY_SELECTIONS: SandboxAgentAuthSelection[] = [];
 const EMPTY_TARGET_STATES: SandboxAgentAuthTargetState[] = [];
+
+export function useCloudCapabilities(enabled = true) {
+  const client = useCloudClient();
+  return useQuery<CloudCapabilities>({
+    queryKey: cloudCapabilitiesKey(),
+    queryFn: () => getCloudCapabilities(client),
+    enabled,
+  });
+}
 
 export function useAgentAuthCredentials(
   options: AgentAuthCredentialListOptions & { enabled?: boolean } = {},
@@ -84,6 +98,14 @@ export function useAgentAuthMutations() {
   const createCredential = useMutation({
     mutationFn: (body: CreateGatewayCredentialRequest) =>
       createGatewayCredential(body, client),
+    onSuccess: invalidateAgentAuth,
+  });
+
+  const syncSyncedCredential = useMutation({
+    mutationFn: (input: {
+      agentKind: Extract<AgentAuthAgentKind, "claude" | "codex" | "gemini">;
+      body: SyncSyncedCredentialRequest;
+    }) => syncSyncedAgentAuthCredential(input.agentKind, input.body, client),
     onSuccess: invalidateAgentAuth,
   });
 
@@ -147,6 +169,8 @@ export function useAgentAuthMutations() {
   return {
     createCredential: createCredential.mutateAsync,
     isCreatingCredential: createCredential.isPending,
+    syncSyncedCredential: syncSyncedCredential.mutateAsync,
+    isSyncingSyncedCredential: syncSyncedCredential.isPending,
     deleteCredential: deleteCredential.mutateAsync,
     isDeletingCredential: deleteCredential.isPending,
     createShare: createShare.mutateAsync,

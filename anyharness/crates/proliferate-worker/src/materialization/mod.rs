@@ -17,12 +17,8 @@ use sha2::{Digest, Sha256};
 
 use crate::error::WorkerError;
 
-use files::{decode_base64, expand_home, materialization_error, safe_join, write_file};
+use files::{expand_home, materialization_error, safe_join, write_file};
 use runtime_config::{RuntimeConfigMaterializationFragment, RuntimeConfigProjectionSummary};
-
-const CLAUDE_ALLOWED_AUTH_FILES: &[&str] = &[".claude/.credentials.json", ".claude.json"];
-const CODEX_ALLOWED_AUTH_FILES: &[&str] = &[".codex/auth.json"];
-const GEMINI_ALLOWED_AUTH_FILES: &[&str] = &[".gemini/oauth_creds.json", ".gemini/settings.json"];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -48,8 +44,6 @@ pub struct TargetConfigMaterializationPlan {
     #[serde(default)]
     pub run_command: String,
     pub git_credential: Option<GitCredential>,
-    #[serde(default)]
-    pub agent_credentials: BTreeMap<String, Value>,
     pub runtime_config: Option<RuntimeConfigMaterializationFragment>,
     #[serde(default)]
     pub readiness_requirements: BTreeMap<String, Value>,
@@ -116,10 +110,8 @@ pub fn materialize_plan(
         )));
     }
     let workspace_root = prepare_workspace_root(allowed_root, &plan.workspace_root)?;
-    let env_var_count =
-        env::write_env_file(&workspace_root, &plan.env_vars, &plan.agent_credentials)?;
-    let credential_file_count =
-        write_agent_credential_files(&workspace_root, &plan.agent_credentials)?;
+    let env_var_count = env::write_env_file(&workspace_root, &plan.env_vars)?;
+    let credential_file_count = 0;
     write_repo_files(&workspace_root, &plan.tracked_files)?;
     let git_configured =
         git::write_git_materialization(&workspace_root, plan.git_credential.as_ref())?;
@@ -169,71 +161,6 @@ fn write_repo_files(
         write_file(&path, bytes, true)?;
     }
     Ok(())
-}
-
-fn write_agent_credential_files(
-    workspace_root: &Path,
-    agent_credentials: &BTreeMap<String, Value>,
-) -> Result<usize, WorkerError> {
-    let mut written = 0;
-    let home = dirs::home_dir().unwrap_or_else(|| workspace_root.to_path_buf());
-    for (provider, payload) in agent_credentials {
-        let Some(mode) = payload
-            .get("authMode")
-            .or_else(|| payload.get("auth_mode"))
-            .and_then(Value::as_str)
-        else {
-            continue;
-        };
-        if mode != "file" {
-            continue;
-        }
-        let Some(files) = payload.get("files") else {
-            continue;
-        };
-        if let Some(file_map) = files.as_object() {
-            for (relative_path, decoded_content) in file_map {
-                require_allowed_agent_auth_file(provider, relative_path)?;
-                let Some(decoded_content) = decoded_content.as_str() else {
-                    return Err(materialization_error(format!(
-                        "credential file payload for {provider}:{relative_path} must be a string"
-                    )));
-                };
-                let destination = safe_join(&home, relative_path)?;
-                write_file(&destination, decoded_content.as_bytes(), true)?;
-                written += 1;
-            }
-            continue;
-        }
-        if let Some(file_array) = files.as_array() {
-            for item in file_array {
-                let Some(relative_path) = item
-                    .get("relativePath")
-                    .or_else(|| item.get("relative_path"))
-                    .and_then(Value::as_str)
-                else {
-                    continue;
-                };
-                require_allowed_agent_auth_file(provider, relative_path)?;
-                let Some(content_base64) = item
-                    .get("contentBase64")
-                    .or_else(|| item.get("content_base64"))
-                    .and_then(Value::as_str)
-                else {
-                    continue;
-                };
-                let destination = safe_join(&home, relative_path)?;
-                let bytes = decode_base64(content_base64)?;
-                write_file(&destination, &bytes, true)?;
-                written += 1;
-            }
-            continue;
-        }
-        return Err(materialization_error(format!(
-            "credential files for provider {provider} must be an object or array"
-        )));
-    }
-    Ok(written)
 }
 
 fn write_manifest(
@@ -312,25 +239,6 @@ fn expand_path(path: &Path) -> PathBuf {
         .unwrap_or_else(|| path.to_path_buf())
 }
 
-fn require_allowed_agent_auth_file(provider: &str, relative_path: &str) -> Result<(), WorkerError> {
-    let allowed = match provider {
-        "claude" => CLAUDE_ALLOWED_AUTH_FILES,
-        "codex" => CODEX_ALLOWED_AUTH_FILES,
-        "gemini" => GEMINI_ALLOWED_AUTH_FILES,
-        _ => {
-            return Err(materialization_error(format!(
-                "unsupported file credential provider: {provider}"
-            )));
-        }
-    };
-    if allowed.contains(&relative_path) {
-        return Ok(());
-    }
-    Err(materialization_error(format!(
-        "credential file path {relative_path} is not allowed for provider {provider}"
-    )))
-}
-
 #[cfg(test)]
 mod tests {
     use std::{collections::BTreeMap, fs};
@@ -379,7 +287,6 @@ mod tests {
                 username: Some("Pablo".to_string()),
                 email: Some("pablo@example.com".to_string()),
             }),
-            agent_credentials: BTreeMap::new(),
             runtime_config: None,
             readiness_requirements: BTreeMap::new(),
         };
@@ -433,7 +340,6 @@ mod tests {
             setup_script: "".to_string(),
             run_command: "".to_string(),
             git_credential: None,
-            agent_credentials: BTreeMap::new(),
             runtime_config: Some(
                 super::runtime_config::RuntimeConfigMaterializationFragment {
                     revision_id: "rev_1".to_string(),
@@ -529,7 +435,6 @@ mod tests {
             setup_script: "".to_string(),
             run_command: "".to_string(),
             git_credential: None,
-            agent_credentials: BTreeMap::new(),
             runtime_config: None,
             readiness_requirements: BTreeMap::new(),
         };

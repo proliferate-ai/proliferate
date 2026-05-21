@@ -4,11 +4,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from proliferate.constants.cloud import SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS, CloudAgentKind
-from proliferate.server.cloud.credentials.domain.types import CloudCredentialAuthMode
+from proliferate.constants.cloud import (
+    SUPPORTED_CLOUD_AGENTS,
+    SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS,
+    CloudAgentKind,
+)
+from proliferate.server.cloud.agent_auth.domain.types import SyncedCredentialAuthMode
 
-_DEFAULT_AUTH_MODES: dict[CloudAgentKind, CloudCredentialAuthMode] = {
-    "claude": "env",
+_DEFAULT_AUTH_MODES: dict[CloudAgentKind, SyncedCredentialAuthMode] = {
+    "claude": "file",
     "codex": "file",
     "gemini": "env",
 }
@@ -17,7 +21,7 @@ _DEFAULT_AUTH_MODES: dict[CloudAgentKind, CloudCredentialAuthMode] = {
 @dataclass(frozen=True)
 class CredentialStatusRecord:
     provider: CloudAgentKind
-    auth_mode: CloudCredentialAuthMode
+    auth_mode: SyncedCredentialAuthMode
     supported: bool
     local_detected: bool
     synced: bool
@@ -42,7 +46,7 @@ def build_credential_statuses(
         raw_auth_mode = (
             getattr(record, "auth_mode", None) if record else None
         ) or _DEFAULT_AUTH_MODES.get(provider, "env")
-        auth_mode: CloudCredentialAuthMode = (
+        auth_mode: SyncedCredentialAuthMode = (
             raw_auth_mode if raw_auth_mode in ("env", "file") else "env"
         )
         last_synced_at = _to_iso(getattr(record, "last_synced_at", None)) if record else None
@@ -60,7 +64,7 @@ def build_credential_statuses(
 
 
 def allowed_agent_kinds() -> list[CloudAgentKind]:
-    return list(SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS)
+    return list(SUPPORTED_CLOUD_AGENTS)
 
 
 def ready_agent_kinds(statuses: Sequence[CredentialStatusRecord]) -> list[CloudAgentKind]:

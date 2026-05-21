@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
+from proliferate.db.models.cloud.agent_auth import SandboxProfile, SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.targets import CloudTarget, CloudWorker
@@ -233,66 +234,16 @@ async def lease_next_command(
     lease_expires_at: datetime,
     now: datetime,
 ) -> CloudCommandSnapshot | None:
-    query = (
-        select(CloudCommand)
-        .where(CloudCommand.target_id == target_id)
-        .where(CloudCommand.kind.in_(supported_kinds))
-        .where(
-            or_(
-                CloudCommand.status == CloudCommandStatus.queued.value,
-                and_(
-                    CloudCommand.status == CloudCommandStatus.leased.value,
-                    CloudCommand.lease_expires_at.is_not(None),
-                    CloudCommand.lease_expires_at <= now,
-                ),
-            )
-        )
-    )
-    if CloudCommandKind.refresh_agent_auth_config.value not in supported_kinds:
-        query = query.where(
-            ~and_(
-                CloudCommand.kind.in_(
-                    (
-                        CloudCommandKind.start_session.value,
-                        CloudCommandKind.send_prompt.value,
-                    )
-                ),
-                or_(
-                    CloudCommand.payload_json.contains('"sandboxProfileId"'),
-                    CloudCommand.payload_json.contains('"requiredAgentAuthRevision"'),
-                ),
-            )
-        )
-    row = (
-        await db.execute(
-            query.order_by(CloudCommand.created_at.asc())
-            .with_for_update(skip_locked=True)
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    if row is None:
-        return None
     worker = await db.get(CloudWorker, worker_id)
     if worker is None:
         return None
     target = await db.get(CloudTarget, target_id)
-    if (
-        row.kind == CloudCommandKind.materialize_workspace.value
-        and _target_requires_slot(target)
-        and row.cloud_workspace_id is None
-    ):
-        row.status = CloudCommandStatus.rejected.value
-        row.error_code = "cloud_workspace_required"
-        row.error_message = "Managed materialize_workspace command is missing Cloud workspace."
-        row.rejected_at = now
-        row.updated_at = now
-        await db.flush()
-        return None
-    if _target_requires_slot(target) and (
+    target_requires_slot = _target_requires_slot(target)
+    if target_requires_slot and (
         worker.cloud_sandbox_id is None or worker.slot_generation is None
     ):
         return None
-    if worker.cloud_sandbox_id is not None or _target_requires_slot(target):
+    if worker.cloud_sandbox_id is not None or target_requires_slot:
         if worker.cloud_sandbox_id is None or worker.slot_generation is None:
             return None
         active_slot = (
@@ -309,19 +260,173 @@ async def lease_next_command(
         ).scalar_one_or_none()
         if active_slot is None:
             return None
-    row.status = CloudCommandStatus.leased.value
-    row.lease_id = lease_id
-    row.leased_by_worker_id = worker_id
-    row.leased_cloud_sandbox_id = worker.cloud_sandbox_id
-    row.leased_slot_generation = worker.slot_generation
-    row.lease_expires_at = lease_expires_at
-    row.attempt_count += 1
-    row.delivered_at = None
-    row.error_code = None
-    row.error_message = None
-    row.updated_at = now
-    await db.flush()
-    return _snapshot(row)
+    for _ in range(20):
+        query = (
+            select(CloudCommand)
+            .where(CloudCommand.target_id == target_id)
+            .where(CloudCommand.kind.in_(supported_kinds))
+            .where(
+                or_(
+                    CloudCommand.status == CloudCommandStatus.queued.value,
+                    and_(
+                        CloudCommand.status == CloudCommandStatus.leased.value,
+                        CloudCommand.lease_expires_at.is_not(None),
+                        CloudCommand.lease_expires_at <= now,
+                    ),
+                )
+            )
+        )
+        if CloudCommandKind.refresh_agent_auth_config.value not in supported_kinds:
+            query = query.where(
+                ~and_(
+                    CloudCommand.kind.in_(
+                        (
+                            CloudCommandKind.start_session.value,
+                            CloudCommandKind.send_prompt.value,
+                        )
+                    ),
+                    or_(
+                        CloudCommand.payload_json.contains('"sandboxProfileId"'),
+                        CloudCommand.payload_json.contains('"requiredAgentAuthRevision"'),
+                    ),
+                )
+            )
+        row = (
+            await db.execute(
+                query.order_by(CloudCommand.created_at.asc())
+                .with_for_update(skip_locked=True)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            return None
+        if (
+            row.kind == CloudCommandKind.materialize_workspace.value
+            and target_requires_slot
+            and row.cloud_workspace_id is None
+        ):
+            row.status = CloudCommandStatus.rejected.value
+            row.error_code = "cloud_workspace_required"
+            row.error_message = "Managed materialize_workspace command is missing Cloud workspace."
+            row.rejected_at = now
+            row.updated_at = now
+            await db.flush()
+            continue
+        agent_auth_error = await _agent_auth_lease_blocker(db, row, target=target)
+        if agent_auth_error is not None:
+            status, code, message = agent_auth_error
+            row.status = status
+            row.error_code = code
+            row.error_message = message
+            if status == CloudCommandStatus.rejected.value:
+                row.rejected_at = now
+            row.updated_at = now
+            await db.flush()
+            continue
+        row.status = CloudCommandStatus.leased.value
+        row.lease_id = lease_id
+        row.leased_by_worker_id = worker_id
+        row.leased_cloud_sandbox_id = worker.cloud_sandbox_id
+        row.leased_slot_generation = worker.slot_generation
+        row.lease_expires_at = lease_expires_at
+        row.attempt_count += 1
+        row.delivered_at = None
+        row.error_code = None
+        row.error_message = None
+        row.updated_at = now
+        await db.flush()
+        return _snapshot(row)
+    return None
+
+
+async def _agent_auth_lease_blocker(
+    db: AsyncSession,
+    row: CloudCommand,
+    *,
+    target: CloudTarget | None,
+) -> tuple[str, str, str] | None:
+    if row.kind not in {
+        CloudCommandKind.start_session.value,
+        CloudCommandKind.send_prompt.value,
+    }:
+        return None
+    try:
+        payload = json.loads(row.payload_json or "{}")
+    except json.JSONDecodeError:
+        return (
+            CloudCommandStatus.rejected.value,
+            "agent_auth_payload_invalid",
+            "Launch command payload is not valid JSON.",
+        )
+    if not isinstance(payload, dict):
+        return (
+            CloudCommandStatus.rejected.value,
+            "agent_auth_payload_invalid",
+            "Launch command payload is invalid.",
+        )
+    sandbox_profile_id = payload.get("sandboxProfileId")
+    required_revision = payload.get("requiredAgentAuthRevision")
+    if sandbox_profile_id is None and required_revision is None:
+        return None
+    try:
+        profile_id = UUID(str(sandbox_profile_id))
+    except (TypeError, ValueError):
+        return (
+            CloudCommandStatus.rejected.value,
+            "agent_auth_profile_invalid",
+            "Launch command agent auth profile is invalid.",
+        )
+    if not isinstance(required_revision, int) or isinstance(required_revision, bool):
+        return (
+            CloudCommandStatus.rejected.value,
+            "agent_auth_revision_invalid",
+            "Launch command agent auth revision is invalid.",
+        )
+    if target is None or target.sandbox_profile_id != profile_id:
+        return (
+            CloudCommandStatus.superseded.value,
+            "agent_auth_target_mismatch",
+            "Launch command agent auth target no longer matches.",
+        )
+    profile = await db.get(SandboxProfile, profile_id)
+    if profile is None or profile.archived_at is not None or profile.deleted_at is not None:
+        return (
+            CloudCommandStatus.superseded.value,
+            "agent_auth_profile_missing",
+            "Launch command agent auth profile is no longer available.",
+        )
+    if required_revision != profile.desired_agent_auth_revision:
+        return (
+            CloudCommandStatus.superseded.value,
+            "agent_auth_revision_stale",
+            "Launch command agent auth revision was superseded before dispatch.",
+        )
+    state = (
+        await db.execute(
+            select(SandboxProfileTargetState).where(
+                SandboxProfileTargetState.sandbox_profile_id == profile_id,
+                SandboxProfileTargetState.target_id == row.target_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if (
+        state is None
+        or state.agent_auth_status != "applied"
+        or state.applied_agent_auth_revision is None
+        or state.applied_agent_auth_revision < required_revision
+    ):
+        return (
+            CloudCommandStatus.superseded.value,
+            "agent_auth_not_ready",
+            "Launch command agent auth config was no longer current before dispatch.",
+        )
+    if state.agent_auth_force_restart_required:
+        return (
+            CloudCommandStatus.superseded.value,
+            "agent_auth_restart_required",
+            "Launch command agent auth config requires restart before dispatch.",
+        )
+    return None
 
 
 async def mark_command_delivered(

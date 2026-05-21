@@ -1,7 +1,6 @@
 export {
   cloudRootKey,
   controlPlaneHealthKey,
-  cloudCredentialsKey,
   personalCloudOwnerKey,
   cloudBillingKey,
   cloudRepoBranchesKey,

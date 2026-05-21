@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from base64 import b64encode
 from uuid import UUID
 
 import pytest
@@ -53,6 +54,20 @@ def _headers(tokens: dict[str, str]) -> dict[str, str]:
     return {"Authorization": f"Bearer {tokens['access_token']}"}
 
 
+def _claude_file_payload(api_key: str) -> dict[str, object]:
+    return {
+        "authMode": "file",
+        "files": [
+            {
+                "relativePath": ".claude.json",
+                "contentBase64": b64encode(
+                    f'{{"apiKey":"{api_key}"}}'.encode()
+                ).decode("ascii"),
+            }
+        ],
+    }
+
+
 @pytest.mark.asyncio
 async def test_shared_personal_synced_credential_lists_active_share_for_org_selection(
     client: AsyncClient,
@@ -69,12 +84,9 @@ async def test_shared_personal_synced_credential_lists_active_share_for_org_sele
     organization_id = organizations.json()["organizations"][0]["id"]
 
     response = await client.put(
-        "/v1/cloud/credentials/claude",
+        "/v1/cloud/agent-auth/credentials/synced/claude",
         headers=_headers(tokens),
-        json={
-            "authMode": "env",
-            "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-        },
+        json=_claude_file_payload("sk-ant-shared"),
     )
     assert response.status_code == 200
 
@@ -94,6 +106,7 @@ async def test_shared_personal_synced_credential_lists_active_share_for_org_sele
     credential = next(
         record for record in response.json() if record["credentialKind"] == "synced_path"
     )
+    assert credential["status"] == "ready"
     assert credential["activeCredentialShareId"] is None
 
     share_response = await client.post(
@@ -121,14 +134,30 @@ async def test_shared_personal_synced_credential_lists_active_share_for_org_sele
         json={},
     )
     assert profile_response.status_code == 200
+    profile_id = profile_response.json()["id"]
 
     select_response = await client.put(
-        f"/v1/cloud/sandbox-profiles/{profile_response.json()['id']}/agent-auth-selections/claude",
+        f"/v1/cloud/sandbox-profiles/{profile_id}/agent-auth-selections/claude",
         headers=_headers(tokens),
         json={"credentialId": credential["id"], "credentialShareId": share_id},
     )
     assert select_response.status_code == 200
     assert select_response.json()["credentialShareId"] == share_id
+
+    revoke_response = await client.delete(
+        f"/v1/cloud/agent-auth/credential-shares/{share_id}",
+        headers=_headers(tokens),
+    )
+    assert revoke_response.status_code == 200
+
+    selections_response = await client.get(
+        f"/v1/cloud/sandbox-profiles/{profile_id}/agent-auth-selections",
+        headers=_headers(tokens),
+    )
+    assert selections_response.status_code == 200
+    selection = selections_response.json()[0]
+    assert selection["status"] == "invalid"
+    assert selection["lastErrorCode"] == "credential_share_revoked"
 
 
 @pytest.mark.asyncio

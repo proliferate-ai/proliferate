@@ -60,22 +60,6 @@ class CloudRuntimeEnvironment(Base):
     root_anyharness_workspace_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     root_anyharness_repo_root_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     runtime_generation: Mapped[int] = mapped_column(Integer, default=0)
-    credential_snapshot_version: Mapped[int] = mapped_column(Integer, default=0)
-    credential_files_applied_revision: Mapped[str | None] = mapped_column(Text, nullable=True)
-    credential_files_applied_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-    credential_process_applied_revision: Mapped[str | None] = mapped_column(Text, nullable=True)
-    credential_process_applied_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-    credential_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    credential_last_error_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
     repo_env_applied_version: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 

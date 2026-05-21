@@ -24,6 +24,10 @@ from proliferate.constants.cloud import (
     AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
     AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN,
     AGENT_GATEWAY_TOKEN_HASH_KEY_ID,
+    CLAUDE_ALLOWED_AUTH_FILES,
+    CODEX_ALLOWED_AUTH_FILES,
+    GEMINI_ALLOWED_AUTH_FILES,
+    SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS,
     CloudAgentKind,
     CloudCommandActorKind,
     CloudCommandKind,
@@ -44,7 +48,6 @@ from proliferate.db.store.cloud_agent_auth.records import (
     SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
 )
-from proliferate.db.store.cloud_credentials import get_cloud_credential_by_id
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.integrations.aws import (
     AwsIntegrationError,
@@ -61,11 +64,16 @@ from proliferate.server.cloud.agent_auth.domain.policy import (
     is_supported_agent_kind,
     selection_plan_for_credential,
 )
+from proliferate.server.cloud.agent_auth.domain.synced_payload import (
+    normalize_synced_credential_payload,
+    redacted_synced_payload_summary,
+)
 from proliferate.server.cloud.agent_auth.errors import AgentAuthError
 from proliferate.server.cloud.agent_auth.models import (
     CreateGatewayCredentialRequest,
     EnsureManagedCreditsRequest,
     LiteLLMModelDeploymentRequest,
+    SyncSyncedCredentialRequest,
     WorkerAgentAuthGatewayConfig,
     WorkerAgentAuthMaterializationPlan,
     WorkerAgentAuthSelectionPlan,
@@ -73,6 +81,7 @@ from proliferate.server.cloud.agent_auth.models import (
     WorkerAgentAuthStatusResponse,
     WorkerAgentAuthSyncedFilesConfig,
 )
+from proliferate.server.cloud.agent_auth.protected_env import reject_unallowed_protected_env
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
@@ -83,6 +92,11 @@ from proliferate.utils.time import utcnow
 _ORG_ADMIN_ROLES = {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN}
 _GATEWAY_GRANT_TTL = timedelta(days=7)
 _MANAGED_CREDIT_AGENT_KINDS_V1: tuple[CloudAgentKind, ...] = ("claude",)
+_CLEANUP_SELECTION_ERROR_CODES = {
+    "credential_revoked",
+    "credential_share_revoked",
+}
+_OPENCODE_ALLOWED_AUTH_FILES: frozenset[str] = frozenset({".config/opencode/auth.json"})
 
 
 @dataclass(frozen=True)
@@ -106,6 +120,13 @@ class CredentialListItem:
 
 
 @dataclass(frozen=True)
+class SyncSyncedCredentialResult:
+    credential: AgentAuthCredentialRecord
+    selection: SandboxAgentAuthSelectionRecord
+    changed: bool
+
+
+@dataclass(frozen=True)
 class RuntimeGrantIssueResult:
     grant: AgentGatewayRuntimeGrantRecord
     raw_token: str
@@ -121,6 +142,14 @@ class AgentGatewayReconcilePassResult:
     policies_failed: int
 
 
+@dataclass(frozen=True)
+class RuntimeGrantFreshnessReconcilePassResult:
+    grants_checked: int
+    targets_refreshed: int
+    grants_skipped: int
+    grants_failed: int
+
+
 async def ensure_personal_sandbox_profile(
     db: AsyncSession,
     *,
@@ -131,7 +160,6 @@ async def ensure_personal_sandbox_profile(
         user_id=actor_user_id,
         created_by_user_id=actor_user_id,
     )
-    profile = await _backfill_legacy_cloud_credentials(db, actor_user_id, profile)
     await _ensure_profile_target_refresh_if_needed(
         db,
         profile=profile,
@@ -139,25 +167,6 @@ async def ensure_personal_sandbox_profile(
         reason="sandbox_profile_target_attached",
     )
     return profile
-
-
-async def reconcile_legacy_cloud_credentials_for_user(
-    db: AsyncSession,
-    *,
-    actor_user_id: UUID,
-    create_profile: bool,
-) -> SandboxProfileRecord | None:
-    if create_profile:
-        profile = await store.ensure_personal_sandbox_profile(
-            db,
-            user_id=actor_user_id,
-            created_by_user_id=actor_user_id,
-        )
-    else:
-        profile = await store.get_active_personal_sandbox_profile_for_user(db, actor_user_id)
-        if profile is None:
-            return None
-    return await _backfill_legacy_cloud_credentials(db, actor_user_id, profile)
 
 
 async def ensure_organization_sandbox_profile(
@@ -230,6 +239,174 @@ async def list_credentials_for_response(
             )
         items.append(CredentialListItem(credential=credential, active_share=active_share))
     return tuple(items)
+
+
+async def sync_synced_credential_for_user(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    agent_kind: CloudAgentKind,
+    body: SyncSyncedCredentialRequest,
+) -> SyncSyncedCredentialResult:
+    if agent_kind not in SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS:
+        raise AgentAuthError(
+            "Native auth sync is not supported for this agent.",
+            code="unsupported_synced_agent_kind",
+            status_code=400,
+        )
+    normalized = normalize_synced_credential_payload(
+        agent_kind=agent_kind,
+        auth_mode=body.auth_mode,
+        env_vars=getattr(body, "env_vars", None),
+        files=getattr(body, "files", None),
+    )
+    redacted_summary = redacted_synced_payload_summary(
+        agent_kind=agent_kind,
+        payload=normalized.payload,
+    )
+    redacted_summary_json = json.dumps(redacted_summary, sort_keys=True)
+    payload_ciphertext = encrypt_json(normalized.payload)
+
+    profile = await store.ensure_personal_sandbox_profile(
+        db,
+        user_id=actor_user_id,
+        created_by_user_id=actor_user_id,
+    )
+    existing = await store.get_active_personal_synced_credential_for_update(
+        db,
+        user_id=actor_user_id,
+        agent_kind=agent_kind,
+    )
+    payload_changed = True
+    if existing is not None and existing.payload_ciphertext:
+        existing_payload = decrypt_json(existing.payload_ciphertext)
+        payload_changed = (
+            existing.status != "ready"
+            or existing_payload != normalized.payload
+            or existing.redacted_summary_json != redacted_summary_json
+        )
+
+    display_name = f"Synced {agent_kind} auth"
+    if existing is None:
+        credential = await store.create_agent_auth_credential(
+            db,
+            owner_scope="personal",
+            owner_user_id=actor_user_id,
+            organization_id=None,
+            created_by_user_id=actor_user_id,
+            agent_kind=agent_kind,
+            credential_kind="synced_path",
+            display_name=display_name,
+            redacted_summary_json=redacted_summary_json,
+            status="ready",
+            payload_ciphertext=payload_ciphertext,
+            payload_ciphertext_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
+        )
+    else:
+        credential = await store.update_synced_credential_payload(
+            db,
+            credential_id=existing.id,
+            display_name=display_name,
+            redacted_summary_json=redacted_summary_json,
+            payload_ciphertext=payload_ciphertext,
+            payload_ciphertext_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
+            status="ready",
+            increment_revision=payload_changed,
+        )
+        if credential is None:
+            raise AgentAuthError(
+                "Credential not found.",
+                code="credential_not_found",
+                status_code=404,
+            )
+
+    plan = selection_plan_for_credential(
+        agent_kind=agent_kind,
+        credential_kind=credential.credential_kind,
+    )
+    if not isinstance(plan, SelectionPlan):
+        raise AgentAuthError(plan.message, code=plan.code, status_code=plan.status_code)
+    if plan.materialization_mode != "synced_files":
+        raise AgentAuthError(
+            "Synced credentials must materialize as files.",
+            code="invalid_materialization_mode",
+            status_code=500,
+        )
+
+    selections = {
+        selection.agent_kind: selection
+        for selection in await store.list_selections_for_profile(db, profile.id)
+    }
+    existing_selection = selections.get(agent_kind)
+    selection_changed = (
+        existing_selection is None
+        or existing_selection.status != "active"
+        or existing_selection.credential_id != credential.id
+        or existing_selection.credential_share_id is not None
+        or existing_selection.materialization_mode != plan.materialization_mode
+        or existing_selection.selected_revision != credential.revision
+    )
+    selection = await store.upsert_selection(
+        db,
+        sandbox_profile_id=profile.id,
+        owner_scope="personal",
+        agent_kind=agent_kind,
+        credential_id=credential.id,
+        credential_share_id=None,
+        materialization_mode=plan.materialization_mode,
+        selected_revision=credential.revision,
+        status="active",
+        last_error_code=None,
+        last_error_message=None,
+    )
+
+    changed = payload_changed or selection_changed
+    if changed:
+        updated_profile = await store.bump_sandbox_profile_agent_auth_revision(
+            db,
+            sandbox_profile_id=profile.id,
+            reason="synced_credential_sync",
+            actor_user_id=actor_user_id,
+            force_restart=False,
+        )
+        if updated_profile is None:
+            raise AgentAuthError(
+                "Sandbox profile not found.",
+                code="sandbox_profile_not_found",
+                status_code=404,
+            )
+        await _mark_target_pending_and_queue_refresh(
+            db,
+            profile=updated_profile,
+            actor_user_id=actor_user_id,
+            reason="synced_credential_sync",
+            force_restart=False,
+        )
+
+    await store.record_audit_event(
+        db,
+        action="credential.sync",
+        actor_user_id=actor_user_id,
+        owner_scope="personal",
+        owner_user_id=actor_user_id,
+        organization_id=None,
+        credential_id=credential.id,
+        sandbox_profile_id=profile.id,
+        metadata_json=json.dumps(
+            {
+                "agentKind": agent_kind,
+                "authMode": normalized.auth_mode,
+                "changed": changed,
+                "selectionChanged": selection_changed,
+            },
+            sort_keys=True,
+        ),
+    )
+    return SyncSyncedCredentialResult(
+        credential=credential,
+        selection=selection,
+        changed=changed,
+    )
 
 
 async def create_gateway_credential(
@@ -603,6 +780,63 @@ async def reconcile_agent_gateway_litellm_mirror(
     )
 
 
+async def reconcile_agent_gateway_runtime_grant_freshness(
+    db: AsyncSession,
+    *,
+    limit: int = 50,
+    refresh_window: timedelta = timedelta(days=2),
+) -> RuntimeGrantFreshnessReconcilePassResult:
+    if limit <= 0 or not settings.agent_gateway_enabled:
+        return RuntimeGrantFreshnessReconcilePassResult(
+            grants_checked=0,
+            targets_refreshed=0,
+            grants_skipped=0,
+            grants_failed=0,
+        )
+    now = utcnow()
+    grants = await store.list_runtime_grants_needing_rotation(
+        db,
+        now=now,
+        expires_before=now + refresh_window,
+        limit=limit,
+    )
+    refreshed_targets: set[tuple[UUID, UUID]] = set()
+    skipped = 0
+    failed = 0
+    for grant in grants:
+        key = (grant.sandbox_profile_id, grant.target_id)
+        if key in refreshed_targets:
+            skipped += 1
+            continue
+        try:
+            profile = await store.get_sandbox_profile(db, grant.sandbox_profile_id)
+            if profile is None:
+                skipped += 1
+                continue
+            if grant.issued_profile_revision != profile.agent_auth_revision:
+                skipped += 1
+                continue
+            if profile.primary_target_id != grant.target_id:
+                skipped += 1
+                continue
+            await _mark_target_pending_and_queue_refresh(
+                db,
+                profile=profile,
+                actor_user_id=None,
+                reason="runtime_grant_expiring",
+                force_restart=False,
+            )
+            refreshed_targets.add(key)
+        except Exception:
+            failed += 1
+    return RuntimeGrantFreshnessReconcilePassResult(
+        grants_checked=len(grants),
+        targets_refreshed=len(refreshed_targets),
+        grants_skipped=skipped,
+        grants_failed=failed,
+    )
+
+
 async def share_personal_credential_with_organization(
     db: AsyncSession,
     *,
@@ -889,7 +1123,15 @@ async def issue_runtime_grant_for_selection(
     selection: SandboxAgentAuthSelectionRecord,
     profile: SandboxProfileRecord,
     target_id: UUID,
+    cloud_sandbox_id: UUID | None,
+    slot_generation: int | None,
 ) -> RuntimeGrantIssueResult:
+    if cloud_sandbox_id is None or slot_generation is None:
+        raise AgentAuthError(
+            "Gateway runtime grants require an active sandbox slot.",
+            code="agent_gateway_slot_required",
+            status_code=409,
+        )
     if selection.status != "active":
         raise AgentAuthError(
             "Selection is not active.", code="selection_not_active", status_code=409
@@ -955,6 +1197,8 @@ async def issue_runtime_grant_for_selection(
         issued_profile_revision=profile.agent_auth_revision,
         target_id=target_id,
         sandbox_profile_id=profile.id,
+        cloud_sandbox_id=cloud_sandbox_id,
+        slot_generation=slot_generation,
         organization_id=profile.organization_id,
         user_id=profile.owner_user_id,
         agent_kind=selection.agent_kind,
@@ -995,6 +1239,7 @@ async def worker_agent_auth_materialization_plan(
             reason="superseded",
             currentRevision=profile.agent_auth_revision,
             targetId=auth.target_id,
+            slotGeneration=auth.slot_generation,
             sandboxProfileId=profile.id,
             revision=revision,
             selections=[],
@@ -1005,14 +1250,19 @@ async def worker_agent_auth_materialization_plan(
             code="agent_auth_revision_mismatch",
             status_code=409,
         )
-    await _require_agent_auth_target_state(
+    target_state = await _require_agent_auth_target_state(
         db,
         profile=profile,
         auth=auth,
         command=command,
     )
     selections = []
+    selections.extend(_worker_cleanup_plans_from_state(target_state))
     for selection in await store.list_selections_for_profile(db, profile.id):
+        cleanup_plan = await _worker_cleanup_selection_plan(db, selection)
+        if cleanup_plan is not None:
+            selections.append(cleanup_plan)
+            continue
         if selection.status != "active":
             continue
         selections.append(
@@ -1028,6 +1278,7 @@ async def worker_agent_auth_materialization_plan(
         reason=None,
         currentRevision=profile.agent_auth_revision,
         targetId=auth.target_id,
+        slotGeneration=target_state.slot_generation or auth.slot_generation,
         sandboxProfileId=profile.id,
         revision=revision,
         selections=selections,
@@ -1085,7 +1336,21 @@ async def record_worker_agent_auth_status(
         applied_revision = (
             body.applied_revision if body.applied_revision is not None else body.revision
         )
-        if applied_revision < desired_revision:
+        missing_cleanup_paths = await _missing_worker_cleanup_paths(
+            db,
+            sandbox_profile_id=profile.id,
+            target_id=auth.target_id,
+            applied_cleanup_paths=set(body.applied_cleanup_paths),
+        )
+        if missing_cleanup_paths:
+            status = "failed"
+            applied_revision = existing_applied
+            error_code = "agent_auth_cleanup_incomplete"
+            error_message = (
+                "Agent auth cleanup did not report all required paths: "
+                + ", ".join(missing_cleanup_paths)
+            )
+        elif applied_revision < desired_revision:
             status = "superseded"
         else:
             desired_revision = applied_revision
@@ -1143,6 +1408,27 @@ def _validate_worker_status_revisions(
 
 def _worker_status_error_message(error_code: str) -> str:
     return f"Agent auth materialization failed ({error_code})."
+
+
+async def _missing_worker_cleanup_paths(
+    db: AsyncSession,
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+    applied_cleanup_paths: set[str],
+) -> list[str]:
+    expected: set[str] = set()
+    state = await store.get_target_state(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=target_id,
+    )
+    if state is not None:
+        for entry in _pending_cleanup_entries_from_json(state.pending_cleanup_json):
+            expected.update(_cleanup_entry_paths(entry))
+    for selection in await store.list_selections_for_profile(db, sandbox_profile_id):
+        expected.update(await _cleanup_paths_for_selection(db, selection))
+    return sorted(path for path in expected if path not in applied_cleanup_paths)
 
 
 async def _require_agent_auth_refresh_command(
@@ -1241,6 +1527,7 @@ async def _worker_selection_plan(
             materializationMode=selection.materialization_mode,
             credentialId=credential.id,
             credentialRevision=credential.revision,
+            status=selection.status,
             credentialShareId=selection.credential_share_id,
             gateway=gateway,
             syncedFiles=None,
@@ -1252,6 +1539,7 @@ async def _worker_selection_plan(
             materializationMode=selection.materialization_mode,
             credentialId=credential.id,
             credentialRevision=credential.revision,
+            status=selection.status,
             credentialShareId=selection.credential_share_id,
             gateway=None,
             syncedFiles=synced_files,
@@ -1261,6 +1549,225 @@ async def _worker_selection_plan(
         code="unsupported_materialization_mode",
         status_code=400,
     )
+
+
+async def _worker_cleanup_selection_plan(
+    db: AsyncSession,
+    selection: SandboxAgentAuthSelectionRecord,
+) -> WorkerAgentAuthSelectionPlan | None:
+    if selection.status != "invalid":
+        return None
+    if selection.materialization_mode != "synced_files":
+        return None
+    if selection.last_error_code not in _CLEANUP_SELECTION_ERROR_CODES:
+        return None
+    cleanup_paths = await _cleanup_paths_for_selection(db, selection)
+    cleanup = [
+        {
+            "relativePath": relative_path,
+            "reason": selection.last_error_code,
+        }
+        for relative_path in cleanup_paths
+    ]
+    if not cleanup:
+        return None
+    return WorkerAgentAuthSelectionPlan(
+        agentKind=selection.agent_kind,
+        materializationMode=selection.materialization_mode,
+        credentialId=selection.credential_id,
+        credentialRevision=selection.selected_revision,
+        status=selection.status,
+        credentialShareId=selection.credential_share_id,
+        gateway=None,
+        syncedFiles=WorkerAgentAuthSyncedFilesConfig(
+            credentialShareId=selection.credential_share_id,
+            envVars={},
+            files=[],
+            cleanup=cleanup,
+        ),
+    )
+
+
+def _worker_cleanup_plans_from_state(
+    target_state: SandboxProfileAgentAuthTargetStateRecord,
+) -> list[WorkerAgentAuthSelectionPlan]:
+    plans: list[WorkerAgentAuthSelectionPlan] = []
+    for entry in _pending_cleanup_entries_from_json(target_state.pending_cleanup_json):
+        plan = _worker_cleanup_plan_from_entry(entry)
+        if plan is not None:
+            plans.append(plan)
+    return plans
+
+
+def _worker_cleanup_plan_from_entry(
+    entry: dict[str, object],
+) -> WorkerAgentAuthSelectionPlan | None:
+    try:
+        credential_id = UUID(str(entry["credentialId"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+    agent_kind = entry.get("agentKind")
+    materialization_mode = entry.get("materializationMode")
+    credential_revision = entry.get("credentialRevision")
+    if not isinstance(agent_kind, str) or not isinstance(materialization_mode, str):
+        return None
+    if not isinstance(credential_revision, int) or isinstance(credential_revision, bool):
+        return None
+    credential_share_id = _optional_uuid_value(entry.get("credentialShareId"))
+    cleanup = [
+        {"relativePath": path, "reason": entry.get("reason") or "credential_revoked"}
+        for path in _cleanup_entry_paths(entry)
+    ]
+    if not cleanup:
+        return None
+    return WorkerAgentAuthSelectionPlan(
+        agentKind=agent_kind,
+        materializationMode=materialization_mode,
+        credentialId=credential_id,
+        credentialRevision=credential_revision,
+        status="invalid",
+        credentialShareId=credential_share_id,
+        gateway=None,
+        syncedFiles=WorkerAgentAuthSyncedFilesConfig(
+            credentialShareId=credential_share_id,
+            envVars={},
+            files=[],
+            cleanup=cleanup,
+        ),
+    )
+
+
+def _optional_uuid_value(value: object) -> UUID | None:
+    if value is None:
+        return None
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _pending_cleanup_entries_from_json(value: str | None) -> tuple[dict[str, object], ...]:
+    if not value:
+        return ()
+    try:
+        parsed = json.loads(value)
+    except ValueError:
+        return ()
+    if not isinstance(parsed, list):
+        return ()
+    return tuple(entry for entry in parsed if isinstance(entry, dict))
+
+
+def _cleanup_entry_paths(entry: dict[str, object]) -> tuple[str, ...]:
+    paths = entry.get("paths")
+    if not isinstance(paths, list):
+        return ()
+    return tuple(sorted({path for path in paths if isinstance(path, str) and path.strip()}))
+
+
+async def _pending_cleanup_entries_for_selection(
+    db: AsyncSession,
+    selection: SandboxAgentAuthSelectionRecord,
+    *,
+    reason: str,
+) -> list[dict[str, object]]:
+    if reason not in _CLEANUP_SELECTION_ERROR_CODES:
+        return []
+    if selection.materialization_mode != "synced_files":
+        return []
+    paths = await _cleanup_paths_from_credential_payload(db, selection)
+    if not paths:
+        return []
+    return [
+        {
+            "agentKind": selection.agent_kind,
+            "credentialId": str(selection.credential_id),
+            "credentialRevision": selection.selected_revision,
+            "credentialShareId": (
+                str(selection.credential_share_id)
+                if selection.credential_share_id is not None
+                else None
+            ),
+            "materializationMode": selection.materialization_mode,
+            "paths": list(paths),
+            "reason": reason,
+        }
+    ]
+
+
+def _pending_cleanup_json(entries: Sequence[dict[str, object]] | None) -> str | None:
+    if not entries:
+        return None
+    return json.dumps(list(entries), separators=(",", ":"), sort_keys=True)
+
+
+async def _cleanup_paths_for_selection(
+    db: AsyncSession,
+    selection: SandboxAgentAuthSelectionRecord,
+) -> tuple[str, ...]:
+    if selection.status != "invalid":
+        return ()
+    if selection.materialization_mode != "synced_files":
+        return ()
+    if selection.last_error_code not in _CLEANUP_SELECTION_ERROR_CODES:
+        return ()
+    return await _cleanup_paths_from_credential_payload(db, selection)
+
+
+async def _cleanup_paths_from_credential_payload(
+    db: AsyncSession,
+    selection: SandboxAgentAuthSelectionRecord,
+) -> tuple[str, ...]:
+    credential = await store.get_credential(db, selection.credential_id)
+    if credential is None or credential.payload_ciphertext is None:
+        return ()
+    try:
+        payload = _decrypt_synced_payload(credential)
+    except AgentAuthError:
+        return ()
+    files = payload.get("files")
+    if not isinstance(files, dict):
+        return ()
+    allowed_paths = set(_native_auth_file_paths(selection.agent_kind))
+    return tuple(
+        sorted(
+            path
+            for path in files
+            if isinstance(path, str) and path in allowed_paths
+        )
+    )
+
+
+def _native_auth_file_paths(agent_kind: str) -> tuple[str, ...]:
+    if agent_kind == "claude":
+        return tuple(sorted(CLAUDE_ALLOWED_AUTH_FILES))
+    if agent_kind == "codex":
+        return tuple(sorted(CODEX_ALLOWED_AUTH_FILES))
+    if agent_kind == "gemini":
+        return tuple(sorted(GEMINI_ALLOWED_AUTH_FILES))
+    if agent_kind == "opencode":
+        return tuple(sorted(_OPENCODE_ALLOWED_AUTH_FILES))
+    return ()
+
+
+def _reject_unallowed_selection_protected_env(
+    *,
+    agent_kind: str,
+    materialization_mode: str,
+    protected_env: dict[str, str],
+) -> None:
+    try:
+        reject_unallowed_protected_env(
+            agent_kind=agent_kind,
+            materialization_mode=materialization_mode,
+            keys=set(protected_env),
+        )
+    except ValueError as exc:
+        raise AgentAuthError(
+            str(exc),
+            code="agent_auth_protected_env_not_allowed",
+            status_code=409,
+        ) from exc
 
 
 async def _worker_gateway_config(
@@ -1275,11 +1782,13 @@ async def _worker_gateway_config(
         selection=selection,
         profile=profile,
         target_id=auth.target_id,
+        cloud_sandbox_id=auth.cloud_sandbox_id,
+        slot_generation=auth.slot_generation,
     )
     base = _gateway_base_url()
     if selection.agent_kind == "claude":
         facade_base = f"{base}/anthropic"
-        return WorkerAgentAuthGatewayConfig(
+        config = WorkerAgentAuthGatewayConfig(
             protocolFacade="anthropic",
             baseUrls={"anthropic": facade_base},
             runtimeGrantToken=result.raw_token,
@@ -1294,9 +1803,15 @@ async def _worker_gateway_config(
             protectedConfig={},
             supportConfig={},
         )
+        _reject_unallowed_selection_protected_env(
+            agent_kind=selection.agent_kind,
+            materialization_mode=selection.materialization_mode,
+            protected_env=config.protected_env,
+        )
+        return config
     if selection.agent_kind == "codex":
         facade_base = f"{base}/openai/v1"
-        return WorkerAgentAuthGatewayConfig(
+        config = WorkerAgentAuthGatewayConfig(
             protocolFacade="openai",
             baseUrls={"openai": facade_base},
             runtimeGrantToken=result.raw_token,
@@ -1319,9 +1834,15 @@ async def _worker_gateway_config(
             },
             supportConfig={},
         )
+        _reject_unallowed_selection_protected_env(
+            agent_kind=selection.agent_kind,
+            materialization_mode=selection.materialization_mode,
+            protected_env=config.protected_env,
+        )
+        return config
     if selection.agent_kind == "opencode":
         facade_base = f"{base}/openai/v1"
-        return WorkerAgentAuthGatewayConfig(
+        config = WorkerAgentAuthGatewayConfig(
             protocolFacade="openai",
             baseUrls={"openai": facade_base},
             runtimeGrantToken=result.raw_token,
@@ -1334,6 +1855,12 @@ async def _worker_gateway_config(
             protectedConfig={},
             supportConfig={},
         )
+        _reject_unallowed_selection_protected_env(
+            agent_kind=selection.agent_kind,
+            materialization_mode=selection.materialization_mode,
+            protected_env=config.protected_env,
+        )
+        return config
     raise AgentAuthError(
         "Gateway auth is not supported for this agent.",
         code="gateway_not_supported_for_agent",
@@ -1346,26 +1873,7 @@ async def _worker_synced_files_config(
     credential: AgentAuthCredentialRecord,
     selection: SandboxAgentAuthSelectionRecord,
 ) -> WorkerAgentAuthSyncedFilesConfig:
-    if credential.legacy_cloud_credential_id is None:
-        raise AgentAuthError(
-            "Synced credential is missing its source credential.",
-            code="synced_credential_source_missing",
-            status_code=409,
-        )
-    legacy = await get_cloud_credential_by_id(db, credential.legacy_cloud_credential_id)
-    if legacy is None or legacy.revoked_at is not None or legacy.provider != credential.agent_kind:
-        raise AgentAuthError(
-            "Synced credential source is not active.",
-            code="synced_credential_source_missing",
-            status_code=409,
-        )
-    payload = decrypt_json(legacy.payload_ciphertext)
-    if not isinstance(payload, dict):
-        raise AgentAuthError(
-            "Synced credential payload is invalid.",
-            code="synced_credential_payload_invalid",
-            status_code=409,
-        )
+    payload = _decrypt_synced_payload(credential)
     raw_env_vars = payload.get("envVars")
     env_vars = {
         key: value
@@ -1384,12 +1892,34 @@ async def _worker_synced_files_config(
             code="synced_credential_payload_invalid",
             status_code=409,
         )
+    _reject_unallowed_selection_protected_env(
+        agent_kind=selection.agent_kind,
+        materialization_mode=selection.materialization_mode,
+        protected_env=env_vars,
+    )
     return WorkerAgentAuthSyncedFilesConfig(
         credentialShareId=selection.credential_share_id,
         envVars=env_vars,
         files=files,
         cleanup=[],
     )
+
+
+def _decrypt_synced_payload(credential: AgentAuthCredentialRecord) -> dict[str, object]:
+    if credential.payload_ciphertext is None:
+        raise AgentAuthError(
+            "Synced credential is missing its source payload.",
+            code="synced_credential_source_missing",
+            status_code=409,
+        )
+    payload = decrypt_json(credential.payload_ciphertext)
+    if not isinstance(payload, dict) or payload.get("provider") != credential.agent_kind:
+        raise AgentAuthError(
+            "Synced credential payload is invalid.",
+            code="synced_credential_payload_invalid",
+            status_code=409,
+        )
+    return payload
 
 
 def _gateway_base_url() -> str:
@@ -1401,166 +1931,6 @@ def _gateway_base_url() -> str:
             status_code=409,
         )
     return base
-
-
-async def _backfill_legacy_cloud_credentials(
-    db: AsyncSession,
-    actor_user_id: UUID,
-    profile: SandboxProfileRecord,
-) -> SandboxProfileRecord:
-    all_legacy_rows = await store.list_legacy_cloud_credentials_for_user(db, actor_user_id)
-    active_legacy_by_id = {row.id: row for row in all_legacy_rows if row.revoked_at is None}
-    imported_legacy_credentials = await store.list_imported_legacy_credentials_for_user(
-        db,
-        actor_user_id,
-    )
-    imported_credential_ids = {credential.id for credential in imported_legacy_credentials}
-    changed = False
-    for imported in imported_legacy_credentials:
-        legacy = next(
-            (row for row in all_legacy_rows if row.id == imported.legacy_cloud_credential_id),
-            None,
-        )
-        if legacy is None or legacy.revoked_at is not None:
-            await store.revoke_credential(db, credential_id=imported.id)
-            replacement_exists = legacy is not None and any(
-                active.provider == legacy.provider and active.id != legacy.id
-                for active in active_legacy_by_id.values()
-            )
-            if replacement_exists:
-                changed = True
-                continue
-            affected = await store.list_active_selections_for_credential_or_share(
-                db,
-                credential_id=imported.id,
-            )
-            for selection in affected:
-                await store.mark_selection_invalid(
-                    db,
-                    selection_id=selection.id,
-                    error_code="legacy_cloud_credential_revoked",
-                    error_message="Synced cloud credential was revoked.",
-                )
-                await _bump_profile_for_selection(
-                    db,
-                    selection,
-                    actor_user_id=actor_user_id,
-                    reason="legacy_cloud_credential_revoked",
-                    force_restart=True,
-                )
-            changed = True
-    if not active_legacy_by_id:
-        return profile
-    existing_selections = {
-        selection.agent_kind: selection
-        for selection in await store.list_selections_for_profile(db, profile.id)
-    }
-    for legacy in active_legacy_by_id.values():
-        credential = await store.find_agent_auth_credential_for_legacy_cloud_credential(
-            db,
-            legacy.id,
-        )
-        if credential is None:
-            credential = await store.create_agent_auth_credential(
-                db,
-                owner_scope="personal",
-                owner_user_id=actor_user_id,
-                organization_id=None,
-                created_by_user_id=actor_user_id,
-                agent_kind=legacy.provider,
-                credential_kind="synced_path",
-                display_name=f"Synced {legacy.provider} auth",
-                redacted_summary_json=json.dumps(
-                    {
-                        "source": "cloud_credential",
-                        "authMode": legacy.auth_mode,
-                    },
-                    sort_keys=True,
-                ),
-                status="ready",
-                legacy_cloud_credential_id=legacy.id,
-            )
-            await store.record_audit_event(
-                db,
-                action="credential.import_legacy",
-                actor_user_id=actor_user_id,
-                owner_scope="personal",
-                owner_user_id=actor_user_id,
-                organization_id=None,
-                credential_id=credential.id,
-                sandbox_profile_id=profile.id,
-                metadata_json=json.dumps(
-                    {"legacyCloudCredentialId": str(legacy.id)}, sort_keys=True
-                ),
-            )
-            imported_credential_ids.add(credential.id)
-        elif (
-            credential.revoked_at is None
-            and legacy.updated_at is not None
-            and legacy.updated_at > credential.updated_at
-        ):
-            credential = (
-                await store.update_credential_status(
-                    db,
-                    credential_id=credential.id,
-                    status="ready",
-                    redacted_summary_json=json.dumps(
-                        {
-                            "source": "cloud_credential",
-                            "authMode": legacy.auth_mode,
-                        },
-                        sort_keys=True,
-                    ),
-                )
-                or credential
-            )
-            imported_credential_ids.add(credential.id)
-            changed = True
-        if credential.revoked_at is not None:
-            continue
-        selection = existing_selections.get(legacy.provider)
-        should_select = False
-        if selection is None:
-            should_select = True
-        elif selection.credential_id in imported_credential_ids:
-            should_select = (
-                selection.status != "active"
-                or selection.credential_id != credential.id
-                or selection.selected_revision != credential.revision
-            )
-        if should_select:
-            await store.upsert_selection(
-                db,
-                sandbox_profile_id=profile.id,
-                owner_scope="personal",
-                agent_kind=legacy.provider,
-                credential_id=credential.id,
-                credential_share_id=None,
-                materialization_mode="synced_files",
-                selected_revision=credential.revision,
-                status="active",
-                last_error_code=None,
-                last_error_message=None,
-            )
-            changed = True
-    if not changed:
-        return profile
-    updated = await store.bump_sandbox_profile_agent_auth_revision(
-        db,
-        sandbox_profile_id=profile.id,
-        reason="legacy_cloud_credential_import",
-        actor_user_id=actor_user_id,
-        force_restart=False,
-    )
-    if updated is not None:
-        await _mark_target_pending_and_queue_refresh(
-            db,
-            profile=updated,
-            actor_user_id=actor_user_id,
-            reason="legacy_cloud_credential_import",
-            force_restart=False,
-        )
-    return updated or profile
 
 
 async def _reconcile_managed_budget_subject(
@@ -2362,6 +2732,11 @@ async def _bump_profile_for_selection(
     reason: str,
     force_restart: bool,
 ) -> None:
+    pending_cleanup = await _pending_cleanup_entries_for_selection(
+        db,
+        selection,
+        reason=reason,
+    )
     updated_profile = await store.bump_sandbox_profile_agent_auth_revision(
         db,
         sandbox_profile_id=selection.sandbox_profile_id,
@@ -2376,6 +2751,7 @@ async def _bump_profile_for_selection(
             actor_user_id=actor_user_id,
             reason=reason,
             force_restart=force_restart,
+            pending_cleanup=pending_cleanup,
         )
     await store.revoke_runtime_grants_for_selection(db, selection_id=selection.id)
 
@@ -2387,6 +2763,7 @@ async def _mark_target_pending_and_queue_refresh(
     actor_user_id: UUID | None,
     reason: str,
     force_restart: bool,
+    pending_cleanup: Sequence[dict[str, object]] | None = None,
 ) -> None:
     if profile.primary_target_id is None:
         return
@@ -2398,6 +2775,9 @@ async def _mark_target_pending_and_queue_refresh(
         reason=reason,
         force_restart=force_restart,
     )
+    pending_kwargs: dict[str, object] = {}
+    if pending_cleanup is not None:
+        pending_kwargs["pending_cleanup_json"] = _pending_cleanup_json(pending_cleanup)
     await store.upsert_target_state(
         db,
         sandbox_profile_id=profile.id,
@@ -2410,6 +2790,7 @@ async def _mark_target_pending_and_queue_refresh(
         last_worker_id=None,
         last_error_code=None,
         last_error_message=None,
+        **pending_kwargs,
     )
 
 
@@ -2446,6 +2827,51 @@ async def _ensure_profile_target_refresh_if_needed(
     )
 
 
+async def request_agent_auth_refresh_for_profile_target(
+    db: AsyncSession,
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+    actor_user_id: UUID | None,
+    reason: str,
+    force_restart: bool,
+) -> None:
+    profile = await store.get_sandbox_profile(db, sandbox_profile_id)
+    if profile is None:
+        raise AgentAuthError(
+            "Sandbox profile not found.",
+            code="sandbox_profile_not_found",
+            status_code=404,
+        )
+    if profile.primary_target_id != target_id:
+        raise AgentAuthError(
+            "Sandbox profile target does not match the requested target.",
+            code="sandbox_profile_target_mismatch",
+            status_code=409,
+        )
+    command = await _queue_agent_auth_refresh_command(
+        db,
+        profile=profile,
+        target_id=target_id,
+        actor_user_id=actor_user_id,
+        reason=reason,
+        force_restart=force_restart,
+    )
+    await store.upsert_target_state(
+        db,
+        sandbox_profile_id=profile.id,
+        target_id=target_id,
+        desired_revision=profile.agent_auth_revision,
+        applied_revision=None,
+        status="pending",
+        force_restart_required=force_restart,
+        last_command_id=command.id,
+        last_worker_id=None,
+        last_error_code=None,
+        last_error_message=None,
+    )
+
+
 async def _queue_agent_auth_refresh_command(
     db: AsyncSession,
     *,
@@ -2456,7 +2882,10 @@ async def _queue_agent_auth_refresh_command(
     force_restart: bool,
 ) -> commands_store.CloudCommandSnapshot:
     idempotency_scope = f"target:{target_id}:agent-auth-config:{profile.id}"
-    idempotency_key = f"agent-auth-config:{target_id}:{profile.id}:{profile.agent_auth_revision}"
+    idempotency_key = (
+        f"agent-auth-config:{target_id}:{profile.id}:{profile.agent_auth_revision}:"
+        f"{reason}:{int(force_restart)}"
+    )
     existing = await commands_store.get_command_by_idempotency(
         db,
         idempotency_scope=idempotency_scope,

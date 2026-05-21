@@ -4,8 +4,8 @@ import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories
 import { cloudRepositoryKey, isCloudRepository } from "@/lib/domain/settings/repositories";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useCloudCredentials } from "@/hooks/access/cloud/use-cloud-credentials";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
+import { useAgentAuthCredentials } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 
 const EMPTY_REPOSITORIES: SettingsRepositoryEntry[] = [];
 
@@ -17,25 +17,21 @@ export interface RuntimeInputSyncSummaryRow {
 }
 
 function summarizeCredentialRows(
-  credentialStatuses: ReturnType<typeof useCloudCredentials>["data"],
+  credentials: ReturnType<typeof useAgentAuthCredentials>["data"],
 ): RuntimeInputSyncSummaryRow {
-  const statuses = credentialStatuses ?? [];
-  const syncedCount = statuses.filter((status) => status.synced).length;
-  const localCount = statuses.filter((status) => status.localDetected).length;
+  const syncedCount = (credentials ?? []).filter((credential) => (
+    credential.credentialKind === "synced_path" && credential.status === "ready"
+  )).length;
   const status: RuntimeInputSyncStatus = syncedCount > 0
     ? "synced_to_cloud"
-    : localCount > 0
-      ? "local_only"
-      : "not_configured";
+    : "not_configured";
 
   return {
     id: "credentials",
     label: "Agent credentials",
     description: syncedCount > 0
       ? `${syncedCount} credential source${syncedCount === 1 ? "" : "s"} synced to cloud.`
-      : localCount > 0
-        ? `${localCount} local credential source${localCount === 1 ? "" : "s"} can sync to cloud.`
-        : "No supported local agent credentials detected.",
+      : "No synced agent credentials yet.",
     status,
   };
 }
@@ -71,7 +67,7 @@ export function useRuntimeInputSyncSummary(
     (state) => state.cloudRuntimeInputSyncEnabled,
   );
   const setPreference = useUserPreferencesStore((state) => state.set);
-  const credentials = useCloudCredentials();
+  const credentials = useAgentAuthCredentials();
   const repoConfigs = useCloudRepoConfigs();
   const setEnabled = useCallback((enabled: boolean) => {
     setPreference("cloudRuntimeInputSyncEnabled", enabled);

@@ -158,6 +158,48 @@ async def _resolve_command_workspace(
     return workspace.anyharness_workspace_id, payload, str(workspace.id)
 
 
+async def _populate_agent_auth_preflight_payload(
+    db: AsyncSession,
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    kind: str,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    if kind not in {
+        CloudCommandKind.start_session.value,
+        CloudCommandKind.send_prompt.value,
+    }:
+        return payload
+    if target.sandbox_profile_id is None:
+        next_payload = dict(payload)
+        next_payload.pop("agentAuthScope", None)
+        return next_payload
+    state = await agent_auth_store.get_target_state(
+        db,
+        sandbox_profile_id=target.sandbox_profile_id,
+        target_id=target.id,
+    )
+    if state is None:
+        profile = await agent_auth_store.get_sandbox_profile(db, target.sandbox_profile_id)
+        if profile is None:
+            return payload
+        required_revision = profile.agent_auth_revision
+    else:
+        required_revision = state.desired_revision
+    next_payload = dict(payload)
+    next_payload["sandboxProfileId"] = str(target.sandbox_profile_id)
+    next_payload["requiredAgentAuthRevision"] = required_revision
+    if kind == CloudCommandKind.start_session.value:
+        next_payload["agentAuthScope"] = {
+            "provider": "proliferate-cloud",
+            "id": str(target.sandbox_profile_id),
+            "targetId": str(target.id),
+        }
+    else:
+        next_payload.pop("agentAuthScope", None)
+    return next_payload
+
+
 def _direct_start_session_workspace_id(payload: dict[str, object]) -> str | None:
     value = payload.get("workspaceId")
     if not isinstance(value, str) or not value.strip():
@@ -210,34 +252,40 @@ async def enqueue_command(
         session_id=body.session_id,
         preconditions=body.preconditions,
     )
-    validate_command_payload(kind=kind, payload=body.payload)
+    payload = await _populate_agent_auth_preflight_payload(
+        db,
+        target=target,
+        kind=kind,
+        payload=body.payload,
+    )
+    validate_command_payload(kind=kind, payload=payload)
     await _validate_agent_auth_preflight(
         db,
         user=user,
         target=target,
-        payload=body.payload,
+        payload=payload,
     )
     payload = await _stamp_managed_runtime_config_preflight(
         db,
         actor_user_id=user.id,
         target=target,
         kind=kind,
-        payload=body.payload,
+        payload=payload,
     )
-    if payload is not body.payload:
-        body = body.model_copy(update={"payload": payload})
+    validate_command_payload(kind=kind, payload=payload)
     await _validate_runtime_config_preflight(
         db,
         actor_user_id=user.id,
         target=target,
         payload=payload,
     )
+    command_body = body.model_copy(update={"payload": payload})
     resolved_workspace_id, payload, cloud_workspace_id = await _resolve_command_workspace(
         db,
         user=user,
         target=target,
         kind=kind,
-        body=body,
+        body=command_body,
     )
     idempotency_scope = _idempotency_scope_for_command(
         target=target,
@@ -367,6 +415,12 @@ async def _validate_agent_auth_preflight(
         raise CloudApiError(
             "cloud_command_agent_auth_not_ready",
             "Agent auth config has not been applied to this target.",
+            status_code=409,
+        )
+    if state.force_restart_required:
+        raise CloudApiError(
+            "cloud_command_agent_auth_restart_required",
+            "Agent auth changes require the session to restart before this command can run.",
             status_code=409,
         )
 

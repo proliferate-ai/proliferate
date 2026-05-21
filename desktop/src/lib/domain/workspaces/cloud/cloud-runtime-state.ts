@@ -1,5 +1,5 @@
 import type {
-  CloudCredentialFreshness,
+  CloudRuntimeAuthState,
   CloudWorkspaceStatus,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 
@@ -22,7 +22,7 @@ export interface SelectedCloudRuntimeViewModel {
 export function buildSelectedCloudRuntimeViewModel(args: {
   persistedStatus: CloudWorkspaceStatus | null;
   connectionState: SelectedCloudRuntimeConnectionState;
-  credentialFreshness?: CloudCredentialFreshness | null;
+  runtimeAuth?: CloudRuntimeAuthState | null;
   isWarm: boolean;
 }): SelectedCloudRuntimeViewModel | null {
   if (args.persistedStatus !== "ready") {
@@ -30,40 +30,40 @@ export function buildSelectedCloudRuntimeViewModel(args: {
   }
 
   const variant: SelectedCloudRuntimeVariant = args.isWarm ? "warm" : "initial";
-  const freshness = args.credentialFreshness ?? null;
+  const runtimeAuth = args.runtimeAuth ?? null;
 
-  if (freshness?.status === "apply_failed") {
+  if (runtimeAuth?.status === "apply_failed") {
     return {
       phase: "failed",
       variant,
       tone: "error",
-      title: "Credential sync failed",
-      subtitle: freshness.lastError ?? "Retry cloud credential sync.",
-      actionBlockReason: freshness.lastError ?? "Cloud credentials failed to apply. Retry credential sync.",
+      title: "Agent authentication failed",
+      subtitle: runtimeAuth.lastError ?? "Retry agent authentication.",
+      actionBlockReason: runtimeAuth.lastError ?? "Agent authentication failed to apply. Retry.",
       preserveVisibleContent: variant === "warm",
       showRetry: true,
     };
   }
 
-  if (freshness?.status === "restart_required") {
+  if (runtimeAuth?.status === "restart_required") {
     return {
       phase: "failed",
       variant,
       tone: "error",
       title: "Credential restart required",
       subtitle: "Close active cloud sessions, then retry to apply updated credentials.",
-      actionBlockReason: "Cloud credentials changed. Close active cloud sessions, then retry to apply them.",
+      actionBlockReason: "Agent authentication changed. Close active cloud sessions, then retry to apply it.",
       preserveVisibleContent: variant === "warm",
       showRetry: true,
     };
   }
 
-  if (freshness?.status === "missing_credentials") {
+  if (runtimeAuth?.status === "missing_credentials") {
     return {
       phase: "failed",
       variant,
       tone: "error",
-      title: "Cloud credentials required",
+      title: "Agent authentication required",
       subtitle: "Sync an agent credential before starting cloud sessions.",
       actionBlockReason: "Sync an agent credential before starting cloud sessions.",
       preserveVisibleContent: variant === "warm",

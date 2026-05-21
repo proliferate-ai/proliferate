@@ -5,13 +5,12 @@ import type {
 } from "@/lib/access/cloud/client";
 import { startCloudWorkspaceHandoff } from "@proliferate/cloud-sdk/client/mobility";
 import { applyCloudMobilityHandoffSummary } from "./mobility-cache";
-import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/access/cloud/credential-recovery";
+import { autoSyncDetectedAgentAuthCredentialsIfNeeded } from "@/lib/access/cloud/agent-auth-recovery";
+import { syncLocalAgentAuthCredentialToCloud } from "@/lib/access/cloud/agent-auth-sync";
 import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
-import { useCloudCredentialMutations } from "./use-cloud-credential-mutations";
 
 export function useStartCloudWorkspaceHandoff() {
   const queryClient = useQueryClient();
-  const { syncCloudCredential } = useCloudCredentialMutations();
 
   return useMutation<
     CloudMobilityHandoffSummary,
@@ -25,9 +24,9 @@ export function useStartCloudWorkspaceHandoff() {
       try {
         return await startCloudWorkspaceHandoff(mobilityWorkspaceId, input);
       } catch (error) {
-        const didSync = await autoSyncDetectedCloudCredentialsIfNeeded(
+        const didSync = await autoSyncDetectedAgentAuthCredentialsIfNeeded(
           error,
-          syncCloudCredential,
+          syncLocalAgentAuthCredentialToCloud,
         );
         if (!didSync) {
           throw error;

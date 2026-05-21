@@ -21,6 +21,8 @@ pub struct AgentAuthSelectionConfig {
     pub credential_id: String,
     pub credential_revision: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_share_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<String>,
@@ -54,6 +56,8 @@ pub struct AgentAuthSelectionStatus {
     pub credential_id: String,
     pub credential_revision: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_share_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<String>,
@@ -82,5 +86,7 @@ pub struct ApplyAgentAuthConfigResponse {
     pub applied: bool,
     pub revision: i64,
     pub selection_count: usize,
+    #[serde(default)]
+    pub no_selection_kinds: Vec<String>,
     pub status: String,
 }

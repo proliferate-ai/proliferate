@@ -13,10 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.constants.billing import BILLING_MODE_OBSERVE
 from proliferate.db.models.auth import OAuthAccount
-from proliferate.db.models.cloud.credentials import CloudCredential
 from proliferate.db.models.cloud.mcp import CloudMcpConnection, CloudMcpConnectionAuth
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
-from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.cloud.worktree_policy import CloudWorktreeRetentionPolicy
@@ -36,10 +34,8 @@ from proliferate.integrations.sandbox.base import ProviderSandboxState
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config import service as repo_config_service
 from proliferate.server.cloud.repos import service as repos_service
-from proliferate.server.cloud.runtime import service as runtime_service
-from proliferate.server.cloud.runtime import credential_freshness as credential_freshness_service
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
-from proliferate.server.cloud.runtime.credential_freshness import CredentialFreshnessSnapshot
+from proliferate.server.cloud.runtime.auth_status import RuntimeAuthStateSnapshot
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.workspaces import service as cloud_service
 from proliferate.utils.crypto import decrypt_json, encrypt_json, encrypt_text
@@ -50,17 +46,33 @@ async def _billing_subject_for_user(db_session: AsyncSession, user_id: uuid.UUID
     return await ensure_personal_billing_subject(db_session, user_id)
 
 
-def _current_credential_freshness() -> CredentialFreshnessSnapshot:
-    return CredentialFreshnessSnapshot(
+def _current_runtime_auth() -> RuntimeAuthStateSnapshot:
+    return RuntimeAuthStateSnapshot(
         status="current",
-        files_current=True,
-        process_current=True,
+        config_current=True,
+        target_current=True,
         requires_restart=False,
+        desired_revision=1,
+        applied_revision=1,
         last_error=None,
         last_error_at=None,
-        files_applied_at=None,
-        process_applied_at=None,
+        last_attempted_at=None,
+        last_applied_at=None,
     )
+
+
+def _claude_file_payload(api_key: str) -> dict[str, object]:
+    return {
+        "authMode": "file",
+        "files": [
+            {
+                "relativePath": ".claude.json",
+                "contentBase64": base64.b64encode(
+                    f'{{"apiKey":"{api_key}"}}'.encode()
+                ).decode("ascii"),
+            }
+        ],
+    }
 
 
 async def _register_and_login(
@@ -146,17 +158,6 @@ async def _link_secondary_account(db_session: AsyncSession, user_id: str) -> Non
     db_session.add(account)
     await db_session.commit()
 
-
-async def _list_credentials(db_session: AsyncSession, user_id: str) -> list[CloudCredential]:
-    return (
-        (
-            await db_session.execute(
-                select(CloudCredential).where(CloudCredential.user_id == uuid.UUID(user_id))
-            )
-        )
-        .scalars()
-        .all()
-    )
 
 
 async def _list_mcp_connections(
@@ -298,208 +299,6 @@ class TestCloudWorktreeRetentionPolicy:
 
         assert response.status_code == 400
         assert response.json()["detail"]["code"] == "invalid_worktree_retention_policy"
-
-
-class TestCloudCredentials:
-    @pytest.mark.asyncio
-    async def test_sync_and_delete_supported_credentials(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        session = await _register_and_login(client, "cloud-creds@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-
-        claude_response = await client.put(
-            "/v1/cloud/credentials/claude",
-            headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
-        )
-        assert claude_response.status_code == 200
-
-        codex_file = base64.b64encode(
-            json.dumps({"auth_mode": "chatgpt", "tokens": {"access_token": "opaque"}}).encode(
-                "utf-8"
-            )
-        ).decode("ascii")
-        codex_response = await client.put(
-            "/v1/cloud/credentials/codex",
-            headers=headers,
-            json={
-                "authMode": "file",
-                "files": [
-                    {
-                        "relativePath": ".codex/auth.json",
-                        "contentBase64": codex_file,
-                    }
-                ],
-            },
-        )
-        assert codex_response.status_code == 200
-
-        statuses_response = await client.get("/v1/cloud/credentials", headers=headers)
-        assert statuses_response.status_code == 200
-        statuses_payload = statuses_response.json()
-        assert statuses_payload[0]["provider"] == "claude"
-        assert statuses_payload[0]["authMode"] == "env"
-        assert statuses_payload[0]["supported"] is True
-        assert statuses_payload[0]["localDetected"] is False
-        assert statuses_payload[0]["synced"] is True
-        assert isinstance(statuses_payload[0]["lastSyncedAt"], str)
-        assert statuses_payload[1]["provider"] == "codex"
-        assert statuses_payload[1]["authMode"] == "file"
-        assert statuses_payload[1]["supported"] is True
-        assert statuses_payload[1]["localDetected"] is False
-        assert statuses_payload[1]["synced"] is True
-        assert isinstance(statuses_payload[1]["lastSyncedAt"], str)
-
-        records = await _list_credentials(db_session, session["user_id"])
-        assert len(records) == 2
-
-        delete_response = await client.delete("/v1/cloud/credentials/codex", headers=headers)
-        assert delete_response.status_code == 200
-
-        statuses_after_delete = await client.get("/v1/cloud/credentials", headers=headers)
-        assert statuses_after_delete.status_code == 200
-        assert statuses_after_delete.json()[1]["synced"] is False
-
-    @pytest.mark.asyncio
-    async def test_unchanged_credential_sync_touches_active_row(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        session = await _register_and_login(client, "cloud-creds-idempotent@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-        payload = {
-            "authMode": "env",
-            "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-        }
-
-        response = await client.put("/v1/cloud/credentials/claude", headers=headers, json=payload)
-        assert response.status_code == 200
-        records = await _list_credentials(db_session, session["user_id"])
-        assert len(records) == 1
-        record = records[0]
-        assert record is not None
-        record_id = record.id
-        old_synced_at = datetime(2024, 1, 1, tzinfo=UTC)
-        record.last_synced_at = old_synced_at
-        await db_session.commit()
-
-        response = await client.put("/v1/cloud/credentials/claude", headers=headers, json=payload)
-        assert response.status_code == 200
-
-        db_session.expire_all()
-        records = await _list_credentials(db_session, session["user_id"])
-        assert len(records) == 1
-        assert records[0].id == record_id
-        assert records[0].revoked_at is None
-        assert records[0].last_synced_at > old_synced_at
-
-    @pytest.mark.asyncio
-    async def test_changed_credential_sync_versions_active_row(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        session = await _register_and_login(client, "cloud-creds-versioned@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-
-        first = await client.put(
-            "/v1/cloud/credentials/claude",
-            headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "first-key"},
-            },
-        )
-        assert first.status_code == 200
-        second = await client.put(
-            "/v1/cloud/credentials/claude",
-            headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "second-key"},
-            },
-        )
-        assert second.status_code == 200
-
-        records = await _list_credentials(db_session, session["user_id"])
-        active_records = [record for record in records if record.revoked_at is None]
-        assert len(records) == 2
-        assert len(active_records) == 1
-
-    @pytest.mark.asyncio
-    async def test_sync_claude_file_backed_credential(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        """Claude file-backed auth sync via .claude/.credentials.json."""
-        session = await _register_and_login(client, "cloud-claude-file@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-
-        cred_file = base64.b64encode(
-            json.dumps(
-                {
-                    "claudeAiOauth": {
-                        "accessToken": "test-access-token",
-                        "refreshToken": "test-refresh",
-                    }
-                }
-            ).encode("utf-8")
-        ).decode("ascii")
-        response = await client.put(
-            "/v1/cloud/credentials/claude",
-            headers=headers,
-            json={
-                "authMode": "file",
-                "files": [
-                    {
-                        "relativePath": ".claude/.credentials.json",
-                        "contentBase64": cred_file,
-                    }
-                ],
-            },
-        )
-        assert response.status_code == 200
-
-        statuses = await client.get("/v1/cloud/credentials", headers=headers)
-        assert statuses.status_code == 200
-        claude_status = statuses.json()[0]
-        assert claude_status["provider"] == "claude"
-        assert claude_status["authMode"] == "file"
-        assert claude_status["synced"] is True
-
-    @pytest.mark.asyncio
-    async def test_sync_claude_file_backed_rejects_unapproved_path(
-        self,
-        client: AsyncClient,
-    ) -> None:
-        """Only allowlisted Claude auth files are accepted."""
-        session = await _register_and_login(client, "cloud-claude-file-bad@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-
-        cred_file = base64.b64encode(b'{"some":"data"}').decode("ascii")
-        response = await client.put(
-            "/v1/cloud/credentials/claude",
-            headers=headers,
-            json={
-                "authMode": "file",
-                "files": [
-                    {
-                        "relativePath": ".claude/some-random-file.json",
-                        "contentBase64": cred_file,
-                    }
-                ],
-            },
-        )
-        assert response.status_code == 400
-        assert response.json()["detail"]["code"] == "invalid_payload"
 
 
 class TestCloudMcpConnections:
@@ -1061,7 +860,7 @@ class TestCloudRepoConfig:
             ).encode("utf-8")
         ).decode("ascii")
         response = await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
             json={
                 "authMode": "file",
@@ -1088,7 +887,7 @@ class TestCloudRepoConfig:
 
         bad_b64 = base64.b64encode(b"not json {{{").decode("ascii")
         response = await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
             json={
                 "authMode": "file",
@@ -1101,82 +900,6 @@ class TestCloudRepoConfig:
             },
         )
         assert response.status_code == 400
-
-    @pytest.mark.asyncio
-    async def test_sync_claude_env_still_works(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        """The existing env-var path continues to work."""
-        session = await _register_and_login(client, "cloud-claude-env-still@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-
-        response = await client.put(
-            "/v1/cloud/credentials/claude",
-            headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "sk-ant-test-key"},
-            },
-        )
-        assert response.status_code == 200
-
-        statuses = await client.get("/v1/cloud/credentials", headers=headers)
-        claude_status = statuses.json()[0]
-        assert claude_status["authMode"] == "env"
-        assert claude_status["synced"] is True
-
-    @pytest.mark.asyncio
-    async def test_sync_claude_file_replaces_previous_env_credential(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        """Syncing file-backed auth replaces a previously synced env credential."""
-        session = await _register_and_login(client, "cloud-claude-replace@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-
-        # First sync env
-        await client.put(
-            "/v1/cloud/credentials/claude",
-            headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "sk-ant-old"},
-            },
-        )
-
-        # Then sync file
-        cred_file = base64.b64encode(
-            json.dumps({"claudeAiOauth": {"accessToken": "new-access"}}).encode("utf-8")
-        ).decode("ascii")
-        response = await client.put(
-            "/v1/cloud/credentials/claude",
-            headers=headers,
-            json={
-                "authMode": "file",
-                "files": [
-                    {
-                        "relativePath": ".claude/.credentials.json",
-                        "contentBase64": cred_file,
-                    }
-                ],
-            },
-        )
-        assert response.status_code == 200
-
-        statuses = await client.get("/v1/cloud/credentials", headers=headers)
-        claude_status = statuses.json()[0]
-        assert claude_status["authMode"] == "file"
-        assert claude_status["synced"] is True
-
-        # Only one active (non-revoked) Claude credential should exist
-        records = await _list_credentials(db_session, session["user_id"])
-        active_claude = [r for r in records if r.provider == "claude" and r.revoked_at is None]
-        assert len(active_claude) == 1
-        assert active_claude[0].auth_mode == "file"
-
 
 class TestCloudRepoBranches:
     @pytest.mark.asyncio
@@ -1240,12 +963,9 @@ class TestCloudWorkspaces:
         )
 
         sync_response = await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
+            json=_claude_file_payload("sk-ant-test"),
         )
         assert sync_response.status_code == 200
 
@@ -1298,12 +1018,9 @@ class TestCloudWorkspaces:
         )
 
         sync_response = await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
+            json=_claude_file_payload("sk-ant-test"),
         )
         assert sync_response.status_code == 200
 
@@ -1368,12 +1085,9 @@ class TestCloudWorkspaces:
         _patch_repo_branches_lookup(monkeypatch, _stale_repo_branches)
 
         sync_response = await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
+            json=_claude_file_payload("sk-ant-test"),
         )
         assert sync_response.status_code == 200
 
@@ -1429,12 +1143,9 @@ class TestCloudWorkspaces:
         )
 
         sync_response = await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
+            json=_claude_file_payload("sk-ant-test"),
         )
         assert sync_response.status_code == 200
 
@@ -1497,12 +1208,9 @@ class TestCloudWorkspaces:
         assert no_creds.json()["detail"]["code"] == "missing_supported_credentials"
 
         sync_response = await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
+            json=_claude_file_payload("sk-ant-test"),
         )
         assert sync_response.status_code == 200
 
@@ -1564,12 +1272,9 @@ class TestCloudWorkspaces:
         await _configure_repo(client, headers, git_owner="acme", git_repo_name="rocket")
 
         sync_response = await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
+            json=_claude_file_payload("sk-ant-test"),
         )
         assert sync_response.status_code == 200
 
@@ -1612,12 +1317,9 @@ class TestCloudWorkspaces:
         await _configure_repo(client, headers, git_owner="acme", git_repo_name="rocket")
 
         await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
+            json=_claude_file_payload("sk-ant-test"),
         )
 
         request = {
@@ -1658,12 +1360,9 @@ class TestCloudWorkspaces:
         await _configure_repo(client, headers, git_owner="acme", git_repo_name="rocket")
 
         await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
+            json=_claude_file_payload("sk-ant-test"),
         )
 
         response = await client.post(
@@ -1704,12 +1403,9 @@ class TestCloudWorkspaces:
         await _configure_repo(client, headers, git_owner="acme", git_repo_name="rocket")
 
         await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
+            json=_claude_file_payload("sk-ant-test"),
         )
 
         response = await client.post(
@@ -1742,7 +1438,7 @@ class TestCloudWorkspaces:
                 anyharness_workspace_id="workspace-123",
                 runtime_generation=2,
                 ready_agent_kinds=["codex"],
-                credential_freshness=_current_credential_freshness(),
+                runtime_auth=_current_runtime_auth(),
             )
 
         monkeypatch.setattr(cloud_service, "get_workspace_connection", _workspace_connection)
@@ -1854,137 +1550,6 @@ class TestCloudWorkspaces:
         assert response.json()["detail"]["code"] == "workspace_not_ready"
 
     @pytest.mark.asyncio
-    async def test_sync_credentials_succeeds_when_agent_reconcile_fails(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        class _FakeProvider:
-            async def connect_running_sandbox(self, _sandbox_id: str) -> object:
-                return object()
-
-            async def get_sandbox_state(self, sandbox_id: str) -> ProviderSandboxState:
-                return ProviderSandboxState(
-                    external_sandbox_id=sandbox_id,
-                    state="running",
-                    started_at=None,
-                    end_at=None,
-                    observed_at=datetime.now(UTC),
-                    metadata={},
-                )
-
-            async def resolve_runtime_context(self, _sandbox: object) -> object:
-                return object()
-
-        async def _write_files(*_args, **_kwargs) -> None:
-            return None
-
-        async def _boom(*_args, **_kwargs) -> None:
-            raise RuntimeError("codex install failed")
-
-        monkeypatch.setattr(
-            cloud_service,
-            "sync_workspace_credentials",
-            runtime_service.sync_workspace_credentials,
-        )
-        monkeypatch.setattr(
-            credential_freshness_service,
-            "get_sandbox_provider",
-            lambda _kind: _FakeProvider(),
-        )
-        monkeypatch.setattr(credential_freshness_service, "write_credential_files", _write_files)
-        monkeypatch.setattr(credential_freshness_service, "reconcile_remote_agents", _boom)
-
-        session = await _register_and_login(client, "cloud-sync-credentials@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-        user_id = uuid.UUID(session["user_id"])
-        billing_subject = await _billing_subject_for_user(db_session, user_id)
-        environment = CloudRuntimeEnvironment(
-            user_id=user_id,
-            organization_id=None,
-            created_by_user_id=user_id,
-            billing_subject_id=billing_subject.id,
-            git_provider="github",
-            git_owner="acme",
-            git_repo_name="rocket",
-            git_owner_norm="acme",
-            git_repo_name_norm="rocket",
-            isolation_policy="repo_shared",
-            status="running",
-            runtime_url="https://example-runtime.invalid",
-            runtime_token_ciphertext=encrypt_text("runtime-token"),
-            anyharness_data_key_ciphertext=encrypt_text("runtime-data-key"),
-            runtime_generation=2,
-            credential_process_applied_revision="credential-process:v1:empty",
-        )
-        db_session.add(environment)
-        await db_session.commit()
-        await db_session.refresh(environment)
-
-        credential = CloudCredential(
-            user_id=user_id,
-            provider="codex",
-            auth_mode="file",
-            payload_ciphertext=encrypt_json(
-                {
-                    "authMode": "file",
-                    "files": {".codex/auth.json": '{"access_token":"opaque"}'},
-                }
-            ),
-            payload_format="json-v1",
-        )
-        db_session.add(credential)
-        await db_session.commit()
-
-        workspace = CloudWorkspace(
-            user_id=user_id,
-            billing_subject_id=billing_subject.id,
-            runtime_environment_id=environment.id,
-            display_name="acme/rocket",
-            git_provider="github",
-            git_owner="acme",
-            git_repo_name="rocket",
-            git_branch="cloud-branch",
-            git_base_branch="main",
-            status="ready",
-            status_detail="Ready",
-            last_error=None,
-            template_version="v1",
-            runtime_generation=2,
-            runtime_url="https://example-runtime.invalid",
-            runtime_token_ciphertext=encrypt_text("runtime-token"),
-            anyharness_workspace_id="workspace-123",
-        )
-        db_session.add(workspace)
-        await db_session.commit()
-        await db_session.refresh(workspace)
-
-        sandbox = CloudSandbox(
-            runtime_environment_id=environment.id,
-            cloud_workspace_id=workspace.id,
-            provider="e2b",
-            external_sandbox_id=f"sandbox-{uuid.uuid4()}",
-            status="running",
-            template_version="v1",
-        )
-        db_session.add(sandbox)
-        await db_session.commit()
-        environment.active_sandbox_id = sandbox.id
-        workspace.active_sandbox_id = sandbox.id
-        await db_session.commit()
-
-        response = await client.post(
-            f"/v1/cloud/workspaces/{workspace.id}/sync-credentials",
-            headers=headers,
-        )
-
-        assert response.status_code == 200
-        payload = response.json()
-        assert payload["workspaceStatus"] == "ready"
-        assert payload["runtime"]["generation"] == 2
-
-    @pytest.mark.asyncio
     async def test_start_workspace_from_error_requeues_materialization(
         self,
         client: AsyncClient,
@@ -2026,14 +1591,12 @@ class TestCloudWorkspaces:
         await _link_github_account(db_session, session["user_id"])
         user_id = uuid.UUID(session["user_id"])
         billing_subject = await _billing_subject_for_user(db_session, user_id)
+        await db_session.commit()
 
         await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
+            json=_claude_file_payload("sk-ant-test"),
         )
 
         workspace = CloudWorkspace(
@@ -2120,14 +1683,12 @@ class TestCloudWorkspaces:
         await _link_github_account(db_session, session["user_id"])
         user_id = uuid.UUID(session["user_id"])
         billing_subject = await _billing_subject_for_user(db_session, user_id)
+        await db_session.commit()
 
         await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
+            json=_claude_file_payload("sk-ant-test"),
         )
 
         workspace = CloudWorkspace(

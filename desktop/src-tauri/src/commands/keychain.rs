@@ -66,7 +66,7 @@ pub struct PendingAuthRecord {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LocalCloudCredentialSource {
+pub struct LocalAgentAuthSource {
     pub provider: String,
     pub auth_mode: String,
     pub detected: bool,
@@ -74,34 +74,34 @@ pub struct LocalCloudCredentialSource {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExportedCloudCredentialFile {
+pub struct ExportedAgentAuthCredentialFile {
     pub relative_path: String,
     pub content_base64: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExportedEnvCloudCredential {
+pub struct ExportedEnvAgentAuthCredential {
     pub auth_mode: String,
     pub env_vars: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExportedFileCloudCredential {
+pub struct ExportedFileAgentAuthCredential {
     pub auth_mode: String,
-    pub files: Vec<ExportedCloudCredentialFile>,
+    pub files: Vec<ExportedAgentAuthCredentialFile>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
-pub enum ExportedCloudCredential {
-    Env(ExportedEnvCloudCredential),
-    File(ExportedFileCloudCredential),
+pub enum ExportedAgentAuthCredential {
+    Env(ExportedEnvAgentAuthCredential),
+    File(ExportedFileAgentAuthCredential),
 }
 
 #[derive(Clone, Copy)]
-struct CloudCredentialProviderSpec {
+struct AgentAuthProviderSpec {
     id: &'static str,
     default_auth_mode: &'static str,
     env_secret_names: &'static [&'static str],
@@ -116,16 +116,16 @@ fn augment_gemini_env_vars(name: &str, env_vars: &mut HashMap<String, String>) {
     }
 }
 
-const CLOUD_CREDENTIAL_PROVIDERS: &[CloudCredentialProviderSpec] = &[
-    CloudCredentialProviderSpec {
+const AGENT_AUTH_PROVIDERS: &[AgentAuthProviderSpec] = &[
+    AgentAuthProviderSpec {
         id: "claude",
-        default_auth_mode: "env",
-        env_secret_names: &["ANTHROPIC_API_KEY"],
+        default_auth_mode: "file",
+        env_secret_names: &[],
         discovery_provider: Some(ProviderId::Claude),
-        missing_message: "No Claude credentials found. Set ANTHROPIC_API_KEY or log in to Claude Code.",
+        missing_message: "No portable Claude credentials found. Log in to Claude Code to sync file-based auth.",
         augment_env_vars: None,
     },
-    CloudCredentialProviderSpec {
+    AgentAuthProviderSpec {
         id: "codex",
         default_auth_mode: "file",
         env_secret_names: &[],
@@ -133,7 +133,7 @@ const CLOUD_CREDENTIAL_PROVIDERS: &[CloudCredentialProviderSpec] = &[
         missing_message: "No Codex credentials found. Log in to Codex or ensure local auth is available.",
         augment_env_vars: None,
     },
-    CloudCredentialProviderSpec {
+    AgentAuthProviderSpec {
         id: "gemini",
         default_auth_mode: "env",
         // Order matters: prefer a direct Gemini API key over Vertex-style Google API key auth.
@@ -373,10 +373,10 @@ pub async fn clear_pending_auth() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn list_syncable_cloud_credentials() -> Result<Vec<LocalCloudCredentialSource>, String> {
+pub async fn list_syncable_agent_auth_credentials() -> Result<Vec<LocalAgentAuthSource>, String> {
     let home = home_dir()?;
-    tracing::info!(home_dir = %home.display(), "Listing syncable cloud credentials");
-    let sources = CLOUD_CREDENTIAL_PROVIDERS
+    tracing::info!(home_dir = %home.display(), "Listing syncable agent-auth credentials");
+    let sources = AGENT_AUTH_PROVIDERS
         .iter()
         .map(|spec| {
             let env_detected = detect_env_secret(spec)?.is_some();
@@ -397,10 +397,10 @@ pub async fn list_syncable_cloud_credentials() -> Result<Vec<LocalCloudCredentia
                 env_detected,
                 file_detected,
                 auth_mode,
-                "Resolved syncable cloud credential state"
+                "Resolved syncable agent-auth credential state"
             );
 
-            Ok(LocalCloudCredentialSource {
+            Ok(LocalAgentAuthSource {
                 provider: spec.id.to_string(),
                 auth_mode: auth_mode.to_string(),
                 detected: env_detected || file_detected,
@@ -412,11 +412,11 @@ pub async fn list_syncable_cloud_credentials() -> Result<Vec<LocalCloudCredentia
 }
 
 #[tauri::command]
-pub async fn export_syncable_cloud_credential(
+pub async fn export_syncable_agent_auth_credential(
     provider: String,
-) -> Result<ExportedCloudCredential, String> {
-    let Some(spec) = cloud_credential_provider(&provider) else {
-        return Err(format!("Unsupported cloud credential provider: {provider}"));
+) -> Result<ExportedAgentAuthCredential, String> {
+    let Some(spec) = agent_auth_provider(&provider) else {
+        return Err(format!("Unsupported agent-auth provider: {provider}"));
     };
 
     if let Some(env_credential) = export_env_credential(spec)? {
@@ -426,7 +426,7 @@ pub async fn export_syncable_cloud_credential(
     if let Some(discovery_provider) = spec.discovery_provider {
         return match export_portable_file_credential(discovery_provider) {
             Ok(credential) => Ok(credential),
-            Err(err) if err == "No portable cloud credential found for provider." => {
+            Err(err) if err == "No portable agent-auth credential found for provider." => {
                 Err(spec.missing_message.to_string())
             }
             Err(err) => Err(err),
@@ -438,29 +438,29 @@ pub async fn export_syncable_cloud_credential(
 
 fn export_portable_file_credential(
     provider: ProviderId,
-) -> Result<ExportedCloudCredential, String> {
+) -> Result<ExportedAgentAuthCredential, String> {
     let home = home_dir()?;
-    tracing::info!(provider = ?provider, home_dir = %home.display(), "Exporting portable cloud credential");
+    tracing::info!(provider = ?provider, home_dir = %home.display(), "Exporting portable agent-auth credential");
     let Some(export) = export_portable_auth(provider, &home).map_err(|e| e.to_string())? else {
-        tracing::warn!(provider = ?provider, "Portable cloud credential export returned no files");
-        return Err("No portable cloud credential found for provider.".to_string());
+        tracing::warn!(provider = ?provider, "Portable agent-auth credential export returned no files");
+        return Err("No portable agent-auth credential found for provider.".to_string());
     };
 
-    tracing::info!(provider = ?provider, file_count = export.files.len(), "Portable cloud credential export succeeded");
-    Ok(ExportedCloudCredential::File(ExportedFileCloudCredential {
-        auth_mode: "file".to_string(),
-        files: portable_export_to_cloud_files(export),
-    }))
+    tracing::info!(provider = ?provider, file_count = export.files.len(), "Portable agent-auth credential export succeeded");
+    Ok(ExportedAgentAuthCredential::File(
+        ExportedFileAgentAuthCredential {
+            auth_mode: "file".to_string(),
+            files: portable_export_to_agent_auth_files(export),
+        },
+    ))
 }
 
-fn cloud_credential_provider(provider: &str) -> Option<&'static CloudCredentialProviderSpec> {
-    CLOUD_CREDENTIAL_PROVIDERS
-        .iter()
-        .find(|spec| spec.id == provider)
+fn agent_auth_provider(provider: &str) -> Option<&'static AgentAuthProviderSpec> {
+    AGENT_AUTH_PROVIDERS.iter().find(|spec| spec.id == provider)
 }
 
 fn detect_env_secret(
-    spec: &CloudCredentialProviderSpec,
+    spec: &AgentAuthProviderSpec,
 ) -> Result<Option<(&'static str, String)>, String> {
     for &name in spec.env_secret_names {
         if let Some(value) = read_env_secret(name)? {
@@ -471,8 +471,8 @@ fn detect_env_secret(
 }
 
 fn export_env_credential(
-    spec: &CloudCredentialProviderSpec,
-) -> Result<Option<ExportedCloudCredential>, String> {
+    spec: &AgentAuthProviderSpec,
+) -> Result<Option<ExportedAgentAuthCredential>, String> {
     let Some((name, value)) = detect_env_secret(spec)? else {
         return Ok(None);
     };
@@ -480,7 +480,7 @@ fn export_env_credential(
     tracing::info!(
         provider = spec.id,
         env_var = name,
-        "Exporting cloud credential from desktop env secret"
+        "Exporting agent-auth credential from desktop env secret"
     );
     let mut env_vars = HashMap::new();
     env_vars.insert(name.to_string(), value);
@@ -488,8 +488,8 @@ fn export_env_credential(
         augment_env_vars(name, &mut env_vars);
     }
 
-    Ok(Some(ExportedCloudCredential::Env(
-        ExportedEnvCloudCredential {
+    Ok(Some(ExportedAgentAuthCredential::Env(
+        ExportedEnvAgentAuthCredential {
             auth_mode: "env".to_string(),
             env_vars,
         },
@@ -502,26 +502,28 @@ fn portable_auth_detected(provider: ProviderId, home_dir: &std::path::Path) -> b
             tracing::info!(
                 provider = ?provider,
                 file_count = export.files.len(),
-                "Portable cloud credential detected"
+                "Portable agent-auth credential detected"
             );
             true
         }
         Ok(None) => {
-            tracing::info!(provider = ?provider, "Portable cloud credential not detected");
+            tracing::info!(provider = ?provider, "Portable agent-auth credential not detected");
             false
         }
         Err(err) => {
-            tracing::warn!(provider = ?provider, error = %err, "Portable cloud credential detection failed");
+            tracing::warn!(provider = ?provider, error = %err, "Portable agent-auth credential detection failed");
             false
         }
     }
 }
 
-fn portable_export_to_cloud_files(export: PortableAuthExport) -> Vec<ExportedCloudCredentialFile> {
+fn portable_export_to_agent_auth_files(
+    export: PortableAuthExport,
+) -> Vec<ExportedAgentAuthCredentialFile> {
     export
         .files
         .into_iter()
-        .map(|file| ExportedCloudCredentialFile {
+        .map(|file| ExportedAgentAuthCredentialFile {
             relative_path: file.relative_path.as_str().to_string(),
             content_base64: base64::engine::general_purpose::STANDARD.encode(file.content),
         })

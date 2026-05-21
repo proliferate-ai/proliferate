@@ -1,16 +1,21 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AgentAuthCredential } from "@proliferate/cloud-sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@/components/ui/Badge";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { CloudAgentAuthCredentialForm } from "@/components/settings/panes/cloud/CloudAgentAuthCredentialForm";
-import { AGENT_GATEWAY_BYOK_ENABLED } from "@/config/agent-auth";
 import {
   useAgentAuthCredentials,
   useAgentAuthMutations,
-} from "@/hooks/access/cloud/agent-auth/use-agent-auth";
+  useCloudCapabilities,
+} from "@proliferate/cloud-sdk-react/hooks/agent-auth";
+import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";
 import { useOrganizations } from "@/hooks/access/cloud/organizations/use-organizations";
+import type {
+  AgentAuthProvider,
+  LocalAgentAuthSource,
+} from "@/lib/access/tauri/credentials";
 import {
   AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,
@@ -19,7 +24,7 @@ import {
   agentAuthCredentialStatusLabel,
   agentAuthCredentialStatusTone,
   describeAgentAuthCredential,
-  isHostedCloudV1AgentAuthCredential,
+  isAgentAuthCredentialVisibleForCapabilities,
   isProliferateManagedCreditsCredential,
 } from "@/lib/domain/agent-auth/agent-auth-presentation";
 import { useAuthStore } from "@/stores/auth/auth-store";
@@ -30,10 +35,20 @@ export function CloudAgentAuthLibrary() {
   const { data: credentials = [] } = useAgentAuthCredentials({
     organizationId: libraryOrganizationId,
   });
+  const { data: capabilities } = useCloudCapabilities();
+  const agentGatewayCapabilities = capabilities?.agentGateway ?? null;
   const mutations = useAgentAuthMutations();
+  const {
+    exportSyncableAgentAuthCredential,
+    listSyncableAgentAuthCredentials,
+  } = useTauriCredentialsActions();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [sharingCredentialId, setSharingCredentialId] = useState<string | null>(null);
   const [revokingCredentialId, setRevokingCredentialId] = useState<string | null>(null);
+  const [localSources, setLocalSources] = useState<LocalAgentAuthSource[]>([]);
+  const [syncingLocalProvider, setSyncingLocalProvider] = useState<AgentAuthProvider | null>(
+    null,
+  );
   const currentUserId = useAuthStore((state) => state.user?.id ?? null);
   const adminOrganizationIds = useMemo(
     () => new Set(
@@ -49,12 +64,43 @@ export function CloudAgentAuthLibrary() {
 
   const visibleCredentials = useMemo(
     () =>
-      AGENT_GATEWAY_BYOK_ENABLED
-        ? credentials
-        : credentials.filter(isHostedCloudV1AgentAuthCredential),
-    [credentials],
+      credentials.filter((credential) =>
+        isAgentAuthCredentialVisibleForCapabilities(credential, agentGatewayCapabilities)),
+    [agentGatewayCapabilities, credentials],
   );
   const grouped = useMemo(() => groupCredentialsByAgent(visibleCredentials), [visibleCredentials]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listSyncableAgentAuthCredentials()
+      .then((sources) => {
+        if (!cancelled) {
+          setLocalSources(sources);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLocalSources([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [listSyncableAgentAuthCredentials]);
+
+  async function handleSyncLocalCredential(provider: AgentAuthProvider) {
+    setSyncingLocalProvider(provider);
+    setFeedback(null);
+    try {
+      const body = await exportSyncableAgentAuthCredential(provider);
+      const result = await mutations.syncSyncedCredential({ agentKind: provider, body });
+      setFeedback(`${result.credential.displayName} synced.`);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Could not sync local auth.");
+    } finally {
+      setSyncingLocalProvider(null);
+    }
+  }
 
   async function handleShareCredential(credential: AgentAuthCredential) {
     if (!libraryOrganizationId) {
@@ -102,8 +148,35 @@ export function CloudAgentAuthLibrary() {
         organizations={organizations.data?.organizations ?? []}
         libraryOrganizationId={libraryOrganizationId}
         onLibraryOrganizationChange={setLibraryOrganizationId}
-        gatewayByokEnabled={AGENT_GATEWAY_BYOK_ENABLED}
+        agentGatewayCapabilities={agentGatewayCapabilities}
       />
+
+      <SettingsCard>
+        {localSources.length === 0 ? (
+          <div className="p-3 text-sm text-muted-foreground">
+            No local agent auth sources detected.
+          </div>
+        ) : (
+          localSources.map((source) => (
+            <SettingsCardRow
+              key={source.provider}
+              label={agentAuthAgentLabel(source.provider)}
+              description={source.detected ? "Local auth source detected." : "No local auth source detected."}
+            >
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={!source.detected}
+                loading={syncingLocalProvider === source.provider}
+                onClick={() => void handleSyncLocalCredential(source.provider)}
+              >
+                Sync
+              </Button>
+            </SettingsCardRow>
+          ))
+        )}
+      </SettingsCard>
 
       {feedback && <p className="text-xs text-muted-foreground">{feedback}</p>}
 

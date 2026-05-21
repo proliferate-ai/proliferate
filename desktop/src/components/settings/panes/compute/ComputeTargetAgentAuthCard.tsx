@@ -4,16 +4,16 @@ import type {
   AgentAuthCredential,
   SandboxProfile,
 } from "@proliferate/cloud-sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge } from "@/components/ui/Badge";
-import { Select } from "@/components/ui/Select";
-import { AGENT_GATEWAY_BYOK_ENABLED } from "@/config/agent-auth";
 import {
   useAgentAuthCredentials,
   useAgentAuthMutations,
+  useCloudCapabilities,
   useSandboxAgentAuthSelections,
   useSandboxAgentAuthTargetStates,
-} from "@/hooks/access/cloud/agent-auth/use-agent-auth";
+} from "@proliferate/cloud-sdk-react/hooks/agent-auth";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Select } from "@/components/ui/Select";
 import {
   AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,
@@ -21,7 +21,7 @@ import {
   agentAuthCredentialStatusLabel,
   agentAuthCredentialStatusTone,
   credentialSelectableReason,
-  isHostedCloudV1AgentAuthCredential,
+  isAgentAuthCredentialVisibleForCapabilities,
   selectionByAgentKind,
   targetStateSummary,
 } from "@/lib/domain/agent-auth/agent-auth-presentation";
@@ -44,12 +44,13 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
   });
   const { data: selections = [] } = useSandboxAgentAuthSelections(profile?.id ?? null);
   const { data: targetStates = [] } = useSandboxAgentAuthTargetStates(profile?.id ?? null);
+  const { data: capabilities } = useCloudCapabilities();
+  const agentGatewayCapabilities = capabilities?.agentGateway ?? null;
   const visibleCredentials = useMemo(
     () =>
-      AGENT_GATEWAY_BYOK_ENABLED
-        ? credentials
-        : credentials.filter(isHostedCloudV1AgentAuthCredential),
-    [credentials],
+      credentials.filter((credential) =>
+        isAgentAuthCredentialVisibleForCapabilities(credential, agentGatewayCapabilities)),
+    [agentGatewayCapabilities, credentials],
   );
   const selectionsByAgent = useMemo(() => selectionByAgentKind(selections), [selections]);
   const targetState = profile ? targetStateSummary(targetStates, target.id) : null;
@@ -90,6 +91,12 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
           )?.activeCredentialShareId ?? null,
         },
       });
+      const nextProfile = profile.ownerScope === "organization"
+        ? await mutations.ensureOrganizationProfile({
+            organizationId: profile.organizationId!,
+          })
+        : await mutations.ensurePersonalProfile();
+      setProfile(nextProfile);
       setFeedback(`${agentAuthAgentLabel(agentKind)} auth selection saved.`);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Could not save auth selection.");

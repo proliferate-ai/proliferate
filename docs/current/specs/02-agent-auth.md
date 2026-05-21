@@ -49,7 +49,7 @@ Out of scope:
 - Self-hosted gateway/LiteLLM lifecycle.
 - Per-request usage ledger (V1 LiteLLM is the spend authority).
 - Gemini through gateway (V1 keeps Gemini on synced auth only).
-- OpenCode native sync export in the legacy `CloudCredential` path.
+- OpenCode native sync export in the Desktop agent-auth path.
 - Subscription/billing entitlement for `included_budget_usd` (→ spec 09).
 - Settings/Admin IA layout for agent-auth UI (→ spec 03 owns placement;
   this spec names the components).
@@ -168,7 +168,7 @@ AgentAuthCredential
   credential_kind (managed_gateway|synced_path), display_name,
   redacted_summary_json,
   status (pending|ready|needs_resync|invalid|revoked),
-  revision, legacy_cloud_credential_id (FK to legacy CloudCredential),
+  revision, payload_ciphertext, payload_ciphertext_key_id,
   created_at, updated_at, revoked_at
 
 AgentAuthCredentialShare
@@ -223,17 +223,17 @@ AgentAuthAuditEvent
   metadata_json, created_at
 ```
 
-**Legacy `cloud_credential`** still exists
-(`db/models/cloud/credentials.py`). Bridge column
-`AgentAuthCredential.legacy_cloud_credential_id` (unique, nullable) ties
-synced personal credentials to the imported source. Worker import path is
-implemented and idempotent.
+**Synced native auth** is owned by `agent_auth_credential`. The
+`synced_path` credential stores the encrypted source payload exported by
+Desktop and is selected through `sandbox_agent_auth_selection`; there is no
+separate credential source model in the live path.
 
 **Cloud APIs** (`server/proliferate/server/cloud/agent_auth/api.py`):
 
 ```text
 GET    /agent-auth/credentials
 POST   /agent-auth/credentials/gateway
+PUT    /agent-auth/credentials/synced/{agent_kind}
 DELETE /agent-auth/credentials/{credential_id}
 POST   /agent-auth/credentials/{credential_id}/shares
 DELETE /agent-auth/credential-shares/{share_id}
@@ -432,10 +432,9 @@ agent_gateway_opencode_enabled                    default False
    resolving the primary target. Spec 00 drops the column; this spec
    updates the readers.
 
-9. **OpenCode native sync is not exposed by the legacy
-   `CloudCredential` export.** The auth-file allowlist for OpenCode
-   exists in worker; the Desktop sync API does not yet emit OpenCode
-   credentials.
+9. **OpenCode native sync is not exposed by Desktop.** The auth-file
+   allowlist for OpenCode exists in worker; the Desktop sync API does not
+   yet emit OpenCode credentials.
 
 10. **No hosted capability API.** There is no endpoint Desktop can call
     to learn server-side gateway capabilities; it must hardcode them.
@@ -776,10 +775,10 @@ server/proliferate/server/cloud/agent_auth/freshness.py    (new module)
   evaluate_credential_freshness(snapshot, signals) -> CredentialStatus
   apply_signal(credential_id, signal)              -- mutation entrypoint
 
-server/proliferate/server/cloud/credentials/service.py
+server/proliferate/server/cloud/agent_auth/service.py
   on sync event, call apply_signal('desktop_sync_succeeded' | 'desktop_sync_stale')
 
-desktop/src/hooks/access/cloud/credentials/use-credential-sync.ts
+desktop/src/lib/access/cloud/agent-auth-sync.ts
   call apply_signal('desktop_sync_succeeded') on successful sync
   surface needs_resync in CloudAgentAuthLibrary
 ```
@@ -952,7 +951,7 @@ server/proliferate/server/cloud/commands/service.py
     start_session / send_prompt payloads inside the same transaction that
     reads sandbox_profile_target_state
 
-server/proliferate/server/cloud/credentials/service.py
+server/proliferate/server/cloud/agent_auth/service.py
   - on sync success/failure, call freshness.apply_signal
 
 server/proliferate/config.py
@@ -1094,7 +1093,7 @@ Chunk G  Freshness framework + Desktop sync signals
 
 Follow-ups (separate PRs, scope additions, not migration ceremony)
   - provider 401 detection at the gateway (feeds freshness signals)
-  - OpenCode native sync via legacy CloudCredential export
+  - OpenCode native sync via Desktop agent-auth export
   - BYOK enablement (V2 product decision; live validation, LiteLLM
     team-scoped routing or isolated routers)
 ```
@@ -1266,8 +1265,7 @@ Manual smoke cases:
 
 ```text
 1. Personal cloud, sync Claude auth
-     -> CloudCredential sync writes legacy row
-     -> server reconciler imports as AgentAuthCredential(synced_path)
+     -> agent-auth sync writes AgentAuthCredential(synced_path)
      -> default selection set
      -> sandbox_profile_target_state desired bumped
      -> worker refresh writes .claude/.credentials.json + .claude.json

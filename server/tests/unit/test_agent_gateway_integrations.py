@@ -4,7 +4,7 @@ import pytest
 
 from proliferate.integrations.aws import AwsIntegrationError, validate_bedrock_assume_role_payload
 from proliferate.integrations.litellm.client import _redact
-from proliferate.server.cloud.credentials.domain.status import allowed_agent_kinds
+from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
 
 
 def test_bedrock_assume_role_validation_extracts_account_id() -> None:
@@ -43,5 +43,5 @@ def test_litellm_redaction_scrubs_provider_secrets() -> None:
     )
 
 
-def test_legacy_cloud_credential_sync_does_not_advertise_opencode_yet() -> None:
+def test_synced_native_auth_does_not_advertise_opencode_yet() -> None:
     assert allowed_agent_kinds() == ["claude", "codex", "gemini"]

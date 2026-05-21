@@ -1190,6 +1190,9 @@ fn map_create_session_error(error: CreateAndStartSessionError) -> ApiError {
             format!("mode '{mode_id}' is not supported for agent '{agent_kind}'"),
             "SESSION_MODE_UNSUPPORTED",
         ),
+        CreateAndStartSessionError::AgentAuthSelectionRequired(required) => {
+            ApiError::agent_auth_selection_required(required)
+        }
         CreateAndStartSessionError::WorkspaceNotFound => {
             ApiError::bad_request("workspace not found", "WORKSPACE_NOT_FOUND")
         }
@@ -1218,6 +1221,9 @@ fn map_ensure_live_session_error(error: EnsureLiveSessionError) -> ApiError {
         }
         EnsureLiveSessionError::RestartRequired(detail) => {
             ApiError::conflict(detail, "SESSION_RESTART_REQUIRED")
+        }
+        EnsureLiveSessionError::AgentAuthSelectionRequired(required) => {
+            ApiError::agent_auth_selection_required(required)
         }
         EnsureLiveSessionError::Invalid(detail) => {
             ApiError::bad_request(detail, "SESSION_RESUME_FAILED")
