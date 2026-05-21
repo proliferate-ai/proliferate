@@ -7,7 +7,7 @@ import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-act
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { findReusableRunTerminalId } from "@/lib/domain/terminals/run-terminal";
-import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
+import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
