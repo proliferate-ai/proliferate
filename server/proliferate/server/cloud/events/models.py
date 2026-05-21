@@ -29,11 +29,22 @@ class WorkerEventSessionAck(BaseModel):
     last_contiguous_seq: int = Field(serialization_alias="lastContiguousSeq")
 
 
+class WorkerEventAck(BaseModel):
+    session_id: str = Field(serialization_alias="sessionId")
+    seq: int
+    action: str
+    reason: str | None = None
+
+
 class WorkerEventBatchResponse(BaseModel):
     accepted_events: int = Field(serialization_alias="acceptedEvents")
     duplicate_events: int = Field(serialization_alias="duplicateEvents")
     live_only_events: int = Field(serialization_alias="liveOnlyEvents")
     session_acks: list[WorkerEventSessionAck] = Field(serialization_alias="sessionAcks")
+    event_acks: list[WorkerEventAck] = Field(
+        default_factory=list,
+        serialization_alias="eventAcks",
+    )
 
 
 class CloudSessionProjectionResponse(BaseModel):

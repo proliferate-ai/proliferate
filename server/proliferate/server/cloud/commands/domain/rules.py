@@ -74,7 +74,7 @@ def validate_command_shape(
         kind
         in {
             CloudCommandKind.start_session.value,
-            CloudCommandKind.sync_existing_workspace.value,
+            CloudCommandKind.backfill_exposed_workspace.value,
         }
         and not workspace_id
     ):

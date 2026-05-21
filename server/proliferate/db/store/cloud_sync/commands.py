@@ -13,7 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
 from proliferate.db.models.cloud.agent_auth import SandboxProfile, SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
+from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
+from proliferate.db.models.cloud.runtime_config import (
+    SandboxProfileRuntimeConfigCurrent,
+    SandboxProfileRuntimeConfigRevision,
+)
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.sync import CloudSessionProjection
 from proliferate.db.models.cloud.targets import CloudTarget, CloudWorker
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
@@ -117,11 +123,17 @@ async def create_command(
     now = utcnow()
     target = await db.get(CloudTarget, target_id)
     if (
-        kind == CloudCommandKind.materialize_workspace.value
+        kind
+        in {
+            CloudCommandKind.materialize_workspace.value,
+            CloudCommandKind.backfill_exposed_workspace.value,
+        }
         and _target_requires_slot(target)
         and cloud_workspace_id is None
     ):
-        raise RuntimeError("Managed materialize_workspace commands require cloud_workspace_id.")
+        raise RuntimeError(f"Managed {kind} commands require cloud_workspace_id.")
+    if kind == CloudCommandKind.backfill_exposed_workspace.value and cloud_workspace_id is None:
+        raise RuntimeError("backfill_exposed_workspace commands require cloud_workspace_id.")
     row = CloudCommand(
         idempotency_scope=idempotency_scope,
         idempotency_key=idempotency_key,
@@ -311,6 +323,28 @@ async def lease_next_command(
             row.updated_at = now
             await db.flush()
             continue
+        exposure_error = await _exposure_lease_blocker(db, row)
+        if exposure_error is not None:
+            status, code, message = exposure_error
+            row.status = status
+            row.error_code = code
+            row.error_message = message
+            if status == CloudCommandStatus.rejected.value:
+                row.rejected_at = now
+            row.updated_at = now
+            await db.flush()
+            continue
+        runtime_config_error = await _runtime_config_lease_blocker(db, row, target=target)
+        if runtime_config_error is not None:
+            status, code, message = runtime_config_error
+            row.status = status
+            row.error_code = code
+            row.error_message = message
+            if status == CloudCommandStatus.rejected.value:
+                row.rejected_at = now
+            row.updated_at = now
+            await db.flush()
+            continue
         agent_auth_error = await _agent_auth_lease_blocker(db, row, target=target)
         if agent_auth_error is not None:
             status, code, message = agent_auth_error
@@ -336,6 +370,190 @@ async def lease_next_command(
         await db.flush()
         return _snapshot(row)
     return None
+
+
+async def _runtime_config_lease_blocker(
+    db: AsyncSession,
+    row: CloudCommand,
+    *,
+    target: CloudTarget | None,
+) -> tuple[str, str, str] | None:
+    if row.kind not in {
+        CloudCommandKind.start_session.value,
+        CloudCommandKind.send_prompt.value,
+    }:
+        return None
+    try:
+        payload = json.loads(row.payload_json or "{}")
+    except json.JSONDecodeError:
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_payload_invalid",
+            "Launch command payload is not valid JSON.",
+        )
+    if not isinstance(payload, dict):
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_payload_invalid",
+            "Launch command payload is invalid.",
+        )
+    sandbox_profile_id = payload.get("sandboxProfileId")
+    required_revision_id = payload.get("requiredRuntimeConfigRevisionId")
+    required_sequence = payload.get("requiredRuntimeConfigSequence")
+    required_content_hash = payload.get("requiredRuntimeConfigContentHash")
+    if (
+        sandbox_profile_id is None
+        and required_revision_id is None
+        and required_sequence is None
+        and required_content_hash is None
+    ):
+        return None
+    try:
+        profile_id = UUID(str(sandbox_profile_id))
+    except (TypeError, ValueError):
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_profile_invalid",
+            "Launch command runtime config profile is invalid.",
+        )
+    try:
+        revision_id = UUID(str(required_revision_id))
+    except (TypeError, ValueError):
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_revision_invalid",
+            "Launch command runtime config revision is invalid.",
+        )
+    if not isinstance(required_sequence, int) or isinstance(required_sequence, bool):
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_sequence_invalid",
+            "Launch command runtime config sequence is invalid.",
+        )
+    if not isinstance(required_content_hash, str) or not required_content_hash.strip():
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_hash_invalid",
+            "Launch command runtime config content hash is invalid.",
+        )
+    if target is None or target.sandbox_profile_id != profile_id:
+        return (
+            CloudCommandStatus.superseded.value,
+            "runtime_config_target_mismatch",
+            "Launch command runtime config target no longer matches.",
+        )
+    current = await db.get(SandboxProfileRuntimeConfigCurrent, profile_id)
+    if current is None or current.current_revision_id != revision_id:
+        return (
+            CloudCommandStatus.superseded.value,
+            "runtime_config_revision_stale",
+            "Launch command runtime config revision was superseded before dispatch.",
+        )
+    revision = await db.get(SandboxProfileRuntimeConfigRevision, revision_id)
+    if (
+        revision is None
+        or revision.sandbox_profile_id != profile_id
+        or revision.sequence != required_sequence
+        or revision.content_hash != required_content_hash
+    ):
+        return (
+            CloudCommandStatus.superseded.value,
+            "runtime_config_revision_stale",
+            "Launch command runtime config revision was superseded before dispatch.",
+        )
+    if _runtime_config_has_blocking_errors(revision.manifest_json):
+        return (
+            CloudCommandStatus.superseded.value,
+            "runtime_config_blocked",
+            "Launch command runtime config is blocked by resolver errors.",
+        )
+    state = (
+        await db.execute(
+            select(SandboxProfileTargetState).where(
+                SandboxProfileTargetState.sandbox_profile_id == profile_id,
+                SandboxProfileTargetState.target_id == row.target_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if (
+        state is None
+        or state.runtime_config_status != "applied"
+        or state.applied_runtime_config_revision_id != str(revision_id)
+        or state.applied_runtime_config_sequence < required_sequence
+        or await _target_state_slot_is_stale(db, state=state, target=target)
+    ):
+        return (
+            CloudCommandStatus.superseded.value,
+            "runtime_config_not_ready",
+            "Launch command runtime config was no longer current before dispatch.",
+        )
+    return None
+
+
+async def _exposure_lease_blocker(
+    db: AsyncSession,
+    row: CloudCommand,
+) -> tuple[str, str, str] | None:
+    if row.kind not in {
+        CloudCommandKind.backfill_exposed_workspace.value,
+        CloudCommandKind.materialize_workspace.value,
+    }:
+        return None
+    if (
+        row.kind == CloudCommandKind.materialize_workspace.value
+        and not await _command_requires_slot(
+            db,
+            row,
+        )
+    ):
+        return None
+    if row.cloud_workspace_id is None:
+        return (
+            CloudCommandStatus.rejected.value,
+            "cloud_workspace_required",
+            f"{row.kind} command is missing Cloud workspace.",
+        )
+    exposure = await _load_active_workspace_exposure(
+        db,
+        target_id=row.target_id,
+        cloud_workspace_id=row.cloud_workspace_id,
+    )
+    if exposure is None or exposure.status != "active":
+        return (
+            CloudCommandStatus.rejected.value,
+            "cloud_exposure_not_active",
+            f"{row.kind} command does not reference an active exposure.",
+        )
+    if row.kind == CloudCommandKind.materialize_workspace.value:
+        if not exposure.commandable:
+            return (
+                CloudCommandStatus.rejected.value,
+                "cloud_exposure_not_commandable",
+                "materialize_workspace exposure is read-only.",
+            )
+        return None
+    if not exposure.anyharness_workspace_id or (
+        row.workspace_id is not None and row.workspace_id != exposure.anyharness_workspace_id
+    ):
+        return (
+            CloudCommandStatus.rejected.value,
+            "cloud_exposure_not_active",
+            "backfill_exposed_workspace command does not reference an active exposure.",
+        )
+    return None
+
+
+def _runtime_config_has_blocking_errors(manifest_json: str) -> bool:
+    try:
+        manifest = json.loads(manifest_json)
+    except ValueError:
+        return False
+    if not isinstance(manifest, dict):
+        return False
+    blocking_errors = manifest.get("blockingErrors")
+    return isinstance(blocking_errors, list) and any(
+        isinstance(item, dict) for item in blocking_errors
+    )
 
 
 async def _agent_auth_lease_blocker(
@@ -413,6 +631,7 @@ async def _agent_auth_lease_blocker(
         or state.agent_auth_status != "applied"
         or state.applied_agent_auth_revision is None
         or state.applied_agent_auth_revision < required_revision
+        or await _target_state_slot_is_stale(db, state=state, target=target)
     ):
         return (
             CloudCommandStatus.superseded.value,
@@ -434,6 +653,7 @@ async def mark_command_delivered(
     command_id: UUID,
     worker_id: UUID,
     lease_id: str,
+    slot_generation: int | None,
     now: datetime,
 ) -> CloudCommandSnapshot | None:
     row = await _get_worker_leased_command(
@@ -455,6 +675,13 @@ async def mark_command_delivered(
         row.updated_at = now
         await db.flush()
         return _snapshot(row)
+    if await _leased_slot_echo_is_stale(db, row, slot_generation=slot_generation):
+        row.status = CloudCommandStatus.superseded.value
+        row.error_code = "stale_slot"
+        row.error_message = "Command delivery did not echo the leased sandbox slot generation."
+        row.updated_at = now
+        await db.flush()
+        return _snapshot(row)
     row.status = CloudCommandStatus.delivered.value
     row.delivered_at = now
     row.updated_at = now
@@ -468,6 +695,7 @@ async def mark_command_failed_delivery(
     command_id: UUID,
     worker_id: UUID,
     lease_id: str,
+    slot_generation: int | None,
     error_code: str | None,
     error_message: str | None,
     now: datetime,
@@ -491,6 +719,13 @@ async def mark_command_failed_delivery(
         row.status = CloudCommandStatus.superseded.value
         row.error_code = "stale_slot"
         row.error_message = "Command delivery came from a stale sandbox slot."
+        row.updated_at = now
+        await db.flush()
+        return _snapshot(row)
+    if await _leased_slot_echo_is_stale(db, row, slot_generation=slot_generation):
+        row.status = CloudCommandStatus.superseded.value
+        row.error_code = "stale_slot"
+        row.error_message = "Command delivery did not echo the leased sandbox slot generation."
         row.updated_at = now
         await db.flush()
         return _snapshot(row)
@@ -629,6 +864,16 @@ async def record_command_result(
             slot_generation=row.leased_slot_generation,
             now=now,
         )
+    if row.kind == CloudCommandKind.start_session.value and effective_status in {
+        CloudCommandStatus.accepted.value,
+        CloudCommandStatus.accepted_but_queued.value,
+    }:
+        await _record_started_cloud_session_projection(
+            db,
+            row=row,
+            result_json=result_json,
+            now=now,
+        )
     return _snapshot(row)
 
 
@@ -667,6 +912,44 @@ async def _leased_slot_is_stale(
     return active_slot is None
 
 
+async def _leased_slot_echo_is_stale(
+    db: AsyncSession,
+    row: CloudCommand,
+    *,
+    slot_generation: int | None,
+) -> bool:
+    command_requires_slot = await _command_requires_slot(db, row)
+    return command_requires_slot and slot_generation != row.leased_slot_generation
+
+
+async def _target_state_slot_is_stale(
+    db: AsyncSession,
+    *,
+    state: SandboxProfileTargetState,
+    target: CloudTarget | None,
+) -> bool:
+    if not _target_requires_slot(target):
+        return False
+    if target is None or target.sandbox_profile_id is None:
+        return True
+    active_slot = (
+        await db.execute(
+            select(CloudSandbox).where(
+                CloudSandbox.sandbox_profile_id == target.sandbox_profile_id,
+                CloudSandbox.target_id == target.id,
+                CloudSandbox.superseded_at.is_(None),
+                CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
+            )
+        )
+    ).scalar_one_or_none()
+    if active_slot is None:
+        return True
+    return (
+        state.active_sandbox_id != active_slot.id
+        or state.slot_generation != active_slot.slot_generation
+    )
+
+
 async def _command_requires_slot(db: AsyncSession, row: CloudCommand) -> bool:
     return _target_requires_slot(await db.get(CloudTarget, row.target_id))
 
@@ -693,7 +976,14 @@ async def _cloud_workspace_matches_command(db: AsyncSession, row: CloudCommand) 
         return False
     target = await db.get(CloudTarget, row.target_id)
     if _target_requires_slot(target):
-        return workspace.sandbox_profile_id == target.sandbox_profile_id
+        if workspace.sandbox_profile_id != target.sandbox_profile_id:
+            return False
+        exposure = await _load_active_workspace_exposure(
+            db,
+            target_id=row.target_id,
+            cloud_workspace_id=workspace.id,
+        )
+        return exposure is not None and exposure.status == "active" and exposure.commandable
     return True
 
 
@@ -714,7 +1004,99 @@ async def _record_materialized_cloud_workspace(
     workspace.status_detail = "Ready"
     workspace.ready_at = now
     workspace.updated_at = now
+    if workspace.target_id is not None:
+        exposure = await _load_active_workspace_exposure(
+            db,
+            target_id=workspace.target_id,
+            cloud_workspace_id=workspace.id,
+        )
+        if exposure is not None and exposure.status == "active":
+            changed = False
+            if exposure.anyharness_workspace_id != anyharness_workspace_id:
+                exposure.anyharness_workspace_id = anyharness_workspace_id
+                changed = True
+            if exposure.origin != workspace.origin:
+                exposure.origin = workspace.origin
+                changed = True
+            if changed:
+                exposure.revision += 1
+                exposure.updated_at = now
     await db.flush()
+
+
+async def _record_started_cloud_session_projection(
+    db: AsyncSession,
+    *,
+    row: CloudCommand,
+    result_json: str | None,
+    now: datetime,
+) -> None:
+    if row.cloud_workspace_id is None or not row.workspace_id:
+        return
+    session_id = _started_session_id(result_json)
+    if session_id is None:
+        return
+    exposure = await _load_active_workspace_exposure(
+        db,
+        target_id=row.target_id,
+        cloud_workspace_id=row.cloud_workspace_id,
+    )
+    if exposure is None or exposure.status != "active" or not exposure.anyharness_workspace_id:
+        return
+    projection = (
+        await db.execute(
+            select(CloudSessionProjection)
+            .where(CloudSessionProjection.target_id == row.target_id)
+            .where(CloudSessionProjection.session_id == session_id)
+            .with_for_update()
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if projection is None:
+        projection = CloudSessionProjection(
+            target_id=row.target_id,
+            exposure_id=exposure.id if exposure is not None else None,
+            cloud_workspace_id=row.cloud_workspace_id,
+            workspace_id=row.workspace_id,
+            session_id=session_id,
+            status="running",
+            projection_level=(
+                exposure.default_projection_level if exposure is not None else "live"
+            ),
+            commandable=exposure.commandable if exposure is not None else True,
+            last_event_seq=0,
+            last_uploaded_seq=0,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(projection)
+    else:
+        projection.exposure_id = exposure.id if exposure is not None else projection.exposure_id
+        projection.cloud_workspace_id = row.cloud_workspace_id
+        projection.workspace_id = row.workspace_id
+        projection.status = projection.status or "running"
+        if exposure is not None:
+            projection.projection_level = exposure.default_projection_level
+            projection.commandable = exposure.commandable
+        projection.updated_at = now
+    await db.flush()
+
+
+async def _load_active_workspace_exposure(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    cloud_workspace_id: UUID,
+) -> CloudWorkspaceExposure | None:
+    return (
+        await db.execute(
+            select(CloudWorkspaceExposure)
+            .where(CloudWorkspaceExposure.target_id == target_id)
+            .where(CloudWorkspaceExposure.cloud_workspace_id == cloud_workspace_id)
+            .where(CloudWorkspaceExposure.archived_at.is_(None))
+            .limit(1)
+        )
+    ).scalar_one_or_none()
 
 
 def _materialized_workspace_id(
@@ -761,6 +1143,31 @@ def _result_cloud_workspace_id(result_json: str | None) -> UUID | None:
         return UUID(value)
     except ValueError:
         return None
+
+
+def _started_session_id(result_json: str | None) -> str | None:
+    try:
+        result = json.loads(result_json or "{}")
+    except ValueError:
+        return None
+    if not isinstance(result, dict):
+        return None
+    candidates: list[object] = [
+        result.get("sessionId"),
+        result.get("anyharnessSessionId"),
+    ]
+    body = result.get("body")
+    if isinstance(body, dict):
+        candidates.extend(
+            [
+                body.get("sessionId"),
+                body.get("id"),
+            ]
+        )
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
 
 
 def _safe_result_json(*, kind: str, result_json: str | None) -> str | None:

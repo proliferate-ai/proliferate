@@ -23,7 +23,9 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db.store.cloud_sandboxes import load_active_slot_for_profile_target
 from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import inventory as inventory_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
@@ -69,11 +71,15 @@ from proliferate.server.cloud.worker.models import (
     WorkerDesiredVersionsResponse,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
+    WorkerExposureListResponse,
+    WorkerExposureSnapshotResponse,
     WorkerHeartbeatRequest,
     WorkerHeartbeatResponse,
     WorkerInventoryPayload,
     WorkerInventoryRequest,
     WorkerInventoryResponse,
+    WorkerProjectionGapRequest,
+    WorkerProjectionGapResponse,
     WorkerUpdateStatusRequest,
     WorkerUpdateStatusResponse,
 )
@@ -778,6 +784,7 @@ async def record_command_delivery(
             command_id=command_id,
             worker_id=auth.worker_id,
             lease_id=body.lease_id,
+            slot_generation=body.slot_generation,
             error_code=body.error_code,
             error_message=body.error_message,
             now=now,
@@ -788,6 +795,7 @@ async def record_command_delivery(
             command_id=command_id,
             worker_id=auth.worker_id,
             lease_id=body.lease_id,
+            slot_generation=body.slot_generation,
             now=now,
         )
     if command is None:
@@ -843,6 +851,59 @@ async def record_command_result(
     )
 
 
+async def list_worker_exposures(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+) -> WorkerExposureListResponse:
+    exposures = await exposures_store.list_active_workspace_exposures_for_target(
+        db,
+        target_id=auth.target_id,
+    )
+    cursors = await projections_store.list_active_projection_cursors_for_target(
+        db,
+        target_id=auth.target_id,
+    )
+    responses: list[WorkerExposureSnapshotResponse] = []
+    cursor_exposure_ids = set()
+    for cursor in cursors:
+        cursor_exposure_ids.add(cursor.exposure_id)
+        responses.append(
+            WorkerExposureSnapshotResponse(
+                exposure_id=str(cursor.exposure_id),
+                target_id=str(cursor.target_id),
+                cloud_workspace_id=str(cursor.cloud_workspace_id),
+                session_projection_id=str(cursor.session_projection_id),
+                anyharness_workspace_id=cursor.anyharness_workspace_id,
+                anyharness_session_id=cursor.anyharness_session_id,
+                projection_level=cursor.projection_level,
+                commandable=cursor.commandable,
+                status=cursor.exposure_status,
+                revision=cursor.exposure_revision,
+                last_uploaded_seq=cursor.last_uploaded_seq,
+            )
+        )
+    for exposure in exposures:
+        if not exposure.anyharness_workspace_id or exposure.id in cursor_exposure_ids:
+            continue
+        responses.append(
+            WorkerExposureSnapshotResponse(
+                exposure_id=str(exposure.id),
+                target_id=str(exposure.target_id),
+                cloud_workspace_id=str(exposure.cloud_workspace_id),
+                session_projection_id=None,
+                anyharness_workspace_id=exposure.anyharness_workspace_id,
+                anyharness_session_id=None,
+                projection_level=exposure.default_projection_level,
+                commandable=exposure.commandable,
+                status=exposure.status,
+                revision=exposure.revision,
+                last_uploaded_seq=0,
+            )
+        )
+    return WorkerExposureListResponse(exposures=responses)
+
+
 async def record_event_batch(
     db: AsyncSession,
     *,
@@ -859,3 +920,64 @@ async def record_event_batch(
     await require_current_managed_worker_slot(db, auth=auth, target=target)
     with defer_live_publishes_until_commit(db):
         return await ingest_worker_event_batch(db, auth=auth, body=body)
+
+
+async def record_projection_gap(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    body: WorkerProjectionGapRequest,
+) -> WorkerProjectionGapResponse:
+    target = await targets_store.get_target_by_id(db, auth.target_id)
+    if target is None:
+        raise CloudApiError(
+            "cloud_worker_target_missing",
+            "Worker target no longer exists.",
+            status_code=401,
+        )
+    await require_current_managed_worker_slot(db, auth=auth, target=target)
+    projection = await projections_store.get_session_projection_metadata(
+        db,
+        target_id=auth.target_id,
+        session_id=body.session_id,
+    )
+    if (
+        projection is None
+        or projection.id != body.session_projection_id
+        or projection.exposure_id != body.exposure_id
+    ):
+        raise CloudApiError(
+            "cloud_projection_gap_projection_mismatch",
+            "Projection gap does not match an active Cloud projection.",
+            status_code=409,
+        )
+    exposure = await exposures_store.get_workspace_exposure_by_id(db, body.exposure_id)
+    if exposure is None or exposure.archived_at is not None or exposure.status != "active":
+        raise CloudApiError(
+            "cloud_projection_gap_exposure_inactive",
+            "Projection exposure is no longer active.",
+            status_code=409,
+        )
+    if (projection.last_uploaded_seq or 0) > body.last_uploaded_seq or (
+        projection.last_uploaded_seq or 0
+    ) >= body.expected_seq:
+        return WorkerProjectionGapResponse(updated=False)
+    gap_state_json = compact_json(
+        {
+            "reason": "anyharness_event_sequence_gap",
+            "expectedSeq": body.expected_seq,
+            "firstObservedSeq": body.first_observed_seq,
+            "lastUploadedSeq": body.last_uploaded_seq,
+            "exposureId": str(body.exposure_id),
+            "sessionProjectionId": str(body.session_projection_id),
+            "reportedByWorkerId": str(auth.worker_id),
+            "reportedAt": utcnow().isoformat(),
+        }
+    )
+    await projections_store.set_projection_gap_state(
+        db,
+        target_id=auth.target_id,
+        session_id=body.session_id,
+        gap_state_json=gap_state_json or "{}",
+    )
+    return WorkerProjectionGapResponse(updated=True)

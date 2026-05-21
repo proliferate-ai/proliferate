@@ -538,17 +538,24 @@ New worker SQLite table:
 
 ```text
 worker_projection_cursor
-  exposure_id              text primary key
-  session_projection_id    text                  nullable
+  session_projection_id    text primary key
+  exposure_id              text                  not null
   anyharness_workspace_id  text                  not null
-  anyharness_session_id    text                  nullable
+  anyharness_session_id    text                  not null
   projection_level         text                  not null
   commandable              boolean               not null
   last_uploaded_seq        integer               not null default 0
   last_ack_seq             integer               not null default 0
   status                   text                  not null default 'active'
+  gap_state_json           text                  nullable
   updated_at               text                  not null
 ```
+
+The cursor is keyed by `session_projection_id`, not `exposure_id`. One
+workspace exposure can have multiple sessions; keying by exposure would
+silently collapse all but one active session. Worker responses may also
+include workspace-only exposure rows with no session projection; those
+rows are status/readiness input only and are not stored as tail cursors.
 
 Worker tailer reconciliation:
 
@@ -560,7 +567,7 @@ worker pulls active exposures + projections from Cloud:
                projection_level, commandable, status, revision,
                last_uploaded_seq }
 
-worker upserts worker_projection_cursor rows for active exposures.
+worker upserts worker_projection_cursor rows for active session projections.
 worker removes rows for revoked/paused exposures (or marks them
 inactive).
 

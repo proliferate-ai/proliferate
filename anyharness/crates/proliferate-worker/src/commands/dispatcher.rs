@@ -184,8 +184,8 @@ async fn process_command(
         report_command_result(cloud, identity, store, &command.command_id, &result).await?;
         return Ok(());
     };
-    if command.kind == "sync_existing_workspace" {
-        return process_sync_existing_workspace_command(
+    if command.kind == "backfill_exposed_workspace" {
+        return process_backfill_exposed_workspace_command(
             cloud, identity, anyharness, store, command,
         )
         .await;
@@ -843,7 +843,7 @@ async fn apply_runtime_config_to_anyharness(
     })
 }
 
-async fn process_sync_existing_workspace_command(
+async fn process_backfill_exposed_workspace_command(
     cloud: &CloudClient,
     identity: &WorkerIdentity,
     anyharness: &AnyHarnessClient,
@@ -857,7 +857,7 @@ async fn process_sync_existing_workspace_command(
             &command_delivery_request(&command, "delivered", None, None),
         )
         .await?;
-    let response = sync::backfill::sync_existing_workspace(
+    let response = sync::backfill::backfill_exposed_workspace(
         store,
         anyharness,
         cloud,

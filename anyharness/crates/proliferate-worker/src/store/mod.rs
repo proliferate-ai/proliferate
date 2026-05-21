@@ -5,15 +5,12 @@ use serde_json::Value;
 
 use crate::{error::WorkerError, identity::credentials::WorkerIdentity};
 
+mod projection_cursors;
+
+pub use projection_cursors::{ProjectionCursor, ProjectionCursorUpsert};
+
 pub struct WorkerStore {
     path: PathBuf,
-}
-
-#[derive(Debug, Clone)]
-pub struct SyncSession {
-    pub session_id: String,
-    pub workspace_id: Option<String>,
-    pub last_uploaded_seq: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -52,7 +49,7 @@ impl WorkerStore {
         Ok(store)
     }
 
-    fn connection(&self) -> Result<Connection, WorkerError> {
+    pub(super) fn connection(&self) -> Result<Connection, WorkerError> {
         let conn = Connection::open(&self.path)?;
         conn.busy_timeout(Duration::from_secs(5))?;
         conn.execute_batch(
@@ -89,6 +86,21 @@ impl WorkerStore {
                 cloud_workspace_id TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS worker_projection_cursor (
+                session_projection_id TEXT PRIMARY KEY,
+                exposure_id TEXT NOT NULL,
+                anyharness_workspace_id TEXT NOT NULL,
+                anyharness_session_id TEXT NOT NULL,
+                projection_level TEXT NOT NULL,
+                commandable INTEGER NOT NULL CHECK (commandable IN (0, 1)),
+                last_uploaded_seq INTEGER NOT NULL DEFAULT 0,
+                last_ack_seq INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'active',
+                gap_state_json TEXT,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS ix_worker_projection_cursor_active_session
+                ON worker_projection_cursor(status, anyharness_session_id);
             CREATE TABLE IF NOT EXISTS pending_command_results (
                 command_id TEXT PRIMARY KEY,
                 lease_id TEXT NOT NULL,
@@ -139,6 +151,13 @@ impl WorkerStore {
             "anyharness_workspace_id",
             "anyharness_workspace_id TEXT",
         )?;
+        add_column_if_missing(
+            &conn,
+            "worker_projection_cursor",
+            "gap_state_json",
+            "gap_state_json TEXT",
+        )?;
+        ensure_projection_cursor_keyed_by_projection(&conn)?;
         Ok(())
     }
 
@@ -250,43 +269,6 @@ impl WorkerStore {
             )?;
         }
         tx.commit()?;
-        Ok(())
-    }
-
-    pub fn list_sync_sessions(&self) -> Result<Vec<SyncSession>, WorkerError> {
-        let conn = self.connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT session_id, workspace_id, last_uploaded_seq FROM sync_sessions ORDER BY updated_at DESC",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            Ok(SyncSession {
-                session_id: row.get(0)?,
-                workspace_id: row.get(1)?,
-                last_uploaded_seq: row.get(2)?,
-            })
-        })?;
-        let mut sessions = Vec::new();
-        for row in rows {
-            sessions.push(row?);
-        }
-        Ok(sessions)
-    }
-
-    pub fn update_sync_cursor(
-        &self,
-        session_id: &str,
-        last_uploaded_seq: i64,
-    ) -> Result<(), WorkerError> {
-        let conn = self.connection()?;
-        conn.execute(
-            r#"
-            UPDATE sync_sessions
-            SET last_uploaded_seq = MAX(last_uploaded_seq, ?2),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE session_id = ?1
-            "#,
-            params![session_id, last_uploaded_seq],
-        )?;
         Ok(())
     }
 
@@ -414,6 +396,51 @@ fn add_column_if_missing(
     }
     conn.execute(
         &format!("ALTER TABLE {table} ADD COLUMN {column_definition}"),
+        [],
+    )?;
+    Ok(())
+}
+
+fn ensure_projection_cursor_keyed_by_projection(conn: &Connection) -> Result<(), WorkerError> {
+    let mut stmt = conn.prepare("PRAGMA table_info(worker_projection_cursor)")?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(1)?, row.get::<_, i64>(5)?))
+    })?;
+    let mut primary_key_column = None;
+    for row in rows {
+        let (name, primary_key_order) = row?;
+        if primary_key_order > 0 {
+            primary_key_column = Some(name);
+            break;
+        }
+    }
+    if primary_key_column.as_deref() == Some("session_projection_id") {
+        return Ok(());
+    }
+    conn.execute("DROP TABLE IF EXISTS worker_projection_cursor", [])?;
+    conn.execute(
+        r#"
+        CREATE TABLE worker_projection_cursor (
+            session_projection_id TEXT PRIMARY KEY,
+            exposure_id TEXT NOT NULL,
+            anyharness_workspace_id TEXT NOT NULL,
+            anyharness_session_id TEXT NOT NULL,
+            projection_level TEXT NOT NULL,
+            commandable INTEGER NOT NULL CHECK (commandable IN (0, 1)),
+            last_uploaded_seq INTEGER NOT NULL DEFAULT 0,
+            last_ack_seq INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'active',
+            gap_state_json TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        "#,
+        [],
+    )?;
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS ix_worker_projection_cursor_active_session
+            ON worker_projection_cursor(status, anyharness_session_id)
+        "#,
         [],
     )?;
     Ok(())

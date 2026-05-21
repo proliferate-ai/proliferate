@@ -13,6 +13,8 @@ from proliferate.db.store.billing import (
 )
 from proliferate.db.store.cloud_sync import backfill as backfill_store
 from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import exposures as exposures_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.backfill.models import (
     WorkerBackfillRequest,
@@ -61,6 +63,24 @@ async def record_worker_backfill(
     workspace_mappings: dict[str, UUID] = {}
     mapped_workspaces: list[WorkerBackfillWorkspaceMapping] = []
     for workspace in body.workspaces:
+        existing_cloud_workspace_id = await events_store.resolve_cloud_workspace_id(
+            db,
+            target_id=auth.target_id,
+            workspace_id=workspace.workspace_id,
+        )
+        if existing_cloud_workspace_id is None:
+            continue
+        exposure = await exposures_store.get_active_workspace_exposure(
+            db,
+            target_id=auth.target_id,
+            cloud_workspace_id=existing_cloud_workspace_id,
+        )
+        if (
+            exposure is None
+            or exposure.status != "active"
+            or exposure.anyharness_workspace_id != workspace.workspace_id
+        ):
+            continue
         repo = _normalize_repo(workspace)
         mapped = await backfill_store.upsert_synced_workspace(
             db,
@@ -97,6 +117,19 @@ async def record_worker_backfill(
                 target_id=auth.target_id,
                 workspace_id=session.workspace_id,
             )
+        exposure = None
+        if cloud_workspace_id is not None:
+            exposure = await exposures_store.get_active_workspace_exposure(
+                db,
+                target_id=auth.target_id,
+                cloud_workspace_id=cloud_workspace_id,
+            )
+        if (
+            exposure is None
+            or exposure.status != "active"
+            or exposure.anyharness_workspace_id != session.workspace_id
+        ):
+            continue
         projection = await events_store.upsert_session_projection(
             db,
             target_id=auth.target_id,
@@ -114,6 +147,18 @@ async def record_worker_backfill(
             started_at=session.started_at,
             ended_at=session.ended_at,
         )
+        if cloud_workspace_id is not None:
+            await projections_store.upsert_session_projection_metadata(
+                db,
+                target_id=auth.target_id,
+                session_id=session.session_id,
+                exposure_id=exposure.id,
+                cloud_workspace_id=cloud_workspace_id,
+                workspace_id=session.workspace_id,
+                projection_level=exposure.default_projection_level,
+                commandable=exposure.commandable,
+                status=session.status or "running",
+            )
         for interaction in session.pending_interactions:
             await events_store.upsert_pending_interaction(
                 db,

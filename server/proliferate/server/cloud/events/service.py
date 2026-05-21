@@ -21,10 +21,12 @@ from proliferate.server.cloud.events.domain.projection import (
     transcript_item_payload,
     transcript_item_text,
 )
+from proliferate.server.cloud.events.ingest_policy import projection_ingest_policy
 from proliferate.server.cloud.events.models import (
     CloudSessionPatchResponse,
     CloudSessionProjectionResponse,
     CloudSessionSnapshotResponse,
+    WorkerEventAck,
     WorkerEventBatchRequest,
     WorkerEventBatchResponse,
     WorkerEventSessionAck,
@@ -63,10 +65,11 @@ async def ingest_worker_event_batch(
     accepted_events = 0
     duplicate_events = 0
     live_only_events = 0
-    received_by_session: dict[str, list[int]] = defaultdict(list)
+    processed_by_session: dict[str, list[int]] = defaultdict(list)
     workspace_by_session: dict[str, str | None] = {}
     cloud_workspace_by_session: dict[str, UUID | None] = {}
     projection_patches: list[CloudSessionPatchResponse] = []
+    event_acks: list[WorkerEventAck] = []
 
     for event in body.events:
         if event.seq <= 0:
@@ -78,20 +81,129 @@ async def ingest_worker_event_batch(
         envelope = event.model_dump(by_alias=True)
         current_event_type = event_type(envelope)
         current_workspace_id = event.workspace_id
-        workspace_by_session.setdefault(event.session_id, current_workspace_id)
-        cloud_workspace_id = cloud_workspace_by_session.get(event.session_id)
-        if event.session_id not in cloud_workspace_by_session:
-            cloud_workspace_id = await events_store.resolve_cloud_workspace_id(
-                db,
-                target_id=auth.target_id,
-                workspace_id=current_workspace_id,
-            )
-            cloud_workspace_by_session[event.session_id] = cloud_workspace_id
 
-        received_by_session[event.session_id].append(event.seq)
+        admission = await projection_ingest_policy(
+            db,
+            target_id=auth.target_id,
+            session_id=event.session_id,
+            workspace_id=current_workspace_id,
+        )
+        policy = admission.policy
+        if policy is None:
+            live_only_events += 1
+            event_acks.append(
+                WorkerEventAck(
+                    session_id=event.session_id,
+                    seq=event.seq,
+                    action="discarded",
+                    reason=admission.discard_reason,
+                )
+            )
+            continue
+        workspace_by_session[event.session_id] = policy.workspace_id or current_workspace_id
+        cloud_workspace_by_session[event.session_id] = policy.cloud_workspace_id
         payload_decision = retained_payload(current_event_type, envelope)
         if not payload_decision.durable:
             live_only_events += 1
+            processed_by_session[event.session_id].append(event.seq)
+            event_acks.append(
+                WorkerEventAck(
+                    session_id=event.session_id,
+                    seq=event.seq,
+                    action="live_only",
+                    reason="payload_not_retained",
+                )
+            )
+            continue
+        if policy.projection_level == "session_summaries" and not _updates_session_summary(
+            current_event_type
+        ):
+            live_only_events += 1
+            processed_by_session[event.session_id].append(event.seq)
+            event_acks.append(
+                WorkerEventAck(
+                    session_id=event.session_id,
+                    seq=event.seq,
+                    action="live_only",
+                    reason="projection_level_session_summaries",
+                )
+            )
+            continue
+        if policy.projection_level == "session_summaries":
+            event_count, payload_bytes = await events_store.get_session_event_usage(
+                db,
+                target_id=auth.target_id,
+                session_id=event.session_id,
+            )
+            if event_count >= SESSION_DURABLE_EVENT_HARD_CAP:
+                raise CloudApiError(
+                    "cloud_event_session_cap_exceeded",
+                    "Session cloud event retention cap exceeded.",
+                    status_code=413,
+                )
+            projected_payload_bytes = payload_bytes + payload_decision.payload_size_bytes
+            if projected_payload_bytes > SESSION_PAYLOAD_BYTES_HARD_CAP:
+                raise CloudApiError(
+                    "cloud_event_session_payload_cap_exceeded",
+                    "Session cloud payload retention cap exceeded.",
+                    status_code=413,
+                )
+            inserted, is_new, duplicate_matches = await events_store.insert_event_if_new(
+                db,
+                events_store.InsertSessionEvent(
+                    target_id=auth.target_id,
+                    worker_id=auth.worker_id,
+                    cloud_workspace_id=policy.cloud_workspace_id,
+                    workspace_id=policy.workspace_id,
+                    session_id=event.session_id,
+                    seq=event.seq,
+                    event_type=current_event_type,
+                    source_kind=source_kind_for_event(event.event),
+                    turn_id=event.turn_id,
+                    item_id=event.item_id,
+                    occurred_at=event.timestamp,
+                    payload_json=payload_decision.payload_json,
+                    payload_hash=payload_decision.payload_hash,
+                    payload_size_bytes=payload_decision.payload_size_bytes,
+                    payload_truncated_at_bytes=payload_decision.payload_truncated_at_bytes,
+                ),
+            )
+            if not duplicate_matches:
+                raise CloudApiError(
+                    "cloud_event_duplicate_mismatch",
+                    "Duplicate event sequence has a different payload hash.",
+                    status_code=409,
+                )
+            processed_by_session[event.session_id].append(event.seq)
+            if inserted is None or not is_new:
+                duplicate_events += 1
+                event_acks.append(
+                    WorkerEventAck(
+                        session_id=event.session_id,
+                        seq=event.seq,
+                        action="duplicate",
+                    )
+                )
+                continue
+            accepted_events += 1
+            event_acks.append(
+                WorkerEventAck(
+                    session_id=event.session_id,
+                    seq=event.seq,
+                    action="accepted",
+                )
+            )
+            patch = await _apply_projection(
+                db,
+                auth=auth,
+                cloud_workspace_id=policy.cloud_workspace_id,
+                workspace_id=policy.workspace_id,
+                envelope=envelope,
+                payload_json=payload_decision.payload_json,
+                include_transcript=False,
+            )
+            if policy.live_fanout:
+                projection_patches.append(patch)
             continue
         event_count, payload_bytes = await events_store.get_session_event_usage(
             db,
@@ -115,8 +227,8 @@ async def ingest_worker_event_batch(
             events_store.InsertSessionEvent(
                 target_id=auth.target_id,
                 worker_id=auth.worker_id,
-                cloud_workspace_id=cloud_workspace_id,
-                workspace_id=current_workspace_id,
+                cloud_workspace_id=policy.cloud_workspace_id,
+                workspace_id=policy.workspace_id,
                 session_id=event.session_id,
                 seq=event.seq,
                 event_type=current_event_type,
@@ -136,23 +248,39 @@ async def ingest_worker_event_batch(
                 "Duplicate event sequence has a different payload hash.",
                 status_code=409,
             )
+        processed_by_session[event.session_id].append(event.seq)
         if inserted is None or not is_new:
             duplicate_events += 1
+            event_acks.append(
+                WorkerEventAck(
+                    session_id=event.session_id,
+                    seq=event.seq,
+                    action="duplicate",
+                )
+            )
             continue
         accepted_events += 1
-        projection_patches.append(
-            await _apply_projection(
-                db,
-                auth=auth,
-                cloud_workspace_id=cloud_workspace_id,
-                workspace_id=current_workspace_id,
-                envelope=envelope,
-                payload_json=payload_decision.payload_json,
+        event_acks.append(
+            WorkerEventAck(
+                session_id=event.session_id,
+                seq=event.seq,
+                action="accepted",
             )
         )
+        patch = await _apply_projection(
+            db,
+            auth=auth,
+            cloud_workspace_id=policy.cloud_workspace_id,
+            workspace_id=policy.workspace_id,
+            envelope=envelope,
+            payload_json=payload_decision.payload_json,
+            include_transcript=policy.transcript_rows,
+        )
+        if policy.live_fanout:
+            projection_patches.append(patch)
 
     session_acks: list[WorkerEventSessionAck] = []
-    for session_id, seqs in received_by_session.items():
+    for session_id, seqs in processed_by_session.items():
         current = await events_store.get_ingest_cursor(
             db,
             target_id=auth.target_id,
@@ -183,7 +311,19 @@ async def ingest_worker_event_batch(
         duplicate_events=duplicate_events,
         live_only_events=live_only_events,
         session_acks=session_acks,
+        event_acks=event_acks,
     )
+
+
+def _updates_session_summary(event_type_value: str) -> bool:
+    return event_type_value in {
+        "session_started",
+        "session_ended",
+        "turn_started",
+        "turn_ended",
+        "session_info_update",
+        "config_option_update",
+    }
 
 
 async def get_session_snapshot(
@@ -302,6 +442,7 @@ async def _apply_projection(
     workspace_id: str | None,
     envelope: dict[str, object],
     payload_json: str | None,
+    include_transcript: bool,
 ) -> CloudSessionPatchResponse:
     session_id = str(envelope["sessionId"])
     seq = _int_value(envelope["seq"])
@@ -331,7 +472,7 @@ async def _apply_projection(
     transcript_item = None
     pending_interaction = None
 
-    if current_event_type in {"item_started", "item_completed"}:
+    if include_transcript and current_event_type in {"item_started", "item_completed"}:
         item_id = transcript_item_id(envelope)
         if item_id is not None:
             item = transcript_item_payload(event_payload)
@@ -353,7 +494,7 @@ async def _apply_projection(
                 payload_json=payload_json,
                 completed=current_event_type == "item_completed",
             )
-    elif current_event_type == "interaction_requested":
+    elif include_transcript and current_event_type == "interaction_requested":
         request_id = _str_or_none(event_payload.get("requestId"))
         if request_id:
             pending_interaction = await events_store.upsert_pending_interaction(
@@ -370,7 +511,7 @@ async def _apply_projection(
                 description=_str_or_none(event_payload.get("description")),
                 payload_json=payload_json,
             )
-    elif current_event_type == "interaction_resolved":
+    elif include_transcript and current_event_type == "interaction_resolved":
         request_id = _str_or_none(event_payload.get("requestId"))
         if request_id:
             pending_interaction = await events_store.resolve_pending_interaction(

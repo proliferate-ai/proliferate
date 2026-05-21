@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 from proliferate.constants.cloud import CloudTargetUpdateChannel
@@ -160,4 +162,47 @@ class WorkerCommandResultRequest(BaseModel):
 class WorkerCommandStatusResponse(BaseModel):
     command_id: str = Field(serialization_alias="commandId")
     status: str
+    updated: bool
+
+
+class WorkerExposureSnapshotResponse(BaseModel):
+    exposure_id: str = Field(serialization_alias="exposureId")
+    target_id: str = Field(serialization_alias="targetId")
+    cloud_workspace_id: str = Field(serialization_alias="cloudWorkspaceId")
+    session_projection_id: str | None = Field(
+        default=None,
+        serialization_alias="sessionProjectionId",
+    )
+    anyharness_workspace_id: str = Field(serialization_alias="anyharnessWorkspaceId")
+    anyharness_session_id: str | None = Field(
+        default=None,
+        serialization_alias="anyharnessSessionId",
+    )
+    projection_level: str = Field(serialization_alias="projectionLevel")
+    commandable: bool
+    status: str
+    revision: int | None = None
+    last_uploaded_seq: int = Field(serialization_alias="lastUploadedSeq")
+
+
+class WorkerExposureListResponse(BaseModel):
+    exposures: list[WorkerExposureSnapshotResponse]
+
+
+class WorkerProjectionGapRequest(BaseModel):
+    exposure_id: UUID = Field(serialization_alias="exposureId", alias="exposureId")
+    session_projection_id: UUID = Field(
+        serialization_alias="sessionProjectionId",
+        alias="sessionProjectionId",
+    )
+    session_id: str = Field(serialization_alias="sessionId", alias="sessionId")
+    expected_seq: int = Field(serialization_alias="expectedSeq", alias="expectedSeq")
+    first_observed_seq: int = Field(
+        serialization_alias="firstObservedSeq",
+        alias="firstObservedSeq",
+    )
+    last_uploaded_seq: int = Field(serialization_alias="lastUploadedSeq", alias="lastUploadedSeq")
+
+
+class WorkerProjectionGapResponse(BaseModel):
     updated: bool
