@@ -1,7 +1,7 @@
 """Exposure projection and wake metadata.
 
-Revision ID: b0c1d2e3f4a5
-Revises: a9b8c7d6e5f4
+Revision ID: c4e5f6a7b8d9
+Revises: f2b3c4d5e6a7
 Create Date: 2026-05-20 14:00:00.000000
 """
 
@@ -12,8 +12,8 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "b0c1d2e3f4a5"
-down_revision: str | None = "a9b8c7d6e5f4"
+revision: str = "c4e5f6a7b8d9"
+down_revision: str | None = "f2b3c4d5e6a7"
 branch_labels: str | None = None
 depends_on: str | None = None
 
