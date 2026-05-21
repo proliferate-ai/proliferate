@@ -4,6 +4,7 @@ import {
   createGatewayCredential,
   deleteAgentAuthCredential,
   deleteAgentAuthCredentialShare,
+  enableSandboxProfileCloud,
   ensureManagedCreditsForOrganization,
   ensureOrganizationSandboxProfile,
   ensurePersonalSandboxProfile,
@@ -32,6 +33,7 @@ import {
   agentAuthCredentialsKey,
   agentAuthRootKey,
   cloudCapabilitiesKey,
+  cloudTargetsKey,
   sandboxAgentAuthSelectionsKey,
   sandboxAgentAuthTargetStatesKey,
   sandboxProfileTargetStateKey,
@@ -155,6 +157,18 @@ export function useAgentAuthMutations() {
     onSuccess: invalidateAgentAuth,
   });
 
+  const enableProfileCloud = useMutation({
+    mutationFn: (input: { sandboxProfileId: string }) =>
+      enableSandboxProfileCloud(input.sandboxProfileId, client),
+    onSuccess: async (_state, input) => {
+      await invalidateAgentAuth();
+      await queryClient.invalidateQueries({ queryKey: cloudTargetsKey() });
+      await queryClient.invalidateQueries({
+        queryKey: sandboxProfileTargetStateKey(input.sandboxProfileId),
+      });
+    },
+  });
+
   const selectCredential = useMutation({
     mutationFn: (input: {
       sandboxProfileId: string;
@@ -194,7 +208,9 @@ export function useAgentAuthMutations() {
     isDeletingShare: deleteShare.isPending,
     ensurePersonalProfile: ensurePersonalProfile.mutateAsync as () => Promise<SandboxProfile>,
     ensureOrganizationProfile: ensureOrganizationProfile.mutateAsync,
+    enableProfileCloud: enableProfileCloud.mutateAsync,
     isEnsuringProfile: ensurePersonalProfile.isPending || ensureOrganizationProfile.isPending,
+    isEnablingProfileCloud: enableProfileCloud.isPending,
     selectCredential: selectCredential.mutateAsync,
     isSelectingCredential: selectCredential.isPending,
     ensureManagedCredits: ensureManagedCredits.mutateAsync,

@@ -48,6 +48,7 @@ function renderSettingsSection(
   cloudSignInChecking: boolean,
   cloudSignInAvailable: boolean,
   adminAccess: { isAdmin: boolean; isLoading: boolean; role: string | null },
+  activeOrganizationId: string | null,
   focus: SettingsFocus,
   onSelectSection: (section: SettingsSection) => void,
   onSelectRepo: (sourceRoot: string) => void,
@@ -105,6 +106,8 @@ function renderSettingsSection(
           isAdmin={adminAccess.isAdmin}
           isCheckingAdmin={adminAccess.isLoading}
           role={adminAccess.role}
+          activeOrganizationId={activeOrganizationId}
+          repositories={repositories}
           onOpenSettingsSection={onSelectSection}
         />
       );
@@ -233,6 +236,7 @@ export function SettingsScreen({
                     isLoading: admin.isLoading,
                     role: admin.role,
                   },
+                  activeOrganizationId,
                   focus,
                   onSelectSection,
                   onSelectRepo,

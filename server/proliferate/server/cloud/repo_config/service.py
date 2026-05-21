@@ -14,10 +14,13 @@ from proliferate.db.store.cloud_repo_config import (
     CloudRepoFileInput,
     bootstrap_cloud_repo_config_for_user,
     get_cloud_repo_config,
+    get_organization_cloud_repo_config,
     list_cloud_repo_configs,
+    list_organization_cloud_repo_configs,
     load_cloud_repo_config_for_user,
     save_cloud_repo_config,
     save_cloud_repo_file,
+    save_organization_cloud_repo_config,
 )
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.db.store.organizations import load_active_membership
@@ -53,6 +56,7 @@ from proliferate.server.cloud.runtime.repo_config_apply import (
     run_workspace_saved_setup,
 )
 from proliferate.server.cloud.runtime.service import get_workspace_connection
+from proliferate.server.cloud.targets.domain.policy import require_target_admin_membership
 
 
 class _WorkspaceRepoConfigRecord(Protocol):
@@ -164,6 +168,23 @@ async def list_repo_configs(
     return await list_cloud_repo_configs(db, user_id)
 
 
+async def _require_organization_admin(user_id: UUID, organization_id: UUID) -> None:
+    membership = await load_active_membership(
+        organization_id=organization_id,
+        user_id=user_id,
+    )
+    require_target_admin_membership(membership)
+
+
+async def list_organization_repo_configs(
+    db: AsyncSession,
+    user_id: UUID,
+    organization_id: UUID,
+) -> list[CloudRepoConfigValue]:
+    await _require_organization_admin(user_id, organization_id)
+    return await list_organization_cloud_repo_configs(db, organization_id=organization_id)
+
+
 async def get_repo_config(
     db: AsyncSession,
     user_id: UUID,
@@ -174,6 +195,23 @@ async def get_repo_config(
     return await get_cloud_repo_config(
         db,
         user_id=user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
+
+
+async def get_organization_repo_config(
+    db: AsyncSession,
+    user_id: UUID,
+    organization_id: UUID,
+    *,
+    git_owner: str,
+    git_repo_name: str,
+) -> CloudRepoConfigValue | None:
+    await _require_organization_admin(user_id, organization_id)
+    return await get_organization_cloud_repo_config(
+        db,
+        organization_id=organization_id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
     )
@@ -284,6 +322,48 @@ async def save_repo_config(
             status_code=409,
         ) from error
     return value
+
+
+async def save_organization_repo_config(
+    db: AsyncSession,
+    user_id: UUID,
+    organization_id: UUID,
+    *,
+    git_owner: str,
+    git_repo_name: str,
+    body: SaveCloudRepoConfigRequest,
+) -> CloudRepoConfigValue:
+    await _require_organization_admin(user_id, organization_id)
+    env_vars = normalize_env_vars(body.env_vars)
+    default_branch = await _validate_default_branch(
+        db,
+        user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        default_branch=body.default_branch,
+    )
+    files = (
+        _normalize_files(
+            [
+                CloudRepoFileInput(relative_path=item.relative_path, content=item.content)
+                for item in body.files
+            ]
+        )
+        if "files" in body.model_fields_set
+        else None
+    )
+    return await save_organization_cloud_repo_config(
+        db,
+        organization_id=organization_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        configured=body.configured,
+        default_branch=default_branch,
+        env_vars=env_vars,
+        setup_script=body.setup_script,
+        run_command=body.run_command,
+        files=files,
+    )
 
 
 async def save_repo_file(

@@ -78,6 +78,10 @@ export function cloudRepoConfigsKey() {
   return [...cloudRootKey(), "repo-configs"] as const;
 }
 
+export function organizationCloudRepoConfigsKey(organizationId: string | null) {
+  return [...cloudRootKey(), "organizations", organizationId, "repo-configs"] as const;
+}
+
 export function cloudWorktreeRetentionPolicyKey(userId: string | null) {
   return [...cloudRootKey(), "worktree-retention-policy", userId] as const;
 }
@@ -96,6 +100,14 @@ export function cloudMobilityWorkspaceKey(mobilityWorkspaceId: string) {
 
 export function cloudRepoConfigKey(gitOwner: string, gitRepoName: string) {
   return [...cloudRepoConfigsKey(), gitOwner, gitRepoName] as const;
+}
+
+export function organizationCloudRepoConfigKey(
+  organizationId: string | null,
+  gitOwner: string,
+  gitRepoName: string,
+) {
+  return [...organizationCloudRepoConfigsKey(organizationId), gitOwner, gitRepoName] as const;
 }
 
 export function cloudWorkspaceRepoConfigStatusKey(
