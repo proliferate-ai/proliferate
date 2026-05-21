@@ -1,6 +1,7 @@
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { getFocusZone, isRightPanelFocusZone } from "@/lib/domain/focus-zone";
+import { useContentSearchStore } from "@/stores/search/content-search-store";
 import {
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
@@ -21,6 +22,7 @@ export function useWorkspaceContentShortcuts(
   options: { enabled?: boolean } = {},
 ): void {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const openContentSearch = useContentSearchStore((state) => state.openSearch);
   const enabled = (options.enabled ?? true) && selectedWorkspaceId !== null;
   const {
     activateRelativeTab,
@@ -78,4 +80,32 @@ export function useWorkspaceContentShortcuts(
   useShortcutHandler("workspace.close-active-tab", () => {
     return closeActiveWorkspaceTab() !== "noop";
   }, { enabled });
+
+  useShortcutHandler("workspace.find-content", () => {
+    const surface = resolveContentSearchSurfaceForShortcut();
+    if (!surface) {
+      return false;
+    }
+
+    openContentSearch("diffs", surface);
+    return true;
+  }, { enabled });
+}
+
+function resolveContentSearchSurfaceForShortcut(): "chat" | "file" | null {
+  const activeElement = document.activeElement;
+  if (activeElement?.closest("[data-file-viewer-frame]")) {
+    return "file";
+  }
+
+  const focusZone = getFocusZone();
+  if (focusZone === "right-panel") {
+    return document.querySelector("[data-file-viewer-frame]") ? "file" : null;
+  }
+
+  if (focusZone === "browser" || focusZone === "terminal") {
+    return null;
+  }
+
+  return "chat";
 }

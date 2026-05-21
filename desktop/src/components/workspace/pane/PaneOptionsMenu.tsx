@@ -9,17 +9,19 @@ export function PaneOptionsMenu({
   label = "Pane options",
   align = "end",
   className = "",
+  triggerClassName = "",
   children,
 }: {
   label?: string;
   align?: "start" | "end";
   className?: string;
+  triggerClassName?: string;
   children: (close: () => void) => ReactNode;
 }) {
   return (
     <PopoverButton
       trigger={(
-        <PaneIconButton label={label}>
+        <PaneIconButton label={label} className={triggerClassName}>
           <MoreHorizontal className="size-3.5" />
         </PaneIconButton>
       )}

@@ -41,7 +41,7 @@ export function GitPanel() {
   const diffReviewMeasurement = useDiffReviewMeasurement();
   if (diffReviewMeasurement.deferQueryMount) {
     return (
-      <div className="flex h-full min-w-0 flex-col overflow-hidden bg-sidebar-background text-sidebar-foreground">
+      <div className="flex h-full min-w-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
         <p className="px-4 py-8 text-center text-xs text-sidebar-muted-foreground">
           Loading changes
         </p>
@@ -282,7 +282,7 @@ function GitPanelContent({
   }, [effectiveCollapsedFiles]);
 
   return (
-    <div className="flex h-full flex-col bg-sidebar-background text-sidebar-foreground">
+    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <GitPanelHeader
         changesFilter={changesFilter}
         visibleChangedCount={visibleChangedCount}

@@ -114,6 +114,7 @@ export function TranscriptToolCallItemBlock({
         patch={part.patch}
         preview={part.preview}
         status={status}
+        contentSearchUnitId={`diff:tool:${item.itemId}:file-change:${idx}`}
       />,
     );
   });

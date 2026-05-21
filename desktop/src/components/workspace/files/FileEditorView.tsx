@@ -8,13 +8,11 @@ import { FileViewerContent } from "./FileViewerContent";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { useReadWorkspaceFileQuery } from "@anyharness/sdk-react";
 import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
-import { WorkspaceFileSearchModal } from "@/components/workspace/files/search/WorkspaceFileSearchModal";
 import { FileViewerFrame } from "@/components/workspace/files/viewer/FileViewerFrame";
 import { WorkspaceFileBrowserOverlay } from "@/components/workspace/files/viewer/WorkspaceFileBrowserOverlay";
 import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
 import { useWorkspaceFileTargetActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-target-actions";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { canPreviewAsRichFile } from "@/lib/domain/files/document-preview";
 import type { FileDiffTarget } from "@/lib/domain/workspaces/viewer/file-diff-options";
 import {
@@ -22,6 +20,7 @@ import {
   normalizeFileViewerMode,
   type ViewerTargetKey,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
+import { useContentSearchStore } from "@/stores/search/content-search-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 
 interface FileEditorViewProps {
@@ -33,13 +32,12 @@ interface FileEditorViewProps {
 export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorViewProps) {
   const fileContext = useWorkspaceFileContext();
   const materializedWorkspaceId = fileContext.materializedWorkspaceId;
-  const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
-  const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(materializedWorkspaceId);
   const rawMode = useWorkspaceViewerTabsStore(
     (s) => s.modeByTargetKey[targetKey] ?? defaultFileViewerMode(filePath),
   );
   const setTargetMode = useWorkspaceViewerTabsStore((s) => s.setTargetMode);
   const diffLayout = useWorkspaceViewerTabsStore((s) => s.layoutByTargetKey[targetKey] ?? "unified");
+  const openContentSearch = useContentSearchStore((s) => s.openSearch);
   const { openFile } = useWorkspaceFileTargetActions(fileContext);
   const fileActions = useFileReferenceActions({
     rawPath: filePath,
@@ -49,7 +47,6 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
   const parentPath = useMemo(() => parentDirectoryPath(filePath), [filePath]);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [browserPath, setBrowserPath] = useState(parentPath);
-  const [fileSearchOpen, setFileSearchOpen] = useState(false);
   const activeDiffTarget = diffTarget ?? null;
   const effectiveMode = activeDiffTarget
     ? "diff"
@@ -81,6 +78,17 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
   const openExternal = () => {
     void fileActions.openDefault();
   };
+  const openFindInDiffs = () => {
+    if (activeDiffTarget || !read?.isText || read.tooLarge) {
+      return;
+    }
+
+    if (normalizedEffectiveMode === "rendered") {
+      setTargetMode(targetKey, "source");
+    }
+
+    openContentSearch("diffs", "file");
+  };
   const toggleRichPreview = () => {
     setTargetMode(
       targetKey,
@@ -102,21 +110,11 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
   const closeBrowser = () => {
     setBrowserOpen(false);
   };
-  const openFileSearch = () => {
-    setFileSearchOpen(true);
-  };
-  const closeFileSearch = () => {
-    setFileSearchOpen(false);
-  };
   const openBrowserFile = (path: string) => {
     setBrowserOpen(false);
     void openFile(path);
   };
-  const openSearchFile = (path: string) => {
-    setFileSearchOpen(false);
-    setBrowserOpen(false);
-    void openFile(path);
-  };
+  const canFindInFile = !activeDiffTarget && Boolean(read?.isText && !read.tooLarge);
   const renderPaneContent = (content: ReactNode) => (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -131,13 +129,6 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
         onOpenFile={openBrowserFile}
         onClose={closeBrowser}
       />
-      <WorkspaceFileSearchModal
-        open={fileSearchOpen}
-        workspaceId={materializedWorkspaceId}
-        runtimeBlockedReason={runtimeBlockedReason}
-        onClose={closeFileSearch}
-        onOpenFile={openSearchFile}
-      />
     </div>
   );
 
@@ -149,14 +140,15 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
         wordWrap={wordWrap}
         richPreviewEnabled={normalizedEffectiveMode === "rendered"}
         canCopyContent={false}
+        canFindInFile={false}
         onToggleWordWrap={() => setWordWrap((value) => !value)}
         onToggleRichPreview={toggleRichPreview}
         onCopyContent={copyContent}
         onCopyPath={copyPath}
         onOpenExternal={openExternal}
+        onOpenContentSearch={openFindInDiffs}
         browserOpen={browserOpen}
         onToggleBrowser={toggleBrowser}
-        onOpenSearch={openFileSearch}
         onBrowsePath={browsePath}
       >
         {renderPaneContent(
@@ -174,14 +166,15 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
         wordWrap={wordWrap}
         richPreviewEnabled={normalizedEffectiveMode === "rendered"}
         canCopyContent={false}
+        canFindInFile={false}
         onToggleWordWrap={() => setWordWrap((value) => !value)}
         onToggleRichPreview={toggleRichPreview}
         onCopyContent={copyContent}
         onCopyPath={copyPath}
         onOpenExternal={openExternal}
+        onOpenContentSearch={openFindInDiffs}
         browserOpen={browserOpen}
         onToggleBrowser={toggleBrowser}
-        onOpenSearch={openFileSearch}
         onBrowsePath={browsePath}
       >
         {renderPaneContent(
@@ -200,14 +193,15 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       wordWrap={wordWrap}
       richPreviewEnabled={normalizedEffectiveMode === "rendered"}
       canCopyContent={Boolean(read?.isText && !read.tooLarge)}
+      canFindInFile={canFindInFile}
       onToggleWordWrap={() => setWordWrap((value) => !value)}
       onToggleRichPreview={toggleRichPreview}
       onCopyContent={copyContent}
       onCopyPath={copyPath}
       onOpenExternal={openExternal}
+      onOpenContentSearch={openFindInDiffs}
       browserOpen={browserOpen}
       onToggleBrowser={toggleBrowser}
-      onOpenSearch={openFileSearch}
       onBrowsePath={browsePath}
     >
       {renderPaneContent(

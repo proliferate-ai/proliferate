@@ -63,7 +63,7 @@ export function TerminalTopBar({
   };
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-sidebar-border bg-sidebar-background px-2 text-sidebar-foreground">
+    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-sidebar-border bg-sidebar px-2 text-sidebar-foreground">
       <PopoverButton
         align="start"
         trigger={

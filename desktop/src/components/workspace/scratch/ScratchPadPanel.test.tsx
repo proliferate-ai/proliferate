@@ -106,7 +106,7 @@ describe("ScratchPadPanel", () => {
     };
     render(<ScratchPadPanel workspaceKey="workspace-1" />);
 
-    const editor = screen.getByPlaceholderText(/Capture follow-ups/) as HTMLTextAreaElement;
+    const editor = screen.getByPlaceholderText(/Write notes here/) as HTMLTextAreaElement;
     expect(editor.value).toBe("- [ ] keep this");
 
     fireEvent.change(editor, { target: { value: "- [ ] updated" } });
@@ -134,7 +134,7 @@ describe("ScratchPadPanel", () => {
     };
     const { rerender } = render(<ScratchPadPanel workspaceKey="workspace-1" />);
 
-    const editor = screen.getByPlaceholderText(/Capture follow-ups/) as HTMLTextAreaElement;
+    const editor = screen.getByPlaceholderText(/Write notes here/) as HTMLTextAreaElement;
     fireEvent.change(editor, { target: { value: "newer local draft" } });
 
     scratchQueryMocks.record = {
@@ -160,7 +160,7 @@ describe("ScratchPadPanel", () => {
     );
     render(<ScratchPadPanel workspaceKey="workspace-1" />);
 
-    const editor = screen.getByPlaceholderText(/Capture follow-ups/) as HTMLTextAreaElement;
+    const editor = screen.getByPlaceholderText(/Write notes here/) as HTMLTextAreaElement;
     fireEvent.change(editor, { target: { value: "first draft" } });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
@@ -214,7 +214,7 @@ describe("ScratchPadPanel", () => {
     };
     const { rerender } = render(<ScratchPadPanel workspaceKey="workspace-1" />);
 
-    expect((screen.getByPlaceholderText(/Capture follow-ups/) as HTMLTextAreaElement).value)
+    expect((screen.getByPlaceholderText(/Write notes here/) as HTMLTextAreaElement).value)
       .toBe("workspace one note");
 
     scratchQueryMocks.record = undefined;
@@ -232,7 +232,7 @@ describe("ScratchPadPanel", () => {
     };
     render(<ScratchPadPanel workspaceKey="workspace-1" />);
 
-    const editor = screen.getByPlaceholderText(/Capture follow-ups/) as HTMLTextAreaElement;
+    const editor = screen.getByPlaceholderText(/Write notes here/) as HTMLTextAreaElement;
     fireEvent.click(screen.getByRole("button", { name: "Scratch options" }));
     fireEvent.click(screen.getByRole("button", { name: "Clear completed" }));
 
@@ -251,7 +251,7 @@ describe("ScratchPadPanel", () => {
     };
     render(<ScratchPadPanel workspaceKey="workspace-1" />);
 
-    const editor = screen.getByPlaceholderText(/Capture follow-ups/) as HTMLTextAreaElement;
+    const editor = screen.getByPlaceholderText(/Write notes here/) as HTMLTextAreaElement;
     fireEvent.click(screen.getByRole("button", { name: "Scratch options" }));
     fireEvent.click(screen.getByRole("button", { name: "Clear completed" }));
 

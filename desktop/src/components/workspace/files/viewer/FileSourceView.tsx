@@ -1,12 +1,20 @@
 import {
   forwardRef,
+  useEffect,
   useMemo,
   useRef,
   type CSSProperties,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { renderContentSearchMarkedToken } from "@/components/ui/content/search/ContentSearchMarks";
 import { useHighlightedLines } from "@/hooks/ui/use-highlighted-lines";
+import {
+  buildContentSearchLineMatchIds,
+  findContentSearchTokenMatchSegments,
+  normalizeContentSearchQuery,
+} from "@/lib/domain/content-search/content-search";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
+import { useContentSearchStore } from "@/stores/search/content-search-store";
 
 const FILE_SOURCE_ESTIMATED_LINE_HEIGHT = 20;
 const FILE_SOURCE_VERTICAL_PADDING_PX = 8;
@@ -41,7 +49,37 @@ export function FileSourceView({
   const lines = highlightedLines ?? fallbackLines;
   const scrollRef = useRef<HTMLDivElement>(null);
   const lineNumberDigitWidth = `${Math.max(2, String(lines.length).length)}ch`;
-  const lineNumberGutterWidth = `calc(${lineNumberDigitWidth} + 1rem)`;
+  const lineNumberGutterWidth = `calc(max(2ch, ${lineNumberDigitWidth}) + 16px)`;
+  const contentSearchSurface = useContentSearchStore((state) => state.surface);
+  const contentSearchOpen = useContentSearchStore((state) => state.open);
+  const rawContentSearchQuery = useContentSearchStore((state) => state.query);
+  const rawActiveMatchId = useContentSearchStore((state) => state.activeMatchId);
+  const registerContentSearchUnit = useContentSearchStore((state) => state.registerUnit);
+  const unregisterContentSearchUnit = useContentSearchStore((state) => state.unregisterUnit);
+  const fileContentSearchActive = contentSearchOpen && contentSearchSurface === "file";
+  const contentSearchQuery = fileContentSearchActive ? rawContentSearchQuery : "";
+  const activeMatchId = fileContentSearchActive ? rawActiveMatchId : null;
+  const contentSearchUnitId = useMemo(
+    () => `diff:${filePath}:source`,
+    [filePath],
+  );
+  const contentSearchMatchIds = useMemo(
+    () => {
+      const normalizedQuery = normalizeContentSearchQuery(contentSearchQuery);
+      if (!normalizedQuery) {
+        return [];
+      }
+
+      return lines.flatMap((tokens, lineIndex) =>
+        buildContentSearchLineMatchIds({
+          idPrefix: `${contentSearchUnitId}:${lineIndex + 1}`,
+          tokens,
+          query: normalizedQuery,
+        })
+      );
+    },
+    [contentSearchQuery, contentSearchUnitId, lines],
+  );
   const maxLineCharacterWidth = useMemo(
     () => maxVisualLineLength(lines),
     [lines],
@@ -70,7 +108,39 @@ export function FileSourceView({
   const renderedRows = virtualRows.length > 0 ? virtualRows : initialVirtualRows;
   const codeMinWidth = wordWrap
     ? undefined
-    : `calc(var(--file-source-line-number-gutter-width) + var(--file-source-content-gap) + ${maxLineCharacterWidth}ch + (var(--file-source-content-padding-inline) * 2))`;
+    : `calc(var(--diffs-column-number-width) + var(--file-source-content-gap) + ${maxLineCharacterWidth}ch + (var(--file-source-content-padding-inline) * 2))`;
+
+  useEffect(() => {
+    if (!activeMatchId?.startsWith(`${contentSearchUnitId}:`)) {
+      return;
+    }
+
+    const matchSuffix = activeMatchId.slice(contentSearchUnitId.length + 1);
+    const lineNumber = Number(matchSuffix.split(":")[0]);
+    if (!Number.isFinite(lineNumber) || lineNumber <= 0) {
+      return;
+    }
+
+    virtualizer.scrollToIndex(lineNumber - 1, { align: "center" });
+  }, [activeMatchId, contentSearchUnitId, virtualizer]);
+
+  useEffect(() => {
+    registerContentSearchUnit({
+      unitId: contentSearchUnitId,
+      surface: "file",
+      scope: "diffs",
+      query: contentSearchQuery,
+      matchIds: contentSearchMatchIds,
+    });
+
+    return () => unregisterContentSearchUnit(contentSearchUnitId);
+  }, [
+    contentSearchMatchIds,
+    contentSearchQuery,
+    contentSearchUnitId,
+    registerContentSearchUnit,
+    unregisterContentSearchUnit,
+  ]);
 
   return (
     <div
@@ -78,7 +148,7 @@ export function FileSourceView({
       data-file-source-view
       data-word-wrap={wordWrap ? "true" : "false"}
       style={{
-        "--file-source-line-number-gutter-width": lineNumberGutterWidth,
+        "--diffs-column-number-width": lineNumberGutterWidth,
       } as CSSProperties}
     >
       <div
@@ -110,6 +180,9 @@ export function FileSourceView({
                 lineNumber={virtualRow.index + 1}
                 tokens={lines[virtualRow.index] ?? []}
                 wordWrap={wordWrap}
+                contentSearchQuery={contentSearchQuery}
+                activeMatchId={activeMatchId}
+                contentSearchUnitId={contentSearchUnitId}
                 style={{
                   position: "absolute",
                   top: 0,
@@ -131,6 +204,9 @@ interface SourceLineProps {
   virtualIndex: number;
   tokens: HighlightedToken[];
   wordWrap: boolean;
+  contentSearchQuery: string;
+  activeMatchId: string | null;
+  contentSearchUnitId: string;
   style: CSSProperties;
 }
 
@@ -139,22 +215,39 @@ const SourceLine = forwardRef<HTMLSpanElement, SourceLineProps>(function SourceL
   virtualIndex,
   tokens,
   wordWrap,
+  contentSearchQuery,
+  activeMatchId,
+  contentSearchUnitId,
   style,
 }, ref) {
+  const matchSegmentsByToken = findContentSearchTokenMatchSegments(
+    tokens,
+    contentSearchQuery,
+  );
+
   return (
     <span
       ref={ref}
       className={`file-source-line grid min-h-[var(--diffs-line-height)] ${
         wordWrap
-          ? "grid-cols-[var(--file-source-line-number-gutter-width)_minmax(0,1fr)]"
-          : "grid-cols-[var(--file-source-line-number-gutter-width)_max-content]"
+          ? "grid-cols-[var(--diffs-column-number-width)_minmax(0,1fr)]"
+          : "grid-cols-[var(--diffs-column-number-width)_max-content]"
       }`}
       data-index={virtualIndex}
+      data-line={lineNumber}
+      data-line-index={virtualIndex}
+      data-line-type="context"
       data-source-line
       style={style}
     >
-      <span className="file-source-line-number sticky left-0 z-10 select-none px-2 text-right tabular-nums">
-        {lineNumber}
+      <span
+        className="file-source-line-number sticky left-0 z-10 select-none px-2 text-right tabular-nums"
+        data-column-number={lineNumber}
+        data-gutter=""
+        data-line-index={virtualIndex}
+        data-line-type="context"
+      >
+        <span data-line-number-content="">{lineNumber}</span>
       </span>
       <span
         className={`file-source-line-content min-w-0 ${
@@ -162,6 +255,10 @@ const SourceLine = forwardRef<HTMLSpanElement, SourceLineProps>(function SourceL
             ? "whitespace-pre-wrap break-words"
             : "whitespace-pre"
         }`}
+        data-content=""
+        data-line={lineNumber}
+        data-line-index={virtualIndex}
+        data-line-type="context"
       >
         {tokens.length > 0
           ? tokens.map((token, index) => (
@@ -169,7 +266,12 @@ const SourceLine = forwardRef<HTMLSpanElement, SourceLineProps>(function SourceL
                 key={index}
                 style={token.color ? { color: token.color } : undefined}
               >
-                {token.content}
+                {renderContentSearchMarkedToken({
+                  text: token.content,
+                  matchSegments: matchSegmentsByToken[index] ?? [],
+                  activeMatchId,
+                  matchIdPrefix: `${contentSearchUnitId}:${lineNumber}`,
+                })}
               </span>
             ))
           : "\n"}

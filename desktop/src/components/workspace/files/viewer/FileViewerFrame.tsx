@@ -2,6 +2,7 @@ import type {
   ReactNode,
   Ref,
 } from "react";
+import { Button } from "@proliferate/ui/primitives/Button";
 import {
   ChevronRight,
   Copy,
@@ -12,14 +13,11 @@ import {
   WrapText,
 } from "@/components/ui/icons";
 import {
-  PaneHeader,
-  PaneIconButton,
-} from "@/components/workspace/pane/PaneHeader";
-import {
   PaneOptionsMenu,
   PaneOptionsMenuItem,
   PaneOptionsMenuSeparator,
 } from "@/components/workspace/pane/PaneOptionsMenu";
+import { SessionContentSearchOverlay } from "@/components/workspace/chat/surface/SessionContentSearchOverlay";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 
 export function FileViewerFrame({
@@ -29,14 +27,15 @@ export function FileViewerFrame({
   wordWrap,
   richPreviewEnabled,
   canCopyContent,
+  canFindInFile,
   onToggleWordWrap,
   onToggleRichPreview,
   onCopyContent,
   onCopyPath,
   onOpenExternal,
+  onOpenContentSearch,
   browserOpen,
   onToggleBrowser,
-  onOpenSearch,
   onBrowsePath,
   children,
 }: {
@@ -46,23 +45,31 @@ export function FileViewerFrame({
   wordWrap: boolean;
   richPreviewEnabled: boolean;
   canCopyContent: boolean;
+  canFindInFile: boolean;
   onToggleWordWrap: () => void;
   onToggleRichPreview: () => void;
   onCopyContent: () => void;
   onCopyPath: () => void;
   onOpenExternal: () => void;
+  onOpenContentSearch: () => void;
   browserOpen: boolean;
   onToggleBrowser: () => void;
-  onOpenSearch: () => void;
   onBrowsePath: (path: string) => void;
   children: ReactNode;
 }) {
   return (
-    <div ref={rootRef} tabIndex={-1} className="flex h-full min-w-0 flex-col overflow-hidden bg-background outline-none">
-      <PaneHeader
-        left={<FileBreadcrumbs filePath={filePath} onBrowsePath={onBrowsePath} />}
-        right={(
-          <>
+    <div
+      ref={rootRef}
+      tabIndex={-1}
+      className="relative flex h-full min-w-0 flex-col overflow-hidden bg-background outline-none"
+      data-file-viewer-frame
+    >
+      <div
+        className="z-20 flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border bg-background px-2 text-foreground"
+        data-file-viewer-toolbar
+      >
+        <FileBreadcrumbs filePath={filePath} onBrowsePath={onBrowsePath} />
+        <div className="flex shrink-0 items-center gap-px">
           <FileViewerOptionsMenu
             canRenderRichPreview={canRenderRichPreview}
             richPreviewEnabled={richPreviewEnabled}
@@ -73,32 +80,37 @@ export function FileViewerFrame({
             onCopyContent={onCopyContent}
             onCopyPath={onCopyPath}
           />
-          <PaneIconButton
+          <FileViewerToolbarButton
             label="Open in default editor"
             onClick={onOpenExternal}
           >
-            <ExternalLink className="size-3.5" />
-          </PaneIconButton>
-          <PaneIconButton
-            label="Search files"
-            onClick={onOpenSearch}
-          >
-            <Search className="size-3.5" />
-          </PaneIconButton>
-          <PaneIconButton
+            <ExternalLink className="size-4" />
+          </FileViewerToolbarButton>
+          {canFindInFile && (
+            <FileViewerToolbarButton
+              label="Find in file"
+              onClick={onOpenContentSearch}
+            >
+              <Search className="size-4" />
+            </FileViewerToolbarButton>
+          )}
+          <FileViewerToolbarButton
             label={browserOpen ? "Hide files" : "Show files"}
             active={browserOpen}
             onClick={onToggleBrowser}
           >
-            <FolderOpen className="size-3.5" />
-          </PaneIconButton>
-          </>
-        )}
-      />
+            <FolderOpen className="size-4" />
+          </FileViewerToolbarButton>
+        </div>
+      </div>
+      <SessionContentSearchOverlay enabled surface="file" />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
     </div>
   );
 }
+
+const FILE_VIEWER_TOOLBAR_BUTTON_CLASS =
+  "size-7 rounded-lg text-muted-foreground hover:bg-list-hover hover:text-foreground data-[state=open]:bg-list-hover data-[state=open]:text-foreground";
 
 function FileBreadcrumbs({
   filePath,
@@ -118,9 +130,9 @@ function FileBreadcrumbs({
   return (
     <nav
       aria-label="File path"
-      className="hide-scrollbar flex min-w-0 flex-1 items-center overflow-x-auto px-2"
+      className="hide-scrollbar flex min-w-0 flex-1 flex-row-reverse items-center overflow-x-auto px-2"
     >
-      <ol className="flex min-w-0 items-center gap-1 text-xs text-sidebar-muted-foreground">
+      <ol className="flex min-w-max flex-1 items-center gap-1 text-xs text-muted-foreground">
         {crumbs.map((part, index) => {
           const isLast = index === crumbs.length - 1;
           const isWorkspaceCrumb = workspaceName && index === 0;
@@ -130,18 +142,20 @@ function FileBreadcrumbs({
             : parts.slice(0, Math.max(0, index - workspaceOffset + 1)).join("/");
           return (
             <li key={`${part}-${index}`} className="flex min-w-0 items-center gap-1">
-              {index > 0 && <ChevronRight className="size-3.5 shrink-0 text-sidebar-muted-foreground/55" />}
+              {index > 0 && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/55" />}
               {browsable ? (
-                <button
+                <Button
                   type="button"
+                  variant="unstyled"
+                  size="unstyled"
                   onClick={() => onBrowsePath(browsePath)}
-                  className="whitespace-nowrap rounded px-0.5 text-sidebar-muted-foreground hover:text-sidebar-foreground"
+                  className="whitespace-nowrap rounded px-0.5 text-muted-foreground hover:text-foreground"
                 >
                   {part}
-                </button>
+                </Button>
               ) : (
                 <span
-                  className="whitespace-nowrap font-medium text-sidebar-foreground"
+                  className="whitespace-nowrap font-medium text-foreground"
                 >
                   {part}
                 </span>
@@ -151,6 +165,33 @@ function FileBreadcrumbs({
         })}
       </ol>
     </nav>
+  );
+}
+
+function FileViewerToolbarButton({
+  label,
+  active = false,
+  onClick,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label={label}
+      className={`${FILE_VIEWER_TOOLBAR_BUTTON_CLASS} ${
+        active ? "bg-list-hover text-foreground" : ""
+      }`}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
   );
 }
 
@@ -177,6 +218,7 @@ function FileViewerOptionsMenu({
     <PaneOptionsMenu
       label="File viewer options"
       className="min-w-[220px]"
+      triggerClassName={FILE_VIEWER_TOOLBAR_BUTTON_CLASS}
     >
       {(close) => (
         <div className="flex flex-col gap-px">

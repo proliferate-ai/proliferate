@@ -297,10 +297,10 @@
   --diffs-font-family: var(--font-mono);
   --diffs-font-size: 11px;
   --diffs-line-height: calc(var(--diffs-font-size, 11px) * 1.8);
-  --scratch-font-family: var(--diffs-font-family);
-  --scratch-code-font-family: var(--diffs-font-family);
-  --scratch-font-size: var(--diffs-font-size);
-  --scratch-line-height: var(--diffs-line-height);
+  --scratch-font-family: var(--font-sans);
+  --scratch-code-font-family: var(--font-mono);
+  --scratch-font-size: var(--text-chat, 12px);
+  --scratch-line-height: var(--text-chat--line-height, 20px);
   --scratch-list-marker-width: 1.35em;
   --scratch-task-box-size: 0.82em;
   --readable-code-font-size: 0.6875rem;
@@ -343,33 +343,14 @@
 }
 
 .file-source-view {
-  --file-source-surface: var(--color-background);
-  --file-source-gutter-surface: color-mix(in srgb, var(--color-background) 97%, var(--color-foreground));
-  --file-source-gutter-border: color-mix(in srgb, var(--color-foreground) 7%, transparent);
-  --file-source-row-hover: color-mix(in srgb, var(--color-foreground) 5%, transparent);
-  --file-source-line-number: color-mix(in srgb, var(--color-foreground) 34%, transparent);
-  --file-source-line-number-hover: color-mix(in srgb, var(--color-foreground) 58%, transparent);
+  --codex-diffs-surface: var(--color-background);
+  --diffs-bg: var(--codex-diffs-surface);
+  --file-source-row-hover: color-mix(in srgb, var(--color-foreground) 4.5%, transparent);
+  --file-source-line-number: color-mix(in srgb, var(--color-foreground) 36%, transparent);
+  --file-source-line-number-hover: color-mix(in srgb, var(--color-foreground) 60%, transparent);
   --file-source-content-gap: 0.625rem;
   --file-source-content-padding-inline: 0.125rem;
-  background:
-    linear-gradient(
-      to right,
-      var(--file-source-gutter-surface) 0,
-      var(--file-source-gutter-surface) var(--file-source-line-number-gutter-width),
-      var(--file-source-surface) var(--file-source-line-number-gutter-width),
-      var(--file-source-surface) 100%
-    );
-}
-
-.file-source-view::after {
-  content: "";
-  position: absolute;
-  inset-block: 0;
-  left: calc(var(--file-source-line-number-gutter-width) - 1px);
-  z-index: 6;
-  width: 1px;
-  pointer-events: none;
-  background: var(--file-source-gutter-border);
+  background: var(--codex-diffs-surface);
 }
 
 .file-source-scroll {
@@ -382,7 +363,7 @@
 }
 
 .file-source-view [data-file] {
-  background: transparent;
+  background: var(--codex-diffs-surface);
   color: var(--diffs-fg);
 }
 
@@ -397,11 +378,8 @@
 
 .file-source-line-number {
   box-sizing: border-box;
-  background: var(--file-source-gutter-surface);
+  background: var(--diffs-bg);
   color: var(--file-source-line-number);
-  box-shadow:
-    inset 1px 0 0 var(--file-source-gutter-border),
-    inset -1px 0 0 var(--file-source-gutter-border);
 }
 
 .file-source-line:hover .file-source-line-number {
@@ -411,6 +389,24 @@
 .file-source-line-content {
   padding-inline: var(--file-source-content-padding-inline);
   tab-size: 2;
+}
+
+mark.codex-thread-find-match {
+  background-color: var(--color-terminal-yellow);
+  color: var(--color-background);
+  border-radius: calc(var(--radius) / 4);
+  padding: 0;
+  margin: 0;
+  border: 0;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  word-spacing: inherit;
+  vertical-align: baseline;
+}
+
+mark.codex-thread-find-active {
+  background-color: hsl(30 95% 65%);
 }
 
 
@@ -2286,7 +2282,7 @@ body {
 
 /* ---- Right panel tabs ---- */
 .right-panel-tab-system {
-  --tab-system-height: 2.5rem; /* Align with the main sidebar header. */
+  --tab-system-height: 3rem; /* Align with the workspace content header (h-12). */
   --tab-max-width: 156px;
   --tab-shell-max-width: 160px;
   --tab-height: 30px;

@@ -117,7 +117,7 @@ export function RightPanelFrame({
       data-group="true"
       tabIndex={-1}
       onPointerDownCapture={onPointerDownCapture}
-      className="relative flex h-full flex-col overflow-hidden border-l border-sidebar-border text-sidebar-foreground outline-none"
+      className="relative flex h-full flex-col overflow-hidden border-l border-t border-sidebar-border text-sidebar-foreground outline-none"
     >
       <RightPanelHeaderTabs
         entries={entries}

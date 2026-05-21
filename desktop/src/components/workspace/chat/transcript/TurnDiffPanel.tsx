@@ -101,6 +101,7 @@ export function TurnDiffPanel({
               <DiffViewer
                 patch={combinedPatch}
                 filePath={fp.path}
+                contentSearchUnitId={`diff:${turn.turnId}:${fp.path}`}
                 viewportClassName={TURN_DIFF_VIEWPORT_CLASS}
                 variant="chat"
               />

@@ -25,7 +25,7 @@ import { useWorkspaceScratchPadMutations } from "@/hooks/access/tauri/workspace-
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
 const SAVE_DEBOUNCE_MS = 500;
-const SCRATCH_PLACEHOLDER = "☐ Capture follow-ups\n☐ Keep durable workspace notes here";
+const SCRATCH_PLACEHOLDER = "Write notes here";
 const COMPLETED_TASK_PATTERN = /^\s*(?:[-*]\s+\[[xX]\]|☑)\s+.*(?:\r?\n|$)/gm;
 const COMPLETED_TASK_DETECT_PATTERN = /^\s*(?:[-*]\s+\[[xX]\]|☑)\s+/m;
 
@@ -179,7 +179,7 @@ export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
   }, [flushSave]);
 
   return (
-    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-sidebar-background text-sidebar-foreground">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
       <PaneHeader
         left={(
           <div className="flex min-w-0 items-center px-1">
