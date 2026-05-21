@@ -79,6 +79,7 @@ function makeCloudWorkspace(overrides: Partial<CloudWorkspaceSummary> = {}): Clo
     postReadyFilesApplied: overrides.postReadyFilesApplied ?? 0,
     postReadyStartedAt: overrides.postReadyStartedAt ?? null,
     postReadyCompletedAt: overrides.postReadyCompletedAt ?? null,
+    visibility: overrides.visibility ?? "private",
   };
 }
 

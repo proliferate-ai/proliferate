@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod http;
 pub mod openapi;
 pub mod router;

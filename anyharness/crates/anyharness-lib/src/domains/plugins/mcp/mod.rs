@@ -157,6 +157,7 @@ mod tests {
                     credential_refs: Vec::new(),
                 }],
                 artifacts: vec![instruction, resource],
+                direct_attach_auth: None,
                 warnings: Vec::new(),
             },
             artifact_payloads: vec![

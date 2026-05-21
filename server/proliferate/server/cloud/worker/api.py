@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.engine import get_async_session
@@ -28,6 +29,7 @@ from proliferate.server.cloud.worker.models import (
     WorkerInventoryResponse,
     WorkerProjectionGapRequest,
     WorkerProjectionGapResponse,
+    WorkerRevokedJtisResponse,
     WorkerUpdateStatusRequest,
     WorkerUpdateStatusResponse,
 )
@@ -35,6 +37,7 @@ from proliferate.server.cloud.worker.service import (
     authenticate_worker,
     enroll_worker,
     lease_worker_command,
+    list_revoked_jtis,
     list_worker_exposures,
     record_command_delivery,
     record_command_result,
@@ -157,6 +160,24 @@ async def worker_exposures_endpoint(
     try:
         auth = await authenticate_worker(db, authorization=authorization)
         return await list_worker_exposures(db, auth=auth)
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.get("/revoked-jtis", response_model=WorkerRevokedJtisResponse)
+async def worker_revoked_jtis_endpoint(
+    since: datetime | None = Query(default=None),
+    cursor: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkerRevokedJtisResponse:
+    try:
+        auth = await authenticate_worker(db, authorization=authorization)
+        return await list_revoked_jtis(
+            db,
+            auth=auth,
+            cursor=cursor or (since.isoformat() if since is not None else None),
+        )
     except CloudApiError as error:
         raise_cloud_error(error)
 

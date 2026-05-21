@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.cloud import CloudCommandActorKind, CloudCommandKind, CloudCommandSource
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
@@ -218,6 +219,7 @@ async def compile_profile_runtime_config(
     return compile_runtime_config_manifest(
         plan,
         sandbox_profile_id=str(profile.id),
+        direct_attach_auth=_direct_attach_auth_payload(),
     )
 
 
@@ -482,6 +484,45 @@ def _plugin_resolver_snapshot(record) -> PluginConfiguredItemSnapshot:  # noqa: 
         public_status=record.public_status,
         config_version=record.config_version,
     )
+
+
+def _direct_attach_auth_payload() -> dict[str, object]:
+    raw_keys = settings.cloud_jwt_verification_keys_json.strip()
+    if not raw_keys:
+        parsed: object = []
+    else:
+        try:
+            parsed = json.loads(raw_keys)
+        except json.JSONDecodeError:
+            parsed = []
+    if not isinstance(parsed, list):
+        parsed = []
+    verification_keys: list[dict[str, object]] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        kid = item.get("kid")
+        public_key_pem = item.get("publicKeyPem", item.get("public_key_pem"))
+        algorithm = item.get("algorithm", "RS256")
+        if (
+            isinstance(kid, str)
+            and kid.strip()
+            and isinstance(public_key_pem, str)
+            and public_key_pem.strip()
+            and algorithm == "RS256"
+        ):
+            verification_keys.append(
+                {
+                    "kid": kid.strip(),
+                    "algorithm": "RS256",
+                    "publicKeyPem": public_key_pem,
+                }
+            )
+    return {
+        "issuer": settings.cloud_jwt_issuer,
+        "audience": settings.cloud_jwt_audience_anyharness,
+        "verificationKeys": verification_keys,
+    }
 
 
 async def _load_profile(

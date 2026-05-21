@@ -46,6 +46,18 @@ class WorkspaceRecord(Protocol):
     created_at: datetime
 
 
+class WorkspaceExposureRecord(Protocol):
+    visibility: str
+    claimed_by_user_id: UUID | None
+
+
+class WorkspaceClaimRecord(Protocol):
+    id: UUID
+    claimed_by_user_id: UUID | None
+    claimed_at: datetime
+    source_kind: str
+
+
 class RuntimeEnvironmentRecord(Protocol):
     id: UUID
     status: str
@@ -160,6 +172,11 @@ class WorkspaceSummary(BaseModel):
         default=None,
         serialization_alias="directTargetContext",
     )
+    visibility: Literal["private", "shared_unclaimed", "claimed", "archived"] = "private"
+    claimed_by_user_id: str | None = Field(default=None, serialization_alias="claimedByUserId")
+    claim_id: str | None = Field(default=None, serialization_alias="claimId")
+    claimed_at: str | None = Field(default=None, serialization_alias="claimedAt")
+    claim_source_kind: str | None = Field(default=None, serialization_alias="claimSourceKind")
 
 
 class WorkspaceDetail(WorkspaceSummary):
@@ -268,6 +285,8 @@ def workspace_summary_payload(
     action_block_reason: str | None = None,
     creator_context: WorkspaceCreatorContext | None = None,
     direct_target_context: WorkspaceDirectTargetContext | None = None,
+    exposure: WorkspaceExposureRecord | None = None,
+    claim: WorkspaceClaimRecord | None = None,
 ) -> WorkspaceSummary:
     runtime_status = (
         runtime_environment.status
@@ -314,6 +333,15 @@ def workspace_summary_payload(
         origin=_origin_payload(workspace),
         creator_context=creator_context,
         direct_target_context=direct_target_context,
+        visibility=exposure.visibility if exposure is not None else "private",
+        claimed_by_user_id=(
+            str(exposure.claimed_by_user_id)
+            if exposure is not None and exposure.claimed_by_user_id is not None
+            else (str(claim.claimed_by_user_id) if claim and claim.claimed_by_user_id else None)
+        ),
+        claim_id=str(claim.id) if claim is not None else None,
+        claimed_at=_to_iso(claim.claimed_at) if claim is not None else None,
+        claim_source_kind=claim.source_kind if claim is not None else None,
     )
 
 
@@ -327,6 +355,8 @@ def workspace_detail_payload(
     action_block_reason: str | None = None,
     creator_context: WorkspaceCreatorContext | None = None,
     direct_target_context: WorkspaceDirectTargetContext | None = None,
+    exposure: WorkspaceExposureRecord | None = None,
+    claim: WorkspaceClaimRecord | None = None,
 ) -> WorkspaceDetail:
     summary = workspace_summary_payload(
         workspace,
@@ -336,6 +366,8 @@ def workspace_detail_payload(
         action_block_reason=action_block_reason,
         creator_context=creator_context,
         direct_target_context=direct_target_context,
+        exposure=exposure,
+        claim=claim,
     )
     return WorkspaceDetail(
         **summary.model_dump(),

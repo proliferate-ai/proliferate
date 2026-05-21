@@ -46,6 +46,7 @@ function makeCloudWorkspace(
       baseBranch: "main",
       branch: "feature/support-cleanup",
     },
+    visibility: overrides.visibility ?? "private",
     ...overrides,
   };
 }

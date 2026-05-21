@@ -709,6 +709,74 @@ export interface paths {
         patch: operations["update_cloud_workspace_display_name_endpoint_v1_cloud_workspaces__workspace_id__display_name_patch"];
         trace?: never;
     };
+    "/v1/cloud/workspaces/{cloud_workspace_id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claim Workspace Endpoint */
+        post: operations["claim_workspace_endpoint_v1_cloud_workspaces__cloud_workspace_id__claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{cloud_workspace_id}/direct-access-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue Direct Access Token Endpoint */
+        post: operations["issue_direct_access_token_endpoint_v1_cloud_workspaces__cloud_workspace_id__direct_access_token_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{cloud_workspace_id}/direct-access-token/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Direct Access Token Endpoint */
+        post: operations["refresh_direct_access_token_endpoint_v1_cloud_workspaces__cloud_workspace_id__direct_access_token_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{cloud_workspace_id}/direct-access-tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Direct Access Token Endpoint */
+        delete: operations["revoke_direct_access_token_endpoint_v1_cloud_workspaces__cloud_workspace_id__direct_access_tokens__token_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/mobility/workspaces": {
         parameters: {
             query?: never;
@@ -2117,6 +2185,23 @@ export interface paths {
         };
         /** Worker Exposures Endpoint */
         get: operations["worker_exposures_endpoint_v1_cloud_worker_exposures_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/revoked-jtis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Worker Revoked Jtis Endpoint */
+        get: operations["worker_revoked_jtis_endpoint_v1_cloud_worker_revoked_jtis_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3604,6 +3689,30 @@ export interface components {
             /** User */
             user?: string | null;
         };
+        /** ClaimWorkspaceRequest */
+        ClaimWorkspaceRequest: {
+            /**
+             * Sourcekind
+             * @default manual
+             * @enum {string}
+             */
+            sourceKind: "slack" | "automation" | "api" | "manual";
+        };
+        /** ClaimWorkspaceResponse */
+        ClaimWorkspaceResponse: {
+            /** Claimid */
+            claimId: string;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId: string;
+            /** Exposureid */
+            exposureId: string;
+            /** Exposurerevision */
+            exposureRevision: number;
+            /** Claimedat */
+            claimedAt: string;
+            /** Claimedbyuserid */
+            claimedByUserId: string;
+        };
         /** CloudCapabilitiesResponse */
         CloudCapabilitiesResponse: {
             agentGateway: components["schemas"]["AgentGatewayCapabilities"];
@@ -4607,6 +4716,42 @@ export interface components {
              */
             enabled: boolean;
         };
+        /** DirectAccessTokenRequest */
+        DirectAccessTokenRequest: {
+            /** Targetanyharnessworkspaceid */
+            targetAnyharnessWorkspaceId?: string | null;
+            /** Cloudsessionid */
+            cloudSessionId?: string | null;
+            /** Anyharnesssessionid */
+            anyharnessSessionId?: string | null;
+            /** Permissions */
+            permissions?: ("read" | "write" | "control")[];
+        };
+        /** DirectAccessTokenResponse */
+        DirectAccessTokenResponse: {
+            /** Token */
+            token: string;
+            /** Tokenid */
+            tokenId: string;
+            /** Jti */
+            jti: string;
+            /** Expiresat */
+            expiresAt: string;
+            /** Anyharnessbaseurl */
+            anyharnessBaseUrl: string;
+            /** Targetid */
+            targetId: string;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Cloudsessionid */
+            cloudSessionId?: string | null;
+            /** Anyharnesssessionid */
+            anyharnessSessionId?: string | null;
+            /** Permissions */
+            permissions: ("read" | "write" | "control")[];
+        };
         /** E2BWebhookReceipt */
         E2BWebhookReceipt: {
             /**
@@ -5413,6 +5558,18 @@ export interface components {
             lastApplyError: string | null;
             /** Workspaceid */
             workspaceId: string;
+        };
+        /** RevokeClaimTokenResponse */
+        RevokeClaimTokenResponse: {
+            /** Tokenid */
+            tokenId: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "revoked" | "expired" | "active";
+            /** Revokedat */
+            revokedAt?: string | null;
         };
         /** RevokeWorkersResponse */
         RevokeWorkersResponse: {
@@ -6831,6 +6988,28 @@ export interface components {
             /** Updated */
             updated: boolean;
         };
+        /** WorkerRevokedJtiEntry */
+        WorkerRevokedJtiEntry: {
+            /** Jtihash */
+            jtiHash: string;
+            /** Hashkeyid */
+            hashKeyId: string;
+            /** Expiresat */
+            expiresAt: string;
+            /** Revokedat */
+            revokedAt: string;
+        };
+        /** WorkerRevokedJtisResponse */
+        WorkerRevokedJtisResponse: {
+            /** Revokedjtis */
+            revokedJtis: components["schemas"]["WorkerRevokedJtiEntry"][];
+            /** Servertime */
+            serverTime: string;
+            /** Nextcursor */
+            nextCursor: string;
+            /** Hasmore */
+            hasMore: boolean;
+        };
         /** WorkerRuntimeConfigCredentialMaterializationRequest */
         WorkerRuntimeConfigCredentialMaterializationRequest: {
             /** Credentialrefs */
@@ -7056,6 +7235,20 @@ export interface components {
             origin?: components["schemas"]["OriginContext"] | null;
             creatorContext?: components["schemas"]["WorkspaceCreatorContext"] | null;
             directTargetContext?: components["schemas"]["WorkspaceDirectTargetContext"] | null;
+            /**
+             * Visibility
+             * @default private
+             * @enum {string}
+             */
+            visibility: "private" | "shared_unclaimed" | "claimed" | "archived";
+            /** Claimedbyuserid */
+            claimedByUserId?: string | null;
+            /** Claimid */
+            claimId?: string | null;
+            /** Claimedat */
+            claimedAt?: string | null;
+            /** Claimsourcekind */
+            claimSourceKind?: string | null;
             /** Allowedagentkinds */
             allowedAgentKinds: string[];
             /** Readyagentkinds */
@@ -7179,6 +7372,20 @@ export interface components {
             origin?: components["schemas"]["OriginContext"] | null;
             creatorContext?: components["schemas"]["WorkspaceCreatorContext"] | null;
             directTargetContext?: components["schemas"]["WorkspaceDirectTargetContext"] | null;
+            /**
+             * Visibility
+             * @default private
+             * @enum {string}
+             */
+            visibility: "private" | "shared_unclaimed" | "claimed" | "archived";
+            /** Claimedbyuserid */
+            claimedByUserId?: string | null;
+            /** Claimid */
+            claimId?: string | null;
+            /** Claimedat */
+            claimedAt?: string | null;
+            /** Claimsourcekind */
+            claimSourceKind?: string | null;
         };
     };
     responses: never;
@@ -8471,6 +8678,7 @@ export interface operations {
             query?: {
                 ownerScope?: "personal" | "organization";
                 organizationId?: string | null;
+                scope?: ("my" | "unclaimed" | "claimable" | "org-all") | null;
             };
             header?: never;
             path?: never;
@@ -8745,6 +8953,147 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_workspace_endpoint_v1_cloud_workspaces__cloud_workspace_id__claim_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cloud_workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimWorkspaceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    issue_direct_access_token_endpoint_v1_cloud_workspaces__cloud_workspace_id__direct_access_token_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Client-Kind"?: string | null;
+            };
+            path: {
+                cloud_workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DirectAccessTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectAccessTokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_direct_access_token_endpoint_v1_cloud_workspaces__cloud_workspace_id__direct_access_token_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Client-Kind"?: string | null;
+            };
+            path: {
+                cloud_workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DirectAccessTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectAccessTokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_direct_access_token_endpoint_v1_cloud_workspaces__cloud_workspace_id__direct_access_tokens__token_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cloud_workspace_id: string;
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokeClaimTokenResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11593,6 +11942,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerExposureListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_revoked_jtis_endpoint_v1_cloud_worker_revoked_jtis_get: {
+        parameters: {
+            query?: {
+                since?: string | null;
+                cursor?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerRevokedJtisResponse"];
                 };
             };
             /** @description Validation Error */

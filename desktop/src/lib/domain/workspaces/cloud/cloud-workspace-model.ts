@@ -6,6 +6,12 @@ export type CloudWorkspaceStatus =
   | "archived"
   | "error";
 
+export type CloudWorkspaceVisibility =
+  | "private"
+  | "shared_unclaimed"
+  | "claimed"
+  | "archived";
+
 export type CloudRuntimeStatus =
   | "pending"
   | "provisioning"
@@ -96,6 +102,11 @@ export interface CloudWorkspaceSummary {
   origin?: CloudWorkspaceOriginContext | null;
   creatorContext?: CloudWorkspaceCreatorContext | null;
   directTargetContext?: CloudWorkspaceDirectTargetContext | null;
+  visibility: CloudWorkspaceVisibility;
+  claimedByUserId?: string | null;
+  claimId?: string | null;
+  claimedAt?: string | null;
+  claimSourceKind?: string | null;
 }
 
 export interface CloudRepoConfigSummary {

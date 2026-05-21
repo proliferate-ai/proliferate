@@ -23,7 +23,6 @@ import {
 } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
 import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
-import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/access/cloud/use-cloud-workspace-connection";
 import { resolveRouteScopedWorkspaceProviderId } from "@/lib/domain/workspaces/selection/workspace-provider-scope";
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/cache/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -103,17 +102,7 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
           explicitCloudMaterializationId
           && materializationId === explicitCloudMaterializationId
         ) {
-          return appQueryClient.fetchQuery(
-            cloudWorkspaceConnectionQueryOptions(
-              logicalWorkspace.cloudWorkspace?.id
-                ?? logicalWorkspace.mobilityWorkspace?.cloudWorkspaceId
-                ?? "",
-            ),
-          ).then((connectionInfo) => ({
-            runtimeUrl: connectionInfo.runtimeUrl,
-            authToken: connectionInfo.accessToken,
-            anyharnessWorkspaceId: connectionInfo.anyharnessWorkspaceId ?? "",
-          }));
+          return resolveWorkspaceConnection(runtimeUrl, explicitCloudMaterializationId);
         }
 
         if (
