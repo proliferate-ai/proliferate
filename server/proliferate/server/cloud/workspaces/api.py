@@ -38,6 +38,7 @@ router = APIRouter()
 async def list_cloud_workspaces_endpoint(
     owner_scope: Literal["personal", "organization"] = Query("personal", alias="ownerScope"),
     organization_id: UUID | None = Query(default=None, alias="organizationId"),
+    scope: Literal["my", "unclaimed", "claimable", "org-all"] | None = Query(default=None),
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[WorkspaceSummary]:
@@ -50,6 +51,7 @@ async def list_cloud_workspaces_endpoint(
                 owner_scope=owner_scope,
                 organization_id=organization_id,
             ),
+            scope=scope,
         )
     except CloudApiError as error:
         raise_cloud_error(error)

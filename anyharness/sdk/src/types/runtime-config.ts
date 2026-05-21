@@ -15,6 +15,10 @@ export type RuntimeConfigStatusResponse =
   components["schemas"]["RuntimeConfigStatusResponse"];
 export type RuntimeConfigManifest =
   components["schemas"]["RuntimeConfigManifest"];
+export type RuntimeDirectAttachAuthConfig =
+  components["schemas"]["RuntimeDirectAttachAuthConfig"];
+export type RuntimeJwtVerificationKey =
+  components["schemas"]["RuntimeJwtVerificationKey"];
 export type RuntimeMcpServer = components["schemas"]["RuntimeMcpServer"];
 export type RuntimeMcpTransport = components["schemas"]["RuntimeMcpTransport"];
 export type RuntimeMcpLaunch = components["schemas"]["RuntimeMcpLaunch"];

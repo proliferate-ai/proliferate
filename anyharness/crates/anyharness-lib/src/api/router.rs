@@ -11,12 +11,13 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agent_auth_config, agents, agents_model_registry, cowork, files, git, health, hosting,
-    mobility, plans, processes, product_mcp, replay, repo_roots, reviews, runtime_config, sessions,
-    subagents, terminals, workspaces, worktrees,
+    agent_auth_config, agents, agents_model_registry, auth as http_auth, cowork, files, git,
+    health, hosting, mobility, plans, processes, product_mcp, replay, repo_roots, reviews,
+    runtime_config, sessions, subagents, terminals, workspaces, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
+use crate::api::auth::{user_route_allowed, AuthContext, AuthError};
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
 
@@ -54,6 +55,7 @@ pub fn build_router(state: AppState) -> Router {
             "/agents/auth-config/status",
             get(agent_auth_config::get_agent_auth_config_status),
         )
+        .route("/auth/revoked-jtis", put(http_auth::push_revoked_jtis))
         .route(
             "/runtime-config",
             get(runtime_config::get_runtime_config).put(runtime_config::apply_runtime_config),
@@ -475,22 +477,66 @@ pub fn build_router(state: AppState) -> Router {
 
 async fn require_bearer_auth(
     State(state): State<AppState>,
-    request: Request<axum::body::Body>,
+    mut request: Request<axum::body::Body>,
     next: Next,
 ) -> Result<Response, ApiError> {
     let Some(expected_token) = state.bearer_token.as_deref() else {
+        request
+            .extensions_mut()
+            .insert(AuthContext::Unauthenticated);
         return Ok(next.run(request).await);
     };
 
     let provided = extract_bearer_token(request.headers(), request.uri().query());
-    if !bearer_tokens_match(provided.as_deref(), expected_token) {
-        return Err(ApiError::unauthorized(
-            "A valid bearer token is required for this AnyHarness runtime.",
-            "UNAUTHORIZED",
-        ));
+    if bearer_tokens_match(provided.as_deref(), expected_token) {
+        request.extensions_mut().insert(AuthContext::Worker);
+        return Ok(next.run(request).await);
     }
 
-    Ok(next.run(request).await)
+    if let Some(token) = provided.as_deref().filter(|token| token_is_jwt(token)) {
+        let claim = state
+            .auth_manager
+            .verify_user_claim_token(token)
+            .map_err(auth_error_to_api)?;
+        user_route_allowed(request.method(), request.uri().path(), &claim)
+            .map_err(auth_error_to_api)?;
+        request
+            .extensions_mut()
+            .insert(AuthContext::UserClaim(claim));
+        return Ok(next.run(request).await);
+    }
+
+    Err(ApiError::unauthorized(
+        "A valid bearer token is required for this AnyHarness runtime.",
+        "UNAUTHORIZED",
+    ))
+}
+
+fn auth_error_to_api(error: AuthError) -> ApiError {
+    match error {
+        AuthError::InvalidToken | AuthError::Revoked | AuthError::NotConfigured => {
+            ApiError::unauthorized(
+                "A valid direct-attach token is required for this AnyHarness runtime.",
+                "UNAUTHORIZED",
+            )
+        }
+        AuthError::UnsupportedRoute => ApiError::forbidden(
+            "Direct-attach tokens cannot access this AnyHarness route.",
+            "DIRECT_ATTACH_ROUTE_FORBIDDEN",
+        ),
+        AuthError::InsufficientPermission => ApiError::forbidden(
+            "Direct-attach token does not grant the required permission.",
+            "DIRECT_ATTACH_PERMISSION_DENIED",
+        ),
+        AuthError::ScopeMismatch => ApiError::forbidden(
+            "Direct-attach token is not scoped to this resource.",
+            "DIRECT_ATTACH_SCOPE_MISMATCH",
+        ),
+    }
+}
+
+fn token_is_jwt(token: &str) -> bool {
+    token.split('.').count() == 3
 }
 
 fn bearer_tokens_match(provided: Option<&str>, expected: &str) -> bool {

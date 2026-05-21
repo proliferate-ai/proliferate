@@ -3,6 +3,7 @@ import {
   getCloudWorkspace,
   getCloudWorkspaceConnection,
 } from "@proliferate/cloud-sdk/client/workspaces";
+import { issueCloudWorkspaceDirectAccessToken } from "@proliferate/cloud-sdk/client/claims";
 import { ensureSshAnyHarnessTunnel } from "@/lib/access/tauri/ssh-tunnel";
 import { getSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile";
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
@@ -60,6 +61,29 @@ export async function resolveRuntimeTargetForWorkspace(
   if (!cloudWorkspace) throw new Error("Cloud workspace not found.");
   if (cloudWorkspace.status !== "ready") {
     throw new Error("Cloud workspace is not ready yet.");
+  }
+
+  if (cloudWorkspace.visibility === "shared_unclaimed") {
+    throw new Error("Claim this workspace before opening it directly in Desktop.");
+  }
+
+  if (cloudWorkspace.visibility === "claimed") {
+    const token = await issueCloudWorkspaceDirectAccessToken(
+      cloudWorkspace.id,
+      {
+        targetAnyharnessWorkspaceId: cloudWorkspace.anyharnessWorkspaceId ?? undefined,
+      },
+      { clientKind: "desktop" },
+    );
+    return {
+      location: "cloud",
+      baseUrl: token.anyharnessBaseUrl,
+      authToken: token.token,
+      anyharnessWorkspaceId: token.anyharnessWorkspaceId,
+      runtimeGeneration: cloudWorkspace.runtime?.generation ?? 0,
+      allowedAgentKinds: cloudWorkspace.allowedAgentKinds.filter(isCloudAgentRuntimeKind),
+      readyAgentKinds: cloudWorkspace.readyAgentKinds.filter(isCloudAgentRuntimeKind),
+    };
   }
 
   const connection = await getCloudWorkspaceConnection(cloudWorkspace.id);

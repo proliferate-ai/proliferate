@@ -69,15 +69,19 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
     },
   });
   const persistedStatus = (selectedCloudWorkspace?.status ?? null) as CloudWorkspaceStatus | null;
+  const usesDirectAttach = selectedCloudWorkspace?.visibility === "claimed";
   const isWarm = selectedWorkspaceId !== null && hasWorkspaceBootstrappedInSession(selectedWorkspaceId);
   const connectionQuery = useCloudWorkspaceConnection(
     selectedCloudWorkspace?.id ?? null,
-    persistedStatus === "ready" && !hotPaintPending,
+    persistedStatus === "ready" && !hotPaintPending && !usesDirectAttach,
   );
 
   const connectionState = useMemo(() => {
     if (persistedStatus !== "ready") {
       return "resolving" as const;
+    }
+    if (usesDirectAttach) {
+      return "ready" as const;
     }
     if (connectionQuery.fetchStatus !== "idle" || connectionQuery.status === "pending") {
       return "resolving" as const;
@@ -94,6 +98,7 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
     connectionQuery.fetchStatus,
     connectionQuery.status,
     persistedStatus,
+    usesDirectAttach,
   ]);
 
   const state = useMemo(() => buildSelectedCloudRuntimeViewModel({
@@ -115,8 +120,10 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
     workspaceId: selectedWorkspaceId,
     cloudWorkspaceId,
     state,
-    connectionInfo: persistedStatus === "ready" ? connectionQuery.data ?? null : null,
-    retry: persistedStatus === "ready"
+    connectionInfo: persistedStatus === "ready" && !usesDirectAttach
+      ? connectionQuery.data ?? null
+      : null,
+    retry: persistedStatus === "ready" && !usesDirectAttach
       ? () => {
         if (
           connectionState === "failed"

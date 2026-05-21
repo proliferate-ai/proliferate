@@ -14,6 +14,7 @@ tower-http.workspace = true
 tower.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+jsonwebtoken.workspace = true
 utoipa.workspace = true
 utoipa-axum.workspace = true
 tracing.workspace = true

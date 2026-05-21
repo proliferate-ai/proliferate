@@ -74,6 +74,7 @@ def build_runtime_env(
     runtime_token: str,
     *,
     anyharness_data_key: str,
+    target_id: UUID | None = None,
     repo_env_vars: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
     env: dict[str, str] = {
@@ -90,6 +91,8 @@ def build_runtime_env(
         env["ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE"] = str(_runtime_sentry_traces_sample_rate())
     env["ANYHARNESS_BEARER_TOKEN"] = runtime_token
     env["ANYHARNESS_DATA_KEY"] = anyharness_data_key
+    if target_id is not None:
+        env["ANYHARNESS_RUNTIME_TARGET_ID"] = str(target_id)
     if repo_env_vars:
         env.update(repo_env_vars)
     return env

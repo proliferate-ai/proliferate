@@ -70,6 +70,17 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
             warn!(?error, "worker event sync loop exited");
         }
     });
+    let revoked_jti_config = config.clone();
+    let revoked_jti_cloud = cloud.clone();
+    let revoked_jti_identity = identity.clone();
+    tokio::spawn(async move {
+        if let Err(error) =
+            sync::revoked_jti::run_loop(revoked_jti_config, revoked_jti_cloud, revoked_jti_identity)
+                .await
+        {
+            warn!(?error, "worker revoked-jti sync loop exited");
+        }
+    });
     loop {
         sleep(Duration::from_secs(
             config.heartbeat_interval_seconds.max(10),

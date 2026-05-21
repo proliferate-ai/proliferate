@@ -5,6 +5,7 @@ Callers should import concrete models from the owning module in this package.
 """
 
 from . import agent_auth as agent_auth  # noqa: F401
+from . import claims as claims  # noqa: F401
 from . import cloud_target_runtime_access as cloud_target_runtime_access  # noqa: F401
 from . import commands as commands  # noqa: F401
 from . import exposures as exposures  # noqa: F401

@@ -456,6 +456,46 @@
         }
       }
     },
+    "/v1/auth/revoked-jtis": {
+      "put": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "push_revoked_jtis",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushRevokedJtisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted revoked direct-attach token ids",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushRevokedJtisResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid revocation payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/cowork": {
       "get": {
         "tags": [
@@ -11898,6 +11938,36 @@
           }
         }
       },
+      "PushRevokedJtisRequest": {
+        "type": "object",
+        "required": [
+          "expiresAt"
+        ],
+        "properties": {
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "jtiHashes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PushRevokedJtisResponse": {
+        "type": "object",
+        "required": [
+          "accepted"
+        ],
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
       "RawSessionConfigOption": {
         "type": "object",
         "description": "A raw ACP session configuration option as exposed by the active session.\n\nThis is the transport-fidelity layer. It should match the live ACP state as\nclosely as possible without applying product-specific interpretation.",
@@ -13341,6 +13411,16 @@
               "$ref": "#/components/schemas/RuntimeArtifactRef"
             }
           },
+          "directAttachAuth": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RuntimeDirectAttachAuthConfig"
+              }
+            ]
+          },
           "mcpBindingSummaries": {
             "type": "array",
             "items": {
@@ -13513,6 +13593,52 @@
             "type": "string"
           },
           "value": {
+            "type": "string"
+          }
+        }
+      },
+      "RuntimeDirectAttachAuthConfig": {
+        "type": "object",
+        "required": [
+          "issuer",
+          "audience"
+        ],
+        "properties": {
+          "audience": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "targetId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verificationKeys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeJwtVerificationKey"
+            }
+          }
+        }
+      },
+      "RuntimeJwtVerificationKey": {
+        "type": "object",
+        "required": [
+          "kid",
+          "algorithm",
+          "publicKeyPem"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "kid": {
+            "type": "string"
+          },
+          "publicKeyPem": {
             "type": "string"
           }
         }
