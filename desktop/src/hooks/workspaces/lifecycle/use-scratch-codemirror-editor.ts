@@ -219,6 +219,8 @@ const scratchEditorTheme = EditorView.theme({
     fontFamily: "var(--scratch-font-family)",
     fontSize: "var(--scratch-font-size)",
     lineHeight: "var(--scratch-line-height)",
+    fontWeight: "400",
+    letterSpacing: "0",
   },
   ".cm-scroller": {
     height: "100%",
@@ -229,9 +231,12 @@ const scratchEditorTheme = EditorView.theme({
     minHeight: "100%",
     padding: "0.9rem 1.05rem",
     caretColor: "var(--color-foreground)",
+    fontFamily: "inherit",
+    lineHeight: "var(--scratch-line-height)",
   },
   ".cm-line": {
     padding: "0",
+    lineHeight: "var(--scratch-line-height)",
   },
   ".cm-focused": {
     outline: "none",
@@ -239,14 +244,19 @@ const scratchEditorTheme = EditorView.theme({
   ".cm-cursor": {
     borderLeftColor: "var(--color-foreground)",
     borderLeftWidth: "1px",
-    minHeight: "1.1em",
-    marginTop: "0.2em",
+    height: "1.25em !important",
+    marginTop: "0.14em",
   },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
     backgroundColor: "color-mix(in oklab, var(--color-foreground) 18%, transparent)",
   },
   ".cm-placeholder": {
     color: "color-mix(in oklab, var(--color-sidebar-muted-foreground) 65%, transparent)",
+    display: "inline",
+    fontFamily: "inherit",
+    fontSize: "var(--scratch-font-size)",
+    lineHeight: "var(--scratch-line-height)",
+    whiteSpace: "normal",
   },
   ".scratch-list-marker": {
     display: "inline-flex",
