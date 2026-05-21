@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Protocol
 from uuid import UUID
 
@@ -358,14 +358,16 @@ async def get_cloud_workspace_handoff_op(
     *,
     user_id: UUID,
     handoff_op_id: UUID,
+    lock: bool = False,
 ) -> CloudWorkspaceHandoffOp | None:
+    query = select(CloudWorkspaceHandoffOp).where(
+        CloudWorkspaceHandoffOp.id == handoff_op_id,
+        CloudWorkspaceHandoffOp.user_id == user_id,
+    )
+    if lock:
+        query = query.with_for_update()
     return (
-        await db.execute(
-            select(CloudWorkspaceHandoffOp).where(
-                CloudWorkspaceHandoffOp.id == handoff_op_id,
-                CloudWorkspaceHandoffOp.user_id == user_id,
-            )
-        )
+        await db.execute(query)
     ).scalar_one_or_none()
 
 
@@ -620,6 +622,8 @@ async def finalize_cloud_workspace_handoff_op(
 ) -> CloudWorkspaceHandoffOpValue:
     now = utcnow()
     previous_phase = handoff_op.phase
+    if previous_phase not in {"install_succeeded", "cutover_committed", "cleanup_pending"}:
+        raise ValueError("handoff is not ready for cutover")
     handoff_op.phase = "cutover_committed"
     handoff_op.canonical_side = "destination"
     handoff_op.finalized_at = now
@@ -634,11 +638,12 @@ async def finalize_cloud_workspace_handoff_op(
         "shared_cloud": "shared_cloud_active",
         "ssh": "ssh_active",
     }.get(target_owner, "cloud_active")
-    mobility_workspace.cloud_workspace_id = (
-        None
-        if target_owner == "local"
-        else cloud_workspace_id or mobility_workspace.cloud_workspace_id
-    )
+    if target_owner == "local":
+        mobility_workspace.cloud_workspace_id = None
+    else:
+        if cloud_workspace_id is None:
+            raise ValueError("destination cloud workspace is required")
+        mobility_workspace.cloud_workspace_id = cloud_workspace_id
     mobility_workspace.status_detail = "Cutover committed"
     mobility_workspace.last_error = None
     mobility_workspace.updated_at = now
@@ -705,6 +710,35 @@ async def insert_cleanup_items_for_handoff(
     if not items:
         return []
     now = utcnow()
+    existing_rows = (
+        await db.execute(
+            select(CloudWorkspaceMoveCleanupItem)
+            .where(CloudWorkspaceMoveCleanupItem.handoff_op_id == handoff_op_id)
+            .with_for_update()
+        )
+    ).scalars()
+    existing_keys = {
+        (
+            row.item_kind,
+            row.target_id,
+            row.anyharness_workspace_id,
+            row.object_id,
+        )
+        for row in existing_rows
+    }
+    deduped_items = [
+        item
+        for item in items
+        if (
+            item.item_kind,
+            item.target_id,
+            item.anyharness_workspace_id,
+            item.object_id,
+        )
+        not in existing_keys
+    ]
+    if not deduped_items:
+        return []
     records = [
         CloudWorkspaceMoveCleanupItem(
             handoff_op_id=handoff_op_id,
@@ -722,7 +756,7 @@ async def insert_cleanup_items_for_handoff(
             created_at=now,
             updated_at=now,
         )
-        for item in items
+        for item in deduped_items
     ]
     db.add_all(records)
     await db.flush()
@@ -795,6 +829,7 @@ async def update_cleanup_item_status(
     status: str,
     error_code: str | None = None,
     error_message: str | None = None,
+    retry_delay_seconds: int = 0,
 ) -> CloudWorkspaceMoveCleanupItemValue:
     now = utcnow()
     cleanup_item.status = status
@@ -809,7 +844,7 @@ async def update_cleanup_item_status(
         cleanup_item.attempt_count += 1
         cleanup_item.error_code = error_code
         cleanup_item.error_message = error_message
-        cleanup_item.next_attempt_at = now
+        cleanup_item.next_attempt_at = now + timedelta(seconds=max(0, retry_delay_seconds))
     await db.flush()
     return _cleanup_item_value(cleanup_item)
 
@@ -1089,6 +1124,7 @@ async def update_cloud_workspace_handoff_phase_for_user(
             db,
             user_id=user_id,
             handoff_op_id=handoff_op_id,
+            lock=True,
         ),
     )
     return await update_cloud_workspace_handoff_phase(
@@ -1132,7 +1168,7 @@ async def heartbeat_cloud_workspace_handoff_op_for_user(
     handoff_op_id: UUID,
 ) -> CloudWorkspaceHandoffOpValue:
     _, handoff_op = _require_handoff_belongs_to_workspace(
-        await get_cloud_workspace_mobility(
+        await get_cloud_workspace_mobility_for_update(
             db,
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
@@ -1141,6 +1177,7 @@ async def heartbeat_cloud_workspace_handoff_op_for_user(
             db,
             user_id=user_id,
             handoff_op_id=handoff_op_id,
+            lock=True,
         ),
     )
     return await heartbeat_cloud_workspace_handoff_op(db, handoff_op=handoff_op)
@@ -1155,7 +1192,7 @@ async def finalize_cloud_workspace_handoff_op_for_user(
     cloud_workspace_id: UUID | None,
 ) -> CloudWorkspaceHandoffOpValue:
     mobility_workspace, handoff_op = _require_handoff_belongs_to_workspace(
-        await get_cloud_workspace_mobility(
+        await get_cloud_workspace_mobility_for_update(
             db,
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
@@ -1164,6 +1201,7 @@ async def finalize_cloud_workspace_handoff_op_for_user(
             db,
             user_id=user_id,
             handoff_op_id=handoff_op_id,
+            lock=True,
         ),
     )
     return await finalize_cloud_workspace_handoff_op(
@@ -1182,7 +1220,7 @@ async def complete_cloud_workspace_handoff_cleanup_for_user(
     handoff_op_id: UUID,
 ) -> CloudWorkspaceHandoffOpValue:
     mobility_workspace, handoff_op = _require_handoff_belongs_to_workspace(
-        await get_cloud_workspace_mobility(
+        await get_cloud_workspace_mobility_for_update(
             db,
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
@@ -1191,6 +1229,7 @@ async def complete_cloud_workspace_handoff_cleanup_for_user(
             db,
             user_id=user_id,
             handoff_op_id=handoff_op_id,
+            lock=True,
         ),
     )
     return await complete_cloud_workspace_handoff_cleanup(
@@ -1216,7 +1255,7 @@ async def fail_cloud_workspace_handoff_op_for_user(
     event_type: str = "handoff_failed",
 ) -> CloudWorkspaceHandoffOpValue:
     mobility_workspace, handoff_op = _require_handoff_belongs_to_workspace(
-        await get_cloud_workspace_mobility(
+        await get_cloud_workspace_mobility_for_update(
             db,
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
@@ -1225,6 +1264,7 @@ async def fail_cloud_workspace_handoff_op_for_user(
             db,
             user_id=user_id,
             handoff_op_id=handoff_op_id,
+            lock=True,
         ),
     )
     return await fail_cloud_workspace_handoff_op(
