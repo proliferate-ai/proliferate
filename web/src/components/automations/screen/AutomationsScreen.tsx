@@ -20,7 +20,7 @@ export function AutomationsScreen() {
           title: automation.title,
           repo: `${automation.gitOwner}/${automation.gitRepoName}`,
           schedule: automation.schedule.summary,
-          target: automation.executionTarget,
+          target: automation.targetMode,
           lastRun: automation.lastScheduledAt,
           enabled: automation.enabled,
         }))}

@@ -41,6 +41,8 @@ export interface CloudWorkspaceExposureSummary {
 }
 
 export interface CloudWorkspaceLastSessionSummary {
+  targetId: string;
+  workspaceId?: string | null;
   sessionId: string;
   title?: string | null;
   status: string;
