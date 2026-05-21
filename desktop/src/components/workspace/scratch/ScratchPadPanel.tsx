@@ -25,7 +25,7 @@ import { useWorkspaceScratchPadMutations } from "@/hooks/access/tauri/workspace-
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
 const SAVE_DEBOUNCE_MS = 500;
-const SCRATCH_PLACEHOLDER = "☐ Capture follow-ups\n☐ Keep durable workspace notes here";
+const SCRATCH_PLACEHOLDER = "Capture follow-ups";
 const COMPLETED_TASK_PATTERN = /^\s*(?:[-*]\s+\[[xX]\]|☑)\s+.*(?:\r?\n|$)/gm;
 const COMPLETED_TASK_DETECT_PATTERN = /^\s*(?:[-*]\s+\[[xX]\]|☑)\s+/m;
 
