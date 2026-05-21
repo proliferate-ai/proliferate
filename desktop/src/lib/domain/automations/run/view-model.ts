@@ -21,6 +21,19 @@ const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 
+function executionTargetForTargetMode(
+  value: AutomationRecord["targetMode"] | AutomationRunRecord["targetMode"],
+  fallback?: "cloud" | "local",
+): "cloud" | "local" {
+  if (value === "local") {
+    return "local";
+  }
+  if (value === "personal_cloud" || value === "shared_cloud") {
+    return "cloud";
+  }
+  return fallback ?? "cloud";
+}
+
 function compactStatusMessage(message: string): string {
   const firstLine = message.split(/\r?\n/)[0]?.trim() ?? "";
   if (firstLine.length <= MAX_STATUS_MESSAGE_LENGTH) {
@@ -51,7 +64,10 @@ export function buildAutomationRowViewModel(
         automation.schedule.nextRunAt,
         automation.schedule.timezone,
       ),
-    executionLabel: automation.executionTarget === "cloud" ? "Cloud" : "Local",
+    executionLabel: executionTargetForTargetMode(
+      automation.targetMode,
+      automation.executionTarget,
+    ) === "cloud" ? "Cloud" : "Local",
   };
 }
 
@@ -145,17 +161,17 @@ function formatMonthDay(date: Date, timezone?: string | null): string {
 export function automationRunStatusLabel(run: AutomationRunRecord): string {
   switch (run.status) {
     case "queued":
-      return run.executionTarget === "local"
+      return executionTargetForTargetMode(run.targetMode, run.executionTarget) === "local"
         ? AUTOMATION_RUN_COPY.localQueued
         : AUTOMATION_RUN_COPY.queued;
     case "claimed":
       return AUTOMATION_RUN_COPY.claimed;
     case "creating_workspace":
-      return run.executionTarget === "local"
+      return executionTargetForTargetMode(run.targetMode, run.executionTarget) === "local"
         ? AUTOMATION_RUN_COPY.creatingLocalWorkspace
         : AUTOMATION_RUN_COPY.creatingWorkspace;
     case "provisioning_workspace":
-      return run.executionTarget === "local"
+      return executionTargetForTargetMode(run.targetMode, run.executionTarget) === "local"
         ? AUTOMATION_RUN_COPY.provisioningLocalWorkspace
         : AUTOMATION_RUN_COPY.provisioningWorkspace;
     case "creating_session":

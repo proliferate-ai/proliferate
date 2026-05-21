@@ -60,10 +60,17 @@ router = APIRouter(prefix="/automations", tags=["automations"])
 
 @router.get("", response_model=AutomationListResponse)
 async def list_automations_endpoint(
+    owner_scope: Annotated[str, Query(alias="ownerScope")] = "personal",
+    organization_id: Annotated[UUID | None, Query(alias="organizationId")] = None,
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> AutomationListResponse:
-    values = await list_automations(db, user.id)
+    values = await list_automations(
+        db,
+        user.id,
+        owner_scope=owner_scope,
+        organization_id=organization_id,
+    )
     return AutomationListResponse(automations=[automation_payload(value) for value in values])
 
 
