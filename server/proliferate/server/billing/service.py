@@ -236,6 +236,14 @@ async def get_billing_snapshot_for_subject(billing_subject_id: UUID) -> BillingS
     return _build_billing_snapshot(state)
 
 
+async def get_billing_snapshot_for_subject_in_session(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+) -> BillingSnapshot:
+    state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+    return _build_billing_snapshot(state)
+
+
 async def _get_billing_snapshot_for_request(
     db: AsyncSession,
     user_id: UUID,
@@ -403,6 +411,7 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
         is_paid_cloud=is_paid_cloud,
         payment_healthy=payment_healthy,
         overage_enabled=state.subject.overage_enabled,
+        overage_cap_cents_per_seat=state.subject.overage_cap_cents_per_seat,
         included_hours=None if has_unlimited_cloud_hours else included_seconds / 3600.0,
         used_hours=used_seconds / 3600.0,
         remaining_hours=(None if has_unlimited_cloud_hours else remaining_seconds_value / 3600.0),
@@ -438,6 +447,20 @@ def _authorization_message(reason: str | None) -> str | None:
     return authorization_message(reason)
 
 
+async def authorize_sandbox_start_for_billing_subject(
+    *,
+    actor_user_id: UUID | None,
+    billing_subject_id: UUID,
+    workspace_id: UUID | None = None,
+) -> SandboxStartAuthorization:
+    snapshot = await get_billing_snapshot_for_subject(billing_subject_id)
+    return await _record_sandbox_start_authorization(
+        snapshot,
+        actor_user_id=actor_user_id,
+        workspace_id=workspace_id,
+    )
+
+
 async def authorize_sandbox_start(
     *,
     user_id: UUID,
@@ -448,12 +471,25 @@ async def authorize_sandbox_start(
     else:
         billing_subject_id = await resolve_billing_subject_id_for_workspace(workspace_id)
         snapshot = await get_billing_snapshot_for_subject(billing_subject_id)
+    return await _record_sandbox_start_authorization(
+        snapshot,
+        actor_user_id=user_id,
+        workspace_id=workspace_id,
+    )
+
+
+async def _record_sandbox_start_authorization(
+    snapshot: BillingSnapshot,
+    *,
+    actor_user_id: UUID | None,
+    workspace_id: UUID | None,
+) -> SandboxStartAuthorization:
     enforced = settings.cloud_billing_mode == BILLING_MODE_ENFORCE
     allowed = not enforced or not snapshot.start_blocked
     reason = snapshot.start_block_reason if snapshot.start_blocked else None
     await record_billing_decision_event(
         billing_subject_id=snapshot.billing_subject_id,
-        actor_user_id=user_id,
+        actor_user_id=actor_user_id,
         workspace_id=workspace_id,
         decision_type=BILLING_DECISION_AUTHORIZE_START,
         mode=settings.cloud_billing_mode,

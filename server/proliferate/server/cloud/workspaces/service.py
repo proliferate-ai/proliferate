@@ -357,6 +357,7 @@ async def _workspace_summaries_for_request(
                 workspace,
                 runtime_environment=runtime_environment,
                 runtime_auth=runtime_auth,
+                billing=billing,
                 action_block_kind=action_block_kind,
                 action_block_reason=action_block_reason,
                 creator_context=_creator_context_for_automation_run(
@@ -532,6 +533,7 @@ async def _build_workspace_detail_for_request(
         ready_agent_kind_values,
         runtime_environment=runtime_environment,
         runtime_auth=runtime_auth,
+        billing=billing,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
         creator_context=_creator_context_for_automation_run(
@@ -592,6 +594,7 @@ async def _build_workspace_detail(
         ready_agent_kind_values,
         runtime_environment=runtime_environment,
         runtime_auth=runtime_auth,
+        billing=billing,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
         creator_context=_creator_context_for_automation_run(

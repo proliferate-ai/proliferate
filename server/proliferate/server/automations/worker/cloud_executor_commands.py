@@ -25,7 +25,7 @@ from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
 from proliferate.server.cloud.commands.service import (
-    kick_off_command_wake_if_required,
+    kick_off_command_wake_after_commit_if_required,
     stamp_and_validate_command_preflight,
 )
 from proliferate.server.cloud.errors import CloudApiError
@@ -103,7 +103,11 @@ async def enqueue_automation_command(
                     "Existing automation command is missing required runtime config preflight.",
                     status_code=409,
                 )
-            kick_off_command_wake_if_required(target=target, command=existing)
+            await kick_off_command_wake_after_commit_if_required(
+                db,
+                target=target,
+                command=existing,
+            )
             return existing
         command = await commands_store.create_command(
             db,
@@ -132,7 +136,11 @@ async def enqueue_automation_command(
                 }
             ),
         )
-        kick_off_command_wake_if_required(target=target, command=command)
+        await kick_off_command_wake_after_commit_if_required(
+            db,
+            target=target,
+            command=command,
+        )
         return command
 
 

@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core.js";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   BillingPlanInfo,
   BillingUrlResponse,
@@ -26,9 +26,10 @@ function ownerBody(owner?: CloudOwnerSelection) {
 
 export async function getCloudBillingPlan(
   owner?: CloudOwnerSelection,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<BillingPlanInfo> {
   return (
-    await getProliferateClient().GET("/v1/billing/cloud-plan", {
+    await client.GET("/v1/billing/cloud-plan", {
       params: { query: ownerQuery(owner) },
     })
   ).data!;
@@ -36,9 +37,10 @@ export async function getCloudBillingPlan(
 
 export async function createCloudCheckoutSession(
   owner?: CloudOwnerSelection,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<BillingUrlResponse> {
   return (
-    await getProliferateClient().POST("/v1/billing/cloud-checkout", {
+    await client.POST("/v1/billing/cloud-checkout", {
       body: ownerBody(owner),
     })
   ).data!;
@@ -46,9 +48,10 @@ export async function createCloudCheckoutSession(
 
 export async function createBillingPortalSession(
   owner?: CloudOwnerSelection,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<BillingUrlResponse> {
   return (
-    await getProliferateClient().POST("/v1/billing/customer-portal", {
+    await client.POST("/v1/billing/customer-portal", {
       body: ownerBody(owner),
     })
   ).data!;
@@ -56,9 +59,10 @@ export async function createBillingPortalSession(
 
 export async function createRefillCheckoutSession(
   owner?: CloudOwnerSelection,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<BillingUrlResponse> {
   return (
-    await getProliferateClient().POST("/v1/billing/refill-checkout", {
+    await client.POST("/v1/billing/refill-checkout", {
       body: ownerBody(owner),
     })
   ).data!;
@@ -67,9 +71,10 @@ export async function createRefillCheckoutSession(
 export async function updateOverageSettings(
   input: { enabled: boolean; capCentsPerSeat?: number | null },
   owner?: CloudOwnerSelection,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<OverageSettingsResponse> {
   return (
-    await getProliferateClient().POST("/v1/billing/overage-settings", {
+    await client.POST("/v1/billing/overage-settings", {
       body: { ...input, ...ownerBody(owner) },
     })
   ).data!;

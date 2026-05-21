@@ -24,7 +24,9 @@ async def test_cloud_capabilities_response_shape(
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_byok_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_anthropic_byok_enabled", True)
-    monkeypatch.setattr(settings, "agent_gateway_default_managed_budget_usd", "12.50")
+    monkeypatch.setattr(settings, "agent_gateway_managed_budget_free_usd", "12.50")
+    monkeypatch.setattr(settings, "agent_gateway_managed_budget_pro_usd", "0")
+    monkeypatch.setattr(settings, "agent_gateway_managed_budget_unlimited_usd", "0")
     auth = await create_user_and_login(
         client,
         db_session,

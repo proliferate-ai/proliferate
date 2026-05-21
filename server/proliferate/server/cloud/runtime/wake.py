@@ -6,10 +6,20 @@ import asyncio
 import logging
 from uuid import UUID
 
+from proliferate.db import engine as db_engine
+from proliferate.db.store.cloud_sandbox_profiles import load_sandbox_profile_by_id
+from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.integrations.sentry import capture_server_sentry_exception
+from proliferate.server.billing.service import authorize_sandbox_start_for_billing_subject
+from proliferate.server.cloud.live.service import publish_command_status_after_commit
+from proliferate.server.cloud.runtime.domain.wake import WAKE_REQUIRED_CLOUD_COMMAND_KINDS
+from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.cloud.runtime.wake")
 _wake_tasks: dict[str, asyncio.Task[None]] = {}
+_WAKE_BLOCKED_ERROR_CODE = "sandbox_wake_blocked"
+_WAKE_BLOCKED_FALLBACK_MESSAGE = "Sandbox wake is blocked by billing."
 
 
 def kick_off_managed_slot_wake(target_id: UUID, command_id: UUID | None = None) -> None:
@@ -39,13 +49,49 @@ async def _run_wake_task(target_id: UUID) -> None:
 
 
 async def run_managed_slot_wake_job(target_id: UUID) -> None:
-    """Background wake job placeholder.
+    """Gate managed slot wake on billing before provider resume work."""
 
-    Spec 09 owns the billing decision and the provider resume implementation.
-    This hook intentionally does not talk to E2B yet.
-    """
+    async with db_engine.async_session_factory() as db:
+        target = await targets_store.get_target_by_id(db, target_id)
+        if target is None or target.sandbox_profile_id is None:
+            return
+        profile = await load_sandbox_profile_by_id(db, target.sandbox_profile_id)
+        if profile is None:
+            return
+        authorization = await authorize_sandbox_start_for_billing_subject(
+            actor_user_id=target.created_by_user_id,
+            billing_subject_id=profile.billing_subject_id,
+        )
+        if not authorization.allowed:
+            message = (
+                authorization.message
+                or authorization.start_block_reason
+                or _WAKE_BLOCKED_FALLBACK_MESSAGE
+            )
+            commands = await commands_store.mark_queued_commands_failed_delivery_for_target(
+                db,
+                target_id=target.id,
+                command_kinds=WAKE_REQUIRED_CLOUD_COMMAND_KINDS,
+                error_code=_WAKE_BLOCKED_ERROR_CODE,
+                error_message=message,
+                now=utcnow(),
+            )
+            for command in commands:
+                await publish_command_status_after_commit(db, command)
+            await db.commit()
+            logger.info(
+                "Blocked managed slot wake because billing denied sandbox start",
+                extra={
+                    "target_id": str(target_id),
+                    "billing_subject_id": str(profile.billing_subject_id),
+                    "reason": authorization.start_block_reason,
+                    "failed_command_count": len(commands),
+                },
+            )
+            return
+        await db.commit()
 
-    del target_id
+    await perform_proliferate_owned_e2b_resume({"target_id": str(target_id)})
 
 
 async def perform_proliferate_owned_e2b_resume(slot: object) -> None:
