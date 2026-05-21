@@ -121,16 +121,103 @@ export type CloudRepoConfigsListResponse = components["schemas"]["CloudRepoConfi
 export type CloudRepoFileMetadata     = components["schemas"]["CloudRepoFileMetadata"];
 export type CloudRepoConfigResponse   = components["schemas"]["CloudRepoConfigResponse"];
 export type SaveCloudRepoConfigRequest = components["schemas"]["SaveCloudRepoConfigRequest"];
-export type AutomationResponse = components["schemas"]["AutomationResponse"];
-export type AutomationListResponse = components["schemas"]["AutomationListResponse"];
-export type AutomationRunResponse = components["schemas"]["AutomationRunResponse"];
-export type AutomationRunListResponse = components["schemas"]["AutomationRunListResponse"];
-export type CreateAutomationRequest = components["schemas"]["CreateAutomationRequest"];
-export type UpdateAutomationRequest = components["schemas"]["UpdateAutomationRequest"];
+export type AutomationOwnerScope = "personal" | "organization";
+export type AutomationTargetMode = "local" | "personal_cloud" | "shared_cloud";
+export type AutomationRunStatus =
+  | "queued"
+  | "claimed"
+  | "creating_workspace"
+  | "provisioning_workspace"
+  | "creating_session"
+  | "dispatching"
+  | "dispatched"
+  | "failed"
+  | "cancelled";
+export interface AutomationResponse {
+  id: string;
+  ownerScope: AutomationOwnerScope;
+  ownerUserId: string | null;
+  organizationId: string | null;
+  createdByUserId: string;
+  gitOwner: string;
+  gitRepoName: string;
+  title: string;
+  prompt: string;
+  schedule: components["schemas"]["AutomationScheduleResponse"];
+  targetMode: AutomationTargetMode;
+  cloudAgentRunConfigId: string;
+  enabled: boolean;
+  pausedAt: string | null;
+  lastScheduledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface AutomationListResponse {
+  automations: AutomationResponse[];
+}
+export interface AutomationRunResponse {
+  id: string;
+  automationId: string;
+  ownerScope: AutomationOwnerScope;
+  ownerUserId: string | null;
+  organizationId: string | null;
+  createdByUserId: string;
+  triggerKind: "scheduled" | "manual";
+  scheduledFor: string | null;
+  targetMode: AutomationTargetMode;
+  status: AutomationRunStatus;
+  titleSnapshot: string;
+  promptSnapshot: string;
+  gitProviderSnapshot: string;
+  gitOwnerSnapshot: string;
+  gitRepoNameSnapshot: string;
+  cloudRepoConfigIdSnapshot: string;
+  cloudTargetIdSnapshot: string | null;
+  cloudTargetKindSnapshot: string | null;
+  sandboxProfileId: string | null;
+  cloudWorkspaceExposureId: string | null;
+  agentRunConfigSnapshot: Record<string, unknown> | null;
+  cascadeAttempt: number;
+  lastCascadeCommandId: string | null;
+  lastCascadeReason: string | null;
+  claimExpiresAt: string | null;
+  dispatchStartedAt: string | null;
+  dispatchedAt: string | null;
+  failedAt: string | null;
+  cloudWorkspaceId: string | null;
+  anyharnessWorkspaceId: string | null;
+  anyharnessSessionId: string | null;
+  cancelledAt: string | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface AutomationRunListResponse {
+  runs: AutomationRunResponse[];
+}
+export interface CreateAutomationRequest {
+  title: string;
+  prompt: string;
+  ownerScope?: AutomationOwnerScope;
+  organizationId?: string | null;
+  gitOwner: string;
+  gitRepoName: string;
+  schedule: components["schemas"]["AutomationScheduleRequest"];
+  targetMode: AutomationTargetMode;
+  cloudAgentRunConfigId: string;
+}
+export interface UpdateAutomationRequest {
+  title?: string | null;
+  prompt?: string | null;
+  gitOwner?: string | null;
+  gitRepoName?: string | null;
+  schedule?: components["schemas"]["AutomationScheduleRequest"] | null;
+  targetMode?: AutomationTargetMode | null;
+  cloudAgentRunConfigId?: string | null;
+}
 export type LocalAutomationClaimRequest =
   components["schemas"]["LocalAutomationClaimRequest"];
-export type LocalAutomationClaimListResponse =
-  components["schemas"]["LocalAutomationClaimListResponse"];
 export type LocalAutomationClaimActionRequest =
   components["schemas"]["LocalAutomationClaimActionRequest"];
 export type LocalAutomationAttachWorkspaceRequest =
@@ -139,10 +226,33 @@ export type LocalAutomationAttachSessionRequest =
   components["schemas"]["LocalAutomationAttachSessionRequest"];
 export type LocalAutomationFailRequest =
   components["schemas"]["LocalAutomationFailRequest"];
-export type LocalAutomationMutationResponse =
-  components["schemas"]["LocalAutomationMutationResponse"];
-export type LocalAutomationRunClaimResponse =
-  components["schemas"]["LocalAutomationRunClaimResponse"];
+export interface LocalAutomationRunClaimResponse {
+  id: string;
+  automationId: string;
+  status: AutomationRunStatus;
+  targetMode: AutomationTargetMode;
+  titleSnapshot: string;
+  promptSnapshot: string;
+  gitProviderSnapshot: string;
+  gitOwnerSnapshot: string;
+  gitRepoNameSnapshot: string;
+  cloudAgentRunConfigIdSnapshot: string | null;
+  agentKindSnapshot: string | null;
+  modelIdSnapshot: string | null;
+  modeIdSnapshot: string | null;
+  reasoningEffortSnapshot: string | null;
+  claimId: string;
+  claimExpiresAt: string;
+  anyharnessWorkspaceId: string | null;
+  anyharnessSessionId: string | null;
+}
+export interface LocalAutomationClaimListResponse {
+  runs: LocalAutomationRunClaimResponse[];
+}
+export interface LocalAutomationMutationResponse {
+  run: LocalAutomationRunClaimResponse | null;
+  accepted: boolean;
+}
 export type CloudMcpCatalogResponse = components["schemas"]["ConnectorCatalogResponse"];
 export type CloudMcpCatalogEntry = components["schemas"]["ConnectorCatalogEntryModel"];
 export type CloudPluginPackage = components["schemas"]["PluginPackageModel"];

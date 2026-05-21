@@ -28,40 +28,6 @@ class AutomationInvalidField(InvalidRequest):
         super().__init__(message=message, code=self.code)
 
 
-class AutomationInvalidExecutionTarget(InvalidRequest):
-    code = "automation_invalid_execution_target"
-
-    def __init__(self) -> None:
-        super().__init__(message="Execution target must be 'cloud' or 'local'.", code=self.code)
-
-
-class AutomationInvalidAgentKind(InvalidRequest):
-    code = "automation_invalid_agent_kind"
-
-    def __init__(self) -> None:
-        super().__init__(
-            message="Agent kind must be one of: claude, codex, gemini.",
-            code=self.code,
-        )
-
-
-class AutomationInvalidReasoningEffort(InvalidRequest):
-    code = "automation_invalid_reasoning_effort"
-
-    def __init__(self) -> None:
-        super().__init__(message="Reasoning effort is not supported.", code=self.code)
-
-
-class AutomationAgentRequired(InvalidRequest):
-    code = "automation_agent_required"
-
-    def __init__(self) -> None:
-        super().__init__(
-            message="Choose an agent before scheduling this automation.",
-            code=self.code,
-        )
-
-
 class AutomationInvalidSchedule(InvalidRequest):
     code = "automation_invalid_schedule"
 

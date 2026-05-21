@@ -34,7 +34,7 @@ export function useAutomationMutations() {
   }, [queryClient]);
 
   const createMutation = useMutation<AutomationResponse, Error, CreateAutomationRequest>({
-    mutationFn: createAutomation,
+    mutationFn: (body) => createAutomation(body),
     onSuccess: (automation) => invalidateAutomation(automation.id),
   });
 
