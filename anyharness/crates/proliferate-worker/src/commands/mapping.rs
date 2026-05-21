@@ -134,6 +134,7 @@ fn start_session_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMa
     let mut body = object.clone();
     body.insert("workspaceId".to_string(), Value::String(workspace_id));
     body.insert("agentKind".to_string(), Value::String(agent_kind));
+    map_runtime_config_preflight(&mut body)?;
     body.entry("origin".to_string())
         .or_insert_with(|| json!({ "kind": "system", "entrypoint": "cloud" }));
     Ok(Value::Object(body))
@@ -200,6 +201,7 @@ fn prompt_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMappingEr
         ));
     };
     let mut body = object.clone();
+    strip_runtime_config_preflight(&mut body);
     if !body.contains_key("promptId") && !body.contains_key("prompt_id") {
         body.insert(
             "promptId".to_string(),
@@ -220,6 +222,56 @@ fn prompt_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMappingEr
         json!([{ "type": "text", "text": text }]),
     );
     Ok(Value::Object(body))
+}
+
+fn map_runtime_config_preflight(body: &mut Map<String, Value>) -> Result<(), CommandMappingError> {
+    let existing_expected = body.get("expectedRuntimeConfigRevision").cloned();
+    let revision_id = body
+        .remove("requiredRuntimeConfigRevisionId")
+        .and_then(|value| value.as_str().map(str::to_string));
+    let sequence = body
+        .remove("requiredRuntimeConfigSequence")
+        .and_then(|value| value.as_i64());
+    let content_hash = body
+        .remove("requiredRuntimeConfigContentHash")
+        .and_then(|value| value.as_str().map(str::to_string));
+    let sandbox_profile_id = body
+        .remove("sandboxProfileId")
+        .and_then(|value| value.as_str().map(str::to_string));
+    if existing_expected.is_some() {
+        return Ok(());
+    }
+    if revision_id.is_none() && sequence.is_none() && content_hash.is_none() {
+        return Ok(());
+    }
+    let (Some(revision_id), Some(sequence), Some(content_hash)) =
+        (revision_id, sequence, content_hash)
+    else {
+        return Err(CommandMappingError::new(
+            "invalid_runtime_config_preflight",
+            "runtime config preflight requires revision id, sequence, and content hash.",
+        ));
+    };
+    body.insert(
+        "expectedRuntimeConfigRevision".to_string(),
+        json!({
+            "revisionId": revision_id,
+            "sequence": sequence,
+            "contentHash": content_hash,
+            "externalScope": sandbox_profile_id.map(|id| json!({
+                "provider": "proliferate-cloud",
+                "id": id,
+            })),
+        }),
+    );
+    Ok(())
+}
+
+fn strip_runtime_config_preflight(body: &mut Map<String, Value>) {
+    body.remove("sandboxProfileId");
+    body.remove("requiredRuntimeConfigRevisionId");
+    body.remove("requiredRuntimeConfigSequence");
+    body.remove("requiredRuntimeConfigContentHash");
 }
 
 fn interaction_resolution_body(payload: &Value) -> Result<(String, Value), CommandMappingError> {
@@ -379,6 +431,55 @@ mod tests {
         }));
         let error = map_cloud_command(&command).expect_err("error");
         assert_eq!(error.code, "invalid_materialize_workspace_payload");
+    }
+
+    #[test]
+    fn maps_runtime_config_preflight_to_anyharness_expected_revision() {
+        let mut command = test_command(json!({
+            "workspaceId": "workspace-1",
+            "agentKind": "claude",
+            "sandboxProfileId": "profile-1",
+            "requiredRuntimeConfigRevisionId": "rev-1",
+            "requiredRuntimeConfigSequence": 7,
+            "requiredRuntimeConfigContentHash": "sha256:abc"
+        }));
+        command.kind = "start_session".to_string();
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::StartSession { body } = mapped else {
+            panic!("expected start session");
+        };
+        assert!(body.get("sandboxProfileId").is_none());
+        assert!(body.get("requiredRuntimeConfigRevisionId").is_none());
+        assert_eq!(
+            body.pointer("/expectedRuntimeConfigRevision/revisionId")
+                .and_then(serde_json::Value::as_str),
+            Some("rev-1")
+        );
+        assert_eq!(
+            body.pointer("/expectedRuntimeConfigRevision/sequence")
+                .and_then(serde_json::Value::as_i64),
+            Some(7)
+        );
+    }
+
+    #[test]
+    fn strips_runtime_config_preflight_from_prompt_payload() {
+        let mut command = test_command(json!({
+            "text": "continue",
+            "sandboxProfileId": "profile-1",
+            "requiredRuntimeConfigRevisionId": "rev-1",
+            "requiredRuntimeConfigSequence": 7,
+            "requiredRuntimeConfigContentHash": "sha256:abc"
+        }));
+        command.kind = "send_prompt".to_string();
+        command.session_id = Some("session-1".to_string());
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::SendPrompt { body, .. } = mapped else {
+            panic!("expected send prompt");
+        };
+        assert!(body.get("sandboxProfileId").is_none());
+        assert!(body.get("requiredRuntimeConfigRevisionId").is_none());
+        assert!(body.get("blocks").is_some());
     }
 
     fn test_command(payload: serde_json::Value) -> CloudCommandEnvelope {

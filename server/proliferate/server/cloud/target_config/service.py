@@ -26,8 +26,10 @@ from proliferate.server.cloud.commands.models import (
 from proliferate.server.cloud.commands.service import enqueue_command
 from proliferate.server.cloud.credentials.service import load_active_cloud_credential_payloads
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.mcp_materialization.models import MaterializeCloudMcpRequest
-from proliferate.server.cloud.mcp_materialization.service import materialize_cloud_mcp_servers
+from proliferate.server.cloud.runtime_config.service import (
+    refresh_profile_runtime_config,
+    runtime_config_fragment_for_profile,
+)
 from proliferate.server.cloud.target_config.domain.policy import require_target_materializable
 from proliferate.server.cloud.target_config.domain.rules import (
     default_workspace_root,
@@ -69,10 +71,6 @@ def _command_idempotency_key(
 
 def _credential_snapshot_version(agent_credentials: dict[str, dict[str, object]]) -> int:
     return len(agent_credentials)
-
-
-def _mcp_materialization_version(binding_count: int, warning_count: int) -> int:
-    return binding_count + warning_count
 
 
 def _required_tools(
@@ -282,20 +280,49 @@ async def materialize_target_config(
         if isinstance(provider, str) and isinstance(payload, dict)
     }
 
-    mcp = await materialize_cloud_mcp_servers(
-        db,
-        user_id=user.id,
-        body=MaterializeCloudMcpRequest(
-            targetLocation="cloud",
-            connectionIds=body.mcp_connection_ids,
-        ),
-    )
-    binding_count = len(mcp.mcp_binding_summaries)
-    warning_count = len(mcp.warnings)
+    runtime_config = None
+    if target.sandbox_profile_id is not None:
+        runtime_config = await runtime_config_fragment_for_profile(
+            db,
+            sandbox_profile_id=target.sandbox_profile_id,
+        )
+        if runtime_config is None:
+            await refresh_profile_runtime_config(
+                db,
+                sandbox_profile_id=target.sandbox_profile_id,
+                actor_user_id=user.id,
+                reason="target_config_materialization",
+            )
+            runtime_config = await runtime_config_fragment_for_profile(
+                db,
+                sandbox_profile_id=target.sandbox_profile_id,
+            )
+        if runtime_config is None:
+            raise CloudApiError(
+                "runtime_config_missing",
+                "Managed targets require a materialized runtime config.",
+                status_code=409,
+            )
+        runtime_config = runtime_config.model_copy(update={"target_id": str(target.id)})
+
+    if runtime_config is None:
+        binding_count = 0
+        warning_count = 0
+        plugin_package_count = 0
+        mcp_materialization_version = 0
+    else:
+        manifest = runtime_config.manifest
+        mcp_servers = manifest.get("mcpServers")
+        warnings = manifest.get("warnings")
+        skills = manifest.get("skills")
+        binding_count = len(mcp_servers) if isinstance(mcp_servers, list) else 0
+        warning_count = len(warnings) if isinstance(warnings, list) else 0
+        plugin_package_count = len(skills) if isinstance(skills, list) else 0
+        mcp_materialization_version = runtime_config.sequence
     required_tools = _required_tools(
         include_git=body.include_git_credentials,
         mcp_binding_count=binding_count,
-        plugin_package_count=len(mcp.plugin_packages),
+        plugin_package_count=plugin_package_count,
     )
 
     summary = TargetConfigSummaryModel(
@@ -320,8 +347,7 @@ async def materialize_target_config(
         run_command=run_command,
         git_credential=git_credential,
         agent_credentials=agent_credentials,
-        mcp=mcp.model_dump(mode="json", by_alias=True),
-        skills=[],
+        runtime_config=runtime_config,
         readiness_requirements={tool: True for tool in required_tools},
     )
     config = await target_config_store.upsert_target_config(
@@ -338,7 +364,7 @@ async def materialize_target_config(
         env_vars_version=env_vars_version,
         files_version=files_version,
         credential_snapshot_version=_credential_snapshot_version(agent_credentials),
-        mcp_materialization_version=_mcp_materialization_version(binding_count, warning_count),
+        mcp_materialization_version=mcp_materialization_version,
     )
 
     finalized_plan = plan.model_copy(

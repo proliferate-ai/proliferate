@@ -12,8 +12,8 @@ use url::form_urlencoded;
 
 use super::http::{
     agent_auth_config, agents, agents_model_registry, cowork, files, git, health, hosting,
-    mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions, subagents,
-    terminals, workspaces, worktrees,
+    mobility, plans, processes, product_mcp, replay, repo_roots, reviews, runtime_config, sessions,
+    subagents, terminals, workspaces, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -53,6 +53,10 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/agents/auth-config/status",
             get(agent_auth_config::get_agent_auth_config_status),
+        )
+        .route(
+            "/runtime-config",
+            get(runtime_config::get_runtime_config).put(runtime_config::apply_runtime_config),
         )
         // Workspaces
         .route(

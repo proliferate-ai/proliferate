@@ -256,6 +256,35 @@ async def update_target_config_payload(
     return _snapshot(row)
 
 
+async def replace_target_config_payload_for_runtime_config(
+    db: AsyncSession,
+    *,
+    config_id: UUID,
+    payload_ciphertext: str,
+    summary_json: str,
+    mcp_materialization_version: int,
+) -> CloudTargetConfigSnapshot | None:
+    row = (
+        await db.execute(
+            select(CloudTargetConfig).where(CloudTargetConfig.id == config_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    row.config_version += 1
+    row.payload_ciphertext = payload_ciphertext
+    row.summary_json = summary_json
+    row.mcp_materialization_version = mcp_materialization_version
+    row.materialization_status = CloudTargetConfigStatus.pending.value
+    row.last_command_id = None
+    row.last_materialized_at = None
+    row.last_error_code = None
+    row.last_error_message = None
+    row.updated_at = utcnow()
+    await db.flush()
+    return _snapshot(row)
+
+
 async def mark_target_config_status(
     db: AsyncSession,
     *,

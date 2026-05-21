@@ -65,7 +65,7 @@ export function ConnectorConfigureTab({
               error={null}
               helperText={
                 isConnected
-                  ? "Changing these settings updates future launches for this connector."
+                  ? "Changing these settings refreshes managed cloud sandbox runtime config for this connector."
                   : "Choose these settings before saving credentials."
               }
               onChange={onSettingsChange}
@@ -139,7 +139,7 @@ export function ConnectorConfigureTab({
             />
           ) : (
             <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-              Choose the Gmail account in your browser. Gmail is available only in new local desktop sessions with plugins enabled.
+              Choose the Gmail account in your browser. Managed cloud sandboxes use the account after runtime config refresh.
             </div>
           )}
         </div>

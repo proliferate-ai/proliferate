@@ -31,7 +31,6 @@ import {
 } from "@/lib/workflows/sessions/session-reconnect-state";
 import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   isCurrentStreamHandle,
@@ -70,9 +69,6 @@ export function useSessionRuntimeActions() {
     persistReconciledModePreferences,
   } = useSessionSummaryActions();
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
-  const pluginsInCodingSessionsEnabled = useUserPreferencesStore(
-    (state) => state.pluginsInCodingSessionsEnabled,
-  );
 
   const activateSession = useCallback((sessionId: string | null) => {
     useSessionSelectionStore.getState().setActiveSessionId(sessionId);
@@ -128,7 +124,6 @@ export function useSessionRuntimeActions() {
         }) === "running"
       ) {
         session = await resumeSession(sessionId, {
-          pluginsInCodingSessionsEnabled,
           requestHeaders: options?.requestHeaders,
           measurementOperationId: options?.measurementOperationId,
         });
@@ -142,7 +137,7 @@ export function useSessionRuntimeActions() {
         console.debug("[session-runtime] session metadata refresh failed", error);
       }
     }
-  }, [applySessionSummary, pluginsInCodingSessionsEnabled]);
+  }, [applySessionSummary]);
 
   const createSessionStreamFlushController = useSessionStreamFlushControllerFactory({
     sessionStreamCache,

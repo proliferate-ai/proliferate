@@ -32,10 +32,6 @@ import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import type { DesktopLaunchModelRegistry as ModelRegistry } from "@/lib/domain/agents/cloud-launch-catalog";
 import {
-  COWORK_WORKSPACE_PATH_PLACEHOLDER,
-  resolveSessionMcpServersForLaunch,
-} from "@/lib/workflows/sessions/session-mcp-launch";
-import {
   createEmptySessionRecord,
   getSessionRecord,
   putSessionRecord,
@@ -187,28 +183,7 @@ export function useCoworkThreadWorkflow() {
     navigateToWorkspaceShell();
 
     try {
-      const resolveStartedAt = startLatencyTimer();
-      const mcpLaunch = await resolveSessionMcpServersForLaunch({
-        targetLocation: "local",
-        workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
-        launchId: entry.attemptId,
-        policy: {
-          workspaceSurface: "cowork",
-          lifecycle: "create",
-          enabled: true,
-        },
-      });
-      const { mcpServers, mcpBindingSummaries } = mcpLaunch;
-      const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
-      logLatency("workspace.cowork.create.mcp_resolved", {
-        attemptId: entry.attemptId,
-        pluginsEnabled: true,
-        mcpServerCount: mcpServers.length,
-        elapsedMs: elapsedMs(resolveStartedAt),
-      });
-
       if (!isAttemptCurrent(entry.attemptId)) {
-        await releaseRuntimeReservations();
         return null;
       }
 
@@ -219,24 +194,15 @@ export function useCoworkThreadWorkflow() {
         modelId: input.modelId,
         modeId: modeId ?? null,
         workspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
-        mcpServerCount: mcpServers.length,
         elapsedSincePendingMs: elapsedSince(entry.createdAt),
       });
 
-      const result = await (async () => {
-        try {
-          return await createCoworkThreadMutation.mutateAsync({
-            agentKind: input.agentKind,
-            modelId: input.modelId,
-            coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
-            ...(modeId ? { modeId } : {}),
-            ...(mcpServers.length > 0 ? { mcpServers } : {}),
-            mcpBindingSummaries,
-          });
-        } finally {
-          await releaseRuntimeReservations();
-        }
-      })();
+      const result = await createCoworkThreadMutation.mutateAsync({
+        agentKind: input.agentKind,
+        modelId: input.modelId,
+        coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
+        ...(modeId ? { modeId } : {}),
+      });
 
       logLatency("workspace.cowork.create.request.success", {
         attemptId: entry.attemptId,

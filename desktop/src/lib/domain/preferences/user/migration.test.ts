@@ -6,11 +6,10 @@ import {
 } from "@/lib/domain/preferences/user/worktree-auto-delete";
 
 describe("user preference migration", () => {
-  it("migrates legacy model and powers preferences into the current shape", () => {
+  it("migrates legacy model preferences into the current shape", () => {
     const result = migrateUserPreferences({
       defaultChatAgentKind: " claude ",
       defaultChatModelId: " claude-sonnet-4-5-1m ",
-      powersInCodingSessionsEnabled: true,
     });
 
     expect(result.changed).toBe(true);
@@ -18,8 +17,6 @@ describe("user preference migration", () => {
     expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
       claude: "sonnet[1m]",
     });
-    expect(result.preferences.pluginsInCodingSessionsEnabled).toBe(true);
-    expect(result.preferences).not.toHaveProperty("powersInCodingSessionsEnabled");
   });
 
   it("sanitizes per-agent model, session mode, and live control maps", () => {

@@ -66,20 +66,20 @@ export type OrganizationInvitationAcceptResponse =
   components["schemas"]["OrganizationInvitationAcceptResponse"];
 export type CloudWorkspaceSummary = Omit<
   components["schemas"]["WorkspaceSummary"],
-  "status" | "runtime" | "actionBlockKind" | "actionBlockReason"
+  "status" | "workspaceStatus" | "runtime" | "actionBlockKind" | "actionBlockReason"
 > & {
   status: CloudWorkspaceStatus;
-  workspaceStatus?: CloudWorkspaceStatus;
+  workspaceStatus: CloudWorkspaceStatus;
   runtime?: CloudWorkspaceRuntimeSummary;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
 };
 export type CloudWorkspaceDetail = Omit<
   components["schemas"]["WorkspaceDetail"],
-  "status" | "runtime" | "actionBlockKind" | "actionBlockReason"
+  "status" | "workspaceStatus" | "runtime" | "actionBlockKind" | "actionBlockReason"
 > & {
   status: CloudWorkspaceStatus;
-  workspaceStatus?: CloudWorkspaceStatus;
+  workspaceStatus: CloudWorkspaceStatus;
   runtime?: CloudWorkspaceRuntimeSummary;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
@@ -120,8 +120,6 @@ export type LocalAutomationMutationResponse =
   components["schemas"]["LocalAutomationMutationResponse"];
 export type LocalAutomationRunClaimResponse =
   components["schemas"]["LocalAutomationRunClaimResponse"];
-export type CloudMcpConnectionSyncStatus = components["schemas"]["CloudMcpConnectionSyncStatus"];
-export type SyncCloudMcpConnectionRequest = components["schemas"]["SyncCloudMcpConnectionRequest"];
 export type CloudMcpCatalogResponse = components["schemas"]["ConnectorCatalogResponse"];
 export type CloudMcpCatalogEntry = components["schemas"]["ConnectorCatalogEntryModel"];
 export type CloudPluginPackage = components["schemas"]["PluginPackageModel"];
@@ -138,11 +136,6 @@ export type CloudMcpOAuthFlowStatusResponse =
   components["schemas"]["CloudMcpOAuthFlowStatusResponse"];
 export type StartCloudMcpOAuthFlowResponse =
   components["schemas"]["StartCloudMcpOAuthFlowResponse"];
-export type MaterializeCloudMcpRequest = components["schemas"]["MaterializeCloudMcpRequest"];
-export type MaterializeCloudMcpResponse = components["schemas"]["MaterializeCloudMcpResponse"];
-export type LocalStdioCandidate = components["schemas"]["LocalStdioCandidateModel"];
-export type CloudMcpMaterializationWarning =
-  components["schemas"]["CloudMcpMaterializationWarningModel"];
 export type PutCloudRepoFileRequest   = components["schemas"]["PutCloudRepoFileRequest"];
 export type CloudWorkspaceRepoConfigStatusResponse = components["schemas"]["CloudWorkspaceRepoConfigStatusResponse"];
 export type ResyncCloudWorkspaceFilesResponse = components["schemas"]["ResyncCloudWorkspaceFilesResponse"];
@@ -189,3 +182,10 @@ export type MaterializeTargetConfigRequest =
   components["schemas"]["MaterializeTargetConfigRequest"];
 export type MaterializeTargetConfigResponse =
   components["schemas"]["MaterializeTargetConfigResponse"];
+export type RefreshRuntimeConfigRequest =
+  components["schemas"]["RefreshRuntimeConfigRequest"];
+export type RuntimeConfigRevision = components["schemas"]["RuntimeConfigRevisionModel"];
+export type RuntimeConfigStatusResponse =
+  components["schemas"]["RuntimeConfigStatusResponse"];
+export type RuntimeConfigMaterializationFragment =
+  components["schemas"]["RuntimeConfigMaterializationFragment"];

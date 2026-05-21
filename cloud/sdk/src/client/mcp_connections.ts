@@ -2,11 +2,9 @@ import { getProliferateClient } from "./core.js";
 import type {
   CloudMcpConnection,
   CloudMcpConnectionsResponse,
-  CloudMcpConnectionSyncStatus,
   CreateCloudMcpConnectionRequest,
   PatchCloudMcpConnectionRequest,
   PutCloudMcpSecretAuthRequest,
-  SyncCloudMcpConnectionRequest,
 } from "../types/index.js";
 
 export async function listCloudMcpConnections(): Promise<CloudMcpConnectionsResponse> {
@@ -44,26 +42,6 @@ export async function putCloudMcpSecretAuth(
 
 export async function deleteCloudMcpConnectionV2(connectionId: string): Promise<void> {
   await getProliferateClient().DELETE("/v1/cloud/mcp/connections/{connection_id}", {
-    params: { path: { connection_id: connectionId } },
-  });
-}
-
-export async function listCloudMcpConnectionStatuses(): Promise<CloudMcpConnectionSyncStatus[]> {
-  return (await getProliferateClient().GET("/v1/cloud/mcp-connections/statuses")).data!;
-}
-
-export async function syncCloudMcpConnection(
-  connectionId: string,
-  body: SyncCloudMcpConnectionRequest,
-): Promise<void> {
-  await getProliferateClient().PUT("/v1/cloud/mcp-connections/{connection_id}", {
-    params: { path: { connection_id: connectionId } },
-    body,
-  });
-}
-
-export async function deleteCloudMcpConnection(connectionId: string): Promise<void> {
-  await getProliferateClient().DELETE("/v1/cloud/mcp-connections/{connection_id}", {
     params: { path: { connection_id: connectionId } },
   });
 }

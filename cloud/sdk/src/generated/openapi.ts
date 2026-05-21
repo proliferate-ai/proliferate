@@ -1205,6 +1205,40 @@ export interface paths {
         patch: operations["patch_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__patch"];
         trace?: never;
     };
+    "/v1/cloud/mcp/connections/{connection_id}/publicize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publicize Cloud Mcp Connection Endpoint */
+        post: operations["publicize_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__publicize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/mcp/connections/{connection_id}/unpublicize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unpublicize Cloud Mcp Connection Endpoint */
+        post: operations["unpublicize_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__unpublicize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/mcp/connections/{connection_id}/auth/secret": {
         parameters: {
             query?: never;
@@ -1216,58 +1250,6 @@ export interface paths {
         /** Put Cloud Mcp Connection Secret Auth Endpoint */
         put: operations["put_cloud_mcp_connection_secret_auth_endpoint_v1_cloud_mcp_connections__connection_id__auth_secret_put"];
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/mcp-connections/statuses": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Cloud Mcp Connection Statuses Endpoint */
-        get: operations["list_cloud_mcp_connection_statuses_endpoint_v1_cloud_mcp_connections_statuses_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/mcp-connections/{connection_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Sync Cloud Mcp Connection Endpoint */
-        put: operations["sync_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__put"];
-        post?: never;
-        /** Delete Legacy Cloud Mcp Connection Endpoint */
-        delete: operations["delete_legacy_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/mcp/materialize": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Materialize Cloud Mcp Endpoint */
-        post: operations["materialize_cloud_mcp_endpoint_v1_cloud_mcp_materialize_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1340,6 +1322,94 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Configured Plugins Endpoint */
+        get: operations["list_configured_plugins_endpoint_v1_cloud_plugins_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/plugins/{plugin_id}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Install Plugin Endpoint */
+        post: operations["install_plugin_endpoint_v1_cloud_plugins__plugin_id__install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/plugins/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Uninstall Plugin Endpoint */
+        delete: operations["uninstall_plugin_endpoint_v1_cloud_plugins__item_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Configured Plugin Endpoint */
+        patch: operations["patch_configured_plugin_endpoint_v1_cloud_plugins__item_id__patch"];
+        trace?: never;
+    };
+    "/v1/cloud/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Configured Skills Endpoint */
+        get: operations["list_configured_skills_endpoint_v1_cloud_skills_get"];
+        put?: never;
+        /** Create Configured Skill Endpoint */
+        post: operations["create_configured_skill_endpoint_v1_cloud_skills_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/skills/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Configured Skill Endpoint */
+        delete: operations["delete_configured_skill_endpoint_v1_cloud_skills__item_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Configured Skill Endpoint */
+        patch: operations["patch_configured_skill_endpoint_v1_cloud_skills__item_id__patch"];
         trace?: never;
     };
     "/v1/cloud/webhooks/e2b": {
@@ -1733,6 +1803,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/runtime-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Runtime Config Status Endpoint */
+        get: operations["get_runtime_config_status_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__runtime_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/runtime-config/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Runtime Config Endpoint */
+        post: operations["refresh_runtime_config_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__runtime_config_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/worker/agent-auth-configs/{sandbox_profile_id}/materialization": {
         parameters: {
             query?: never;
@@ -1761,6 +1865,74 @@ export interface paths {
         put?: never;
         /** Worker Agent Auth Status Endpoint */
         post: operations["worker_agent_auth_status_endpoint_v1_cloud_worker_agent_auth_configs__sandbox_profile_id__status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/runtime-configs/{revision_id}/materialization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Worker Runtime Config Materialization Endpoint */
+        get: operations["worker_runtime_config_materialization_endpoint_v1_cloud_worker_runtime_configs__revision_id__materialization_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/runtime-configs/{revision_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Runtime Config Status Endpoint */
+        post: operations["worker_runtime_config_status_endpoint_v1_cloud_worker_runtime_configs__revision_id__status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/runtime-configs/{revision_id}/credentials/materialize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Runtime Config Credentials Endpoint */
+        post: operations["worker_runtime_config_credentials_endpoint_v1_cloud_worker_runtime_configs__revision_id__credentials_materialize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/runtime-configs/{revision_id}/artifacts/{artifact_hash}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Worker Runtime Config Artifact Endpoint */
+        get: operations["worker_runtime_config_artifact_endpoint_v1_cloud_worker_runtime_configs__revision_id__artifacts__artifact_hash__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3448,6 +3620,12 @@ export interface components {
         CloudMcpConnectionResponse: {
             /** Connectionid */
             connectionId: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Owneruserid */
+            ownerUserId?: string | null;
+            /** Organizationid */
+            organizationId?: string | null;
             /** Catalogentryid */
             catalogEntryId: string;
             /** Catalogentryversion */
@@ -3456,6 +3634,16 @@ export interface components {
             serverName: string;
             /** Enabled */
             enabled: boolean;
+            /** Publictoorg */
+            publicToOrg: boolean;
+            /** Publicorganizationid */
+            publicOrganizationId?: string | null;
+            /** Publicstatus */
+            publicStatus: string;
+            /** Publicupdatedat */
+            publicUpdatedAt?: string | null;
+            /** Publicupdatedbyuserid */
+            publicUpdatedByUserId?: string | null;
             /**
              * Authkind
              * @enum {string}
@@ -3479,37 +3667,10 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
-        /** CloudMcpConnectionSyncStatus */
-        CloudMcpConnectionSyncStatus: {
-            /** Connectionid */
-            connectionId: string;
-            /** Catalogentryid */
-            catalogEntryId: string;
-            /** Synced */
-            synced: boolean;
-            /** Lastsyncedat */
-            lastSyncedAt?: string | null;
-        };
         /** CloudMcpConnectionsResponse */
         CloudMcpConnectionsResponse: {
             /** Connections */
             connections: components["schemas"]["CloudMcpConnectionResponse"][];
-        };
-        /** CloudMcpMaterializationWarningModel */
-        CloudMcpMaterializationWarningModel: {
-            /** Connectionid */
-            connectionId: string;
-            /** Catalogentryid */
-            catalogEntryId: string;
-            /** Connectorname */
-            connectorName: string;
-            /** Servername */
-            serverName?: string | null;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "needs_reconnect" | "unsupported_target" | "invalid_settings" | "refresh_failed" | "missing_secret" | "workspace_path_unresolved" | "command_missing" | "resolver_error";
         };
         /** CloudMcpOAuthFlowStatusResponse */
         CloudMcpOAuthFlowStatusResponse: {
@@ -4392,6 +4553,27 @@ export interface components {
             policy: components["schemas"]["AgentGatewayPolicyResponse"];
             providerCredential: components["schemas"]["AgentGatewayProviderCredentialResponse"];
         };
+        /** CreateSkillConfiguredItemRequest */
+        CreateSkillConfiguredItemRequest: {
+            /** Skillsourcekind */
+            skillSourceKind: string;
+            /** Skillid */
+            skillId: string;
+            /** Skillversion */
+            skillVersion?: string | null;
+            /**
+             * Pluginid
+             * @default
+             */
+            pluginId: string;
+            /** Pluginversion */
+            pluginVersion?: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
         /** CredentialStatus */
         CredentialStatus: {
             /** Provider */
@@ -4619,96 +4801,6 @@ export interface components {
             /** Name */
             name: string;
         };
-        /** LocalStdioArgTemplateModel */
-        LocalStdioArgTemplateModel: {
-            /** Source */
-            source: components["schemas"]["LocalStdioStaticSourceModel"] | components["schemas"]["LocalStdioWorkspacePathSourceModel"];
-        };
-        /** LocalStdioCandidateModel */
-        LocalStdioCandidateModel: {
-            /** Connectionid */
-            connectionId: string;
-            /** Catalogentryid */
-            catalogEntryId: string;
-            /** Servername */
-            serverName: string;
-            /** Connectorname */
-            connectorName: string;
-            /**
-             * Setupkind
-             * @default none
-             * @enum {string}
-             */
-            setupKind: "none" | "local_oauth";
-            localOauth?: components["schemas"]["LocalStdioOAuthMetadataModel"] | null;
-            /** Command */
-            command: string;
-            /** Args */
-            args: components["schemas"]["LocalStdioArgTemplateModel"][];
-            /** Env */
-            env: components["schemas"]["LocalStdioEnvTemplateModel"][];
-        };
-        /** LocalStdioEnvTemplateModel */
-        LocalStdioEnvTemplateModel: {
-            /** Name */
-            name: string;
-            source: components["schemas"]["LocalStdioStaticSourceModel"];
-        };
-        /** LocalStdioOAuthMetadataModel */
-        LocalStdioOAuthMetadataModel: {
-            /**
-             * Provider
-             * @constant
-             */
-            provider: "google_workspace";
-            /** Usergoogleemail */
-            userGoogleEmail: string;
-            /** Requiredscope */
-            requiredScope: string;
-        };
-        /** LocalStdioStaticSourceModel */
-        LocalStdioStaticSourceModel: {
-            /**
-             * Kind
-             * @constant
-             */
-            kind: "static";
-            /** Value */
-            value: string;
-        };
-        /** LocalStdioWorkspacePathSourceModel */
-        LocalStdioWorkspacePathSourceModel: {
-            /**
-             * Kind
-             * @constant
-             */
-            kind: "workspace_path";
-        };
-        /** MaterializeCloudMcpRequest */
-        MaterializeCloudMcpRequest: {
-            /**
-             * Targetlocation
-             * @enum {string}
-             */
-            targetLocation: "local" | "cloud";
-            /** Connectionids */
-            connectionIds?: string[] | null;
-        };
-        /** MaterializeCloudMcpResponse */
-        MaterializeCloudMcpResponse: {
-            /** Catalogversion */
-            catalogVersion: string;
-            /** Mcpservers */
-            mcpServers: (components["schemas"]["SessionMcpHttpServerModel"] | components["schemas"]["SessionMcpStdioServerModel"])[];
-            /** Mcpbindingsummaries */
-            mcpBindingSummaries: components["schemas"]["SessionMcpBindingSummaryModel"][];
-            /** Localstdiocandidates */
-            localStdioCandidates: components["schemas"]["LocalStdioCandidateModel"][];
-            /** Pluginpackages */
-            pluginPackages?: components["schemas"]["PluginPackageModel"][];
-            /** Warnings */
-            warnings: components["schemas"]["CloudMcpMaterializationWarningModel"][];
-        };
         /** MaterializeTargetConfigRequest */
         MaterializeTargetConfigRequest: {
             /**
@@ -4723,8 +4815,6 @@ export interface components {
             gitRepoName: string;
             /** Workspaceroot */
             workspaceRoot?: string | null;
-            /** Mcpconnectionids */
-            mcpConnectionIds?: string[] | null;
             /**
              * Includeagentcredentials
              * @default true
@@ -5058,6 +5148,28 @@ export interface components {
             } | null;
             /** Enabled */
             enabled?: boolean | null;
+            /** Publictoorg */
+            publicToOrg?: boolean | null;
+            /** Publicorganizationid */
+            publicOrganizationId?: string | null;
+        };
+        /** PatchPluginConfiguredItemRequest */
+        PatchPluginConfiguredItemRequest: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Publictoorg */
+            publicToOrg?: boolean | null;
+            /** Publicorganizationid */
+            publicOrganizationId?: string | null;
+        };
+        /** PatchSkillConfiguredItemRequest */
+        PatchSkillConfiguredItemRequest: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Publictoorg */
+            publicToOrg?: boolean | null;
+            /** Publicorganizationid */
+            publicOrganizationId?: string | null;
         };
         /**
          * PendingTokenRequest
@@ -5086,6 +5198,40 @@ export interface components {
             usageMinutes: number;
             /** Probillingenabled */
             proBillingEnabled: boolean;
+        };
+        /** PluginConfiguredItemResponse */
+        PluginConfiguredItemResponse: {
+            /** Id */
+            id: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Owneruserid */
+            ownerUserId?: string | null;
+            /** Organizationid */
+            organizationId?: string | null;
+            /** Pluginid */
+            pluginId: string;
+            /** Pluginversion */
+            pluginVersion?: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Publictoorg */
+            publicToOrg: boolean;
+            /** Publicorganizationid */
+            publicOrganizationId?: string | null;
+            /** Publicstatus */
+            publicStatus: string;
+            /** Configversion */
+            configVersion: number;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** PluginConfiguredItemsResponse */
+        PluginConfiguredItemsResponse: {
+            /** Plugins */
+            plugins: components["schemas"]["PluginConfiguredItemResponse"][];
         };
         /** PluginPackageModel */
         PluginPackageModel: {
@@ -5167,6 +5313,14 @@ export interface components {
             /** Content */
             content: string;
         };
+        /** PublicizeCloudMcpConnectionRequest */
+        PublicizeCloudMcpConnectionRequest: {
+            /**
+             * Organizationid
+             * Format: uuid
+             */
+            organizationId: string;
+        };
         /** PutCloudMcpSecretAuthRequest */
         PutCloudMcpSecretAuthRequest: {
             /** Secretfields */
@@ -5190,6 +5344,14 @@ export interface components {
              * @default refresh_token
              */
             grant_type: string;
+        };
+        /** RefreshRuntimeConfigRequest */
+        RefreshRuntimeConfigRequest: {
+            /**
+             * Reason
+             * @default manual_refresh
+             */
+            reason: string;
         };
         /** RepoBranchesResponse */
         RepoBranchesResponse: {
@@ -5261,6 +5423,95 @@ export interface components {
             commandRunId?: string | null;
             /** Status */
             status: string;
+        };
+        /** RuntimeConfigArtifactRefModel */
+        RuntimeConfigArtifactRefModel: {
+            /** Hash */
+            hash: string;
+            /** Contenttype */
+            contentType: string;
+            /** Bytesize */
+            byteSize: number;
+            /** Sourceref */
+            sourceRef?: string | null;
+            /** Resourceid */
+            resourceId?: string | null;
+            /** Displayname */
+            displayName?: string | null;
+        };
+        /** RuntimeConfigArtifactResponse */
+        RuntimeConfigArtifactResponse: {
+            /** Hash */
+            hash: string;
+            /** Contenttype */
+            contentType: string;
+            /** Bytesize */
+            byteSize: number;
+            /** Sourceref */
+            sourceRef?: string | null;
+            /** Resourceid */
+            resourceId?: string | null;
+            /** Displayname */
+            displayName?: string | null;
+            /** Content */
+            content: string;
+        };
+        /** RuntimeConfigCredentialValueModel */
+        RuntimeConfigCredentialValueModel: {
+            /** Credentialref */
+            credentialRef: string;
+            /** Value */
+            value: string;
+        };
+        /** RuntimeConfigMaterializationFragment */
+        RuntimeConfigMaterializationFragment: {
+            /** Revisionid */
+            revisionId: string;
+            /** Sandboxprofileid */
+            sandboxProfileId: string;
+            /** Targetid */
+            targetId?: string | null;
+            /** Sequence */
+            sequence: number;
+            /** Contenthash */
+            contentHash: string;
+            /** Manifest */
+            manifest: {
+                [key: string]: unknown;
+            };
+            /** Artifactrefs */
+            artifactRefs?: components["schemas"]["RuntimeConfigArtifactRefModel"][];
+            /** Credentialrefs */
+            credentialRefs?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** RuntimeConfigRevisionModel */
+        RuntimeConfigRevisionModel: {
+            /** Revisionid */
+            revisionId: string;
+            /** Sandboxprofileid */
+            sandboxProfileId: string;
+            /** Sequence */
+            sequence: number;
+            /** Contenthash */
+            contentHash: string;
+            /** Createdat */
+            createdAt: string;
+        };
+        /** RuntimeConfigStatusResponse */
+        RuntimeConfigStatusResponse: {
+            /** Sandboxprofileid */
+            sandboxProfileId: string;
+            currentRevision?: components["schemas"]["RuntimeConfigRevisionModel"] | null;
+            /** Manifest */
+            manifest?: {
+                [key: string]: unknown;
+            } | null;
+            /** Warnings */
+            warnings?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** SafeStopCheckResponse */
         SafeStopCheckResponse: {
@@ -5463,81 +5714,6 @@ export interface components {
              */
             forceRestart: boolean;
         };
-        /** SessionMcpBindingSummaryModel */
-        SessionMcpBindingSummaryModel: {
-            /** Id */
-            id: string;
-            /** Servername */
-            serverName: string;
-            /** Displayname */
-            displayName?: string | null;
-            /**
-             * Transport
-             * @enum {string}
-             */
-            transport: "http" | "stdio";
-            /**
-             * Outcome
-             * @enum {string}
-             */
-            outcome: "applied" | "not_applied";
-            /** Reason */
-            reason?: ("missing_secret" | "needs_reconnect" | "unsupported_target" | "workspace_path_unresolved" | "policy_disabled" | "resolver_error" | "invalid_settings") | null;
-        };
-        /** SessionMcpEnvVarModel */
-        SessionMcpEnvVarModel: {
-            /** Name */
-            name: string;
-            /** Value */
-            value: string;
-        };
-        /** SessionMcpHeaderModel */
-        SessionMcpHeaderModel: {
-            /** Name */
-            name: string;
-            /** Value */
-            value: string;
-        };
-        /** SessionMcpHttpServerModel */
-        SessionMcpHttpServerModel: {
-            /**
-             * Transport
-             * @default http
-             * @constant
-             */
-            transport: "http";
-            /** Connectionid */
-            connectionId: string;
-            /** Catalogentryid */
-            catalogEntryId?: string | null;
-            /** Servername */
-            serverName: string;
-            /** Url */
-            url: string;
-            /** Headers */
-            headers?: components["schemas"]["SessionMcpHeaderModel"][];
-        };
-        /** SessionMcpStdioServerModel */
-        SessionMcpStdioServerModel: {
-            /**
-             * Transport
-             * @default stdio
-             * @constant
-             */
-            transport: "stdio";
-            /** Connectionid */
-            connectionId: string;
-            /** Catalogentryid */
-            catalogEntryId?: string | null;
-            /** Servername */
-            serverName: string;
-            /** Command */
-            command: string;
-            /** Args */
-            args?: string[];
-            /** Env */
-            env?: components["schemas"]["SessionMcpEnvVarModel"][];
-        };
         /** SetDesiredVersionsRequest */
         SetDesiredVersionsRequest: {
             /** Updatechannel */
@@ -5560,6 +5736,46 @@ export interface components {
              * Format: uuid
              */
             organizationId: string;
+        };
+        /** SkillConfiguredItemResponse */
+        SkillConfiguredItemResponse: {
+            /** Id */
+            id: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Owneruserid */
+            ownerUserId?: string | null;
+            /** Organizationid */
+            organizationId?: string | null;
+            /** Skillsourcekind */
+            skillSourceKind: string;
+            /** Skillid */
+            skillId: string;
+            /** Skillversion */
+            skillVersion?: string | null;
+            /** Pluginid */
+            pluginId: string;
+            /** Pluginversion */
+            pluginVersion?: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Publictoorg */
+            publicToOrg: boolean;
+            /** Publicorganizationid */
+            publicOrganizationId?: string | null;
+            /** Publicstatus */
+            publicStatus: string;
+            /** Configversion */
+            configVersion: number;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** SkillConfiguredItemsResponse */
+        SkillConfiguredItemsResponse: {
+            /** Skills */
+            skills: components["schemas"]["SkillConfiguredItemResponse"][];
         };
         /** StartAuthRequest */
         StartAuthRequest: {
@@ -5710,15 +5926,6 @@ export interface components {
             /** Contentbase64 */
             contentBase64: string;
         };
-        /** SyncCloudMcpConnectionRequest */
-        SyncCloudMcpConnectionRequest: {
-            /** Catalogentryid */
-            catalogEntryId: string;
-            /** Secretfields */
-            secretFields: {
-                [key: string]: string;
-            };
-        };
         /** SyncCodexCredentialRequest */
         SyncCodexCredentialRequest: {
             /**
@@ -5814,14 +6021,7 @@ export interface components {
                     [key: string]: unknown;
                 };
             };
-            /** Mcp */
-            mcp?: {
-                [key: string]: unknown;
-            } | null;
-            /** Skills */
-            skills?: {
-                [key: string]: unknown;
-            }[];
+            runtimeConfig?: components["schemas"]["RuntimeConfigMaterializationFragment"] | null;
             /** Readinessrequirements */
             readinessRequirements?: {
                 [key: string]: unknown;
@@ -6585,6 +6785,43 @@ export interface components {
             targetId: string;
             /** Workerid */
             workerId: string;
+            /** Updated */
+            updated: boolean;
+        };
+        /** WorkerRuntimeConfigCredentialMaterializationRequest */
+        WorkerRuntimeConfigCredentialMaterializationRequest: {
+            /** Credentialrefs */
+            credentialRefs?: string[];
+        };
+        /** WorkerRuntimeConfigCredentialMaterializationResponse */
+        WorkerRuntimeConfigCredentialMaterializationResponse: {
+            /** Credentials */
+            credentials?: components["schemas"]["RuntimeConfigCredentialValueModel"][];
+            /** Missingcredentialrefs */
+            missingCredentialRefs?: string[];
+        };
+        /** WorkerRuntimeConfigStatusRequest */
+        WorkerRuntimeConfigStatusRequest: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "materializing" | "applied" | "failed";
+            /** Missingartifacts */
+            missingArtifacts?: string[];
+            /** Missingcredentials */
+            missingCredentials?: string[];
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+        };
+        /** WorkerRuntimeConfigStatusResponse */
+        WorkerRuntimeConfigStatusResponse: {
+            /** Revisionid */
+            revisionId: string;
+            /** Status */
+            status: string;
             /** Updated */
             updated: boolean;
         };
@@ -9475,7 +9712,7 @@ export interface operations {
             };
         };
     };
-    put_cloud_mcp_connection_secret_auth_endpoint_v1_cloud_mcp_connections__connection_id__auth_secret_put: {
+    publicize_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__publicize_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -9486,7 +9723,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PutCloudMcpSecretAuthRequest"];
+                "application/json": components["schemas"]["PublicizeCloudMcpConnectionRequest"];
             };
         };
         responses: {
@@ -9510,62 +9747,7 @@ export interface operations {
             };
         };
     };
-    list_cloud_mcp_connection_statuses_endpoint_v1_cloud_mcp_connections_statuses_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudMcpConnectionSyncStatus"][];
-                };
-            };
-        };
-    };
-    sync_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                connection_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SyncCloudMcpConnectionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OkResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_legacy_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__delete: {
+    unpublicize_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__unpublicize_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -9582,7 +9764,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OkResponse"];
+                    "application/json": components["schemas"]["CloudMcpConnectionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -9596,16 +9778,18 @@ export interface operations {
             };
         };
     };
-    materialize_cloud_mcp_endpoint_v1_cloud_mcp_materialize_post: {
+    put_cloud_mcp_connection_secret_auth_endpoint_v1_cloud_mcp_connections__connection_id__auth_secret_put: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                connection_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MaterializeCloudMcpRequest"];
+                "application/json": components["schemas"]["PutCloudMcpSecretAuthRequest"];
             };
         };
         responses: {
@@ -9615,7 +9799,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MaterializeCloudMcpResponse"];
+                    "application/json": components["schemas"]["CloudMcpConnectionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -9742,6 +9926,242 @@ export interface operations {
                 };
                 content: {
                     "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_configured_plugins_endpoint_v1_cloud_plugins_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginConfiguredItemsResponse"];
+                };
+            };
+        };
+    };
+    install_plugin_endpoint_v1_cloud_plugins__plugin_id__install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginConfiguredItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    uninstall_plugin_endpoint_v1_cloud_plugins__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_configured_plugin_endpoint_v1_cloud_plugins__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchPluginConfiguredItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginConfiguredItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_configured_skills_endpoint_v1_cloud_skills_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillConfiguredItemsResponse"];
+                };
+            };
+        };
+    };
+    create_configured_skill_endpoint_v1_cloud_skills_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSkillConfiguredItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillConfiguredItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_configured_skill_endpoint_v1_cloud_skills__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_configured_skill_endpoint_v1_cloud_skills__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchSkillConfiguredItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillConfiguredItemResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10494,6 +10914,72 @@ export interface operations {
             };
         };
     };
+    get_runtime_config_status_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__runtime_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeConfigStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_runtime_config_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__runtime_config_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshRuntimeConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeConfigStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     worker_agent_auth_materialization_endpoint_v1_cloud_worker_agent_auth_configs__sandbox_profile_id__materialization_get: {
         parameters: {
             query: {
@@ -10555,6 +11041,147 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerAgentAuthStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_runtime_config_materialization_endpoint_v1_cloud_worker_runtime_configs__revision_id__materialization_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeConfigMaterializationFragment"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_runtime_config_status_endpoint_v1_cloud_worker_runtime_configs__revision_id__status_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerRuntimeConfigStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerRuntimeConfigStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_runtime_config_credentials_endpoint_v1_cloud_worker_runtime_configs__revision_id__credentials_materialize_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerRuntimeConfigCredentialMaterializationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerRuntimeConfigCredentialMaterializationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_runtime_config_artifact_endpoint_v1_cloud_worker_runtime_configs__revision_id__artifacts__artifact_hash__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                revision_id: string;
+                artifact_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeConfigArtifactResponse"];
                 };
             };
             /** @description Validation Error */

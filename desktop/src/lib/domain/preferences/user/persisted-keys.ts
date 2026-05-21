@@ -15,7 +15,6 @@ const USER_PREFERENCE_KEYS = [
   "turnEndSoundEnabled",
   "turnEndSoundId",
   "transparentChromeEnabled",
-  "pluginsInCodingSessionsEnabled",
   "subagentsEnabled",
   "coworkWorkspaceDelegationEnabled",
   "cloudRuntimeInputSyncEnabled",
@@ -29,7 +28,6 @@ const USER_PREFERENCE_KEY_SET = new Set<string>(USER_PREFERENCE_KEYS);
 
 const MIGRATED_USER_PREFERENCE_KEYS = [
   "defaultChatModelId",
-  "powersInCodingSessionsEnabled",
 ] as const;
 
 const MIGRATED_USER_PREFERENCE_KEY_SET = new Set<string>(MIGRATED_USER_PREFERENCE_KEYS);
@@ -37,6 +35,8 @@ const MIGRATED_USER_PREFERENCE_KEY_SET = new Set<string>(MIGRATED_USER_PREFERENC
 const DEPRECATED_USER_PREFERENCE_KEYS = [
   "onboardingCompletedVersion",
   "onboardingPrimaryGoalId",
+  "pluginsInCodingSessionsEnabled",
+  "powersInCodingSessionsEnabled",
 ] as const;
 
 const DEPRECATED_USER_PREFERENCE_KEY_SET = new Set<string>(DEPRECATED_USER_PREFERENCE_KEYS);
@@ -45,7 +45,6 @@ export type LegacyUserPreferencesInput =
   Omit<Partial<UserPreferences>, "defaultChatModelIdByAgentKind"> & {
     defaultChatModelId?: unknown;
     defaultChatModelIdByAgentKind?: unknown;
-    powersInCodingSessionsEnabled?: unknown;
   };
 
 export function pickLegacyUserPreferencesInput(
