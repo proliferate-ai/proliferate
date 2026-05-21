@@ -1,7 +1,7 @@
 """Add managed sandbox profile foundation.
 
 Revision ID: f0a1b2c3d4e5
-Revises: e7f8a9b0c1d2
+Revises: b0c1d2e3f4a5
 Create Date: 2026-05-20 12:00:00.000000
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "f0a1b2c3d4e5"
-down_revision: str | None = "e7f8a9b0c1d2"
+down_revision: str | None = "b0c1d2e3f4a5"
 branch_labels: str | None = None
 depends_on: str | None = None
 
