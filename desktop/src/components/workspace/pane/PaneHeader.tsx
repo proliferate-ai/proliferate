@@ -17,7 +17,7 @@ export function PaneHeader({
   return (
     <div
       className={twMerge(
-        "z-20 flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-sidebar-border/70 bg-sidebar px-2 text-sidebar-foreground",
+        "z-20 flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-sidebar-border/70 px-2 text-sidebar-foreground",
         className,
       )}
     >

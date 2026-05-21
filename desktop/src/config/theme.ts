@@ -169,7 +169,7 @@ export function getTerminalTheme(): Record<string, string> {
   const s = getComputedStyle(document.documentElement);
   const v = (name: string) => s.getPropertyValue(name).trim();
   return {
-    background: v("--color-background"),
+    background: v("--color-sidebar"),
     foreground: v("--color-foreground"),
     cursor: v("--color-foreground"),
     selectionBackground: v("--color-input"),
