@@ -4,6 +4,7 @@ export * from "./hooks/automations.js";
 export * from "./hooks/agent-auth.js";
 export * from "./hooks/commands.js";
 export * from "./hooks/config.js";
+export * from "./hooks/claims.js";
 export * from "./hooks/events.js";
 export * from "./hooks/live.js";
 export * from "./hooks/organizations.js";

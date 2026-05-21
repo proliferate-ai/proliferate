@@ -16,6 +16,38 @@ export type CloudWorkspaceVisibility =
   | "claimed"
   | "archived";
 
+export type CloudWorkspaceExposureState =
+  | "untracked"
+  | "tracked"
+  | "live"
+  | "paused"
+  | "stale"
+  | "revoked";
+
+export type CloudWorkspaceSandboxType =
+  | "local"
+  | "ssh"
+  | "managed_personal"
+  | "managed_shared"
+  | "self_hosted";
+
+export interface CloudWorkspaceExposureSummary {
+  id: string;
+  visibility: CloudWorkspaceVisibility;
+  claimedByUserId?: string | null;
+  defaultProjectionLevel: string;
+  commandable: boolean;
+  status: "active" | "paused" | "stale" | "revoked";
+}
+
+export interface CloudWorkspaceLastSessionSummary {
+  sessionId: string;
+  title?: string | null;
+  status: string;
+  lastEventAt?: string | null;
+  preview?: string | null;
+}
+
 export type CloudRuntimeStatus =
   | "pending"
   | "provisioning"
@@ -84,6 +116,11 @@ export type CloudWorkspaceSummary = Omit<
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
   visibility: CloudWorkspaceVisibility;
+  exposure?: CloudWorkspaceExposureSummary | null;
+  exposureState?: CloudWorkspaceExposureState;
+  sandboxType?: CloudWorkspaceSandboxType;
+  lastActivityAt?: string | null;
+  lastSessionSummary?: CloudWorkspaceLastSessionSummary | null;
 };
 export type CloudWorkspaceDetail = Omit<
   components["schemas"]["WorkspaceDetail"],
@@ -100,6 +137,11 @@ export type CloudWorkspaceDetail = Omit<
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
   visibility: CloudWorkspaceVisibility;
+  exposure?: CloudWorkspaceExposureSummary | null;
+  exposureState?: CloudWorkspaceExposureState;
+  sandboxType?: CloudWorkspaceSandboxType;
+  lastActivityAt?: string | null;
+  lastSessionSummary?: CloudWorkspaceLastSessionSummary | null;
 };
 export type ClaimWorkspaceRequest = components["schemas"]["ClaimWorkspaceRequest"];
 export type ClaimWorkspaceResponse = components["schemas"]["ClaimWorkspaceResponse"];

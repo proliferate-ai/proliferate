@@ -38,7 +38,9 @@ router = APIRouter()
 async def list_cloud_workspaces_endpoint(
     owner_scope: Literal["personal", "organization"] = Query("personal", alias="ownerScope"),
     organization_id: UUID | None = Query(default=None, alias="organizationId"),
-    scope: Literal["my", "unclaimed", "claimable", "org-all"] | None = Query(default=None),
+    scope: Literal["my", "unclaimed", "claimable", "org-all", "exposed"] | None = Query(
+        default=None,
+    ),
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[WorkspaceSummary]:
