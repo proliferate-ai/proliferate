@@ -12,6 +12,7 @@ from proliferate.db.store.cloud_mobility import (
     complete_cloud_workspace_handoff_cleanup,
     fail_cloud_workspace_handoff_op,
     get_cleanup_item_for_handoff,
+    list_cleanup_items_for_handoff,
     update_cleanup_item_status,
 )
 from proliferate.db.store.cloud_sync.exposures import archive_workspace_exposure
@@ -34,6 +35,30 @@ SERVER_CLEANUP_ITEM_KINDS: frozenset[str] = frozenset(
         "worker_projection_cursor",
     }
 )
+_CLEANUP_KIND_ORDER: tuple[str, ...] = (
+    "anyharness_workspace",
+    "cloud_session_projection",
+    "cloud_transcript_projection",
+    "cloud_exposure",
+    "worker_projection_cursor",
+    "cloud_workspace",
+)
+_CLEANUP_KIND_RANK = {kind: index for index, kind in enumerate(_CLEANUP_KIND_ORDER)}
+
+
+async def _earlier_cleanup_items_completed(
+    db: AsyncSession,
+    *,
+    handoff_op_id: UUID,
+    item_kind: str,
+) -> bool:
+    item_rank = _CLEANUP_KIND_RANK.get(item_kind, len(_CLEANUP_KIND_ORDER))
+    for item in await list_cleanup_items_for_handoff(db, handoff_op_id=handoff_op_id):
+        if _CLEANUP_KIND_RANK.get(item.item_kind, len(_CLEANUP_KIND_ORDER)) >= item_rank:
+            continue
+        if item.status != "completed":
+            return False
+    return True
 
 
 async def execute_server_cleanup_item(
@@ -49,6 +74,12 @@ async def execute_server_cleanup_item(
         lock=True,
     )
     if item is None or item.item_kind not in SERVER_CLEANUP_ITEM_KINDS:
+        return
+    if not await _earlier_cleanup_items_completed(
+        db,
+        handoff_op_id=handoff_op_id,
+        item_kind=item.item_kind,
+    ):
         return
 
     await update_cleanup_item_status(db, cleanup_item=item, status="in_progress")

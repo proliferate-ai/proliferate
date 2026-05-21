@@ -123,9 +123,12 @@ function inferLifecycle(
     mobilityLifecycle === "local_active"
     || mobilityLifecycle === "moving_to_cloud"
     || mobilityLifecycle === "cloud_active"
+    || mobilityLifecycle === "shared_cloud_active"
+    || mobilityLifecycle === "ssh_active"
     || mobilityLifecycle === "moving_to_local"
     || mobilityLifecycle === "handoff_failed"
     || mobilityLifecycle === "cleanup_failed"
+    || mobilityLifecycle === "repair_required"
     || mobilityLifecycle === "cloud_lost"
   ) {
     return mobilityLifecycle;
@@ -144,6 +147,22 @@ function inferLifecycle(
   }
 
   return "handoff_failed";
+}
+
+function effectiveOwnerFromMobilityOwner(
+  owner: string | null | undefined,
+): "local" | "cloud" | null {
+  switch (owner) {
+    case "local":
+      return "local";
+    case "cloud":
+    case "personal_cloud":
+    case "shared_cloud":
+    case "ssh":
+      return "cloud";
+    default:
+      return null;
+  }
 }
 
 export function buildLogicalWorkspaces(args: {
@@ -238,9 +257,7 @@ export function buildLogicalWorkspaces(args: {
         entry.cloudWorkspace,
         entry.mobilityWorkspace,
         args.currentSelectionId ?? null,
-        entry.mobilityWorkspace?.owner === "local" || entry.mobilityWorkspace?.owner === "cloud"
-          ? entry.mobilityWorkspace.owner
-          : null,
+        effectiveOwnerFromMobilityOwner(entry.mobilityWorkspace?.owner),
       );
       const repoKey = entry.localWorkspace
         ? localWorkspaceGroupKey(entry.localWorkspace)
@@ -309,7 +326,9 @@ export function buildLogicalWorkspaces(args: {
         cloudWorkspace: entry.cloudWorkspace,
         mobilityWorkspace: entry.mobilityWorkspace,
         preferredMaterializationId: materialization.workspaceId,
-        effectiveOwner: entry.mobilityWorkspace?.owner === "cloud" ? "cloud" : materialization.owner,
+        effectiveOwner:
+          effectiveOwnerFromMobilityOwner(entry.mobilityWorkspace?.owner)
+          ?? materialization.owner,
         lifecycle: inferLifecycle(
           entry.localWorkspace,
           entry.cloudWorkspace,
