@@ -1433,6 +1433,7 @@ mark.codex-thread-find-active {
 .composer-diff-simple-line {
   --codex-diffs-surface: var(--color-diff-code-surface);
   --codex-diffs-header-surface: var(--codex-diffs-surface);
+  --codex-diffs-empty-surface: color-mix(in srgb, var(--codex-diffs-surface) 96%, var(--color-foreground));
   --diffs-bg: var(--codex-diffs-surface);
   background-color: var(--codex-diffs-surface);
   scrollbar-color: var(--color-scrollbar-thumb) transparent;
@@ -1467,6 +1468,14 @@ mark.codex-thread-find-active {
   background-color: var(--diffs-bg-separator-override);
 }
 
+.composer-diff-simple-line .diff-content-cell[data-empty-side] {
+  background-color: var(--codex-diffs-empty-surface);
+}
+
+.composer-diff-simple-line .diff-gutter-cell[data-empty-side] {
+  background-color: var(--codex-diffs-context-number);
+}
+
 .composer-diff-simple-line .diff-gutter-cell[data-line-type="context"] {
   background-color: var(--codex-diffs-context-number);
   color: color-mix(in srgb, var(--diffs-fg) 35%, transparent);
@@ -1484,7 +1493,14 @@ mark.codex-thread-find-active {
 
 .composer-diff-simple-line .diff-gutter-cell[data-line-type="change-addition"],
 .composer-diff-simple-line .diff-gutter-cell[data-line-type="change-deletion"] {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 10;
+}
+
+.composer-diff-simple-line [data-line-number-content] {
   position: relative;
+  z-index: 1;
 }
 
 .composer-diff-simple-line .diff-gutter-cell[data-line-type="change-addition"]::before,

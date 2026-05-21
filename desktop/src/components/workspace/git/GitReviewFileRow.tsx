@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, type CSSProperties, type ReactNode } from "react";
 import {
   type AnyHarnessQueryTimingOptions,
   useGitDiffQuery,
@@ -6,7 +6,18 @@ import {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
 import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
-import { Minus, Plus } from "@/components/ui/icons";
+import {
+  CircleAlert,
+  FileCode,
+  FileIcon,
+  Minus,
+  Plus,
+  RefreshCw,
+} from "@/components/ui/icons";
+import {
+  GitReviewEmptyState,
+  GitReviewEmptyStateAction,
+} from "./GitReviewEmptyState";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
@@ -18,6 +29,10 @@ import type {
 
 type StagePath = (path: string) => Promise<unknown>;
 type OpenFile = (path: string) => Promise<void>;
+
+const SIDEBAR_DIFF_SURFACE_STYLE = {
+  "--codex-diffs-surface-override": "var(--color-diff-surface)",
+} as CSSProperties;
 
 export function GitReviewFileRow({
   id,
@@ -102,14 +117,13 @@ export function GitReviewFileRow({
   const waitingForDiffPermit = Boolean(
     currentDiff
     && isRuntimeReady
-    && !collapsed
     && metadataPolicy?.canFetchInline
     && !fetchDiff
     && !patch
     && !diffQuery.data
     && !diffQuery.isError,
   );
-  const emptyDiffMessage = formatEmptyDiffMessage({
+  const emptyDiffState = formatEmptyDiffState({
     binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
     truncated: Boolean(diffQuery.data?.truncated && !patch),
   });
@@ -129,7 +143,7 @@ export function GitReviewFileRow({
     && !patch
     && !diffQuery.isLoading
     && !diffErrorMessage
-    && !emptyDiffMessage
+    && !emptyDiffState
   ) {
     return null;
   }
@@ -137,7 +151,8 @@ export function GitReviewFileRow({
   return (
     <div
       id={id}
-      className="[--codex-diffs-surface-override:var(--color-diff-surface)]"
+      data-review-path={file.path}
+      style={SIDEBAR_DIFF_SURFACE_STYLE}
     >
       <FileDiffCard
         filePath={file.displayPath}
@@ -166,25 +181,28 @@ export function GitReviewFileRow({
               }}
               disabled={!isRuntimeReady}
               aria-label={shouldUnstage ? `Unstage ${file.displayPath}` : `Stage ${file.displayPath}`}
-              className={`size-5 rounded-full border-0 bg-transparent p-0 ${
+              className={`size-6 rounded-full border-0 bg-transparent p-0 ${
                 shouldUnstage
                   ? "text-git-green hover:bg-sidebar-accent"
                   : "text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
               }`}
             >
               {shouldUnstage ? (
-                <Minus className="size-3" />
+                <Minus className="size-3.5" />
               ) : (
-                <Plus className="size-3" />
+                <Plus className="size-3.5" />
               )}
             </Button>
           </Tooltip>
         )}
       >
         {!currentDiff ? (
-          <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
-            No current diff against base
-          </p>
+          <GitReviewInlineEmptyState
+            icon={<FileIcon className="size-3.5" />}
+            title="No current diff"
+            description="This file was touched, but there are no current changes to review against the selected base."
+            onOpenFile={() => void openFile(file.path)}
+          />
         ) : !metadataPolicy?.canFetchInline ? (
           <DiffDisplayPolicyPlaceholder
             title={metadataPolicy?.placeholderTitle ?? "Too large to render inline"}
@@ -192,17 +210,24 @@ export function GitReviewFileRow({
             onOpenFile={() => void openFile(file.path)}
           />
         ) : waitingForDiffPermit ? (
-          <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
-            Waiting to load diff
-          </p>
+          <GitReviewInlineEmptyState
+            icon={<RefreshCw className="size-3.5" />}
+            title="Waiting to load diff"
+            description="This file will load when review capacity is available."
+          />
         ) : diffQuery.isLoading ? (
-          <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
-            Loading diff
-          </p>
+          <GitReviewInlineEmptyState
+            icon={<RefreshCw className="size-3.5 animate-spin" />}
+            title="Loading diff"
+            description="Fetching the latest file patch."
+          />
         ) : diffErrorMessage ? (
-          <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
-            Diff unavailable: {diffErrorMessage}
-          </p>
+          <GitReviewInlineEmptyState
+            icon={<CircleAlert className="size-3.5" />}
+            title="Diff unavailable"
+            description={diffErrorMessage}
+            onOpenFile={() => void openFile(file.path)}
+          />
         ) : patch ? (
           patchPolicy && !patchPolicy.canRenderInline ? (
             <DiffDisplayPolicyPlaceholder
@@ -231,10 +256,13 @@ export function GitReviewFileRow({
               ) : null}
             </>
           )
-        ) : emptyDiffMessage ? (
-          <p className="px-3 py-5 text-center text-xs text-sidebar-muted-foreground">
-            {emptyDiffMessage}
-          </p>
+        ) : emptyDiffState ? (
+          <GitReviewInlineEmptyState
+            icon={emptyDiffState.icon}
+            title={emptyDiffState.title}
+            description={emptyDiffState.description}
+            onOpenFile={() => void openFile(file.path)}
+          />
         ) : null}
       </FileDiffCard>
     </div>
@@ -311,21 +339,12 @@ function DiffDisplayPolicyPlaceholder({
   onOpenFile: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 px-3 py-4 text-xs text-sidebar-muted-foreground">
-      <div className="min-w-0 flex-1">
-        <p className="font-medium text-sidebar-foreground">{title}</p>
-        <p className="mt-0.5 leading-5">{description}</p>
-      </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={onOpenFile}
-        className="h-7 shrink-0 rounded-md border border-sidebar-border/70 px-2.5 text-xs text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-      >
-        Open file
-      </Button>
-    </div>
+    <GitReviewInlineEmptyState
+      icon={<CircleAlert className="size-3.5" />}
+      title={title}
+      description={description}
+      onOpenFile={onOpenFile}
+    />
   );
 }
 
@@ -339,18 +358,56 @@ function formatDiffErrorMessage(error: unknown): string {
   return "Failed to load diff";
 }
 
-function formatEmptyDiffMessage({
+function GitReviewInlineEmptyState({
+  icon,
+  title,
+  description,
+  onOpenFile,
+}: {
+  icon: ReactNode;
+  title: string;
+  description?: string;
+  onOpenFile?: () => void;
+}) {
+  return (
+    <GitReviewEmptyState
+      variant="inline"
+      icon={icon}
+      title={title}
+      description={description}
+      action={onOpenFile ? (
+        <GitReviewEmptyStateAction onClick={onOpenFile}>
+          Open file
+        </GitReviewEmptyStateAction>
+      ) : null}
+    />
+  );
+}
+
+function formatEmptyDiffState({
   binary,
   truncated,
 }: {
   binary: boolean;
   truncated: boolean;
-}): string | null {
+}): {
+  title: string;
+  description: string;
+  icon: ReactNode;
+} | null {
   if (binary) {
-    return "Binary file changed";
+    return {
+      title: "Binary file changed",
+      description: "Open the file to inspect this change.",
+      icon: <FileCode className="size-3.5" />,
+    };
   }
   if (truncated) {
-    return "Diff unavailable because it is too large";
+    return {
+      title: "Diff too large",
+      description: "Open the file to inspect the full change.",
+      icon: <CircleAlert className="size-3.5" />,
+    };
   }
   return null;
 }

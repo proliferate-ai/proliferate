@@ -3,11 +3,14 @@ import {
   useStageGitPathsMutation,
   useUnstageGitPathsMutation,
 } from "@anyharness/sdk-react";
+import {
+  GitReviewEmptyState,
+  GitReviewEmptyStateAction,
+} from "./GitReviewEmptyState";
 import { GitPanelHeader } from "./GitPanelHeader";
 import { GitReviewFileRow } from "./GitReviewFileRow";
 import { GitReviewFileTree } from "./GitReviewFileTree";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { CheckCircleFilled, ChevronRight, GitBranchIcon, RefreshCw } from "@/components/ui/icons";
 import { PaneSideOverlay } from "@/components/workspace/pane/PaneSideOverlay";
 import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
@@ -34,7 +37,6 @@ import {
 } from "@/lib/domain/workspaces/changes/git-review-entries";
 import { useGitPanelUiStore } from "@/stores/editor/git-panel-ui-store";
 
-const INITIAL_EXPANDED_DIFF_FILE_LIMIT = 3;
 const EMPTY_COLLAPSED_FILE_KEYS = new Set<string>();
 
 export function GitPanel() {
@@ -62,7 +64,7 @@ function GitPanelContent({
   const [changesFilter, setChangesFilter] = useState<GitPanelMode>("unstaged");
   const [selectedBaseRef, setSelectedBaseRef] = useState<string | null>(null);
   const [layout, setLayout] = useState<"unified" | "split">("unified");
-  const [wrapLongLines, setWrapLongLines] = useState(true);
+  const [wrapLongLines, setWrapLongLines] = useState(false);
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<GitPanelReviewScope>>(new Set());
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
@@ -93,42 +95,25 @@ function GitPanelContent({
   });
   const stageMutation = useStageGitPathsMutation({ workspaceId: activeWorkspaceId });
   const unstageMutation = useUnstageGitPathsMutation({ workspaceId: activeWorkspaceId });
+  const reviewEntries = useMemo(
+    () => buildGitReviewFileEntries(sections),
+    [sections],
+  );
+  const hasReviewEntries = reviewEntries.length > 0;
   const canShowFileTree = fileTreeOpen
     && !isLoading
     && !errorMessage
     && !runtimeBlockedReason
-    && sections.length > 0;
-
-  const reviewEntries = useMemo(
-    () => buildGitReviewFileEntries(sections),
+    && hasReviewEntries;
+  const aggregateStats = useMemo(
+    () => summarizeGitPanelSectionStats(sections),
     [sections],
   );
   const autoCollapsedFiles = useMemo<ReadonlySet<string>>(() => {
     if (fileCollapseTouched) {
       return EMPTY_COLLAPSED_FILE_KEYS;
     }
-    const collapsedKeys = reviewEntries.flatMap((entry, index) => {
-      const currentDiff = entry.file.currentDiff;
-      const displayPolicy = currentDiff
-        ? resolveDiffDisplayPolicy({
-            path: currentDiff.path,
-            additions: currentDiff.additions,
-            deletions: currentDiff.deletions,
-          })
-        : null;
-      const hasKnownChangedLines = currentDiff
-        ? currentDiff.additions + currentDiff.deletions > 0
-        : false;
-      const shouldResolveInline = Boolean(
-        currentDiff
-        && !hasKnownChangedLines
-        && !displayPolicy?.shouldAutoCollapse,
-      );
-      return Boolean(displayPolicy?.shouldAutoCollapse)
-        || (index >= INITIAL_EXPANDED_DIFF_FILE_LIMIT && !shouldResolveInline)
-        ? [entry.key]
-        : [];
-    });
+    const collapsedKeys = reviewEntries.map((entry) => entry.key);
     return collapsedKeys.length === 0
       ? EMPTY_COLLAPSED_FILE_KEYS
       : new Set(collapsedKeys);
@@ -286,6 +271,8 @@ function GitPanelContent({
       <GitPanelHeader
         changesFilter={changesFilter}
         visibleChangedCount={visibleChangedCount}
+        additions={aggregateStats.additions}
+        deletions={aggregateStats.deletions}
         isRuntimeReady={isRuntimeReady}
         branchRefs={branchRefs}
         baseRef={baseRef}
@@ -303,79 +290,87 @@ function GitPanelContent({
       />
 
       <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-        <AutoHideScrollArea
-          className="h-full min-h-0 min-w-0"
-          viewportClassName="px-2 pb-2"
-          contentClassName="pt-2"
+        <div
+          id="review-diffs-collapsed"
+          data-app-action-review-scroll=""
+          data-thread-find-target="review"
+          className="h-full min-h-0 min-w-0 overflow-y-auto overflow-x-hidden px-2 pb-3"
         >
-          {isLoading && (
-            <div className="space-y-2 px-2 py-4">
-              <div className="h-3 w-32 animate-pulse rounded bg-sidebar-accent" />
-              <div className="h-3 w-48 animate-pulse rounded bg-sidebar-accent" />
-              <div className="h-3 w-40 animate-pulse rounded bg-sidebar-accent" />
-            </div>
-          )}
-          {errorMessage && (
-            <p className="px-2 py-4 text-xs text-destructive">{errorMessage}</p>
-          )}
-          {!errorMessage && runtimeBlockedReason && (
-            <p className="px-2 py-4 text-xs text-sidebar-muted-foreground">
-              {runtimeBlockedReason}
-            </p>
-          )}
-          {!isLoading && !errorMessage && !runtimeBlockedReason && sections.length === 0 && (
-            <GitReviewEmptyState
-              mode={changesFilter}
-              baseRef={baseRef}
-              onRefresh={() => void refetch()}
+          <div className="relative flex min-h-full flex-col pt-2">
+            <span
+              aria-hidden="true"
+              data-app-action-review-metrics-probe=""
+              className="pointer-events-none absolute left-0 top-0 size-px opacity-0"
             />
-          )}
+            {isLoading && (
+              <div className="space-y-2 px-2 py-4">
+                <div className="h-3 w-32 animate-pulse rounded bg-sidebar-accent" />
+                <div className="h-3 w-48 animate-pulse rounded bg-sidebar-accent" />
+                <div className="h-3 w-40 animate-pulse rounded bg-sidebar-accent" />
+              </div>
+            )}
+            {errorMessage && (
+              <p className="px-2 py-4 text-xs text-destructive">{errorMessage}</p>
+            )}
+            {!errorMessage && runtimeBlockedReason && (
+              <p className="px-2 py-4 text-xs text-sidebar-muted-foreground">
+                {runtimeBlockedReason}
+              </p>
+            )}
+            {!isLoading && !errorMessage && !runtimeBlockedReason && !hasReviewEntries && (
+              <GitReviewNoChangesState
+                mode={changesFilter}
+                baseRef={baseRef}
+                onRefresh={() => void refetch()}
+              />
+            )}
 
-          {!isLoading && !errorMessage && !runtimeBlockedReason && sections.length > 0 && (
-            <div className="flex flex-col gap-2">
-              {diffPolicySummary.total > 0 && (
-                <GitReviewDiffPolicyNotice summary={diffPolicySummary} />
-              )}
-              {sections.map((section) => (
-                <div key={section.scope} className="flex flex-col gap-1.5">
-                  {changesFilter === "working_tree_composite" && (
-                    <GitReviewSectionHeader
-                      section={section}
-                      collapsed={collapsedSections.has(section.scope)}
-                      onToggle={() => toggleSectionCollapsed(section.scope)}
-                    />
-                  )}
-                  {visibleSections.some((visibleSection) => visibleSection.scope === section.scope)
-                    && section.files.map((file) => {
-                      const entry = gitReviewEntryForFile(section.scope, file);
-                      return (
-                        <GitReviewFileRow
-                          key={entry.key}
-                          id={entry.id}
-                          workspaceId={activeWorkspaceId}
-                          sectionScope={section.scope}
-                          file={file}
-                          baseRef={baseRef}
-                          layout={layout}
-                          wrapLongLines={wrapLongLines}
-                          collapsed={effectiveCollapsedFiles.has(entry.key)}
-                          isRuntimeReady={isRuntimeReady}
-                          fetchDiff={permittedDiffFetchKeys.has(entry.key)}
-                          onToggleCollapsed={() => toggleFileCollapsed(entry.key)}
-                          onDiffFetchSettled={() => markDiffFetchSettled(entry.key)}
-                          openFile={openFile}
-                          stagePath={(path) => stageMutation.mutateAsync([path])}
-                          unstagePath={(path) => unstageMutation.mutateAsync([path])}
-                          diffTimingOptions={diffReviewMeasurement.diffTimingOptions}
-                          measurementOperationId={diffReviewMeasurement.operationId}
-                        />
-                      );
-                    })}
-                </div>
-              ))}
-            </div>
-          )}
-        </AutoHideScrollArea>
+            {!isLoading && !errorMessage && !runtimeBlockedReason && hasReviewEntries && (
+              <div className="flex flex-col gap-1.5">
+                {diffPolicySummary.total > 0 && (
+                  <GitReviewDiffPolicyNotice summary={diffPolicySummary} />
+                )}
+                {sections.map((section) => (
+                  <div key={section.scope} className="flex flex-col gap-1">
+                    {changesFilter === "working_tree_composite" && (
+                      <GitReviewSectionHeader
+                        section={section}
+                        collapsed={collapsedSections.has(section.scope)}
+                        onToggle={() => toggleSectionCollapsed(section.scope)}
+                      />
+                    )}
+                    {visibleSections.some((visibleSection) => visibleSection.scope === section.scope)
+                      && section.files.map((file) => {
+                        const entry = gitReviewEntryForFile(section.scope, file);
+                        return (
+                          <GitReviewFileRow
+                            key={entry.key}
+                            id={entry.id}
+                            workspaceId={activeWorkspaceId}
+                            sectionScope={section.scope}
+                            file={file}
+                            baseRef={baseRef}
+                            layout={layout}
+                            wrapLongLines={wrapLongLines}
+                            collapsed={effectiveCollapsedFiles.has(entry.key)}
+                            isRuntimeReady={isRuntimeReady}
+                            fetchDiff={permittedDiffFetchKeys.has(entry.key)}
+                            onToggleCollapsed={() => toggleFileCollapsed(entry.key)}
+                            onDiffFetchSettled={() => markDiffFetchSettled(entry.key)}
+                            openFile={openFile}
+                            stagePath={(path) => stageMutation.mutateAsync([path])}
+                            unstagePath={(path) => unstageMutation.mutateAsync([path])}
+                            diffTimingOptions={diffReviewMeasurement.diffTimingOptions}
+                            measurementOperationId={diffReviewMeasurement.operationId}
+                          />
+                        );
+                      })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
         <PaneSideOverlay
           open={canShowFileTree}
           label="Changed files"
@@ -391,6 +386,22 @@ function GitPanelContent({
         </PaneSideOverlay>
       </div>
     </div>
+  );
+}
+
+function summarizeGitPanelSectionStats(sections: readonly GitPanelSection[]): {
+  additions: number;
+  deletions: number;
+} {
+  return sections.reduce(
+    (stats, section) => {
+      for (const file of section.files) {
+        stats.additions += file.currentDiff?.additions ?? 0;
+        stats.deletions += file.currentDiff?.deletions ?? 0;
+      }
+      return stats;
+    },
+    { additions: 0, deletions: 0 },
   );
 }
 
@@ -411,7 +422,7 @@ function GitReviewDiffPolicyNotice({ summary }: { summary: DiffDisplayPolicySumm
   );
 }
 
-function GitReviewEmptyState({
+function GitReviewNoChangesState({
   mode,
   baseRef,
   onRefresh,
@@ -422,29 +433,17 @@ function GitReviewEmptyState({
 }) {
   const Icon = mode === "branch" ? GitBranchIcon : CheckCircleFilled;
   return (
-    <div className="flex min-h-[260px] items-center justify-center px-4 py-8">
-      <div className="flex max-w-[280px] flex-col items-center text-center">
-        <div className="mb-3 flex size-9 items-center justify-center rounded-lg border border-sidebar-border/70 bg-foreground/5 text-sidebar-muted-foreground">
-          <Icon className="size-4" />
-        </div>
-        <p className="text-sm font-medium text-sidebar-foreground">
-          {gitPanelEmptyMessage(mode)}
-        </p>
-        <p className="mt-1 text-pretty text-xs leading-5 text-sidebar-muted-foreground">
-          {gitPanelEmptyDescription(mode, baseRef)}
-        </p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onRefresh}
-          className="mt-4 h-7 gap-1.5 rounded-md border border-sidebar-border/70 px-2.5 text-xs text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-        >
+    <GitReviewEmptyState
+      icon={<Icon className="size-4" />}
+      title={gitPanelEmptyMessage(mode)}
+      description={gitPanelEmptyDescription(mode, baseRef)}
+      action={
+        <GitReviewEmptyStateAction onClick={onRefresh}>
           <RefreshCw className="size-3" />
           Refresh
-        </Button>
-      </div>
-    </div>
+        </GitReviewEmptyStateAction>
+      }
+    />
   );
 }
 

@@ -19,18 +19,21 @@ describe("TurnDiffPanel", () => {
       }),
     );
 
-    expect(html).toContain("2 files changed");
-    expect(html).not.toContain("+4");
-    expect(html).not.toContain("text-git-red\">-2</span>");
-    expect(html).toContain('text-right">+</span><span class="text-right">2');
-    expect(html).toContain('text-right">-</span><span class="text-right">1');
-    expect(html).toContain("grid-cols-[0.65ch_minmax(1ch,max-content)]");
+    expect(html).toContain("Edited 2 files");
+    expect(html).toContain("bg-[var(--color-diff-panel-surface)]");
+    expect(html).toContain("border border-border");
+    expect(html).toContain(">+2</span>");
+    expect(html).toContain(">-1</span>");
     expect(html).toContain("data-diff-surface=\"chat\"");
+    expect(html).toContain("thread-diff-virtualized");
+    expect(html).toContain("data-app-action-review-file-expanded=\"false\"");
+    expect(html).not.toContain("data-gutter=\"\"");
+    expect(html).not.toContain("data-content=\"\"");
     expect(html).toContain("README.md");
     expect(html).toContain("GitPanel.tsx");
   });
 
-  it("labels the file card action as a changes review entry point", () => {
+  it("keeps the aggregate review entry point invisible while file rows keep their action", () => {
     const turn = PLAYGROUND_END_TURN_DIFF_TRANSCRIPT.turnsById["turn-end-diff"];
     const html = renderToStaticMarkup(
       createElement(TurnDiffPanel, {
@@ -42,6 +45,43 @@ describe("TurnDiffPanel", () => {
     );
 
     expect(html).toContain("Open changes review");
+    expect(html).toContain("--turn-diff-header-hover-surface");
+    expect(html).toContain("var(--color-diff-panel-surface)_96%");
+    expect(html).toContain("var(--color-background)");
+    expect(html).toContain("hover:bg-[var(--turn-diff-header-hover-surface)]");
+    expect(html).not.toContain(">Review</button>");
+    expect(html).toContain("Show file in review");
+    expect(html).toContain("data-app-action-review-file-toggle");
+  });
+
+  it("uses file-specific single-file end-turn copy without repeating row stats", () => {
+    const transcript = structuredClone(PLAYGROUND_END_TURN_DIFF_TRANSCRIPT);
+    transcript.turnsById["turn-end-diff"].itemOrder = [
+      "assistant-end-diff",
+      "tool-end-diff-readme",
+    ];
+    transcript.turnsById["turn-end-diff"].fileBadges = [
+      { path: "README.md", additions: 2, deletions: 1 },
+    ];
+
+    const html = renderToStaticMarkup(
+      createElement(TurnDiffPanel, {
+        turn: transcript.turnsById["turn-end-diff"],
+        transcript,
+        onOpenFile: () => {},
+        onOpenReviewPane: () => {},
+      }),
+    );
+
+    expect(html).toContain("Edited README.md");
+    expect(html).not.toContain("Edited 1 file");
+    expect(html).toContain(">README.md</span>");
+    expect(html).not.toContain(">Details</span>");
+    expect(html.match(/>\+2<\/span>/g)).toHaveLength(1);
+    expect(html.match(/>-1<\/span>/g)).toHaveLength(1);
+    expect(html).toContain("data-app-action-review-file-expanded=\"false\"");
+    expect(html).not.toContain("data-gutter=\"\"");
+    expect(html).not.toContain("data-content=\"\"");
   });
 
   it("does not render chat diff cards for blank file patches", () => {
@@ -102,10 +142,10 @@ describe("TurnDiffPanel", () => {
       }),
     );
 
-    expect(html).toContain("5 files changed");
+    expect(html).toContain("Edited 5 files");
     expect(html).toContain("src/file-0.ts");
     expect(html).toContain("src/file-2.ts");
     expect(html).not.toContain("src/file-3.ts");
-    expect(html).toContain("Show 2 more");
+    expect(html).toContain("Show 2 more files");
   });
 });

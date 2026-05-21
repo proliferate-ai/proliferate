@@ -37,13 +37,19 @@ describe("DiffViewer chat variant", () => {
     expect(html).toContain("data-gutter=\"\"");
     expect(html).toContain("sticky left-0 z-10");
     expect(html).toContain("data-content=\"\"");
+    expect(html.match(/data-gutter=\"\"/g)).toHaveLength(1);
+    expect(html.match(/data-content=\"\"/g)).toHaveLength(1);
+    expect(html).toContain("grid-row:1 / span 4");
+    expect(html).toContain("grid-template-rows:repeat(4, auto)");
+    expect(html).toContain("[grid-template-rows:subgrid]");
     expect(html).toContain("--diffs-min-number-column-width:4ch");
     expect(html).toContain("--diffs-min-number-column-width-default:3ch");
     expect(html).toContain("--diffs-addition-color:var(--diffs-addition-color-override)");
     expect(html).toContain("--diffs-deletion-color:var(--diffs-deletion-color-override)");
     expect(html).toContain(
-      "--diffs-column-number-width:max(24px, 5ch)",
+      "--diffs-column-number-width:max(40px, calc(4ch + 1.5rem))",
     );
+    expect(html).toContain("pr-2 pl-3");
     expect(html).toContain("diff-content-cell relative min-h");
     expect(html).not.toContain("thread-diff-virtualized");
   });
@@ -110,6 +116,35 @@ describe("DiffViewer chat variant", () => {
     expect(splitHtml).toContain("overscroll-behavior:none");
     expect(splitHtml).toContain("overscroll-behavior-x:none");
     expect(splitHtml).toContain("overscroll-behavior-y:none");
+  });
+
+  it("renders split diffs with Codex-style paired code columns", () => {
+    const html = renderToStaticMarkup(
+      createElement(DiffViewer, {
+        patch: PATCH,
+        filePath: "src/example.ts",
+        layout: "split",
+      }),
+    );
+
+    expect(html).toContain("composer-diff-simple-line");
+    expect(html).toContain("data-diff-type=\"split\"");
+    expect(html).toContain("data-deletions=\"\"");
+    expect(html).toContain("data-additions=\"\"");
+    expect(html).toContain("data-container-size=\"\"");
+    expect(html).toContain("data-line-type=\"change-deletion\"");
+    expect(html).toContain("data-line-type=\"change-addition\"");
+    expect(html).toContain("--diffs-column-content-width:360px");
+    expect(html).toContain("--diffs-column-number-width:max(40px, calc(4ch + 1.5rem))");
+    expect(html).toContain("[grid-template-rows:subgrid]");
+    expect(html).toContain("overflow-x-hidden");
+    expect(html).toContain("overflow-x-auto overflow-y-hidden");
+    expect(html).toContain("grid-cols-[minmax(0,1fr)_minmax(0,1fr)]");
+    expect(html).toContain("data-empty-side=\"change-deletion\"");
+    expect(html).toContain("data-empty-side=\"change-addition\"");
+    expect(html).toContain("data-gutter-buffer=\"buffer\"");
+    expect(html).toContain("w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)]");
+    expect(html).not.toContain("w-max min-w-full");
   });
 
   it("keeps diff viewer overscroll non-chaining by default", () => {

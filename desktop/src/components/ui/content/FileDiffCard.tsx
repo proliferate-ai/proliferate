@@ -19,6 +19,7 @@ export function FileChangeStats({
 
   return (
     <span
+      data-thread-find-skip="true"
       className={`inline-flex shrink-0 items-baseline gap-1 tabular-nums tracking-tight ${className ?? ""}`}
     >
       {additions > 0 && (
@@ -41,9 +42,9 @@ function FileChangeStat({
   className: string;
 }) {
   return (
-    <span className={`inline-grid shrink-0 grid-cols-[0.65ch_minmax(1ch,max-content)] items-baseline ${className}`}>
-      <span className="text-right">{sign}</span>
-      <span className="text-right">{value}</span>
+    <span className={`shrink-0 leading-none ${className}`}>
+      {sign}
+      {value}
     </span>
   );
 }
@@ -183,6 +184,8 @@ interface FileDiffCardProps {
   filePath: string;
   additions: number;
   deletions: number;
+  displayLabel?: string;
+  showStats?: boolean;
   isExpanded: boolean;
   onToggleExpand?: () => void;
   onOpenFile?: () => void;
@@ -201,6 +204,8 @@ export function FileDiffCard({
   filePath,
   additions,
   deletions,
+  displayLabel,
+  showStats = true,
   isExpanded,
   onToggleExpand,
   onOpenFile,
@@ -222,147 +227,176 @@ export function FileDiffCard({
   const showChildren = !!children && (!collapsible || isExpanded);
   const basename = extractBasename(filePath);
   const displayPath = formatDiffHeaderPath(filePath);
-  const surfaceTextClass = surface === "sidebar" ? "text-sidebar-foreground" : "text-foreground";
-  const surfaceActionClass = surface === "sidebar"
+  const compactLabel = displayLabel ?? basename;
+  const fullLabel = displayLabel ?? displayPath;
+  const isSidebar = surface === "sidebar";
+  const surfaceTextClass = isSidebar ? "text-sidebar-foreground" : "text-foreground";
+  const surfaceActionClass = isSidebar
     ? "text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-sidebar-ring"
     : "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-border";
-  const cardClass = surface === "sidebar"
-    ? "codex-review-diff-card rounded-lg ring-[0.5px] ring-sidebar-border/70"
+  const cardClass = isSidebar
+    ? "codex-review-diff-card rounded-lg"
     : embedded ? "" : "rounded-lg";
   const cardStyle = {
     "--codex-diffs-surface":
       "var(--codex-diffs-surface-override, var(--color-diff-surface))",
-    "--codex-diffs-header-surface": "var(--codex-diffs-surface)",
+    "--codex-diffs-header-surface": isSidebar
+      ? "color-mix(in srgb, var(--codex-diffs-surface) 98%, var(--color-foreground))"
+      : "var(--codex-diffs-surface)",
+    ...(isSidebar
+      ? {
+          "--codex-diffs-separator-surface":
+            "color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-foreground))",
+        }
+      : {}),
     backgroundColor: "var(--codex-diffs-surface)",
   } as CSSProperties;
+  const headerShellClass = isSidebar
+    ? "bg-[var(--codex-diffs-header-surface)]"
+    : "bg-[var(--codex-diffs-header-surface)]";
+  const headerInnerClass = isSidebar
+    ? "group/diff-header @container/diff-header relative flex min-h-9 items-center gap-2.5 px-[calc(var(--codex-diffs-header-padding-x,0.75rem)+0.5rem)] py-1.5 text-chat leading-[var(--text-chat--line-height)] hover:bg-[var(--codex-diffs-separator-surface)]"
+    : "group/diff-header @container/diff-header relative flex min-h-8 items-center gap-2.5 px-[var(--codex-diffs-header-padding-x,1rem)] py-[var(--codex-diffs-header-padding-y,0.5rem)] text-chat leading-[var(--text-chat--line-height)] hover:bg-foreground/5";
+  const actionRevealClass = isSidebar
+    ? "opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100 group-focus-within/file-diff:opacity-100"
+    : "hidden group-hover/diff-header:block group-focus-within/diff-header:block";
+  const statsClass = isSidebar
+    ? "leading-none"
+    : "leading-none group-hover/diff-header:hidden group-focus-within/diff-header:hidden";
   const pathContent = (
     <>
       <span className="min-w-0 truncate text-chat leading-[var(--text-chat--line-height)] [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:hidden">
-        {basename}
+        {compactLabel}
       </span>
       <span className="hidden min-w-0 truncate text-chat leading-[var(--text-chat--line-height)] [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:inline">
-        {displayPath}
+        {fullLabel}
       </span>
     </>
   );
 
-  return (
-    <div className="thread-diff-virtualized">
+  const card = (
+    <div
+      data-diff-surface={surface}
+      style={cardStyle}
+      className={`group/file-diff flex flex-col overflow-clip bg-[var(--codex-diffs-surface)] ${cardClass}`}
+    >
       <div
-        data-diff-surface={surface}
-        style={cardStyle}
-        className={`group/file-diff flex flex-col overflow-clip bg-[var(--codex-diffs-surface)] ${cardClass}`}
-      >
-        <div
-          role={canExpand ? "button" : undefined}
-          tabIndex={canExpand ? 0 : undefined}
-          onClick={canExpand ? onToggleExpand : undefined}
-          onKeyDown={
-            canExpand
-              ? (e) => {
-                  if (
-                    e.target === e.currentTarget
-                    && (e.key === "Enter" || e.key === " ")
-                  ) {
-                    e.preventDefault();
-                    onToggleExpand();
-                  }
+        role={canExpand ? "button" : undefined}
+        tabIndex={canExpand ? 0 : undefined}
+        aria-expanded={canExpand ? isExpanded : undefined}
+        onClick={canExpand ? onToggleExpand : undefined}
+        onKeyDown={
+          canExpand
+            ? (e) => {
+                if (
+                  e.target === e.currentTarget
+                  && (e.key === "Enter" || e.key === " ")
+                ) {
+                  e.preventDefault();
+                  onToggleExpand();
                 }
-              : undefined
-          }
-          className={`z-10 select-none bg-[var(--codex-diffs-surface)] ${surface === "sidebar" ? "sticky top-0" : ""} ${canExpand ? "cursor-pointer" : ""}`}
-        >
-          <div className="bg-[var(--codex-diffs-header-surface)] px-2 py-[2px]">
-            <div className="group/diff-header @container/diff-header relative flex items-center gap-2 rounded-[6px] px-1 py-0.5 text-chat leading-[var(--text-chat--line-height)] hover:bg-[var(--codex-diffs-separator-surface)]">
-              <div className={`flex min-w-0 flex-1 items-center gap-2 ${surfaceTextClass}`}>
-                {onOpenFile ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    title={filePath}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onOpenFile();
-                    }}
-                    className={`h-auto min-w-0 truncate rounded-none border-0 bg-transparent p-0 text-start text-chat font-normal leading-[var(--text-chat--line-height)] shadow-none select-text [direction:rtl] hover:bg-transparent focus-visible:ring-1 ${
-                      surface === "sidebar" ? "text-sidebar-foreground hover:text-sidebar-foreground focus-visible:ring-sidebar-ring" : "text-foreground hover:text-foreground focus-visible:ring-border"
-                    }`}
-                  >
-                    {pathContent}
-                  </Button>
-                ) : (
-                  <span
-                    className="min-w-0 truncate text-start text-chat leading-[var(--text-chat--line-height)] [direction:rtl]"
-                    title={filePath}
-                  >
-                    {pathContent}
-                  </span>
-                )}
-              </div>
+              }
+            : undefined
+        }
+        className={`z-10 select-none bg-[var(--codex-diffs-surface)] ${isSidebar ? "sticky top-0" : ""} ${canExpand ? "cursor-pointer" : ""}`}
+      >
+        <div className={headerShellClass}>
+          <div className={headerInnerClass}>
+            <div className={`flex min-w-0 flex-1 items-center gap-2 ${surfaceTextClass}`}>
+              {onOpenFile ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  title={filePath}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenFile();
+                  }}
+                  className={`h-auto min-w-0 truncate rounded-none border-0 bg-transparent p-0 text-start text-chat font-normal leading-[var(--text-chat--line-height)] shadow-none select-text [direction:rtl] hover:bg-transparent focus-visible:ring-1 ${
+                    isSidebar ? "text-sidebar-foreground hover:text-sidebar-foreground focus-visible:ring-sidebar-ring" : "text-foreground hover:text-foreground focus-visible:ring-border"
+                  }`}
+                >
+                  {pathContent}
+                </Button>
+              ) : (
+                <span
+                  className="min-w-0 truncate text-start text-chat leading-[var(--text-chat--line-height)] [direction:rtl]"
+                  title={filePath}
+                >
+                  {pathContent}
+                </span>
+              )}
+            </div>
 
-              <div className="ms-auto flex shrink-0 items-center gap-1">
-                {actions && (
-                  <div className="flex items-center opacity-0 transition-opacity duration-200 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100">
-                    {actions}
-                  </div>
-                )}
+            <div className="ms-auto flex shrink-0 items-center gap-1.5">
+              {actions && (
+                <div className={`flex items-center ${actionRevealClass}`}>
+                  {actions}
+                </div>
+              )}
+              {showStats && (
                 <FileChangeStats
                   additions={additions}
                   deletions={deletions}
-                  className="leading-none"
+                  className={statsClass}
                 />
-                {!additions && !deletions && metadata}
-                {handleOpenAction && (
-                  <div className="shrink-0 opacity-0 transition-opacity duration-200 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleOpenAction();
-                      }}
-                      className={`size-5 rounded-lg border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
-                      aria-label={openActionLabel ?? `Open ${filePath}`}
-                      title={openActionTitle ?? "Open file"}
-                    >
-                      <ArrowUpRight className="size-3" />
-                    </Button>
-                  </div>
-                )}
-                {canExpand && (
+              )}
+              {!additions && !deletions && metadata}
+              {handleOpenAction && (
+                <div className={`shrink-0 ${actionRevealClass}`}>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleExpand();
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleOpenAction();
                     }}
-                    className={`size-5 shrink-0 rounded-lg border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
-                    aria-label="Toggle file diff"
+                    className={`size-6 rounded-lg border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
+                    aria-label={openActionLabel ?? `Open ${filePath}`}
+                    title={openActionTitle ?? "Open file"}
                   >
-                    <ChevronDown
-                      className={`size-3 transition-transform duration-200 ${
-                        isExpanded ? "rotate-180" : "rotate-0"
-                      }`}
-                    />
+                    <ArrowUpRight className="size-3.5" />
                   </Button>
-                )}
-              </div>
+                </div>
+              )}
+              {canExpand && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleExpand();
+                  }}
+                  className={`size-6 shrink-0 rounded-lg border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
+                  aria-label="Toggle file diff"
+                  aria-expanded={isExpanded}
+                  data-app-action-review-file-expanded={isExpanded ? "true" : "false"}
+                  data-app-action-review-file-toggle=""
+                >
+                  <ChevronDown
+                    className={`size-3.5 transition-transform duration-200 ${
+                      isExpanded ? "rotate-180" : "rotate-0"
+                    }`}
+                  />
+                </Button>
+              )}
             </div>
           </div>
         </div>
-
-        {showChildren && (
-          <div className="relative overflow-hidden">
-            {children}
-          </div>
-        )}
       </div>
+
+      {showChildren && (
+        <div className="relative overflow-hidden">
+          {children}
+        </div>
+      )}
     </div>
   );
+
+  return isSidebar ? card : <div className="thread-diff-virtualized">{card}</div>;
 }
 
 function extractBasename(path: string): string {

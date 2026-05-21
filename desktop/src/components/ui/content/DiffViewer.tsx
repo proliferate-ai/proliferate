@@ -72,6 +72,7 @@ export function DiffViewer({
           tokens={tokens}
           className={rootClass}
           viewportClassName={viewportClassName}
+          wrapLongLines={wrapLongLines}
           overscrollBehavior={overscrollBehavior}
           overscrollBehaviorX={overscrollBehaviorX}
           overscrollBehaviorY={overscrollBehaviorY}
