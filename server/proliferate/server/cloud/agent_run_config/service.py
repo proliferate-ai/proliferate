@@ -358,7 +358,7 @@ async def set_agent_run_config_default(
         raise CloudApiError(
             "agent_run_config_kind_mismatch",
             "Config agent kind does not match the default slot.",
-            400,
+            status_code=400,
         )
     owner_user_id: UUID | None = user.id
     if owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL:
@@ -366,13 +366,13 @@ async def set_agent_run_config_default(
             raise CloudApiError(
                 "agent_run_config_not_usable",
                 "Config cannot be used in personal sandboxes.",
-                400,
+                status_code=400,
             )
         if config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION:
             raise CloudApiError(
                 "agent_run_config_not_usable",
                 "Organization configs cannot be pinned as personal defaults.",
-                400,
+                status_code=400,
             )
         organization_id = None
     elif owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION:
@@ -387,13 +387,25 @@ async def set_agent_run_config_default(
             raise CloudApiError(
                 "agent_run_config_not_usable",
                 "Config cannot be used in shared sandboxes.",
-                400,
+                status_code=400,
             )
         if config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL:
             raise CloudApiError(
                 "agent_run_config_not_usable",
                 "Personal configs cannot be pinned as organization defaults.",
-                400,
+                status_code=400,
+            )
+        if (
+            config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION
+            and config.organization_id != organization_id
+        ):
+            raise CloudApiError(
+                "agent_run_config_not_usable",
+                (
+                    "Organization defaults can only use system configs or configs owned "
+                    "by that organization."
+                ),
+                status_code=400,
             )
         owner_user_id = None
     else:
