@@ -79,7 +79,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     void fileActions.openDefault();
   };
   const openFindInDiffs = () => {
-    openContentSearch("diffs");
+    openContentSearch("diffs", "file");
   };
   const toggleRichPreview = () => {
     setTargetMode(

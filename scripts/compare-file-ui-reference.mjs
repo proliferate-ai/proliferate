@@ -23,6 +23,10 @@ const inputs = {
     repoRoot,
     "desktop/src/components/workspace/files/viewer/FileViewerFrame.tsx",
   ),
+  fileBrowserOverlay: path.join(
+    repoRoot,
+    "desktop/src/components/workspace/files/viewer/WorkspaceFileBrowserOverlay.tsx",
+  ),
   fileEditor: path.join(
     repoRoot,
     "desktop/src/components/workspace/files/FileEditorView.tsx",
@@ -47,6 +51,10 @@ const inputs = {
   contentSearch: path.join(
     repoRoot,
     "desktop/src/lib/domain/content-search/content-search.ts",
+  ),
+  paneSideOverlay: path.join(
+    repoRoot,
+    "desktop/src/components/workspace/pane/PaneSideOverlay.tsx",
   ),
   css: path.join(repoRoot, "desktop/src/index.css"),
 };
@@ -95,12 +103,13 @@ for (const [key, value] of Object.entries(source)) {
 
 addCheck(
   "content search overlay",
-  "anchored over the session pane with reference offsets and z-index",
+  "anchored pane-locally with reference offsets and z-index",
   includesAll(source.referenceSearch, [
     "pointer-events-none fixed top-2 right-4 z-[55] flex justify-end",
   ]),
   includesAll(source.overlay, [
     "data-content-search-overlay",
+    "data-content-search-surface",
     "pointer-events-none absolute top-2 right-4 z-[55] flex justify-end",
   ]),
 );
@@ -114,7 +123,8 @@ addCheck(
     "shadow-[0px_8px_16px_-4px_rgba(0,0,0,0.12)]",
   ]),
   includesAll(source.overlay, [
-    "grid w-[340px] max-w-[70vw] grid-cols-[minmax(0,1fr)_auto_auto]",
+    "grid w-[340px] max-w-[70vw]",
+    "grid-cols-[minmax(0,1fr)_auto_auto]",
     "overflow-hidden rounded-[20px]",
     "shadow-[0px_8px_16px_-4px_rgba(0,0,0,0.12)]",
   ]),
@@ -129,7 +139,7 @@ addCheck(
 
 addCheck(
   "content search overlay",
-  "input id, accessible label, and diff placeholder mirror the reference",
+  "input id, surface-aware accessible label, and diff placeholder mirror the reference",
   includesAll(source.referenceSearch, [
     'id="content-search-input"',
     'aria-label="Find in chat"',
@@ -137,14 +147,14 @@ addCheck(
   ]),
   includesAll(source.overlay, [
     'id="content-search-input"',
-    'aria-label="Find in chat"',
-    'scope === "diffs" ? "Search diff',
+    'surface === "file" ? "Find in file" : "Find in chat"',
+    "Search diff",
   ]),
 );
 
 addCheck(
   "content search overlay",
-  "scope buttons and result controls keep the reference labels",
+  "chat overlay scope buttons and result controls keep the reference labels",
   includesAll(source.referenceSearch, [
     'aria-label="Search chat"',
     'aria-label="Search diffs"',
@@ -158,6 +168,17 @@ addCheck(
     'label="Previous result"',
     'label="Next result"',
     'aria-label="Close find"',
+  ]),
+);
+
+addCheck(
+  "content search overlay",
+  "file overlay omits chat/diff scope controls",
+  true,
+  includesAll(source.overlay, [
+    'const showScopeButtons = surface === "chat"',
+    "grid-cols-[minmax(0,1fr)_auto]",
+    "Search file",
   ]),
 );
 
@@ -209,6 +230,35 @@ addCheck(
     "SessionContentSearchOverlay",
     "shouldEnableContentSearchOverlay",
     "enabled={contentSearchEnabled}",
+    'surface="chat"',
+  ]),
+);
+
+addCheck(
+  "content search wiring",
+  "file toolbar owns a pane-local content-search surface",
+  true,
+  includesAll(source.fileFrame, [
+    "relative flex h-full",
+    "data-file-viewer-frame",
+    "SessionContentSearchOverlay",
+    "enabled",
+    'surface="file"',
+  ]) && includesAll(source.fileEditor, [
+    'openContentSearch("diffs", "file")',
+    "onOpenContentSearch={openFindInDiffs}",
+  ]),
+);
+
+addCheck(
+  "content search wiring",
+  "find shortcut routes to the file pane when focus is inside a file viewer",
+  true,
+  includesAll(source.overlay, [
+    "resolveContentSearchSurfaceForShortcut",
+    'closest("[data-file-viewer-frame]")',
+    'getFocusZone() === "right-panel"',
+    'return "file"',
   ]),
 );
 
@@ -263,6 +313,24 @@ addCheck(
 );
 
 addCheck(
+  "content search domain",
+  "visible matches are isolated by pane surface",
+  true,
+  includesAll(source.store, [
+    "ContentSearchSurface",
+    "surface: ContentSearchSurface",
+    "openSearch: (scope?: ContentSearchScope, surface?: ContentSearchSurface)",
+    "unit.surface === state.surface",
+  ]) && includesAll(source.fileSource, [
+    'contentSearchSurface === "file"',
+    'surface: "file"',
+  ]) && includesAll(source.diffViewer, [
+    'contentSearchSurface === "chat"',
+    'surface: "chat"',
+  ]),
+);
+
+addCheck(
   "file viewer toolbar",
   "toolbar matches the reference single-row file path nav shape",
   includesAll(source.referenceView, [
@@ -288,16 +356,31 @@ addCheck(
 
 addCheck(
   "file viewer toolbar",
-  "toolbar search icon opens the session content-search overlay",
+  "toolbar search icon opens the pane-local content-search overlay",
   true,
   includesAll(source.fileFrame, [
     "Search",
     'label="Find in file"',
     "onOpenContentSearch",
   ]) && includesAll(source.fileEditor, [
-    "openContentSearch(\"diffs\")",
+    'openContentSearch("diffs", "file")',
     "onOpenContentSearch={openFindInDiffs}",
   ]),
+);
+
+addCheck(
+  "file browser overlay",
+  "file browser uses the same right-side pane overlay as the git file tree",
+  true,
+  includesAll(source.paneSideOverlay, [
+    "data-pane-side-overlay",
+    "absolute bottom-2 right-2 top-2",
+  ]) && includesAll(source.fileBrowserOverlay, [
+    "PaneSideOverlay",
+    'label="Browse files"',
+    'widthClassName="w-[min(320px,calc(100%-1rem))]"',
+    'dataAttribute="file-browser-overlay"',
+  ]) && !source.fileBrowserOverlay.includes("ModalShell"),
 );
 
 addCheck(

@@ -2,9 +2,11 @@ import { create } from "zustand";
 import { normalizeContentSearchQuery } from "@/lib/domain/content-search/content-search";
 
 export type ContentSearchScope = "chat" | "diffs";
+export type ContentSearchSurface = "chat" | "file";
 
 export interface ContentSearchUnitRegistration {
   unitId: string;
+  surface?: ContentSearchSurface;
   scope: ContentSearchScope;
   query: string;
   matchIds: readonly string[];
@@ -12,6 +14,7 @@ export interface ContentSearchUnitRegistration {
 
 interface ContentSearchUnit {
   unitId: string;
+  surface: ContentSearchSurface;
   scope: ContentSearchScope;
   query: string;
   matchIds: string[];
@@ -21,12 +24,13 @@ interface ContentSearchUnit {
 interface ContentSearchState {
   open: boolean;
   query: string;
+  surface: ContentSearchSurface;
   scope: ContentSearchScope;
   activeMatchIndex: number;
   activeMatchId: string | null;
   unitsById: Record<string, ContentSearchUnit>;
   nextUnitOrder: number;
-  openSearch: (scope?: ContentSearchScope) => void;
+  openSearch: (scope?: ContentSearchScope, surface?: ContentSearchSurface) => void;
   closeSearch: () => void;
   setQuery: (query: string) => void;
   setScope: (scope: ContentSearchScope) => void;
@@ -39,16 +43,18 @@ interface ContentSearchState {
 export const useContentSearchStore = create<ContentSearchState>((set) => ({
   open: false,
   query: "",
+  surface: "chat",
   scope: "diffs",
   activeMatchIndex: 0,
   activeMatchId: null,
   unitsById: {},
   nextUnitOrder: 0,
 
-  openSearch: (scope) => {
+  openSearch: (scope, surface = "chat") => {
     set((state) => resolveActiveMatch({
       ...state,
       open: true,
+      surface,
       scope: scope ?? state.scope,
     }, 0));
   },
@@ -84,9 +90,11 @@ export const useContentSearchStore = create<ContentSearchState>((set) => ({
       const query = normalizeContentSearchQuery(registration.query);
       const matchIds = [...registration.matchIds];
       const previous = state.unitsById[registration.unitId];
+      const surface = registration.surface ?? "chat";
 
       if (
         previous
+        && previous.surface === surface
         && previous.scope === registration.scope
         && previous.query === query
         && stringArraysEqual(previous.matchIds, matchIds)
@@ -101,6 +109,7 @@ export const useContentSearchStore = create<ContentSearchState>((set) => ({
           ...state.unitsById,
           [registration.unitId]: {
             unitId: registration.unitId,
+            surface,
             scope: registration.scope,
             query,
             matchIds,
@@ -130,7 +139,7 @@ export const useContentSearchStore = create<ContentSearchState>((set) => ({
 
 export function selectVisibleContentSearchMatchIds(state: Pick<
   ContentSearchState,
-  "query" | "scope" | "unitsById"
+  "query" | "surface" | "scope" | "unitsById"
 >): string[] {
   const query = normalizeContentSearchQuery(state.query);
   if (!query) {
@@ -138,14 +147,16 @@ export function selectVisibleContentSearchMatchIds(state: Pick<
   }
 
   return Object.values(state.unitsById)
-    .filter((unit) => unit.scope === state.scope && unit.query === query)
+    .filter((unit) =>
+      unit.surface === state.surface && unit.scope === state.scope && unit.query === query
+    )
     .sort((left, right) => left.order - right.order)
     .flatMap((unit) => unit.matchIds);
 }
 
 function resolveActiveMatch<State extends Pick<
   ContentSearchState,
-  "query" | "scope" | "unitsById"
+  "query" | "surface" | "scope" | "unitsById"
 >>(
   state: State,
   requestedIndex: number,

@@ -49,10 +49,13 @@ export function FileSourceView({
   const scrollRef = useRef<HTMLDivElement>(null);
   const lineNumberDigitWidth = `${Math.max(2, String(lines.length).length)}ch`;
   const lineNumberGutterWidth = `calc(max(2ch, ${lineNumberDigitWidth}) + 16px)`;
-  const contentSearchQuery = useContentSearchStore((state) => state.query);
-  const activeMatchId = useContentSearchStore((state) => state.activeMatchId);
+  const contentSearchSurface = useContentSearchStore((state) => state.surface);
+  const rawContentSearchQuery = useContentSearchStore((state) => state.query);
+  const rawActiveMatchId = useContentSearchStore((state) => state.activeMatchId);
   const registerContentSearchUnit = useContentSearchStore((state) => state.registerUnit);
   const unregisterContentSearchUnit = useContentSearchStore((state) => state.unregisterUnit);
+  const contentSearchQuery = contentSearchSurface === "file" ? rawContentSearchQuery : "";
+  const activeMatchId = contentSearchSurface === "file" ? rawActiveMatchId : null;
   const contentSearchUnitId = useMemo(
     () => `diff:${filePath}:source`,
     [filePath],
@@ -121,6 +124,7 @@ export function FileSourceView({
   useEffect(() => {
     registerContentSearchUnit({
       unitId: contentSearchUnitId,
+      surface: "file",
       scope: "diffs",
       query: contentSearchQuery,
       matchIds: contentSearchMatchIds,

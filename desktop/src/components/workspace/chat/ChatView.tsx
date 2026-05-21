@@ -232,7 +232,7 @@ export const ChatView = memo(function ChatView({
           aria-hidden="true"
         />
       )}
-      <SessionContentSearchOverlay enabled={contentSearchEnabled} />
+      <SessionContentSearchOverlay enabled={contentSearchEnabled} surface="chat" />
       <WorkspaceMobilityOverlay />
       <DebugProfiler id="chat-composer-dock-region">
         <ChatComposerDock

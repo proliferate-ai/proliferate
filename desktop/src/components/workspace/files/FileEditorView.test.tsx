@@ -139,6 +139,7 @@ describe("FileEditorView", () => {
     useContentSearchStore.setState({
       open: false,
       query: "",
+      surface: "chat",
       scope: "diffs",
       activeMatchIndex: 0,
       activeMatchId: null,
@@ -274,7 +275,7 @@ describe("FileEditorView", () => {
       isLoading: false,
     });
 
-    render(createElement(FileEditorView, {
+    const { container } = render(createElement(FileEditorView, {
       filePath: "package.json",
       targetKey,
     }));
@@ -282,7 +283,8 @@ describe("FileEditorView", () => {
     fireEvent.click(screen.getByLabelText("Show files"));
 
     expect(screen.getByRole("dialog", { name: "Browse files" })).toBeTruthy();
-    expect(document.body.querySelector("[data-file-browser-overlay]")).toBeTruthy();
+    expect(container.querySelector("[data-pane-side-overlay]")).toBeTruthy();
+    expect(container.querySelector("[data-file-browser-overlay]")).toBeTruthy();
     expect(screen.getByText("{\"ok\":true}")).toBeTruthy();
     expect(screen.getByText("README.md")).toBeTruthy();
     expect(workspaceFilesQuery).toHaveBeenCalledWith({
@@ -298,7 +300,7 @@ describe("FileEditorView", () => {
     });
   });
 
-  it("opens session content search from the file viewer toolbar", () => {
+  it("opens pane-local content search from the file viewer toolbar", () => {
     const target = fileViewerTarget("package.json");
     const targetKey = viewerTargetKey(target);
     useWorkspaceViewerTabsStore.setState({
@@ -317,7 +319,7 @@ describe("FileEditorView", () => {
       error: null,
       isLoading: false,
     });
-    render(createElement(FileEditorView, {
+    const { container } = render(createElement(FileEditorView, {
       filePath: "package.json",
       targetKey,
     }));
@@ -326,6 +328,11 @@ describe("FileEditorView", () => {
     fireEvent.click(screen.getByLabelText("Find in file"));
     expect(useContentSearchStore.getState().open).toBe(true);
     expect(useContentSearchStore.getState().scope).toBe("diffs");
+    expect(useContentSearchStore.getState().surface).toBe("file");
+    expect(container.querySelector('[data-content-search-surface="file"]')).toBeTruthy();
+    expect(screen.getByPlaceholderText("Search file…")).toBeTruthy();
+    expect(screen.queryByLabelText("Search chat")).toBeNull();
+    expect(screen.queryByLabelText("Search diffs")).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Search workspace files" })).toBeNull();
     expect(searchWorkspaceFilesQuery.mock.calls.some(([options]) => options?.enabled === true))
       .toBe(false);

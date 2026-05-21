@@ -1,4 +1,4 @@
-import { ModalShell } from "@/components/ui/ModalShell";
+import { PaneSideOverlay } from "@/components/workspace/pane/PaneSideOverlay";
 import { WorkspaceFileBrowserPane } from "./WorkspaceFileBrowserPane";
 
 interface WorkspaceFileBrowserOverlayProps {
@@ -20,18 +20,13 @@ export function WorkspaceFileBrowserOverlay({
   onOpenFile,
   onClose,
 }: WorkspaceFileBrowserOverlayProps) {
-  const directoryLabel = pathPrefix.trim() || "Workspace root";
-
   return (
-    <ModalShell
+    <PaneSideOverlay
       open={open}
+      label="Browse files"
+      widthClassName="w-[min(320px,calc(100%-1rem))]"
+      dataAttribute="file-browser-overlay"
       onClose={onClose}
-      title="Browse files"
-      description={directoryLabel}
-      sizeClassName="h-[min(72vh,42rem)] max-w-2xl"
-      bodyClassName="p-0"
-      panelClassName="border-sidebar-border/80 bg-sidebar-background/95 text-sidebar-foreground shadow-floating-dark backdrop-blur"
-      overlayClassName="bg-overlay/40 backdrop-blur-sm"
     >
       <div className="h-full min-h-0" data-file-browser-overlay>
         <WorkspaceFileBrowserPane
@@ -43,6 +38,6 @@ export function WorkspaceFileBrowserOverlay({
           onOpenFile={onOpenFile}
         />
       </div>
-    </ModalShell>
+    </PaneSideOverlay>
   );
 }

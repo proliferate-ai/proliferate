@@ -17,6 +17,7 @@ import {
   PaneOptionsMenuItem,
   PaneOptionsMenuSeparator,
 } from "@/components/workspace/pane/PaneOptionsMenu";
+import { SessionContentSearchOverlay } from "@/components/workspace/chat/surface/SessionContentSearchOverlay";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 
 export function FileViewerFrame({
@@ -55,7 +56,12 @@ export function FileViewerFrame({
   children: ReactNode;
 }) {
   return (
-    <div ref={rootRef} tabIndex={-1} className="flex h-full min-w-0 flex-col overflow-hidden bg-background outline-none">
+    <div
+      ref={rootRef}
+      tabIndex={-1}
+      className="relative flex h-full min-w-0 flex-col overflow-hidden bg-background outline-none"
+      data-file-viewer-frame
+    >
       <div
         className="z-20 flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border bg-background px-2 text-foreground"
         data-file-viewer-toolbar
@@ -93,6 +99,7 @@ export function FileViewerFrame({
           </FileViewerToolbarButton>
         </div>
       </div>
+      <SessionContentSearchOverlay enabled surface="file" />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
     </div>
   );

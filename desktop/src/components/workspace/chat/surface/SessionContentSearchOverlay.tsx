@@ -15,20 +15,25 @@ import {
   X,
 } from "@/components/ui/icons";
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { getFocusZone } from "@/lib/domain/focus-zone";
 import {
   selectVisibleContentSearchMatchIds,
+  type ContentSearchSurface,
   useContentSearchStore,
 } from "@/stores/search/content-search-store";
 
 interface SessionContentSearchOverlayProps {
   enabled: boolean;
+  surface: ContentSearchSurface;
 }
 
 export function SessionContentSearchOverlay({
   enabled,
+  surface,
 }: SessionContentSearchOverlayProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const open = useContentSearchStore((state) => state.open);
+  const activeSurface = useContentSearchStore((state) => state.surface);
   const query = useContentSearchStore((state) => state.query);
   const scope = useContentSearchStore((state) => state.scope);
   const activeMatchIndex = useContentSearchStore((state) => state.activeMatchIndex);
@@ -44,22 +49,24 @@ export function SessionContentSearchOverlay({
   const goToPreviousMatch = useContentSearchStore((state) => state.goToPreviousMatch);
   const hasQuery = query.trim().length > 0;
   const hasMatches = matchCount > 0;
+  const surfaceOpen = enabled && open && activeSurface === surface;
+  const showScopeButtons = surface === "chat";
 
   useShortcutHandler("workspace.find-content", () => {
-    openSearch("diffs");
+    openSearch("diffs", resolveContentSearchSurfaceForShortcut());
     return true;
-  }, { enabled });
+  }, { enabled: enabled && surface === "chat" });
 
   useEffect(() => {
-    if (open && enabled) {
+    if (surfaceOpen) {
       window.requestAnimationFrame(() => {
         inputRef.current?.select();
       });
     }
-  }, [enabled, open]);
+  }, [surfaceOpen]);
 
   useEffect(() => {
-    if (!activeMatchId) {
+    if (!surfaceOpen || !activeMatchId) {
       return;
     }
 
@@ -82,13 +89,23 @@ export function SessionContentSearchOverlay({
 
       window.requestAnimationFrame(scrollActiveMatchIntoView);
     });
-  }, [activeMatchId]);
+  }, [activeMatchId, surfaceOpen]);
 
-  if (!enabled || !open) {
+  if (!surfaceOpen) {
     return null;
   }
 
-  const placeholder = scope === "diffs" ? "Search diff…" : "Search chat…";
+  const placeholder = surface === "file"
+    ? "Search file…"
+    : scope === "diffs"
+      ? "Search diff…"
+      : "Search chat…";
+  const inputLabel = surface === "file" ? "Find in file" : "Find in chat";
+  const panelGridClass = showScopeButtons
+    ? "grid-cols-[minmax(0,1fr)_auto_auto]"
+    : "grid-cols-[minmax(0,1fr)_auto]";
+  const resultRowColumnClass = showScopeButtons ? "col-[1/4]" : "col-[1/3]";
+  const closeColumnClass = showScopeButtons ? "col-[3/4]" : "col-[2/3]";
   const resultLabel = hasMatches
     ? `${activeMatchIndex + 1} / ${matchCount} results`
     : "0 results";
@@ -114,14 +131,15 @@ export function SessionContentSearchOverlay({
     <div
       className="pointer-events-none absolute top-2 right-4 z-[55] flex justify-end"
       data-content-search-overlay
+      data-content-search-surface={surface}
     >
-      <div className="pointer-events-auto grid w-[340px] max-w-[70vw] grid-cols-[minmax(0,1fr)_auto_auto] overflow-hidden rounded-[20px] border-[0.5px] border-border bg-sidebar-background shadow-[0px_8px_16px_-4px_rgba(0,0,0,0.12)]">
+      <div className={`pointer-events-auto grid w-[340px] max-w-[70vw] ${panelGridClass} overflow-hidden rounded-[20px] border-[0.5px] border-border bg-sidebar-background shadow-[0px_8px_16px_-4px_rgba(0,0,0,0.12)]`}>
         <div className="col-[1/2] row-[1] flex h-[44px] min-w-0 items-center gap-2 pl-4">
           <Search className="size-4 shrink-0 text-foreground" />
           <Input
             ref={inputRef}
             id="content-search-input"
-            aria-label="Find in chat"
+            aria-label={inputLabel}
             placeholder={placeholder}
             className="h-6 min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus:ring-0"
             type="text"
@@ -132,25 +150,27 @@ export function SessionContentSearchOverlay({
             onKeyDown={handleKeyDown}
           />
         </div>
-        <div className="col-[2/3] row-[1] flex h-[44px] items-center justify-center gap-2">
-          <ContentSearchScopeButton
-            active={scope === "chat"}
-            label="Search chat"
-            onClick={() => setScope("chat")}
-          >
-            <MessageSquare className="size-4" />
-          </ContentSearchScopeButton>
-          <ContentSearchScopeButton
-            active={scope === "diffs"}
-            label="Search diffs"
-            onClick={() => setScope("diffs")}
-          >
-            <FileCode className="size-4" />
-          </ContentSearchScopeButton>
-        </div>
+        {showScopeButtons && (
+          <div className="col-[2/3] row-[1] flex h-[44px] items-center justify-center gap-2">
+            <ContentSearchScopeButton
+              active={scope === "chat"}
+              label="Search chat"
+              onClick={() => setScope("chat")}
+            >
+              <MessageSquare className="size-4" />
+            </ContentSearchScopeButton>
+            <ContentSearchScopeButton
+              active={scope === "diffs"}
+              label="Search diffs"
+              onClick={() => setScope("diffs")}
+            >
+              <FileCode className="size-4" />
+            </ContentSearchScopeButton>
+          </div>
+        )}
         {hasQuery && (
           <>
-            <div className="col-[1/4] row-[2] flex min-w-0 items-center border-t border-border px-4 py-2 text-base leading-6 transition-[border-width,max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100">
+            <div className={`${resultRowColumnClass} row-[2] flex min-w-0 items-center border-t border-border px-4 py-2 text-base leading-6 transition-[border-width,max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100`}>
               <div className="flex items-center gap-3">
                 <SearchNavigationButton
                   label="Previous result"
@@ -165,12 +185,12 @@ export function SessionContentSearchOverlay({
                 />
               </div>
             </div>
-            <span className="pointer-events-none col-[1/4] row-[2] min-w-0 px-4 py-2 text-right text-base leading-6 text-muted-foreground transition-[max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100">
+            <span className={`pointer-events-none ${resultRowColumnClass} row-[2] min-w-0 px-4 py-2 text-right text-base leading-6 text-muted-foreground transition-[max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100`}>
               {resultLabel}
             </span>
           </>
         )}
-        <div className="col-[3/4] row-[1] flex h-[44px] items-center pr-4">
+        <div className={`${closeColumnClass} row-[1] flex h-[44px] items-center pr-4`}>
           <div className="mr-2 ml-2 h-4 w-px bg-border" />
           <Button
             type="button"
@@ -186,6 +206,19 @@ export function SessionContentSearchOverlay({
       </div>
     </div>
   );
+}
+
+function resolveContentSearchSurfaceForShortcut(): ContentSearchSurface {
+  const activeElement = document.activeElement;
+  if (activeElement?.closest("[data-file-viewer-frame]")) {
+    return "file";
+  }
+
+  if (getFocusZone() === "right-panel" && document.querySelector("[data-file-viewer-frame]")) {
+    return "file";
+  }
+
+  return "chat";
 }
 
 function ContentSearchScopeButton({

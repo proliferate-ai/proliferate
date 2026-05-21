@@ -226,10 +226,13 @@ export function ChatDiffViewer({
     () => getChatRows(parsed, expandedCollapsedKeys),
     [parsed, expandedCollapsedKeys],
   );
-  const contentSearchQuery = useContentSearchStore((state) => state.query);
-  const activeMatchId = useContentSearchStore((state) => state.activeMatchId);
+  const contentSearchSurface = useContentSearchStore((state) => state.surface);
+  const rawContentSearchQuery = useContentSearchStore((state) => state.query);
+  const rawActiveMatchId = useContentSearchStore((state) => state.activeMatchId);
   const registerContentSearchUnit = useContentSearchStore((state) => state.registerUnit);
   const unregisterContentSearchUnit = useContentSearchStore((state) => state.unregisterUnit);
+  const contentSearchQuery = contentSearchSurface === "chat" ? rawContentSearchQuery : "";
+  const activeMatchId = contentSearchSurface === "chat" ? rawActiveMatchId : null;
   const contentSearchUnitId = useMemo(
     () => contentSearchUnitIdProp ?? `diff:${filePath ?? "inline"}:${parsed.allCodeLines.length}`,
     [contentSearchUnitIdProp, filePath, parsed.allCodeLines.length],
@@ -287,6 +290,7 @@ export function ChatDiffViewer({
   useEffect(() => {
     registerContentSearchUnit({
       unitId: contentSearchUnitId,
+      surface: "chat",
       scope: "diffs",
       query: contentSearchQuery,
       matchIds: contentSearchMatchIds,
