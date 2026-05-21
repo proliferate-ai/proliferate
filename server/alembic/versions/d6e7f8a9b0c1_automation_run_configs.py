@@ -66,6 +66,59 @@ def _drop_column_once(table_name: str, column_name: str) -> None:
         op.drop_column(table_name, column_name)
 
 
+def _drop_daily_automation_activity_view() -> None:
+    op.execute("DROP VIEW IF EXISTS analytics.daily_automation_activity")
+
+
+def _create_daily_automation_activity_view() -> None:
+    if (
+        not _has_table("automation")
+        or not _has_table("automation_run")
+        or not _has_column("automation", "target_mode")
+        or not _has_column("automation_run", "target_mode")
+    ):
+        return
+    op.execute("CREATE SCHEMA IF NOT EXISTS analytics")
+    op.execute(
+        """
+        CREATE OR REPLACE VIEW analytics.daily_automation_activity AS
+        SELECT
+            activity_date,
+            target_mode AS execution_target,
+            status,
+            trigger_kind,
+            sum(created_automations)::bigint AS created_automations,
+            sum(automation_runs)::bigint AS automation_runs
+        FROM (
+            SELECT
+                (created_at AT TIME ZONE 'UTC')::date AS activity_date,
+                target_mode,
+                CASE WHEN enabled THEN 'enabled' ELSE 'paused' END AS status,
+                NULL::text AS trigger_kind,
+                count(*) AS created_automations,
+                0::bigint AS automation_runs
+            FROM automation
+            GROUP BY (created_at AT TIME ZONE 'UTC')::date, target_mode, enabled
+            UNION ALL
+            SELECT
+                (created_at AT TIME ZONE 'UTC')::date AS activity_date,
+                target_mode,
+                status,
+                trigger_kind,
+                0::bigint AS created_automations,
+                count(*) AS automation_runs
+            FROM automation_run
+            GROUP BY
+                (created_at AT TIME ZONE 'UTC')::date,
+                target_mode,
+                status,
+                trigger_kind
+        ) daily
+        GROUP BY activity_date, target_mode, status, trigger_kind
+        """
+    )
+
+
 def _backfill_automation_agent_run_configs() -> None:
     required_columns = {
         "id",
@@ -392,6 +445,7 @@ def _create_agent_run_config_tables() -> None:
 
 
 def _upgrade_automation_tables() -> None:
+    _drop_daily_automation_activity_view()
     if _has_table("automation"):
         _add_column_once(
             "automation",
@@ -671,6 +725,7 @@ def _upgrade_automation_tables() -> None:
             ["id"],
             ondelete="SET NULL",
         )
+    _create_daily_automation_activity_view()
 
 
 def upgrade() -> None:
