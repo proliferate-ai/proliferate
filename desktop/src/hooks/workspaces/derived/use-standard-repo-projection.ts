@@ -1,6 +1,6 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useMemo } from "react";
-import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
+import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-status";
 import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
