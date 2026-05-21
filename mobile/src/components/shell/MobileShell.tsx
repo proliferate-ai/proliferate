@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import type { ProductChat } from "@proliferate/product-model/chats/model";
 import type { AuthUser } from "@proliferate/cloud-sdk";
 
 import { MobileAuthScreen } from "../auth/MobileAuthScreen";
@@ -25,8 +24,13 @@ import { MobileSettingsScreen } from "../settings/MobileSettingsScreen";
 import { MobileTopBar, MobileTopBarIconButton } from "../primitives/MobileTopBar";
 import { MobileWorkspacesScreen } from "../workspaces/MobileWorkspacesScreen";
 import { useMobileClientDailyActivity } from "../../hooks/telemetry/use-mobile-client-daily-activity";
-import { drawerRoutes, routeTitle, type RouteId } from "../../navigation/navigation-model";
 import { useMobileScreenTelemetry } from "../../hooks/telemetry/use-mobile-screen-telemetry";
+import {
+  drawerRoutes,
+  routeTitle,
+  type MobileCloudChat,
+  type RouteId,
+} from "../../navigation/navigation-model";
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
 import { colors, radius, shadow, spacing } from "../../styles/tokens";
 
@@ -43,7 +47,7 @@ export function MobileShell() {
   } = useMobileAuth();
   const [route, setRoute] = useState<RouteId>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedChat, setSelectedChat] = useState<ProductChat | null>(null);
+  const [selectedChat, setSelectedChat] = useState<MobileCloudChat | null>(null);
 
   const subtitle = useMemo(() => routeSubtitle(route), [route]);
   const account = useMemo(() => accountSummary(user), [user]);
@@ -84,7 +88,7 @@ export function MobileShell() {
     setDrawerOpen(false);
   }
 
-  function openChat(chat: ProductChat) {
+  function openChat(chat: MobileCloudChat) {
     setSelectedChat(chat);
     setDrawerOpen(false);
   }

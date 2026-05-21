@@ -64,6 +64,8 @@ class WorkspaceClaimRecord(Protocol):
 
 
 class WorkspaceSessionSummaryRecord(Protocol):
+    target_id: UUID
+    workspace_id: str | None
     session_id: str
     title: str | None
     status: str
@@ -161,6 +163,8 @@ class WorkspaceExposureSummary(BaseModel):
 
 
 class LastSessionSummary(BaseModel):
+    target_id: str = Field(serialization_alias="targetId")
+    workspace_id: str | None = Field(default=None, serialization_alias="workspaceId")
     session_id: str = Field(serialization_alias="sessionId")
     title: str | None = None
     status: str
@@ -375,6 +379,8 @@ def last_session_summary_payload(
     if session is None:
         return None
     return LastSessionSummary(
+        target_id=str(session.target_id),
+        workspace_id=session.workspace_id,
         session_id=session.session_id,
         title=session.title,
         status=session.status,

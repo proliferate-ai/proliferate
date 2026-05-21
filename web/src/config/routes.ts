@@ -10,5 +10,6 @@ export const routes = {
   connectGitHub: "/connect-github",
   desktopHandoff: "/auth/desktop/handoff",
   authError: "/auth/error",
+  workspace: (workspaceId: string) => `/workspaces/${workspaceId}`,
   chat: (workspaceId: string, chatId: string) => `/workspaces/${workspaceId}/chats/${chatId}`,
 } as const;

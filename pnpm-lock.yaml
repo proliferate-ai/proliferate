@@ -299,6 +299,9 @@ importers:
       '@proliferate/cloud-sdk':
         specifier: workspace:*
         version: link:../cloud/sdk
+      '@proliferate/cloud-sdk-react':
+        specifier: workspace:*
+        version: link:../cloud/sdk-react
       '@proliferate/design':
         specifier: workspace:*
         version: link:../packages/design
@@ -308,6 +311,9 @@ importers:
       '@sentry/react-native':
         specifier: ^8.11.1
         version: 8.11.1(@expo/env@2.0.11)(dotenv@16.6.1)(expo@54.0.34(@babel/core@7.29.0)(graphql@16.8.1)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      '@tanstack/react-query':
+        specifier: ^5.95.2
+        version: 5.95.2(react@19.1.0)
       expo:
         specifier: ~54.0.33
         version: 54.0.34(@babel/core@7.29.0)(graphql@16.8.1)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
