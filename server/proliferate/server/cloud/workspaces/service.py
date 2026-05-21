@@ -45,6 +45,7 @@ from proliferate.db.store.cloud_runtime_environments import (
     load_runtime_environment_for_workspace,
 )
 from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
     create_cloud_workspace_for_user,
@@ -336,6 +337,11 @@ async def _workspace_summaries_for_request(
             cloud_workspace_id=workspace.id,
             limit=1,
         )
+        target = (
+            await targets_store.get_target_by_id(db, workspace.target_id)
+            if workspace.target_id is not None
+            else None
+        )
         billing_subject_id = (
             runtime_environment.billing_subject_id
             if runtime_environment is not None
@@ -362,6 +368,7 @@ async def _workspace_summaries_for_request(
                 exposure=exposure,
                 claim=claim,
                 last_session_summary=latest_sessions[0] if latest_sessions else None,
+                target_kind=target.kind if target is not None else None,
             )
         )
     return summaries
@@ -505,6 +512,11 @@ async def _build_workspace_detail_for_request(
         cloud_workspace_id=workspace.id,
         limit=1,
     )
+    target = (
+        await targets_store.get_target_by_id(db, workspace.target_id)
+        if workspace.target_id is not None
+        else None
+    )
     billing = await get_billing_snapshot_for_subject(
         runtime_environment.billing_subject_id
         if runtime_environment is not None
@@ -531,6 +543,7 @@ async def _build_workspace_detail_for_request(
         exposure=exposure,
         claim=claim,
         last_session_summary=latest_sessions[0] if latest_sessions else None,
+        target_kind=target.kind if target is not None else None,
     )
 
 
@@ -552,11 +565,17 @@ async def _build_workspace_detail(
     )
     ready_agent_kind_values = await _load_agent_auth_agent_kinds_for_workspace(workspace)
     latest_sessions = ()
+    target = None
     async with db_engine.async_session_factory() as db:
         latest_sessions = await events_store.list_session_projections_for_workspace(
             db,
             cloud_workspace_id=workspace.id,
             limit=1,
+        )
+        target = (
+            await targets_store.get_target_by_id(db, workspace.target_id)
+            if workspace.target_id is not None
+            else None
         )
     billing = await get_billing_snapshot_for_subject(
         runtime_environment.billing_subject_id
@@ -584,6 +603,7 @@ async def _build_workspace_detail(
         exposure=exposure,
         claim=claim,
         last_session_summary=latest_sessions[0] if latest_sessions else None,
+        target_kind=target.kind if target is not None else None,
     )
 
 

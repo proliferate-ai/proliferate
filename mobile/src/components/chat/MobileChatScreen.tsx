@@ -11,6 +11,7 @@ import {
 import {
   useCloudTranscriptSnapshot,
   useCommandStatus,
+  useClaimCloudWorkspace,
   useEnqueueCloudCommand,
   useSessionLive,
 } from "@proliferate/cloud-sdk-react";
@@ -35,14 +36,17 @@ type SendPromptPayload = {
 export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
   const [draft, setDraft] = useState("");
   const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
+  const [claimedLocally, setClaimedLocally] = useState(false);
   const sessionLive = useSessionLive(chat.sessionId, {
     targetId: chat.targetId,
   });
   const transcript = useCloudTranscriptSnapshot(chat.targetId, chat.sessionId);
   const enqueuePrompt = useEnqueueCloudCommand<SendPromptPayload>();
+  const claimWorkspace = useClaimCloudWorkspace();
   const commandStatus = useCommandStatus(latestCommandId);
   const messages = sessionLive.snapshot?.transcriptItems ?? transcript.data?.transcriptItems ?? [];
-  const canSubmit = Boolean(draft.trim() && !enqueuePrompt.isPending);
+  const isUnclaimed = chat.visibility === "shared_unclaimed" && !claimedLocally;
+  const canSubmit = Boolean(draft.trim() && !enqueuePrompt.isPending && !isUnclaimed);
 
   async function submitPrompt() {
     const text = draft.trim();
@@ -61,6 +65,11 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
     });
     setLatestCommandId(command.commandId);
     setDraft("");
+  }
+
+  async function claimChat() {
+    await claimWorkspace.mutateAsync({ workspaceId: chat.workspaceId });
+    setClaimedLocally(true);
   }
 
   return (
@@ -88,7 +97,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        {chat.visibility === "shared_unclaimed" ? (
+        {isUnclaimed ? (
           <View style={styles.claimBanner}>
             <View style={styles.claimIcon}>
               <MobileIcon name="hand" size={16} color={colors.success} />
@@ -96,9 +105,25 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
             <View style={styles.claimText}>
               <Text style={styles.claimTitle}>Unclaimed shared chat</Text>
               <Text style={styles.claimBody}>
-                Claim from web or Desktop before taking direct control.
+                Claim this work before sending prompts from mobile.
               </Text>
             </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Claim shared chat"
+              accessibilityState={{ disabled: claimWorkspace.isPending }}
+              disabled={claimWorkspace.isPending}
+              onPress={() => void claimChat()}
+              style={({ pressed }) => [
+                styles.claimButton,
+                claimWorkspace.isPending && styles.claimButtonDisabled,
+                pressed && styles.claimButtonPressed,
+              ]}
+            >
+              <Text style={styles.claimButtonText}>
+                {claimWorkspace.isPending ? "Claiming" : "Claim"}
+              </Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -133,7 +158,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
           multiline
           value={draft}
           onChangeText={setDraft}
-          placeholder="Message this session"
+          placeholder={isUnclaimed ? "Claim this chat to reply" : "Message this session"}
           style={styles.composerInput}
         />
         <Pressable
@@ -255,6 +280,23 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     fontSize: 12.5,
     lineHeight: 17,
+  },
+  claimButton: {
+    borderRadius: radius.md,
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  claimButtonPressed: {
+    opacity: 0.82,
+  },
+  claimButtonDisabled: {
+    opacity: 0.56,
+  },
+  claimButtonText: {
+    color: colors.background,
+    fontSize: 12,
+    fontWeight: "700",
   },
   controlNote: {
     paddingVertical: spacing[2],

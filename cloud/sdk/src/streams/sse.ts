@@ -34,11 +34,17 @@ export function subscribeCloudSse<TEvent>(
   options.signal?.addEventListener("abort", close, { once: true });
   void pumpCloudSse(options, controller.signal, (nextReader) => {
     reader = nextReader;
-  }).catch((error) => {
-    if (!closed && !controller.signal.aborted) {
-      options.onError?.(error instanceof Event ? error : new Event("error"));
-    }
-  });
+  })
+    .then(() => {
+      if (!closed && !controller.signal.aborted) {
+        options.onError?.(new Event("eof"));
+      }
+    })
+    .catch((error) => {
+      if (!closed && !controller.signal.aborted) {
+        options.onError?.(error instanceof Event ? error : new Event("error"));
+      }
+    });
 
   return {
     close,
