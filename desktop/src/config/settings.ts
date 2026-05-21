@@ -12,6 +12,7 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "repo",
   "worktrees",
   "compute",
+  "slack-bot",
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_CONTENT_SECTIONS)[number];

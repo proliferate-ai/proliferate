@@ -9,6 +9,7 @@ import {
   FolderList,
   GitBranch,
   Keyboard,
+  MessageSquare,
   RefreshCw,
   Settings,
   Sparkles,
@@ -21,7 +22,7 @@ export type SettingsNavItem =
   | { kind: "action"; id: "checkForUpdates" | "support"; label: string; icon: ComponentType<IconProps> };
 
 export interface SettingsNavGroup {
-  id: "preferences" | "organization_account" | "environments" | "workflows" | "help";
+  id: "preferences" | "organization_account" | "environments" | "workflows" | "slack" | "help";
   heading: string;
   items: SettingsNavItem[];
 }
@@ -62,6 +63,13 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       { kind: "section", id: "agents", label: "Agents", icon: Blocks },
       { kind: "section", id: "agent-defaults", label: "Agent Defaults", icon: Settings },
       { kind: "section", id: "review", label: "Review", icon: BrainOutline },
+    ],
+  },
+  {
+    id: "slack",
+    heading: "Slack bot",
+    items: [
+      { kind: "section", id: "slack-bot", label: "Slack bot", icon: MessageSquare },
     ],
   },
   {

@@ -44,7 +44,9 @@ class CloudRepoFileValue:
 @dataclass(frozen=True)
 class CloudRepoConfigValue:
     id: UUID
-    user_id: UUID
+    owner_scope: str
+    user_id: UUID | None
+    organization_id: UUID | None
     git_owner: str
     git_repo_name: str
     configured: bool
@@ -63,6 +65,10 @@ class CloudRepoConfigValue:
 
 @dataclass(frozen=True)
 class CloudRepoConfigSummaryValue:
+    id: UUID
+    owner_scope: str
+    user_id: UUID | None
+    organization_id: UUID | None
     git_owner: str
     git_repo_name: str
     configured: bool
@@ -98,7 +104,9 @@ def _repo_config_value(
 ) -> CloudRepoConfigValue:
     return CloudRepoConfigValue(
         id=record.id,
+        owner_scope=record.owner_scope,
         user_id=record.user_id,
+        organization_id=record.organization_id,
         git_owner=record.git_owner,
         git_repo_name=record.git_repo_name,
         configured=record.configured,
@@ -129,6 +137,7 @@ async def list_cloud_repo_configs(
         (
             await db.execute(
                 select(CloudRepoConfig)
+                .where(CloudRepoConfig.owner_scope == "personal")
                 .where(CloudRepoConfig.user_id == user_id)
                 .order_by(CloudRepoConfig.git_owner.asc(), CloudRepoConfig.git_repo_name.asc())
             )
@@ -138,6 +147,10 @@ async def list_cloud_repo_configs(
     )
     return [
         CloudRepoConfigSummaryValue(
+            id=record.id,
+            owner_scope=record.owner_scope,
+            user_id=record.user_id,
+            organization_id=record.organization_id,
             git_owner=record.git_owner,
             git_repo_name=record.git_repo_name,
             configured=record.configured,
@@ -158,6 +171,7 @@ async def get_cloud_repo_config(
     record = (
         await db.execute(
             select(CloudRepoConfig).where(
+                CloudRepoConfig.owner_scope == "personal",
                 CloudRepoConfig.user_id == user_id,
                 CloudRepoConfig.git_owner == git_owner,
                 CloudRepoConfig.git_repo_name == git_repo_name,
@@ -180,6 +194,94 @@ async def get_cloud_repo_config(
     return _repo_config_value(record, files)
 
 
+async def get_cloud_repo_config_by_id(
+    db: AsyncSession,
+    *,
+    cloud_repo_config_id: UUID,
+) -> CloudRepoConfigValue | None:
+    record = await db.get(CloudRepoConfig, cloud_repo_config_id)
+    if record is None:
+        return None
+    files = await _load_repo_file_rows(db, record.id)
+    return _repo_config_value(record, files)
+
+
+async def list_organization_cloud_repo_configs(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+) -> list[CloudRepoConfigValue]:
+    records = list(
+        (
+            await db.execute(
+                select(CloudRepoConfig)
+                .where(CloudRepoConfig.owner_scope == "organization")
+                .where(CloudRepoConfig.organization_id == organization_id)
+                .order_by(CloudRepoConfig.git_owner.asc(), CloudRepoConfig.git_repo_name.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    values: list[CloudRepoConfigValue] = []
+    for record in records:
+        values.append(_repo_config_value(record, await _load_repo_file_rows(db, record.id)))
+    return values
+
+
+async def ensure_organization_cloud_repo_config(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+    created_by_user_id: UUID,
+    default_branch: str | None = None,
+) -> CloudRepoConfigValue:
+    del created_by_user_id
+    now = utcnow()
+    await db.execute(
+        pg_insert(CloudRepoConfig)
+        .values(
+            owner_scope="organization",
+            user_id=None,
+            organization_id=organization_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            configured=True,
+            configured_at=now,
+            default_branch=default_branch,
+            env_vars_ciphertext=encrypt_json({}),
+            env_vars_version=0,
+            setup_script="",
+            setup_script_version=0,
+            run_command="",
+            files_version=0,
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(
+            index_elements=[
+                CloudRepoConfig.organization_id,
+                CloudRepoConfig.git_owner,
+                CloudRepoConfig.git_repo_name,
+            ],
+            index_where=CloudRepoConfig.owner_scope == "organization",
+        )
+    )
+    row = (
+        await db.execute(
+            select(CloudRepoConfig).where(
+                CloudRepoConfig.owner_scope == "organization",
+                CloudRepoConfig.organization_id == organization_id,
+                CloudRepoConfig.git_owner == git_owner,
+                CloudRepoConfig.git_repo_name == git_repo_name,
+            )
+        )
+    ).scalar_one()
+    return _repo_config_value(row, await _load_repo_file_rows(db, row.id))
+
+
 async def _get_or_create_repo_config_record(
     db: AsyncSession,
     *,
@@ -191,7 +293,9 @@ async def _get_or_create_repo_config_record(
     await db.execute(
         pg_insert(CloudRepoConfig)
         .values(
+            owner_scope="personal",
             user_id=user_id,
+            organization_id=None,
             git_owner=git_owner,
             git_repo_name=git_repo_name,
             configured=False,
@@ -211,12 +315,14 @@ async def _get_or_create_repo_config_record(
                 CloudRepoConfig.user_id,
                 CloudRepoConfig.git_owner,
                 CloudRepoConfig.git_repo_name,
-            ]
+            ],
+            index_where=CloudRepoConfig.owner_scope == "personal",
         )
     )
     return (
         await db.execute(
             select(CloudRepoConfig).where(
+                CloudRepoConfig.owner_scope == "personal",
                 CloudRepoConfig.user_id == user_id,
                 CloudRepoConfig.git_owner == git_owner,
                 CloudRepoConfig.git_repo_name == git_repo_name,

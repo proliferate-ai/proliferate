@@ -18,6 +18,7 @@ from . import runtime_config as runtime_config  # noqa: F401
 from . import runtime_environments as runtime_environments  # noqa: F401
 from . import sandboxes as sandboxes  # noqa: F401
 from . import skills as skills  # noqa: F401
+from . import slack as slack  # noqa: F401
 from . import sync as sync  # noqa: F401
 from . import target_config as target_config  # noqa: F401
 from . import target_git_identity as target_git_identity  # noqa: F401
