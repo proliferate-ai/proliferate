@@ -141,14 +141,6 @@ async def get_user_connection_by_db_id(
     return await _connection_record(db, record)
 
 
-async def get_connection_payload_ciphertext(
-    db: AsyncSession,
-    connection_db_id: UUID,
-) -> str | None:
-    record = await db.get(CloudMcpConnection, connection_db_id)
-    return record.payload_ciphertext if record is not None else None
-
-
 async def upsert_user_connection(
     db: AsyncSession,
     *,
