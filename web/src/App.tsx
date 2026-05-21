@@ -38,6 +38,7 @@ export function App() {
         <Route path="plugins" element={<PluginsPage />} />
         <Route path="support" element={<SupportPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="workspaces/:workspaceId" element={<ChatPage />} />
         <Route path="workspaces/:workspaceId/chats/:chatId" element={<ChatPage />} />
         <Route path="*" element={<Navigate to={routes.home} replace />} />
       </Route>

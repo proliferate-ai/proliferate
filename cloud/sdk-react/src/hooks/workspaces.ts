@@ -4,19 +4,41 @@ import {
   getWorkspaceSnapshot,
   type CloudWorkspaceSummary,
   type CloudWorkspaceSnapshot,
+  type CloudWorkspaceListSelection,
+  type CloudWorkspaceListScope,
 } from "@proliferate/cloud-sdk";
 import {
   cloudWorkspacesKey,
   cloudWorkspaceSnapshotKey,
+  personalCloudOwnerKey,
+  type CloudOwnerScope,
 } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 
-export function useCloudWorkspaces(enabled = true) {
+export interface UseCloudWorkspacesOptions {
+  enabled?: boolean;
+  ownerScope?: CloudOwnerScope;
+  organizationId?: string | null;
+  scope?: CloudWorkspaceListScope | null;
+}
+
+export function useCloudWorkspaces(options: UseCloudWorkspacesOptions | boolean = {}) {
   const client = useCloudClient();
+  const normalizedOptions = typeof options === "boolean" ? { enabled: options } : options;
+  const owner = {
+    ...personalCloudOwnerKey(),
+    ownerScope: normalizedOptions.ownerScope ?? "personal",
+    organizationId: normalizedOptions.organizationId ?? null,
+  };
+  const selection: CloudWorkspaceListSelection = {
+    ownerScope: owner.ownerScope,
+    organizationId: owner.organizationId,
+    scope: normalizedOptions.scope ?? undefined,
+  };
   return useQuery<CloudWorkspaceSummary[]>({
-    queryKey: cloudWorkspacesKey(),
-    queryFn: () => listCloudWorkspaces(undefined, undefined, client),
-    enabled,
+    queryKey: cloudWorkspacesKey(owner, normalizedOptions.scope ?? null),
+    queryFn: () => listCloudWorkspaces(undefined, selection, client),
+    enabled: normalizedOptions.enabled ?? true,
   });
 }
 

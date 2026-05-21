@@ -1202,6 +1202,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/agent-run-configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Agent Run Configs Endpoint */
+        get: operations["list_agent_run_configs_endpoint_v1_cloud_agent_run_configs_get"];
+        put?: never;
+        /** Create Agent Run Config Endpoint */
+        post: operations["create_agent_run_config_endpoint_v1_cloud_agent_run_configs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-run-configs/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Agent Run Config Defaults Endpoint */
+        get: operations["list_agent_run_config_defaults_endpoint_v1_cloud_agent_run_configs_defaults_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-run-configs/defaults/{agent_kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Agent Run Config Default Endpoint */
+        put: operations["set_agent_run_config_default_endpoint_v1_cloud_agent_run_configs_defaults__agent_kind__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-run-configs/{config_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Agent Run Config Endpoint */
+        get: operations["get_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__get"];
+        put?: never;
+        post?: never;
+        /** Archive Agent Run Config Endpoint */
+        delete: operations["archive_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Agent Run Config Endpoint */
+        patch: operations["update_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__patch"];
+        trace?: never;
+    };
     "/v1/cloud/mcp/catalog": {
         parameters: {
             query?: never;
@@ -1460,6 +1531,144 @@ export interface paths {
         head?: never;
         /** Patch Configured Skill Endpoint */
         patch: operations["patch_configured_skill_endpoint_v1_cloud_skills__item_id__patch"];
+        trace?: never;
+    };
+    "/v1/cloud/slack/oauth/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start Slack Oauth Endpoint */
+        get: operations["start_slack_oauth_endpoint_v1_cloud_slack_oauth_start_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/slack/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Slack Oauth Callback Endpoint */
+        get: operations["slack_oauth_callback_endpoint_v1_cloud_slack_oauth_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/slack/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disconnect Slack Endpoint */
+        post: operations["disconnect_slack_endpoint_v1_cloud_slack_disconnect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/slack/bot-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Slack Bot Config Endpoint */
+        get: operations["get_slack_bot_config_endpoint_v1_cloud_slack_bot_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Slack Bot Config Endpoint */
+        patch: operations["update_slack_bot_config_endpoint_v1_cloud_slack_bot_config_patch"];
+        trace?: never;
+    };
+    "/v1/cloud/slack/bot-config/validate-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Slack Connection Endpoint */
+        post: operations["validate_slack_connection_endpoint_v1_cloud_slack_bot_config_validate_connection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/slack/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Slack Channels Endpoint */
+        get: operations["list_slack_channels_endpoint_v1_cloud_slack_channels_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/slack/repo-routing-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Slack Repo Routing Profiles Endpoint */
+        get: operations["list_slack_repo_routing_profiles_endpoint_v1_cloud_slack_repo_routing_profiles_get"];
+        /** Upsert Slack Repo Routing Profile Endpoint */
+        put: operations["upsert_slack_repo_routing_profile_endpoint_v1_cloud_slack_repo_routing_profiles_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/slack/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Slack Events Endpoint */
+        post: operations["slack_events_endpoint_v1_cloud_slack_events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/cloud/webhooks/e2b": {
@@ -3298,6 +3507,156 @@ export interface components {
             /** Revision */
             revision: number;
         };
+        /** AgentRunConfigCreateRequest */
+        AgentRunConfigCreateRequest: {
+            /**
+             * Ownerscope
+             * @enum {string}
+             */
+            ownerScope: "system" | "personal" | "organization";
+            /** Organizationid */
+            organizationId?: string | null;
+            /** Name */
+            name: string;
+            /** Agentkind */
+            agentKind: string;
+            /** Modelid */
+            modelId: string;
+            /** Controlvalues */
+            controlValues?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Usableinpersonalsandboxes
+             * @default true
+             */
+            usableInPersonalSandboxes: boolean;
+            /**
+             * Usableinsharedsandboxes
+             * @default false
+             */
+            usableInSharedSandboxes: boolean;
+        };
+        /** AgentRunConfigDefaultRequest */
+        AgentRunConfigDefaultRequest: {
+            /**
+             * Configid
+             * Format: uuid
+             */
+            configId: string;
+        };
+        /** AgentRunConfigDefaultResponse */
+        AgentRunConfigDefaultResponse: {
+            /** Id */
+            id: string;
+            /**
+             * Ownerscope
+             * @enum {string}
+             */
+            ownerScope: "personal" | "organization";
+            /** Owneruserid */
+            ownerUserId: string | null;
+            /** Organizationid */
+            organizationId: string | null;
+            /** Agentkind */
+            agentKind: string;
+            /** Configid */
+            configId: string;
+            /** Createdbyuserid */
+            createdByUserId: string;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** AgentRunConfigDefaultsResponse */
+        AgentRunConfigDefaultsResponse: {
+            /** Defaults */
+            defaults: components["schemas"]["AgentRunConfigDefaultResponse"][];
+        };
+        /** AgentRunConfigListResponse */
+        AgentRunConfigListResponse: {
+            /** Configs */
+            configs: components["schemas"]["AgentRunConfigResponse"][];
+        };
+        /** AgentRunConfigResolvedSnapshot */
+        AgentRunConfigResolvedSnapshot: {
+            /** Configid */
+            configId: string;
+            /** Configname */
+            configName: string;
+            /** Agentkind */
+            agentKind: string;
+            /** Modelid */
+            modelId: string;
+            /** Controlvalues */
+            controlValues: {
+                [key: string]: unknown;
+            };
+            /** Ignoredkeys */
+            ignoredKeys: string[];
+        };
+        /** AgentRunConfigResponse */
+        AgentRunConfigResponse: {
+            /** Id */
+            id: string;
+            /**
+             * Ownerscope
+             * @enum {string}
+             */
+            ownerScope: "system" | "personal" | "organization";
+            /** Owneruserid */
+            ownerUserId: string | null;
+            /** Organizationid */
+            organizationId: string | null;
+            /** Createdbyuserid */
+            createdByUserId: string;
+            /** Name */
+            name: string;
+            /** Agentkind */
+            agentKind: string;
+            /** Modelid */
+            modelId: string;
+            /** Controlvalues */
+            controlValues: {
+                [key: string]: unknown;
+            };
+            /** Usableinpersonalsandboxes */
+            usableInPersonalSandboxes: boolean;
+            /** Usableinsharedsandboxes */
+            usableInSharedSandboxes: boolean;
+            /** Seedkey */
+            seedKey: string | null;
+            /** Systemdefaultrank */
+            systemDefaultRank: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "archived";
+            resolved?: components["schemas"]["AgentRunConfigResolvedSnapshot"] | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+            /** Archivedat */
+            archivedAt: string | null;
+        };
+        /** AgentRunConfigUpdateRequest */
+        AgentRunConfigUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Modelid */
+            modelId?: string | null;
+            /** Controlvalues */
+            controlValues?: {
+                [key: string]: unknown;
+            } | null;
+            /** Usableinpersonalsandboxes */
+            usableInPersonalSandboxes?: boolean | null;
+            /** Usableinsharedsandboxes */
+            usableInSharedSandboxes?: boolean | null;
+        };
         /** AnonymousTelemetryAcceptedResponse */
         AnonymousTelemetryAcceptedResponse: {
             /**
@@ -3472,6 +3831,17 @@ export interface components {
         AutomationResponse: {
             /** Id */
             id: string;
+            /**
+             * Ownerscope
+             * @enum {string}
+             */
+            ownerScope: "personal" | "organization";
+            /** Owneruserid */
+            ownerUserId: string | null;
+            /** Organizationid */
+            organizationId: string | null;
+            /** Createdbyuserid */
+            createdByUserId: string;
             /** Gitowner */
             gitOwner: string;
             /** Gitreponame */
@@ -3482,22 +3852,12 @@ export interface components {
             prompt: string;
             schedule: components["schemas"]["AutomationScheduleResponse"];
             /**
-             * Executiontarget
+             * Targetmode
              * @enum {string}
              */
-            executionTarget: "cloud" | "local";
-            /** Targetid */
-            targetId: string | null;
-            /** Targetkind */
-            targetKind: string | null;
-            /** Agentkind */
-            agentKind: string | null;
-            /** Modelid */
-            modelId: string | null;
-            /** Modeid */
-            modeId: string | null;
-            /** Reasoningeffort */
-            reasoningEffort: string | null;
+            targetMode: "local" | "personal_cloud" | "shared_cloud";
+            /** Cloudagentrunconfigid */
+            cloudAgentRunConfigId: string;
             /** Enabled */
             enabled: boolean;
             /** Pausedat */
@@ -3521,6 +3881,17 @@ export interface components {
             /** Automationid */
             automationId: string;
             /**
+             * Ownerscope
+             * @enum {string}
+             */
+            ownerScope: "personal" | "organization";
+            /** Owneruserid */
+            ownerUserId: string | null;
+            /** Organizationid */
+            organizationId: string | null;
+            /** Createdbyuserid */
+            createdByUserId: string;
+            /**
              * Triggerkind
              * @enum {string}
              */
@@ -3528,14 +3899,10 @@ export interface components {
             /** Scheduledfor */
             scheduledFor: string | null;
             /**
-             * Executiontarget
+             * Targetmode
              * @enum {string}
              */
-            executionTarget: "cloud" | "local";
-            /** Targetidsnapshot */
-            targetIdSnapshot: string | null;
-            /** Targetkindsnapshot */
-            targetKindSnapshot: string | null;
+            targetMode: "local" | "personal_cloud" | "shared_cloud";
             /**
              * Status
              * @enum {string}
@@ -3543,14 +3910,34 @@ export interface components {
             status: "queued" | "claimed" | "creating_workspace" | "provisioning_workspace" | "creating_session" | "dispatching" | "dispatched" | "failed" | "cancelled";
             /** Titlesnapshot */
             titleSnapshot: string;
-            /** Agentkindsnapshot */
-            agentKindSnapshot: string | null;
-            /** Modelidsnapshot */
-            modelIdSnapshot: string | null;
-            /** Modeidsnapshot */
-            modeIdSnapshot: string | null;
-            /** Reasoningeffortsnapshot */
-            reasoningEffortSnapshot: string | null;
+            /** Promptsnapshot */
+            promptSnapshot: string;
+            /** Gitprovidersnapshot */
+            gitProviderSnapshot: string;
+            /** Gitownersnapshot */
+            gitOwnerSnapshot: string;
+            /** Gitreponamesnapshot */
+            gitRepoNameSnapshot: string;
+            /** Cloudrepoconfigidsnapshot */
+            cloudRepoConfigIdSnapshot: string;
+            /** Cloudtargetidsnapshot */
+            cloudTargetIdSnapshot: string | null;
+            /** Cloudtargetkindsnapshot */
+            cloudTargetKindSnapshot: string | null;
+            /** Sandboxprofileid */
+            sandboxProfileId: string | null;
+            /** Cloudworkspaceexposureid */
+            cloudWorkspaceExposureId: string | null;
+            /** Agentrunconfigsnapshot */
+            agentRunConfigSnapshot: {
+                [key: string]: unknown;
+            } | null;
+            /** Cascadeattempt */
+            cascadeAttempt: number;
+            /** Lastcascadecommandid */
+            lastCascadeCommandId: string | null;
+            /** Lastcascadereason */
+            lastCascadeReason: string | null;
             /** Claimexpiresat */
             claimExpiresAt: string | null;
             /** Dispatchstartedat */
@@ -4567,26 +4954,30 @@ export interface components {
             title: string;
             /** Prompt */
             prompt: string;
+            /**
+             * Ownerscope
+             * @default personal
+             * @enum {string}
+             */
+            ownerScope: "personal" | "organization";
+            /** Organizationid */
+            organizationId?: string | null;
             /** Gitowner */
             gitOwner: string;
             /** Gitreponame */
             gitRepoName: string;
             schedule: components["schemas"]["AutomationScheduleRequest"];
             /**
-             * Executiontarget
+             * Targetmode
+             * @default personal_cloud
              * @enum {string}
              */
-            executionTarget: "cloud" | "local";
-            /** Targetid */
-            targetId?: string | null;
-            /** Agentkind */
-            agentKind?: string | null;
-            /** Modelid */
-            modelId?: string | null;
-            /** Modeid */
-            modeId?: string | null;
-            /** Reasoningeffort */
-            reasoningEffort?: string | null;
+            targetMode: "local" | "personal_cloud" | "shared_cloud";
+            /**
+             * Cloudagentrunconfigid
+             * Format: uuid
+             */
+            cloudAgentRunConfigId: string;
         };
         /** CreateCloudCommandRequest */
         CreateCloudCommandRequest: {
@@ -4835,6 +5226,23 @@ export interface components {
              */
             version: string;
         };
+        /** LastSessionSummary */
+        LastSessionSummary: {
+            /** Targetid */
+            targetId: string;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Sessionid */
+            sessionId: string;
+            /** Title */
+            title?: string | null;
+            /** Status */
+            status: string;
+            /** Lasteventat */
+            lastEventAt?: string | null;
+            /** Preview */
+            preview?: string | null;
+        };
         /** LocalAutomationAttachSessionRequest */
         LocalAutomationAttachSessionRequest: {
             /** Executorid */
@@ -4921,10 +5329,10 @@ export interface components {
              */
             status: "queued" | "claimed" | "creating_workspace" | "provisioning_workspace" | "creating_session" | "dispatching" | "dispatched" | "failed" | "cancelled";
             /**
-             * Executiontarget
+             * Targetmode
              * @enum {string}
              */
-            executionTarget: "cloud" | "local";
+            targetMode: "local" | "personal_cloud" | "shared_cloud";
             /** Titlesnapshot */
             titleSnapshot: string;
             /** Promptsnapshot */
@@ -4935,6 +5343,8 @@ export interface components {
             gitOwnerSnapshot: string;
             /** Gitreponamesnapshot */
             gitRepoNameSnapshot: string;
+            /** Cloudagentrunconfigidsnapshot */
+            cloudAgentRunConfigIdSnapshot: string | null;
             /** Agentkindsnapshot */
             agentKindSnapshot: string | null;
             /** Modelidsnapshot */
@@ -5271,7 +5681,7 @@ export interface components {
              * Entrypoint
              * @enum {string}
              */
-            entrypoint: "desktop" | "cloud" | "local_runtime" | "cowork";
+            entrypoint: "desktop" | "web" | "mobile" | "cloud" | "local_runtime" | "cowork" | "slack" | "api";
         };
         /** OverageSettingsRequest */
         OverageSettingsRequest: {
@@ -5944,6 +6354,157 @@ export interface components {
             /** Skills */
             skills: components["schemas"]["SkillConfiguredItemResponse"][];
         };
+        /** SlackBotConfigEnvelopeResponse */
+        SlackBotConfigEnvelopeResponse: {
+            connection: components["schemas"]["SlackConnectionResponse"] | null;
+            config: components["schemas"]["SlackBotConfigResponse"] | null;
+        };
+        /** SlackBotConfigResponse */
+        SlackBotConfigResponse: {
+            /** Id */
+            id: string;
+            /** Organizationid */
+            organizationId: string;
+            /** Slackworkspaceconnectionid */
+            slackWorkspaceConnectionId: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Repomode */
+            repoMode: string;
+            /** Fixedcloudrepoconfigid */
+            fixedCloudRepoConfigId: string | null;
+            /** Allowedcloudrepoconfigids */
+            allowedCloudRepoConfigIds: string[];
+            /** Defaultagentkind */
+            defaultAgentKind: string | null;
+            /** Defaultagentrunconfigid */
+            defaultAgentRunConfigId: string | null;
+            /** Allowedslackchannelids */
+            allowedSlackChannelIds: string[];
+            /** Ackmessagetemplate */
+            ackMessageTemplate: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** SlackBotConfigUpdateRequest */
+        SlackBotConfigUpdateRequest: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Repomode */
+            repoMode?: string | null;
+            /** Fixedcloudrepoconfigid */
+            fixedCloudRepoConfigId?: string | null;
+            /** Allowedcloudrepoconfigids */
+            allowedCloudRepoConfigIds?: string[] | null;
+            /** Defaultagentkind */
+            defaultAgentKind?: string | null;
+            /** Defaultagentrunconfigid */
+            defaultAgentRunConfigId?: string | null;
+            /** Allowedslackchannelids */
+            allowedSlackChannelIds?: string[] | null;
+            /** Ackmessagetemplate */
+            ackMessageTemplate?: string | null;
+        };
+        /** SlackChannelResponse */
+        SlackChannelResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Isprivate */
+            isPrivate: boolean;
+            /** Isarchived */
+            isArchived: boolean;
+        };
+        /** SlackChannelsResponse */
+        SlackChannelsResponse: {
+            /** Channels */
+            channels: components["schemas"]["SlackChannelResponse"][];
+        };
+        /** SlackConnectionResponse */
+        SlackConnectionResponse: {
+            /** Id */
+            id: string;
+            /** Organizationid */
+            organizationId: string;
+            /** Slackteamid */
+            slackTeamId: string;
+            /** Slackteamname */
+            slackTeamName: string;
+            /** Slackbotuserid */
+            slackBotUserId: string;
+            /** Botscopes */
+            botScopes: string;
+            /** Status */
+            status: string;
+            /** Installedbyuserid */
+            installedByUserId: string;
+            /** Installedat */
+            installedAt: string;
+            /** Lastvalidatedat */
+            lastValidatedAt: string | null;
+            /** Revokedat */
+            revokedAt: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** SlackRepoRoutingProfileResponse */
+        SlackRepoRoutingProfileResponse: {
+            /** Id */
+            id: string;
+            /** Cloudrepoconfigid */
+            cloudRepoConfigId: string;
+            /** Organizationid */
+            organizationId: string;
+            /** Displayname */
+            displayName: string | null;
+            /** Description */
+            description?: string | null;
+            /** Readmesummary */
+            readmeSummary: string | null;
+            /** Languages */
+            languages: string[];
+            /** Topics */
+            topics: string[];
+            /** Cachedat */
+            cachedAt: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** SlackRepoRoutingProfileUpsertRequest */
+        SlackRepoRoutingProfileUpsertRequest: {
+            /**
+             * Cloudrepoconfigid
+             * Format: uuid
+             */
+            cloudRepoConfigId: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Description */
+            description?: string | null;
+        };
+        /** SlackRepoRoutingProfilesResponse */
+        SlackRepoRoutingProfilesResponse: {
+            /** Profiles */
+            profiles: components["schemas"]["SlackRepoRoutingProfileResponse"][];
+        };
+        /** SlackValidateConnectionResponse */
+        SlackValidateConnectionResponse: {
+            /** Ok */
+            ok: boolean;
+            /** Status */
+            status: string;
+            /** Teamname */
+            teamName?: string | null;
+            /** Errorcode */
+            errorCode?: string | null;
+        };
         /** StartAuthRequest */
         StartAuthRequest: {
             /**
@@ -6048,7 +6609,7 @@ export interface components {
             /** Workspacename */
             workspaceName?: string | null;
             /** Workspacelocation */
-            workspaceLocation?: ("cloud" | "local") | null;
+            workspaceLocation?: ("local" | "cloud") | null;
         };
         /** SupportMessageRequest */
         SupportMessageRequest: {
@@ -6268,18 +6829,10 @@ export interface components {
             /** Gitreponame */
             gitRepoName?: string | null;
             schedule?: components["schemas"]["AutomationScheduleRequest"] | null;
-            /** Executiontarget */
-            executionTarget?: ("cloud" | "local") | null;
-            /** Targetid */
-            targetId?: string | null;
-            /** Agentkind */
-            agentKind?: string | null;
-            /** Modelid */
-            modelId?: string | null;
-            /** Modeid */
-            modeId?: string | null;
-            /** Reasoningeffort */
-            reasoningEffort?: string | null;
+            /** Targetmode */
+            targetMode?: ("local" | "personal_cloud" | "shared_cloud") | null;
+            /** Cloudagentrunconfigid */
+            cloudAgentRunConfigId?: string | null;
         };
         /** UpdateCloudWorkspaceBranchRequest */
         UpdateCloudWorkspaceBranchRequest: {
@@ -7241,6 +7794,22 @@ export interface components {
              * @enum {string}
              */
             visibility: "private" | "shared_unclaimed" | "claimed" | "archived";
+            exposure?: components["schemas"]["WorkspaceExposureSummary"] | null;
+            /**
+             * Exposurestate
+             * @default untracked
+             * @enum {string}
+             */
+            exposureState: "untracked" | "tracked" | "live" | "paused" | "stale" | "revoked";
+            /**
+             * Sandboxtype
+             * @default managed_personal
+             * @enum {string}
+             */
+            sandboxType: "local" | "ssh" | "managed_personal" | "managed_shared" | "self_hosted";
+            /** Lastactivityat */
+            lastActivityAt?: string | null;
+            lastSessionSummary?: components["schemas"]["LastSessionSummary"] | null;
             /** Claimedbyuserid */
             claimedByUserId?: string | null;
             /** Claimid */
@@ -7267,6 +7836,27 @@ export interface components {
             targetKind: string;
             /** Anyharnessworkspaceid */
             anyharnessWorkspaceId: string;
+        };
+        /** WorkspaceExposureSummary */
+        WorkspaceExposureSummary: {
+            /** Id */
+            id: string;
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "private" | "shared_unclaimed" | "claimed" | "archived";
+            /** Claimedbyuserid */
+            claimedByUserId?: string | null;
+            /** Defaultprojectionlevel */
+            defaultProjectionLevel: string;
+            /** Commandable */
+            commandable: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "stale" | "revoked";
         };
         /** WorkspaceMobilityPreflightRequest */
         WorkspaceMobilityPreflightRequest: {
@@ -7378,6 +7968,22 @@ export interface components {
              * @enum {string}
              */
             visibility: "private" | "shared_unclaimed" | "claimed" | "archived";
+            exposure?: components["schemas"]["WorkspaceExposureSummary"] | null;
+            /**
+             * Exposurestate
+             * @default untracked
+             * @enum {string}
+             */
+            exposureState: "untracked" | "tracked" | "live" | "paused" | "stale" | "revoked";
+            /**
+             * Sandboxtype
+             * @default managed_personal
+             * @enum {string}
+             */
+            sandboxType: "local" | "ssh" | "managed_personal" | "managed_shared" | "self_hosted";
+            /** Lastactivityat */
+            lastActivityAt?: string | null;
+            lastSessionSummary?: components["schemas"]["LastSessionSummary"] | null;
             /** Claimedbyuserid */
             claimedByUserId?: string | null;
             /** Claimid */
@@ -8678,7 +9284,7 @@ export interface operations {
             query?: {
                 ownerScope?: "personal" | "organization";
                 organizationId?: string | null;
-                scope?: ("my" | "unclaimed" | "claimable" | "org-all") | null;
+                scope?: ("my" | "unclaimed" | "claimable" | "org-all" | "exposed") | null;
             };
             header?: never;
             path?: never;
@@ -9907,6 +10513,241 @@ export interface operations {
             };
         };
     };
+    list_agent_run_configs_endpoint_v1_cloud_agent_run_configs_get: {
+        parameters: {
+            query?: {
+                ownerScope?: string | null;
+                organizationId?: string | null;
+                agentKind?: string | null;
+                usableIn?: string | null;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunConfigListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_agent_run_config_endpoint_v1_cloud_agent_run_configs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRunConfigCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_run_config_defaults_endpoint_v1_cloud_agent_run_configs_defaults_get: {
+        parameters: {
+            query?: {
+                ownerScope?: string;
+                organizationId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunConfigDefaultsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_agent_run_config_default_endpoint_v1_cloud_agent_run_configs_defaults__agent_kind__put: {
+        parameters: {
+            query?: {
+                ownerScope?: string;
+                organizationId?: string | null;
+            };
+            header?: never;
+            path: {
+                agent_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRunConfigDefaultRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunConfigDefaultResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRunConfigUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_cloud_mcp_catalog_endpoint_v1_cloud_mcp_catalog_get: {
         parameters: {
             query?: never;
@@ -10496,6 +11337,329 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillConfiguredItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_slack_oauth_endpoint_v1_cloud_slack_oauth_start_get: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    slack_oauth_callback_endpoint_v1_cloud_slack_oauth_callback_get: {
+        parameters: {
+            query?: {
+                code?: string | null;
+                state?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disconnect_slack_endpoint_v1_cloud_slack_disconnect_post: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackBotConfigEnvelopeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_slack_bot_config_endpoint_v1_cloud_slack_bot_config_get: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackBotConfigEnvelopeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_slack_bot_config_endpoint_v1_cloud_slack_bot_config_patch: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlackBotConfigUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackBotConfigEnvelopeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_slack_connection_endpoint_v1_cloud_slack_bot_config_validate_connection_post: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackValidateConnectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_slack_channels_endpoint_v1_cloud_slack_channels_get: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackChannelsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_slack_repo_routing_profiles_endpoint_v1_cloud_slack_repo_routing_profiles_get: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackRepoRoutingProfilesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_slack_repo_routing_profile_endpoint_v1_cloud_slack_repo_routing_profiles_put: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlackRepoRoutingProfileUpsertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackRepoRoutingProfilesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    slack_events_endpoint_v1_cloud_slack_events_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-slack-request-timestamp"?: string | null;
+                "x-slack-signature"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -12791,7 +13955,10 @@ export interface operations {
     };
     list_automations_endpoint_v1_automations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                ownerScope?: string;
+                organizationId?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -12805,6 +13972,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AutomationListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

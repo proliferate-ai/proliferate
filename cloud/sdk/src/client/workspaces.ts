@@ -12,7 +12,12 @@ import type {
 } from "../types/index.js";
 import type { CloudOwnerSelection } from "./billing.js";
 
-export type CloudWorkspaceListScope = "my" | "unclaimed" | "claimable" | "org-all";
+export type CloudWorkspaceListScope =
+  | "my"
+  | "unclaimed"
+  | "claimable"
+  | "org-all"
+  | "exposed";
 export type CloudWorkspaceListSelection = CloudOwnerSelection & {
   scope?: CloudWorkspaceListScope;
 };
@@ -72,18 +77,17 @@ export async function listCloudWorkspaces(
     operationId: options?.measurementOperationId,
     category: "cloud.workspace.list",
     method: "GET",
-    run: async () => (
-      await client.GET("/v1/cloud/workspaces", {
-        params: {
-          query: {
-            ownerScope: owner?.ownerScope ?? "personal",
-            organizationId: owner?.organizationId ?? undefined,
-            scope: owner?.scope,
-          },
+    run: async () =>
+      client.requestJson<CloudWorkspaceTransport[]>({
+        method: "GET",
+        path: "/v1/cloud/workspaces",
+        query: {
+          ownerScope: owner?.ownerScope ?? "personal",
+          organizationId: owner?.organizationId ?? undefined,
+          scope: owner?.scope,
         },
         signal: options?.signal,
-      })
-    ).data!,
+      }),
   });
   return data.map((workspace) => normalizeCloudWorkspace(workspace) as CloudWorkspaceSummary);
 }

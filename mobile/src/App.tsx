@@ -2,6 +2,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { MobileShell } from "./components/shell/MobileShell";
 import { MobileAuthProvider } from "./providers/MobileAuthProvider";
+import { MobileCloudProvider } from "./providers/MobileCloudProvider";
 import { MobileTelemetryProvider } from "./providers/MobileTelemetryProvider";
 
 export default function App() {
@@ -9,7 +10,9 @@ export default function App() {
     <SafeAreaProvider>
       <MobileAuthProvider>
         <MobileTelemetryProvider>
-          <MobileShell />
+          <MobileCloudProvider>
+            <MobileShell />
+          </MobileCloudProvider>
         </MobileTelemetryProvider>
       </MobileAuthProvider>
     </SafeAreaProvider>
