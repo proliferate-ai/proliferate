@@ -75,7 +75,7 @@ describe("git panel diff domain", () => {
     });
   });
 
-  it("omits last-turn touched files that no longer have a current diff", () => {
+  it("keeps last-turn touched files even when they no longer have a current diff", () => {
     const sections = buildGitPanelSections({
       mode: "last_turn",
       statusFiles: [],
@@ -104,7 +104,33 @@ describe("git panel diff domain", () => {
     });
 
     expect(sections).toHaveLength(1);
-    expect(sections[0].files.map((file) => file.path)).toEqual(["dirty.md"]);
+    expect(sections[0].files.map((file) => file.path)).toEqual([
+      "clean.md",
+      "dirty.md",
+    ]);
+    expect(sections[0].files[0]).toMatchObject({
+      key: ":clean.md:edit",
+      path: "clean.md",
+      displayPath: "clean.md",
+      currentDiff: null,
+      touched: {
+        path: "clean.md",
+        operation: "edit",
+      },
+    });
+    expect(sections[0].files[1]).toMatchObject({
+      key: ":dirty.md:edit",
+      path: "dirty.md",
+      displayPath: "dirty.md",
+      currentDiff: {
+        path: "dirty.md",
+        additions: 2,
+      },
+      touched: {
+        path: "dirty.md",
+        operation: "edit",
+      },
+    });
   });
 
   it("resolves branch base-ref precedence", () => {

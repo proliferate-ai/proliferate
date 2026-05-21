@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
 import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
+import { CheckCircleFilled } from "@/components/ui/icons";
+import { GitReviewEmptyState } from "@/components/workspace/git/GitReviewEmptyState";
 import {
   PLAYGROUND_SIDEBAR_GIT_DIFF_FILES,
   PLAYGROUND_SIDEBAR_GIT_DIFF_SECTIONS,
@@ -8,6 +10,9 @@ import {
 } from "@/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
 
 const SIDEBAR_DIFF_VIEWPORT_CLASS = "max-h-[calc(var(--diffs-line-height)*18)]";
+const SIDEBAR_DIFF_SURFACE_STYLE = {
+  "--codex-diffs-surface-override": "var(--color-diff-surface)",
+} as CSSProperties;
 
 export function PlaygroundSidebarGitDiff() {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
@@ -31,15 +36,25 @@ export function PlaygroundSidebarGitDiff() {
       <div className="shrink-0 border-b border-sidebar-border/70 px-3 py-2">
         <p className="text-xs text-sidebar-muted-foreground">Git diff sidebar</p>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        <div className="flex flex-col gap-3 pt-2">
+      <div
+        id="review-diffs-collapsed"
+        data-app-action-review-scroll=""
+        data-thread-find-target="review"
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-3"
+      >
+        <div className="relative flex flex-col gap-1.5 pt-2">
+          <span
+            aria-hidden="true"
+            data-app-action-review-metrics-probe=""
+            className="pointer-events-none absolute left-0 top-0 size-px opacity-0"
+          />
           {PLAYGROUND_SIDEBAR_GIT_DIFF_SECTIONS.map((section) => {
             const files = PLAYGROUND_SIDEBAR_GIT_DIFF_FILES.filter(
               (file) => file.section === section,
             );
             return (
-              <section key={section} className="flex flex-col gap-2">
-                <h2 className="px-1 text-xs font-medium text-sidebar-muted-foreground">
+              <section key={section} className="flex flex-col gap-1">
+                <h2 className="px-1.5 text-[10px] font-medium uppercase tracking-wide text-sidebar-muted-foreground">
                   {section}
                 </h2>
                 {files.length > 0 ? (
@@ -52,9 +67,12 @@ export function PlaygroundSidebarGitDiff() {
                     />
                   ))
                 ) : (
-                  <p className="rounded-lg bg-sidebar-accent px-3 py-4 text-center text-xs text-sidebar-muted-foreground">
-                    Working tree clean
-                  </p>
+                  <GitReviewEmptyState
+                    variant="inline"
+                    icon={<CheckCircleFilled className="size-3.5" />}
+                    title="Working tree clean"
+                    description="No files to review in this section."
+                  />
                 )}
               </section>
             );
@@ -75,33 +93,38 @@ function PlaygroundSidebarGitDiffCard({
   onToggle: () => void;
 }) {
   return (
-    <FileDiffCard
-      filePath={file.displayPath}
-      additions={file.additions}
-      deletions={file.deletions}
-      isExpanded={isExpanded}
-      onToggleExpand={onToggle}
-      surface="sidebar"
+    <div
+      data-review-path={file.displayPath}
+      style={SIDEBAR_DIFF_SURFACE_STYLE}
     >
-      {file.binary ? (
-        <p className="px-3 py-2 text-xs text-sidebar-muted-foreground">
-          Binary file changed
-        </p>
-      ) : file.patch ? (
-        <div>
-          <DiffViewer
-            patch={file.patch}
-            filePath={file.displayPath}
-            viewportClassName={SIDEBAR_DIFF_VIEWPORT_CLASS}
-            variant="chat"
-          />
-          {file.truncated && (
-            <p className="px-3 pb-1 text-[10px] text-sidebar-muted-foreground">
-              Diff truncated
-            </p>
-          )}
-        </div>
-      ) : null}
-    </FileDiffCard>
+      <FileDiffCard
+        filePath={file.displayPath}
+        additions={file.additions}
+        deletions={file.deletions}
+        isExpanded={isExpanded}
+        onToggleExpand={onToggle}
+        surface="sidebar"
+      >
+        {file.binary ? (
+          <p className="px-3 py-2 text-xs text-sidebar-muted-foreground">
+            Binary file changed
+          </p>
+        ) : file.patch ? (
+          <div>
+            <DiffViewer
+              patch={file.patch}
+              filePath={file.displayPath}
+              viewportClassName={SIDEBAR_DIFF_VIEWPORT_CLASS}
+              variant="chat"
+            />
+            {file.truncated && (
+              <p className="px-3 pb-1 text-[10px] text-sidebar-muted-foreground">
+                Diff truncated
+              </p>
+            )}
+          </div>
+        ) : null}
+      </FileDiffCard>
+    </div>
   );
 }

@@ -25,15 +25,17 @@ describe("FileChangesCard and FileDiffCard", () => {
 
     expect(html).toContain("2 files changed");
     expect(html).not.toContain("+7");
-    expect(html).not.toContain("text-git-red\">-3</span>");
-    expect(html).toContain('text-right">+</span><span class="text-right">4');
-    expect(html).toContain('text-right">-</span><span class="text-right">1');
-    expect(html).toContain("grid-cols-[0.65ch_minmax(1ch,max-content)]");
+    expect(html).not.toContain(">-3</span>");
+    expect(html).toContain(">+4</span>");
+    expect(html).toContain(">-1</span>");
     expect(html).toContain("bg-[var(--color-diff-panel-surface)]");
     expect(html).toContain("text-chat leading-[var(--text-chat--line-height)]");
-    expect(html).toContain("thread-diff-virtualized");
+    expect(html).not.toContain("thread-diff-virtualized");
     expect(html).toContain("--codex-diffs-surface:var(--codex-diffs-surface-override, var(--color-diff-surface))");
     expect(html).toContain("data-diff-surface=\"sidebar\"");
+    expect(html).toContain("codex-review-diff-card");
+    expect(html).toContain("data-app-action-review-file-expanded=\"true\"");
+    expect(html).toContain("data-app-action-review-file-toggle=\"\"");
     expect(html).toContain("text-sidebar-foreground");
     expect(html).toContain("hover:bg-sidebar-accent");
     expect(html).toContain("diff body");
@@ -55,7 +57,8 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain(">.claude/plans/sorry-im-eant-liek-moonlit-goose.md</span>");
     expect(html).not.toContain(">/Users/pablo/.claude/plans/sorry-im-eant-liek-moonlit-goose.md</span>");
     expect(html).not.toContain("hover:underline");
-    expect(html).toContain("opacity-0");
+    expect(html).toContain("thread-diff-virtualized");
+    expect(html).toContain("group-hover/diff-header:block");
   });
 
   it("marks truncated absolute path prefixes with an ellipsis", () => {

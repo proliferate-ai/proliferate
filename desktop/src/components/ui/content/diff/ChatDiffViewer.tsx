@@ -1,5 +1,4 @@
 import {
-  Fragment,
   useEffect,
   useId,
   useMemo,
@@ -108,24 +107,36 @@ function getChatLineNumberDigits(rows: ChatDiffRow[]): number {
   return Math.max(String(maxLineNumber).length, 1);
 }
 
-function ChatGutterCell({ line }: { line: DiffLine }) {
+function getDiffLineNumberColumnWidth(lineNumberDigits: number): string {
+  return `max(40px, calc(${lineNumberDigits}ch + 1.5rem))`;
+}
+
+function ChatGutterLine({ line }: { line: DiffLine }) {
   const lineType = getChatLineType(line);
   const lineNumber = getChatLineNumber(line);
 
   return (
     <div
-      data-gutter=""
       data-line-type={lineType}
       data-column-number={lineNumber ?? undefined}
       data-line-index={getChatLineIndex(line)}
-      className="diff-gutter-cell sticky left-0 z-10 box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] items-start justify-end bg-[var(--diffs-bg)] px-2 pt-[calc((var(--diffs-line-height)-1em)/2)] text-right tabular-nums"
+      className="diff-gutter-cell box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] items-start justify-end bg-[var(--diffs-bg)] pr-2 pl-3 pt-[calc((var(--diffs-line-height)-1em)/2)] text-right tabular-nums"
     >
       <span data-line-number-content="">{lineNumber ?? ""}</span>
     </div>
   );
 }
 
-function ChatContentCell({
+function ChatGutterSeparatorLine() {
+  return (
+    <div
+      data-separator="simple"
+      className="diff-gutter-cell min-h-[var(--diffs-line-height)] bg-[var(--diffs-bg)]"
+    />
+  );
+}
+
+function ChatContentLine({
   line,
   tokens,
   wrapLongLines,
@@ -146,7 +157,6 @@ function ChatContentCell({
 
   return (
     <div
-      data-content=""
       data-line={lineNumber ?? undefined}
       data-alt-line={altLineNumber}
       data-line-type={lineType}
@@ -178,7 +188,6 @@ function ChatCollapsedRow({
   return (
     <button
       type="button"
-      data-content=""
       data-separator="simple"
       onClick={onExpand}
       aria-label={`Show ${section.lineCount} unmodified lines`}
@@ -191,6 +200,78 @@ function ChatCollapsedRow({
       </span>
       <span className="h-px min-w-4 flex-1 bg-border/60" />
     </button>
+  );
+}
+
+function ChatGutterColumn({
+  rows,
+  rowCount,
+}: {
+  rows: ChatDiffRow[];
+  rowCount: number;
+}) {
+  return (
+    <div
+      data-gutter=""
+      style={{ gridColumn: "1", gridRow: `1 / span ${rowCount}` }}
+      className="sticky left-0 z-10 grid [grid-template-rows:subgrid]"
+    >
+      {rows.map((row) =>
+        row.kind === "line" ? (
+          <ChatGutterLine key={row.key} line={row.line} />
+        ) : (
+          <ChatGutterSeparatorLine key={row.key} />
+        )
+      )}
+    </div>
+  );
+}
+
+function ChatContentColumn({
+  rows,
+  rowCount,
+  tokens,
+  wrapLongLines,
+  contentSearchQuery,
+  activeMatchId,
+  contentSearchUnitId,
+  onExpandCollapsedRow,
+}: {
+  rows: ChatDiffRow[];
+  rowCount: number;
+  tokens: HighlightedToken[][] | null;
+  wrapLongLines: boolean;
+  contentSearchQuery: string;
+  activeMatchId: string | null;
+  contentSearchUnitId: string;
+  onExpandCollapsedRow: (key: string) => void;
+}) {
+  return (
+    <div
+      data-content=""
+      style={{ gridColumn: "2", gridRow: `1 / span ${rowCount}` }}
+      className="grid [grid-template-rows:subgrid]"
+    >
+      {rows.map((row) =>
+        row.kind === "line" ? (
+          <ChatContentLine
+            key={row.key}
+            line={row.line}
+            tokens={tokens}
+            wrapLongLines={wrapLongLines}
+            contentSearchQuery={contentSearchQuery}
+            activeMatchId={activeMatchId}
+            contentSearchUnitId={contentSearchUnitId}
+          />
+        ) : (
+          <ChatCollapsedRow
+            key={row.key}
+            section={row.section}
+            onExpand={() => onExpandCollapsedRow(row.key)}
+          />
+        )
+      )}
+    </div>
   );
 }
 
@@ -258,13 +339,15 @@ export function ChatDiffViewer({
     },
     [contentSearchQuery, contentSearchUnitId, parsed.allCodeLines, tokens],
   );
+  const rowCount = Math.max(rows.length, 1);
   const lineNumberDigits = getChatLineNumberDigits(rows);
   const codeStyle = useMemo(
     () => ({
       ...CHAT_DIFF_CODE_BASE_STYLE,
-      "--diffs-column-number-width": `max(24px, ${lineNumberDigits + 1}ch)`,
+      "--diffs-column-number-width": getDiffLineNumberColumnWidth(lineNumberDigits),
+      gridTemplateRows: `repeat(${rowCount}, auto)`,
     }) as CSSProperties,
-    [lineNumberDigits],
+    [lineNumberDigits, rowCount],
   );
   const viewportStyle = useMemo(
     () => ({
@@ -345,33 +428,17 @@ export function ChatDiffViewer({
                 : "grid-cols-[var(--diffs-column-number-width)_minmax(max-content,1fr)]"
             }`}
           >
-            {rows.map((row) =>
-              row.kind === "line" ? (
-                <Fragment key={row.key}>
-                  <ChatGutterCell line={row.line} />
-                  <ChatContentCell
-                    line={row.line}
-                    tokens={tokens}
-                    wrapLongLines={wrapLongLines}
-                    contentSearchQuery={contentSearchQuery}
-                    activeMatchId={activeMatchId}
-                    contentSearchUnitId={contentSearchUnitId}
-                  />
-                </Fragment>
-              ) : (
-                <Fragment key={row.key}>
-                  <div
-                    data-gutter=""
-                    data-separator="simple"
-                    className="diff-gutter-cell sticky left-0 z-10 min-h-[var(--diffs-line-height)] bg-[var(--diffs-bg)]"
-                  />
-                  <ChatCollapsedRow
-                    section={row.section}
-                    onExpand={() => expandCollapsedRow(row.key)}
-                  />
-                </Fragment>
-              )
-            )}
+            <ChatGutterColumn rows={rows} rowCount={rowCount} />
+            <ChatContentColumn
+              rows={rows}
+              rowCount={rowCount}
+              tokens={tokens}
+              wrapLongLines={wrapLongLines}
+              contentSearchQuery={contentSearchQuery}
+              activeMatchId={activeMatchId}
+              contentSearchUnitId={contentSearchUnitId}
+              onExpandCollapsedRow={expandCollapsedRow}
+            />
           </code>
         </pre>
       </div>

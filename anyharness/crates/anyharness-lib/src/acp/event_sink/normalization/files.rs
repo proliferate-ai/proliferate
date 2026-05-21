@@ -5,6 +5,7 @@ use super::file_references::{
     determine_file_read_scope, extract_location_line, normalize_file_reference,
     resolve_file_references,
 };
+use super::synthesized_patch::{extract_diff_start_line, synthesize_patch};
 use super::text::{count_lines, extract_preview};
 use anyharness_contract::v1::{ContentPart, FileChangeOperation, FileOpenTarget};
 
@@ -37,24 +38,35 @@ pub(in crate::acp::event_sink) fn normalize_file_parts(
                 .get("newText")
                 .and_then(serde_json::Value::as_str)
                 .map(String::from);
-            let patch = item
+            let raw_patch = item
                 .get("patch")
                 .and_then(serde_json::Value::as_str)
-                .map(String::from)
-                .or_else(|| {
-                    synthesize_patch(
-                        diff_path.as_deref(),
-                        old_text.as_deref(),
-                        new_text.as_deref(),
-                    )
-                });
-            let additions = item
-                .get("additions")
-                .and_then(serde_json::Value::as_i64)
+                .map(String::from);
+            let synthesized_patch = if raw_patch.is_none() {
+                let start_line = extract_diff_start_line(item, raw_input, locations);
+                synthesize_patch(
+                    diff_path.as_deref(),
+                    old_text.as_deref(),
+                    new_text.as_deref(),
+                    start_line,
+                )
+            } else {
+                None
+            };
+            let patch = raw_patch.or_else(|| {
+                synthesized_patch
+                    .as_ref()
+                    .map(|synthesized| synthesized.patch.clone())
+            });
+            let additions = synthesized_patch
+                .as_ref()
+                .map(|patch| patch.additions)
+                .or_else(|| item.get("additions").and_then(serde_json::Value::as_i64))
                 .or_else(|| new_text.as_ref().map(|text| count_lines(text)));
-            let deletions = item
-                .get("deletions")
-                .and_then(serde_json::Value::as_i64)
+            let deletions = synthesized_patch
+                .as_ref()
+                .map(|patch| patch.deletions)
+                .or_else(|| item.get("deletions").and_then(serde_json::Value::as_i64))
                 .or_else(|| old_text.as_ref().map(|text| count_lines(text)));
 
             let (path, new_path) =
@@ -244,35 +256,4 @@ fn determine_file_operation(
         (Some(old), Some(new)) if !old.is_empty() && new.is_empty() => FileChangeOperation::Delete,
         _ => FileChangeOperation::Edit,
     }
-}
-
-fn synthesize_patch(
-    path: Option<&str>,
-    old_text: Option<&str>,
-    new_text: Option<&str>,
-) -> Option<String> {
-    if old_text.is_none() && new_text.is_none() {
-        return None;
-    }
-
-    let path = path.unwrap_or("file");
-    let mut patch = format!("--- a/{path}\n+++ b/{path}\n");
-
-    if let Some(old_text) = old_text {
-        for line in old_text.lines() {
-            patch.push('-');
-            patch.push_str(line);
-            patch.push('\n');
-        }
-    }
-
-    if let Some(new_text) = new_text {
-        for line in new_text.lines() {
-            patch.push('+');
-            patch.push_str(line);
-            patch.push('\n');
-        }
-    }
-
-    Some(patch)
 }

@@ -118,9 +118,9 @@ export function buildGitPanelSections(input: BuildGitPanelFilesInput): GitPanelS
       label: "Last turn",
       files: (input.lastTurnFiles ?? [])
         .filter((file) => isVisibleGitPath(file.path))
-        .map((file) => currentByPath.get(file.path) ?? null)
-        .filter((file): file is GitPanelFile => Boolean(file))
-        .map(toReviewFile),
+        .map((file) =>
+          toLastTurnReviewFile(file, currentByPath.get(file.path) ?? null)
+        ),
     }];
   }
   const scope: GitPanelSectionScope = input.mode;
@@ -229,6 +229,20 @@ export function toReviewFile(file: GitPanelFile): GitPanelReviewFile {
     oldPath: file.oldPath,
     displayPath: file.displayPath,
     currentDiff: file,
+  };
+}
+
+function toLastTurnReviewFile(
+  touched: LastTurnTouchedFile,
+  currentDiff: GitPanelFile | null,
+): GitPanelReviewFile {
+  return {
+    key: touched.key,
+    path: touched.path,
+    oldPath: currentDiff?.oldPath ?? touched.oldPath,
+    displayPath: touched.displayPath,
+    currentDiff,
+    touched,
   };
 }
 
