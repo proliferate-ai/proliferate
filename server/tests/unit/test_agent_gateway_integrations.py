@@ -43,5 +43,5 @@ def test_litellm_redaction_scrubs_provider_secrets() -> None:
     )
 
 
-def test_synced_native_auth_does_not_advertise_opencode_yet() -> None:
-    assert allowed_agent_kinds() == ["claude", "codex", "gemini"]
+def test_allowed_agent_kinds_include_opencode() -> None:
+    assert allowed_agent_kinds() == ["claude", "codex", "opencode", "gemini"]

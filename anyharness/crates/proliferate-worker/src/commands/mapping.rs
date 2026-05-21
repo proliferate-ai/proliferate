@@ -224,7 +224,8 @@ fn prompt_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMappingEr
         ));
     };
     let mut body = object.clone();
-    strip_preflight_fields(&mut body);
+    strip_agent_auth_preflight_fields(&mut body);
+    map_runtime_config_preflight(&mut body, &command.target_id)?;
     if !body.contains_key("promptId") && !body.contains_key("prompt_id") {
         body.insert(
             "promptId".to_string(),
@@ -294,13 +295,9 @@ fn map_runtime_config_preflight(
     Ok(())
 }
 
-fn strip_preflight_fields(body: &mut Map<String, Value>) {
+fn strip_agent_auth_preflight_fields(body: &mut Map<String, Value>) {
     body.remove("agentAuthScope");
-    body.remove("sandboxProfileId");
     body.remove("requiredAgentAuthRevision");
-    body.remove("requiredRuntimeConfigRevisionId");
-    body.remove("requiredRuntimeConfigSequence");
-    body.remove("requiredRuntimeConfigContentHash");
 }
 
 fn interaction_resolution_body(payload: &Value) -> Result<(String, Value), CommandMappingError> {
@@ -573,6 +570,16 @@ mod tests {
         assert!(body.get("sandboxProfileId").is_none());
         assert!(body.get("requiredAgentAuthRevision").is_none());
         assert!(body.get("requiredRuntimeConfigRevisionId").is_none());
+        assert_eq!(
+            body.pointer("/expectedRuntimeConfigRevision/revisionId")
+                .and_then(serde_json::Value::as_str),
+            Some("rev-1")
+        );
+        assert_eq!(
+            body.pointer("/expectedRuntimeConfigRevision/externalScope/targetId")
+                .and_then(serde_json::Value::as_str),
+            Some("target-1")
+        );
         assert!(body.get("blocks").is_some());
     }
 

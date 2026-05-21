@@ -578,6 +578,7 @@ async def _prepare_runtime_template(
         )
         tracker.complete(node_version=installed_version)
 
+
 async def _launch_supervised_runtime_bundle(
     tracker: _StepTracker,
     ctx: CloudProvisionInput,

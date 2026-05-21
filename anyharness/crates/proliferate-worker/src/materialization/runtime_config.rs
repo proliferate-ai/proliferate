@@ -1,11 +1,12 @@
 use std::path::Path;
 
 use anyharness_contract::v1::{
-    RuntimeArtifactRef, RuntimeConfigManifest, RuntimeMcpLaunch, RuntimeMcpTemplatePart,
-    RuntimeMcpValue,
+    RuntimeArtifactPayload, RuntimeArtifactRef, RuntimeConfigManifest, RuntimeMcpLaunch,
+    RuntimeMcpTemplatePart, RuntimeMcpValue,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use crate::error::WorkerError;
 
@@ -86,6 +87,28 @@ pub fn manifest_credential_refs(manifest: &RuntimeConfigManifest) -> Vec<String>
         }
     }
     refs
+}
+
+pub fn validate_runtime_artifact_payload(
+    artifact: &RuntimeArtifactRef,
+    payload: &RuntimeArtifactPayload,
+) -> Result<(), WorkerError> {
+    if payload.hash != artifact.hash
+        || payload.content_type != artifact.content_type
+        || payload.byte_size != artifact.byte_size
+        || payload.content.as_bytes().len() as i64 != artifact.byte_size
+        || runtime_artifact_hash(&payload.content) != artifact.hash
+    {
+        return Err(WorkerError::Materialization(format!(
+            "Runtime config artifact integrity mismatch for {}.",
+            artifact.hash
+        )));
+    }
+    Ok(())
+}
+
+fn runtime_artifact_hash(content: &str) -> String {
+    format!("sha256:{:x}", Sha256::digest(content.as_bytes()))
 }
 
 pub fn write_runtime_config_projection(
@@ -214,5 +237,32 @@ mod tests {
             panic!("expected http launch");
         };
         assert!(matches!(headers[0].value, RuntimeMcpValue::Template { .. }));
+    }
+
+    #[test]
+    fn validates_runtime_artifact_payload_hash_and_metadata() {
+        let content = "# Skill\n";
+        let artifact = RuntimeArtifactRef {
+            hash: runtime_artifact_hash(content),
+            content_type: "text/markdown".to_string(),
+            byte_size: content.as_bytes().len() as i64,
+            source_ref: Some("skill:instructions".to_string()),
+            resource_id: None,
+            display_name: None,
+        };
+        let payload = RuntimeArtifactPayload {
+            hash: artifact.hash.clone(),
+            content_type: artifact.content_type.clone(),
+            byte_size: artifact.byte_size,
+            source_ref: artifact.source_ref.clone(),
+            resource_id: None,
+            display_name: None,
+            content: content.to_string(),
+        };
+        validate_runtime_artifact_payload(&artifact, &payload).expect("valid payload");
+
+        let mut tampered = payload;
+        tampered.content = "# Different\n".to_string();
+        assert!(validate_runtime_artifact_payload(&artifact, &tampered).is_err());
     }
 }

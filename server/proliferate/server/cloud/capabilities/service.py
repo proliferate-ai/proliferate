@@ -21,9 +21,7 @@ def cloud_capabilities() -> CloudCapabilitiesResponse:
             enabled=gateway_enabled,
             managedCreditsPersonalEnabled=managed_credits_enabled,
             managedCreditsOrganizationEnabled=managed_credits_enabled,
-            defaultManagedBudgetUsd=(
-                default_managed_budget if managed_credits_enabled else None
-            ),
+            defaultManagedBudgetUsd=(default_managed_budget if managed_credits_enabled else None),
             byokEnabled=gateway_enabled and settings.agent_gateway_byok_enabled,
             byokProviders=AgentGatewayByokProviderCapabilities(
                 anthropicApiKey=(

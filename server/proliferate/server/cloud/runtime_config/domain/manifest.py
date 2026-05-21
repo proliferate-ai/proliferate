@@ -37,16 +37,8 @@ def compile_runtime_config_manifest(
     sandbox_profile_id: str,
 ) -> CompiledRuntimeConfigManifest:
     warning_payloads = [_warning_payload(warning) for warning in plan.warnings]
-    blocking_error_payloads = tuple(
-        _warning_payload(blocker) for blocker in plan.blocking_errors
-    )
-    manifest_without_hash = {
-        "runtimeConfigVersion": 1,
-        "externalScope": {
-            "provider": "proliferate-cloud",
-            "id": sandbox_profile_id,
-            "targetId": None,
-        },
+    blocking_error_payloads = tuple(_warning_payload(blocker) for blocker in plan.blocking_errors)
+    runtime_manifest_payload = {
         "mcpServers": [_mcp_server_payload(server) for server in plan.mcp_servers],
         "mcpBindingSummaries": [
             {
@@ -62,6 +54,15 @@ def compile_runtime_config_manifest(
         "skills": [_skill_payload(skill) for skill in plan.skills],
         "artifacts": [_artifact_payload(artifact) for artifact in plan.artifacts],
         "warnings": warning_payloads,
+    }
+    manifest_without_hash = {
+        "runtimeConfigVersion": 1,
+        "externalScope": {
+            "provider": "proliferate-cloud",
+            "id": sandbox_profile_id,
+            "targetId": None,
+        },
+        **runtime_manifest_payload,
         "blockingErrors": list(blocking_error_payloads),
         "sourceRowRefs": [
             {
@@ -74,7 +75,7 @@ def compile_runtime_config_manifest(
             for source in plan.source_row_refs
         ],
     }
-    hash_value = _content_hash(manifest_without_hash)
+    hash_value = _content_hash(runtime_manifest_payload)
     manifest = {
         **manifest_without_hash,
         "contentHash": hash_value,
