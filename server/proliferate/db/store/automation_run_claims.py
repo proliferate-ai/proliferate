@@ -15,6 +15,7 @@ from proliferate.constants.automations import (
     AUTOMATION_EXECUTION_TARGET_LOCAL,
     AUTOMATION_EXECUTOR_KIND_CLOUD,
     AUTOMATION_EXECUTOR_KIND_DESKTOP,
+    AUTOMATION_OWNER_SCOPE_ORGANIZATION,
     AUTOMATION_RUN_STATUS_CLAIMED,
     AUTOMATION_RUN_STATUS_FAILED,
     AUTOMATION_RUN_STATUS_QUEUED,
@@ -86,7 +87,15 @@ async def load_claimed_run_for_update(
         AutomationRun.status.in_(allowed_statuses),
     ]
     if user_id is not None:
-        predicates.append(AutomationRun.owner_user_id == user_id)
+        predicates.append(
+            or_(
+                AutomationRun.owner_user_id == user_id,
+                and_(
+                    AutomationRun.owner_scope == AUTOMATION_OWNER_SCOPE_ORGANIZATION,
+                    AutomationRun.created_by_user_id == user_id,
+                ),
+            )
+        )
 
     run = (
         await db.execute(select(AutomationRun).where(*predicates).with_for_update())

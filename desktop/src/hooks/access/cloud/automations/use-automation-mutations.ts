@@ -16,14 +16,14 @@ import {
 import {
   automationDetailKey,
   automationRunsKey,
-  automationsListKey,
+  automationsRootKey,
 } from "./query-keys";
 
 export function useAutomationMutations() {
   const queryClient = useQueryClient();
 
   const invalidateAutomation = useCallback(async (automationId?: string) => {
-    await queryClient.invalidateQueries({ queryKey: automationsListKey() });
+    await queryClient.invalidateQueries({ queryKey: automationsRootKey() });
     if (!automationId) {
       return;
     }

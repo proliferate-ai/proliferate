@@ -118,6 +118,15 @@ def _normalize_owner(owner: str) -> str:
     return "personal_cloud" if owner == "cloud" else owner
 
 
+def _active_lifecycle_state_for_owner(owner: str) -> str:
+    return {
+        "local": "local_active",
+        "personal_cloud": "cloud_active",
+        "shared_cloud": "shared_cloud_active",
+        "ssh": "ssh_active",
+    }.get(_normalize_owner(owner), "cloud_active")
+
+
 def _handoff_value(record: CloudWorkspaceHandoffOp) -> CloudWorkspaceHandoffOpValue:
     return CloudWorkspaceHandoffOpValue(
         id=record.id,
@@ -632,12 +641,7 @@ async def finalize_cloud_workspace_handoff_op(
 
     target_owner = _normalize_owner(handoff_op.target_owner)
     mobility_workspace.owner = target_owner
-    mobility_workspace.lifecycle_state = {
-        "local": "local_active",
-        "personal_cloud": "cloud_active",
-        "shared_cloud": "shared_cloud_active",
-        "ssh": "ssh_active",
-    }.get(target_owner, "cloud_active")
+    mobility_workspace.lifecycle_state = _active_lifecycle_state_for_owner(target_owner)
     if target_owner == "local":
         mobility_workspace.cloud_workspace_id = None
     else:
@@ -676,11 +680,19 @@ async def complete_cloud_workspace_handoff_cleanup(
     previous_phase = handoff_op.phase
     handoff_op.phase = "completed"
     handoff_op.cleanup_completed_at = now
+    handoff_op.failure_code = None
+    handoff_op.failure_detail = None
     handoff_op.heartbeat_at = now
     handoff_op.updated_at = now
 
     mobility_workspace.active_handoff_op_id = None
+    mobility_workspace.lifecycle_state = _active_lifecycle_state_for_owner(
+        mobility_workspace.owner
+    )
+    if _normalize_owner(mobility_workspace.owner) == "local":
+        mobility_workspace.cloud_workspace_id = None
     mobility_workspace.status_detail = "Ready"
+    mobility_workspace.last_error = None
     mobility_workspace.updated_at = now
     if previous_phase != handoff_op.phase:
         _record_mobility_event(

@@ -20,6 +20,7 @@ from proliferate.server.cloud.slack.models import (
     SlackBotConfigUpdateRequest,
     SlackChannelResponse,
     SlackChannelsResponse,
+    SlackOAuthStartResponse,
     SlackRepoRoutingProfilesResponse,
     SlackRepoRoutingProfileUpsertRequest,
     SlackValidateConnectionResponse,
@@ -45,14 +46,14 @@ from proliferate.server.cloud.slack.signature import verify_slack_signature
 router = APIRouter(prefix="/slack", tags=["cloud-slack"])
 
 
-@router.get("/oauth/start")
+@router.get("/oauth/start", response_model=SlackOAuthStartResponse)
 async def start_slack_oauth_endpoint(
     organization_id: Annotated[UUID, Query(alias="organizationId")],
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
-) -> RedirectResponse:
-    url = await start_oauth_install(db, user, organization_id=organization_id)
-    return RedirectResponse(url, status_code=302)
+) -> SlackOAuthStartResponse:
+    authorize_url = await start_oauth_install(db, user, organization_id=organization_id)
+    return SlackOAuthStartResponse(authorize_url=authorize_url)
 
 
 @router.get("/oauth/callback")

@@ -25,6 +25,7 @@ class ProvisionStep(StrEnum):
     check_rust_runtime = "check_rust_runtime"
     install_rust_runtime = "install_rust_runtime"
     apply_agent_auth = "apply_agent_auth"
+    apply_runtime_config = "apply_runtime_config"
     clone_repository = "clone_repository"
     checkout_cloud_branch = "checkout_cloud_branch"
     configure_git_identity = "configure_git_identity"

@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   disconnectSlackWorkspace,
+  startSlackOAuth,
   updateSlackBotConfig,
   validateSlackConnection,
 } from "@proliferate/cloud-sdk/client/slack";
@@ -10,6 +11,7 @@ import type {
   SlackBotConfigResponse,
   SlackConnectionValidationResponse,
   SlackDisconnectResponse,
+  SlackOAuthStartResponse,
   UpdateSlackBotConfigRequest,
 } from "@/lib/access/cloud/client";
 import {
@@ -52,10 +54,15 @@ export function useSlackBotConfigMutations(organizationId: string | null) {
     onSuccess: invalidateSlack,
   });
 
+  const oauthStartMutation = useMutation<SlackOAuthStartResponse, Error, void>({
+    mutationFn: () => startSlackOAuth({ organizationId: organizationId! }),
+  });
+
   return {
     updateMutation,
     validateMutation,
     disconnectMutation,
+    oauthStartMutation,
     invalidateSlack,
   };
 }

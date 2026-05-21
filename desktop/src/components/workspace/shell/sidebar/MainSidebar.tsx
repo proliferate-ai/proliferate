@@ -39,6 +39,7 @@ import { useWorkspaceSidebarState } from "@/hooks/workspaces/derived/use-workspa
 import { useSessionActivityReconciler } from "@/hooks/sessions/lifecycle/use-session-activity-reconciler";
 import {
   buildCloudRepoSettingsHref,
+  buildSettingsHref,
 } from "@/lib/domain/settings/navigation";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
@@ -143,7 +144,7 @@ export const MainSidebar = memo(function MainSidebar() {
   }, [clearRepoGroupShowMore, groups, hideRepoRoot, unarchiveWorkspaces]);
 
   const handleOpenRepoSettings = useCallback((sourceRoot: string) => {
-    navigate(`/settings?section=repo&repo=${encodeURIComponent(sourceRoot)}`);
+    navigate(buildSettingsHref({ section: "environments", repo: sourceRoot }));
   }, [navigate]);
   const handleOpenCloudRepoSettings = useCallback((target: {
     gitOwner: string;

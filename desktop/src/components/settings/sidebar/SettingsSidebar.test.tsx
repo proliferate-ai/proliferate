@@ -40,10 +40,12 @@ afterEach(() => {
 });
 
 function renderSettingsSidebar({
+  adminAccess = { isAdmin: true, isLoading: false },
   disabledSections,
   onNavigateHome = vi.fn(),
   onSelectSection = vi.fn(),
 }: {
+  adminAccess?: { isAdmin: boolean; isLoading?: boolean };
   disabledSections?: Partial<Record<SettingsSection, boolean>>;
   onNavigateHome?: () => void;
   onSelectSection?: (section: SettingsSection) => void;
@@ -60,6 +62,7 @@ function renderSettingsSidebar({
       <MemoryRouter initialEntries={["/settings?section=general"]}>
         <SettingsSidebar
           activeSection="general"
+          adminAccess={adminAccess}
           disabledSections={disabledSections}
           onNavigateHome={onNavigateHome}
           onSelectSection={onSelectSection}
@@ -114,6 +117,64 @@ describe("SettingsSidebar support mount boundary", () => {
 });
 
 describe("SettingsSidebar layout and shortcuts", () => {
+  it("renders the settings IA from the mock in order", () => {
+    renderSettingsSidebar();
+
+    const navText = screen.getByRole("navigation", { name: "Settings" }).textContent ?? "";
+    const expectedOrder = [
+      "Preferences",
+      "General",
+      "Appearance",
+      "Keyboard",
+      "Organization & Account",
+      "Account",
+      "Organization",
+      "Billing",
+      "Workspace",
+      "Environments",
+      "Shared environments",
+      "Compute",
+      "Agents",
+      "Agent Defaults",
+      "Agent Authentication",
+      "Review",
+      "Slack bot",
+      "Help",
+      "Support",
+    ];
+    let previousIndex = -1;
+    for (const label of expectedOrder) {
+      const nextIndex = navText.indexOf(label, previousIndex + 1);
+      expect(nextIndex).toBeGreaterThan(previousIndex);
+      previousIndex = nextIndex;
+    }
+
+    expect(screen.queryByText("Workflows")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cloud" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Worktrees" })).toBeNull();
+  });
+
+  it("renders admin tags for admin-only settings rows", () => {
+    renderSettingsSidebar();
+
+    expect(screen.getAllByText("Admin")).toHaveLength(2);
+  });
+
+  it("disables admin-only rows for non-admins", () => {
+    const onSelectSection = vi.fn();
+    renderSettingsSidebar({
+      adminAccess: { isAdmin: false, isLoading: false },
+      onSelectSection,
+    });
+
+    const sharedEnvironments = screen.getByRole("button", { name: /Shared environments/ }) as HTMLButtonElement;
+    expect(sharedEnvironments.disabled).toBe(true);
+    expect(sharedEnvironments.getAttribute("title")).toBe("Admin access required");
+
+    fireEvent.click(sharedEnvironments);
+    expect(onSelectSection).not.toHaveBeenCalledWith("shared-environments");
+  });
+
   it("keeps the back row full width", () => {
     renderSettingsSidebar();
 
@@ -153,7 +214,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 9,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("review");
+    expect(onSelectSection).toHaveBeenLastCalledWith("slack-bot");
   });
 
   it("keeps disabled sections in numbering but declines their shortcut", async () => {

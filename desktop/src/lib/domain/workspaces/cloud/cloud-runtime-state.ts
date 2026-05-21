@@ -1,9 +1,10 @@
 import type {
   CloudRuntimeAuthState,
   CloudWorkspaceStatus,
+  CloudWorkspaceVisibility,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 
-export type SelectedCloudRuntimePhase = "ready" | "resuming" | "failed";
+export type SelectedCloudRuntimePhase = "ready" | "resuming" | "failed" | "claim_required";
 export type SelectedCloudRuntimeVariant = "initial" | "warm";
 export type SelectedCloudRuntimeTone = "pending" | "error";
 export type SelectedCloudRuntimeConnectionState = "resolving" | "ready" | "failed";
@@ -17,10 +18,12 @@ export interface SelectedCloudRuntimeViewModel {
   actionBlockReason: string | null;
   preserveVisibleContent: boolean;
   showRetry: boolean;
+  showClaim: boolean;
 }
 
 export function buildSelectedCloudRuntimeViewModel(args: {
   persistedStatus: CloudWorkspaceStatus | null;
+  visibility?: CloudWorkspaceVisibility | null;
   connectionState: SelectedCloudRuntimeConnectionState;
   runtimeAuth?: CloudRuntimeAuthState | null;
   isWarm: boolean;
@@ -32,6 +35,20 @@ export function buildSelectedCloudRuntimeViewModel(args: {
   const variant: SelectedCloudRuntimeVariant = args.isWarm ? "warm" : "initial";
   const runtimeAuth = args.runtimeAuth ?? null;
 
+  if (args.visibility === "shared_unclaimed") {
+    return {
+      phase: "claim_required",
+      variant,
+      tone: "pending",
+      title: "Shared workspace unclaimed",
+      subtitle: "Claim this workspace to open it directly in Desktop.",
+      actionBlockReason: "This is shared team work. Claim it to attach Desktop directly to the runtime.",
+      preserveVisibleContent: variant === "warm",
+      showRetry: false,
+      showClaim: true,
+    };
+  }
+
   if (runtimeAuth?.status === "apply_failed") {
     return {
       phase: "failed",
@@ -42,6 +59,7 @@ export function buildSelectedCloudRuntimeViewModel(args: {
       actionBlockReason: runtimeAuth.lastError ?? "Agent authentication failed to apply. Retry.",
       preserveVisibleContent: variant === "warm",
       showRetry: true,
+      showClaim: false,
     };
   }
 
@@ -55,6 +73,7 @@ export function buildSelectedCloudRuntimeViewModel(args: {
       actionBlockReason: "Agent authentication changed. Close active cloud sessions, then retry to apply it.",
       preserveVisibleContent: variant === "warm",
       showRetry: true,
+      showClaim: false,
     };
   }
 
@@ -68,6 +87,7 @@ export function buildSelectedCloudRuntimeViewModel(args: {
       actionBlockReason: "Sync an agent credential before starting cloud sessions.",
       preserveVisibleContent: variant === "warm",
       showRetry: false,
+      showClaim: false,
     };
   }
 
@@ -81,6 +101,7 @@ export function buildSelectedCloudRuntimeViewModel(args: {
       actionBlockReason: null,
       preserveVisibleContent: false,
       showRetry: false,
+      showClaim: false,
     };
   }
 
@@ -94,6 +115,7 @@ export function buildSelectedCloudRuntimeViewModel(args: {
       actionBlockReason: "Cloud workspace couldn't reconnect. Retry to restore chat, files, and terminals.",
       preserveVisibleContent: variant === "warm",
       showRetry: true,
+      showClaim: false,
     };
   }
 
@@ -110,5 +132,6 @@ export function buildSelectedCloudRuntimeViewModel(args: {
       : "Cloud workspace is resuming. Runtime-backed actions are paused until it comes back.",
     preserveVisibleContent: variant === "warm",
     showRetry: false,
+    showClaim: false,
   };
 }

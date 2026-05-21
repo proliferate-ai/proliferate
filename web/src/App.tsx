@@ -40,6 +40,8 @@ export function App() {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="workspaces/:workspaceId" element={<ChatPage />} />
         <Route path="workspaces/:workspaceId/chats/:chatId" element={<ChatPage />} />
+        <Route path="cloud/workspaces/:workspaceId" element={<ChatPage />} />
+        <Route path="cloud/workspaces/:workspaceId/chats/:chatId" element={<ChatPage />} />
         <Route path="*" element={<Navigate to={routes.home} replace />} />
       </Route>
     </InstrumentedRoutes>

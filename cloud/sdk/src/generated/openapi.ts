@@ -433,6 +433,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/analytics/client-daily-activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Client Daily Activity Endpoint */
+        post: operations["record_client_daily_activity_endpoint_v1_analytics_client_daily_activity_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/repos/{git_owner}/{git_repo_name}/branches": {
         parameters: {
             query?: never;
@@ -3742,6 +3759,14 @@ export interface components {
             /** Usableinsharedsandboxes */
             usableInSharedSandboxes?: boolean | null;
         };
+        /** AnalyticsAcceptedResponse */
+        AnalyticsAcceptedResponse: {
+            /**
+             * Accepted
+             * @default true
+             */
+            accepted: boolean;
+        };
         /** AnonymousTelemetryAcceptedResponse */
         AnonymousTelemetryAcceptedResponse: {
             /**
@@ -4184,6 +4209,24 @@ export interface components {
             claimedAt: string;
             /** Claimedbyuserid */
             claimedByUserId: string;
+        };
+        /** ClientDailyActivityRequest */
+        ClientDailyActivityRequest: {
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "desktop" | "web" | "mobile";
+            /** Anonymousinstalluuid */
+            anonymousInstallUuid?: string | null;
+            /** Telemetrymode */
+            telemetryMode?: ("full" | "limited" | "off" | "local_dev" | "self_managed" | "hosted_product") | null;
+            /** Appversion */
+            appVersion?: string | null;
+            /** Platform */
+            platform?: string | null;
+            /** Routeorscreen */
+            routeOrScreen?: string | null;
         };
         /** CloudCapabilitiesResponse */
         CloudCapabilitiesResponse: {
@@ -6585,6 +6628,11 @@ export interface components {
             createdAt: string;
             /** Updatedat */
             updatedAt: string;
+        };
+        /** SlackOAuthStartResponse */
+        SlackOAuthStartResponse: {
+            /** Authorizeurl */
+            authorizeUrl: string;
         };
         /** SlackRepoRoutingProfileResponse */
         SlackRepoRoutingProfileResponse: {
@@ -9118,6 +9166,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnonymousTelemetryAcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_client_daily_activity_endpoint_v1_analytics_client_daily_activity_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientDailyActivityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsAcceptedResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11712,7 +11793,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SlackOAuthStartResponse"];
                 };
             };
             /** @description Validation Error */

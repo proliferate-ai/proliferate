@@ -60,6 +60,6 @@ describe("RepoSetupModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Customize defaults" }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(navigateMock).toHaveBeenCalledWith("/settings?section=repo&repo=%2Ftmp%2Fproliferate");
+    expect(navigateMock).toHaveBeenCalledWith("/settings?section=environments&repo=%2Ftmp%2Fproliferate");
   });
 });

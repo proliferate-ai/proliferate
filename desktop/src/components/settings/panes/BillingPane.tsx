@@ -6,21 +6,15 @@ import { OrganizationBillingSection } from "@/components/settings/panes/billing/
 import { Button } from "@proliferate/ui/primitives/Button";
 import { useCloudBilling, useCloudBillingActions } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
-import { useAuthStore } from "@/stores/auth/auth-store";
-
-const EMPTY_MEMBERS = [] as const;
+import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 
 export function BillingPane() {
   const personalBillingQuery = useCloudBilling();
   const personalBillingPlan = personalBillingQuery.data;
   const personalBillingActions = useCloudBillingActions();
   const { activeOrganization, activeOrganizationId } = useActiveOrganization();
-  const membersQuery = useOrganizationMembers(activeOrganizationId);
-  const members = membersQuery.data?.members ?? EMPTY_MEMBERS;
-  const currentUser = useAuthStore((state) => state.user);
-  const currentMember = members.find((member) => member.userId === currentUser?.id) ?? null;
-  const canManageBilling = currentMember?.role === "owner" || currentMember?.role === "admin";
+  const admin = useIsAdmin(activeOrganizationId);
+  const canManageBilling = admin.isAdmin;
 
   return (
     <section className="space-y-6">
@@ -34,7 +28,7 @@ export function BillingPane() {
           organizationId={activeOrganization.id}
           organizationName={activeOrganization.name}
           canManageBilling={canManageBilling}
-          currentMemberRole={currentMember?.role ?? null}
+          currentMemberRole={admin.role}
         />
       ) : null}
 

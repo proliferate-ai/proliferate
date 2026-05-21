@@ -8,7 +8,9 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const apiPort = Number(process.env.PROLIFERATE_API_PORT || "8000");
-const webPort = Number(process.env.PROLIFERATE_WEB_PORT || "5174");
+const webPort = Number(
+  process.env.PROLIFERATE_HOSTED_WEB_PORT || process.env.PROLIFERATE_WEB_PORT || "5174",
+);
 const frontendBaseUrl = process.env.FRONTEND_BASE_URL || `http://localhost:${webPort}`;
 const localApiBaseUrl = process.env.VITE_PROLIFERATE_API_BASE_URL || `http://127.0.0.1:${apiPort}`;
 const ngrokWebAddr = process.env.NGROK_WEB_ADDR || "127.0.0.1:4042";
@@ -23,7 +25,7 @@ function usage() {
 
 Environment overrides:
   PROLIFERATE_API_PORT=8000
-  PROLIFERATE_WEB_PORT=5174
+  PROLIFERATE_HOSTED_WEB_PORT=5174
   FRONTEND_BASE_URL=http://localhost:5174
   VITE_PROLIFERATE_API_BASE_URL=http://127.0.0.1:8000
   NGROK_WEB_ADDR=127.0.0.1:4042
@@ -378,11 +380,11 @@ async function main() {
       "--filter",
       "@proliferate/web",
       "dev",
-      "--",
       "--host",
       "127.0.0.1",
       "--port",
       String(webPort),
+      "--strictPort",
     ],
     {
       env: {

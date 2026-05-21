@@ -311,6 +311,23 @@ def test_not_ready_mcp_blocks_skill_that_requires_it() -> None:
     assert compiled.manifest["blockingErrors"] == list(compiled.blocking_errors)
 
 
+def test_runtime_config_hash_changes_when_blockers_clear() -> None:
+    blocked = compile_runtime_config_manifest(
+        resolve_runtime_config(
+            _input(mcps=(_mcp(id="mcp-unready", auth_status="needs_reconnect"),))
+        ),
+        sandbox_profile_id="profile-1",
+    )
+    cleared = compile_runtime_config_manifest(
+        resolve_runtime_config(_input()),
+        sandbox_profile_id="profile-1",
+    )
+
+    assert blocked.blocking_errors
+    assert not cleared.blocking_errors
+    assert blocked.content_hash != cleared.content_hash
+
+
 def test_plugin_child_skill_is_removed_when_parent_plugin_disabled_or_deleted() -> None:
     disabled_plan = resolve_runtime_config(
         _input(

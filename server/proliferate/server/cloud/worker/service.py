@@ -16,12 +16,14 @@ from proliferate.constants.cloud import (
     CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
     CLOUD_TARGET_HEARTBEAT_STALE_SECONDS,
     CLOUD_WORKER_TOKEN_DOMAIN,
+    CloudCommandKind,
     CloudCommandStatus,
     CloudTargetStatus,
     CloudTargetUpdateStatus,
     CloudWorkerStatus,
 )
 from proliferate.db.store.cloud_claims import tokens as claim_tokens_store
+from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_sandboxes import load_active_slot_for_profile_target
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
@@ -185,6 +187,7 @@ def _parse_json_dict(value: str | None) -> dict[str, object] | None:
 def _command_envelope(
     command: commands_store.CloudCommandSnapshot,
 ) -> WorkerCommandEnvelope:
+    payload = _parse_json_dict(command.payload_json) or {}
     return WorkerCommandEnvelope(
         command_id=str(command.id),
         idempotency_key=command.idempotency_key,
@@ -197,7 +200,7 @@ def _command_envelope(
         slot_generation=command.leased_slot_generation,
         session_id=command.session_id,
         kind=command.kind,
-        payload=_parse_json_dict(command.payload_json) or {},
+        payload=_worker_delivery_payload(command, payload),
         observed_event_seq=command.observed_event_seq,
         preconditions=_parse_json_dict(command.preconditions_json),
         lease_id=command.lease_id or "",
@@ -209,6 +212,65 @@ def _sandbox_profile_id_from_payload(payload_json: str) -> str | None:
     value = _parse_json_dict(payload_json) or {}
     sandbox_profile_id = value.get("sandboxProfileId")
     return sandbox_profile_id if isinstance(sandbox_profile_id, str) else None
+
+
+def _worker_delivery_payload(
+    command: commands_store.CloudCommandSnapshot,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    if command.kind == CloudCommandKind.start_session.value:
+        sanitized = dict(payload)
+        _ensure_expected_runtime_config_revision(
+            sanitized,
+            target_id=str(command.target_id),
+        )
+        _strip_cloud_launch_preflight_fields(sanitized)
+        return sanitized
+    if command.kind == CloudCommandKind.send_prompt.value:
+        sanitized = dict(payload)
+        _strip_cloud_launch_preflight_fields(sanitized)
+        sanitized.pop("agentAuthScope", None)
+        sanitized.pop("requiredAgentAuthRevision", None)
+        return sanitized
+    return payload
+
+
+def _ensure_expected_runtime_config_revision(
+    payload: dict[str, object],
+    *,
+    target_id: str,
+) -> None:
+    if isinstance(payload.get("expectedRuntimeConfigRevision"), dict):
+        return
+    sandbox_profile_id = payload.get("sandboxProfileId")
+    revision_id = payload.get("requiredRuntimeConfigRevisionId")
+    sequence = payload.get("requiredRuntimeConfigSequence")
+    content_hash = payload.get("requiredRuntimeConfigContentHash")
+    if not (
+        isinstance(sandbox_profile_id, str)
+        and isinstance(revision_id, str)
+        and isinstance(sequence, int)
+        and not isinstance(sequence, bool)
+        and isinstance(content_hash, str)
+    ):
+        return
+    payload["expectedRuntimeConfigRevision"] = {
+        "revisionId": revision_id,
+        "sequence": sequence,
+        "contentHash": content_hash,
+        "externalScope": {
+            "provider": "proliferate-cloud",
+            "id": sandbox_profile_id,
+            "targetId": target_id,
+        },
+    }
+
+
+def _strip_cloud_launch_preflight_fields(payload: dict[str, object]) -> None:
+    payload.pop("sandboxProfileId", None)
+    payload.pop("requiredRuntimeConfigRevisionId", None)
+    payload.pop("requiredRuntimeConfigSequence", None)
+    payload.pop("requiredRuntimeConfigContentHash", None)
 
 
 def _target_desired_versions(target: targets_store.CloudTargetSnapshot) -> DesiredVersions:
@@ -879,6 +941,91 @@ async def record_command_delivery(
     )
 
 
+async def _record_agent_auth_state_from_command_result(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    command: commands_store.CloudCommandSnapshot,
+    body: WorkerCommandResultRequest,
+    status: str,
+) -> None:
+    """Accept refresh command results as a compatibility materialization signal.
+
+    New workers report the detailed status endpoint during materialization.
+    Older deployed worker bundles may only return an accepted command result;
+    the command result is still slot-fenced and worker-authenticated, so it is
+    sufficient to mark the target current for the reported revision.
+    """
+
+    if command.kind != CloudCommandKind.refresh_agent_auth_config.value:
+        return
+    if status not in {
+        CloudCommandStatus.accepted.value,
+        CloudCommandStatus.accepted_but_queued.value,
+    }:
+        return
+    try:
+        payload = json.loads(command.payload_json or "{}")
+    except ValueError:
+        return
+    if not isinstance(payload, dict):
+        return
+    try:
+        sandbox_profile_id = UUID(str(payload.get("sandboxProfileId") or ""))
+        revision = int(payload.get("revision"))
+    except (TypeError, ValueError):
+        return
+    result = body.result or {}
+    if not isinstance(result, dict):
+        return
+    current_revision = _optional_int_result_field(result.get("currentRevision"))
+    existing = await agent_auth_store.get_target_state(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=auth.target_id,
+    )
+    if existing is not None and existing.desired_revision > revision:
+        return
+    if (
+        existing is not None
+        and existing.last_command_id is not None
+        and existing.last_command_id != command.id
+        and existing.desired_revision >= revision
+    ):
+        return
+    applied_revision = existing.applied_revision if existing is not None else None
+    desired_revision = max(revision, current_revision or revision)
+    state_status = "superseded"
+    if result.get("applied") is True and desired_revision <= revision:
+        applied_revision = revision
+        desired_revision = revision
+        state_status = "applied"
+    elif current_revision is None and result.get("reason") != "superseded":
+        return
+    force_restart_required = existing.force_restart_required if existing is not None else False
+    if state_status == "applied":
+        force_restart_required = False
+    await agent_auth_store.upsert_target_state(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=auth.target_id,
+        desired_revision=desired_revision,
+        applied_revision=applied_revision,
+        status=state_status,
+        force_restart_required=force_restart_required,
+        last_command_id=command.id,
+        last_worker_id=auth.worker_id,
+        last_error_code=None,
+        last_error_message=None,
+    )
+
+
+def _optional_int_result_field(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
 async def record_command_result(
     db: AsyncSession,
     *,
@@ -910,6 +1057,13 @@ async def record_command_result(
             "Command is not leased by this worker.",
             status_code=404,
         )
+    await _record_agent_auth_state_from_command_result(
+        db,
+        auth=auth,
+        command=command,
+        body=body,
+        status=command.status,
+    )
     await publish_command_status_after_commit(db, command)
     return WorkerCommandStatusResponse(
         command_id=str(command.id),

@@ -207,6 +207,44 @@ async def test_automation_workspace_requires_selected_agent_credentials(
 
 
 @pytest.mark.asyncio
+async def test_automation_workspace_requires_managed_target_and_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+
+    async def _unexpected(*_args, **_kwargs) -> None:
+        raise AssertionError("automation workspace must not fall back to legacy creation")
+
+    monkeypatch.setattr(
+        workspace_service,
+        "_resolve_new_cloud_workspace_create",
+        _unexpected,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "_resolve_new_managed_cloud_workspace_create",
+        _unexpected,
+    )
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await workspace_service.create_cloud_workspace_for_automation_run(
+            user,  # type: ignore[arg-type]
+            run_id=uuid4(),
+            claim_id=uuid4(),
+            target_id=uuid4(),
+            sandbox_profile_id=None,
+            git_owner="acme",
+            git_repo_name="rocket",
+            branch_name="automation/run-123",
+            display_name="Automation run",
+            required_agent_kind="codex",
+        )
+
+    assert exc_info.value.code == "target_required"
+    assert exc_info.value.status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_create_cloud_workspace_returns_pending_after_queueing_provision(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -270,6 +308,101 @@ async def test_create_cloud_workspace_returns_pending_after_queueing_provision(
 
 
 @pytest.mark.asyncio
+async def test_delete_cloud_workspace_destroys_runtime_before_archiving(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid4()
+    workspace_id = uuid4()
+    workspace = SimpleNamespace(id=workspace_id)
+    calls: list[tuple[str, object]] = []
+
+    async def _cloud_workspace_user_can_archive(_user_id, _workspace_id):
+        assert _user_id == user_id
+        assert _workspace_id == workspace_id
+        calls.append(("load", _workspace_id))
+        return workspace
+
+    async def _revoke_claim_tokens_for_workspace(_workspace, *, reason: str) -> None:
+        assert _workspace is workspace
+        calls.append(("revoke", reason))
+
+    async def _destroy_workspace_runtime(_workspace) -> None:
+        assert _workspace is workspace
+        calls.append(("destroy", _workspace.id))
+
+    async def _delete_cloud_workspace_records_for_workspace(_workspace) -> None:
+        assert _workspace is workspace
+        calls.append(("archive", _workspace.id))
+
+    monkeypatch.setattr(
+        workspace_service,
+        "cloud_workspace_user_can_archive",
+        _cloud_workspace_user_can_archive,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "_revoke_claim_tokens_for_workspace",
+        _revoke_claim_tokens_for_workspace,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "_destroy_workspace_runtime",
+        _destroy_workspace_runtime,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "delete_cloud_workspace_records_for_workspace",
+        _delete_cloud_workspace_records_for_workspace,
+    )
+
+    await workspace_service.delete_cloud_workspace(user_id, workspace_id)
+
+    assert calls == [
+        ("load", workspace_id),
+        ("revoke", "workspace_deleted"),
+        ("destroy", workspace_id),
+        ("archive", workspace_id),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_destroy_workspace_runtime_skips_shared_profile_slot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = SimpleNamespace(
+        id=uuid4(),
+        active_sandbox_id=None,
+        status=workspace_service.CloudWorkspaceStatus.ready.value,
+        status_detail="Ready",
+        updated_at=None,
+    )
+    calls: list[str] = []
+
+    async def _load_cloud_sandbox_by_id(_sandbox_id):
+        raise AssertionError("shared profile slot should not be loaded from workspace destroy")
+
+    async def _persist_workspace_destroy_state(_workspace) -> None:
+        assert _workspace is workspace
+        calls.append("persist")
+
+    monkeypatch.setattr(
+        workspace_service,
+        "load_cloud_sandbox_by_id",
+        _load_cloud_sandbox_by_id,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "persist_workspace_destroy_state",
+        _persist_workspace_destroy_state,
+    )
+
+    await workspace_service._destroy_workspace_runtime(workspace)
+
+    assert calls == ["persist"]
+    assert workspace.status == workspace_service.CloudWorkspaceStatus.archived.value
+
+
+@pytest.mark.asyncio
 async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -297,7 +430,7 @@ async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     async def _unexpected(*_args, **_kwargs) -> None:
         raise AssertionError("workspace start should stop before credential/runtime work")
 
-    monkeypatch.setattr(workspace_service, "cloud_workspace_user_can_read", _require_workspace)
+    monkeypatch.setattr(workspace_service, "cloud_workspace_user_can_interact", _require_workspace)
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(workspace_service, "_load_personal_agent_auth_agent_kinds", _unexpected)
@@ -355,7 +488,7 @@ async def test_start_cloud_workspace_requeues_error_workspace(
 
     monkeypatch.setattr(
         workspace_service,
-        "cloud_workspace_user_can_read",
+        "cloud_workspace_user_can_interact",
         _require_workspace,
     )
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
@@ -427,7 +560,7 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
 
     monkeypatch.setattr(
         workspace_service,
-        "cloud_workspace_user_can_read",
+        "cloud_workspace_user_can_interact",
         _require_workspace,
     )
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
@@ -506,7 +639,7 @@ async def test_start_cloud_workspace_returns_ready_workspace_without_requeue(
 
     monkeypatch.setattr(
         workspace_service,
-        "cloud_workspace_user_can_read",
+        "cloud_workspace_user_can_interact",
         _require_workspace,
     )
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)

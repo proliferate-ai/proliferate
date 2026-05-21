@@ -260,6 +260,27 @@ async def _resolve_managed_start_session_workspace(
             "Workspace is not attached to the requested target.",
             status_code=409,
         )
+    if workspace.sandbox_profile_id is None or workspace.target_id is None:
+        raise CloudApiError(
+            "cloud_command_workspace_slot_missing",
+            "Workspace is missing its managed sandbox profile target.",
+            status_code=409,
+        )
+    active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
+        db,
+        sandbox_profile_id=workspace.sandbox_profile_id,
+        target_id=workspace.target_id,
+    )
+    if (
+        active_slot is None
+        or active_slot.slot_generation is None
+        or workspace.materialized_slot_generation != active_slot.slot_generation
+    ):
+        raise CloudApiError(
+            "cloud_command_workspace_slot_stale",
+            "Workspace must be rematerialized on the active managed sandbox before commands run.",
+            status_code=409,
+        )
     exposure = await exposures_store.get_active_workspace_exposure(
         db,
         target_id=target.id,
@@ -505,6 +526,19 @@ def _target_requires_cloud_workspace(target: targets_store.CloudTargetSnapshot) 
     )
 
 
+def _command_has_managed_cloud_workspace(
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    kind: str,
+    body: CreateCloudCommandRequest,
+) -> bool:
+    return (
+        _target_requires_cloud_workspace(target)
+        and kind == CloudCommandKind.start_session.value
+        and (body.cloud_workspace_id is not None or body.workspace_id is not None)
+    )
+
+
 async def enqueue_command(
     db: AsyncSession,
     *,
@@ -574,6 +608,11 @@ async def enqueue_command(
         target=target,
         kind=kind,
         payload=payload,
+        require_target_config=not _command_has_managed_cloud_workspace(
+            target=target,
+            kind=kind,
+            body=body,
+        ),
     )
     validate_command_payload(kind=kind, payload=payload)
     await _validate_runtime_config_preflight(
@@ -725,11 +764,27 @@ async def _validate_agent_auth_preflight(
         sandbox_profile_id=profile.id,
         target_id=target.id,
     )
+    requires_slot = _target_requires_cloud_workspace(target)
+    active_slot = None
+    if requires_slot:
+        active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
+            db,
+            sandbox_profile_id=profile.id,
+            target_id=target.id,
+        )
     if (
         state is None
         or state.status != "applied"
         or state.applied_revision is None
         or state.applied_revision < required_revision
+        or (
+            active_slot is not None
+            and (
+                state.active_sandbox_id != active_slot.id
+                or state.slot_generation != active_slot.slot_generation
+            )
+        )
+        or (requires_slot and active_slot is None)
     ):
         raise CloudApiError(
             "cloud_command_agent_auth_not_ready",
@@ -967,6 +1022,7 @@ async def _stamp_managed_runtime_config_preflight(
     target: targets_store.CloudTargetSnapshot,
     kind: str,
     payload: dict[str, object],
+    require_target_config: bool = True,
 ) -> dict[str, object]:
     del actor_user_id
     if kind not in {CloudCommandKind.start_session.value, CloudCommandKind.send_prompt.value}:
@@ -975,13 +1031,14 @@ async def _stamp_managed_runtime_config_preflight(
         return payload
     if _runtime_config_preflight_fields_present(payload):
         return payload
-    configs = await target_config_store.list_target_configs(db, target_id=target.id)
-    if not configs:
-        raise CloudApiError(
-            "cloud_command_target_config_required",
-            "Managed targets require a materialized target config before sessions can start.",
-            status_code=409,
-        )
+    if require_target_config:
+        configs = await target_config_store.list_target_configs(db, target_id=target.id)
+        if not configs:
+            raise CloudApiError(
+                "cloud_command_target_config_required",
+                "Managed targets require a materialized target config before sessions can start.",
+                status_code=409,
+            )
     _current, current_revision = await runtime_config_store.get_current(
         db,
         sandbox_profile_id=target.sandbox_profile_id,

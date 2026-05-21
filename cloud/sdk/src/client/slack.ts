@@ -4,20 +4,22 @@ import type {
   SlackChannelsResponse,
   SlackConnectionValidationResponse,
   SlackDisconnectResponse,
-  SlackOAuthStartUrlOptions,
+  SlackOAuthStartOptions,
+  SlackOAuthStartResponse,
   SlackRepoRoutingProfile,
   SlackRepoRoutingProfilesResponse,
   UpdateSlackBotConfigRequest,
   UpsertSlackRepoRoutingProfileRequest,
 } from "../types/index.js";
 
-export function buildSlackOAuthStartUrl(
-  options: SlackOAuthStartUrlOptions,
+export async function startSlackOAuth(
+  options: SlackOAuthStartOptions,
   client: ProliferateCloudClient = getProliferateClient(),
-): string {
-  return client.buildUrl("/v1/cloud/slack/oauth/start", {
-    organizationId: options.organizationId,
-    returnTo: options.returnTo,
+): Promise<SlackOAuthStartResponse> {
+  return client.requestJson<SlackOAuthStartResponse>({
+    method: "GET",
+    path: "/v1/cloud/slack/oauth/start",
+    query: { organizationId: options.organizationId },
   });
 }
 

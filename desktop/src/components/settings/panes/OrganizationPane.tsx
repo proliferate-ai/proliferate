@@ -19,6 +19,7 @@ import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHea
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import { useOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-organization-invitations";
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
+import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import {
   type OrganizationInvitationRecord,
@@ -59,13 +60,13 @@ export function OrganizationPane() {
   } = useActiveOrganization();
   const actions = useOrganizationActions(activeOrganizationId);
   const membersQuery = useOrganizationMembers(activeOrganizationId);
+  const admin = useIsAdmin(activeOrganizationId);
   const invitationsQuery = useOrganizationInvitations(activeOrganizationId);
   const members = membersQuery.data?.members ?? EMPTY_MEMBERS;
   const invitations = invitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
   const currentUser = useAuthStore((state) => state.user);
-  const currentMember = members.find((member) => member.userId === currentUser?.id) ?? null;
-  const canManage = currentMember?.role === "owner" || currentMember?.role === "admin";
-  const canManageOwners = currentMember?.role === "owner";
+  const canManage = admin.isAdmin;
+  const canManageOwners = admin.isOwner;
   const [settingsName, setSettingsName] = useState("");
   const [settingsLogoImage, setSettingsLogoImage] = useState<string | null>(null);
   const [logoImageError, setLogoImageError] = useState<string | null>(null);

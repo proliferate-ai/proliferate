@@ -3,8 +3,10 @@ import { useState } from "react";
 import {
   ArrowRight,
   CircleAlert,
+  CircleUser,
   Clock,
   GitMerge,
+  Globe,
   Spinner,
 } from "@/components/ui/icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
@@ -139,10 +141,23 @@ function SidebarDetailIndicatorView({
     );
   }
 
+  if (indicator.kind === "cloud_access" || indicator.kind === "cloud_exposure") {
+    const glyph = indicator.kind === "cloud_access"
+      ? <CircleUser className="size-3" />
+      : <Globe className="size-3" />;
+    return (
+      <Tooltip content={indicator.tooltip} className="inline-flex shrink-0 items-center justify-center">
+        <span className={detailToneClass(indicator.tone, className)}>
+          {glyph}
+        </span>
+      </Tooltip>
+    );
+  }
+
   const glyph = indicator.kind === "automation"
     ? <Clock className="size-3" />
     : <ArrowRight className="size-3" />;
-  const action = indicator.action ?? null;
+  const action = "action" in indicator ? indicator.action ?? null : null;
 
   return (
     <Tooltip content={indicator.tooltip} className="inline-flex shrink-0 items-center justify-center">
@@ -164,6 +179,23 @@ function SidebarDetailIndicatorView({
       )}
     </Tooltip>
   );
+}
+
+function detailToneClass(
+  tone: "neutral" | "success" | "warning" | "muted",
+  fallbackClassName: string,
+): string {
+  switch (tone) {
+    case "success":
+      return "text-success";
+    case "warning":
+      return "text-warning";
+    case "muted":
+      return "text-sidebar-muted-foreground/50";
+    case "neutral":
+    default:
+      return fallbackClassName;
+  }
 }
 
 function FinishSuggestionIndicator({
@@ -260,6 +292,12 @@ function detailIndicatorKey(indicator: SidebarDetailIndicator): string {
   switch (indicator.kind) {
     case "materialization":
       return `materialization:${indicator.variant}`;
+    case "cloud_access":
+      return `cloud-access:${indicator.tooltip}`;
+    case "cloud_exposure":
+      return `cloud-exposure:${indicator.tooltip}`;
+    case "origin":
+      return `origin:${indicator.tooltip}`;
     case "automation":
       return "automation";
     case "agent":

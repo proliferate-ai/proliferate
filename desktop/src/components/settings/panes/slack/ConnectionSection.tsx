@@ -10,7 +10,7 @@ interface ConnectionSectionProps {
   connection: SlackWorkspaceConnection | null;
   loading: boolean;
   canManage: boolean;
-  oauthStartUrl: string | null;
+  opening: boolean;
   disconnecting: boolean;
   onOpenOAuth: () => void;
   onDisconnect: () => void;
@@ -20,7 +20,7 @@ export function ConnectionSection({
   connection,
   loading,
   canManage,
-  oauthStartUrl,
+  opening,
   disconnecting,
   onOpenOAuth,
   onDisconnect,
@@ -54,7 +54,8 @@ export function ConnectionSection({
             <Button
               type="button"
               variant="secondary"
-              disabled={!canManage || !oauthStartUrl}
+              loading={opening}
+              disabled={!canManage}
               onClick={onOpenOAuth}
             >
               {installLabel}

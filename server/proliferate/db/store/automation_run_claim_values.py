@@ -13,6 +13,9 @@ from proliferate.db.models.automations import AutomationRun
 class AutomationRunClaimValue:
     id: UUID
     automation_id: UUID
+    owner_scope: str
+    owner_user_id: UUID | None
+    organization_id: UUID | None
     user_id: UUID
     status: str
     execution_target: str
@@ -86,6 +89,9 @@ def claim_value(run: AutomationRun) -> AutomationRunClaimValue:
     return AutomationRunClaimValue(
         id=run.id,
         automation_id=run.automation_id,
+        owner_scope=run.owner_scope,
+        owner_user_id=run.owner_user_id,
+        organization_id=run.organization_id,
         user_id=run.owner_user_id or run.created_by_user_id,
         status=run.status,
         execution_target=_execution_target_for_target_mode(run.target_mode),

@@ -72,6 +72,10 @@ class SlackBotConfigUpdateRequest(SlackBaseModel):
     ack_message_template: str | None = Field(default=None, alias="ackMessageTemplate")
 
 
+class SlackOAuthStartResponse(SlackBaseModel):
+    authorize_url: str = Field(alias="authorizeUrl")
+
+
 class SlackValidateConnectionResponse(SlackBaseModel):
     ok: bool
     status: str

@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.constants.cloud import CloudWorkspaceStatus
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_mobility import (
     CloudWorkspaceHandoffOpValue,
@@ -53,6 +54,7 @@ from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mobility.cleanup_executor import (
     SERVER_CLEANUP_ITEM_KINDS,
+    cleanup_item_execution_rank,
     execute_server_cleanup_item,
 )
 from proliferate.server.cloud.mobility.domain.lifecycle import (
@@ -114,6 +116,18 @@ _ALLOWED_PHASE_TRANSITIONS: dict[str, frozenset[str]] = {
     HANDOFF_PHASE_INSTALL_SUCCEEDED: frozenset({HANDOFF_PHASE_CUTOVER_COMMITTED}),
     HANDOFF_PHASE_CUTOVER_COMMITTED: frozenset({HANDOFF_PHASE_CLEANUP_PENDING}),
 }
+_MOBILITY_BACKFILLABLE_WORKSPACE_STATUSES = frozenset(
+    {
+        CloudWorkspaceStatus.pending.value,
+        CloudWorkspaceStatus.materializing.value,
+        CloudWorkspaceStatus.needs_rematerialization.value,
+        CloudWorkspaceStatus.ready.value,
+    }
+)
+
+
+def _should_backfill_mobility_from_cloud_workspace(workspace: CloudWorkspace) -> bool:
+    return workspace.status in _MOBILITY_BACKFILLABLE_WORKSPACE_STATUSES
 
 
 def _phase_transition_allowed(*, current_phase: str, requested_phase: str) -> bool:
@@ -243,6 +257,8 @@ async def list_cloud_workspace_mobility_for_user(
     await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
     workspaces = await list_cloud_workspaces_store(user_id)
     for workspace in workspaces:
+        if not _should_backfill_mobility_from_cloud_workspace(workspace):
+            continue
         await backfill_cloud_workspace_mobility_for_workspace(
             workspace=workspace,
             active_lifecycle_state=active_lifecycle_state(OWNER_CLOUD),
@@ -755,14 +771,7 @@ async def complete_cloud_workspace_handoff_cleanup(
     cleanup_items = await list_cleanup_items_for_handoff(db, handoff_op_id=handoff_op_id)
     if cleanup_items:
         for item in cleanup_items:
-            if item.status == "completed":
-                continue
-            if item.item_kind in SERVER_CLEANUP_ITEM_KINDS:
-                await execute_server_cleanup_item(
-                    db,
-                    handoff_op_id=handoff_op_id,
-                    cleanup_item_id=item.id,
-                )
+            if item.status == "completed" or item.item_kind in SERVER_CLEANUP_ITEM_KINDS:
                 continue
             cleanup_item = await get_cleanup_item_for_handoff(
                 db,
@@ -776,6 +785,18 @@ async def complete_cloud_workspace_handoff_cleanup(
                     cleanup_item=cleanup_item,
                     status="completed",
                 )
+        cleanup_items = await list_cleanup_items_for_handoff(db, handoff_op_id=handoff_op_id)
+        for item in sorted(
+            cleanup_items,
+            key=lambda value: cleanup_item_execution_rank(value.item_kind),
+        ):
+            if item.status == "completed" or item.item_kind not in SERVER_CLEANUP_ITEM_KINDS:
+                continue
+            await execute_server_cleanup_item(
+                db,
+                handoff_op_id=handoff_op_id,
+                cleanup_item_id=item.id,
+            )
         cleanup_items = await list_cleanup_items_for_handoff(db, handoff_op_id=handoff_op_id)
         if not all(item.status == "completed" for item in cleanup_items):
             raise CloudApiError(

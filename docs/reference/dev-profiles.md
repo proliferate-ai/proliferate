@@ -13,6 +13,7 @@ make dev PROFILE=<name>            # full stack for this profile
 make dev PROFILE=<name> STRIPE=1   # also run Stripe webhook forwarding
 make dev PROFILE=<name> AGENT_GATEWAY=1
                                     # also run local private LiteLLM for gateway work
+make dev-web-auth                  # standalone web auth helper with ngrok callbacks
 ```
 
 Profile names must be lowercase letters, numbers, hyphens, or underscores.
@@ -82,16 +83,20 @@ local LiteLLM stack, and `make server-litellm-down` stops it.
 `scripts/dev.mjs` allocates stable ports for each profile:
 
 - `PROLIFERATE_API_PORT`
-- `PROLIFERATE_WEB_PORT`
+- `PROLIFERATE_WEB_PORT` for the Tauri desktop renderer
 - `PROLIFERATE_WEB_HMR_PORT`
+- `PROLIFERATE_HOSTED_WEB_PORT` for the separate `web/` app
 - `PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE`
 - `ANYHARNESS_PORT`
 
 The Google Workspace MCP value is the base of a 64-port loopback pool used for
 local Gmail OAuth callbacks. The generated Tauri config points the desktop at
-the profile ports. On macOS, profile dev also uses a generated Tauri runner so
-the unbundled debug app appears as `Proliferate (<profile>)` in the app bar
-instead of every profile appearing as `proliferate`.
+`PROLIFERATE_WEB_PORT`, while `make dev PROFILE=<name>` also starts the hosted
+web app on `PROLIFERATE_HOSTED_WEB_PORT` and sets `FRONTEND_BASE_URL` to that
+hosted web origin. Server CORS includes both frontend origins plus the Tauri
+origins. On macOS, profile dev also uses a generated Tauri runner so the
+unbundled debug app appears as `Proliferate (<profile>)` in the app bar instead
+of every profile appearing as `proliferate`.
 
 ## Scope Notes
 

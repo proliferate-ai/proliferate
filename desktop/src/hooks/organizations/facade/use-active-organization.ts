@@ -28,7 +28,9 @@ export function useActiveOrganization() {
   ]);
 
   const activeOrganization = activeOrganizationId
-    ? organizations.find((organization) => organization.id === activeOrganizationId) ?? null
+    ? organizations.find((organization) => organization.id === activeOrganizationId)
+      ?? organizations[0]
+      ?? null
     : organizations[0] ?? null;
 
   return {

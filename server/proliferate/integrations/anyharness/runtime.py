@@ -143,3 +143,36 @@ async def install_runtime_agent(
         agent=agent,
         already_installed=already_installed if isinstance(already_installed, bool) else None,
     )
+
+
+async def apply_runtime_config(
+    runtime_url: str,
+    access_token: str,
+    body: dict[str, object],
+) -> dict[str, object]:
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.put(
+                f"{runtime_url}/v1/runtime-config",
+                headers=auth_headers(access_token),
+                json=body,
+            )
+    except httpx.HTTPError as exc:
+        raise CloudRuntimeReconnectError("Failed to apply cloud runtime config.") from exc
+    if not response.is_success:
+        preview = response_preview(response.text)
+        suffix = f" Response: {preview}" if preview else ""
+        raise CloudRuntimeReconnectError(
+            f"Cloud runtime rejected runtime config (status {response.status_code}).{suffix}"
+        )
+    try:
+        payload: object = response.json()
+    except ValueError as exc:
+        raise CloudRuntimeReconnectError(
+            "Cloud runtime returned invalid JSON after applying runtime config."
+        ) from exc
+    if not isinstance(payload, dict):
+        raise CloudRuntimeReconnectError(
+            "Cloud runtime returned an invalid runtime config apply response."
+        )
+    return payload

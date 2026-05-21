@@ -31,6 +31,7 @@ from proliferate.server.cloud.claims.domain.jwt import (
     direct_attach_claims_payload,
     timestamp_seconds,
 )
+from proliferate.server.cloud.claims.domain.pem import normalize_pem_setting
 from proliferate.server.cloud.claims.domain.policy import (
     can_claim_cloud_workspace,
     can_request_direct_attach_token,
@@ -200,7 +201,8 @@ async def issue_direct_access_token(
             "Requested workspace does not match the claimed workspace.",
             status_code=409,
         )
-    if not settings.cloud_jwt_signing_key_pem.strip():
+    signing_key_pem = normalize_pem_setting(settings.cloud_jwt_signing_key_pem)
+    if not signing_key_pem:
         raise CloudApiError(
             "direct_attach_signing_key_missing",
             "Direct workspace attach is not configured.",
@@ -250,7 +252,7 @@ async def issue_direct_access_token(
     )
     raw_token = jwt.encode(
         payload,
-        settings.cloud_jwt_signing_key_pem,
+        signing_key_pem,
         algorithm="RS256",
         headers={"kid": settings.cloud_jwt_signing_key_id},
     )

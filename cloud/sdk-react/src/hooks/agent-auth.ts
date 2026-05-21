@@ -10,6 +10,7 @@ import {
   getCloudCapabilities,
   getSandboxAgentAuthSelections,
   getSandboxAgentAuthTargetStates,
+  getSandboxProfileTargetState,
   listAgentAuthCredentials,
   putSandboxAgentAuthSelection,
   syncSyncedAgentAuthCredential,
@@ -22,6 +23,7 @@ import {
   type SandboxAgentAuthSelection,
   type SandboxAgentAuthTargetState,
   type SandboxProfile,
+  type SandboxProfileTargetState,
   type SelectAgentAuthCredentialInput,
   type SyncSyncedCredentialRequest,
 } from "@proliferate/cloud-sdk";
@@ -32,6 +34,7 @@ import {
   cloudCapabilitiesKey,
   sandboxAgentAuthSelectionsKey,
   sandboxAgentAuthTargetStatesKey,
+  sandboxProfileTargetStateKey,
 } from "../lib/query-keys.js";
 
 const EMPTY_CREDENTIALS: AgentAuthCredential[] = [];
@@ -84,6 +87,18 @@ export function useSandboxAgentAuthTargetStates(
     queryFn: () => getSandboxAgentAuthTargetStates(sandboxProfileId!, client),
     enabled: enabled && sandboxProfileId !== null,
     placeholderData: EMPTY_TARGET_STATES,
+  });
+}
+
+export function useSandboxProfileTargetState(
+  sandboxProfileId: string | null,
+  enabled = true,
+) {
+  const client = useCloudClient();
+  return useQuery<SandboxProfileTargetState>({
+    queryKey: sandboxProfileTargetStateKey(sandboxProfileId),
+    queryFn: () => getSandboxProfileTargetState(sandboxProfileId!, client),
+    enabled: enabled && sandboxProfileId !== null,
   });
 }
 

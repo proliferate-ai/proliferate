@@ -101,6 +101,16 @@ _CLEANUP_SELECTION_ERROR_CODES = {
     "credential_share_revoked",
 }
 _OPENCODE_ALLOWED_AUTH_FILES: frozenset[str] = frozenset({".config/opencode/auth.json"})
+_TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES = frozenset(
+    {
+        CloudCommandStatus.accepted.value,
+        CloudCommandStatus.accepted_but_queued.value,
+        CloudCommandStatus.rejected.value,
+        CloudCommandStatus.expired.value,
+        CloudCommandStatus.superseded.value,
+        CloudCommandStatus.failed_delivery.value,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -2869,6 +2879,17 @@ async def request_agent_auth_refresh_for_profile_target(
             code="sandbox_profile_target_mismatch",
             status_code=409,
         )
+    existing_state = await store.get_target_state(
+        db,
+        sandbox_profile_id=profile.id,
+        target_id=target_id,
+    )
+    if _agent_auth_target_state_is_current(
+        existing_state,
+        profile=profile,
+        force_restart=force_restart,
+    ):
+        return
     command = await _queue_agent_auth_refresh_command(
         db,
         profile=profile,
@@ -2876,6 +2897,7 @@ async def request_agent_auth_refresh_for_profile_target(
         actor_user_id=actor_user_id,
         reason=reason,
         force_restart=force_restart,
+        existing_state=existing_state,
     )
     await store.upsert_target_state(
         db,
@@ -2900,20 +2922,39 @@ async def _queue_agent_auth_refresh_command(
     actor_user_id: UUID | None,
     reason: str,
     force_restart: bool,
+    existing_state: SandboxProfileAgentAuthTargetStateRecord | None = None,
 ) -> commands_store.CloudCommandSnapshot:
     idempotency_scope = f"target:{target_id}:agent-auth-config:{profile.id}"
-    idempotency_key = (
+    base_idempotency_key = (
         f"agent-auth-config:{target_id}:{profile.id}:{profile.agent_auth_revision}:"
         f"{reason}:{int(force_restart)}"
     )
+    idempotency_key = base_idempotency_key
     existing = await commands_store.get_command_by_idempotency(
         db,
         idempotency_scope=idempotency_scope,
         idempotency_key=idempotency_key,
     )
     if existing is not None:
-        await publish_command_status_after_commit(db, existing)
-        return existing
+        if not _agent_auth_refresh_command_requires_retry(
+            existing,
+            existing_state=existing_state,
+            profile=profile,
+            force_restart=force_restart,
+        ):
+            await publish_command_status_after_commit(db, existing)
+            return existing
+        idempotency_key = (
+            f"{base_idempotency_key}:retry:{_agent_auth_retry_marker(existing_state)}"
+        )
+        retry_existing = await commands_store.get_command_by_idempotency(
+            db,
+            idempotency_scope=idempotency_scope,
+            idempotency_key=idempotency_key,
+        )
+        if retry_existing is not None:
+            await publish_command_status_after_commit(db, retry_existing)
+            return retry_existing
     payload = {
         "sandboxProfileId": str(profile.id),
         "revision": profile.agent_auth_revision,
@@ -2965,6 +3006,50 @@ async def _queue_agent_auth_refresh_command(
         command = duplicate
     await publish_command_status_after_commit(db, command)
     return command
+
+
+def _agent_auth_target_state_is_current(
+    state: SandboxProfileAgentAuthTargetStateRecord | None,
+    *,
+    profile: SandboxProfileRecord,
+    force_restart: bool,
+) -> bool:
+    return (
+        not force_restart
+        and state is not None
+        and state.status == "applied"
+        and state.applied_revision is not None
+        and state.applied_revision >= profile.agent_auth_revision
+        and not state.force_restart_required
+    )
+
+
+def _agent_auth_refresh_command_requires_retry(
+    command: commands_store.CloudCommandSnapshot,
+    *,
+    existing_state: SandboxProfileAgentAuthTargetStateRecord | None,
+    profile: SandboxProfileRecord,
+    force_restart: bool,
+) -> bool:
+    if command.status not in _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES:
+        return False
+    return not _agent_auth_target_state_is_current(
+        existing_state,
+        profile=profile,
+        force_restart=force_restart,
+    )
+
+
+def _agent_auth_retry_marker(
+    existing_state: SandboxProfileAgentAuthTargetStateRecord | None,
+) -> str:
+    if existing_state is None:
+        return "missing"
+    marker = (
+        f"{existing_state.id}:{existing_state.status}:"
+        f"{existing_state.desired_revision}:{existing_state.updated_at.isoformat()}"
+    )
+    return hashlib.sha256(marker.encode("utf-8")).hexdigest()[:16]
 
 
 def _hash_token(raw_token: str) -> str:

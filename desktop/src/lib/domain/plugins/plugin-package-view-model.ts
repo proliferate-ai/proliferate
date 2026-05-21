@@ -1,4 +1,5 @@
 import type {
+  ConfiguredCapabilityItemState,
   ConnectorCatalogEntry,
   InstalledConnectorRecord,
 } from "@/lib/domain/mcp/types";
@@ -12,6 +13,20 @@ export interface PluginComponentRowModel {
   description: string;
   stateLabel: string;
   stateTone: "neutral" | "success" | "warning" | "muted";
+  publicLabel?: string;
+  publicTone?: "neutral" | "success" | "warning" | "muted";
+}
+
+export interface PluginSharedExposurePresentation {
+  personalCloudLabel: string;
+  sharedCloudLabel: string;
+  sourceLabel: string;
+  sharedCloudDescription: string;
+  sharedCloudTone: "neutral" | "success" | "warning" | "muted";
+  configuredItemCount: number;
+  publicItemCount: number;
+  isFullyPublic: boolean;
+  hasPublicItems: boolean;
 }
 
 export interface PluginPackagePresentation {
@@ -31,7 +46,8 @@ export function buildConnectedPluginPresentation(
   const components = buildPluginComponents(entry, {
     authState: connectedCredentialStateLabel(status),
     mcpState: record.metadata.enabled ? "Enabled" : "Off",
-    skillState: record.metadata.enabled ? "Available" : "Off",
+    skillState: record.metadata.enabled ? "Enabled" : "Off",
+    record,
   });
 
   return {
@@ -42,6 +58,84 @@ export function buildConnectedPluginPresentation(
     enabledScopesLabel: record.metadata.enabled ? "New sessions" : "Disabled",
     components,
   };
+}
+
+export function buildPluginSharedExposurePresentation(
+  record: InstalledConnectorRecord,
+): PluginSharedExposurePresentation {
+  const items = buildConfiguredCapabilityItems(record);
+  const publicItems = items.filter(isConfiguredCapabilityPublic);
+  const blockedItems = items.filter((item) =>
+    item.ownerScope !== "organization"
+    && item.publicToOrg
+    && item.publicStatus !== "public"
+  );
+  const isFullyPublic = items.length > 0 && publicItems.length === items.length;
+  const hasPublicItems = publicItems.length > 0;
+  const sharedCloudTone: PluginSharedExposurePresentation["sharedCloudTone"] =
+    blockedItems.length > 0
+      ? "warning"
+      : isFullyPublic
+        ? "success"
+        : hasPublicItems
+          ? "warning"
+          : "muted";
+  const sharedCloudLabel = blockedItems.length > 0
+    ? "Shared attention"
+    : isFullyPublic
+      ? "Shared public"
+      : hasPublicItems
+        ? `${publicItems.length}/${items.length} shared`
+        : "Shared private";
+
+  return {
+    personalCloudLabel: record.metadata.enabled ? "Personal cloud on" : "Personal cloud off",
+    sourceLabel: configuredSourceLabel(items),
+    sharedCloudLabel,
+    sharedCloudDescription: hasPublicItems || isFullyPublic
+      ? "Public items can be used by team automations, Slack, and shared cloud work."
+      : "Private items stay limited to personal cloud and local use.",
+    sharedCloudTone,
+    configuredItemCount: items.length,
+    publicItemCount: publicItems.length,
+    isFullyPublic,
+    hasPublicItems,
+  };
+}
+
+export function buildConfiguredCapabilityItems(
+  record: InstalledConnectorRecord,
+): ConfiguredCapabilityItemState[] {
+  return [
+    {
+      kind: "mcp",
+      id: record.metadata.connectionId,
+      sourceId: record.metadata.catalogEntryId,
+      sourceKind: "mcp_catalog",
+      sourceVersion: String(record.metadata.catalogEntryVersion),
+      label: record.metadata.serverName || record.catalogEntry.serverNameBase,
+      enabled: record.metadata.enabled,
+      ownerScope: record.metadata.ownerScope,
+      ownerUserId: record.metadata.ownerUserId ?? null,
+      organizationId: record.metadata.organizationId ?? null,
+      publicToOrg: record.metadata.publicToOrg,
+      publicOrganizationId: record.metadata.publicOrganizationId ?? null,
+      publicStatus: record.metadata.publicStatus,
+      createdAt: record.metadata.createdAt,
+      updatedAt: record.metadata.publicUpdatedAt ?? record.metadata.updatedAt,
+    },
+    ...(record.metadata.configuredPlugin ? [record.metadata.configuredPlugin] : []),
+    ...record.metadata.configuredSkills,
+  ];
+}
+
+export function isConfiguredCapabilityPublic(
+  item: ConfiguredCapabilityItemState,
+): boolean {
+  if (item.ownerScope === "organization") {
+    return true;
+  }
+  return item.publicToOrg && item.publicStatus === "public";
 }
 
 export function buildAvailablePluginPresentation(
@@ -69,9 +163,15 @@ function buildPluginComponents(
     authState: string;
     mcpState: string;
     skillState: string;
+    record?: InstalledConnectorRecord;
   },
 ): PluginComponentRowModel[] {
-  const skillCount = entry.pluginPackage?.skills.length ?? 0;
+  const configuredSkillItemsBySourceId = new Map(
+    state.record?.metadata.configuredSkills.map((item) => [item.sourceId, item]) ?? [],
+  );
+  const mcpPublicLabel = state.record
+    ? configuredItemPublicLabel(buildConfiguredCapabilityItems(state.record)[0])
+    : undefined;
   const components: PluginComponentRowModel[] = [
     {
       kind: "app",
@@ -86,16 +186,27 @@ function buildPluginComponents(
       description: "MCP tools mounted into compatible sessions.",
       stateLabel: state.mcpState,
       stateTone: state.mcpState === "Enabled" ? "success" : "muted",
+      publicLabel: mcpPublicLabel,
+      publicTone: publicLabelTone(mcpPublicLabel),
     },
   ];
 
-  if (skillCount > 0) {
+  for (const skill of entry.pluginPackage?.skills ?? []) {
+    const configuredSkill = configuredSkillItemsBySourceId.get(skill.id);
+    const skillStateLabel = configuredSkill
+      ? configuredSkill.enabled ? state.skillState : "Off"
+      : "Not configured";
+    const publicLabel = configuredSkill
+      ? configuredItemPublicLabel(configuredSkill)
+      : undefined;
     components.push({
       kind: "skill",
-      label: `${skillCount} ${skillCount === 1 ? "skill" : "skills"}`,
-      description: "Reviewed markdown instructions agents can activate when relevant.",
-      stateLabel: state.skillState,
-      stateTone: state.skillState === "Available" ? "success" : "muted",
+      label: skill.displayName,
+      description: skill.description || "Reviewed markdown instructions agents can activate when relevant.",
+      stateLabel: skillStateLabel,
+      stateTone: skillStateLabel === "Enabled" ? "success" : "muted",
+      publicLabel,
+      publicTone: publicLabelTone(publicLabel),
     });
   }
 
@@ -110,6 +221,52 @@ function buildPluginComponents(
   );
 
   return components;
+}
+
+function configuredItemPublicLabel(
+  item: ConfiguredCapabilityItemState | undefined,
+): string | undefined {
+  if (!item) {
+    return undefined;
+  }
+  if (item.ownerScope === "organization") {
+    return "Organization";
+  }
+  if (!item.publicToOrg) {
+    return "Private";
+  }
+  if (item.publicStatus === "public") {
+    return "Public";
+  }
+  return item.publicStatus;
+}
+
+function publicLabelTone(
+  publicLabel: string | undefined,
+): PluginComponentRowModel["publicTone"] {
+  if (!publicLabel) {
+    return undefined;
+  }
+  if (publicLabel === "Public" || publicLabel === "Organization") {
+    return "success";
+  }
+  if (publicLabel === "Private") {
+    return "muted";
+  }
+  return "warning";
+}
+
+function configuredSourceLabel(
+  items: readonly ConfiguredCapabilityItemState[],
+): string {
+  const ownerScopes = new Set(items.map((item) => item.ownerScope));
+  if (ownerScopes.size === 1 && ownerScopes.has("organization")) {
+    return "Org-owned";
+  }
+  if (ownerScopes.size === 1 && (ownerScopes.has("personal") || ownerScopes.has("user"))) {
+    return "Personal source";
+  }
+  return "Mixed source";
 }
 
 function connectedCredentialStateLabel(status: ConnectorCardStatus): string {
@@ -141,7 +298,9 @@ function summarizeComponents(components: readonly PluginComponentRowModel[]): st
     skill: 0,
     requirement: 0,
   });
-  const skillLabel = components.find((component) => component.kind === "skill")?.label;
+  const skillLabel = counts.skill
+    ? `${counts.skill} ${counts.skill === 1 ? "skill" : "skills"}`
+    : null;
   const parts = [
     counts.app ? "App" : null,
     counts.mcp ? `${counts.mcp} MCP` : null,

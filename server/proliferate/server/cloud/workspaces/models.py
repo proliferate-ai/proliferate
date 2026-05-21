@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 class WorkspaceRecord(Protocol):
     id: UUID
+    target_id: UUID | None
     display_name: str | None
     git_provider: str
     git_owner: str
@@ -232,6 +233,7 @@ class WorkspaceBillingSummary(BaseModel):
 
 class WorkspaceSummary(BaseModel):
     id: str
+    target_id: str | None = Field(default=None, serialization_alias="targetId")
     display_name: str | None = Field(serialization_alias="displayName")
     repo: RepoRef
     workspace_status: Literal["pending", "materializing", "ready", "archived", "error"] = Field(
@@ -533,6 +535,7 @@ def workspace_summary_payload(
     session_summary = last_session_summary_payload(last_session_summary)
     return WorkspaceSummary(
         id=str(workspace.id),
+        target_id=str(workspace.target_id) if workspace.target_id is not None else None,
         display_name=workspace.display_name,
         repo=_repo_ref(workspace),
         workspace_status=workspace_status,

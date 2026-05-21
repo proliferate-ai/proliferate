@@ -28,11 +28,14 @@ from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_sandboxes import ensure_profile_slot, supersede_slot
-from proliferate.db.store.cloud_runtime_config import store as runtime_config_store
+from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
-from proliferate.db.store.cloud_workspaces import create_managed_cloud_workspace_for_profile
+from proliferate.db.store.cloud_workspaces import (
+    create_managed_cloud_workspace_for_profile,
+    get_active_sandbox,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.worker import service as worker_service
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
@@ -206,6 +209,10 @@ async def test_slot_generation_and_runtime_access_reject_stale_slot_reports(
         target_id=target_id,
     )
     assert first_slot.slot_generation == 1
+    first_slot_row = await db_session.get(CloudSandbox, first_slot.id)
+    assert first_slot_row is not None
+    first_slot_row.status = "provisioning"
+    await db_session.flush()
     same_slot = await ensure_profile_slot(
         db_session,
         sandbox_profile_id=profile_id,
@@ -339,6 +346,53 @@ async def test_slot_generation_and_runtime_access_reject_stale_slot_reports(
     assert changed_slot_touch.anyharness_base_url is None
     assert changed_slot_touch.runtime_token_ciphertext is None
     assert changed_slot_touch.anyharness_data_key_ciphertext is None
+
+
+@pytest.mark.asyncio
+async def test_workspace_active_sandbox_falls_back_to_profile_target_slot(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth, profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="sandbox-profile-active-slot",
+    )
+    workspace = await create_managed_cloud_workspace_for_profile(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        created_by_user_id=uuid.UUID(auth.user_id),
+        display_name="acme/rocket",
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name="rocket",
+        git_branch="feature/profile-slot",
+        git_base_branch="main",
+        worktree_path="/workspace/profile-slot",
+        origin_json=None,
+        template_version="managed-cloud-v1",
+    )
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    slot_row = await db_session.get(CloudSandbox, slot.id)
+    assert slot_row is not None
+    slot_row.status = "running"
+    slot_row.external_sandbox_id = "sandbox-profile-active-slot"
+    await db_session.flush()
+
+    workspace.active_sandbox_id = None
+    await db_session.flush()
+
+    active_sandbox = await get_active_sandbox(db_session, workspace)
+
+    assert active_sandbox is not None
+    assert active_sandbox.id == slot.id
+    assert active_sandbox.sandbox_profile_id == profile_id
+    assert active_sandbox.target_id == target_id
 
 
 @pytest.mark.asyncio

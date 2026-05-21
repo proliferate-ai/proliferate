@@ -29,6 +29,7 @@ import type {
   ComputeTargetDetail,
   ComputeTargetSummary,
 } from "@/lib/domain/compute/target-types";
+import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 
 interface ComputeTargetAgentAuthCardProps {
   target: ComputeTargetDetail | ComputeTargetSummary;
@@ -37,6 +38,9 @@ interface ComputeTargetAgentAuthCardProps {
 export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCardProps) {
   const [profile, setProfile] = useState<SandboxProfile | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const sharedTarget = target.ownerScope === "organization";
+  const admin = useIsAdmin(sharedTarget ? target.organizationId ?? null : null);
+  const canManageAgentAuth = !sharedTarget || admin.isAdmin;
   const mutations = useAgentAuthMutations();
   const { data: credentials = [] } = useAgentAuthCredentials({
     organizationId: profile?.organizationId ?? null,
@@ -61,6 +65,9 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
   }, [target.id]);
 
   async function handleEnsureProfile() {
+    if (!canManageAgentAuth) {
+      return;
+    }
     setFeedback(null);
     try {
       const nextProfile = target.ownerScope === "organization"
@@ -76,7 +83,7 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
   }
 
   async function handleSelect(agentKind: AgentAuthAgentKind, credentialId: string) {
-    if (!profile || !credentialId) {
+    if (!profile || !credentialId || !canManageAgentAuth) {
       return;
     }
     setFeedback(null);
@@ -122,17 +129,25 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
       {!profile ? (
         <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 p-3">
           <p className="text-xs text-muted-foreground">
-            {feedback ?? "Initialize this target's sandbox profile before selecting auth."}
+            {feedback ?? (sharedTarget && !canManageAgentAuth
+              ? "Shared target auth can only be configured by an organization admin."
+              : "Initialize this target's sandbox profile before selecting auth.")}
           </p>
           <Button
             type="button"
             variant="secondary"
             size="sm"
             loading={mutations.isEnsuringProfile}
-            disabled={target.ownerScope === "organization" && !target.organizationId}
+            disabled={
+              !canManageAgentAuth
+              || (sharedTarget && admin.isLoading)
+              || (target.ownerScope === "organization" && !target.organizationId)
+            }
             onClick={() => { void handleEnsureProfile(); }}
           >
-            Configure
+            {sharedTarget && admin.isLoading
+              ? "Checking"
+              : sharedTarget && !canManageAgentAuth ? "Admin only" : "Configure"}
           </Button>
         </div>
       ) : (
@@ -163,6 +178,7 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
                 selectedCredentialId={selection?.credentialId ?? ""}
                 unavailableSelectedCredentialLabel={unavailableSelectedCredentialLabel}
                 selecting={mutations.isSelectingCredential}
+                disabled={!canManageAgentAuth}
                 onSelect={handleSelect}
               />
             );
@@ -181,6 +197,7 @@ function AgentAuthSelectionRow({
   selectedCredentialId,
   unavailableSelectedCredentialLabel,
   selecting,
+  disabled,
   onSelect,
 }: {
   agentKind: AgentAuthAgentKind;
@@ -189,6 +206,7 @@ function AgentAuthSelectionRow({
   selectedCredentialId: string;
   unavailableSelectedCredentialLabel: string | null;
   selecting: boolean;
+  disabled: boolean;
   onSelect: (agentKind: AgentAuthAgentKind, credentialId: string) => void;
 }) {
   return (
@@ -196,7 +214,7 @@ function AgentAuthSelectionRow({
       <div className="text-sm font-medium text-foreground">{agentAuthAgentLabel(agentKind)}</div>
       <Select
         value={selectedCredentialId}
-        disabled={selecting || credentials.length === 0}
+        disabled={disabled || selecting || credentials.length === 0}
         onChange={(event) => onSelect(agentKind, event.target.value)}
       >
         <option value="">

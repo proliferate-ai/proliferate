@@ -9,12 +9,18 @@ import { getSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 
+type CloudWorkspaceCommandMetadata = CloudWorkspaceDetail & {
+  targetId?: string | null;
+};
+
 export interface RuntimeTarget {
   location: "local" | "cloud" | "target";
   baseUrl: string;
   authToken?: string;
   anyharnessWorkspaceId: string;
   runtimeGeneration: number;
+  cloudWorkspaceId?: string;
+  targetId?: string;
   allowedAgentKinds?: AgentAuthAgentKind[];
   readyAgentKinds?: AgentAuthAgentKind[];
 }
@@ -44,6 +50,7 @@ export async function resolveRuntimeTargetForWorkspace(
       baseUrl: tunnel.localUrl,
       anyharnessWorkspaceId: targetWorkspace.anyharnessWorkspaceId,
       runtimeGeneration: 0,
+      targetId: targetWorkspace.targetId,
     };
   }
 
@@ -59,6 +66,7 @@ export async function resolveRuntimeTargetForWorkspace(
 
   const cloudWorkspace: CloudWorkspaceDetail | undefined = await getCloudWorkspace(cloudWorkspaceId);
   if (!cloudWorkspace) throw new Error("Cloud workspace not found.");
+  const cloudWorkspaceCommandMetadata = cloudWorkspace as CloudWorkspaceCommandMetadata;
   if (cloudWorkspace.status !== "ready") {
     throw new Error("Cloud workspace is not ready yet.");
   }
@@ -81,6 +89,8 @@ export async function resolveRuntimeTargetForWorkspace(
       authToken: token.token,
       anyharnessWorkspaceId: token.anyharnessWorkspaceId,
       runtimeGeneration: cloudWorkspace.runtime?.generation ?? 0,
+      cloudWorkspaceId: cloudWorkspace.id,
+      targetId: token.targetId,
       allowedAgentKinds: cloudWorkspace.allowedAgentKinds.filter(isCloudAgentRuntimeKind),
       readyAgentKinds: cloudWorkspace.readyAgentKinds.filter(isCloudAgentRuntimeKind),
     };
@@ -94,6 +104,8 @@ export async function resolveRuntimeTargetForWorkspace(
     authToken: connection.accessToken,
     anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
     runtimeGeneration: connection.runtimeGeneration,
+    cloudWorkspaceId: cloudWorkspace.id,
+    targetId: cloudWorkspaceCommandMetadata.targetId ?? undefined,
     allowedAgentKinds: connection.allowedAgentKinds.filter(isCloudAgentRuntimeKind),
     readyAgentKinds: connection.readyAgentKinds.filter(isCloudAgentRuntimeKind),
   };

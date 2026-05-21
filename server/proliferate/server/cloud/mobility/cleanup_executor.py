@@ -46,15 +46,19 @@ _CLEANUP_KIND_ORDER: tuple[str, ...] = (
 _CLEANUP_KIND_RANK = {kind: index for index, kind in enumerate(_CLEANUP_KIND_ORDER)}
 
 
+def cleanup_item_execution_rank(item_kind: str) -> int:
+    return _CLEANUP_KIND_RANK.get(item_kind, len(_CLEANUP_KIND_ORDER))
+
+
 async def _earlier_cleanup_items_completed(
     db: AsyncSession,
     *,
     handoff_op_id: UUID,
     item_kind: str,
 ) -> bool:
-    item_rank = _CLEANUP_KIND_RANK.get(item_kind, len(_CLEANUP_KIND_ORDER))
+    item_rank = cleanup_item_execution_rank(item_kind)
     for item in await list_cleanup_items_for_handoff(db, handoff_op_id=handoff_op_id):
-        if _CLEANUP_KIND_RANK.get(item.item_kind, len(_CLEANUP_KIND_ORDER)) >= item_rank:
+        if cleanup_item_execution_rank(item.item_kind) >= item_rank:
             continue
         if item.status != "completed":
             return False

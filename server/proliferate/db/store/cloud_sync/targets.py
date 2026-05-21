@@ -588,7 +588,11 @@ async def update_target_runtime_access(
                 CloudSandbox.slot_generation == slot_generation,
                 CloudSandbox.superseded_at.is_(None),
             )
-            .where(CloudSandbox.status.in_(("creating", "running", "paused", "blocked")))
+            .where(
+                CloudSandbox.status.in_(
+                    ("creating", "provisioning", "running", "paused", "blocked")
+                )
+            )
         )
     ).scalar_one_or_none()
     if active_slot is None:
@@ -626,7 +630,8 @@ async def update_target_runtime_access(
             previous_slot_is_current = (
                 previous_slot is not None
                 and previous_slot.superseded_at is None
-                and previous_slot.status in ("creating", "running", "paused", "blocked")
+                and previous_slot.status
+                in ("creating", "provisioning", "running", "paused", "blocked")
             )
             if previous_slot_is_current:
                 return None
