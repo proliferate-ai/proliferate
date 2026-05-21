@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from proliferate.server.cloud.mobility.domain.lifecycle import (
+    DIRECTION_CLOUD_TO_CLOUD,
     DIRECTION_CLOUD_TO_LOCAL,
     DIRECTION_LOCAL_TO_CLOUD,
     HANDOFF_PHASE_CLEANUP_FAILED,
@@ -22,6 +23,7 @@ from proliferate.server.cloud.mobility.domain.lifecycle import (
     active_lifecycle_state,
     is_active_handoff_phase,
     is_final_handoff_phase,
+    is_valid_handoff_direction,
     is_retryable_mobility_failure,
     moving_lifecycle_state,
     owner_direction_blocker,
@@ -56,6 +58,12 @@ def test_owner_direction_compatibility() -> None:
 def test_owner_direction_rejects_unknown_direction() -> None:
     with pytest.raises(ValueError, match="unsupported handoff direction"):
         target_owner_for_direction("teleport")
+
+
+def test_v1_only_advertises_implemented_handoff_directions() -> None:
+    assert is_valid_handoff_direction(DIRECTION_LOCAL_TO_CLOUD)
+    assert is_valid_handoff_direction(DIRECTION_CLOUD_TO_LOCAL)
+    assert not is_valid_handoff_direction(DIRECTION_CLOUD_TO_CLOUD)
 
 
 def test_lifecycle_state_helpers_follow_owner_and_target_owner() -> None:

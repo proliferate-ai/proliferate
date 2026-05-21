@@ -32,6 +32,32 @@ def upgrade() -> None:
             server_default=sa.text("'source'"),
         ),
     )
+    op.execute(
+        """
+        UPDATE cloud_workspace_handoff_op
+        SET canonical_side = 'destination',
+            phase = CASE
+                WHEN cleanup_completed_at IS NOT NULL THEN 'completed'
+                WHEN phase IN (
+                    'cutover_committed',
+                    'cleanup_pending',
+                    'completed',
+                    'repair_required',
+                    'cleanup_failed'
+                ) THEN phase
+                ELSE 'cleanup_pending'
+            END
+        WHERE finalized_at IS NOT NULL
+           OR cleanup_completed_at IS NOT NULL
+           OR phase IN (
+                'cutover_committed',
+                'cleanup_pending',
+                'completed',
+                'repair_required',
+                'cleanup_failed'
+           )
+        """
+    )
     op.create_check_constraint(
         "ck_cloud_workspace_handoff_canonical_side",
         "cloud_workspace_handoff_op",

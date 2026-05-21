@@ -25,10 +25,6 @@ VALID_HANDOFF_DIRECTIONS: frozenset[str] = frozenset(
     {
         DIRECTION_LOCAL_TO_CLOUD,
         DIRECTION_CLOUD_TO_LOCAL,
-        DIRECTION_SHARED_TO_PERSONAL,
-        DIRECTION_SHARED_TO_LOCAL,
-        DIRECTION_PERSONAL_TO_SHARED,
-        DIRECTION_CLOUD_TO_CLOUD,
     }
 )
 
@@ -166,6 +162,10 @@ def is_valid_canonical_side(canonical_side: str) -> bool:
 
 def is_valid_handoff_phase(phase: str) -> bool:
     return phase in VALID_HANDOFF_PHASES
+
+
+def cleanup_retry_delay_seconds(attempt_count: int) -> int:
+    return min(300, 30 * (2 ** max(0, attempt_count - 1)))
 
 
 def is_final_handoff_phase(phase: str) -> bool:

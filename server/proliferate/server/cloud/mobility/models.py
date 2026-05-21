@@ -16,6 +16,13 @@ def _to_iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
+def _wire_owner(owner: str) -> str:
+    # Desktop's current mobility UI still treats "cloud" as the personal
+    # managed-cloud owner. Keep the API stable while the DB uses explicit owner
+    # names internally.
+    return "cloud" if owner == "personal_cloud" else owner
+
+
 class MobilityRepoRef(BaseModel):
     provider: str
     owner: str
@@ -149,8 +156,8 @@ def handoff_summary_payload(value: CloudWorkspaceHandoffOpValue) -> MobilityHand
     return MobilityHandoffSummary(
         id=str(value.id),
         direction=value.direction,
-        source_owner=value.source_owner,
-        target_owner=value.target_owner,
+        source_owner=_wire_owner(value.source_owner),
+        target_owner=_wire_owner(value.target_owner),
         phase=value.phase,
         canonical_side=value.canonical_side,
         requested_branch=value.requested_branch,
@@ -199,7 +206,7 @@ def mobility_workspace_summary_payload(
             name=value.git_repo_name,
             branch=value.git_branch,
         ),
-        owner=value.owner,
+        owner=_wire_owner(value.owner),
         lifecycle_state=value.lifecycle_state,
         status_detail=value.status_detail,
         last_error=value.last_error,

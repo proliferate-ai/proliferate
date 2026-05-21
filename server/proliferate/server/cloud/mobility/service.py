@@ -7,6 +7,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_mobility import (
     CloudWorkspaceHandoffOpValue,
@@ -29,7 +30,6 @@ from proliferate.db.store.cloud_mobility import (
     load_active_user_handoff_op_for_user,
     load_cloud_workspace_mobility_for_user,
     load_cloud_workspace_mobility_value,
-    mark_remaining_cleanup_items_completed,
     record_cloud_workspace_mobility_event_for_user,
     update_cleanup_item_status,
     update_cloud_workspace_handoff_phase_checkpoint_for_user,
@@ -42,10 +42,11 @@ from proliferate.db.store.cloud_repo_config import load_cloud_repo_config_for_us
 from proliferate.db.store.cloud_sync.events import list_session_projections_for_workspace
 from proliferate.db.store.cloud_sync.exposures import get_active_workspace_exposure
 from proliferate.db.store.cloud_workspaces import (
-    list_cloud_workspaces_for_user as list_cloud_workspaces_store,
+    get_cloud_workspace_for_user,
+    load_existing_cloud_workspace,
 )
 from proliferate.db.store.cloud_workspaces import (
-    load_existing_cloud_workspace,
+    list_cloud_workspaces_for_user as list_cloud_workspaces_store,
 )
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.cloud._logging import log_cloud_event
@@ -60,11 +61,17 @@ from proliferate.server.cloud.mobility.domain.lifecycle import (
     HANDOFF_PHASE_CLEANUP_FAILED,
     HANDOFF_PHASE_CLEANUP_PENDING,
     HANDOFF_PHASE_CUTOVER_COMMITTED,
+    HANDOFF_PHASE_DESTINATION_READY,
     HANDOFF_PHASE_HANDOFF_FAILED,
+    HANDOFF_PHASE_INSTALL_SUCCEEDED,
+    HANDOFF_PHASE_SOURCE_FROZEN,
+    HANDOFF_PHASE_START_REQUESTED,
     LIFECYCLE_CLEANUP_FAILED,
     LIFECYCLE_HANDOFF_FAILED,
     OWNER_CLOUD,
+    OWNER_LOCAL,
     active_lifecycle_state,
+    cleanup_retry_delay_seconds,
     is_local_to_cloud_direction,
     is_retryable_mobility_failure,
     is_valid_handoff_direction,
@@ -92,6 +99,27 @@ from proliferate.utils.time import duration_ms, utcnow
 _STALE_HANDOFF_AFTER = timedelta(seconds=120)
 _BRANCH_NOT_PUBLISHED_BLOCKER = "The branch '{branch}' was not found on GitHub."
 _BRANCH_HEAD_MISMATCH_BLOCKER = "The branch '{branch}' on GitHub is not at the requested commit."
+_WORKER_PROGRESS_PHASES = frozenset(
+    {
+        HANDOFF_PHASE_SOURCE_FROZEN,
+        HANDOFF_PHASE_DESTINATION_READY,
+        HANDOFF_PHASE_INSTALL_SUCCEEDED,
+        HANDOFF_PHASE_CLEANUP_PENDING,
+    }
+)
+_ALLOWED_PHASE_TRANSITIONS: dict[str, frozenset[str]] = {
+    HANDOFF_PHASE_START_REQUESTED: frozenset({HANDOFF_PHASE_SOURCE_FROZEN}),
+    HANDOFF_PHASE_SOURCE_FROZEN: frozenset({HANDOFF_PHASE_DESTINATION_READY}),
+    HANDOFF_PHASE_DESTINATION_READY: frozenset({HANDOFF_PHASE_INSTALL_SUCCEEDED}),
+    HANDOFF_PHASE_INSTALL_SUCCEEDED: frozenset({HANDOFF_PHASE_CUTOVER_COMMITTED}),
+    HANDOFF_PHASE_CUTOVER_COMMITTED: frozenset({HANDOFF_PHASE_CLEANUP_PENDING}),
+}
+
+
+def _phase_transition_allowed(*, current_phase: str, requested_phase: str) -> bool:
+    if requested_phase == current_phase:
+        return requested_phase in _WORKER_PROGRESS_PHASES
+    return requested_phase in _ALLOWED_PHASE_TRANSITIONS.get(current_phase, frozenset())
 
 
 async def _require_handoff_belongs_to_workspace(
@@ -570,6 +598,26 @@ async def update_cloud_workspace_handoff_phase(
             f"Unsupported handoff phase '{phase}'.",
             status_code=400,
         )
+    handoff = await get_cloud_workspace_handoff_op(
+        db,
+        user_id=user_id,
+        handoff_op_id=handoff_op_id,
+        lock=True,
+    )
+    if handoff is None or handoff.mobility_workspace_id != mobility_workspace_id:
+        raise CloudApiError("handoff_not_found", "Mobility handoff not found.", status_code=404)
+    if phase not in _WORKER_PROGRESS_PHASES and phase != HANDOFF_PHASE_CUTOVER_COMMITTED:
+        raise CloudApiError(
+            "invalid_handoff_phase",
+            "Use finalize, fail, cleanup, or repair endpoints for terminal handoff states.",
+            status_code=409,
+        )
+    if not _phase_transition_allowed(current_phase=handoff.phase, requested_phase=phase):
+        raise CloudApiError(
+            "invalid_handoff_phase",
+            f"Cannot move handoff from '{handoff.phase}' to '{phase}'.",
+            status_code=409,
+        )
     if phase == HANDOFF_PHASE_CUTOVER_COMMITTED:
         return await finalize_cloud_workspace_handoff(
             db,
@@ -606,6 +654,56 @@ async def finalize_cloud_workspace_handoff(
         user_id=user_id,
         mobility_workspace_id=mobility_workspace_id,
     )
+    handoff = await get_cloud_workspace_handoff_op(
+        db,
+        user_id=user_id,
+        handoff_op_id=handoff_op_id,
+        lock=True,
+    )
+    if handoff is None or handoff.mobility_workspace_id != mobility_workspace_id:
+        raise CloudApiError("handoff_not_found", "Mobility handoff not found.", status_code=404)
+    if handoff.phase not in {
+        HANDOFF_PHASE_INSTALL_SUCCEEDED,
+        HANDOFF_PHASE_CUTOVER_COMMITTED,
+        HANDOFF_PHASE_CLEANUP_PENDING,
+    }:
+        raise CloudApiError(
+            "invalid_handoff_phase",
+            "Handoff must reach install_succeeded before cutover can be committed.",
+            status_code=409,
+        )
+    target_owner = normalize_owner(handoff.target_owner)
+    if target_owner == OWNER_LOCAL:
+        if cloud_workspace_id is not None:
+            raise CloudApiError(
+                "invalid_destination_workspace",
+                "Local handoff destinations must not provide a cloud workspace id.",
+                status_code=400,
+            )
+    else:
+        if cloud_workspace_id is None:
+            raise CloudApiError(
+                "destination_workspace_required",
+                "Cloud handoff destinations must provide a destination cloud workspace id.",
+                status_code=400,
+            )
+        destination_workspace = await get_cloud_workspace_for_user(
+            db,
+            user_id,
+            cloud_workspace_id,
+        )
+        if (
+            destination_workspace is None
+            or destination_workspace.git_provider != source_workspace.git_provider
+            or destination_workspace.git_owner != source_workspace.git_owner
+            or destination_workspace.git_repo_name != source_workspace.git_repo_name
+            or destination_workspace.git_branch != source_workspace.git_branch
+        ):
+            raise CloudApiError(
+                "invalid_destination_workspace",
+                "Destination cloud workspace does not match the mobility workspace.",
+                status_code=409,
+            )
     try:
         value = await finalize_cloud_workspace_handoff_op_for_user(
             db,
@@ -615,7 +713,7 @@ async def finalize_cloud_workspace_handoff(
             cloud_workspace_id=cloud_workspace_id,
         )
     except ValueError as error:
-        raise CloudApiError("handoff_not_found", str(error), status_code=404) from error
+        raise CloudApiError("invalid_handoff_phase", str(error), status_code=409) from error
     if value.canonical_side != CANONICAL_SIDE_DESTINATION:
         raise CloudApiError(
             "cutover_not_committed",
@@ -634,6 +732,15 @@ async def finalize_cloud_workspace_handoff(
             handoff_op_id=handoff_op_id,
             items=cleanup_items,
         )
+    value = await update_cloud_workspace_handoff_phase_for_user(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+        handoff_op_id=handoff_op_id,
+        phase=HANDOFF_PHASE_CLEANUP_PENDING,
+        status_detail="Awaiting source cleanup",
+        cloud_workspace_id=cloud_workspace_id,
+    )
     return value
 
 
@@ -812,19 +919,21 @@ async def fail_cloud_workspace_handoff_cleanup_item(
         status="failed",
         error_code=error_code,
         error_message=error_message,
+        retry_delay_seconds=cleanup_retry_delay_seconds(item.attempt_count + 1),
     )
-    await fail_cloud_workspace_handoff_op_for_user(
-        db,
-        user_id=user_id,
-        mobility_workspace_id=mobility_workspace_id,
-        handoff_op_id=handoff_op_id,
-        phase=HANDOFF_PHASE_CLEANUP_FAILED,
-        lifecycle_state=LIFECYCLE_CLEANUP_FAILED,
-        failure_code=error_code,
-        failure_detail=error_message,
-        status_detail=visible_failure_status_detail(error_message),
-        last_error=visible_failure_last_error(error_message),
-    )
+    if value.attempt_count >= max(1, settings.workspace_move_cleanup_max_attempts):
+        await fail_cloud_workspace_handoff_op_for_user(
+            db,
+            user_id=user_id,
+            mobility_workspace_id=mobility_workspace_id,
+            handoff_op_id=handoff_op_id,
+            phase=HANDOFF_PHASE_CLEANUP_FAILED,
+            lifecycle_state=LIFECYCLE_CLEANUP_FAILED,
+            failure_code=error_code,
+            failure_detail=error_message,
+            status_detail=visible_failure_status_detail(error_message),
+            last_error=visible_failure_last_error(error_message),
+        )
     return value
 
 
@@ -850,11 +959,12 @@ async def repair_cloud_workspace_handoff(
         handoff_op_id=handoff_op_id,
     )
     if action == "mark_complete":
-        await mark_remaining_cleanup_items_completed(
-            db,
-            handoff_op_id=handoff_op_id,
-            error_message=detail or "Marked complete manually.",
-        )
+        if not await all_cleanup_items_completed(db, handoff_op_id=handoff_op_id):
+            raise CloudApiError(
+                "cleanup_items_incomplete",
+                "Cleanup items must complete before a handoff can be marked complete.",
+                status_code=409,
+            )
         return await complete_cloud_workspace_handoff_cleanup_for_user(
             db,
             user_id=user_id,

@@ -5,16 +5,25 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db.models.cloud.mobility import CloudWorkspaceHandoffOp, CloudWorkspaceMobility
 from proliferate.db.store.cloud_mobility import (
     all_cleanup_items_completed,
     complete_cloud_workspace_handoff_cleanup,
+    fail_cloud_workspace_handoff_op,
     get_cleanup_item_for_handoff,
     update_cleanup_item_status,
 )
 from proliferate.db.store.cloud_sync.exposures import archive_workspace_exposure
 from proliferate.db.store.cloud_sync.projections import end_session_projection_by_id
 from proliferate.db.store.cloud_workspaces import archive_cloud_workspace_record_by_id
+from proliferate.server.cloud.mobility.domain.lifecycle import (
+    HANDOFF_PHASE_CLEANUP_FAILED,
+    LIFECYCLE_CLEANUP_FAILED,
+    cleanup_retry_delay_seconds,
+    visible_failure_last_error,
+    visible_failure_status_detail,
+)
 
 SERVER_CLEANUP_ITEM_KINDS: frozenset[str] = frozenset(
     {
@@ -54,13 +63,39 @@ async def execute_server_cleanup_item(
             pass
         await update_cleanup_item_status(db, cleanup_item=item, status="completed")
     except Exception as error:
-        await update_cleanup_item_status(
+        value = await update_cleanup_item_status(
             db,
             cleanup_item=item,
             status="failed",
             error_code=error.__class__.__name__,
             error_message=str(error),
+            retry_delay_seconds=cleanup_retry_delay_seconds(item.attempt_count + 1),
         )
+        if value.attempt_count >= max(1, settings.workspace_move_cleanup_max_attempts):
+            handoff = await db.get(CloudWorkspaceHandoffOp, handoff_op_id)
+            if handoff is None:
+                return
+            mobility_workspace = (
+                await db.execute(
+                    select(CloudWorkspaceMobility)
+                    .where(CloudWorkspaceMobility.id == handoff.mobility_workspace_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if mobility_workspace is None:
+                return
+            failure_detail = value.error_message or "Workspace cleanup failed."
+            await fail_cloud_workspace_handoff_op(
+                db,
+                handoff_op=handoff,
+                mobility_workspace=mobility_workspace,
+                phase=HANDOFF_PHASE_CLEANUP_FAILED,
+                lifecycle_state=LIFECYCLE_CLEANUP_FAILED,
+                failure_code=value.error_code or "cleanup_failed",
+                failure_detail=failure_detail,
+                status_detail=visible_failure_status_detail(failure_detail),
+                last_error=visible_failure_last_error(failure_detail),
+            )
         return
 
     if await all_cleanup_items_completed(db, handoff_op_id=handoff_op_id):

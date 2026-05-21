@@ -352,3 +352,76 @@ async def test_update_handoff_phase_rejects_unsupported_phase(
 
     assert exc_info.value.code == "invalid_handoff_phase"
     assert exc_info.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_update_handoff_phase_rejects_invalid_transition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace_id = uuid4()
+
+    async def _get_handoff(*_args, **_kwargs):
+        return SimpleNamespace(
+            id=uuid4(),
+            mobility_workspace_id=workspace_id,
+            phase="start_requested",
+        )
+
+    monkeypatch.setattr(
+        mobility_service,
+        "expire_stale_cloud_workspace_handoffs_for_user",
+        _noop_expire,
+    )
+    monkeypatch.setattr(mobility_service, "get_cloud_workspace_handoff_op", _get_handoff)
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await mobility_service.update_cloud_workspace_handoff_phase(
+            object(),
+            user_id=uuid4(),
+            mobility_workspace_id=workspace_id,
+            handoff_op_id=uuid4(),
+            phase="install_succeeded",
+            status_detail=None,
+            cloud_workspace_id=None,
+        )
+
+    assert exc_info.value.code == "invalid_handoff_phase"
+    assert exc_info.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_finalize_requires_cloud_destination_for_cloud_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = _workspace(owner="local")
+
+    async def _get_detail(*_args, **_kwargs):
+        return workspace
+
+    async def _get_handoff(*_args, **_kwargs):
+        return SimpleNamespace(
+            id=uuid4(),
+            mobility_workspace_id=workspace.id,
+            phase="install_succeeded",
+            target_owner="cloud",
+        )
+
+    monkeypatch.setattr(
+        mobility_service,
+        "expire_stale_cloud_workspace_handoffs_for_user",
+        _noop_expire,
+    )
+    monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
+    monkeypatch.setattr(mobility_service, "get_cloud_workspace_handoff_op", _get_handoff)
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await mobility_service.finalize_cloud_workspace_handoff(
+            object(),
+            user_id=uuid4(),
+            mobility_workspace_id=workspace.id,
+            handoff_op_id=uuid4(),
+            cloud_workspace_id=None,
+        )
+
+    assert exc_info.value.code == "destination_workspace_required"
+    assert exc_info.value.status_code == 400
