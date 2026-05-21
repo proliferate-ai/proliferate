@@ -155,6 +155,9 @@ class Settings(BaseSettings):
     automation_cloud_executor_sweep_limit: int = 100
     automation_cloud_executor_branch_prefix: str = "automation"
     automation_cloud_executor_branch_slug_chars: int = 48
+    workspace_move_cleanup_max_attempts: int = 5
+    workspace_move_executor_heartbeat_timeout_seconds: int = 120
+    workspace_move_cleanup_reconciler_interval_seconds: int = 300
     cloud_mcp_oauth_callback_base_url: str = ""
     cloud_mcp_oauth_callback_fallback_base_url: str = "http://localhost:8000"
     cloud_mcp_slack_enabled: bool = False

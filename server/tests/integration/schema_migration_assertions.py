@@ -27,6 +27,7 @@ async def assert_current_schema(
         "cloud_workspace_mobility_event",
         "cloud_workspace_handoff_op",
         "cloud_workspace_mobility",
+        "cloud_workspace_move_cleanup_item",
         "cloud_sandbox",
         "cloud_target_runtime_access",
         "agent_auth_audit_event",
@@ -57,6 +58,72 @@ async def assert_current_schema(
         "user",
         "webhook_event_receipt",
     }
+
+    mobility_handoff_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("cloud_workspace_handoff_op")
+        }
+    )
+    assert "canonical_side" in mobility_handoff_columns
+    mobility_handoff_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints(
+                "cloud_workspace_handoff_op"
+            )
+        }
+    )
+    assert {
+        "ck_cloud_workspace_handoff_canonical_side",
+        "ck_cloud_workspace_handoff_destination_phase",
+    } <= mobility_handoff_checks
+
+    mobility_cleanup_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("cloud_workspace_move_cleanup_item")
+        }
+    )
+    assert {
+        "id",
+        "handoff_op_id",
+        "item_kind",
+        "target_id",
+        "anyharness_workspace_id",
+        "object_id",
+        "status",
+        "attempt_count",
+        "next_attempt_at",
+        "error_code",
+        "error_message",
+        "started_at",
+        "completed_at",
+        "created_at",
+        "updated_at",
+    } <= mobility_cleanup_columns
+    mobility_cleanup_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints(
+                "cloud_workspace_move_cleanup_item"
+            )
+        }
+    )
+    assert {
+        "ck_cloud_workspace_move_cleanup_item_kind",
+        "ck_cloud_workspace_move_cleanup_item_status",
+    } <= mobility_cleanup_checks
+    mobility_cleanup_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("cloud_workspace_move_cleanup_item")
+        }
+    )
+    assert {
+        "ix_cloud_workspace_move_cleanup_item_handoff_status",
+        "ix_cloud_workspace_move_cleanup_item_due",
+    } <= mobility_cleanup_indexes
 
     columns = await conn.run_sync(
         lambda sync_conn: {

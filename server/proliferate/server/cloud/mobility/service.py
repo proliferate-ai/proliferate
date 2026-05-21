@@ -7,9 +7,13 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_mobility import (
     CloudWorkspaceHandoffOpValue,
     CloudWorkspaceMobilityValue,
+    CloudWorkspaceMoveCleanupItemInput,
+    CloudWorkspaceMoveCleanupItemValue,
+    all_cleanup_items_completed,
     backfill_cloud_workspace_mobility_for_workspace,
     complete_cloud_workspace_handoff_cleanup_for_user,
     create_cloud_workspace_handoff_op_for_user,
@@ -17,11 +21,17 @@ from proliferate.db.store.cloud_mobility import (
     fail_cloud_workspace_handoff_op_checkpoint_for_user,
     fail_cloud_workspace_handoff_op_for_user,
     finalize_cloud_workspace_handoff_op_for_user,
+    get_cleanup_item_for_handoff,
+    get_cloud_workspace_handoff_op,
     heartbeat_cloud_workspace_handoff_op_for_user,
+    insert_cleanup_items_for_handoff,
+    list_cleanup_items_for_handoff,
     load_active_user_handoff_op_for_user,
     load_cloud_workspace_mobility_for_user,
     load_cloud_workspace_mobility_value,
+    mark_remaining_cleanup_items_completed,
     record_cloud_workspace_mobility_event_for_user,
+    update_cleanup_item_status,
     update_cloud_workspace_handoff_phase_checkpoint_for_user,
     update_cloud_workspace_handoff_phase_for_user,
 )
@@ -29,6 +39,8 @@ from proliferate.db.store.cloud_mobility import (
     list_cloud_workspace_mobility_for_user as list_cloud_workspace_mobility_store,
 )
 from proliferate.db.store.cloud_repo_config import load_cloud_repo_config_for_user
+from proliferate.db.store.cloud_sync.events import list_session_projections_for_workspace
+from proliferate.db.store.cloud_sync.exposures import get_active_workspace_exposure
 from proliferate.db.store.cloud_workspaces import (
     list_cloud_workspaces_for_user as list_cloud_workspaces_store,
 )
@@ -38,9 +50,18 @@ from proliferate.db.store.cloud_workspaces import (
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.mobility.cleanup_executor import (
+    SERVER_CLEANUP_ITEM_KINDS,
+    execute_server_cleanup_item,
+)
 from proliferate.server.cloud.mobility.domain.lifecycle import (
+    CANONICAL_SIDE_DESTINATION,
     FINAL_HANDOFF_PHASES,
+    HANDOFF_PHASE_CLEANUP_FAILED,
+    HANDOFF_PHASE_CLEANUP_PENDING,
+    HANDOFF_PHASE_CUTOVER_COMMITTED,
     HANDOFF_PHASE_HANDOFF_FAILED,
+    LIFECYCLE_CLEANUP_FAILED,
     LIFECYCLE_HANDOFF_FAILED,
     OWNER_CLOUD,
     active_lifecycle_state,
@@ -50,6 +71,7 @@ from proliferate.server.cloud.mobility.domain.lifecycle import (
     is_valid_handoff_phase,
     is_valid_owner,
     moving_lifecycle_state,
+    normalize_owner,
     owner_direction_blocker,
     stale_handoff_outcome,
     target_owner_for_direction,
@@ -72,6 +94,94 @@ _BRANCH_NOT_PUBLISHED_BLOCKER = "The branch '{branch}' was not found on GitHub."
 _BRANCH_HEAD_MISMATCH_BLOCKER = "The branch '{branch}' on GitHub is not at the requested commit."
 
 
+async def _require_handoff_belongs_to_workspace(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    mobility_workspace_id: UUID,
+    handoff_op_id: UUID,
+) -> None:
+    handoff = await get_cloud_workspace_handoff_op(
+        db,
+        user_id=user_id,
+        handoff_op_id=handoff_op_id,
+    )
+    if handoff is None or handoff.mobility_workspace_id != mobility_workspace_id:
+        raise CloudApiError("handoff_not_found", "Mobility handoff not found.", status_code=404)
+
+
+async def _default_cleanup_items_for_cutover(
+    db: AsyncSession,
+    *,
+    source_cloud_workspace_id: UUID | None,
+    destination_cloud_workspace_id: UUID | None,
+) -> list[CloudWorkspaceMoveCleanupItemInput]:
+    if source_cloud_workspace_id is None:
+        return []
+    if (
+        destination_cloud_workspace_id is not None
+        and destination_cloud_workspace_id == source_cloud_workspace_id
+    ):
+        return []
+
+    source_workspace = await db.get(CloudWorkspace, source_cloud_workspace_id)
+    if source_workspace is None:
+        return []
+
+    items: list[CloudWorkspaceMoveCleanupItemInput] = []
+    if source_workspace.anyharness_workspace_id:
+        items.append(
+            CloudWorkspaceMoveCleanupItemInput(
+                item_kind="anyharness_workspace",
+                target_id=source_workspace.target_id,
+                anyharness_workspace_id=source_workspace.anyharness_workspace_id,
+            )
+        )
+
+    for projection in await list_session_projections_for_workspace(
+        db,
+        cloud_workspace_id=source_cloud_workspace_id,
+        limit=500,
+    ):
+        items.append(
+            CloudWorkspaceMoveCleanupItemInput(
+                item_kind="cloud_session_projection",
+                target_id=projection.target_id,
+                object_id=projection.id,
+            )
+        )
+
+    if source_workspace.target_id is not None:
+        exposure = await get_active_workspace_exposure(
+            db,
+            target_id=source_workspace.target_id,
+            cloud_workspace_id=source_cloud_workspace_id,
+        )
+        if exposure is not None:
+            items.append(
+                CloudWorkspaceMoveCleanupItemInput(
+                    item_kind="cloud_exposure",
+                    target_id=source_workspace.target_id,
+                    object_id=exposure.id,
+                )
+            )
+        items.append(
+            CloudWorkspaceMoveCleanupItemInput(
+                item_kind="worker_projection_cursor",
+                target_id=source_workspace.target_id,
+            )
+        )
+
+    items.append(
+        CloudWorkspaceMoveCleanupItemInput(
+            item_kind="cloud_workspace",
+            target_id=source_workspace.target_id,
+            object_id=source_cloud_workspace_id,
+        )
+    )
+    return items
+
+
 async def expire_stale_cloud_workspace_handoffs_for_user(*, user_id: UUID) -> None:
     stale_before = utcnow() - _STALE_HANDOFF_AFTER
     workspaces = await list_cloud_workspace_mobility_store(user_id=user_id)
@@ -82,6 +192,7 @@ async def expire_stale_cloud_workspace_handoffs_for_user(*, user_id: UUID) -> No
         outcome = stale_handoff_outcome(
             finalized_at=active_handoff.finalized_at,
             cleanup_completed_at=active_handoff.cleanup_completed_at,
+            canonical_side=active_handoff.canonical_side,
         )
         await fail_cloud_workspace_handoff_op_checkpoint_for_user(
             user_id=user_id,
@@ -123,10 +234,12 @@ async def ensure_cloud_workspace_mobility(
     owner_hint: str,
 ) -> CloudWorkspaceMobilityValue:
     await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
+    owner_hint = normalize_owner(owner_hint)
     if not is_valid_owner(owner_hint):
         raise CloudApiError(
             "invalid_owner_hint",
-            "ownerHint must be either 'local' or 'cloud'.",
+            "ownerHint must be one of 'local', 'personal_cloud', "
+            "'shared_cloud', 'ssh', or legacy 'cloud'.",
             status_code=400,
         )
 
@@ -210,7 +323,7 @@ async def preflight_cloud_workspace_handoff(
     if not is_valid_handoff_direction(direction):
         raise CloudApiError(
             "invalid_handoff_direction",
-            "direction must be either 'local_to_cloud' or 'cloud_to_local'.",
+            "direction must be a supported workspace move direction.",
             status_code=400,
         )
     if workspace.cloud_lost_at is not None:
@@ -341,7 +454,7 @@ async def start_cloud_workspace_handoff(
             "; ".join(preflight.blockers),
             status_code=409,
         )
-    source_owner = workspace.owner
+    source_owner = normalize_owner(workspace.owner)
     target_owner = target_owner_for_direction(direction)
     try:
         handoff = await create_cloud_workspace_handoff_op_for_user(
@@ -457,6 +570,14 @@ async def update_cloud_workspace_handoff_phase(
             f"Unsupported handoff phase '{phase}'.",
             status_code=400,
         )
+    if phase == HANDOFF_PHASE_CUTOVER_COMMITTED:
+        return await finalize_cloud_workspace_handoff(
+            db,
+            user_id=user_id,
+            mobility_workspace_id=mobility_workspace_id,
+            handoff_op_id=handoff_op_id,
+            cloud_workspace_id=cloud_workspace_id,
+        )
     try:
         return await update_cloud_workspace_handoff_phase_for_user(
             db,
@@ -480,8 +601,13 @@ async def finalize_cloud_workspace_handoff(
     cloud_workspace_id: UUID | None,
 ) -> CloudWorkspaceHandoffOpValue:
     await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
+    source_workspace = await get_cloud_workspace_mobility_detail(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+    )
     try:
-        return await finalize_cloud_workspace_handoff_op_for_user(
+        value = await finalize_cloud_workspace_handoff_op_for_user(
             db,
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
@@ -490,6 +616,25 @@ async def finalize_cloud_workspace_handoff(
         )
     except ValueError as error:
         raise CloudApiError("handoff_not_found", str(error), status_code=404) from error
+    if value.canonical_side != CANONICAL_SIDE_DESTINATION:
+        raise CloudApiError(
+            "cutover_not_committed",
+            "Handoff cutover did not commit.",
+            status_code=500,
+        )
+    existing_items = await list_cleanup_items_for_handoff(db, handoff_op_id=handoff_op_id)
+    if not existing_items:
+        cleanup_items = await _default_cleanup_items_for_cutover(
+            db,
+            source_cloud_workspace_id=source_workspace.cloud_workspace_id,
+            destination_cloud_workspace_id=cloud_workspace_id,
+        )
+        await insert_cleanup_items_for_handoff(
+            db,
+            handoff_op_id=handoff_op_id,
+            items=cleanup_items,
+        )
+    return value
 
 
 async def complete_cloud_workspace_handoff_cleanup(
@@ -500,6 +645,37 @@ async def complete_cloud_workspace_handoff_cleanup(
     handoff_op_id: UUID,
 ) -> CloudWorkspaceHandoffOpValue:
     await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
+    cleanup_items = await list_cleanup_items_for_handoff(db, handoff_op_id=handoff_op_id)
+    if cleanup_items:
+        for item in cleanup_items:
+            if item.status == "completed":
+                continue
+            if item.item_kind in SERVER_CLEANUP_ITEM_KINDS:
+                await execute_server_cleanup_item(
+                    db,
+                    handoff_op_id=handoff_op_id,
+                    cleanup_item_id=item.id,
+                )
+                continue
+            cleanup_item = await get_cleanup_item_for_handoff(
+                db,
+                handoff_op_id=handoff_op_id,
+                cleanup_item_id=item.id,
+                lock=True,
+            )
+            if cleanup_item is not None:
+                await update_cleanup_item_status(
+                    db,
+                    cleanup_item=cleanup_item,
+                    status="completed",
+                )
+        cleanup_items = await list_cleanup_items_for_handoff(db, handoff_op_id=handoff_op_id)
+        if not all(item.status == "completed" for item in cleanup_items):
+            raise CloudApiError(
+                "cleanup_items_incomplete",
+                "All cleanup items must complete before the handoff can be marked completed.",
+                status_code=409,
+            )
     try:
         return await complete_cloud_workspace_handoff_cleanup_for_user(
             db,
@@ -509,6 +685,190 @@ async def complete_cloud_workspace_handoff_cleanup(
         )
     except ValueError as error:
         raise CloudApiError("handoff_not_found", str(error), status_code=404) from error
+
+
+async def list_cloud_workspace_handoff_cleanup_items(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    mobility_workspace_id: UUID,
+    handoff_op_id: UUID,
+) -> list[CloudWorkspaceMoveCleanupItemValue]:
+    await get_cloud_workspace_mobility_detail(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+    )
+    await _require_handoff_belongs_to_workspace(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+        handoff_op_id=handoff_op_id,
+    )
+    return await list_cleanup_items_for_handoff(db, handoff_op_id=handoff_op_id)
+
+
+async def start_cloud_workspace_handoff_cleanup_item(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    mobility_workspace_id: UUID,
+    handoff_op_id: UUID,
+    cleanup_item_id: UUID,
+) -> CloudWorkspaceMoveCleanupItemValue:
+    await get_cloud_workspace_mobility_detail(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+    )
+    await _require_handoff_belongs_to_workspace(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+        handoff_op_id=handoff_op_id,
+    )
+    item = await get_cleanup_item_for_handoff(
+        db,
+        handoff_op_id=handoff_op_id,
+        cleanup_item_id=cleanup_item_id,
+        lock=True,
+    )
+    if item is None:
+        raise CloudApiError("cleanup_item_not_found", "Cleanup item not found.", status_code=404)
+    return await update_cleanup_item_status(db, cleanup_item=item, status="in_progress")
+
+
+async def complete_cloud_workspace_handoff_cleanup_item(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    mobility_workspace_id: UUID,
+    handoff_op_id: UUID,
+    cleanup_item_id: UUID,
+) -> CloudWorkspaceMoveCleanupItemValue:
+    await get_cloud_workspace_mobility_detail(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+    )
+    await _require_handoff_belongs_to_workspace(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+        handoff_op_id=handoff_op_id,
+    )
+    item = await get_cleanup_item_for_handoff(
+        db,
+        handoff_op_id=handoff_op_id,
+        cleanup_item_id=cleanup_item_id,
+        lock=True,
+    )
+    if item is None:
+        raise CloudApiError("cleanup_item_not_found", "Cleanup item not found.", status_code=404)
+    value = await update_cleanup_item_status(db, cleanup_item=item, status="completed")
+    if await all_cleanup_items_completed(db, handoff_op_id=handoff_op_id):
+        with suppress(CloudApiError, ValueError):
+            await complete_cloud_workspace_handoff_cleanup(
+                db,
+                user_id=user_id,
+                mobility_workspace_id=mobility_workspace_id,
+                handoff_op_id=handoff_op_id,
+            )
+    return value
+
+
+async def fail_cloud_workspace_handoff_cleanup_item(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    mobility_workspace_id: UUID,
+    handoff_op_id: UUID,
+    cleanup_item_id: UUID,
+    error_code: str,
+    error_message: str,
+) -> CloudWorkspaceMoveCleanupItemValue:
+    await get_cloud_workspace_mobility_detail(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+    )
+    await _require_handoff_belongs_to_workspace(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+        handoff_op_id=handoff_op_id,
+    )
+    item = await get_cleanup_item_for_handoff(
+        db,
+        handoff_op_id=handoff_op_id,
+        cleanup_item_id=cleanup_item_id,
+        lock=True,
+    )
+    if item is None:
+        raise CloudApiError("cleanup_item_not_found", "Cleanup item not found.", status_code=404)
+    value = await update_cleanup_item_status(
+        db,
+        cleanup_item=item,
+        status="failed",
+        error_code=error_code,
+        error_message=error_message,
+    )
+    await fail_cloud_workspace_handoff_op_for_user(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+        handoff_op_id=handoff_op_id,
+        phase=HANDOFF_PHASE_CLEANUP_FAILED,
+        lifecycle_state=LIFECYCLE_CLEANUP_FAILED,
+        failure_code=error_code,
+        failure_detail=error_message,
+        status_detail=visible_failure_status_detail(error_message),
+        last_error=visible_failure_last_error(error_message),
+    )
+    return value
+
+
+async def repair_cloud_workspace_handoff(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    mobility_workspace_id: UUID,
+    handoff_op_id: UUID,
+    action: str,
+    detail: str | None,
+) -> CloudWorkspaceHandoffOpValue:
+    if action not in {"resume_cleanup", "mark_complete"}:
+        raise CloudApiError(
+            "invalid_repair_action",
+            "repair action must be 'resume_cleanup' or 'mark_complete'.",
+            status_code=400,
+        )
+    await _require_handoff_belongs_to_workspace(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+        handoff_op_id=handoff_op_id,
+    )
+    if action == "mark_complete":
+        await mark_remaining_cleanup_items_completed(
+            db,
+            handoff_op_id=handoff_op_id,
+            error_message=detail or "Marked complete manually.",
+        )
+        return await complete_cloud_workspace_handoff_cleanup_for_user(
+            db,
+            user_id=user_id,
+            mobility_workspace_id=mobility_workspace_id,
+            handoff_op_id=handoff_op_id,
+        )
+    return await update_cloud_workspace_handoff_phase_for_user(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+        handoff_op_id=handoff_op_id,
+        phase=HANDOFF_PHASE_CLEANUP_PENDING,
+        status_detail="Awaiting source cleanup",
+    )
 
 
 async def fail_cloud_workspace_handoff(
@@ -522,13 +882,34 @@ async def fail_cloud_workspace_handoff(
 ) -> CloudWorkspaceHandoffOpValue:
     await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
     try:
+        await _require_handoff_belongs_to_workspace(
+            db,
+            user_id=user_id,
+            mobility_workspace_id=mobility_workspace_id,
+            handoff_op_id=handoff_op_id,
+        )
+        handoff = await get_cloud_workspace_handoff_op(
+            db,
+            user_id=user_id,
+            handoff_op_id=handoff_op_id,
+        )
+        phase = (
+            HANDOFF_PHASE_CLEANUP_FAILED
+            if handoff is not None and handoff.canonical_side == CANONICAL_SIDE_DESTINATION
+            else HANDOFF_PHASE_HANDOFF_FAILED
+        )
+        lifecycle_state = (
+            "cleanup_failed"
+            if phase == HANDOFF_PHASE_CLEANUP_FAILED
+            else LIFECYCLE_HANDOFF_FAILED
+        )
         return await fail_cloud_workspace_handoff_op_for_user(
             db,
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
             handoff_op_id=handoff_op_id,
-            phase=HANDOFF_PHASE_HANDOFF_FAILED,
-            lifecycle_state=LIFECYCLE_HANDOFF_FAILED,
+            phase=phase,
+            lifecycle_state=lifecycle_state,
             failure_code=failure_code,
             failure_detail=failure_detail,
             status_detail=visible_failure_status_detail(failure_detail),

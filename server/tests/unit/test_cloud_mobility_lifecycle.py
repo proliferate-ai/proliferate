@@ -140,7 +140,7 @@ async def test_create_handoff_sets_active_pointer_and_moving_state(
     assert refreshed.active_handoff_op_id == handoff.id
     assert refreshed.last_handoff_op_id == handoff.id
     assert refreshed.owner == "local"
-    assert refreshed.lifecycle_state == "moving_to_cloud"
+    assert refreshed.lifecycle_state == "moving"
     assert refreshed.status_detail == "Handoff started"
     assert refreshed.active_handoff is not None
     assert refreshed.active_handoff.exclude_paths == ("node_modules",)
@@ -260,13 +260,14 @@ async def test_finalize_flips_owner_before_cleanup_clears_active_handoff(
         user_id=user_id,
         mobility_workspace_id=mobility.id,
     )
-    assert finalized.phase == "cleanup_pending"
+    assert finalized.phase == "cutover_committed"
+    assert finalized.canonical_side == "destination"
     assert finalized.finalized_at is not None
     assert visible is not None
-    assert visible.owner == "cloud"
+    assert visible.owner == "personal_cloud"
     assert visible.lifecycle_state == "cloud_active"
     assert visible.active_handoff_op_id == handoff.id
-    assert visible.status_detail == "Awaiting source cleanup"
+    assert visible.status_detail == "Cutover committed"
 
 
 @pytest.mark.asyncio

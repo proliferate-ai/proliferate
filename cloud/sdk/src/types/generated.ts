@@ -344,6 +344,12 @@ export type FinalizeCloudWorkspaceMobilityHandoffRequest =
   components["schemas"]["FinalizeWorkspaceMobilityHandoffRequest"];
 export type FailCloudWorkspaceMobilityHandoffRequest =
   components["schemas"]["FailWorkspaceMobilityHandoffRequest"];
+export type CloudMobilityCleanupItemSummary =
+  components["schemas"]["MobilityCleanupItemSummary"];
+export type FailCloudMobilityCleanupItemRequest =
+  components["schemas"]["FailMobilityCleanupItemRequest"];
+export type RepairCloudWorkspaceMobilityHandoffRequest =
+  components["schemas"]["RepairWorkspaceMobilityHandoffRequest"];
 export type CloudAgentCatalogResponse = components["schemas"]["AgentCatalogResponse"];
 export type CloudAgentCatalogAgent = components["schemas"]["AgentCatalogAgent"];
 export type CloudAgentCatalogSession = components["schemas"]["AgentCatalogSession"];

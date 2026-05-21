@@ -31,6 +31,12 @@ def _has_index(table_name: str, index_name: str) -> bool:
     return index_name in {index["name"] for index in inspector.get_indexes(table_name)}
 
 
+def _has_column(table_name: str, column_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return column_name in {column["name"] for column in inspector.get_columns(table_name)}
+
+
 def upgrade() -> None:
     if not _has_table("automation"):
         op.create_table(
@@ -69,16 +75,22 @@ def upgrade() -> None:
             ),
             sa.PrimaryKeyConstraint("id"),
         )
-    if not _has_index("automation", "ix_automation_user_id"):
+    if _has_column("automation", "user_id") and not _has_index(
+        "automation", "ix_automation_user_id"
+    ):
         op.create_index("ix_automation_user_id", "automation", ["user_id"], unique=False)
-    if not _has_index("automation", "ix_automation_cloud_repo_config_id"):
+    if _has_column("automation", "cloud_repo_config_id") and not _has_index(
+        "automation", "ix_automation_cloud_repo_config_id"
+    ):
         op.create_index(
             "ix_automation_cloud_repo_config_id",
             "automation",
             ["cloud_repo_config_id"],
             unique=False,
         )
-    if not _has_index("automation", "ix_automation_scheduler_due"):
+    if _has_column("automation", "next_run_at") and not _has_index(
+        "automation", "ix_automation_scheduler_due"
+    ):
         op.create_index(
             "ix_automation_scheduler_due",
             "automation",
@@ -125,16 +137,22 @@ def upgrade() -> None:
             sa.ForeignKeyConstraint(["automation_id"], ["automation.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
         )
-    if not _has_index("automation_run", "ix_automation_run_user_id"):
+    if _has_column("automation_run", "user_id") and not _has_index(
+        "automation_run", "ix_automation_run_user_id"
+    ):
         op.create_index("ix_automation_run_user_id", "automation_run", ["user_id"], unique=False)
-    if not _has_index("automation_run", "ix_automation_run_automation_created"):
+    if _has_column("automation_run", "automation_id") and _has_column(
+        "automation_run", "created_at"
+    ) and not _has_index("automation_run", "ix_automation_run_automation_created"):
         op.create_index(
             "ix_automation_run_automation_created",
             "automation_run",
             ["automation_id", "created_at"],
             unique=False,
         )
-    if not _has_index("automation_run", "uq_automation_run_scheduled_slot"):
+    if _has_column("automation_run", "automation_id") and _has_column(
+        "automation_run", "scheduled_for"
+    ) and not _has_index("automation_run", "uq_automation_run_scheduled_slot"):
         op.create_index(
             "uq_automation_run_scheduled_slot",
             "automation_run",

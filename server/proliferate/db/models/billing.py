@@ -172,8 +172,6 @@ class FreeCloudAllocation(Base):
             "issued_billing_grant_id",
             name="uq_free_cloud_allocation_billing_grant",
         ),
-        Index("ix_free_cloud_allocation_billing_subject_id", "billing_subject_id"),
-        Index("ix_free_cloud_allocation_user_id", "user_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

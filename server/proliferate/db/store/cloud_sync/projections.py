@@ -191,6 +191,30 @@ async def clear_projection_gap_state(
     return _snapshot(row)
 
 
+async def end_session_projection_by_id(
+    db: AsyncSession,
+    *,
+    projection_id: UUID,
+    ended_at: str | None = None,
+) -> CloudSessionProjectionMetadataSnapshot | None:
+    row = (
+        await db.execute(
+            select(CloudSessionProjection)
+            .where(CloudSessionProjection.id == projection_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    row.status = "ended"
+    row.phase = "ended"
+    row.commandable = False
+    row.ended_at = ended_at or utcnow().isoformat()
+    row.updated_at = utcnow()
+    await db.flush()
+    return _snapshot(row)
+
+
 async def list_active_projection_cursors_for_target(
     db: AsyncSession,
     *,

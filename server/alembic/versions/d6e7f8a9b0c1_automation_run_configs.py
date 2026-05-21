@@ -445,6 +445,24 @@ def _create_agent_run_config_tables() -> None:
 
 
 def _upgrade_automation_tables() -> None:
+    automation_already_modern = (
+        _has_table("automation")
+        and _has_column("automation", "owner_scope")
+        and _has_column("automation", "cloud_agent_run_config_id")
+        and not _has_column("automation", "user_id")
+        and not _has_column("automation", "execution_target")
+    )
+    automation_run_already_modern = (
+        _has_table("automation_run")
+        and _has_column("automation_run", "owner_scope")
+        and _has_column("automation_run", "agent_run_config_snapshot_json")
+        and not _has_column("automation_run", "user_id")
+        and not _has_column("automation_run", "execution_target")
+    )
+    if automation_already_modern and automation_run_already_modern:
+        _create_daily_automation_activity_view()
+        return
+
     _drop_daily_automation_activity_view()
     if _has_table("automation"):
         _add_column_once(

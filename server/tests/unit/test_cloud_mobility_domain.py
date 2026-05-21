@@ -14,7 +14,7 @@ from proliferate.server.cloud.mobility.domain.lifecycle import (
     LIFECYCLE_CLOUD_ACTIVE,
     LIFECYCLE_HANDOFF_FAILED,
     LIFECYCLE_LOCAL_ACTIVE,
-    LIFECYCLE_MOVING_TO_CLOUD,
+    LIFECYCLE_MOVING,
     OWNER_CLOUD,
     OWNER_LOCAL,
     STALE_CLEANUP_FAILURE_CODE,
@@ -61,7 +61,7 @@ def test_owner_direction_rejects_unknown_direction() -> None:
 def test_lifecycle_state_helpers_follow_owner_and_target_owner() -> None:
     assert active_lifecycle_state(OWNER_LOCAL) == LIFECYCLE_LOCAL_ACTIVE
     assert active_lifecycle_state(OWNER_CLOUD) == LIFECYCLE_CLOUD_ACTIVE
-    assert moving_lifecycle_state(OWNER_CLOUD) == LIFECYCLE_MOVING_TO_CLOUD
+    assert moving_lifecycle_state(OWNER_CLOUD) == LIFECYCLE_MOVING
 
 
 def test_retryability_requires_failed_lifecycle_without_active_handoff() -> None:
