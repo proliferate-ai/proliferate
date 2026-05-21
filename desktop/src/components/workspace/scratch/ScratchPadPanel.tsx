@@ -179,7 +179,7 @@ export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
   }, [flushSave]);
 
   return (
-    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-sidebar-background text-sidebar-foreground">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
       <PaneHeader
         left={(
           <div className="flex min-w-0 items-center px-1">

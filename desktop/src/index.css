@@ -2282,7 +2282,7 @@ body {
 
 /* ---- Right panel tabs ---- */
 .right-panel-tab-system {
-  --tab-system-height: 2.5rem; /* Align with the main sidebar header. */
+  --tab-system-height: 3rem; /* Align with the workspace content header (h-12). */
   --tab-max-width: 156px;
   --tab-shell-max-width: 160px;
   --tab-height: 30px;
