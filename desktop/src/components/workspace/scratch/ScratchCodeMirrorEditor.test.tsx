@@ -23,7 +23,7 @@ describe("ScratchCodeMirrorEditor", () => {
     render(
       <ScratchCodeMirrorEditor
         value=""
-        placeholder={"☐ Capture follow-ups\n☐ Keep durable workspace notes here"}
+        placeholder="Write notes here"
         disabled={false}
         wordWrap
         onChange={vi.fn()}
