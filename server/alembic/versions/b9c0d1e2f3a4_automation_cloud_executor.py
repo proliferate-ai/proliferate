@@ -50,6 +50,7 @@ def upgrade() -> None:
         return
 
     existing_columns = _columns("automation_run")
+    automation_columns = _columns("automation") if _has_table("automation") else set()
     for name, column in (
         ("title_snapshot", sa.Column("title_snapshot", sa.String(length=255), nullable=True)),
         ("prompt_snapshot", sa.Column("prompt_snapshot", sa.Text(), nullable=True)),
@@ -115,33 +116,45 @@ def upgrade() -> None:
         if name not in existing_columns:
             op.add_column("automation_run", column)
 
-    op.execute(
-        sa.text(
-            """
-            UPDATE automation_run AS run
-            SET
-              title_snapshot = COALESCE(run.title_snapshot, automation.title),
-              prompt_snapshot = COALESCE(run.prompt_snapshot, automation.prompt),
-              git_provider_snapshot = COALESCE(run.git_provider_snapshot, 'github'),
-              git_owner_snapshot = COALESCE(run.git_owner_snapshot, repo.git_owner),
-              git_repo_name_snapshot = COALESCE(run.git_repo_name_snapshot, repo.git_repo_name),
-              cloud_repo_config_id_snapshot = COALESCE(
-                run.cloud_repo_config_id_snapshot,
-                automation.cloud_repo_config_id
-              ),
-              agent_kind_snapshot = COALESCE(run.agent_kind_snapshot, automation.agent_kind),
-              model_id_snapshot = COALESCE(run.model_id_snapshot, automation.model_id),
-              mode_id_snapshot = COALESCE(run.mode_id_snapshot, automation.mode_id),
-              reasoning_effort_snapshot = COALESCE(
-                run.reasoning_effort_snapshot,
-                automation.reasoning_effort
-              )
-            FROM automation
-            JOIN cloud_repo_config AS repo ON repo.id = automation.cloud_repo_config_id
-            WHERE run.automation_id = automation.id
-            """
+    if {
+        "title",
+        "prompt",
+        "cloud_repo_config_id",
+        "agent_kind",
+        "model_id",
+        "mode_id",
+        "reasoning_effort",
+    } <= automation_columns:
+        op.execute(
+            sa.text(
+                """
+                UPDATE automation_run AS run
+                SET
+                  title_snapshot = COALESCE(run.title_snapshot, automation.title),
+                  prompt_snapshot = COALESCE(run.prompt_snapshot, automation.prompt),
+                  git_provider_snapshot = COALESCE(run.git_provider_snapshot, 'github'),
+                  git_owner_snapshot = COALESCE(run.git_owner_snapshot, repo.git_owner),
+                  git_repo_name_snapshot = COALESCE(
+                    run.git_repo_name_snapshot,
+                    repo.git_repo_name
+                  ),
+                  cloud_repo_config_id_snapshot = COALESCE(
+                    run.cloud_repo_config_id_snapshot,
+                    automation.cloud_repo_config_id
+                  ),
+                  agent_kind_snapshot = COALESCE(run.agent_kind_snapshot, automation.agent_kind),
+                  model_id_snapshot = COALESCE(run.model_id_snapshot, automation.model_id),
+                  mode_id_snapshot = COALESCE(run.mode_id_snapshot, automation.mode_id),
+                  reasoning_effort_snapshot = COALESCE(
+                    run.reasoning_effort_snapshot,
+                    automation.reasoning_effort
+                  )
+                FROM automation
+                JOIN cloud_repo_config AS repo ON repo.id = automation.cloud_repo_config_id
+                WHERE run.automation_id = automation.id
+                """
+            )
         )
-    )
 
     if "last_error" in existing_columns:
         op.execute(
@@ -155,20 +168,21 @@ def upgrade() -> None:
         )
         op.drop_column("automation_run", "last_error")
 
-    op.execute(
-        sa.text(
-            """
-            UPDATE automation
-            SET enabled = false,
-                paused_at = COALESCE(paused_at, now()),
-                next_run_at = NULL,
-                updated_at = now()
-            WHERE execution_target = 'cloud'
-              AND agent_kind IS NULL
-              AND enabled = true
-            """
+    if {"execution_target", "agent_kind", "enabled"} <= automation_columns:
+        op.execute(
+            sa.text(
+                """
+                UPDATE automation
+                SET enabled = false,
+                    paused_at = COALESCE(paused_at, now()),
+                    next_run_at = NULL,
+                    updated_at = now()
+                WHERE execution_target = 'cloud'
+                  AND agent_kind IS NULL
+                  AND enabled = true
+                """
+            )
         )
-    )
 
     for name in (
         "title_snapshot",
@@ -219,7 +233,9 @@ def upgrade() -> None:
             ondelete="SET NULL",
         )
 
-    if not _has_index("automation_run", "ix_automation_run_cloud_claimable"):
+    if "execution_target" in existing_columns and not _has_index(
+        "automation_run", "ix_automation_run_cloud_claimable"
+    ):
         op.create_index(
             "ix_automation_run_cloud_claimable",
             "automation_run",
@@ -236,7 +252,9 @@ def upgrade() -> None:
                 ")"
             ),
         )
-    if not _has_index("automation_run", "ix_automation_run_cloud_claim_expiry"):
+    if "execution_target" in existing_columns and not _has_index(
+        "automation_run", "ix_automation_run_cloud_claim_expiry"
+    ):
         op.create_index(
             "ix_automation_run_cloud_claim_expiry",
             "automation_run",

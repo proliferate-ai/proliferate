@@ -1,13 +1,16 @@
 import { getProliferateClient } from "./core.js";
 import type {
+  CloudMobilityCleanupItemSummary,
   CloudMobilityHandoffSummary,
   CloudMobilityWorkspaceDetail,
   CloudMobilityWorkspaceSummary,
   CloudWorkspaceMobilityPreflightRequest,
   CloudWorkspaceMobilityPreflightResponse,
   EnsureCloudMobilityWorkspaceRequest,
+  FailCloudMobilityCleanupItemRequest,
   FailCloudWorkspaceMobilityHandoffRequest,
   FinalizeCloudWorkspaceMobilityHandoffRequest,
+  RepairCloudWorkspaceMobilityHandoffRequest,
   StartCloudWorkspaceMobilityHandoffRequest,
   UpdateCloudWorkspaceMobilityHandoffPhaseRequest,
 } from "../types/index.js";
@@ -141,6 +144,111 @@ export async function completeCloudWorkspaceHandoffCleanup(
             handoff_op_id: handoffOpId,
           },
         },
+      },
+    )
+  ).data!;
+}
+
+export async function listCloudWorkspaceHandoffCleanupItems(
+  mobilityWorkspaceId: string,
+  handoffOpId: string,
+): Promise<CloudMobilityCleanupItemSummary[]> {
+  return (
+    await getProliferateClient().GET(
+      "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-items",
+      {
+        params: {
+          path: {
+            mobility_workspace_id: mobilityWorkspaceId,
+            handoff_op_id: handoffOpId,
+          },
+        },
+      },
+    )
+  ).data!;
+}
+
+export async function startCloudWorkspaceHandoffCleanupItem(
+  mobilityWorkspaceId: string,
+  handoffOpId: string,
+  cleanupItemId: string,
+): Promise<CloudMobilityCleanupItemSummary> {
+  return (
+    await getProliferateClient().POST(
+      "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-items/{cleanup_item_id}/start",
+      {
+        params: {
+          path: {
+            mobility_workspace_id: mobilityWorkspaceId,
+            handoff_op_id: handoffOpId,
+            cleanup_item_id: cleanupItemId,
+          },
+        },
+      },
+    )
+  ).data!;
+}
+
+export async function completeCloudWorkspaceHandoffCleanupItem(
+  mobilityWorkspaceId: string,
+  handoffOpId: string,
+  cleanupItemId: string,
+): Promise<CloudMobilityCleanupItemSummary> {
+  return (
+    await getProliferateClient().POST(
+      "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-items/{cleanup_item_id}/complete",
+      {
+        params: {
+          path: {
+            mobility_workspace_id: mobilityWorkspaceId,
+            handoff_op_id: handoffOpId,
+            cleanup_item_id: cleanupItemId,
+          },
+        },
+      },
+    )
+  ).data!;
+}
+
+export async function failCloudWorkspaceHandoffCleanupItem(
+  mobilityWorkspaceId: string,
+  handoffOpId: string,
+  cleanupItemId: string,
+  input: FailCloudMobilityCleanupItemRequest,
+): Promise<CloudMobilityCleanupItemSummary> {
+  return (
+    await getProliferateClient().POST(
+      "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-items/{cleanup_item_id}/fail",
+      {
+        params: {
+          path: {
+            mobility_workspace_id: mobilityWorkspaceId,
+            handoff_op_id: handoffOpId,
+            cleanup_item_id: cleanupItemId,
+          },
+        },
+        body: input,
+      },
+    )
+  ).data!;
+}
+
+export async function repairCloudWorkspaceHandoff(
+  mobilityWorkspaceId: string,
+  handoffOpId: string,
+  input: RepairCloudWorkspaceMobilityHandoffRequest,
+): Promise<CloudMobilityHandoffSummary> {
+  return (
+    await getProliferateClient().POST(
+      "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/repair",
+      {
+        params: {
+          path: {
+            mobility_workspace_id: mobilityWorkspaceId,
+            handoff_op_id: handoffOpId,
+          },
+        },
+        body: input,
       },
     )
   ).data!;

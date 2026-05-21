@@ -11,29 +11,38 @@ from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.mobility.models import (
     EnsureMobilityWorkspaceRequest,
+    FailMobilityCleanupItemRequest,
     FailWorkspaceMobilityHandoffRequest,
     FinalizeWorkspaceMobilityHandoffRequest,
+    MobilityCleanupItemSummary,
     MobilityHandoffSummary,
     MobilityWorkspaceDetail,
     MobilityWorkspaceSummary,
+    RepairWorkspaceMobilityHandoffRequest,
     StartWorkspaceMobilityHandoffRequest,
     UpdateWorkspaceMobilityHandoffPhaseRequest,
     WorkspaceMobilityPreflightRequest,
     WorkspaceMobilityPreflightResponse,
+    cleanup_item_summary_payload,
     handoff_summary_payload,
     mobility_workspace_detail_payload,
     mobility_workspace_summary_payload,
 )
 from proliferate.server.cloud.mobility.service import (
     complete_cloud_workspace_handoff_cleanup,
+    complete_cloud_workspace_handoff_cleanup_item,
     ensure_cloud_workspace_mobility,
     fail_cloud_workspace_handoff,
+    fail_cloud_workspace_handoff_cleanup_item,
     finalize_cloud_workspace_handoff,
     get_cloud_workspace_mobility_detail,
     heartbeat_cloud_workspace_handoff,
+    list_cloud_workspace_handoff_cleanup_items,
     list_cloud_workspace_mobility_for_user,
     preflight_cloud_workspace_handoff,
+    repair_cloud_workspace_handoff,
     start_cloud_workspace_handoff,
+    start_cloud_workspace_handoff_cleanup_item,
     update_cloud_workspace_handoff_phase,
 )
 
@@ -217,6 +226,128 @@ async def cleanup_mobility_handoff_endpoint(
             user_id=user.id,
             mobility_workspace_id=mobility_workspace_id,
             handoff_op_id=handoff_op_id,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return handoff_summary_payload(value)
+
+
+@router.get(
+    "/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-items",
+    response_model=list[MobilityCleanupItemSummary],
+)
+async def list_mobility_handoff_cleanup_items_endpoint(
+    mobility_workspace_id: UUID,
+    handoff_op_id: UUID,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> list[MobilityCleanupItemSummary]:
+    try:
+        values = await list_cloud_workspace_handoff_cleanup_items(
+            db,
+            user_id=user.id,
+            mobility_workspace_id=mobility_workspace_id,
+            handoff_op_id=handoff_op_id,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return [cleanup_item_summary_payload(value) for value in values]
+
+
+@router.post(
+    "/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-items/{cleanup_item_id}/start",
+    response_model=MobilityCleanupItemSummary,
+)
+async def start_mobility_handoff_cleanup_item_endpoint(
+    mobility_workspace_id: UUID,
+    handoff_op_id: UUID,
+    cleanup_item_id: UUID,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> MobilityCleanupItemSummary:
+    try:
+        value = await start_cloud_workspace_handoff_cleanup_item(
+            db,
+            user_id=user.id,
+            mobility_workspace_id=mobility_workspace_id,
+            handoff_op_id=handoff_op_id,
+            cleanup_item_id=cleanup_item_id,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return cleanup_item_summary_payload(value)
+
+
+@router.post(
+    "/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-items/{cleanup_item_id}/complete",
+    response_model=MobilityCleanupItemSummary,
+)
+async def complete_mobility_handoff_cleanup_item_endpoint(
+    mobility_workspace_id: UUID,
+    handoff_op_id: UUID,
+    cleanup_item_id: UUID,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> MobilityCleanupItemSummary:
+    try:
+        value = await complete_cloud_workspace_handoff_cleanup_item(
+            db,
+            user_id=user.id,
+            mobility_workspace_id=mobility_workspace_id,
+            handoff_op_id=handoff_op_id,
+            cleanup_item_id=cleanup_item_id,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return cleanup_item_summary_payload(value)
+
+
+@router.post(
+    "/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-items/{cleanup_item_id}/fail",
+    response_model=MobilityCleanupItemSummary,
+)
+async def fail_mobility_handoff_cleanup_item_endpoint(
+    mobility_workspace_id: UUID,
+    handoff_op_id: UUID,
+    cleanup_item_id: UUID,
+    body: FailMobilityCleanupItemRequest,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> MobilityCleanupItemSummary:
+    try:
+        value = await fail_cloud_workspace_handoff_cleanup_item(
+            db,
+            user_id=user.id,
+            mobility_workspace_id=mobility_workspace_id,
+            handoff_op_id=handoff_op_id,
+            cleanup_item_id=cleanup_item_id,
+            error_code=body.error_code,
+            error_message=body.error_message,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return cleanup_item_summary_payload(value)
+
+
+@router.post(
+    "/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/repair",
+    response_model=MobilityHandoffSummary,
+)
+async def repair_mobility_handoff_endpoint(
+    mobility_workspace_id: UUID,
+    handoff_op_id: UUID,
+    body: RepairWorkspaceMobilityHandoffRequest,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> MobilityHandoffSummary:
+    try:
+        value = await repair_cloud_workspace_handoff(
+            db,
+            user_id=user.id,
+            mobility_workspace_id=mobility_workspace_id,
+            handoff_op_id=handoff_op_id,
+            action=body.action,
+            detail=body.detail,
         )
     except CloudApiError as error:
         raise_cloud_error(error)
