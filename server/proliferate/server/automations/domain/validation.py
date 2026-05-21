@@ -9,21 +9,14 @@ from proliferate.constants.automations import (
     AUTOMATION_REPO_PART_MAX_LENGTH,
     AUTOMATION_RUN_LIST_MAX_LIMIT,
     AUTOMATION_TITLE_MAX_LENGTH,
-    SUPPORTED_AUTOMATION_EXECUTION_TARGETS,
-    SUPPORTED_AUTOMATION_REASONING_EFFORTS,
 )
-from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
 from proliferate.server.automations.domain.schedule import (
     AutomationScheduleError,
     ParsedAutomationSchedule,
     normalize_schedule,
 )
 from proliferate.server.automations.errors import (
-    AutomationAgentRequired,
-    AutomationInvalidAgentKind,
-    AutomationInvalidExecutionTarget,
     AutomationInvalidField,
-    AutomationInvalidReasoningEffort,
     AutomationInvalidSchedule,
 )
 
@@ -69,35 +62,6 @@ def normalize_optional_text(value: str | None, *, field_name: str) -> str | None
             f"{field_name} must be at most {AUTOMATION_OPTIONAL_TEXT_MAX_LENGTH} characters."
         )
     return normalized
-
-
-def normalize_execution_target(value: str) -> str:
-    if value not in SUPPORTED_AUTOMATION_EXECUTION_TARGETS:
-        raise AutomationInvalidExecutionTarget()
-    return value
-
-
-def normalize_agent_kind(value: str | None) -> str | None:
-    normalized = normalize_optional_text(value, field_name="agentKind")
-    if normalized is None:
-        return None
-    if normalized not in SUPPORTED_CLOUD_AGENTS:
-        raise AutomationInvalidAgentKind()
-    return normalized
-
-
-def normalize_reasoning_effort(value: str | None) -> str | None:
-    normalized = normalize_optional_text(value, field_name="reasoningEffort")
-    if normalized is None:
-        return None
-    if normalized not in SUPPORTED_AUTOMATION_REASONING_EFFORTS:
-        raise AutomationInvalidReasoningEffort()
-    return normalized
-
-
-def require_agent_kind(execution_target: str, agent_kind: str | None) -> None:
-    if execution_target in SUPPORTED_AUTOMATION_EXECUTION_TARGETS and agent_kind is None:
-        raise AutomationAgentRequired()
 
 
 def normalize_automation_schedule(

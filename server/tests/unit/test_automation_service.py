@@ -18,7 +18,7 @@ from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.errors import ProliferateError
 from proliferate.server.automations import service as automation_service
-from proliferate.server.automations.errors import AutomationAgentRequired, AutomationServiceError
+from proliferate.server.automations.errors import AutomationInvalidField, AutomationServiceError
 from proliferate.server.automations.models import (
     AutomationScheduleRequest,
     CreateAutomationRequest,
@@ -244,7 +244,7 @@ async def test_resume_cloud_automation_requires_agent_kind(
             await session.commit()
 
         async with engine_module.async_session_factory() as session:
-            with pytest.raises(AutomationAgentRequired) as exc:
+            with pytest.raises(AutomationInvalidField) as exc:
                 await automation_service.resume_automation(session, user_id, automation_id)
 
         assert exc.value.code == "automation_agent_required"
@@ -270,7 +270,7 @@ async def test_create_cloud_automation_requires_agent_kind(
         async with engine_module.async_session_factory() as session, session.begin():
             await _add_user(session, user_id, email="automation-agent-required@example.com")
             target = await _create_online_target(session, user_id=user_id)
-            with pytest.raises(AutomationAgentRequired) as exc:
+            with pytest.raises(AutomationInvalidField) as exc:
                 await automation_service.create_automation(
                     session,
                     user_id,

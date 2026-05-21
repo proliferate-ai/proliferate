@@ -1,4 +1,5 @@
 import type { AutomationExecutionTarget } from "@/lib/domain/automations/target/records";
+import type { AutomationTargetMode } from "@/lib/access/cloud/client";
 
 export interface AutomationScheduleSnapshot {
   rrule?: string;
@@ -13,14 +14,16 @@ export interface AutomationRecord {
   gitRepoName: string;
   title: string;
   schedule: AutomationScheduleSnapshot;
-  executionTarget: AutomationExecutionTarget;
+  targetMode?: AutomationTargetMode;
+  executionTarget?: AutomationExecutionTarget;
   enabled: boolean;
 }
 
 export interface AutomationRunRecord {
   triggerKind: string;
   scheduledFor: string | null;
-  executionTarget: AutomationExecutionTarget;
+  targetMode?: AutomationTargetMode;
+  executionTarget?: AutomationExecutionTarget;
   status: string;
   lastErrorMessage: string | null;
   createdAt: string;
