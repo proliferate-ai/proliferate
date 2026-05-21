@@ -183,3 +183,99 @@ async def test_killed_e2b_webhook_clears_runtime_metadata_and_increments_generat
             "last_error": "Provider reported sandbox killed.",
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_timeout_e2b_webhook_closes_usage_as_paused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sandbox_id = uuid4()
+    runtime_environment_id = uuid4()
+    event_time = datetime.now(UTC)
+    payload = json.dumps(
+        {
+            "id": f"evt-{uuid4()}",
+            "type": "sandbox.lifecycle.timeout",
+            "sandboxId": "sandbox-123",
+            "timestamp": event_time.isoformat(),
+            "eventData": {"sandbox_metadata": {"cloud_sandbox_id": str(sandbox_id)}},
+        }
+    ).encode()
+    sandbox = SimpleNamespace(
+        id=sandbox_id,
+        runtime_environment_id=runtime_environment_id,
+        cloud_workspace_id=None,
+        provider="e2b",
+        external_sandbox_id="sandbox-123",
+        last_provider_event_at=None,
+        last_provider_event_kind=None,
+    )
+    runtime_environment = SimpleNamespace(id=runtime_environment_id)
+    closed_segments: list[dict[str, object]] = []
+    sandbox_state_updates: list[dict[str, object]] = []
+    runtime_state_updates: list[dict[str, object]] = []
+
+    async def _remember_sandbox_event_receipt(**_kwargs: object) -> bool:
+        return True
+
+    async def _load_cloud_sandbox_by_external_id(_external_sandbox_id: str) -> object:
+        return sandbox
+
+    async def _load_runtime_environment_by_id(_runtime_environment_id: object) -> object:
+        return runtime_environment
+
+    async def _save_sandbox_provider_state(_sandbox_id: object, **kwargs: object) -> None:
+        sandbox_state_updates.append(kwargs)
+
+    async def _close_usage_segment_for_sandbox(**kwargs: object) -> None:
+        closed_segments.append(kwargs)
+
+    async def _save_runtime_environment_state(
+        _runtime_environment_id: object,
+        **kwargs: object,
+    ) -> None:
+        runtime_state_updates.append(kwargs)
+
+    monkeypatch.setattr(webhook_service, "_verify_e2b_signature", lambda *_args: None)
+    monkeypatch.setattr(
+        webhook_service,
+        "remember_sandbox_event_receipt",
+        _remember_sandbox_event_receipt,
+    )
+    monkeypatch.setattr(
+        webhook_service,
+        "load_cloud_sandbox_by_external_id",
+        _load_cloud_sandbox_by_external_id,
+    )
+    monkeypatch.setattr(
+        webhook_service,
+        "load_runtime_environment_by_id",
+        _load_runtime_environment_by_id,
+    )
+    monkeypatch.setattr(
+        webhook_service,
+        "save_sandbox_provider_state",
+        _save_sandbox_provider_state,
+    )
+    monkeypatch.setattr(
+        webhook_service,
+        "close_usage_segment_for_sandbox",
+        _close_usage_segment_for_sandbox,
+    )
+    monkeypatch.setattr(
+        webhook_service,
+        "save_runtime_environment_state",
+        _save_runtime_environment_state,
+    )
+
+    receipt = await webhook_service.handle_e2b_webhook(payload=payload, signature=None)
+
+    assert receipt.received is True
+    assert closed_segments[-1]["closed_by"] == "webhook_timeout"
+    assert sandbox_state_updates[-1] == {
+        "status": "paused",
+        "stopped_at": event_time,
+        "last_provider_event_at": event_time,
+        "last_provider_event_kind": "timeout",
+    }
+    assert runtime_state_updates[-1]["status"] == "paused"

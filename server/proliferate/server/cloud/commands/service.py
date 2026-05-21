@@ -15,6 +15,7 @@ from proliferate.constants.cloud import (
     CloudTargetStatus,
     CloudWorkspaceStatus,
 )
+from proliferate.db import engine as db_engine
 from proliferate.db.models.auth import User
 from proliferate.db.store import cloud_runtime_environments, cloud_sandboxes, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
@@ -608,7 +609,11 @@ async def enqueue_command(
     )
     if existing is not None:
         await publish_command_status_after_commit(db, existing)
-        _kick_off_managed_slot_wake_if_required(target=target, command=existing)
+        await kick_off_command_wake_after_commit_if_required(
+            db,
+            target=target,
+            command=existing,
+        )
         return existing
     authorization_context_json = compact_command_json(
         {
@@ -641,7 +646,11 @@ async def enqueue_command(
                 authorization_context_json=authorization_context_json,
             )
         await publish_command_status_after_commit(db, command)
-        _kick_off_managed_slot_wake_if_required(target=target, command=command)
+        await kick_off_command_wake_after_commit_if_required(
+            db,
+            target=target,
+            command=command,
+        )
         return command
     except IntegrityError:
         duplicate = await commands_store.get_command_by_idempotency(
@@ -1146,26 +1155,30 @@ def _runtime_config_blocking_errors(manifest_json: str) -> list[dict[str, object
     return [item for item in blocking_errors if isinstance(item, dict)]
 
 
-def _kick_off_managed_slot_wake_if_required(
-    *,
+def _command_requires_managed_slot_wake(
     target: targets_store.CloudTargetSnapshot,
     command: commands_store.CloudCommandSnapshot,
-) -> None:
+) -> bool:
     if is_terminal_command_status(command.status):
-        return
+        return False
     if not _target_requires_cloud_workspace(target):
-        return
-    if not command_kind_requires_wake(command.kind):
-        return
-    kick_off_managed_slot_wake(target.id, command.id)
+        return False
+    return command_kind_requires_wake(command.kind)
 
 
-def kick_off_command_wake_if_required(
+async def kick_off_command_wake_after_commit_if_required(
+    db: AsyncSession,
     *,
     target: targets_store.CloudTargetSnapshot,
     command: commands_store.CloudCommandSnapshot,
 ) -> None:
-    _kick_off_managed_slot_wake_if_required(target=target, command=command)
+    if not _command_requires_managed_slot_wake(target, command):
+        return
+
+    async def _wake_after_commit() -> None:
+        kick_off_managed_slot_wake(target.id, command.id)
+
+    await db_engine.run_after_commit(db, _wake_after_commit)
 
 
 def is_terminal_command_status(status: str) -> bool:

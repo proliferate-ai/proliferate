@@ -737,6 +737,40 @@ async def mark_command_failed_delivery(
     return _snapshot(row)
 
 
+async def mark_queued_commands_failed_delivery_for_target(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    command_kinds: frozenset[str],
+    error_code: str,
+    error_message: str,
+    now: datetime,
+) -> tuple[CloudCommandSnapshot, ...]:
+    rows = list(
+        (
+            await db.execute(
+                select(CloudCommand)
+                .where(
+                    CloudCommand.target_id == target_id,
+                    CloudCommand.status == CloudCommandStatus.queued.value,
+                    CloudCommand.kind.in_(command_kinds),
+                )
+                .with_for_update()
+                .order_by(CloudCommand.created_at.asc(), CloudCommand.id.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for row in rows:
+        row.status = CloudCommandStatus.failed_delivery.value
+        row.error_code = error_code
+        row.error_message = error_message
+        row.updated_at = now
+    await db.flush()
+    return tuple(_snapshot(row) for row in rows)
+
+
 async def record_command_result(
     db: AsyncSession,
     *,

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import PolicyDenied
 from proliferate.config import settings
+from proliferate.constants.billing import BILLING_PLAN_PRO
 from proliferate.constants.cloud import (
     AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
     AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN,
@@ -35,7 +36,9 @@ from proliferate.constants.cloud import (
     CloudCommandStatus,
 )
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
+from proliferate.db import engine as db_engine
 from proliferate.db.store import organizations as organization_store
+from proliferate.db.store.billing import ensure_organization_billing_subject
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_agent_auth.records import (
     AgentAuthCredentialRecord,
@@ -54,6 +57,7 @@ from proliferate.integrations.aws import (
     validate_bedrock_assume_role_payload,
 )
 from proliferate.integrations.litellm import LiteLLMAdminClient, LiteLLMIntegrationError
+from proliferate.server.billing.service import get_billing_snapshot_for_subject_in_session
 from proliferate.server.cloud.agent_auth.domain.desired_state import (
     LiteLLMModelDeploymentPlan,
     fingerprint_litellm_policy_state,
@@ -561,9 +565,9 @@ async def ensure_managed_credits_for_organization(
 ) -> EnsureManagedCreditsResult:
     await _require_organization_admin(db, actor_user_id, organization_id)
     # Customer-facing callers never choose managed-credit amounts. The value
-    # comes from Proliferate entitlement/billing state; Phase 1 uses settings as
-    # that entitlement source until billing integration wires this internally.
-    included_budget_usd = _managed_credit_entitlement_budget()
+    # comes from the organization's billing plan and deploy-time entitlement
+    # settings.
+    included_budget_usd = await _managed_credit_entitlement_budget(db, organization_id)
     existing_budget = await store.get_managed_budget_subject(db, organization_id)
     team_id = existing_budget.litellm_team_id if existing_budget else None
     sync_status = "failed"
@@ -712,6 +716,20 @@ async def ensure_managed_credits_for_organization(
         credentials=tuple(credentials),
         policies=tuple(policies),
     )
+
+
+async def sync_managed_credit_budget_for_organization(
+    organization_id: UUID,
+) -> AgentGatewayBudgetSubjectRecord | None:
+    """Recompute and mirror an existing managed-credit budget after billing changes."""
+
+    async with db_engine.async_session_factory() as db:
+        budget = await store.get_managed_budget_subject(db, organization_id)
+        if budget is None:
+            return None
+        reconciled = await _reconcile_managed_budget_subject(db, budget=budget)
+        await db.commit()
+        return reconciled
 
 
 async def reconcile_agent_gateway_litellm_mirror(
@@ -1931,6 +1949,11 @@ async def _reconcile_managed_budget_subject(
     *,
     budget: AgentGatewayBudgetSubjectRecord,
 ) -> AgentGatewayBudgetSubjectRecord:
+    included_budget_usd = await _managed_credit_entitlement_budget(
+        db,
+        budget.organization_id,
+        require_positive=False,
+    )
     managed_deployments = tuple(
         deployment
         for agent_kind in _MANAGED_CREDIT_AGENT_KINDS_V1
@@ -1951,7 +1974,7 @@ async def _reconcile_managed_budget_subject(
             team = await client.ensure_team(
                 team_alias=f"org-{budget.organization_id}-managed-credits",
                 team_id=budget.litellm_team_id,
-                max_budget=budget.included_budget_usd,
+                max_budget=included_budget_usd,
                 budget_duration=budget.budget_duration,
             )
             team_id = team.team_id
@@ -1970,9 +1993,13 @@ async def _reconcile_managed_budget_subject(
                         "organizationId": str(budget.organization_id),
                         "budgetKind": budget.budget_kind,
                     },
-                )
+            )
             sync_status = "synced"
-            status = "exhausted" if budget.status == "exhausted" else "ready"
+            status = (
+                "exhausted"
+                if budget.status == "exhausted" or Decimal(included_budget_usd) <= 0
+                else "ready"
+            )
             fingerprint = _deployment_fingerprint(
                 policy_kind="proliferate_managed",
                 litellm_team_id=team_id,
@@ -1988,7 +2015,7 @@ async def _reconcile_managed_budget_subject(
     return await store.ensure_managed_budget_subject(
         db,
         organization_id=budget.organization_id,
-        included_budget_usd=budget.included_budget_usd,
+        included_budget_usd=included_budget_usd,
         litellm_team_id=team_id,
         litellm_sync_status=sync_status,
         litellm_sync_fingerprint=fingerprint,
@@ -2975,9 +3002,23 @@ def _budget_amount(value: str) -> str:
     return format(amount, "f")
 
 
-def _managed_credit_entitlement_budget() -> str:
-    budget = _budget_amount(settings.agent_gateway_default_managed_budget_usd)
-    if Decimal(budget) <= 0:
+async def _managed_credit_entitlement_budget(
+    db: AsyncSession,
+    organization_id: UUID,
+    *,
+    require_positive: bool = True,
+) -> str:
+    subject = await ensure_organization_billing_subject(db, organization_id)
+    snapshot = await get_billing_snapshot_for_subject_in_session(db, subject.id)
+    if snapshot.has_unlimited_cloud_hours or snapshot.is_unlimited:
+        configured_budget = settings.agent_gateway_managed_budget_unlimited_usd
+    elif snapshot.plan == BILLING_PLAN_PRO or snapshot.is_paid_cloud:
+        configured_budget = settings.agent_gateway_managed_budget_pro_usd
+    else:
+        configured_budget = settings.agent_gateway_managed_budget_free_usd
+
+    budget = _budget_amount(configured_budget)
+    if require_positive and Decimal(budget) <= 0:
         raise AgentAuthError(
             "Managed credits are not enabled for this organization.",
             code="managed_credits_not_entitled",

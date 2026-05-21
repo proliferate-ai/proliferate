@@ -2,6 +2,7 @@ export * from "./context/CloudClientProvider.js";
 export * from "./hooks/auth.js";
 export * from "./hooks/automations.js";
 export * from "./hooks/agent-auth.js";
+export * from "./hooks/billing.js";
 export * from "./hooks/commands.js";
 export * from "./hooks/config.js";
 export * from "./hooks/claims.js";

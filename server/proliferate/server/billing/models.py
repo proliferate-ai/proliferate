@@ -21,6 +21,7 @@ class BillingSnapshot:
     is_paid_cloud: bool
     payment_healthy: bool
     overage_enabled: bool
+    overage_cap_cents_per_seat: int | None
     included_hours: float | None
     used_hours: float
     remaining_hours: float | None

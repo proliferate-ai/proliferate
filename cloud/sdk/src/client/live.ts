@@ -110,6 +110,7 @@ function isCloudPatchEvent(event: unknown): boolean {
     kind === "projection_patch" ||
     kind === "workspace_projection_patch" ||
     kind === "target_projection_patch" ||
+    kind === "billing_patch" ||
     kind === "command_status"
   );
 }
