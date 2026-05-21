@@ -12,6 +12,21 @@ export type CloudWorkspaceVisibility =
   | "claimed"
   | "archived";
 
+export type CloudWorkspaceExposureState =
+  | "untracked"
+  | "tracked"
+  | "live"
+  | "paused"
+  | "stale"
+  | "revoked";
+
+export type CloudWorkspaceSandboxType =
+  | "local"
+  | "ssh"
+  | "managed_personal"
+  | "managed_shared"
+  | "self_hosted";
+
 export type CloudRuntimeStatus =
   | "pending"
   | "provisioning"
@@ -59,7 +74,15 @@ export interface CloudWorkspaceRepoRef {
 
 export interface CloudWorkspaceOriginContext {
   kind: "human" | "cowork" | "api" | "system";
-  entrypoint: "desktop" | "cloud" | "local_runtime" | "cowork";
+  entrypoint:
+    | "desktop"
+    | "cloud"
+    | "local_runtime"
+    | "cowork"
+    | "api"
+    | "web"
+    | "mobile"
+    | "slack";
 }
 
 export interface CloudWorkspaceCreatorContext {
@@ -103,6 +126,8 @@ export interface CloudWorkspaceSummary {
   creatorContext?: CloudWorkspaceCreatorContext | null;
   directTargetContext?: CloudWorkspaceDirectTargetContext | null;
   visibility: CloudWorkspaceVisibility;
+  exposureState?: CloudWorkspaceExposureState;
+  sandboxType?: CloudWorkspaceSandboxType;
   claimedByUserId?: string | null;
   claimId?: string | null;
   claimedAt?: string | null;

@@ -78,6 +78,13 @@ server/proliferate/server/cloud/worker/service.py
 server/proliferate/server/cloud/agent_auth/service.py
 server/proliferate/server/cloud/runtime/provision.py
 server/proliferate/server/cloud/workspaces/service.py
+server/proliferate/db/store/automations.py
+server/proliferate/server/cloud/events/service.py
+server/proliferate/server/cloud/mobility/service.py
+server/proliferate/server/cloud/slack/service.py
+server/proliferate/server/cloud/workspaces/models.py
+server/tests/integration/schema_migration_assertions.py
+server/tests/integration/test_schema_migrations.py
 server/tests/integration/test_cloud_commands_api.py
 anyharness/crates/anyharness-lib/src/sessions/service.rs
 server/proliferate/db/models/cloud/agent_auth.py

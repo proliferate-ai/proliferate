@@ -527,13 +527,41 @@ async def delete_cloud_workspace_records(
     db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> None:
-    workspace.archive_requested_at = workspace.archive_requested_at or utcnow()
-    workspace.archived_at = utcnow()
+    await archive_cloud_workspace_record(db, workspace=workspace)
+    await db.commit()
+
+
+async def archive_cloud_workspace_record(
+    db: AsyncSession,
+    *,
+    workspace: CloudWorkspace,
+) -> CloudWorkspace:
+    now = utcnow()
+    workspace.archive_requested_at = workspace.archive_requested_at or now
+    workspace.archived_at = workspace.archived_at or now
     workspace.status = CloudWorkspaceStatus.archived.value
     workspace.status_detail = "Archived"
     workspace.cleanup_state = CloudWorkspaceCleanupState.pending.value
-    workspace.updated_at = utcnow()
-    await db.commit()
+    workspace.updated_at = now
+    await db.flush()
+    return workspace
+
+
+async def archive_cloud_workspace_record_by_id(
+    db: AsyncSession,
+    *,
+    workspace_id: UUID,
+) -> CloudWorkspace | None:
+    workspace = (
+        await db.execute(
+            select(CloudWorkspace)
+            .where(CloudWorkspace.id == workspace_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if workspace is None:
+        return None
+    return await archive_cloud_workspace_record(db, workspace=workspace)
 
 
 async def get_active_sandbox(

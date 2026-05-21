@@ -8,11 +8,19 @@ from pydantic import BaseModel, Field
 from proliferate.db.store.cloud_mobility import (
     CloudWorkspaceHandoffOpValue,
     CloudWorkspaceMobilityValue,
+    CloudWorkspaceMoveCleanupItemValue,
 )
 
 
 def _to_iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
+
+
+def _wire_owner(owner: str) -> str:
+    # Desktop's current mobility UI still treats "cloud" as the personal
+    # managed-cloud owner. Keep the API stable while the DB uses explicit owner
+    # names internally.
+    return "cloud" if owner == "personal_cloud" else owner
 
 
 class MobilityRepoRef(BaseModel):
@@ -28,6 +36,7 @@ class MobilityHandoffSummary(BaseModel):
     source_owner: str = Field(serialization_alias="sourceOwner")
     target_owner: str = Field(serialization_alias="targetOwner")
     phase: str
+    canonical_side: str = Field(serialization_alias="canonicalSide")
     requested_branch: str = Field(serialization_alias="requestedBranch")
     requested_base_sha: str | None = Field(
         default=None,
@@ -112,13 +121,45 @@ class FailWorkspaceMobilityHandoffRequest(BaseModel):
     failure_detail: str = Field(alias="failureDetail")
 
 
+class MobilityCleanupItemSummary(BaseModel):
+    id: str
+    handoff_op_id: str = Field(serialization_alias="handoffOpId")
+    item_kind: str = Field(serialization_alias="itemKind")
+    target_id: str | None = Field(default=None, serialization_alias="targetId")
+    anyharness_workspace_id: str | None = Field(
+        default=None,
+        serialization_alias="anyharnessWorkspaceId",
+    )
+    object_id: str | None = Field(default=None, serialization_alias="objectId")
+    status: str
+    attempt_count: int = Field(serialization_alias="attemptCount")
+    next_attempt_at: str = Field(serialization_alias="nextAttemptAt")
+    error_code: str | None = Field(default=None, serialization_alias="errorCode")
+    error_message: str | None = Field(default=None, serialization_alias="errorMessage")
+    started_at: str | None = Field(default=None, serialization_alias="startedAt")
+    completed_at: str | None = Field(default=None, serialization_alias="completedAt")
+    created_at: str = Field(serialization_alias="createdAt")
+    updated_at: str = Field(serialization_alias="updatedAt")
+
+
+class FailMobilityCleanupItemRequest(BaseModel):
+    error_code: str = Field(alias="errorCode")
+    error_message: str = Field(alias="errorMessage")
+
+
+class RepairWorkspaceMobilityHandoffRequest(BaseModel):
+    action: str
+    detail: str | None = None
+
+
 def handoff_summary_payload(value: CloudWorkspaceHandoffOpValue) -> MobilityHandoffSummary:
     return MobilityHandoffSummary(
         id=str(value.id),
         direction=value.direction,
-        source_owner=value.source_owner,
-        target_owner=value.target_owner,
+        source_owner=_wire_owner(value.source_owner),
+        target_owner=_wire_owner(value.target_owner),
         phase=value.phase,
+        canonical_side=value.canonical_side,
         requested_branch=value.requested_branch,
         requested_base_sha=value.requested_base_sha,
         exclude_paths=list(value.exclude_paths),
@@ -128,6 +169,28 @@ def handoff_summary_payload(value: CloudWorkspaceHandoffOpValue) -> MobilityHand
         heartbeat_at=_to_iso(value.heartbeat_at),
         finalized_at=_to_iso(value.finalized_at),
         cleanup_completed_at=_to_iso(value.cleanup_completed_at),
+    )
+
+
+def cleanup_item_summary_payload(
+    value: CloudWorkspaceMoveCleanupItemValue,
+) -> MobilityCleanupItemSummary:
+    return MobilityCleanupItemSummary(
+        id=str(value.id),
+        handoff_op_id=str(value.handoff_op_id),
+        item_kind=value.item_kind,
+        target_id=str(value.target_id) if value.target_id else None,
+        anyharness_workspace_id=value.anyharness_workspace_id,
+        object_id=str(value.object_id) if value.object_id else None,
+        status=value.status,
+        attempt_count=value.attempt_count,
+        next_attempt_at=_to_iso(value.next_attempt_at),
+        error_code=value.error_code,
+        error_message=value.error_message,
+        started_at=_to_iso(value.started_at),
+        completed_at=_to_iso(value.completed_at),
+        created_at=_to_iso(value.created_at),
+        updated_at=_to_iso(value.updated_at),
     )
 
 
@@ -143,7 +206,7 @@ def mobility_workspace_summary_payload(
             name=value.git_repo_name,
             branch=value.git_branch,
         ),
-        owner=value.owner,
+        owner=_wire_owner(value.owner),
         lifecycle_state=value.lifecycle_state,
         status_detail=value.status_detail,
         last_error=value.last_error,

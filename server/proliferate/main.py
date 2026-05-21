@@ -47,6 +47,10 @@ from proliferate.server.cloud.agent_auth.reconciler import (
     stop_agent_gateway_reconciler,
 )
 from proliferate.server.cloud.api import router as cloud_router
+from proliferate.server.cloud.mobility.reconciler import (
+    start_mobility_cleanup_reconciler,
+    stop_mobility_cleanup_reconciler,
+)
 from proliferate.server.cloud.runtime.setup_monitor import (
     start_cloud_setup_monitor,
     stop_cloud_setup_monitor,
@@ -136,11 +140,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         start_billing_reconciler()
     start_cloud_setup_monitor()
     start_agent_gateway_reconciler()
+    start_mobility_cleanup_reconciler()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     try:
         yield
     finally:
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
+        await stop_mobility_cleanup_reconciler()
         await stop_agent_gateway_reconciler()
         await stop_cloud_setup_monitor()
         await stop_billing_reconciler()
