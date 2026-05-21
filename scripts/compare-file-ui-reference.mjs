@@ -19,6 +19,10 @@ const inputs = {
   ),
   chatView: path.join(repoRoot, "desktop/src/components/workspace/chat/ChatView.tsx"),
   shortcuts: path.join(repoRoot, "desktop/src/config/shortcuts.ts"),
+  workspaceContentShortcuts: path.join(
+    repoRoot,
+    "desktop/src/hooks/workspaces/ui/use-workspace-content-shortcuts.ts",
+  ),
   fileFrame: path.join(
     repoRoot,
     "desktop/src/components/workspace/files/viewer/FileViewerFrame.tsx",
@@ -110,7 +114,8 @@ addCheck(
   includesAll(source.overlay, [
     "data-content-search-overlay",
     "data-content-search-surface",
-    "pointer-events-none absolute top-2 right-4 z-[55] flex justify-end",
+    "pointer-events-none absolute",
+    "right-4 z-[55] flex justify-end",
   ]),
 );
 
@@ -124,7 +129,7 @@ addCheck(
   ]),
   includesAll(source.overlay, [
     "grid w-[340px] max-w-[70vw]",
-    "grid-cols-[minmax(0,1fr)_auto_auto]",
+    "grid-cols-[minmax(0,1fr)_auto]",
     "overflow-hidden rounded-[20px]",
     "shadow-[0px_8px_16px_-4px_rgba(0,0,0,0.12)]",
   ]),
@@ -154,17 +159,13 @@ addCheck(
 
 addCheck(
   "content search overlay",
-  "chat overlay scope buttons and result controls keep the reference labels",
+  "result controls keep the reference labels",
   includesAll(source.referenceSearch, [
-    'aria-label="Search chat"',
-    'aria-label="Search diffs"',
     'aria-label="Previous result"',
     'aria-label="Next result"',
     'aria-label="Close find"',
   ]),
   includesAll(source.overlay, [
-    'label="Search chat"',
-    'label="Search diffs"',
     'label="Previous result"',
     'label="Next result"',
     'aria-label="Close find"',
@@ -173,13 +174,14 @@ addCheck(
 
 addCheck(
   "content search overlay",
-  "file overlay omits chat/diff scope controls",
+  "overlay omits unsupported chat/diff scope controls",
   true,
   includesAll(source.overlay, [
-    'const showScopeButtons = surface === "chat"',
     "grid-cols-[minmax(0,1fr)_auto]",
     "Search file",
-  ]),
+  ]) &&
+    !source.overlay.includes('label="Search chat"') &&
+    !source.overlay.includes('label="Search diffs"'),
 );
 
 addCheck(
@@ -242,9 +244,11 @@ addCheck(
     "relative flex h-full",
     "data-file-viewer-frame",
     "SessionContentSearchOverlay",
+    "canFindInFile",
     "enabled",
     'surface="file"',
   ]) && includesAll(source.fileEditor, [
+    "normalizedEffectiveMode === \"rendered\"",
     'openContentSearch("diffs", "file")',
     "onOpenContentSearch={openFindInDiffs}",
   ]),
@@ -252,14 +256,15 @@ addCheck(
 
 addCheck(
   "content search wiring",
-  "find shortcut routes to the file pane when focus is inside a file viewer",
+  "find shortcut routing lives in the workspace shortcut layer",
   true,
-  includesAll(source.overlay, [
+  includesAll(source.workspaceContentShortcuts, [
     "resolveContentSearchSurfaceForShortcut",
     'closest("[data-file-viewer-frame]")',
-    'getFocusZone() === "right-panel"',
+    'focusZone === "right-panel"',
+    'focusZone === "terminal"',
     'return "file"',
-  ]),
+  ]) && !source.overlay.includes('useShortcutHandler("workspace.find-content"'),
 );
 
 addCheck(
@@ -287,11 +292,11 @@ addCheck(
   "diff and file source renderers wrap visible text with searchable marks",
   true,
   includesAll(source.diffLineContent, [
-    "renderContentSearchMarkedText",
+    "renderContentSearchMarkedToken",
     "contentSearchLineId",
     "activeMatchId",
   ]) && includesAll(source.fileSource, [
-    "renderContentSearchMarkedText",
+    "renderContentSearchMarkedToken",
     "contentSearchUnitId",
     "activeMatchId",
   ]),
@@ -303,6 +308,7 @@ addCheck(
   true,
   includesAll(source.contentSearch, [
     "findContentSearchMatches",
+    "findContentSearchTokenMatchSegments",
     "countContentSearchTokenMatches",
     "buildContentSearchLineMatchIds",
   ]) && includesAll(source.store, [
@@ -322,9 +328,11 @@ addCheck(
     "openSearch: (scope?: ContentSearchScope, surface?: ContentSearchSurface)",
     "unit.surface === state.surface",
   ]) && includesAll(source.fileSource, [
+    "contentSearchOpen",
     'contentSearchSurface === "file"',
     'surface: "file"',
   ]) && includesAll(source.diffViewer, [
+    "contentSearchOpen",
     'contentSearchSurface === "chat"',
     'surface: "chat"',
   ]),

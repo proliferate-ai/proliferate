@@ -27,6 +27,7 @@ export function FileViewerFrame({
   wordWrap,
   richPreviewEnabled,
   canCopyContent,
+  canFindInFile,
   onToggleWordWrap,
   onToggleRichPreview,
   onCopyContent,
@@ -44,6 +45,7 @@ export function FileViewerFrame({
   wordWrap: boolean;
   richPreviewEnabled: boolean;
   canCopyContent: boolean;
+  canFindInFile: boolean;
   onToggleWordWrap: () => void;
   onToggleRichPreview: () => void;
   onCopyContent: () => void;
@@ -84,12 +86,14 @@ export function FileViewerFrame({
           >
             <ExternalLink className="size-4" />
           </FileViewerToolbarButton>
-          <FileViewerToolbarButton
-            label="Find in file"
-            onClick={onOpenContentSearch}
-          >
-            <Search className="size-4" />
-          </FileViewerToolbarButton>
+          {canFindInFile && (
+            <FileViewerToolbarButton
+              label="Find in file"
+              onClick={onOpenContentSearch}
+            >
+              <Search className="size-4" />
+            </FileViewerToolbarButton>
+          )}
           <FileViewerToolbarButton
             label={browserOpen ? "Hide files" : "Show files"}
             active={browserOpen}

@@ -93,6 +93,7 @@ describe("FileEditorView", () => {
       return 1;
     });
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    Element.prototype.scrollIntoView = vi.fn();
     readWorkspaceFileQuery.mockReset();
     gitDiffQuery.mockReset();
     workspaceFilesQuery.mockReset();
@@ -179,6 +180,7 @@ describe("FileEditorView", () => {
     });
     expect(screen.getByText("diff rendered")).toBeTruthy();
     expect(screen.queryByText("not found")).toBeNull();
+    expect(screen.queryByLabelText("Find in file")).toBeNull();
   });
 
   it("renders source files with the read-only source viewer", () => {
@@ -336,5 +338,70 @@ describe("FileEditorView", () => {
     expect(screen.queryByRole("dialog", { name: "Search workspace files" })).toBeNull();
     expect(searchWorkspaceFilesQuery.mock.calls.some(([options]) => options?.enabled === true))
       .toBe(false);
+  });
+
+  it("clears file find highlights when the search overlay closes", () => {
+    const target = fileViewerTarget("package.json");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "{\"ok\":true}",
+        isText: true,
+        path: "package.json",
+        sizeBytes: 11,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+    const { container } = render(createElement(FileEditorView, {
+      filePath: "package.json",
+      targetKey,
+    }));
+
+    fireEvent.click(screen.getByLabelText("Find in file"));
+    fireEvent.change(screen.getByPlaceholderText("Search file…"), {
+      target: { value: "ok" },
+    });
+
+    expect(container.querySelector("mark.codex-thread-find-match")).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("Close find"));
+    expect(container.querySelector("mark.codex-thread-find-match")).toBeNull();
+  });
+
+  it("switches rendered files back to source before opening file find", () => {
+    const target = fileViewerTarget("README.md");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "# Hello\n",
+        isText: true,
+        path: "README.md",
+        sizeBytes: 8,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+    render(createElement(FileEditorView, {
+      filePath: "README.md",
+      targetKey,
+    }));
+
+    fireEvent.click(screen.getByLabelText("Find in file"));
+
+    expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("source");
+    expect(useContentSearchStore.getState().surface).toBe("file");
   });
 });

@@ -3,6 +3,7 @@ import {
   buildContentSearchLineMatchIds,
   countContentSearchTokenMatches,
   findContentSearchMatches,
+  findContentSearchTokenMatchSegments,
   normalizeContentSearchQuery,
 } from "./content-search";
 
@@ -35,6 +36,26 @@ describe("content search domain", () => {
       "diff:demo:line:4:0",
       "diff:demo:line:4:1",
       "diff:demo:line:4:2",
+    ]);
+  });
+
+  it("finds matches that span syntax token boundaries", () => {
+    const tokens = [
+      { content: "function " },
+      { content: "name" },
+      { content: "()" },
+    ];
+
+    expect(countContentSearchTokenMatches(tokens, "function name")).toBe(1);
+    expect(buildContentSearchLineMatchIds({
+      idPrefix: "diff:demo:line:8",
+      tokens,
+      query: "function name",
+    })).toEqual(["diff:demo:line:8:0"]);
+    expect(findContentSearchTokenMatchSegments(tokens, "function name")).toEqual([
+      [{ tokenIndex: 0, start: 0, end: 9, matchIndex: 0 }],
+      [{ tokenIndex: 1, start: 0, end: 4, matchIndex: 0 }],
+      [],
     ]);
   });
 });

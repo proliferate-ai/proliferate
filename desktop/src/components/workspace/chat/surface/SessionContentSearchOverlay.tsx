@@ -3,19 +3,14 @@ import {
   useRef,
   type ChangeEvent,
   type KeyboardEvent,
-  type ReactNode,
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import {
   ArrowUp,
-  FileCode,
-  MessageSquare,
   Search,
   X,
 } from "@/components/ui/icons";
-import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import { getFocusZone } from "@/lib/domain/focus-zone";
 import {
   selectVisibleContentSearchMatchIds,
   type ContentSearchSurface,
@@ -35,27 +30,18 @@ export function SessionContentSearchOverlay({
   const open = useContentSearchStore((state) => state.open);
   const activeSurface = useContentSearchStore((state) => state.surface);
   const query = useContentSearchStore((state) => state.query);
-  const scope = useContentSearchStore((state) => state.scope);
   const activeMatchIndex = useContentSearchStore((state) => state.activeMatchIndex);
   const activeMatchId = useContentSearchStore((state) => state.activeMatchId);
   const matchCount = useContentSearchStore((state) =>
     selectVisibleContentSearchMatchIds(state).length
   );
-  const openSearch = useContentSearchStore((state) => state.openSearch);
   const closeSearch = useContentSearchStore((state) => state.closeSearch);
   const setQuery = useContentSearchStore((state) => state.setQuery);
-  const setScope = useContentSearchStore((state) => state.setScope);
   const goToNextMatch = useContentSearchStore((state) => state.goToNextMatch);
   const goToPreviousMatch = useContentSearchStore((state) => state.goToPreviousMatch);
   const hasQuery = query.trim().length > 0;
   const hasMatches = matchCount > 0;
   const surfaceOpen = enabled && open && activeSurface === surface;
-  const showScopeButtons = surface === "chat";
-
-  useShortcutHandler("workspace.find-content", () => {
-    openSearch("diffs", resolveContentSearchSurfaceForShortcut());
-    return true;
-  }, { enabled: enabled && surface === "chat" });
 
   useEffect(() => {
     if (surfaceOpen) {
@@ -97,15 +83,10 @@ export function SessionContentSearchOverlay({
 
   const placeholder = surface === "file"
     ? "Search file…"
-    : scope === "diffs"
-      ? "Search diff…"
-      : "Search chat…";
+    : "Search diff…";
   const inputLabel = surface === "file" ? "Find in file" : "Find in chat";
-  const panelGridClass = showScopeButtons
-    ? "grid-cols-[minmax(0,1fr)_auto_auto]"
-    : "grid-cols-[minmax(0,1fr)_auto]";
-  const resultRowColumnClass = showScopeButtons ? "col-[1/4]" : "col-[1/3]";
-  const closeColumnClass = showScopeButtons ? "col-[3/4]" : "col-[2/3]";
+  const offsetClassName = surface === "file" ? "top-12" : "top-2";
+  const resultRowColumnClass = "col-[1/3]";
   const resultLabel = hasMatches
     ? `${activeMatchIndex + 1} / ${matchCount} results`
     : "0 results";
@@ -129,11 +110,11 @@ export function SessionContentSearchOverlay({
 
   return (
     <div
-      className="pointer-events-none absolute top-2 right-4 z-[55] flex justify-end"
+      className={`pointer-events-none absolute ${offsetClassName} right-4 z-[55] flex justify-end`}
       data-content-search-overlay
       data-content-search-surface={surface}
     >
-      <div className={`pointer-events-auto grid w-[340px] max-w-[70vw] ${panelGridClass} overflow-hidden rounded-[20px] border-[0.5px] border-border bg-sidebar-background shadow-[0px_8px_16px_-4px_rgba(0,0,0,0.12)]`}>
+      <div className="pointer-events-auto grid w-[340px] max-w-[70vw] grid-cols-[minmax(0,1fr)_auto] overflow-hidden rounded-[20px] border-[0.5px] border-border bg-sidebar-background shadow-[0px_8px_16px_-4px_rgba(0,0,0,0.12)]">
         <div className="col-[1/2] row-[1] flex h-[44px] min-w-0 items-center gap-2 pl-4">
           <Search className="size-4 shrink-0 text-foreground" />
           <Input
@@ -150,24 +131,6 @@ export function SessionContentSearchOverlay({
             onKeyDown={handleKeyDown}
           />
         </div>
-        {showScopeButtons && (
-          <div className="col-[2/3] row-[1] flex h-[44px] items-center justify-center gap-2">
-            <ContentSearchScopeButton
-              active={scope === "chat"}
-              label="Search chat"
-              onClick={() => setScope("chat")}
-            >
-              <MessageSquare className="size-4" />
-            </ContentSearchScopeButton>
-            <ContentSearchScopeButton
-              active={scope === "diffs"}
-              label="Search diffs"
-              onClick={() => setScope("diffs")}
-            >
-              <FileCode className="size-4" />
-            </ContentSearchScopeButton>
-          </div>
-        )}
         {hasQuery && (
           <>
             <div className={`${resultRowColumnClass} row-[2] flex min-w-0 items-center border-t border-border px-4 py-2 text-base leading-6 transition-[border-width,max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100`}>
@@ -190,7 +153,7 @@ export function SessionContentSearchOverlay({
             </span>
           </>
         )}
-        <div className={`${closeColumnClass} row-[1] flex h-[44px] items-center pr-4`}>
+        <div className="col-[2/3] row-[1] flex h-[44px] items-center pr-4">
           <div className="mr-2 ml-2 h-4 w-px bg-border" />
           <Button
             type="button"
@@ -205,47 +168,6 @@ export function SessionContentSearchOverlay({
         </div>
       </div>
     </div>
-  );
-}
-
-function resolveContentSearchSurfaceForShortcut(): ContentSearchSurface {
-  const activeElement = document.activeElement;
-  if (activeElement?.closest("[data-file-viewer-frame]")) {
-    return "file";
-  }
-
-  if (getFocusZone() === "right-panel" && document.querySelector("[data-file-viewer-frame]")) {
-    return "file";
-  }
-
-  return "chat";
-}
-
-function ContentSearchScopeButton({
-  active,
-  label,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="unstyled"
-      size="unstyled"
-      aria-pressed={active}
-      aria-label={label}
-      className={`-m-0.5 flex size-6 items-center justify-center rounded-full hover:bg-list-hover ${
-        active ? "text-link-foreground" : "text-muted-foreground"
-      }`}
-      onClick={onClick}
-    >
-      {children}
-    </Button>
   );
 }
 

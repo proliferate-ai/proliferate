@@ -32,6 +32,8 @@ export function EditRows({ item }: { item: ToolCallItem }) {
       {fileChanges.map((part, idx) => (
         <EditActionRow
           key={`${item.itemId}-edit-${idx}`}
+          itemId={item.itemId}
+          index={idx}
           part={part}
           failed={item.status === "failed"}
         />
@@ -41,9 +43,13 @@ export function EditRows({ item }: { item: ToolCallItem }) {
 }
 
 function EditActionRow({
+  itemId,
+  index,
   part,
   failed,
 }: {
+  itemId: string;
+  index: number;
   part: FileChangeContentPart;
   failed: boolean;
 }) {
@@ -124,6 +130,7 @@ function EditActionRow({
               <DiffViewer
                 patch={part.patch}
                 filePath={pathLabel}
+                contentSearchUnitId={`diff:collapsed-tool:${itemId}:file-change:${index}`}
                 className="w-full"
                 viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
                 variant="chat"

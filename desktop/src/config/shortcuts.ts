@@ -370,7 +370,7 @@ export const SHORTCUTS = {
     id: "workspace.find-content",
     label: "⌘F",
     nonMacLabel: "Ctrl+F",
-    description: "Find in chat and diffs",
+    description: "Find visible content",
     owner: "js",
     match: { kind: "fixed", key: "f", meta: true, shift: false, alt: false },
     allowInInputs: true,

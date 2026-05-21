@@ -79,6 +79,14 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     void fileActions.openDefault();
   };
   const openFindInDiffs = () => {
+    if (activeDiffTarget || !read?.isText || read.tooLarge) {
+      return;
+    }
+
+    if (normalizedEffectiveMode === "rendered") {
+      setTargetMode(targetKey, "source");
+    }
+
     openContentSearch("diffs", "file");
   };
   const toggleRichPreview = () => {
@@ -106,6 +114,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     setBrowserOpen(false);
     void openFile(path);
   };
+  const canFindInFile = !activeDiffTarget && Boolean(read?.isText && !read.tooLarge);
   const renderPaneContent = (content: ReactNode) => (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -131,6 +140,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
         wordWrap={wordWrap}
         richPreviewEnabled={normalizedEffectiveMode === "rendered"}
         canCopyContent={false}
+        canFindInFile={false}
         onToggleWordWrap={() => setWordWrap((value) => !value)}
         onToggleRichPreview={toggleRichPreview}
         onCopyContent={copyContent}
@@ -156,6 +166,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
         wordWrap={wordWrap}
         richPreviewEnabled={normalizedEffectiveMode === "rendered"}
         canCopyContent={false}
+        canFindInFile={false}
         onToggleWordWrap={() => setWordWrap((value) => !value)}
         onToggleRichPreview={toggleRichPreview}
         onCopyContent={copyContent}
@@ -182,6 +193,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       wordWrap={wordWrap}
       richPreviewEnabled={normalizedEffectiveMode === "rendered"}
       canCopyContent={Boolean(read?.isText && !read.tooLarge)}
+      canFindInFile={canFindInFile}
       onToggleWordWrap={() => setWordWrap((value) => !value)}
       onToggleRichPreview={toggleRichPreview}
       onCopyContent={copyContent}

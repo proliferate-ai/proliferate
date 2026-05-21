@@ -7,6 +7,7 @@ import {
   runShortcutHandler,
 } from "@/lib/domain/shortcuts/registry";
 import { useWorkspaceContentShortcuts } from "@/hooks/workspaces/ui/use-workspace-content-shortcuts";
+import { useContentSearchStore } from "@/stores/search/content-search-store";
 import {
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
@@ -47,6 +48,16 @@ describe("useWorkspaceContentShortcuts", () => {
   beforeEach(() => {
     harnessState.selectedWorkspaceId = "workspace-1";
     clearShortcutHandlerRegistryForTests();
+    useContentSearchStore.setState({
+      open: false,
+      query: "",
+      surface: "chat",
+      scope: "diffs",
+      activeMatchIndex: 0,
+      activeMatchId: null,
+      unitsById: {},
+      nextUnitOrder: 0,
+    });
   });
 
   afterEach(() => {
@@ -151,5 +162,56 @@ describe("useWorkspaceContentShortcuts", () => {
     })).toBe(true);
     expect(requestRightPanelTabByIndex).not.toHaveBeenCalled();
     expect(actions.activateTabByShortcutIndex).toHaveBeenCalledWith("3");
+  });
+
+  it("opens chat content search when chat owns focus", () => {
+    const actions = createActions();
+    const zone = document.createElement("div");
+    zone.tabIndex = 0;
+    zone.setAttribute("data-focus-zone", "chat");
+    document.body.append(zone);
+    zone.focus();
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(true);
+    expect(useContentSearchStore.getState().open).toBe(true);
+    expect(useContentSearchStore.getState().surface).toBe("chat");
+    expect(useContentSearchStore.getState().scope).toBe("diffs");
+  });
+
+  it("routes content search to the file viewer when file viewer owns focus", () => {
+    const actions = createActions();
+    const zone = document.createElement("div");
+    zone.tabIndex = 0;
+    zone.setAttribute("data-focus-zone", "right-panel");
+    const frame = document.createElement("div");
+    frame.setAttribute("data-file-viewer-frame", "true");
+    const focusTarget = document.createElement("button");
+    frame.append(focusTarget);
+    zone.append(frame);
+    document.body.append(zone);
+    focusTarget.focus();
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(true);
+    expect(useContentSearchStore.getState().open).toBe(true);
+    expect(useContentSearchStore.getState().surface).toBe("file");
+    expect(useContentSearchStore.getState().scope).toBe("diffs");
+  });
+
+  it("declines content search when terminal or browser owns focus", () => {
+    const actions = createActions();
+    const zone = document.createElement("div");
+    zone.tabIndex = 0;
+    zone.setAttribute("data-focus-zone", "terminal");
+    document.body.append(zone);
+    zone.focus();
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(false);
+    expect(useContentSearchStore.getState().open).toBe(false);
   });
 });

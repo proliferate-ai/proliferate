@@ -6,10 +6,11 @@ import {
   type CSSProperties,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { renderContentSearchMarkedText } from "@/components/ui/content/search/ContentSearchMarks";
+import { renderContentSearchMarkedToken } from "@/components/ui/content/search/ContentSearchMarks";
 import { useHighlightedLines } from "@/hooks/ui/use-highlighted-lines";
 import {
   buildContentSearchLineMatchIds,
+  findContentSearchTokenMatchSegments,
   normalizeContentSearchQuery,
 } from "@/lib/domain/content-search/content-search";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
@@ -50,12 +51,14 @@ export function FileSourceView({
   const lineNumberDigitWidth = `${Math.max(2, String(lines.length).length)}ch`;
   const lineNumberGutterWidth = `calc(max(2ch, ${lineNumberDigitWidth}) + 16px)`;
   const contentSearchSurface = useContentSearchStore((state) => state.surface);
+  const contentSearchOpen = useContentSearchStore((state) => state.open);
   const rawContentSearchQuery = useContentSearchStore((state) => state.query);
   const rawActiveMatchId = useContentSearchStore((state) => state.activeMatchId);
   const registerContentSearchUnit = useContentSearchStore((state) => state.registerUnit);
   const unregisterContentSearchUnit = useContentSearchStore((state) => state.unregisterUnit);
-  const contentSearchQuery = contentSearchSurface === "file" ? rawContentSearchQuery : "";
-  const activeMatchId = contentSearchSurface === "file" ? rawActiveMatchId : null;
+  const fileContentSearchActive = contentSearchOpen && contentSearchSurface === "file";
+  const contentSearchQuery = fileContentSearchActive ? rawContentSearchQuery : "";
+  const activeMatchId = fileContentSearchActive ? rawActiveMatchId : null;
   const contentSearchUnitId = useMemo(
     () => `diff:${filePath}:source`,
     [filePath],
@@ -217,7 +220,10 @@ const SourceLine = forwardRef<HTMLSpanElement, SourceLineProps>(function SourceL
   contentSearchUnitId,
   style,
 }, ref) {
-  let contentSearchMatchIndex = 0;
+  const matchSegmentsByToken = findContentSearchTokenMatchSegments(
+    tokens,
+    contentSearchQuery,
+  );
 
   return (
     <span
@@ -260,15 +266,11 @@ const SourceLine = forwardRef<HTMLSpanElement, SourceLineProps>(function SourceL
                 key={index}
                 style={token.color ? { color: token.color } : undefined}
               >
-                {renderContentSearchMarkedText({
+                {renderContentSearchMarkedToken({
                   text: token.content,
-                  query: contentSearchQuery,
+                  matchSegments: matchSegmentsByToken[index] ?? [],
                   activeMatchId,
-                  nextMatchId: () => {
-                    const matchId = `${contentSearchUnitId}:${lineNumber}:${contentSearchMatchIndex}`;
-                    contentSearchMatchIndex += 1;
-                    return matchId;
-                  },
+                  matchIdPrefix: `${contentSearchUnitId}:${lineNumber}`,
                 })}
               </span>
             ))

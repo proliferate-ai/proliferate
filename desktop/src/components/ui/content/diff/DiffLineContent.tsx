@@ -1,6 +1,10 @@
 import type { DiffLine } from "@/lib/domain/files/diff-parser";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
-import { renderContentSearchMarkedText } from "@/components/ui/content/search/ContentSearchMarks";
+import {
+  renderContentSearchMarkedText,
+  renderContentSearchMarkedToken,
+} from "@/components/ui/content/search/ContentSearchMarks";
+import { findContentSearchTokenMatchSegments } from "@/lib/domain/content-search/content-search";
 
 export function DiffLineContent({
   line,
@@ -16,23 +20,22 @@ export function DiffLineContent({
   contentSearchLineId?: string | null;
 }) {
   const lineTokens = tokens?.[line.tokenIndex];
-  let contentSearchMatchIndex = 0;
 
   if (lineTokens) {
+    const matchSegmentsByToken = contentSearchLineId
+      ? findContentSearchTokenMatchSegments(lineTokens, contentSearchQuery)
+      : [];
+
     return (
       <>
         {lineTokens.map((token, index) => (
           <span key={index} style={token.color ? { color: token.color } : undefined}>
             {contentSearchLineId
-              ? renderContentSearchMarkedText({
+              ? renderContentSearchMarkedToken({
                   text: token.content,
-                  query: contentSearchQuery,
+                  matchSegments: matchSegmentsByToken[index] ?? [],
                   activeMatchId,
-                  nextMatchId: () => {
-                    const matchId = `${contentSearchLineId}:${contentSearchMatchIndex}`;
-                    contentSearchMatchIndex += 1;
-                    return matchId;
-                  },
+                  matchIdPrefix: contentSearchLineId,
                 })
               : token.content}
           </span>
@@ -51,12 +54,17 @@ export function DiffLineContent({
         text: line.content || " ",
         query: contentSearchQuery,
         activeMatchId,
-        nextMatchId: () => {
-          const matchId = `${contentSearchLineId}:${contentSearchMatchIndex}`;
-          contentSearchMatchIndex += 1;
-          return matchId;
-        },
+        nextMatchId: createContentSearchMatchIdFactory(contentSearchLineId),
       })}
     </>
   );
+}
+
+function createContentSearchMatchIdFactory(matchIdPrefix: string): () => string {
+  let matchIndex = 0;
+  return () => {
+    const matchId = `${matchIdPrefix}:${matchIndex}`;
+    matchIndex += 1;
+    return matchId;
+  };
 }

@@ -7,6 +7,13 @@ export interface ContentSearchMatchRange {
   end: number;
 }
 
+export interface ContentSearchTokenMatchSegment {
+  tokenIndex: number;
+  start: number;
+  end: number;
+  matchIndex: number;
+}
+
 export function normalizeContentSearchQuery(query: string): string {
   return query.trim();
 }
@@ -43,10 +50,7 @@ export function countContentSearchTokenMatches(
   tokens: readonly ContentSearchTextToken[],
   query: string,
 ): number {
-  return tokens.reduce(
-    (count, token) => count + findContentSearchMatches(token.content, query).length,
-    0,
-  );
+  return findContentSearchMatches(concatTokenText(tokens), query).length;
 }
 
 export function buildContentSearchLineMatchIds({
@@ -58,16 +62,62 @@ export function buildContentSearchLineMatchIds({
   tokens: readonly ContentSearchTextToken[];
   query: string;
 }): string[] {
-  const ids: string[] = [];
-  let matchIndex = 0;
+  return findContentSearchMatches(concatTokenText(tokens), query).map(
+    (_range, matchIndex) => `${idPrefix}:${matchIndex}`,
+  );
+}
 
-  for (const token of tokens) {
-    const ranges = findContentSearchMatches(token.content, query);
-    for (let index = 0; index < ranges.length; index += 1) {
-      ids.push(`${idPrefix}:${matchIndex}`);
-      matchIndex += 1;
-    }
-  }
+export function findContentSearchTokenMatchSegments(
+  tokens: readonly ContentSearchTextToken[],
+  query: string,
+): ContentSearchTokenMatchSegment[][] {
+  const tokenOffsets = buildTokenOffsets(tokens);
+  const matches = findContentSearchMatches(
+    tokenOffsets.map((token) => token.content).join(""),
+    query,
+  );
+  const segmentsByToken = tokens.map(() => [] as ContentSearchTokenMatchSegment[]);
 
-  return ids;
+  matches.forEach((match, matchIndex) => {
+    tokenOffsets.forEach((token) => {
+      const start = Math.max(match.start, token.start);
+      const end = Math.min(match.end, token.end);
+      if (start >= end) {
+        return;
+      }
+
+      segmentsByToken[token.index].push({
+        tokenIndex: token.index,
+        start: start - token.start,
+        end: end - token.start,
+        matchIndex,
+      });
+    });
+  });
+
+  return segmentsByToken;
+}
+
+function concatTokenText(tokens: readonly ContentSearchTextToken[]): string {
+  return tokens.map((token) => token.content).join("");
+}
+
+function buildTokenOffsets(tokens: readonly ContentSearchTextToken[]): Array<{
+  index: number;
+  content: string;
+  start: number;
+  end: number;
+}> {
+  let cursor = 0;
+  return tokens.map((token, index) => {
+    const start = cursor;
+    const end = start + token.content.length;
+    cursor = end;
+    return {
+      index,
+      content: token.content,
+      start,
+      end,
+    };
+  });
 }

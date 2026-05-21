@@ -34,6 +34,7 @@ interface FileChangeCallProps {
   status: "running" | "completed" | "failed";
   duration?: string;
   defaultExpanded?: boolean;
+  contentSearchUnitId?: string;
 }
 
 export function FileChangeCall({
@@ -51,6 +52,7 @@ export function FileChangeCall({
   status,
   duration,
   defaultExpanded = false,
+  contentSearchUnitId,
 }: FileChangeCallProps) {
   const hasDiff = !!patch;
   const [rowExpanded, setRowExpanded] = useState(defaultExpanded);
@@ -122,6 +124,7 @@ export function FileChangeCall({
                 <DiffViewer
                   patch={patch!}
                   filePath={displayPath}
+                  contentSearchUnitId={contentSearchUnitId}
                   className="w-full"
                   viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
                   variant="chat"
@@ -155,6 +158,7 @@ export function FileChangeCall({
             <DiffViewer
               patch={patch!}
               filePath={displayPath}
+              contentSearchUnitId={contentSearchUnitId}
               className="w-full"
               viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               variant="chat"

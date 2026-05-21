@@ -1,6 +1,7 @@
 import {
   Fragment,
   useEffect,
+  useId,
   useMemo,
   useState,
   type CSSProperties,
@@ -227,15 +228,18 @@ export function ChatDiffViewer({
     [parsed, expandedCollapsedKeys],
   );
   const contentSearchSurface = useContentSearchStore((state) => state.surface);
+  const contentSearchOpen = useContentSearchStore((state) => state.open);
   const rawContentSearchQuery = useContentSearchStore((state) => state.query);
   const rawActiveMatchId = useContentSearchStore((state) => state.activeMatchId);
   const registerContentSearchUnit = useContentSearchStore((state) => state.registerUnit);
   const unregisterContentSearchUnit = useContentSearchStore((state) => state.unregisterUnit);
-  const contentSearchQuery = contentSearchSurface === "chat" ? rawContentSearchQuery : "";
-  const activeMatchId = contentSearchSurface === "chat" ? rawActiveMatchId : null;
+  const chatContentSearchActive = contentSearchOpen && contentSearchSurface === "chat";
+  const contentSearchQuery = chatContentSearchActive ? rawContentSearchQuery : "";
+  const activeMatchId = chatContentSearchActive ? rawActiveMatchId : null;
+  const fallbackContentSearchUnitId = useId();
   const contentSearchUnitId = useMemo(
-    () => contentSearchUnitIdProp ?? `diff:${filePath ?? "inline"}:${parsed.allCodeLines.length}`,
-    [contentSearchUnitIdProp, filePath, parsed.allCodeLines.length],
+    () => contentSearchUnitIdProp ?? `diff:${fallbackContentSearchUnitId}:${filePath ?? "inline"}`,
+    [contentSearchUnitIdProp, fallbackContentSearchUnitId, filePath],
   );
   const contentSearchMatchIds = useMemo(
     () => {
