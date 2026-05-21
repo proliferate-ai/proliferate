@@ -19,10 +19,12 @@ from proliferate.constants.cloud import (
     WorkspacePostReadyPhase,
     WorkspaceStatus,
 )
+from proliferate.constants.organizations import ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.models.organizations import OrganizationMembership
 from proliferate.db.store.billing import (
     acquire_billing_subject_repo_limit_lock,
     cloud_repo_slot_exists,
@@ -101,6 +103,89 @@ async def list_cloud_workspaces(db: AsyncSession, user_id: UUID) -> list[CloudWo
                     CloudWorkspace.owner_scope == "personal",
                     CloudWorkspace.owner_user_id == user_id,
                     CloudWorkspace.archived_at.is_(None),
+                )
+                .order_by(CloudWorkspace.updated_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def list_claimed_organization_workspaces_for_user(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> list[CloudWorkspace]:
+    return list(
+        (
+            await db.execute(
+                select(CloudWorkspace)
+                .join(
+                    CloudWorkspaceExposure,
+                    CloudWorkspaceExposure.cloud_workspace_id == CloudWorkspace.id,
+                )
+                .join(
+                    OrganizationMembership,
+                    OrganizationMembership.organization_id == CloudWorkspace.organization_id,
+                )
+                .where(
+                    CloudWorkspace.owner_scope == "organization",
+                    CloudWorkspaceExposure.visibility == "claimed",
+                    CloudWorkspaceExposure.claimed_by_user_id == user_id,
+                    OrganizationMembership.user_id == user_id,
+                    OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+                    CloudWorkspace.archived_at.is_(None),
+                    CloudWorkspaceExposure.archived_at.is_(None),
+                )
+                .order_by(CloudWorkspace.updated_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def list_unclaimed_organization_workspaces(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+) -> list[CloudWorkspace]:
+    return list(
+        (
+            await db.execute(
+                select(CloudWorkspace)
+                .join(
+                    CloudWorkspaceExposure,
+                    CloudWorkspaceExposure.cloud_workspace_id == CloudWorkspace.id,
+                )
+                .where(
+                    CloudWorkspace.owner_scope == "organization",
+                    CloudWorkspace.organization_id == organization_id,
+                    CloudWorkspaceExposure.visibility == "shared_unclaimed",
+                    CloudWorkspace.archived_at.is_(None),
+                    CloudWorkspaceExposure.archived_at.is_(None),
+                )
+                .order_by(CloudWorkspace.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def list_organization_workspaces_for_admin_audit(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+) -> list[CloudWorkspace]:
+    return list(
+        (
+            await db.execute(
+                select(CloudWorkspace)
+                .where(
+                    CloudWorkspace.owner_scope == "organization",
+                    CloudWorkspace.organization_id == organization_id,
                 )
                 .order_by(CloudWorkspace.updated_at.desc())
             )

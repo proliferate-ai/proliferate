@@ -6,6 +6,7 @@ from proliferate.server.cloud.agent_auth.api import router as agent_auth_router
 from proliferate.server.cloud.agent_auth.api import worker_router as agent_auth_worker_router
 from proliferate.server.cloud.backfill.api import router as backfill_router
 from proliferate.server.cloud.capabilities.api import router as capabilities_router
+from proliferate.server.cloud.claims.api import router as claims_router
 from proliferate.server.cloud.commands.api import router as commands_router
 from proliferate.server.cloud.compute.api import router as compute_router
 from proliferate.server.cloud.events.api import router as events_router
@@ -40,6 +41,7 @@ router.include_router(repo_config_router)
 router.include_router(worktree_policy_router)
 router.include_router(capabilities_router)
 router.include_router(workspaces_router)
+router.include_router(claims_router)
 router.include_router(mobility_router)
 router.include_router(sandbox_profiles_router)
 router.include_router(agent_auth_router)

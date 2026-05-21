@@ -150,6 +150,7 @@ export function makeCloudWorkspace(args: {
     postReadyFilesApplied: 0,
     postReadyStartedAt: null,
     postReadyCompletedAt: null,
+    visibility: "private",
   };
 }
 

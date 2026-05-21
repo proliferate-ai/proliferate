@@ -6,12 +6,14 @@ use std::time::{Duration, Instant};
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::response::sse::{Event, Sse};
+use axum::Extension;
 use futures::stream::{self, BoxStream, Stream, StreamExt as FuturesStreamExt};
 use tokio::sync::broadcast;
 use tokio::time::sleep;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::api::http::error::ApiError;
+use crate::api::{auth::AuthContext, http::access::assert_session_auth_scope};
 use crate::app::AppState;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope};
@@ -36,10 +38,12 @@ pub struct StreamSessionQuery {
 )]
 pub async fn stream_session(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     headers: HeaderMap,
     Path(session_id): Path<String>,
     Query(query): Query<StreamSessionQuery>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let latency = LatencyRequestContext::from_headers(&headers);
     let latency_fields = latency_trace_fields(latency.as_ref());
     let started = Instant::now();

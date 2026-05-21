@@ -191,6 +191,32 @@ async def archive_workspace_exposure(
     return _snapshot(row)
 
 
+async def claim_workspace_exposure(
+    db: AsyncSession,
+    *,
+    exposure_id: UUID,
+    claimed_by_user_id: UUID,
+) -> CloudWorkspaceExposureSnapshot | None:
+    row = (
+        await db.execute(
+            select(CloudWorkspaceExposure)
+            .where(CloudWorkspaceExposure.id == exposure_id)
+            .where(CloudWorkspaceExposure.archived_at.is_(None))
+            .where(CloudWorkspaceExposure.status == "active")
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if row is None or row.visibility != "shared_unclaimed":
+        return None
+    now = utcnow()
+    row.visibility = "claimed"
+    row.claimed_by_user_id = claimed_by_user_id
+    row.revision += 1
+    row.updated_at = now
+    await db.flush()
+    return _snapshot(row)
+
+
 async def mark_workspace_exposure_projected(
     db: AsyncSession,
     *,

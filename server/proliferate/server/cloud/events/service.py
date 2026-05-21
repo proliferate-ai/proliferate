@@ -9,8 +9,13 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.store import cloud_workspaces
 from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.server.cloud.claims.access import (
+    load_workspace_exposure_and_claim,
+    require_workspace_view,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.events.domain.cursors import advance_contiguous_cursor
 from proliferate.server.cloud.events.domain.payload_policy import retained_payload
@@ -372,6 +377,12 @@ async def list_session_summaries(
     limit: int = 100,
 ) -> list[CloudSessionProjectionResponse]:
     await ensure_visible_target(db, target_id=target_id, user_id=user_id)
+    if cloud_workspace_id is not None:
+        await _require_cloud_workspace_view(
+            db,
+            user_id=user_id,
+            cloud_workspace_id=cloud_workspace_id,
+        )
     sessions = await events_store.list_session_projections(
         db,
         target_id=target_id,
@@ -379,7 +390,19 @@ async def list_session_summaries(
         workspace_id=workspace_id,
         limit=min(max(limit, 1), 200),
     )
-    return [session_projection_response(session) for session in sessions]
+    visible_sessions = []
+    for session in sessions:
+        if session.cloud_workspace_id is not None and cloud_workspace_id is None:
+            try:
+                await _require_cloud_workspace_view(
+                    db,
+                    user_id=user_id,
+                    cloud_workspace_id=session.cloud_workspace_id,
+                )
+            except CloudApiError:
+                continue
+        visible_sessions.append(session)
+    return [session_projection_response(session) for session in visible_sessions]
 
 
 async def ensure_visible_session_target(
@@ -411,6 +434,12 @@ async def ensure_visible_session_target(
             "Synced session not found.",
             status_code=404,
         )
+    if projection.cloud_workspace_id is not None:
+        await _require_cloud_workspace_view(
+            db,
+            user_id=user_id,
+            cloud_workspace_id=projection.cloud_workspace_id,
+        )
     return target_id
 
 
@@ -432,6 +461,34 @@ async def ensure_visible_target(
             status_code=404,
         )
     return target
+
+
+async def _require_cloud_workspace_view(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    cloud_workspace_id: UUID,
+) -> None:
+    workspace = await cloud_workspaces.get_cloud_workspace_by_id(db, cloud_workspace_id)
+    if workspace is None:
+        raise CloudApiError(
+            "cloud_session_not_found",
+            "Synced session not found.",
+            status_code=404,
+        )
+    exposure, _claim = await load_workspace_exposure_and_claim(
+        db,
+        target_id=workspace.target_id,
+        cloud_workspace_id=workspace.id,
+    )
+    await require_workspace_view(
+        db,
+        actor_user_id=user_id,
+        owner_scope=workspace.owner_scope,
+        owner_user_id=workspace.owner_user_id,
+        organization_id=workspace.organization_id,
+        exposure=exposure,
+    )
 
 
 async def _apply_projection(

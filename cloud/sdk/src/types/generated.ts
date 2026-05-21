@@ -10,6 +10,12 @@ export type CloudWorkspaceStatus =
   | "archived"
   | "error";
 
+export type CloudWorkspaceVisibility =
+  | "private"
+  | "shared_unclaimed"
+  | "claimed"
+  | "archived";
+
 export type CloudRuntimeStatus =
   | "pending"
   | "provisioning"
@@ -65,24 +71,44 @@ export type OrganizationInvitationAcceptResponse =
   components["schemas"]["OrganizationInvitationAcceptResponse"];
 export type CloudWorkspaceSummary = Omit<
   components["schemas"]["WorkspaceSummary"],
-  "status" | "workspaceStatus" | "runtime" | "actionBlockKind" | "actionBlockReason"
+  | "status"
+  | "workspaceStatus"
+  | "runtime"
+  | "actionBlockKind"
+  | "actionBlockReason"
+  | "visibility"
 > & {
   status: CloudWorkspaceStatus;
   workspaceStatus: CloudWorkspaceStatus;
   runtime?: CloudWorkspaceRuntimeSummary;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
+  visibility: CloudWorkspaceVisibility;
 };
 export type CloudWorkspaceDetail = Omit<
   components["schemas"]["WorkspaceDetail"],
-  "status" | "workspaceStatus" | "runtime" | "actionBlockKind" | "actionBlockReason"
+  | "status"
+  | "workspaceStatus"
+  | "runtime"
+  | "actionBlockKind"
+  | "actionBlockReason"
+  | "visibility"
 > & {
   status: CloudWorkspaceStatus;
   workspaceStatus: CloudWorkspaceStatus;
   runtime?: CloudWorkspaceRuntimeSummary;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
+  visibility: CloudWorkspaceVisibility;
 };
+export type ClaimWorkspaceRequest = components["schemas"]["ClaimWorkspaceRequest"];
+export type ClaimWorkspaceResponse = components["schemas"]["ClaimWorkspaceResponse"];
+export type DirectAccessTokenRequest =
+  components["schemas"]["DirectAccessTokenRequest"];
+export type DirectAccessTokenResponse =
+  components["schemas"]["DirectAccessTokenResponse"];
+export type RevokeClaimTokenResponse =
+  components["schemas"]["RevokeClaimTokenResponse"];
 export type CloudOriginContext        = components["schemas"]["OriginContext"];
 export type CloudWorkspaceCreatorContext =
   components["schemas"]["WorkspaceCreatorContext"];

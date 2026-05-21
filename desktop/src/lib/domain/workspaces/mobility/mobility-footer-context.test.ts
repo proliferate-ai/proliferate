@@ -155,6 +155,7 @@ describe("buildMobilityFooterContext", () => {
             baseBranch: "main",
             branch: "feature/workspace-mobility",
           },
+          visibility: "private",
         },
         effectiveOwner: "cloud",
         lifecycle: "cloud_active",
