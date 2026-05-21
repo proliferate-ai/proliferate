@@ -1,8 +1,9 @@
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -10,7 +11,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import type { AuthUser } from "@proliferate/cloud-sdk";
+import type { AuthUser, CloudSessionProjection, CloudWorkspaceDetail } from "@proliferate/cloud-sdk";
+import { useCloudWorkspaceSnapshot } from "@proliferate/cloud-sdk-react";
 
 import { MobileAuthScreen } from "../auth/MobileAuthScreen";
 import { MobileConnectGitHubScreen } from "../auth/MobileConnectGitHubScreen";
@@ -48,6 +50,11 @@ export function MobileShell() {
   const [route, setRoute] = useState<RouteId>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<MobileCloudChat | null>(null);
+  const [linkedWorkspaceId, setLinkedWorkspaceId] = useState<string | null>(null);
+  const linkedWorkspace = useCloudWorkspaceSnapshot(
+    linkedWorkspaceId,
+    authState === "active" && linkedWorkspaceId !== null,
+  );
 
   const subtitle = useMemo(() => routeSubtitle(route), [route]);
   const account = useMemo(() => accountSummary(user), [user]);
@@ -61,6 +68,45 @@ export function MobileShell() {
     routeOrScreen: authState === "needs_github" ? "connect_github" : telemetryScreen,
     viewingChat: authState === "active" && selectedChat !== null,
   });
+  const applyWorkspaceLink = useCallback((url: string | null) => {
+    const workspaceId = workspaceIdFromUrl(url);
+    if (!workspaceId) {
+      return;
+    }
+    setLinkedWorkspaceId(workspaceId);
+    setRoute("workspaces");
+    setSelectedChat(null);
+    setDrawerOpen(false);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void Linking.getInitialURL().then((url) => {
+      if (active) {
+        applyWorkspaceLink(url);
+      }
+    });
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      applyWorkspaceLink(url);
+    });
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, [applyWorkspaceLink]);
+
+  useEffect(() => {
+    if (!linkedWorkspaceId || !linkedWorkspace.data) {
+      return;
+    }
+    const chat = linkedChatForWorkspace(linkedWorkspace.data.workspace, linkedWorkspace.data.sessions);
+    if (chat) {
+      setSelectedChat(chat);
+    } else {
+      setRoute("workspaces");
+    }
+    setLinkedWorkspaceId(null);
+  }, [linkedWorkspace.data, linkedWorkspaceId]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -241,6 +287,40 @@ function routeSubtitle(route: RouteId): string | undefined {
     case "settings":
       return "Account · device";
   }
+}
+
+function workspaceIdFromUrl(url: string | null): string | null {
+  if (!url) {
+    return null;
+  }
+  const match = url.match(
+    /^(?:proliferate:\/\/workspaces\/|https:\/\/app\.proliferate\.ai\/workspaces\/)([^/?#]+)/u,
+  );
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+function linkedChatForWorkspace(
+  workspace: CloudWorkspaceDetail,
+  sessions: readonly CloudSessionProjection[],
+): MobileCloudChat | null {
+  const session = [...sessions].sort((left, right) =>
+    (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0)
+  )[0];
+  if (!session) {
+    return null;
+  }
+  return {
+    workspaceId: workspace.id,
+    workspaceName: workspace.displayName ?? workspace.repo.name,
+    repoLabel: `${workspace.repo.owner}/${workspace.repo.name}`,
+    branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
+    targetId: session.targetId,
+    workspaceRuntimeId: session.workspaceId ?? null,
+    sessionId: session.sessionId,
+    title: session.title ?? workspace.displayName ?? workspace.repo.name,
+    status: session.status,
+    visibility: workspace.visibility,
+  };
 }
 
 interface DrawerProps {

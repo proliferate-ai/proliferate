@@ -62,6 +62,7 @@ export function ChatScreen() {
   const enqueuePrompt = useEnqueueCloudCommand<SendPromptPayload>();
   const claimWorkspace = useClaimCloudWorkspace();
   const commandStatus = useCommandStatus(latestCommandId);
+  const isUnclaimed = workspace?.visibility === "shared_unclaimed";
 
   async function submitPrompt(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -95,7 +96,7 @@ export function ChatScreen() {
     return <MissingState title="Workspace not available" />;
   }
 
-  const canSubmit = Boolean(draft.trim() && session && !enqueuePrompt.isPending);
+  const canSubmit = Boolean(draft.trim() && session && !enqueuePrompt.isPending && !isUnclaimed);
   const sessionTitle = session?.title ?? workspace.displayName ?? workspace.repo.name;
   const commandMessage =
     commandStatus.data?.errorMessage ??
@@ -117,7 +118,7 @@ export function ChatScreen() {
           </div>
           <h1 className="truncate text-sm font-semibold">{sessionTitle}</h1>
         </div>
-        {workspace.visibility === "shared_unclaimed" && (
+        {isUnclaimed && (
           <Button
             variant="secondary"
             size="sm"
@@ -189,7 +190,13 @@ export function ChatScreen() {
             onChange={(event) => setDraft(event.currentTarget.value)}
             disabled={!session}
             className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-            placeholder={session ? "Message this session" : "No active projected session"}
+            placeholder={
+              isUnclaimed
+                ? "Claim this workspace to reply"
+                : session
+                  ? "Message this session"
+                  : "No active projected session"
+            }
           />
           <Button size="icon" aria-label="Send message" disabled={!canSubmit}>
             <Send size={15} />

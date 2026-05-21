@@ -29,6 +29,7 @@ class WorkspaceRecord(Protocol):
     git_repo_name: str
     git_branch: str
     git_base_branch: str | None
+    origin: str
     origin_json: str | None
     status: str
     status_detail: str | None
@@ -126,7 +127,16 @@ class OriginContext(BaseModel):
     """Advisory provenance metadata; not authoritative for policy decisions."""
 
     kind: Literal["human", "cowork", "api", "system"]
-    entrypoint: Literal["desktop", "cloud", "local_runtime", "cowork"]
+    entrypoint: Literal[
+        "desktop",
+        "web",
+        "mobile",
+        "cloud",
+        "local_runtime",
+        "cowork",
+        "slack",
+        "api",
+    ]
 
 
 class WorkspaceCreatorContext(BaseModel):
@@ -293,7 +303,7 @@ def _repo_ref(workspace: WorkspaceRecord) -> RepoRef:
 
 def _origin_payload(workspace: WorkspaceRecord) -> OriginContext | None:
     if not workspace.origin_json:
-        return None
+        return _origin_context_from_legacy_origin(workspace.origin)
     try:
         raw = json.loads(workspace.origin_json)
         if not isinstance(raw, dict):
@@ -304,7 +314,23 @@ def _origin_payload(workspace: WorkspaceRecord) -> OriginContext | None:
             "invalid cloud workspace origin JSON",
             extra={"table": "cloud_workspace", "row_id": str(workspace.id), "error": str(exc)},
         )
-        return None
+        return _origin_context_from_legacy_origin(workspace.origin)
+
+
+def _origin_context_from_legacy_origin(origin: str | None) -> OriginContext | None:
+    if origin == "manual_desktop":
+        return OriginContext(kind="human", entrypoint="desktop")
+    if origin == "manual_web":
+        return OriginContext(kind="human", entrypoint="web")
+    if origin == "manual_mobile":
+        return OriginContext(kind="human", entrypoint="mobile")
+    if origin == "automation":
+        return OriginContext(kind="system", entrypoint="cloud")
+    if origin == "slack":
+        return OriginContext(kind="system", entrypoint="slack")
+    if origin == "cowork_api":
+        return OriginContext(kind="api", entrypoint="api")
+    return None
 
 
 def runtime_auth_payload(
@@ -365,7 +391,13 @@ def exposure_state_payload(exposure: WorkspaceExposureRecord | None) -> str:
     return "tracked"
 
 
-def sandbox_type_payload(workspace: WorkspaceRecord) -> str:
+def sandbox_type_payload(workspace: WorkspaceRecord, target_kind: str | None) -> str:
+    if target_kind == "ssh":
+        return "ssh"
+    if target_kind in {"desktop_dispatch", "local_direct"}:
+        return "local"
+    if target_kind == "self_hosted_cloud":
+        return "self_hosted"
     return (
         "managed_shared"
         if getattr(workspace, "owner_scope", None) == "organization"
@@ -401,6 +433,7 @@ def workspace_summary_payload(
     exposure: WorkspaceExposureRecord | None = None,
     claim: WorkspaceClaimRecord | None = None,
     last_session_summary: WorkspaceSessionSummaryRecord | None = None,
+    target_kind: str | None = None,
 ) -> WorkspaceSummary:
     runtime_status = (
         runtime_environment.status
@@ -451,7 +484,7 @@ def workspace_summary_payload(
         visibility=exposure.visibility if exposure is not None else "private",
         exposure=exposure_payload(exposure),
         exposure_state=exposure_state_payload(exposure),
-        sandbox_type=sandbox_type_payload(workspace),
+        sandbox_type=sandbox_type_payload(workspace, target_kind),
         last_activity_at=(
             session_summary.last_event_at
             if session_summary is not None and session_summary.last_event_at is not None
@@ -482,6 +515,7 @@ def workspace_detail_payload(
     exposure: WorkspaceExposureRecord | None = None,
     claim: WorkspaceClaimRecord | None = None,
     last_session_summary: WorkspaceSessionSummaryRecord | None = None,
+    target_kind: str | None = None,
 ) -> WorkspaceDetail:
     summary = workspace_summary_payload(
         workspace,
@@ -494,6 +528,7 @@ def workspace_detail_payload(
         exposure=exposure,
         claim=claim,
         last_session_summary=last_session_summary,
+        target_kind=target_kind,
     )
     return WorkspaceDetail(
         **summary.model_dump(),
