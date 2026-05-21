@@ -68,6 +68,8 @@ async def ensure_runtime_target_enrollment(
                 organization_id=None,
                 created_by_user_id=user_id,
                 default_workspace_root=None,
+                sandbox_profile_id=None,
+                profile_target_role="none",
             )
             target_id = target.id
             await attach_target_to_runtime_environment(

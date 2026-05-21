@@ -26,6 +26,7 @@ async def assert_current_schema(
         "cloud_workspace_handoff_op",
         "cloud_workspace_mobility",
         "cloud_sandbox",
+        "cloud_target_runtime_access",
         "agent_auth_audit_event",
         "agent_auth_credential",
         "agent_auth_credential_share",
@@ -36,7 +37,7 @@ async def assert_current_schema(
         "sandbox_agent_auth_selection",
         "sandbox_profile",
         "sandbox_profile_agent_auth_revision",
-        "sandbox_profile_agent_auth_target_state",
+        "sandbox_profile_target_state",
         "cloud_worktree_retention_policy",
         "cloud_workspace",
         "desktop_auth_code",
@@ -65,6 +66,14 @@ async def assert_current_schema(
         "owner_user_id",
         "organization_id",
         "created_by_user_id",
+        "sandbox_profile_id",
+        "target_id",
+        "normalized_repo_key",
+        "worktree_path",
+        "materialized_slot_generation",
+        "required_runtime_config_sequence",
+        "required_runtime_config_revision_id",
+        "required_agent_auth_revision",
     } <= columns
 
     organization_columns = await conn.run_sync(
@@ -310,13 +319,98 @@ async def assert_current_schema(
         "uq_sandbox_profile_active_organization",
     } <= sandbox_profile_indexes
 
+    sandbox_profile_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("sandbox_profile")
+        }
+    )
+    assert {
+        "billing_subject_id",
+        "created_by_user_id",
+        "desired_agent_auth_revision",
+        "archived_at",
+    } <= sandbox_profile_columns
+
+    target_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("cloud_targets")
+        }
+    )
+    assert {
+        "sandbox_profile_id",
+        "profile_target_role",
+    } <= target_columns
+    target_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("cloud_targets")
+        }
+    )
+    assert "ux_cloud_target_primary_per_profile" in target_indexes
+
+    sandbox_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]: column for column in inspect(sync_conn).get_columns("cloud_sandbox")
+        }
+    )
+    assert {
+        "sandbox_profile_id",
+        "target_id",
+        "billing_subject_id",
+        "slot_generation",
+        "superseded_by_sandbox_id",
+        "superseded_at",
+        "lifecycle_on_timeout",
+        "lifecycle_auto_resume",
+        "provider_timeout_seconds",
+        "blocked_reason",
+    } <= set(sandbox_columns)
+    assert sandbox_columns["external_sandbox_id"]["nullable"] is True
+    sandbox_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("cloud_sandbox")
+        }
+    )
+    assert "ux_cloud_sandbox_active_slot_per_profile_target" in sandbox_indexes
+
+    runtime_access_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("cloud_target_runtime_access")
+        }
+    )
+    assert {
+        "target_id",
+        "sandbox_profile_id",
+        "active_sandbox_id",
+        "slot_generation",
+        "anyharness_base_url",
+        "runtime_token_ciphertext",
+        "anyharness_data_key_ciphertext",
+    } <= runtime_access_columns
+    runtime_access_uniques = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_unique_constraints(
+                "cloud_target_runtime_access"
+            )
+        }
+    )
+    assert "uq_cloud_target_runtime_access_target_id" in runtime_access_uniques
+    runtime_access_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("cloud_target_runtime_access")
+        }
+    )
+    assert "ix_cloud_target_runtime_access_target_id" not in runtime_access_indexes
+
     target_state_indexes = await conn.run_sync(
         lambda sync_conn: {
             index["name"]
-            for index in inspect(sync_conn).get_indexes("sandbox_profile_agent_auth_target_state")
+            for index in inspect(sync_conn).get_indexes("sandbox_profile_target_state")
         }
     )
-    assert "uq_sandbox_profile_agent_auth_target_state_target_profile" in target_state_indexes
+    assert "uq_sandbox_profile_target_state_target_profile" in target_state_indexes
 
     runtime_grant_indexes = await conn.run_sync(
         lambda sync_conn: {

@@ -24,6 +24,7 @@ from proliferate.server.cloud.backfill.models import (
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.worker.domain.rules import compact_json
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
+from proliferate.server.cloud.worker.slot_guard import require_current_managed_worker_slot
 
 CLOUD_BACKFILL_TEMPLATE_VERSION = "worker-backfill-v1"
 CLOUD_BACKFILL_ORIGIN_JSON = '{"kind":"system","entrypoint":"cloud"}'
@@ -51,6 +52,7 @@ async def record_worker_backfill(
             "Worker target no longer exists.",
             status_code=401,
         )
+    await require_current_managed_worker_slot(db, auth=auth, target=target)
     billing_subject = (
         await ensure_organization_billing_subject(db, target.organization_id)
         if target.owner_scope == "organization" and target.organization_id is not None

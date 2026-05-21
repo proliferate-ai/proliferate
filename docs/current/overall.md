@@ -1,0 +1,354 @@
+- **Prep: make the reference set canonical**
+  - Keep authoritative specs in `reference/sandbox-systems/`:
+    - `00-cloud-target-managed-sandbox-foundation.md`
+    - `01-mcp-plugins-skills.md`
+    - `02-agent-auth-config.md`
+  - Add/replace:
+    - `03-settings-admin-ia.md`
+    - `04-cloud-running-alignment.md`
+    - `05-claiming.md`
+    - `06-automations.md`
+    - `07-slack-bot.md`
+    - `08-web-mobile-dispatch.md`
+    - `09-billing.md`
+    - `10-migration.md`
+  - Archive or mark stale:
+    - old `03-settings-admin-ui.md`
+    - old `04-cloud-worker-web-mobile-automations.md`
+    - old `05-claiming-slack-team-automations.md`
+
+- **Prep: settings/admin IA spec**
+  - Read `docs/current/mockups/settings-sample.html` as the visual/product
+    reference for the settings/admin surfaces before rewriting this spec.
+  - Define shared settings shell:
+    - Preferences
+    - Organization & Account
+    - Workspace
+    - Agents
+    - Slack bot
+    - Help
+  - Define ownership boundaries:
+    - Agent Auth spec owns Agents / Agent Defaults / Agent Authentication implementation.
+    - MCP/plugins spec owns Plugins page conventions.
+    - Sandbox foundation owns Compute and target readiness.
+    - Repo/env work owns Environments / Shared Environments.
+    - Feature specs own Automations, Slack, Web/Mobile/Dispatch flows.
+  - Define shared vocabulary:
+    - workspace type: local, worktree, SSH, personal cloud, shared cloud
+    - origin: manual, automation, Slack, cowork/API
+    - exposure: not tracked, tracked, live, stale
+    - access: personal, shared unclaimed, claimed
+    - sandbox type: local, SSH, managed personal, managed shared
+  - Define reusable UI primitives:
+    - `CredentialPicker`
+    - `AgentRunConfigSelector`
+    - `RuntimeReadinessPanel`
+    - `PublicCapabilityList`
+    - `WhereUsedDrawer`
+    - form-card/list-detail/status-badge conventions
+
+- **Phase 0: sandbox foundation**
+  - Goal:
+    - Make managed cloud have stable sandbox identity before feature config is layered on.
+  - Implement:
+    - `cloud_sandbox_profile`
+      - one personal profile per user
+      - one shared profile per org
+    - `cloud_target.sandbox_profile_id`
+    - `cloud_target.profile_target_role`
+    - managed cloud slot state keyed by profile + target
+    - `cloud_target_runtime_access`
+    - profile/target desired/applied state rows
+    - `cloud_workspace.sandbox_profile_id`
+    - `cloud_workspace.target_id`
+    - command correlation through `cloud_workspace_id`
+  - Remove managed-cloud dependence on:
+    - `CloudRuntimeEnvironment` as root
+    - workspace-owned runtime URL/token/data key
+  - Add placeholders:
+    - desired/current runtime config sequence
+    - desired/current agent auth sequence
+  - UI included:
+    - minimal Compute/target readiness only if needed
+    - no broad redesign yet
+  - Acceptance:
+    - personal cloud resolves to stable profile/target/slot
+    - shared cloud can resolve to org profile/target/slot or fail explicitly
+    - managed workspace rows exist before AnyHarness materialization
+    - old runtime-environment root is not used for managed cloud
+
+- **Phase 1: MCPs / Skills / Plugins**
+  - Goal:
+    - Treat MCPs, skills, and plugins as sandbox capability state.
+  - Cloud DB:
+    - extend MCP connections with:
+      - owner scope
+      - enabled
+      - public-to-org
+      - auth/config status
+    - add configured skill rows
+    - add configured plugin rows if durable plugin install state is needed
+    - add runtime config revision/current/artifact rows
+  - Resolver:
+    - personal profile includes user-enabled items
+    - shared profile includes org-public items
+    - plugin expands to MCPs + skills
+    - duplicate MCP server names are deterministic
+    - missing auth/artifacts/required MCPs block readiness
+  - Runtime apply:
+    - compile flat runtime manifest
+    - worker/Desktop applies to AnyHarness
+    - launch preflight checks applied revision
+    - lazy artifact/credential resolution exists only as repair path
+  - UI included:
+    - Plugins page updates
+    - enable/disable personal items
+    - make public/private for admins
+    - show auth/readiness/apply status
+    - show public items available for shared sandbox
+  - Acceptance:
+    - personal sandbox sees enabled MCPs/skills/plugins
+    - shared sandbox sees only public org items
+    - no workspace/session MCP id list is needed for normal launch
+    - AnyHarness sees flat MCP/skill runtime config, not plugin concepts
+
+- **Phase 2: Agent Auth**
+  - Goal:
+    - Configure agent harness auth as sandbox state.
+  - Backend:
+    - use canonical agent auth credential model
+    - support synced native credentials
+    - support managed credits/gateway where enabled
+    - support admin-selected shared auth
+    - require owner consent for personal synced auth used by shared sandbox
+    - refresh/apply via `refresh_agent_auth_config`
+    - fail closed if selected auth is missing/stale
+  - Runtime:
+    - worker materializes synced files or gateway config
+    - AnyHarness launch env/config is protected from override
+    - applied agent auth revision is tracked per profile/target
+  - UI included:
+    - Agents overview
+    - Agent Defaults
+    - Agent Authentication
+    - per-harness auth cards
+    - detected credentials list
+    - sync-to-cloud selector
+    - team default selector for admins
+    - team sync overview for admins
+  - Acceptance:
+    - local auth is visible per harness
+    - user can sync/select cloud auth
+    - admin can select shared auth where permitted
+    - stale/missing auth blocks launch clearly
+
+- **Phase 3: Cloud Running Alignment**
+  - Goal:
+    - Align existing command/projection machinery with the new profile/target/slot model.
+  - Existing systems to rebind:
+    - cloud command queue
+    - worker lease/delivery/result loop
+    - `start_session`
+    - `send_prompt`
+    - event upload
+    - session projection
+    - target config materialization
+  - Implement/clean up:
+    - command payloads carry:
+      - `cloud_workspace_id`
+      - `sandbox_profile_id`
+      - `target_id`
+      - active slot/generation where needed
+      - required runtime config revision
+      - required agent auth revision
+    - Cloud workspace/session shell is created before worker dispatch
+    - worker preflights runtime config and agent auth before launch
+    - event projection attaches to Cloud workspace/session rows
+    - workspace metadata includes:
+      - origin
+      - personal/shared state
+      - tracked/projection state
+  - Minimal UI:
+    - passive workspace facts only where useful
+    - no fake “open in web”/mobile buttons unless the destination works
+  - Acceptance:
+    - command/projection path works for personal and shared cloud work
+    - Slack/automations/web/mobile can all become clients of this same substrate
+    - launches fail before AnyHarness if sandbox materialization is stale
+
+- **Phase 4: Claiming**
+  - Goal:
+    - Let shared cloud work start unclaimed, then be claimed by one user.
+  - Backend:
+    - add claim rows/state
+    - shared unclaimed workspace/session visibility
+    - claim/release/revoke APIs
+    - claim audit events
+    - direct access grants/tokens
+  - Runtime:
+    - before claim, only worker/control plane can direct-drive shared runtime
+    - after claim, claimed user can attach where permitted
+    - AnyHarness enforces scoped direct access token
+  - UI:
+    - unclaimed shared work indicator
+    - claim action in web/Desktop where valid
+    - claimed state in sidebar/session header
+    - admin view/manage hooks
+  - Acceptance:
+    - team work can be visible to org before claim
+    - claim narrows command/control to claiming user
+    - worker remains authorized for background projection/materialization
+
+- **Phase 5: Automations**
+  - Goal:
+    - Scheduled/triggered work uses the same sandbox, auth, command, projection, and claiming primitives.
+  - Backend:
+    - automation definition
+    - automation run
+    - scheduler cursor
+    - personal/team target mode
+    - agent run config snapshot
+  - Execution:
+    - resolve target/profile
+    - preflight MCP/skill runtime config
+    - preflight agent auth
+    - create Cloud workspace/session shell
+    - enqueue command
+    - project events
+    - mark run complete
+  - UI:
+    - personal/team selector
+    - target selector
+    - repo selector
+    - schedule editor
+    - agent run config selector
+    - run history/status
+    - shared readiness summary for team automations
+  - Acceptance:
+    - team automations create shared unclaimed work
+    - personal automations create personal work
+    - no automation-specific MCP/auth/model system exists
+
+- **Phase 6: Slack Bot**
+  - Goal:
+    - Slack becomes a team automation entrypoint.
+  - Backend:
+    - Slack workspace connection
+    - bot config
+    - thread-to-work mapping
+    - Slack signature verification
+    - event dedupe
+    - outbound response queue/rate-limit handling
+  - Execution:
+    - mention arrives
+    - resolve org/channel/thread
+    - select repo fixed/auto
+    - create shared unclaimed work
+    - enqueue cloud command
+    - project events
+    - post/update Slack thread on turn completion
+  - UI:
+    - install/reconnect Slack
+    - bot status
+    - default repository or auto detect
+    - default harness/run config inline
+  - Acceptance:
+    - Slack-created work appears as shared unclaimed
+    - users can claim it
+    - Slack does not define separate runtime/auth/MCP config
+
+- **Phase 7: Web / Mobile / Dispatch UX**
+  - Goal:
+    - Turn existing Cloud command/projection substrate into user-facing remote access.
+  - Backend:
+    - exposure/projection APIs if not already complete
+    - commandability controls
+    - live stream APIs
+    - mobile/web session query APIs
+  - Desktop UI:
+    - workspace sidebar type/origin/tracked indicators
+    - enable/disable remote access
+    - open in web
+    - open on mobile
+    - move/migration entry point only if migration is ready
+  - Web/mobile UI:
+    - session list
+    - transcript view
+    - prompt box
+    - claim action for unclaimed work
+    - open in desktop where valid
+  - Acceptance:
+    - web/mobile are Cloud-mediated clients
+    - no direct AnyHarness access from web/mobile
+    - Desktop direct path and Cloud-mediated path can coexist on same session
+
+- **Phase 8: Billing**
+  - Goal:
+    - Gate managed compute and managed LLM credits.
+  - Backend:
+    - billing subject
+    - plan entitlement
+    - usage period
+    - compute usage interval
+    - managed LLM credit budget
+    - provider lifecycle reconciliation
+  - Enforcement:
+    - check before create/resume/connect/command delivery
+    - pause/block when compute exhausted
+    - gateway hard-caps managed credits
+    - no surprise overage without explicit opt-in
+  - UI:
+    - billing page
+    - plan/usage status
+    - blocked/exhausted states in readiness panels
+  - Acceptance:
+    - exhausted compute blocks wake/run
+    - exhausted managed credits block gateway calls
+    - local/SSH/BYO paths remain usable where appropriate
+
+- **Phase 9: Migration / Move Runnable State**
+  - Goal:
+    - Move workspace/session runtime state between targets.
+  - Backend:
+    - migration job
+    - source/destination validation
+    - state export/import
+    - git/worktree preservation
+    - transcript/session state preservation
+    - rollback/repair states
+  - UI:
+    - move session selector
+    - destination target picker
+    - risk/preflight summary
+    - progress state
+    - source cleanup policy
+  - Acceptance:
+    - move does not leave hidden dangling state
+    - source is archived/deleted only after destination verifies
+    - dispatch/exposure remains separate from migration
+
+- **Cross-cutting rules**
+  - Do not invent parallel models:
+    - one sandbox profile root
+    - one MCP/skill/plugin configured state model
+    - one agent auth model
+    - one command/projection substrate
+  - UI should land with its owning backend slice:
+    - Plugins UI with MCP/plugins
+    - Agent auth UI with agent auth
+    - Compute with sandbox foundation
+    - Claim UI with claiming
+    - Automation UI with automations
+    - Slack UI with Slack
+    - Web/mobile/dispatch UI with web/mobile/dispatch
+  - Avoid nonfunctional controls:
+    - no “Open in web” before web target exists
+    - no “Enable mobile” before projection/commandability works
+    - no shared auth selector before sharing/consent exists
+  - Every launch-capable path must preflight:
+    - sandbox slot ready
+    - worker supports command
+    - runtime config applied
+    - agent auth applied
+    - billing/entitlement allows run
+    - claim/access policy allows command

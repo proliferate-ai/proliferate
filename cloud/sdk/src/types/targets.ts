@@ -43,7 +43,7 @@ export type CloudTargetEnrollmentRequest = Omit<
   components["schemas"]["CloudTargetEnrollmentRequest"],
   "kind"
 > & {
-  kind: Exclude<CloudTargetKind, "local_direct">;
+  kind: Exclude<CloudTargetKind, "local_direct" | "managed_cloud">;
 };
 
 export type CloudTargetEnrollmentResponse =

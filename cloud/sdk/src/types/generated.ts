@@ -5,6 +5,7 @@ import type { components } from "../generated/openapi.js";
 export type CloudWorkspaceStatus =
   | "pending"
   | "materializing"
+  | "needs_rematerialization"
   | "ready"
   | "archived"
   | "error";

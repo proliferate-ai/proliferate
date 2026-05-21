@@ -73,10 +73,6 @@ export interface CreateBedrockAssumeRoleCredentialInput
   externalId: string;
 }
 
-export interface EnsureSandboxProfileInput {
-  managedTargetId?: string | null;
-}
-
 export interface SelectAgentAuthCredentialInput {
   credentialId: string;
   credentialShareId?: string | null;

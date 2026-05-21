@@ -53,6 +53,10 @@ async def _seed_gateway_grant(
     )
     db_session.add(user)
     await db_session.flush()
+    profile = await store.ensure_personal_sandbox_profile(
+        db_session,
+        user_id=user.id,
+    )
     target = CloudTarget(
         display_name="Gateway Test Target",
         kind="managed_cloud",
@@ -63,14 +67,11 @@ async def _seed_gateway_grant(
         created_by_user_id=user.id,
         default_workspace_root=None,
         update_channel="stable",
+        sandbox_profile_id=profile.id,
+        profile_target_role="primary",
     )
     db_session.add(target)
     await db_session.flush()
-    profile = await store.ensure_personal_sandbox_profile(
-        db_session,
-        user_id=user.id,
-        managed_target_id=target.id,
-    )
     credential = await store.create_agent_auth_credential(
         db_session,
         owner_scope="personal",
@@ -468,14 +469,16 @@ async def test_gateway_rejects_grant_after_target_rebind(
         created_by_user_id=user_id,
         default_workspace_root=None,
         update_channel="stable",
+        sandbox_profile_id=profile.id,
+        profile_target_role="primary",
     )
+    old_target = await db_session.get(CloudTarget, seed.target_id)
+    assert old_target is not None
+    old_target.profile_target_role = "none"
+    old_target.sandbox_profile_id = None
+    await db_session.flush()
     db_session.add(target)
     await db_session.flush()
-    await store.ensure_personal_sandbox_profile(
-        db_session,
-        user_id=user_id,
-        managed_target_id=target.id,
-    )
     await db_session.commit()
 
     response = await client.post(

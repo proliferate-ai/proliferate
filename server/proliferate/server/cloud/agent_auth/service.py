@@ -76,6 +76,7 @@ from proliferate.server.cloud.agent_auth.models import (
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
+from proliferate.server.cloud.worker.slot_guard import require_current_managed_worker_slot
 from proliferate.utils.crypto import decrypt_json, encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
 
@@ -124,12 +125,11 @@ async def ensure_personal_sandbox_profile(
     db: AsyncSession,
     *,
     actor_user_id: UUID,
-    managed_target_id: UUID | None,
 ) -> SandboxProfileRecord:
     profile = await store.ensure_personal_sandbox_profile(
         db,
         user_id=actor_user_id,
-        managed_target_id=managed_target_id,
+        created_by_user_id=actor_user_id,
     )
     profile = await _backfill_legacy_cloud_credentials(db, actor_user_id, profile)
     await _ensure_profile_target_refresh_if_needed(
@@ -151,7 +151,7 @@ async def reconcile_legacy_cloud_credentials_for_user(
         profile = await store.ensure_personal_sandbox_profile(
             db,
             user_id=actor_user_id,
-            managed_target_id=None,
+            created_by_user_id=actor_user_id,
         )
     else:
         profile = await store.get_active_personal_sandbox_profile_for_user(db, actor_user_id)
@@ -165,13 +165,12 @@ async def ensure_organization_sandbox_profile(
     *,
     actor_user_id: UUID,
     organization_id: UUID,
-    managed_target_id: UUID | None,
 ) -> SandboxProfileRecord:
     await _require_organization_admin(db, actor_user_id, organization_id)
     profile = await store.ensure_organization_sandbox_profile(
         db,
         organization_id=organization_id,
-        managed_target_id=managed_target_id,
+        created_by_user_id=actor_user_id,
     )
     await _ensure_profile_target_refresh_if_needed(
         db,
@@ -974,6 +973,7 @@ async def worker_agent_auth_materialization_plan(
     revision: int,
     lease_id: str,
 ) -> WorkerAgentAuthMaterializationPlan:
+    await require_current_managed_worker_slot(db, auth=auth)
     command = await _require_agent_auth_refresh_command(
         db,
         auth=auth,
@@ -1041,6 +1041,7 @@ async def record_worker_agent_auth_status(
     sandbox_profile_id: UUID,
     body: WorkerAgentAuthStatusRequest,
 ) -> WorkerAgentAuthStatusResponse:
+    await require_current_managed_worker_slot(db, auth=auth)
     command = await _require_agent_auth_refresh_command(
         db,
         auth=auth,
@@ -2387,12 +2388,12 @@ async def _mark_target_pending_and_queue_refresh(
     reason: str,
     force_restart: bool,
 ) -> None:
-    if profile.managed_target_id is None:
+    if profile.primary_target_id is None:
         return
     command = await _queue_agent_auth_refresh_command(
         db,
         profile=profile,
-        target_id=profile.managed_target_id,
+        target_id=profile.primary_target_id,
         actor_user_id=actor_user_id,
         reason=reason,
         force_restart=force_restart,
@@ -2400,7 +2401,7 @@ async def _mark_target_pending_and_queue_refresh(
     await store.upsert_target_state(
         db,
         sandbox_profile_id=profile.id,
-        target_id=profile.managed_target_id,
+        target_id=profile.primary_target_id,
         desired_revision=profile.agent_auth_revision,
         applied_revision=None,
         status="pending",
@@ -2419,7 +2420,7 @@ async def _ensure_profile_target_refresh_if_needed(
     actor_user_id: UUID | None,
     reason: str,
 ) -> None:
-    if profile.managed_target_id is None:
+    if profile.primary_target_id is None:
         return
     if profile.agent_auth_revision == 0:
         selections = await store.list_selections_for_profile(db, profile.id)
@@ -2428,7 +2429,7 @@ async def _ensure_profile_target_refresh_if_needed(
     state = await store.get_target_state(
         db,
         sandbox_profile_id=profile.id,
-        target_id=profile.managed_target_id,
+        target_id=profile.primary_target_id,
     )
     if (
         state is not None
@@ -2488,6 +2489,7 @@ async def _queue_agent_auth_refresh_command(
                 source=CloudCommandSource.api.value,
                 workspace_id=None,
                 session_id=None,
+                cloud_workspace_id=None,
                 kind=CloudCommandKind.refresh_agent_auth_config.value,
                 payload_json=compact_command_json(payload) or "{}",
                 observed_event_seq=None,
