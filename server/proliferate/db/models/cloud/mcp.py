@@ -97,9 +97,6 @@ class CloudMcpConnection(Base):
     )
     settings_json: Mapped[str] = mapped_column(Text, default="{}")
     config_version: Mapped[int] = mapped_column(Integer, default=1)
-    # Legacy replica payload. New clients store auth in CloudMcpConnectionAuth.
-    payload_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
-    payload_format: Mapped[str] = mapped_column(String(32), default="json-v1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

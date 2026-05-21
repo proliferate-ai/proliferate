@@ -38,8 +38,6 @@ class CloudMcpConnectionRecord:
     public_updated_by_user_id: UUID | None
     settings_json: str
     config_version: int
-    payload_ciphertext: str | None
-    payload_format: str
     created_at: datetime
     updated_at: datetime
     last_synced_at: datetime
