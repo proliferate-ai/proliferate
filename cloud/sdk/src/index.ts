@@ -22,6 +22,7 @@ export * from "./client/repo-configs.js";
 export * from "./client/repos.js";
 export * from "./client/runtime-config.js";
 export * from "./client/sessions.js";
+export * from "./client/slack.js";
 export * from "./client/support.js";
 export * from "./client/target-configs.js";
 export * from "./client/targets.js";

@@ -43,10 +43,17 @@ from proliferate.server.cloud.live.service import (
     projection_patch_from_event,
     publish_session_patch,
 )
+from proliferate.server.cloud.slack.service import enqueue_post_session_event
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 
 SESSION_DURABLE_EVENT_HARD_CAP = 10_000
 SESSION_PAYLOAD_BYTES_HARD_CAP = 25 * 1024 * 1024
+END_OF_TURN_KINDS = {
+    "item_completed",
+    "interaction_requested",
+    "session_ended",
+    "turn_ended",
+}
 
 
 @dataclass(frozen=True)
@@ -207,6 +214,15 @@ async def ingest_worker_event_batch(
                 payload_json=payload_decision.payload_json,
                 include_transcript=False,
             )
+            if current_event_type in END_OF_TURN_KINDS:
+                await enqueue_post_session_event(
+                    db,
+                    cloud_workspace_id=policy.cloud_workspace_id,
+                    session_id=event.session_id,
+                    event_type=current_event_type,
+                    event_payload=event.event,
+                    seq=event.seq,
+                )
             if policy.live_fanout:
                 projection_patches.append(patch)
             continue
@@ -281,6 +297,15 @@ async def ingest_worker_event_batch(
             payload_json=payload_decision.payload_json,
             include_transcript=policy.transcript_rows,
         )
+        if current_event_type in END_OF_TURN_KINDS:
+            await enqueue_post_session_event(
+                db,
+                cloud_workspace_id=policy.cloud_workspace_id,
+                session_id=event.session_id,
+                event_type=current_event_type,
+                event_payload=event.event,
+                seq=event.seq,
+            )
         if policy.live_fanout:
             projection_patches.append(patch)
 

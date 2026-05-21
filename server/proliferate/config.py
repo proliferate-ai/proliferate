@@ -106,6 +106,13 @@ class Settings(BaseSettings):
     signups_slack_webhook_url: str = ""
     billing_positive_slack_webhook_url: str = ""
     billing_negative_slack_webhook_url: str = ""
+    slack_client_id: str = ""
+    slack_client_secret: str = ""
+    slack_signing_secret: str = ""
+    slack_oauth_redirect_url: str = ""
+    slack_outbound_max_attempts: int = 5
+    slack_outbound_rate_per_team_per_sec: float = 1.0
+    slack_run_cascade_max_attempts: int = 3
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_cloud_monthly_price_id: str = ""

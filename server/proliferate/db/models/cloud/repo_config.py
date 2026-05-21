@@ -5,12 +5,15 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,10 +22,48 @@ from proliferate.db.models.base import Base, utcnow
 
 class CloudRepoConfig(Base):
     __tablename__ = "cloud_repo_config"
-    __table_args__ = (UniqueConstraint("user_id", "git_owner", "git_repo_name"),)
+    __table_args__ = (
+        CheckConstraint(
+            "owner_scope IN ('personal', 'organization')",
+            name="ck_cloud_repo_config_owner_scope",
+        ),
+        CheckConstraint(
+            "((owner_scope = 'personal' AND user_id IS NOT NULL "
+            "AND organization_id IS NULL) OR "
+            "(owner_scope = 'organization' AND organization_id IS NOT NULL "
+            "AND user_id IS NULL))",
+            name="ck_cloud_repo_config_owner_fields",
+        ),
+        Index(
+            "ux_cloud_repo_config_personal_repo",
+            "user_id",
+            "git_owner",
+            "git_repo_name",
+            unique=True,
+            postgresql_where=text("owner_scope = 'personal'"),
+        ),
+        Index(
+            "ux_cloud_repo_config_organization_repo",
+            "organization_id",
+            "git_owner",
+            "git_repo_name",
+            unique=True,
+            postgresql_where=text("owner_scope = 'organization'"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    owner_scope: Mapped[str] = mapped_column(
+        String(32),
+        default="personal",
+        server_default=text("'personal'"),
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     git_owner: Mapped[str] = mapped_column(String(255))
     git_repo_name: Mapped[str] = mapped_column(String(255))
     configured: Mapped[bool] = mapped_column(default=False)
