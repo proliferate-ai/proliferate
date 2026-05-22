@@ -444,19 +444,16 @@ function linkedChatForWorkspace(
   const session = [...sessions].sort((left, right) =>
     (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0)
   )[0];
-  if (!session) {
-    return null;
-  }
   return {
     workspaceId: workspace.id,
     workspaceName: workspace.displayName ?? workspace.repo.name,
     repoLabel: `${workspace.repo.owner}/${workspace.repo.name}`,
     branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
-    targetId: session.targetId,
-    workspaceRuntimeId: session.workspaceId ?? null,
-    sessionId: session.sessionId,
-    title: session.title ?? workspace.displayName ?? workspace.repo.name,
-    status: session.status,
+    targetId: session?.targetId ?? workspace.targetId ?? null,
+    workspaceRuntimeId: session?.workspaceId ?? workspace.anyharnessWorkspaceId ?? null,
+    sessionId: session?.sessionId ?? null,
+    title: session?.title ?? workspace.displayName ?? workspace.repo.name,
+    status: session?.status ?? workspace.workspaceStatus ?? workspace.status,
     visibility: workspace.visibility,
   };
 }

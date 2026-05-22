@@ -100,11 +100,27 @@ This branch converts the highest-impact gaps into real flows:
   `@proliferate/product-model`, keeping the Web UI behavior intact while
   making Mobile use the same product semantics.
 
-Remaining gaps after this branch are mostly deeper UX and QA work: all-session
-workspace detail views, new-session creation as an explicit button rather than
-composer-first behavior, automation edit/delete/run details, richer settings
-actions, persistent selected-session state across cold restart, pull-to-refresh,
-and simulator/device E2E smoke runs.
+Remaining gaps after this branch are mostly deeper UX and QA work: workspace
+detail views, automation edit/delete/run details, richer settings actions,
+pull-to-refresh, native simulator/device E2E smoke runs, and shared/unclaimed
+claim-path coverage with a real shared workspace fixture.
+
+Latest manual verification, 2026-05-22:
+
+- Mobile web full-stack profile `mobileqa` authenticated through the dev mobile
+  refresh-token flow.
+- Existing session reload restored the active chat and transcript.
+- Existing session prompt send produced optimistic user/waiting rows and exact
+  assistant response.
+- Explicit "New session" from an existing workspace produced optimistic
+  queued rows, started a new projected session, sent the first prompt, and
+  reconciled to the exact assistant response.
+- Sessions screen expanded workspace snapshots to show multiple projected
+  sessions for the same workspace, with session-id disambiguation, and opening
+  old/new rows switched transcripts correctly.
+- Chat config control, workspace navigation, automations create/pause/resume,
+  settings/account/team/billing, sign-out, and re-auth were verified in the
+  same local stack.
 
 ## Core End-To-End Flows
 
@@ -494,7 +510,7 @@ Desktop settings tree.
 - [x] Create workspace from mobile.
 - [x] Persist and dispatch first prompt when workspace is ready.
 - [x] Route into a pending/final-looking chat shell immediately.
-- [ ] Verify the full first-prompt path against a real cloud runtime.
+- [x] Verify the full first-prompt path against a real cloud runtime.
 
 ### Phase 3 - Mobile Chat Surface
 
@@ -507,10 +523,10 @@ Desktop settings tree.
 ### Phase 4 - Workspace, Session, And Sidebar Parity
 
 - [ ] Add workspace detail screen/sheet.
-- [ ] Add all-session listing for a workspace.
-- [ ] Add new-session creation for an existing workspace.
+- [x] Add all-session listing for a workspace.
+- [x] Add new-session creation for an existing workspace.
 - [ ] Upgrade drawer/sidebar grouping and sorting to match Web semantics.
-- [ ] Preserve active workspace/session across resume.
+- [x] Preserve active workspace/session across reload/resume.
 
 ### Phase 5 - Automations And Settings
 

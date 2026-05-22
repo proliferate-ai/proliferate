@@ -41,7 +41,7 @@ import {
   type CloudChatTranscriptRowView,
 } from "@proliferate/product-model/chats/cloud/transcript-view";
 
-import { MobileIcon } from "../primitives/MobileIcon";
+import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileStatusDot } from "../primitives/MobileStatusDot";
 import { MobileTextInput } from "../primitives/MobileTextInput";
 import { MobileTopBar, MobileTopBarIconButton } from "../primitives/MobileTopBar";
@@ -89,6 +89,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
   const [draft, setDraft] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(chat.sessionId);
   const [draftModelId, setDraftModelId] = useState(DEFAULT_DIRECT_PROMPT_MODEL_ID);
+  const [newSessionMode, setNewSessionMode] = useState(false);
   const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
   const [latestConfigCommandId, setLatestConfigCommandId] = useState<string | null>(null);
   const [pendingPrompt, setPendingPrompt] = useState<MobilePendingPrompt | null>(null);
@@ -111,11 +112,12 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
     () => [...(snapshot?.sessions ?? [])].sort(compareSessions),
     [snapshot?.sessions],
   );
-  const session =
+  const selectedSession =
     sessions.find((candidate) => candidate.sessionId === selectedSessionId)
     ?? sessions.find((candidate) => candidate.sessionId === chat.sessionId)
     ?? sessions[0]
     ?? null;
+  const session = newSessionMode ? null : selectedSession;
   const activeSessionId = session?.sessionId ?? selectedSessionId;
   const targetId = session?.targetId ?? workspace?.targetId ?? chat.targetId;
   const workspaceRuntimeId = session?.workspaceId ?? workspace?.anyharnessWorkspaceId ?? chat.workspaceRuntimeId;
@@ -189,6 +191,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
   useEffect(() => {
     setSelectedSessionId(chat.sessionId);
     setDraft("");
+    setNewSessionMode(false);
     setPendingPromptStatus(null);
     setOptimisticPrompts([]);
     setPendingConfigChanges({});
@@ -370,6 +373,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
         if (!isCurrentRun()) {
           return;
         }
+        setNewSessionMode(false);
         setSelectedSessionId(sessionId);
         setOptimisticPrompts((current) => [
           ...current,
@@ -541,6 +545,13 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
     void workspaceQuery.refetch();
   }
 
+  function startNewSession() {
+    setSelectedSessionId(null);
+    setNewSessionMode(true);
+    setDraft("");
+    setPendingPromptStatus(null);
+  }
+
   const isUnclaimed = workspace?.visibility === "shared_unclaimed" && !claimedLocally;
   const workspaceCommandReady =
     workspaceStatus === "ready" && Boolean(workspace?.targetId) && Boolean(workspace?.anyharnessWorkspaceId);
@@ -551,7 +562,9 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
       && !promptSubmitting
       && (session ? true : workspaceCommandReady),
   );
-  const title = session?.title ?? workspace?.displayName ?? chat.title;
+  const title = newSessionMode
+    ? "New session"
+    : session?.title ?? workspace?.displayName ?? chat.title;
   const subtitle = `${workspace?.displayName ?? chat.workspaceName} - ${workspace?.repo.owner ?? chat.repoLabel}`;
   const branchLabel = workspace?.repo.branch ?? workspace?.repo.baseBranch ?? chat.branchLabel;
   const commandMessage =
@@ -559,7 +572,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
     commandStatus.data?.errorMessage ??
     (commandStatus.data?.status ? `Command ${commandStatus.data.status}` : null);
   const emptyTitle = !session
-    ? "No active session yet."
+    ? newSessionMode ? "New session" : "No active session yet."
     : sessionEventsQuery.isLoading && transcriptView.source === "empty"
       ? "Loading transcript"
       : "Waiting for the first projected transcript event.";
@@ -596,6 +609,13 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
         <IdentityChip label={workspace?.visibility ?? chat.visibility} />
         <IdentityChip label={sessionLive.isConnected ? "Live" : "Snapshot"} />
         <IdentityChip label={transcriptView.source === "events" ? "Events" : transcriptView.source} />
+        {sessions.length > 0 ? (
+          <IdentityChip
+            label={newSessionMode ? "Starting new session" : "New session"}
+            icon="plus"
+            onPress={startNewSession}
+          />
+        ) : null}
       </View>
 
       {isUnclaimed ? (
@@ -634,7 +654,9 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{emptyTitle}</Text>
             <Text style={styles.emptyBody}>
-              {!session ? "Send a prompt below to start the first projected session." : "Transcript projection will appear here."}
+              {!session
+                ? "Send a prompt below to start a projected session."
+                : "Transcript projection will appear here."}
             </Text>
           </View>
         }
@@ -757,7 +779,7 @@ function IdentityChip({
   onPress,
 }: {
   label: string;
-  icon?: "git-branch";
+  icon?: Extract<MobileIconName, "git-branch" | "plus">;
   onPress?: () => void;
 }) {
   const content = (
