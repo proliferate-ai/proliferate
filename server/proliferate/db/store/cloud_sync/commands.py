@@ -408,8 +408,7 @@ async def _runtime_config_lease_blocker(
     required_sequence = payload.get("requiredRuntimeConfigSequence")
     required_content_hash = payload.get("requiredRuntimeConfigContentHash")
     if (
-        sandbox_profile_id is None
-        and required_revision_id is None
+        required_revision_id is None
         and required_sequence is None
         and required_content_hash is None
     ):
