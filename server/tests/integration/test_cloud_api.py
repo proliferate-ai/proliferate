@@ -12,12 +12,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.billing import BILLING_MODE_OBSERVE
+from proliferate.constants.organizations import (
+    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_ROLE_MEMBER,
+)
 from proliferate.db.models.auth import OAuthAccount
 from proliferate.db.models.cloud.mcp import CloudMcpConnection, CloudMcpConnectionAuth
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.cloud.worktree_policy import CloudWorktreeRetentionPolicy
+from proliferate.db.models.organizations import OrganizationMembership
 from proliferate.db.store.cloud_mcp.auth import (
     update_connection_auth_if_version,
     upsert_connection_auth,
@@ -749,6 +754,62 @@ class TestCloudRepoConfig:
             organization_get_response.json()["trackedFiles"][0]["content"]
             == "API_BASE_URL=https://example.internal\nSHARED_TOKEN=team\n"
         )
+
+        organization_preserve_response = await client.put(
+            (
+                f"/v1/cloud/organizations/{organization_id}/repos/"
+                "proliferate-ai/proliferate/config"
+            ),
+            headers=headers,
+            json={
+                "configured": True,
+                "defaultBranch": "release",
+                "envVars": {"API_BASE_URL": "https://example.internal"},
+                "setupScript": "pnpm install",
+                "runCommand": "make dev --shared",
+            },
+        )
+        assert organization_preserve_response.status_code == 200
+        assert organization_preserve_response.json()["runCommand"] == "make dev --shared"
+        assert (
+            organization_preserve_response.json()["trackedFiles"][0]["content"]
+            == "API_BASE_URL=https://example.internal\nSHARED_TOKEN=team\n"
+        )
+
+        member_session = await _register_and_login(client, "cloud-member@example.com")
+        db_session.add(
+            OrganizationMembership(
+                organization_id=uuid.UUID(organization_id),
+                user_id=uuid.UUID(member_session["user_id"]),
+                role=ORGANIZATION_ROLE_MEMBER,
+                status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            )
+        )
+        await db_session.commit()
+        member_headers = {"Authorization": f"Bearer {member_session['access_token']}"}
+        member_get_response = await client.get(
+            (
+                f"/v1/cloud/organizations/{organization_id}/repos/"
+                "proliferate-ai/proliferate/config"
+            ),
+            headers=member_headers,
+        )
+        assert member_get_response.status_code == 403
+        assert member_get_response.json()["detail"]["code"] == (
+            "organization_repo_config_permission_denied"
+        )
+
+        outsider_session = await _register_and_login(client, "cloud-outsider@example.com")
+        outsider_headers = {"Authorization": f"Bearer {outsider_session['access_token']}"}
+        outsider_get_response = await client.get(
+            (
+                f"/v1/cloud/organizations/{organization_id}/repos/"
+                "proliferate-ai/proliferate/config"
+            ),
+            headers=outsider_headers,
+        )
+        assert outsider_get_response.status_code == 404
+        assert outsider_get_response.json()["detail"]["code"] == "organization_repo_config_not_found"
 
     @pytest.mark.asyncio
     async def test_free_plan_repo_config_limit_blocks_second_configured_repo(

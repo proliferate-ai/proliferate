@@ -270,7 +270,7 @@ function SharedEnvironmentDetail({
       envVars: draft.savePayload.envVars,
       setupScript: draft.savePayload.setupScript,
       runCommand: draft.savePayload.runCommand,
-      files: draft.sharedEnvFilePayloads,
+      files: draft.sharedEnvFilesDirty ? draft.sharedEnvFilePayloads : undefined,
     });
     const profile = await authMutations.ensureOrganizationProfile({ organizationId });
     await authMutations.enableProfileCloud({ sandboxProfileId: profile.id });

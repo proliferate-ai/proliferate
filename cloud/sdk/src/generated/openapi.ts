@@ -484,6 +484,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/organizations/{organization_id}/repos/configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Organization Cloud Repo Configs Endpoint */
+        get: operations["list_organization_cloud_repo_configs_endpoint_v1_cloud_organizations__organization_id__repos_configs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/repos/{git_owner}/{git_repo_name}/config": {
         parameters: {
             query?: never;
@@ -495,6 +512,24 @@ export interface paths {
         get: operations["get_cloud_repo_config_endpoint_v1_cloud_repos__git_owner___git_repo_name__config_get"];
         /** Save Cloud Repo Config Endpoint */
         put: operations["save_cloud_repo_config_endpoint_v1_cloud_repos__git_owner___git_repo_name__config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/repos/{git_owner}/{git_repo_name}/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Organization Cloud Repo Config Endpoint */
+        get: operations["get_organization_cloud_repo_config_endpoint_v1_cloud_organizations__organization_id__repos__git_owner___git_repo_name__config_get"];
+        /** Save Organization Cloud Repo Config Endpoint */
+        put: operations["save_organization_cloud_repo_config_endpoint_v1_cloud_organizations__organization_id__repos__git_owner___git_repo_name__config_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -623,6 +658,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workspaces/remote-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bootstrap Workspace Remote Access Endpoint */
+        post: operations["bootstrap_workspace_remote_access_endpoint_v1_cloud_workspaces_remote_access_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workspaces/{workspace_id}": {
         parameters: {
             query?: never;
@@ -652,6 +704,40 @@ export interface paths {
         get: operations["get_cloud_workspace_connection_endpoint_v1_cloud_workspaces__workspace_id__connection_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/remote-access/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable Cloud Workspace Remote Access Endpoint */
+        post: operations["enable_cloud_workspace_remote_access_endpoint_v1_cloud_workspaces__workspace_id__remote_access_enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/remote-access/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable Cloud Workspace Remote Access Endpoint */
+        post: operations["disable_cloud_workspace_remote_access_endpoint_v1_cloud_workspaces__workspace_id__remote_access_disable_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4186,6 +4272,21 @@ export interface components {
             /** User */
             user?: string | null;
         };
+        /** BootstrapWorkspaceRemoteAccessRequest */
+        BootstrapWorkspaceRemoteAccessRequest: {
+            /**
+             * Targetid
+             * Format: uuid
+             */
+            targetId: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Anyharnesssessionid */
+            anyharnessSessionId?: string | null;
+            /** Displayname */
+            displayName?: string | null;
+            repo?: components["schemas"]["RemoteAccessRepoRef"] | null;
+        };
         /** ClaimWorkspaceRequest */
         ClaimWorkspaceRequest: {
             /**
@@ -5511,6 +5612,14 @@ export interface components {
         /** MaterializeTargetConfigRequest */
         MaterializeTargetConfigRequest: {
             /**
+             * Ownerscope
+             * @default personal
+             * @enum {string}
+             */
+            ownerScope: "personal" | "organization";
+            /** Organizationid */
+            organizationId?: string | null;
+            /**
              * Gitprovider
              * @default github
              * @constant
@@ -6090,6 +6199,28 @@ export interface components {
              */
             reason: string;
         };
+        /** RemoteAccessRepoRef */
+        RemoteAccessRepoRef: {
+            /**
+             * Provider
+             * @default local
+             */
+            provider: string;
+            /**
+             * Owner
+             * @default local
+             */
+            owner: string;
+            /** Name */
+            name: string;
+            /**
+             * Branch
+             * @default default
+             */
+            branch: string;
+            /** Basebranch */
+            baseBranch?: string | null;
+        };
         /** RepairWorkspaceMobilityHandoffRequest */
         RepairWorkspaceMobilityHandoffRequest: {
             /** Action */
@@ -6453,7 +6584,30 @@ export interface components {
              */
             runCommand: string;
             /** Files */
-            files?: components["schemas"]["SaveCloudRepoConfigFile"][];
+            files: components["schemas"]["SaveCloudRepoConfigFile"][];
+        };
+        /** SaveOrganizationCloudRepoConfigRequest */
+        SaveOrganizationCloudRepoConfigRequest: {
+            /** Configured */
+            configured: boolean;
+            /** Defaultbranch */
+            defaultBranch?: string | null;
+            /** Envvars */
+            envVars?: {
+                [key: string]: string;
+            };
+            /**
+             * Setupscript
+             * @default
+             */
+            setupScript: string;
+            /**
+             * Runcommand
+             * @default
+             */
+            runCommand: string;
+            /** Files */
+            files?: components["schemas"]["SaveCloudRepoConfigFile"][] | null;
         };
         /** SelectAgentAuthCredentialRequest */
         SelectAgentAuthCredentialRequest: {
@@ -6644,6 +6798,10 @@ export interface components {
             cloudRepoConfigId: string;
             /** Organizationid */
             organizationId: string;
+            /** Gitowner */
+            gitOwner?: string | null;
+            /** Gitreponame */
+            gitRepoName?: string | null;
             /** Displayname */
             displayName: string | null;
             /** Description */
@@ -7972,6 +8130,8 @@ export interface components {
         WorkspaceDetail: {
             /** Id */
             id: string;
+            /** Targetid */
+            targetId?: string | null;
             /** Displayname */
             displayName: string | null;
             repo: components["schemas"]["RepoRef"];
@@ -8147,6 +8307,8 @@ export interface components {
         WorkspaceSummary: {
             /** Id */
             id: string;
+            /** Targetid */
+            targetId?: string | null;
             /** Displayname */
             displayName: string | null;
             repo: components["schemas"]["RepoRef"];
@@ -9266,6 +9428,37 @@ export interface operations {
             };
         };
     };
+    list_organization_cloud_repo_configs_endpoint_v1_cloud_organizations__organization_id__repos_configs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudRepoConfigsListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_cloud_repo_config_endpoint_v1_cloud_repos__git_owner___git_repo_name__config_get: {
         parameters: {
             query?: never;
@@ -9311,6 +9504,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SaveCloudRepoConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudRepoConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_organization_cloud_repo_config_endpoint_v1_cloud_organizations__organization_id__repos__git_owner___git_repo_name__config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudRepoConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_organization_cloud_repo_config_endpoint_v1_cloud_organizations__organization_id__repos__git_owner___git_repo_name__config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveOrganizationCloudRepoConfigRequest"];
             };
         };
         responses: {
@@ -9602,6 +9865,39 @@ export interface operations {
             };
         };
     };
+    bootstrap_workspace_remote_access_endpoint_v1_cloud_workspaces_remote_access_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BootstrapWorkspaceRemoteAccessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__get: {
         parameters: {
             query?: never;
@@ -9684,6 +9980,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceConnection"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_cloud_workspace_remote_access_endpoint_v1_cloud_workspaces__workspace_id__remote_access_enable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_cloud_workspace_remote_access_endpoint_v1_cloud_workspaces__workspace_id__remote_access_disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
                 };
             };
             /** @description Validation Error */

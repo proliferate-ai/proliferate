@@ -6,6 +6,7 @@ import type {
   PutCloudRepoFileRequest,
   RunCloudWorkspaceSetupResponse,
   SaveCloudRepoConfigRequest,
+  SaveOrganizationCloudRepoConfigRequest,
   ResyncCloudWorkspaceFilesResponse,
 } from "../types/index.js";
 
@@ -69,9 +70,7 @@ export async function saveOrganizationCloudRepoConfig(
   organizationId: string,
   gitOwner: string,
   gitRepoName: string,
-  body: Omit<SaveCloudRepoConfigRequest, "files"> & {
-    files?: SaveCloudRepoConfigRequest["files"];
-  },
+  body: SaveOrganizationCloudRepoConfigRequest,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudRepoConfigResponse> {
   return client.requestJson<CloudRepoConfigResponse>({

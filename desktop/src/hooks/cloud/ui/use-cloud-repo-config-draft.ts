@@ -14,7 +14,7 @@ import {
 import {
   envFileVariablesEqual,
   parseEnvFileVariables,
-  serializeEnvFileVariables,
+  serializeEnvFileVariablesPreservingOriginal,
   type EnvFileVariable,
 } from "@/lib/domain/settings/env-file-draft";
 import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
@@ -29,6 +29,8 @@ export interface CloudRepoSharedEnvFile {
   id: string;
   relativePath: string;
   rows: CloudRepoEnvVarRow[];
+  originalContent: string | null;
+  originalVariables: EnvFileVariable[];
 }
 
 export interface CloudRepoSharedEnvFilePayload {
@@ -61,11 +63,17 @@ function buildEnvVarRowsFromVariables(variables: readonly EnvFileVariable[]): Cl
 function buildSharedEnvFiles(savedConfig: CloudRepoConfig | null | undefined): CloudRepoSharedEnvFile[] {
   return (savedConfig?.trackedFiles ?? [])
     .filter((file) => typeof file.content === "string")
-    .map((file) => ({
-      id: createRowId(),
-      relativePath: file.relativePath,
-      rows: buildEnvVarRowsFromVariables(parseEnvFileVariables(file.content)),
-    }));
+    .map((file) => {
+      const originalContent = file.content ?? "";
+      const originalVariables = parseEnvFileVariables(originalContent);
+      return {
+        id: createRowId(),
+        relativePath: file.relativePath,
+        rows: buildEnvVarRowsFromVariables(originalVariables),
+        originalContent,
+        originalVariables,
+      };
+    });
 }
 
 function normalizeSharedEnvFilePath(relativePath: string): string {
@@ -87,7 +95,11 @@ function buildSharedEnvFilePayloads(
 ): CloudRepoSharedEnvFilePayload[] {
   return normalizeSharedEnvFiles(files).map((file) => ({
     relativePath: file.relativePath,
-    content: serializeEnvFileVariables(file.rows),
+    content: serializeEnvFileVariablesPreservingOriginal(
+      file.rows,
+      file.originalVariables,
+      file.originalContent,
+    ),
   }));
 }
 
@@ -265,6 +277,8 @@ export function useCloudRepoConfigDraft({
           id: createRowId(),
           relativePath: nextDefaultSharedEnvFilePath(current.sharedEnvFiles),
           rows: [{ id: createRowId(), key: "", value: "" }],
+          originalContent: null,
+          originalVariables: [],
         },
       ],
     }));
@@ -427,6 +441,7 @@ export function useCloudRepoConfigDraft({
     envVarRows: state.envVarRows,
     envVars,
     sharedEnvFiles: state.sharedEnvFiles,
+    sharedEnvFilesDirty,
     sharedEnvFilePayloads: buildSharedEnvFilePayloads(state.sharedEnvFiles),
     trackedFilePaths: currentDraft.trackedFilePaths,
     setupScript: currentDraft.setupScript,

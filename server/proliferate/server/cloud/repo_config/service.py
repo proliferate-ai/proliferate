@@ -22,8 +22,9 @@ from proliferate.db.store.cloud_repo_config import (
     save_cloud_repo_file,
     save_organization_cloud_repo_config,
 )
-from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
-from proliferate.db.store.organizations import load_active_membership
+from proliferate.db.store.cloud_slack import repo_routing_profiles as slack_routing_profile_store
+from proliferate.db.store.cloud_workspaces import get_cloud_workspace_by_id
+from proliferate.db.store.organizations import get_active_membership
 from proliferate.integrations.anyharness import CloudRuntimeOperationError
 from proliferate.server.billing.service import (
     get_billing_snapshot,
@@ -31,6 +32,7 @@ from proliferate.server.billing.service import (
     repo_limit_for_billing_snapshot,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.repo_config.access import require_organization_repo_config_admin
 from proliferate.server.cloud.repo_config.domain.workspace_status import (
     RepoConfigTrackedFileStatus,
     ResyncWorkspaceRepoConfigStatus,
@@ -40,6 +42,7 @@ from proliferate.server.cloud.repo_config.domain.workspace_status import (
 from proliferate.server.cloud.repo_config.models import (
     PutCloudRepoFileRequest,
     SaveCloudRepoConfigRequest,
+    SaveOrganizationCloudRepoConfigRequest,
 )
 from proliferate.server.cloud.repo_config.validation import (
     normalize_env_vars,
@@ -56,8 +59,6 @@ from proliferate.server.cloud.runtime.repo_config_apply import (
     run_workspace_saved_setup,
 )
 from proliferate.server.cloud.runtime.service import get_workspace_connection
-from proliferate.server.cloud.targets.domain.policy import require_target_admin_membership
-from proliferate.db.store.cloud_slack import repo_routing_profiles as slack_routing_profile_store
 
 
 class _WorkspaceRepoConfigRecord(Protocol):
@@ -91,12 +92,14 @@ def _raise_org_cloud_not_ready() -> NoReturn:
 
 
 async def _load_authorized_workspace_for_repo_config(
+    db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
 ) -> _WorkspaceRepoConfigRecord:
-    workspace = await load_cloud_workspace_by_id(workspace_id)
+    workspace = await get_cloud_workspace_by_id(db, workspace_id)
     if workspace is None:
         _raise_workspace_not_found()
+    await db.refresh(workspace)
 
     if workspace.owner_scope == "personal":
         if workspace.owner_user_id != user_id:
@@ -104,7 +107,8 @@ async def _load_authorized_workspace_for_repo_config(
         return workspace
 
     if workspace.owner_scope == "organization" and workspace.organization_id is not None:
-        membership = await load_active_membership(
+        membership = await get_active_membership(
+            db,
             organization_id=workspace.organization_id,
             user_id=user_id,
         )
@@ -169,20 +173,16 @@ async def list_repo_configs(
     return await list_cloud_repo_configs(db, user_id)
 
 
-async def _require_organization_admin(user_id: UUID, organization_id: UUID) -> None:
-    membership = await load_active_membership(
-        organization_id=organization_id,
-        user_id=user_id,
-    )
-    require_target_admin_membership(membership)
-
-
 async def list_organization_repo_configs(
     db: AsyncSession,
     user_id: UUID,
     organization_id: UUID,
 ) -> list[CloudRepoConfigValue]:
-    await _require_organization_admin(user_id, organization_id)
+    await require_organization_repo_config_admin(
+        db,
+        user_id=user_id,
+        organization_id=organization_id,
+    )
     return await list_organization_cloud_repo_configs(db, organization_id=organization_id)
 
 
@@ -209,7 +209,11 @@ async def get_organization_repo_config(
     git_owner: str,
     git_repo_name: str,
 ) -> CloudRepoConfigValue | None:
-    await _require_organization_admin(user_id, organization_id)
+    await require_organization_repo_config_admin(
+        db,
+        user_id=user_id,
+        organization_id=organization_id,
+    )
     return await get_organization_cloud_repo_config(
         db,
         organization_id=organization_id,
@@ -332,9 +336,13 @@ async def save_organization_repo_config(
     *,
     git_owner: str,
     git_repo_name: str,
-    body: SaveCloudRepoConfigRequest,
+    body: SaveOrganizationCloudRepoConfigRequest,
 ) -> CloudRepoConfigValue:
-    await _require_organization_admin(user_id, organization_id)
+    await require_organization_repo_config_admin(
+        db,
+        user_id=user_id,
+        organization_id=organization_id,
+    )
     env_vars = normalize_env_vars(body.env_vars)
     default_branch = await _validate_default_branch(
         db,
@@ -350,7 +358,7 @@ async def save_organization_repo_config(
                 for item in body.files
             ]
         )
-        if "files" in body.model_fields_set
+        if body.files is not None
         else None
     )
     value = await save_organization_cloud_repo_config(
@@ -442,7 +450,7 @@ async def get_workspace_repo_config_status(
     user_id: UUID,
     workspace_id: UUID,
 ) -> WorkspaceRepoConfigStatus:
-    workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
+    workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
     repo_config = await get_cloud_repo_config(
         db,
         user_id=user_id,
@@ -457,7 +465,7 @@ async def build_resync_workspace_repo_config_status(
     user_id: UUID,
     workspace_id: UUID,
 ) -> ResyncWorkspaceRepoConfigStatus:
-    workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
+    workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
     repo_config = await get_cloud_repo_config(
         db,
         user_id=user_id,
@@ -488,7 +496,7 @@ async def resync_workspace_files(
     user_id: UUID,
     workspace_id: UUID,
 ) -> ResyncWorkspaceRepoConfigStatus:
-    workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
+    workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
 
     # Workspace stores still return ORM rows; this lane only removes ORM-aware response builders.
     target = await get_workspace_connection(workspace)  # type: ignore[arg-type]
@@ -511,7 +519,7 @@ async def resync_workspace_files(
             status_code=502,
         ) from error
 
-    workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
+    workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
     repo_config = await get_cloud_repo_config(
         db,
         user_id=user_id,
@@ -526,7 +534,7 @@ async def run_workspace_setup(
     user_id: UUID,
     workspace_id: UUID,
 ) -> RunWorkspaceSetupStatus:
-    workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
+    workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
 
     # Workspace stores still return ORM rows; this lane only removes ORM-aware response builders.
     target = await get_workspace_connection(workspace)  # type: ignore[arg-type]
@@ -548,7 +556,7 @@ async def run_workspace_setup(
             status_code=502,
         ) from error
 
-    workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
+    workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
     return RunWorkspaceSetupStatus(
         workspace_id=workspace.id,
         command=started.command,
