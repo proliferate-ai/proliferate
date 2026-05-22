@@ -35,6 +35,14 @@ def _has_index(table_name: str, index_name: str) -> bool:
     return index_name in {index["name"] for index in inspector.get_indexes(table_name)}
 
 
+def _has_column(table_name: str, column_name: str) -> bool:
+    if not _has_table(table_name):
+        return False
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return column_name in {column["name"] for column in inspector.get_columns(table_name)}
+
+
 def _create_index_once(
     index_name: str,
     table_name: str,
@@ -202,44 +210,59 @@ def _create_analytics_views() -> None:
         """
     )
 
-    op.execute(
-        """
-        CREATE OR REPLACE VIEW analytics.daily_automation_activity AS
-        SELECT
-            activity_date,
-            execution_target,
-            status,
-            trigger_kind,
-            sum(created_automations)::bigint AS created_automations,
-            sum(automation_runs)::bigint AS automation_runs
-        FROM (
+    automation_target_column = None
+    if _has_column("automation", "execution_target") and _has_column(
+        "automation_run",
+        "execution_target",
+    ):
+        automation_target_column = "execution_target"
+    elif _has_column("automation", "target_mode") and _has_column(
+        "automation_run",
+        "target_mode",
+    ):
+        automation_target_column = "target_mode"
+
+    if automation_target_column is not None:
+        op.execute(
+            f"""
+            CREATE OR REPLACE VIEW analytics.daily_automation_activity AS
             SELECT
-                (created_at AT TIME ZONE 'UTC')::date AS activity_date,
-                execution_target,
-                CASE WHEN enabled THEN 'enabled' ELSE 'paused' END AS status,
-                NULL::text AS trigger_kind,
-                count(*) AS created_automations,
-                0::bigint AS automation_runs
-            FROM automation
-            GROUP BY (created_at AT TIME ZONE 'UTC')::date, execution_target, enabled
-            UNION ALL
-            SELECT
-                (created_at AT TIME ZONE 'UTC')::date AS activity_date,
-                execution_target,
+                activity_date,
+                {automation_target_column} AS execution_target,
                 status,
                 trigger_kind,
-                0::bigint AS created_automations,
-                count(*) AS automation_runs
-            FROM automation_run
-            GROUP BY
-                (created_at AT TIME ZONE 'UTC')::date,
-                execution_target,
-                status,
-                trigger_kind
-        ) daily
-        GROUP BY activity_date, execution_target, status, trigger_kind
-        """
-    )
+                sum(created_automations)::bigint AS created_automations,
+                sum(automation_runs)::bigint AS automation_runs
+            FROM (
+                SELECT
+                    (created_at AT TIME ZONE 'UTC')::date AS activity_date,
+                    {automation_target_column},
+                    CASE WHEN enabled THEN 'enabled' ELSE 'paused' END AS status,
+                    NULL::text AS trigger_kind,
+                    count(*) AS created_automations,
+                    0::bigint AS automation_runs
+                FROM automation
+                GROUP BY (created_at AT TIME ZONE 'UTC')::date,
+                         {automation_target_column},
+                         enabled
+                UNION ALL
+                SELECT
+                    (created_at AT TIME ZONE 'UTC')::date AS activity_date,
+                    {automation_target_column},
+                    status,
+                    trigger_kind,
+                    0::bigint AS created_automations,
+                    count(*) AS automation_runs
+                FROM automation_run
+                GROUP BY
+                    (created_at AT TIME ZONE 'UTC')::date,
+                    {automation_target_column},
+                    status,
+                    trigger_kind
+            ) daily
+            GROUP BY activity_date, {automation_target_column}, status, trigger_kind
+            """
+        )
 
     op.execute(
         """
