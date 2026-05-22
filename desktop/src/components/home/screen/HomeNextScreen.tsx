@@ -59,7 +59,6 @@ export function HomeNextScreen() {
     useState<HomeNextModelSelection | null>(null);
   const [baseBranchOverride, setBaseBranchOverride] = useState<string | null>(null);
   const [modeOverrideId, setModeOverrideId] = useState<string | null>(null);
-  const [targetSearch, setTargetSearch] = useState("");
   const [submittedPreview, setSubmittedPreview] = useState<{
     id: string;
     text: string;
@@ -201,6 +200,14 @@ export function HomeNextScreen() {
     }
   }
 
+  function resolveLaunchKindForRepository(sourceRoot: string): HomeNextRepoLaunchKind {
+    if (repoLaunchKind !== "cloud") {
+      return repoLaunchKind;
+    }
+    const cloudAction = homeNext.cloudRepoActionBySourceRoot[sourceRoot];
+    return cloudAction?.kind === "create" ? "cloud" : "worktree";
+  }
+
   return (
     <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground" data-telemetry-block>
       <div className="absolute inset-x-0 top-0 h-10" data-tauri-drag-region="true" />
@@ -261,14 +268,19 @@ export function HomeNextScreen() {
                     branchOptions={homeNext.branchOptions}
                     branchLoading={homeNext.branchQuery.isLoading}
                     cloudActionBySourceRoot={homeNext.cloudRepoActionBySourceRoot}
-                    searchValue={targetSearch}
-                    onSearchChange={setTargetSearch}
                     onSelectCowork={() => {
                       setDestination("cowork");
                     }}
-                    onSelectRepositoryTarget={(sourceRoot, launchKind) => {
+                    onSelectRepository={(sourceRoot) => {
+                      const launchKind = resolveLaunchKindForRepository(sourceRoot);
                       setDestination("repository");
                       setRepositorySelection({ kind: "repository", sourceRoot });
+                      setRepoLaunchKind(launchKind);
+                      if (launchKind === "local") {
+                        setBaseBranchOverride(null);
+                      }
+                    }}
+                    onSelectRuntime={(launchKind) => {
                       setRepoLaunchKind(launchKind);
                       if (launchKind === "local") {
                         setBaseBranchOverride(null);
