@@ -35,7 +35,7 @@ import { createPendingSessionId } from "@/lib/workflows/sessions/session-runtime
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
-import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
+import type { PromptAttachmentSnapshot } from "@proliferate/product-model/chats/composer/prompt-attachment-snapshot";
 import { finishOrCancelMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";

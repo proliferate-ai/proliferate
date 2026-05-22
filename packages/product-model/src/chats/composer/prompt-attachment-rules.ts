@@ -1,5 +1,5 @@
 import type { PromptCapabilities } from "@anyharness/sdk";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "./prompt-plan-attachments";
 
 export const PROMPT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const PROMPT_TEXT_RESOURCE_MAX_BYTES = 256 * 1024;
@@ -22,6 +22,11 @@ export type PromptDraftAttachmentDescriptor =
   | PromptAttachmentDescriptor
   | PromptPlanAttachmentDescriptor;
 
+export interface PromptAttachmentFileCandidate {
+  type: string;
+  name: string;
+}
+
 export function defaultPromptCapabilities(): PromptCapabilities {
   return {
     image: false,
@@ -34,7 +39,7 @@ export function canAttachPromptContent(capabilities: PromptCapabilities | null |
   return !!capabilities?.image || !!capabilities?.embeddedContext;
 }
 
-export function isTextFileCandidate(file: File): boolean {
+export function isTextFileCandidate(file: PromptAttachmentFileCandidate): boolean {
   if (file.type.startsWith("text/")) {
     return true;
   }

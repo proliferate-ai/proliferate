@@ -1,5 +1,5 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
+import type { SidebarSessionActivityState } from "@proliferate/product-model/sessions/activity";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import type { SidebarCloudWorkspaceSummary } from "./cloud-workspace";

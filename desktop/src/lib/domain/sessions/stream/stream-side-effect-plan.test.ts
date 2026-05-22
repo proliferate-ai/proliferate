@@ -6,7 +6,7 @@ import {
   type TranscriptState,
 } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
-import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
+import type { PendingSessionConfigChanges } from "@proliferate/product-model/sessions/pending-config";
 import { planBatchedStreamSideEffects } from "@/lib/domain/sessions/stream/stream-side-effect-plan";
 
 describe("planBatchedStreamSideEffects", () => {

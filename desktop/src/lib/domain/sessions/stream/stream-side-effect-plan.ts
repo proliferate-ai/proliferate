@@ -7,7 +7,7 @@ import type {
 import type {
   PendingSessionConfigChange,
   PendingSessionConfigChanges,
-} from "@/lib/domain/sessions/pending-config";
+} from "@proliferate/product-model/sessions/pending-config";
 import {
   parseSubagentLaunchResult,
   resolveSubagentLaunchDisplay,

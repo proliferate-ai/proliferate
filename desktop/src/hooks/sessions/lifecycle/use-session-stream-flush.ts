@@ -3,6 +3,10 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import { useCallback } from "react";
+import {
+  createFrameStreamBatchScheduler,
+  type StreamBatchScheduler,
+} from "@proliferate/product-model/chats/transcript/stream-batcher";
 import { applyStreamEnvelopeBatch } from "@/lib/domain/sessions/stream/stream-state";
 import { logDevSSEEvent } from "@/lib/infra/debug/session-runtime-dev-sse";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
@@ -25,21 +29,21 @@ import { markWorkspaceViewedAt } from "@/stores/preferences/workspace-ui-store";
 import { isDocumentVisibleAndFocused } from "@/hooks/ui/use-document-focus-visibility";
 import {
   pendingConfigChangesForSessionIntents,
-} from "@/lib/domain/sessions/intents/session-intent-selectors";
+} from "@proliferate/product-model/sessions/intents/session-intent-selectors";
 import {
   sessionIntentsForSession,
-} from "@/lib/domain/sessions/intents/session-intent-state";
+} from "@proliferate/product-model/sessions/intents/session-intent-state";
 import {
   reconcilePendingConfigChanges,
   type PendingSessionConfigChange,
   type PendingSessionConfigChanges,
-} from "@/lib/domain/sessions/pending-config";
+} from "@proliferate/product-model/sessions/pending-config";
 import { buildSessionStreamBatchPatch } from "@/lib/domain/sessions/stream-patch";
 import {
   pruneEchoedOutboxTombstonesForTranscript,
   reconcileOutboxFromEnvelopes,
-} from "@/lib/domain/sessions/intents/session-intent-reconciliation";
-import { shouldClearOptimisticPendingPromptForEnvelope } from "@/lib/domain/chat/pending-prompts/pending-prompts";
+} from "@proliferate/product-model/sessions/intents/session-intent-reconciliation";
+import { shouldClearOptimisticPendingPromptForEnvelope } from "@proliferate/product-model/chats/pending-prompts/pending-prompts";
 import {
   applyBatchedStreamSideEffects,
 } from "@/hooks/sessions/lifecycle/session-stream-side-effects";
@@ -76,10 +80,6 @@ const streamWorkspaceViewedThrottle = createLatestTimestampThrottle({
   intervalMs: STREAM_WORKSPACE_VIEWED_WRITE_INTERVAL_MS,
   write: markWorkspaceViewedAt,
 });
-
-export interface SessionStreamFlushScheduler {
-  schedule(callback: () => void): () => void;
-}
 
 export interface SessionStreamFlushController {
   enqueue(envelope: SessionEventEnvelope): void;
@@ -138,46 +138,23 @@ interface BatchConfigReconcileResult {
   reconciledIntents: ReconciledStreamConfigIntent[];
 }
 
+export type SessionStreamFlushScheduler = StreamBatchScheduler;
+
 export const animationFrameSessionStreamFlushScheduler: SessionStreamFlushScheduler = {
   schedule(callback) {
-    let settled = false;
-    let frameId: number | null = null;
-    let timerId: ReturnType<typeof setTimeout> | null = null;
-    const run = () => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (frameId !== null && typeof cancelAnimationFrame === "function") {
-        cancelAnimationFrame(frameId);
-      }
-      if (timerId !== null) {
-        clearTimeout(timerId);
-      }
-      callback();
-    };
-    if (typeof requestAnimationFrame === "function") {
-      frameId = requestAnimationFrame(run);
-      // Hidden or minimized WebViews can pause rAF while SSE keeps delivering.
-      // Keep stream state application bounded by a regular timer.
-      timerId = setTimeout(run, SESSION_STREAM_FLUSH_MAX_PAINT_WAIT_MS);
-      return () => {
-        settled = true;
-        if (frameId !== null && typeof cancelAnimationFrame === "function") {
-          cancelAnimationFrame(frameId);
-        }
-        if (timerId !== null) {
-          clearTimeout(timerId);
-        }
-      };
-    }
-    timerId = setTimeout(run, 0);
-    return () => {
-      settled = true;
-      if (timerId !== null) {
-        clearTimeout(timerId);
-      }
-    };
+    return createFrameStreamBatchScheduler({
+      requestAnimationFrame: typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame
+        : undefined,
+      cancelAnimationFrame: typeof cancelAnimationFrame === "function"
+        ? cancelAnimationFrame
+        : undefined,
+      setTimeout,
+      clearTimeout: (handle) => {
+        clearTimeout(handle as Parameters<typeof clearTimeout>[0]);
+      },
+      maxPaintWaitMs: SESSION_STREAM_FLUSH_MAX_PAINT_WAIT_MS,
+    }).schedule(callback);
   },
 };
 

@@ -1,4 +1,4 @@
-import { sessionSlotBelongsToWorkspace } from "@/lib/domain/sessions/activity";
+import { sessionSlotBelongsToWorkspace } from "@proliferate/product-model/sessions/activity";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";

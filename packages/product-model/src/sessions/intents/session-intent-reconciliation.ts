@@ -4,13 +4,13 @@ import type {
 } from "@anyharness/sdk";
 import {
   getAuthoritativeConfigValue,
-} from "@/lib/domain/sessions/pending-config";
+} from "../pending-config";
 import {
   patchPromptOutboxEntry,
   removePromptOutboxEntry,
   type PromptOutboxStateShape,
-} from "@/lib/domain/sessions/intents/session-intent-state";
-import { isRenderableUserMessageEcho } from "@/lib/domain/sessions/intents/prompt-echo";
+} from "./session-intent-state";
+import { isRenderableUserMessageEcho } from "./prompt-echo";
 
 export function reconcileOutboxFromEnvelopes(
   state: PromptOutboxStateShape,

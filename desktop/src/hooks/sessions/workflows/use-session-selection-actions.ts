@@ -7,7 +7,7 @@ import {
   type SessionActivationOutcome,
 } from "@/hooks/sessions/workflows/session-activation-guard";
 import type { SessionLatencyFlowOptions } from "@/hooks/sessions/workflows/session-selection-options";
-import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
+import { resolveStatusFromExecutionSummary } from "@proliferate/product-model/sessions/activity";
 import { resolveTrustedSessionSelectionRelationship } from "@/lib/domain/sessions/selection/trusted-session-selection";
 import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/selection/hot-reopen";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";

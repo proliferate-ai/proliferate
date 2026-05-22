@@ -1,5 +1,3 @@
-import { isApplePlatform } from "@/lib/domain/shortcuts/matching";
-
 export interface TranscriptKeyboardEventLike {
   key: string;
   metaKey: boolean;
@@ -39,7 +37,7 @@ export const EMPTY_TRANSCRIPT_TARGET_FACTS: TranscriptTargetFacts = {
 
 export function isPrimarySelectAllEvent(
   event: TranscriptKeyboardEventLike,
-  isApple = isApplePlatform(),
+  isApple: boolean,
 ): boolean {
   const primary = isApple
     ? event.metaKey && !event.ctrlKey

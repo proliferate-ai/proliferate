@@ -7,7 +7,7 @@ import {
   resolvePrimaryAAction,
   resolveSelectionChangeAction,
   type TranscriptTargetFacts,
-} from "@/lib/domain/chat/transcript/transcript-selection";
+} from "./transcript-selection";
 
 function target(overrides: Partial<TranscriptTargetFacts> = {}): TranscriptTargetFacts {
   return {

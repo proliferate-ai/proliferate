@@ -9,8 +9,8 @@ import {
 } from "@/components/workspace/chat/plans/PlanHandoffModePicker";
 import { PlanReferencePreviewDialog } from "@/components/workspace/chat/plans/PlanReferencePreviewDialog";
 import { ModelSelector } from "@/components/workspace/chat/input/ModelSelector";
-import type { PromptDisplayPlanPart } from "@/lib/domain/chat/composer/prompt-display-parts";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
+import type { PromptDisplayPlanPart } from "@proliferate/product-model/chats/composer/prompt-display-parts";
+import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
 import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selection";
 
 interface PlanHandoffDialogProps {

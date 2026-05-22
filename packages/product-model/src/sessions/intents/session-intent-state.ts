@@ -2,7 +2,7 @@ import type {
   PromptOutboxEntry,
   SessionIntent,
   SessionSendPromptIntent,
-} from "@/lib/domain/sessions/intents/session-intent-model";
+} from "./session-intent-model";
 
 export interface SessionIntentStateShape {
   entriesById: Record<string, SessionIntent>;

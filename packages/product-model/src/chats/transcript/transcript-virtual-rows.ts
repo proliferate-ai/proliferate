@@ -1,7 +1,7 @@
 export {
   buildTranscriptRowModel as buildTranscriptVirtualRows,
   type TranscriptRow as TranscriptVirtualRow,
-} from "@/lib/domain/chat/transcript/transcript-row-model";
+} from "./transcript-row-model";
 
 export function resolveVirtualBottomDistance(input: {
   scrollOffset: number;

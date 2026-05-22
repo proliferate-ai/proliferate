@@ -1,4 +1,4 @@
-import { sessionSlotBelongsToWorkspace } from "@/lib/domain/sessions/activity";
+import { sessionSlotBelongsToWorkspace } from "@proliferate/product-model/sessions/activity";
 import {
   fileViewerTarget,
   parseViewerTargetKey,

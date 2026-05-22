@@ -1,4 +1,4 @@
-import type { PromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
+import type { PromptOutboxEntry } from "./session-intent-model";
 
 export function canRetryPromptOutboxEntry(entry: PromptOutboxEntry): boolean {
   return entry.deliveryState === "failed_before_dispatch";

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { isSessionSlotBusy } from "@/lib/domain/sessions/activity";
+import { isSessionSlotBusy } from "@proliferate/product-model/sessions/activity";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
 import { useTauriWindowActions } from "@/hooks/access/tauri/use-window-actions";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";

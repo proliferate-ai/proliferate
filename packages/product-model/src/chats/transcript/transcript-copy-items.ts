@@ -8,22 +8,22 @@ import type {
 import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
-} from "@proliferate/product-model/chats/tools/claude-plan-tool-call";
-import { deriveCoworkCodingToolPresentation } from "@proliferate/product-model/chats/tools/cowork-coding-tool-presentation";
-import { describeToolCallDisplay } from "@proliferate/product-model/chats/tools/tool-call-display";
-import { normalizeToolResultText } from "@proliferate/product-model/chats/tools/tool-result-text";
+} from "../tools/claude-plan-tool-call";
+import { deriveCoworkCodingToolPresentation } from "../tools/cowork-coding-tool-presentation";
+import { describeToolCallDisplay } from "../tools/tool-call-display";
+import { normalizeToolResultText } from "../tools/tool-result-text";
 import {
   formatReviewFeedbackTranscriptText,
   formatWakePromptTranscriptText,
   isSubagentWakeProvenance,
   resolveReviewFeedbackPromptReference,
-} from "@proliferate/product-model/chats/subagents/provenance";
-import { resolveSubagentLaunchDisplay } from "@proliferate/product-model/chats/subagents/subagent-launch";
+} from "../subagents/provenance";
+import { resolveSubagentLaunchDisplay } from "../subagents/subagent-launch";
 import {
   getToolCallParsedCommands,
   getToolCallShellCommand,
-} from "@proliferate/product-model/chats/transcript/transcript-tool-commands";
-import { hasProposedPlanForToolCallItem } from "@/lib/domain/chat/transcript/transcript-rendering";
+} from "./transcript-tool-commands";
+import { hasProposedPlanForToolCallItem } from "./transcript-rendering";
 
 export function serializeTranscriptItem(
   item: TranscriptItem,

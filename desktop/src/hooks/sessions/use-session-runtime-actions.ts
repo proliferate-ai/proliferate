@@ -23,7 +23,7 @@ import {
   resolveSessionViewState,
   resolveSessionStatus,
   shouldSkipColdIdleSessionStream,
-} from "@/lib/domain/sessions/activity";
+} from "@proliferate/product-model/sessions/activity";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
 import {
   clearSessionReconnectTimer,

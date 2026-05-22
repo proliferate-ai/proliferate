@@ -10,13 +10,13 @@ import {
   type PromptOutboxPlacement,
   type SessionIntent,
   type SessionUpdateConfigIntent,
-} from "@/lib/domain/sessions/intents/session-intent-model";
-import type { SessionIntentStateShape } from "@/lib/domain/sessions/intents/session-intent-state";
-import { isRenderableUserMessageEcho } from "@/lib/domain/sessions/intents/prompt-echo";
+} from "./session-intent-model";
+import type { SessionIntentStateShape } from "./session-intent-state";
+import { isRenderableUserMessageEcho } from "./prompt-echo";
 import type {
   PendingSessionConfigChange,
   PendingSessionConfigChanges,
-} from "@/lib/domain/sessions/pending-config";
+} from "../pending-config";
 
 export const EMPTY_INTENT_PENDING_CONFIG_CHANGES: PendingSessionConfigChanges = {};
 

@@ -8,9 +8,9 @@ import {
   buildTurnPresentation,
   type TurnDisplayBlock,
   type TurnPresentation,
-} from "@proliferate/product-model/chats/transcript/transcript-presentation";
-import { turnHasRenderableTranscriptContent } from "@/lib/domain/chat/pending-prompts/pending-prompts";
-import type { PromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
+} from "./transcript-presentation";
+import { turnHasRenderableTranscriptContent } from "../pending-prompts/pending-prompts";
+import type { PromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 
 export const TURN_CONTENT_BLOCK_KEY = "content";
 export const TURN_COMPLETED_HISTORY_BLOCK_KEY = "completed-history";

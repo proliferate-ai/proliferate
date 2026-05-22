@@ -8,8 +8,8 @@ import {
   type TranscriptItem,
   type TranscriptState,
 } from "@anyharness/sdk";
-import { buildTranscriptCopyText } from "@/lib/domain/chat/transcript/transcript-copy";
-import { collectToolCallIdsWithProposedPlan } from "@/lib/domain/chat/transcript/transcript-rendering";
+import { buildTranscriptCopyText } from "./transcript-copy";
+import { collectToolCallIdsWithProposedPlan } from "./transcript-rendering";
 import {
   assistantItem,
   parsedCommandItem,
@@ -18,7 +18,7 @@ import {
   toolItem,
   turnRecord,
   userItem,
-} from "@proliferate/product-model/chats/transcript/transcript-presentation-test-fixtures";
+} from "./transcript-presentation-test-fixtures";
 
 function makeTranscript(
   items: TranscriptItem[],

@@ -15,7 +15,7 @@ import {
   findTailAssistantProseRootId,
   getAssistantProseContent,
   resolveTurnPromptTiming,
-} from "@/lib/domain/chat/transcript/transcript-rendering";
+} from "@proliferate/product-model/chats/transcript/transcript-rendering";
 import {
   lastTopLevelItemIsAssistantProseWithText,
   latestTransientStatusText,
@@ -24,10 +24,10 @@ import {
 import {
   resolveAssistantTurnActionTime,
 } from "@proliferate/product-model/chats/transcript/transcript-action-time";
-import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
+import type { TranscriptVirtualRow } from "@proliferate/product-model/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "@proliferate/product-model/chats/transcript/transcript-presentation";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
-import type { SessionViewState } from "@/lib/domain/sessions/activity";
+import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
+import type { SessionViewState } from "@proliferate/product-model/sessions/activity";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 

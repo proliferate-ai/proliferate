@@ -2,7 +2,7 @@ import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import {
   planReferenceContentPartFromDescriptor,
   type PromptPlanAttachmentDescriptor,
-} from "@/lib/domain/chat/composer/prompt-plan-attachments";
+} from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
 
 export interface PlanHandoffPrompt {
   text: string;

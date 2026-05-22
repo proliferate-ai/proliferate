@@ -12,8 +12,8 @@ import {
   type SessionIntent,
   type SessionResolveInteractionIntent,
   type SessionUpdateConfigIntent,
-} from "@/lib/domain/sessions/intents/session-intent-model";
-import { pruneEchoedOutboxTombstones } from "@/lib/domain/sessions/intents/session-intent-reconciliation";
+} from "@proliferate/product-model/sessions/intents/session-intent-model";
+import { pruneEchoedOutboxTombstones } from "@proliferate/product-model/sessions/intents/session-intent-reconciliation";
 import {
   bindSessionIntentMaterialization,
   getPromptEntryByPromptId,
@@ -22,7 +22,7 @@ import {
   sessionIntentsForSession,
   upsertSessionIntent,
   type SessionIntentStateShape,
-} from "@/lib/domain/sessions/intents/session-intent-state";
+} from "@proliferate/product-model/sessions/intents/session-intent-state";
 import { recordStoreActionDebugActivity } from "@/lib/infra/measurement/debug-jank-activity";
 import { isDebugMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
 import { now as measurementNow } from "@/lib/infra/measurement/debug-measurement-utils";

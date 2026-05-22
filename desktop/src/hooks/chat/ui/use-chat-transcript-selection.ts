@@ -8,7 +8,8 @@ import {
   resolveSelectionChangeAction,
   type TranscriptSelectionClampEdge,
   type TranscriptTargetFacts,
-} from "@/lib/domain/chat/transcript/transcript-selection";
+} from "@proliferate/product-model/chats/transcript/transcript-selection";
+import { isApplePlatform } from "@/lib/domain/shortcuts/matching";
 
 interface UseChatTranscriptSelectionArgs {
   rootRef: RefObject<HTMLElement | null>;
@@ -110,7 +111,7 @@ export function createChatTranscriptSelectionHandlers({
     const root = rootRef.current;
     const action = resolvePrimaryAAction({
       owned: transcriptOwnedRef.current,
-      isSelectAll: isPrimarySelectAllEvent(event),
+      isSelectAll: isPrimarySelectAllEvent(event, isApplePlatform()),
       defaultPrevented: event.defaultPrevented,
       eventTarget: getTargetFactsForEvent(event.target, root),
       activeTarget: getTargetFactsForEvent(getActiveElement(), root),

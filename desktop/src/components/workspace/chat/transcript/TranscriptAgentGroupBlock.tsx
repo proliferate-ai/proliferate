@@ -39,7 +39,7 @@ import {
 } from "@proliferate/product-model/chats/transcript/transcript-presentation";
 import {
   findTrailingLiveExplorationBlock,
-} from "@/lib/domain/chat/transcript/transcript-rendering";
+} from "@proliferate/product-model/chats/transcript/transcript-rendering";
 import { useTranscriptOpenSession } from "./TranscriptContexts";
 import {
   collectDescendantItems,

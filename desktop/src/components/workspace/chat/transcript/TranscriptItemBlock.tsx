@@ -4,7 +4,7 @@ import type {
 } from "@anyharness/sdk";
 import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
 import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
@@ -16,7 +16,7 @@ import {
 } from "@proliferate/product-model/chats/subagents/provenance";
 import {
   hasProposedPlanForToolCallItem,
-} from "@/lib/domain/chat/transcript/transcript-rendering";
+} from "@proliferate/product-model/chats/transcript/transcript-rendering";
 import {
   resolveUserMessageActionTime,
 } from "@proliferate/product-model/chats/transcript/transcript-action-time";

@@ -3,8 +3,8 @@ import {
   formatPromptFileSize,
   type PromptAttachmentSource,
   type PromptDraftAttachmentDescriptor,
-} from "@/lib/domain/chat/composer/prompt-attachment-rules";
-import { planAttachmentId } from "@/lib/domain/chat/composer/prompt-plan-attachments";
+} from "./prompt-attachment-rules";
+import { planAttachmentId } from "./prompt-plan-attachments";
 
 export type PromptDisplayPart =
   | PromptDisplayTextPart

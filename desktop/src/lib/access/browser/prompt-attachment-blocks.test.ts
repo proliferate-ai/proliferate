@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   promptAttachmentSnapshotsToBlocks,
-  type PromptAttachmentSnapshot,
-} from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
+  type BrowserPromptAttachmentSnapshot,
+} from "@/lib/access/browser/prompt-attachment-blocks";
 
 describe("promptAttachmentSnapshotsToBlocks", () => {
   it("does not send client attachment ids with inline payload blocks", async () => {
@@ -32,8 +32,8 @@ describe("promptAttachmentSnapshotsToBlocks", () => {
 });
 
 function snapshot(
-  overrides: Pick<PromptAttachmentSnapshot, "id" | "name" | "mimeType" | "kind" | "file">,
-): PromptAttachmentSnapshot {
+  overrides: Pick<BrowserPromptAttachmentSnapshot, "id" | "name" | "mimeType" | "kind" | "file">,
+): BrowserPromptAttachmentSnapshot {
   return {
     size: overrides.file.size,
     source: "upload",

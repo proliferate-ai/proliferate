@@ -1,5 +1,5 @@
 import type { GitStatusSnapshot, RepoRoot } from "@anyharness/sdk";
-import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
+import type { SidebarSessionActivityState } from "@proliferate/product-model/sessions/activity";
 import {
   latestLogicalWorkspaceTimestamp,
   logicalWorkspaceMatchesId,

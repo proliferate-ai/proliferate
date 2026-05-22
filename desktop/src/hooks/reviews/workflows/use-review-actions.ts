@@ -7,7 +7,7 @@ import {
   useMarkReviewRevisionReadyMutation,
   useRetryReviewAssignmentMutation,
 } from "@anyharness/sdk-react";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
 import {
   buildStartingReview,
   resolveOneClickReviewRequest,

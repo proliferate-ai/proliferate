@@ -166,6 +166,98 @@
     "./workspaces/presentation": {
       "types": "./dist/workspaces/presentation.d.ts",
       "import": "./dist/workspaces/presentation.js"
+    },
+    "./chats/composer/prompt-attachment-rules": {
+      "types": "./dist/chats/composer/prompt-attachment-rules.d.ts",
+      "import": "./dist/chats/composer/prompt-attachment-rules.js"
+    },
+    "./chats/composer/prompt-attachment-snapshot": {
+      "types": "./dist/chats/composer/prompt-attachment-snapshot.d.ts",
+      "import": "./dist/chats/composer/prompt-attachment-snapshot.js"
+    },
+    "./chats/composer/prompt-display-parts": {
+      "types": "./dist/chats/composer/prompt-display-parts.d.ts",
+      "import": "./dist/chats/composer/prompt-display-parts.js"
+    },
+    "./chats/composer/prompt-plan-attachments": {
+      "types": "./dist/chats/composer/prompt-plan-attachments.d.ts",
+      "import": "./dist/chats/composer/prompt-plan-attachments.js"
+    },
+    "./chats/pending-prompts/pending-prompt-queue": {
+      "types": "./dist/chats/pending-prompts/pending-prompt-queue.d.ts",
+      "import": "./dist/chats/pending-prompts/pending-prompt-queue.js"
+    },
+    "./chats/pending-prompts/pending-prompts": {
+      "types": "./dist/chats/pending-prompts/pending-prompts.d.ts",
+      "import": "./dist/chats/pending-prompts/pending-prompts.js"
+    },
+    "./chats/transcript/transcript-copy": {
+      "types": "./dist/chats/transcript/transcript-copy.d.ts",
+      "import": "./dist/chats/transcript/transcript-copy.js"
+    },
+    "./chats/transcript/transcript-copy-items": {
+      "types": "./dist/chats/transcript/transcript-copy-items.d.ts",
+      "import": "./dist/chats/transcript/transcript-copy-items.js"
+    },
+    "./chats/transcript/transcript-rendering": {
+      "types": "./dist/chats/transcript/transcript-rendering.d.ts",
+      "import": "./dist/chats/transcript/transcript-rendering.js"
+    },
+    "./chats/transcript/transcript-row-model": {
+      "types": "./dist/chats/transcript/transcript-row-model.d.ts",
+      "import": "./dist/chats/transcript/transcript-row-model.js"
+    },
+    "./chats/transcript/transcript-virtual-rows": {
+      "types": "./dist/chats/transcript/transcript-virtual-rows.d.ts",
+      "import": "./dist/chats/transcript/transcript-virtual-rows.js"
+    },
+    "./sessions/activity": {
+      "types": "./dist/sessions/activity.d.ts",
+      "import": "./dist/sessions/activity.js"
+    },
+    "./sessions/pending-config": {
+      "types": "./dist/sessions/pending-config.d.ts",
+      "import": "./dist/sessions/pending-config.js"
+    },
+    "./sessions/intents/prompt-dispatch-failure": {
+      "types": "./dist/sessions/intents/prompt-dispatch-failure.d.ts",
+      "import": "./dist/sessions/intents/prompt-dispatch-failure.js"
+    },
+    "./sessions/intents/prompt-echo": {
+      "types": "./dist/sessions/intents/prompt-echo.d.ts",
+      "import": "./dist/sessions/intents/prompt-echo.js"
+    },
+    "./sessions/intents/session-intent-actions": {
+      "types": "./dist/sessions/intents/session-intent-actions.d.ts",
+      "import": "./dist/sessions/intents/session-intent-actions.js"
+    },
+    "./sessions/intents/session-intent-model": {
+      "types": "./dist/sessions/intents/session-intent-model.d.ts",
+      "import": "./dist/sessions/intents/session-intent-model.js"
+    },
+    "./sessions/intents/session-intent-reconciliation": {
+      "types": "./dist/sessions/intents/session-intent-reconciliation.d.ts",
+      "import": "./dist/sessions/intents/session-intent-reconciliation.js"
+    },
+    "./sessions/intents/session-intent-selectors": {
+      "types": "./dist/sessions/intents/session-intent-selectors.d.ts",
+      "import": "./dist/sessions/intents/session-intent-selectors.js"
+    },
+    "./sessions/intents/session-intent-state": {
+      "types": "./dist/sessions/intents/session-intent-state.d.ts",
+      "import": "./dist/sessions/intents/session-intent-state.js"
+    },
+    "./chats/transcript/transcript-selection": {
+      "types": "./dist/chats/transcript/transcript-selection.d.ts",
+      "import": "./dist/chats/transcript/transcript-selection.js"
+    },
+    "./chats/composer/resolve-dock-slots": {
+      "types": "./dist/chats/composer/resolve-dock-slots.d.ts",
+      "import": "./dist/chats/composer/resolve-dock-slots.js"
+    },
+    "./chats/transcript/stream-batcher": {
+      "types": "./dist/chats/transcript/stream-batcher.d.ts",
+      "import": "./dist/chats/transcript/stream-batcher.js"
     }
   },
   "scripts": {

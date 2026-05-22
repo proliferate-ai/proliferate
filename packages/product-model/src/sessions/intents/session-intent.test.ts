@@ -7,20 +7,20 @@ import {
   createResolveInteractionIntent,
   createSendPromptIntent,
   createUpdateConfigIntent,
-} from "@/lib/domain/sessions/intents/session-intent-model";
+} from "./session-intent-model";
 import {
   pendingConfigChangesForSessionIntents,
   projectPendingPromptsWithSessionIntents,
   selectNextDispatchableSessionIntent,
-} from "@/lib/domain/sessions/intents/session-intent-selectors";
+} from "./session-intent-selectors";
 import {
   patchSessionIntent,
   upsertSessionIntent,
   type SessionIntentStateShape,
-} from "@/lib/domain/sessions/intents/session-intent-state";
+} from "./session-intent-state";
 import {
   reconcileOutboxFromEnvelopes,
-} from "@/lib/domain/sessions/intents/session-intent-reconciliation";
+} from "./session-intent-reconciliation";
 
 describe("session intents", () => {
   it("dispatches one ordered intent per session at a time", () => {

@@ -7,7 +7,7 @@ import type {
 import {
   clonePromptAttachmentSnapshot,
   type PromptAttachmentSnapshot,
-} from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
+} from "../../chats/composer/prompt-attachment-snapshot";
 
 export type SessionIntentKind =
   | "send_prompt"

@@ -6,12 +6,12 @@ import type {
 import {
   buildTurnPresentation,
   type TurnDisplayBlock,
-} from "@proliferate/product-model/chats/transcript/transcript-presentation";
+} from "./transcript-presentation";
 import {
   joinTranscriptCopySections,
   serializeTranscriptItem,
   serializeUserPromptContent,
-} from "@/lib/domain/chat/transcript/transcript-copy-items";
+} from "./transcript-copy-items";
 
 export interface BuildTranscriptCopyTextArgs {
   transcript: TranscriptState;

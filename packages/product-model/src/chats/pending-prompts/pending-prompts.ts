@@ -9,8 +9,8 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
-import type { SessionViewState } from "@/lib/domain/sessions/activity";
-import { isRenderableUserMessageEcho } from "@/lib/domain/sessions/intents/prompt-echo";
+import type { SessionViewState } from "../../sessions/activity";
+import { isRenderableUserMessageEcho } from "../../sessions/intents/prompt-echo";
 
 export function createOptimisticPendingPrompt(
   text: string,

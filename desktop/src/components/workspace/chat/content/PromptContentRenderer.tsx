@@ -11,8 +11,8 @@ import {
   normalizeDraftAttachments,
   type PromptDisplayAttachmentPart,
   type PromptDisplayPart,
-} from "@/lib/domain/chat/composer/prompt-display-parts";
-import type { PromptDraftAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-attachment-rules";
+} from "@proliferate/product-model/chats/composer/prompt-display-parts";
+import type { PromptDraftAttachmentDescriptor } from "@proliferate/product-model/chats/composer/prompt-attachment-rules";
 import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/composer/file-mention-links";
 
 type PromptContentRendererVariant = "transcript" | "compact";

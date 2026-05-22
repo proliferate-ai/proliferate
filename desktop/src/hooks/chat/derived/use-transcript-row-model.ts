@@ -4,8 +4,8 @@ import {
   buildTranscriptRowModel,
   createTranscriptRowModelCache,
   type TranscriptRow,
-} from "@/lib/domain/chat/transcript/transcript-row-model";
-import type { PromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
+} from "@proliferate/product-model/chats/transcript/transcript-row-model";
+import type { PromptOutboxEntry } from "@proliferate/product-model/sessions/intents/session-intent-model";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 
 export function useTranscriptRowModel(input: {

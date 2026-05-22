@@ -8,7 +8,7 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   shouldStickToVirtualBottom,
-} from "@/lib/domain/chat/transcript/transcript-virtual-rows";
+} from "@proliferate/product-model/chats/transcript/transcript-virtual-rows";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-model/chats/transcript/transcript-virtualization-config";
 import { useTranscriptVirtualizerBlankFallback } from "@/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";

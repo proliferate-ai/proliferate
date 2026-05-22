@@ -4,12 +4,12 @@ import type {
   ToolCallItem,
   TurnRecord,
 } from "@anyharness/sdk";
-import { summarizeCollapsedActions } from "@proliferate/product-model/chats/transcript/transcript-collapsed-actions";
+import { summarizeCollapsedActions } from "./transcript-collapsed-actions";
 import {
   type TurnDisplayBlock,
   type TurnPresentation,
-} from "@proliferate/product-model/chats/transcript/transcript-presentation";
-import type { PromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
+} from "./transcript-presentation";
+import type { PromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 
 const EMPTY_OUTBOX_STARTED_AT_BY_PROMPT_ID = new Map<string, string>();
 

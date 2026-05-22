@@ -3,15 +3,15 @@ import { createTranscriptState, type PendingPromptEntry, type TranscriptState } 
 import {
   buildTranscriptRowModel,
   createTranscriptRowModelCache,
-} from "@/lib/domain/chat/transcript/transcript-row-model";
-import { createPromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
+} from "./transcript-row-model";
+import { createPromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 import {
   shouldStickToVirtualBottom,
-} from "@/lib/domain/chat/transcript/transcript-virtual-rows";
+} from "./transcript-virtual-rows";
 import {
   parseTranscriptVirtualizationMode,
   resolveTranscriptVirtualizationEnabled,
-} from "@proliferate/product-model/chats/transcript/transcript-virtualization-config";
+} from "./transcript-virtualization-config";
 
 describe("buildTranscriptRowModel", () => {
   it("creates stable turn rows for large transcripts", () => {

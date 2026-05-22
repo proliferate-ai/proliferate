@@ -5,7 +5,7 @@ import { SessionTitleRenamePopover } from "@/components/workspace/shell/tabs/Ses
 import { useCoworkManagedWorkspaces } from "@/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
 import { useCoworkSessionNativeContextMenu } from "@/hooks/cowork/ui/use-cowork-session-native-context-menu";
 import { useCoworkSessionActions } from "@/hooks/cowork/workflows/use-cowork-session-actions";
-import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
+import type { SidebarSessionActivityState } from "@proliferate/product-model/sessions/activity";
 import { coworkThreadTitle } from "@/lib/domain/cowork/threads";
 import { CoworkManagedWorkspaceList } from "./CoworkManagedWorkspaceList";
 import { CoworkSessionActionsMenu } from "./CoworkSessionActionsMenu";

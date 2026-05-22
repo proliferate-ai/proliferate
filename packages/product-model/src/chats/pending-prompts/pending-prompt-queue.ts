@@ -1,11 +1,11 @@
 import type { ContentPart, PromptProvenance } from "@anyharness/sdk";
-import { summarizeContentParts } from "@/lib/domain/chat/composer/prompt-display-parts";
-import type { PromptOutboxDeliveryState } from "@/lib/domain/sessions/intents/session-intent-model";
+import { summarizeContentParts } from "../composer/prompt-display-parts";
+import type { PromptOutboxDeliveryState } from "../../sessions/intents/session-intent-model";
 import {
   formatReviewFeedbackQueueText,
   formatWakePromptQueueText,
   isSubagentWakeProvenance,
-} from "@proliferate/product-model/chats/subagents/provenance";
+} from "../subagents/provenance";
 
 export type PendingPromptQueueRowKind = "plain" | "wake" | "review_feedback";
 

@@ -11,16 +11,16 @@ import { useRevealMcpElicitationUrlMutation } from "@anyharness/sdk-react";
 import { useCallback } from "react";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
+import type { PromptAttachmentSnapshot } from "@proliferate/product-model/chats/composer/prompt-attachment-snapshot";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import {
   resolvePromptOutboxPlacement,
-} from "@/lib/domain/sessions/intents/session-intent-selectors";
+} from "@proliferate/product-model/sessions/intents/session-intent-selectors";
 import {
   promptIntentsForSession,
   sessionIntentsForSession,
-} from "@/lib/domain/sessions/intents/session-intent-state";
-import { isSessionSlotBusy } from "@/lib/domain/sessions/activity";
+} from "@proliferate/product-model/sessions/intents/session-intent-state";
+import { isSessionSlotBusy } from "@proliferate/product-model/sessions/activity";
 import {
   finishLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";

@@ -8,7 +8,7 @@ import {
 } from "@anyharness/sdk-react";
 import {
   promptAttachmentSnapshotsToBlocks,
-} from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
+} from "@/lib/access/browser/prompt-attachment-blocks";
 import {
   failLatencyFlow,
   finishLatencyFlow,
@@ -17,25 +17,25 @@ import {
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   classifyPromptDispatchFailure,
-} from "@/lib/domain/sessions/intents/prompt-dispatch-failure";
+} from "@proliferate/product-model/sessions/intents/prompt-dispatch-failure";
 import {
   transcriptHasRenderablePromptEcho,
-} from "@/lib/domain/sessions/intents/prompt-echo";
+} from "@proliferate/product-model/sessions/intents/prompt-echo";
 import {
   selectNextDispatchableSessionIntent,
-} from "@/lib/domain/sessions/intents/session-intent-selectors";
+} from "@proliferate/product-model/sessions/intents/session-intent-selectors";
 import type {
   PromptOutboxEntry,
   SessionIntent,
   SessionUpdateConfigIntent,
-} from "@/lib/domain/sessions/intents/session-intent-model";
+} from "@proliferate/product-model/sessions/intents/session-intent-model";
 import {
   getAuthoritativeConfigValue,
   shouldAcceptAuthoritativeLiveConfig,
-} from "@/lib/domain/sessions/pending-config";
+} from "@proliferate/product-model/sessions/pending-config";
 import {
   resolveStatusFromExecutionSummary,
-} from "@/lib/domain/sessions/activity";
+} from "@proliferate/product-model/sessions/activity";
 import {
   getSessionClientAndWorkspace,
 } from "@/lib/workflows/sessions/session-runtime";

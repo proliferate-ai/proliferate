@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import type { PromptCapabilities } from "@anyharness/sdk";
-import { canAttachPromptContent } from "@/lib/domain/chat/composer/prompt-attachment-rules";
+import { canAttachPromptContent } from "@proliferate/product-model/chats/composer/prompt-attachment-rules";
 import { usePromptAttachments } from "@/hooks/chat/ui/use-prompt-attachments";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
