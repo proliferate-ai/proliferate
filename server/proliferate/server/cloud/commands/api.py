@@ -29,6 +29,7 @@ async def enqueue_command_endpoint(
 ) -> CloudCommandResponse:
     try:
         command = await enqueue_command(db, user=user, body=body)
+        await db.commit()
     except CloudApiError as error:
         raise_cloud_error(error)
     return command_response_payload(command)

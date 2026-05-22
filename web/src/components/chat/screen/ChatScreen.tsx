@@ -214,6 +214,12 @@ export function ChatScreen() {
     void sessionEventsQuery.refetch();
   }, [session?.sessionId, sessionLive.lastPatchAt, sessionEventsQuery.refetch]);
 
+  useEffect(() => {
+    if (session && !pendingHomePrompt && !directPromptDispatching) {
+      setPendingHomePromptStatus(null);
+    }
+  }, [directPromptDispatching, pendingHomePrompt, session?.sessionId]);
+
   async function submitPrompt() {
     const text = draft.trim();
     if (!text || !workspace) {
@@ -261,18 +267,27 @@ export function ChatScreen() {
       }
       return;
     }
-    const command = await enqueuePrompt.mutateAsync({
-      idempotencyKey: `web:${workspace.id}:${session.sessionId}:${Date.now()}`,
-      targetId: session.targetId,
-      workspaceId: session.workspaceId,
-      cloudWorkspaceId: workspace.id,
-      sessionId: session.sessionId,
-      kind: "send_prompt",
-      source: "web",
-      payload: { text },
-    });
-    setLatestCommandId(command.commandId);
-    setDraft("");
+    setPendingHomePromptStatus(null);
+    try {
+      const command = await enqueuePrompt.mutateAsync({
+        idempotencyKey: `web:${workspace.id}:${session.sessionId}:${Date.now()}`,
+        targetId: session.targetId,
+        workspaceId: session.workspaceId,
+        cloudWorkspaceId: workspace.id,
+        sessionId: session.sessionId,
+        kind: "send_prompt",
+        source: "web",
+        payload: { text },
+      });
+      setLatestCommandId(command.commandId);
+      setDraft("");
+      void transcriptQuery.refetch();
+      void sessionEventsQuery.refetch();
+    } catch (error) {
+      setPendingHomePromptStatus(
+        error instanceof Error ? error.message : "Prompt could not be sent.",
+      );
+    }
   }
 
   if (!workspaceId) {

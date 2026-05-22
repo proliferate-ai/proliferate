@@ -28,8 +28,9 @@ from proliferate.server.cloud.agent_auth.service import (
     request_agent_auth_refresh_for_profile_target,
 )
 from proliferate.server.cloud.commands import service as command_service
+from proliferate.server.cloud.runtime import wake as runtime_wake
 from proliferate.server.cloud.worker import service as worker_service
-from proliferate.utils.crypto import encrypt_json
+from proliferate.utils.crypto import encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
@@ -412,6 +413,13 @@ class TestCloudCommandsApi:
         command = created.json()
         assert command["status"] == "queued"
         assert command["targetId"] == target_id
+
+        immediate_status = await client.get(
+            f"/v1/cloud/commands/{command['commandId']}",
+            headers=auth.headers,
+        )
+        assert immediate_status.status_code == 200
+        assert immediate_status.json()["status"] == "queued"
 
         duplicate = await client.post(
             "/v1/cloud/commands",
@@ -1163,6 +1171,133 @@ class TestCloudCommandsApi:
         assert command_payload["requiredRuntimeConfigSequence"] == 1
         assert command_payload["requiredRuntimeConfigRevisionId"]
         assert command_payload["requiredRuntimeConfigContentHash"]
+
+    @pytest.mark.asyncio
+    async def test_managed_slot_wake_resumes_command_runtime_environment(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-wake-runtime",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="wake-runtime",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="wake-runtime",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-wake-runtime",
+        )
+        workspace = await cloud_workspaces.get_cloud_workspace_by_id(
+            db_session,
+            UUID(cloud_workspace_id),
+        )
+        assert workspace is not None
+        runtime_environment = await cloud_runtime_environments.ensure_runtime_environment_for_workspace(
+            db_session,
+            workspace,
+        )
+        slot = await ensure_profile_slot(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        runtime_environment.active_sandbox_id = slot.id
+        runtime_environment.target_id = target_uuid
+        runtime_environment.runtime_token_ciphertext = encrypt_text("runtime-token")
+        await db_session.commit()
+        monkeypatch.setattr(
+            command_service,
+            "kick_off_managed_slot_wake",
+            lambda _target_id, _command_id=None: None,
+        )
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-wake-runtime",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-wake-runtime",
+                "kind": "send_prompt",
+                "payload": {"text": "wake runtime"},
+            },
+        )
+        assert created.status_code == 200, created.text
+        command_id = UUID(created.json()["commandId"])
+
+        class _Allowed:
+            allowed = True
+            message = None
+            start_block_reason = None
+
+        async def _allow_sandbox_start(**_kwargs: object) -> _Allowed:
+            return _Allowed()
+
+        wake_calls: list[dict[str, object]] = []
+
+        async def _record_runtime_ready(
+            environment: object,
+            *,
+            workspace_id: UUID,
+            allow_launcher_restart: bool,
+            access_token: str,
+        ) -> str:
+            wake_calls.append(
+                {
+                    "environment_id": getattr(environment, "id"),
+                    "workspace_id": workspace_id,
+                    "allow_launcher_restart": allow_launcher_restart,
+                    "access_token": access_token,
+                }
+            )
+            return "https://runtime.example.test"
+
+        monkeypatch.setattr(
+            runtime_wake,
+            "authorize_sandbox_start_for_billing_subject",
+            _allow_sandbox_start,
+        )
+        monkeypatch.setattr(
+            runtime_wake,
+            "ensure_environment_runtime_ready",
+            _record_runtime_ready,
+        )
+
+        await runtime_wake.run_managed_slot_wake_job(target_uuid, command_id=command_id)
+
+        assert wake_calls == [
+            {
+                "environment_id": runtime_environment.id,
+                "workspace_id": UUID(cloud_workspace_id),
+                "allow_launcher_restart": True,
+                "access_token": "runtime-token",
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_managed_materialize_and_start_session_create_exposure_cursor(
