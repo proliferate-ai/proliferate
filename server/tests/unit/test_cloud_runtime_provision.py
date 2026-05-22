@@ -27,6 +27,44 @@ from proliferate.server.cloud.runtime.models import CloudProvisionInput
 from proliferate.utils.crypto import encrypt_json
 
 
+class TestCloudWorkerBaseUrl:
+    def test_prefers_explicit_worker_base_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            runtime_provision.settings,
+            "cloud_worker_base_url",
+            " https://worker.example.dev/ ",
+        )
+        monkeypatch.setattr(runtime_provision.settings, "api_base_url", "http://localhost:8076")
+        monkeypatch.setattr(runtime_provision.settings, "cloud_mcp_oauth_callback_base_url", "")
+        monkeypatch.setattr(
+            runtime_provision.settings,
+            "cloud_mcp_oauth_callback_fallback_base_url",
+            "http://localhost:8000",
+        )
+
+        assert runtime_provision._cloud_base_url() == "https://worker.example.dev"
+
+    def test_rejects_local_only_worker_base_urls(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(runtime_provision.settings, "cloud_worker_base_url", "")
+        monkeypatch.setattr(runtime_provision.settings, "api_base_url", "http://localhost:8076")
+        monkeypatch.setattr(runtime_provision.settings, "cloud_mcp_oauth_callback_base_url", "")
+        monkeypatch.setattr(
+            runtime_provision.settings,
+            "cloud_mcp_oauth_callback_fallback_base_url",
+            "http://localhost:8000",
+        )
+
+        with pytest.raises(CloudApiError) as exc_info:
+            runtime_provision._cloud_base_url()
+
+        assert exc_info.value.code == "cloud_worker_base_url_required"
+        assert exc_info.value.status_code == 400
+        assert "CLOUD_WORKER_BASE_URL" in exc_info.value.message
+        assert "API_BASE_URL=http://localhost:8076" in exc_info.value.message
+
+
 def _make_user(*, email: str, display_name: str | None = "Cloud Tester") -> User:
     return User(
         email=email,
@@ -931,6 +969,7 @@ class TestLaunchAndConnectRuntime:
             ctx,
             provider,
             connected,
+            cloud_base_url="https://worker-control.invalid",
             cloud_sandbox_id=uuid.uuid4(),
             slot_generation=1,
         )
@@ -1007,10 +1046,96 @@ class TestProvisionWorkspaceGitSetup:
         assert errors == ["A usable email address is required to configure cloud git commits."]
 
     @pytest.mark.asyncio
+    async def test_provision_workspace_rejects_local_worker_base_url_before_allocating_sandbox(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ctx = _make_provision_input(codex_enabled=True)
+        allocation_attempts: list[str] = []
+        errors: list[str] = []
+        provider = SimpleNamespace(
+            kind=SandboxProviderKind.daytona,
+            template_version="v1",
+        )
+
+        async def _load_provision_input(_workspace_id, *, requested_base_sha=None):
+            return ctx
+
+        async def _authorize_sandbox_start(*args, **kwargs):
+            return SimpleNamespace(allowed=True, message=None)
+
+        async def _connect_existing_profile_slot(*args, **kwargs):
+            return None
+
+        async def _connect_existing_environment_sandbox(*args, **kwargs):
+            return None
+
+        async def _ensure_profile_slot(*args, **kwargs):
+            allocation_attempts.append("ensure_profile_slot")
+            return SimpleNamespace(id=uuid.uuid4(), slot_generation=1, external_sandbox_id=None)
+
+        async def _mark_workspace_error_by_id(_workspace_id, message: str, **_kwargs):
+            errors.append(message)
+
+        async def _set_workspace_status(*args, **kwargs) -> None:
+            return None
+
+        monkeypatch.setattr(runtime_provision.settings, "cloud_worker_base_url", "")
+        monkeypatch.setattr(runtime_provision.settings, "api_base_url", "http://localhost:8076")
+        monkeypatch.setattr(runtime_provision.settings, "cloud_mcp_oauth_callback_base_url", "")
+        monkeypatch.setattr(
+            runtime_provision.settings,
+            "cloud_mcp_oauth_callback_fallback_base_url",
+            "http://localhost:8000",
+        )
+        monkeypatch.setattr(runtime_provision, "_load_provision_input", _load_provision_input)
+        monkeypatch.setattr(runtime_provision, "get_configured_sandbox_provider", lambda: provider)
+        monkeypatch.setattr(runtime_provision, "authorize_sandbox_start", _authorize_sandbox_start)
+        monkeypatch.setattr(
+            runtime_provision,
+            "_connect_existing_profile_slot",
+            _connect_existing_profile_slot,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "_connect_existing_environment_sandbox",
+            _connect_existing_environment_sandbox,
+        )
+        monkeypatch.setattr(
+            runtime_provision.cloud_sandboxes,
+            "ensure_profile_slot",
+            _ensure_profile_slot,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "mark_workspace_error_by_id",
+            _mark_workspace_error_by_id,
+        )
+        monkeypatch.setattr(runtime_provision, "_set_workspace_status", _set_workspace_status)
+        monkeypatch.setattr(runtime_provision, "log_cloud_event", lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            runtime_provision,
+            "_log_provision_summary",
+            lambda *args, **kwargs: None,
+        )
+
+        with pytest.raises(CloudApiError) as exc_info:
+            await runtime_provision.provision_workspace(ctx.workspace_id)
+
+        assert exc_info.value.code == "cloud_worker_base_url_required"
+        assert allocation_attempts == []
+        assert errors == [exc_info.value.message]
+
+    @pytest.mark.asyncio
     async def test_provision_workspace_configures_git_identity_after_checkout(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        monkeypatch.setattr(
+            runtime_provision.settings,
+            "cloud_worker_base_url",
+            "https://worker-control.invalid",
+        )
         calls: list[str] = []
         ctx = _make_provision_input(codex_enabled=True)
         provider = SimpleNamespace(
@@ -1404,6 +1529,11 @@ class TestProvisionWorkspaceGitSetup:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        monkeypatch.setattr(
+            runtime_provision.settings,
+            "cloud_worker_base_url",
+            "https://worker-control.invalid",
+        )
         ctx = _make_provision_input(codex_enabled=True)
         sandbox_record = SimpleNamespace(
             id=uuid.uuid4(),
@@ -1550,6 +1680,11 @@ class TestProvisionWorkspaceGitSetup:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        monkeypatch.setattr(
+            runtime_provision.settings,
+            "cloud_worker_base_url",
+            "https://worker-control.invalid",
+        )
         ctx = _make_provision_input(codex_enabled=True)
         sandbox_record = SimpleNamespace(
             id=uuid.uuid4(),
