@@ -18,7 +18,7 @@ import {
 } from "@/lib/domain/chat/subagents/provenance";
 import {
   resolveOptimisticPromptActionTime,
-} from "@/lib/domain/chat/transcript/transcript-action-time";
+} from "@proliferate/product-model/chats/transcript/transcript-action-time";
 import {
   resolvePendingPromptTrailingStatus,
 } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";

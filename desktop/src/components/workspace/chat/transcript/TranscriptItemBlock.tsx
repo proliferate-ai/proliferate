@@ -19,8 +19,8 @@ import {
 } from "@/lib/domain/chat/transcript/transcript-rendering";
 import {
   resolveUserMessageActionTime,
-} from "@/lib/domain/chat/transcript/transcript-action-time";
-import type { TranscriptOpenSessionRole } from "@/lib/domain/chat/transcript/transcript-open-target";
+} from "@proliferate/product-model/chats/transcript/transcript-action-time";
+import type { TranscriptOpenSessionRole } from "@proliferate/product-model/chats/transcript/transcript-open-target";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { AssistantMessage } from "./AssistantMessage";
 import { ClaudePlanCard } from "./ClaudePlanCard";

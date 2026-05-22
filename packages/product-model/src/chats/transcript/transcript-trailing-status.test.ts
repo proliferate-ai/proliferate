@@ -5,7 +5,7 @@ import {
   lastTopLevelItemIsStreamingAssistantProse,
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
-} from "@/lib/domain/chat/transcript/transcript-trailing-status";
+} from "./transcript-trailing-status";
 
 describe("transcript trailing status", () => {
   it("suppresses trailing status only while tail assistant prose is streaming", () => {

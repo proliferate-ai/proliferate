@@ -3,7 +3,7 @@ import type {
   GitDiffFile,
   RepoRoot,
 } from "@anyharness/sdk";
-import type { LastTurnTouchedFile } from "@/lib/domain/chat/transcript/last-turn-file-changes";
+import type { LastTurnTouchedFile } from "@proliferate/product-model/chats/transcript/last-turn-file-changes";
 
 export type GitPanelMode = "working_tree_composite" | "unstaged" | "staged" | "branch" | "last_turn";
 export type GitPanelSectionScope = "unstaged" | "staged" | "branch";

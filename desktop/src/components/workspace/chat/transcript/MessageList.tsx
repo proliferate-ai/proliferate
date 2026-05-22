@@ -36,7 +36,7 @@ import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox
 import {
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
-} from "@/lib/domain/chat/transcript/transcript-trailing-status";
+} from "@proliferate/product-model/chats/transcript/transcript-trailing-status";
 import {
   buildOutboxStartedAtByPromptId,
   collectToolCallIdsWithProposedPlan,
@@ -44,7 +44,7 @@ import {
   findTrailingLiveWorkBlock,
   resolveTurnPromptTiming,
 } from "@/lib/domain/chat/transcript/transcript-rendering";
-import type { TranscriptOpenSessionRole } from "@/lib/domain/chat/transcript/transcript-open-target";
+import type { TranscriptOpenSessionRole } from "@proliferate/product-model/chats/transcript/transcript-open-target";
 import type {
   PendingPromptEntry,
   TranscriptState,

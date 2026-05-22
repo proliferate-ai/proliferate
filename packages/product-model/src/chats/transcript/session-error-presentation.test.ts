@@ -3,7 +3,7 @@ import type { ErrorItem } from "@anyharness/sdk";
 import {
   formatModelLabel,
   presentSessionError,
-} from "@/lib/domain/chat/transcript/session-error-presentation";
+} from "./session-error-presentation";
 
 describe("presentSessionError", () => {
   it("turns provider rate limits into concise user-facing copy", () => {

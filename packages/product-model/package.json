@@ -47,6 +47,34 @@
       "types": "./dist/chats/transcript/envelope-to-state.d.ts",
       "import": "./dist/chats/transcript/envelope-to-state.js"
     },
+    "./chats/transcript/last-turn-file-changes": {
+      "types": "./dist/chats/transcript/last-turn-file-changes.d.ts",
+      "import": "./dist/chats/transcript/last-turn-file-changes.js"
+    },
+    "./chats/transcript/session-error-presentation": {
+      "types": "./dist/chats/transcript/session-error-presentation.d.ts",
+      "import": "./dist/chats/transcript/session-error-presentation.js"
+    },
+    "./chats/transcript/transcript-action-time": {
+      "types": "./dist/chats/transcript/transcript-action-time.d.ts",
+      "import": "./dist/chats/transcript/transcript-action-time.js"
+    },
+    "./chats/transcript/transcript-open-target": {
+      "types": "./dist/chats/transcript/transcript-open-target.d.ts",
+      "import": "./dist/chats/transcript/transcript-open-target.js"
+    },
+    "./chats/transcript/transcript-trailing-status": {
+      "types": "./dist/chats/transcript/transcript-trailing-status.d.ts",
+      "import": "./dist/chats/transcript/transcript-trailing-status.js"
+    },
+    "./chats/transcript/transcript-virtualization-config": {
+      "types": "./dist/chats/transcript/transcript-virtualization-config.d.ts",
+      "import": "./dist/chats/transcript/transcript-virtualization-config.js"
+    },
+    "./chats/transcript/turn-file-patches": {
+      "types": "./dist/chats/transcript/turn-file-patches.d.ts",
+      "import": "./dist/chats/transcript/turn-file-patches.js"
+    },
     "./telemetry/scrub": {
       "types": "./dist/telemetry/scrub.d.ts",
       "import": "./dist/telemetry/scrub.js"

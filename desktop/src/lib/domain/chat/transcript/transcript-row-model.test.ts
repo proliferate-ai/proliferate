@@ -11,7 +11,7 @@ import {
 import {
   parseTranscriptVirtualizationMode,
   resolveTranscriptVirtualizationEnabled,
-} from "@/lib/domain/chat/transcript/transcript-virtualization-config";
+} from "@proliferate/product-model/chats/transcript/transcript-virtualization-config";
 
 describe("buildTranscriptRowModel", () => {
   it("creates stable turn rows for large transcripts", () => {
