@@ -654,15 +654,11 @@ async def bootstrap_workspace_remote_access(
                 "workspaceId": body.anyharness_workspace_id,
                 "cloudWorkspaceId": workspace.id,
                 "kind": CloudCommandKind.backfill_exposed_workspace.value,
-                "payload": {
-                    "workspaceId": body.anyharness_workspace_id,
-                    "sessionId": body.anyharness_session_id,
-                },
+                "payload": {"workspaceId": body.anyharness_workspace_id},
                 "source": CloudCommandSource.api.value,
             }
         ),
     )
-    await db.commit()
     return await _build_workspace_detail_for_request(db, workspace)
 
 
@@ -684,6 +680,12 @@ async def enable_cloud_workspace_remote_access(
             "remote_access_target_not_found",
             "Target not found.",
             status_code=404,
+        )
+    if target.status != CloudTargetStatus.online.value:
+        raise CloudApiError(
+            "remote_access_target_offline",
+            "Remote access requires the target worker to be online.",
+            status_code=409,
         )
 
     owner_user_id, organization_id, visibility = _exposure_owner_fields(workspace)
@@ -719,7 +721,6 @@ async def enable_cloud_workspace_remote_access(
             }
         ),
     )
-    await db.commit()
     return await _build_workspace_detail_for_request(db, workspace)
 
 
@@ -738,7 +739,6 @@ async def disable_cloud_workspace_remote_access(
     )
     if exposure is not None:
         await exposures_store.archive_workspace_exposure(db, exposure_id=exposure.id)
-        await db.commit()
     return await _build_workspace_detail_for_request(db, workspace)
 
 

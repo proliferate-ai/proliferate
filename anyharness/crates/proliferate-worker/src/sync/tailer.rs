@@ -56,7 +56,7 @@ async fn sync_once(
     identity: &WorkerIdentity,
 ) -> Result<(), WorkerError> {
     let exposures = reconcile_projection_cursors(store, cloud, identity).await?;
-    discover_workspace_sessions(store, anyharness, cloud, identity, &exposures).await?;
+    discover_workspace_sessions(store, anyharness, cloud, identity, &exposures).await;
     let cursors = store.list_active_projection_cursors()?;
     for cursor in cursors {
         if let Err(error) =
@@ -115,51 +115,79 @@ async fn discover_workspace_sessions(
     cloud: &CloudClient,
     identity: &WorkerIdentity,
     exposures: &[WorkerExposureSnapshot],
-) -> Result<(), WorkerError> {
+) {
     let min_interval_ms = duration_ms(WORKSPACE_DISCOVERY_INTERVAL);
     for exposure in exposures {
-        if exposure.status != "active" || exposure.anyharness_session_id.is_some() {
-            continue;
-        }
-        let workspace_id = exposure.anyharness_workspace_id.as_str();
-        if workspace_id.is_empty() {
-            continue;
-        }
-        if !store.should_discover_workspace(
-            &exposure.exposure_id,
-            workspace_id,
-            now_unix_ms(),
-            min_interval_ms,
-        )? {
-            continue;
-        }
-        let snapshot = anyharness.backfill_snapshot(Some(workspace_id)).await?;
-        let known_sessions = store.list_known_session_ids_for_workspace(workspace_id)?;
-        let missing_session_count = snapshot
-            .sessions
-            .iter()
-            .filter(|session| session.workspace_id == workspace_id)
-            .filter(|session| !known_sessions.contains(&session.id))
-            .count();
-        if missing_session_count == 0 {
-            continue;
-        }
-        info!(
-            exposure_id = %exposure.exposure_id,
-            cloud_workspace_id = %exposure.cloud_workspace_id,
-            workspace_id,
-            missing_session_count,
-            "worker discovered unmapped sessions for exposed workspace"
-        );
-        super::backfill::backfill_exposed_workspace(
+        if let Err(error) = discover_workspace_sessions_for_exposure(
             store,
             anyharness,
             cloud,
             identity,
-            Some(workspace_id),
+            exposure,
+            min_interval_ms,
         )
-        .await?;
+        .await
+        {
+            warn!(
+                ?error,
+                exposure_id = %exposure.exposure_id,
+                cloud_workspace_id = %exposure.cloud_workspace_id,
+                workspace_id = %exposure.anyharness_workspace_id,
+                "worker workspace session discovery failed"
+            );
+        }
     }
+}
+
+async fn discover_workspace_sessions_for_exposure(
+    store: &WorkerStore,
+    anyharness: &AnyHarnessClient,
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    exposure: &WorkerExposureSnapshot,
+    min_interval_ms: i64,
+) -> Result<(), WorkerError> {
+    if exposure.status != "active" || exposure.anyharness_session_id.is_some() {
+        return Ok(());
+    }
+    let workspace_id = exposure.anyharness_workspace_id.as_str();
+    if workspace_id.is_empty() {
+        return Ok(());
+    }
+    if !store.should_discover_workspace(
+        &exposure.exposure_id,
+        workspace_id,
+        now_unix_ms(),
+        min_interval_ms,
+    )? {
+        return Ok(());
+    }
+    let snapshot = anyharness.backfill_snapshot(Some(workspace_id)).await?;
+    let known_sessions = store.list_known_session_ids_for_workspace(workspace_id)?;
+    let missing_session_count = snapshot
+        .sessions
+        .iter()
+        .filter(|session| session.workspace_id == workspace_id)
+        .filter(|session| !known_sessions.contains(&session.id))
+        .count();
+    if missing_session_count == 0 {
+        return Ok(());
+    }
+    info!(
+        exposure_id = %exposure.exposure_id,
+        cloud_workspace_id = %exposure.cloud_workspace_id,
+        workspace_id,
+        missing_session_count,
+        "worker discovered unmapped sessions for exposed workspace"
+    );
+    super::backfill::backfill_exposed_workspace(
+        store,
+        anyharness,
+        cloud,
+        identity,
+        Some(workspace_id),
+    )
+    .await?;
     Ok(())
 }
 

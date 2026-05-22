@@ -7,7 +7,6 @@ import {
 import { useCloudTargets } from "@/hooks/access/cloud/targets/use-cloud-targets";
 import { useCloudTargetMutations } from "@/hooks/access/cloud/targets/use-cloud-target-mutations";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
-import { getProliferateClient } from "@/lib/access/cloud/client";
 import { ensureDesktopDispatchWorker } from "@/lib/access/tauri/cloud-worker";
 import { getRuntimeInfo } from "@/lib/access/tauri/runtime";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -130,13 +129,26 @@ export function WorkspaceRemoteAccessFooterControl() {
     await ensureDesktopDispatchWorker({
       targetId: enrollment.target.id,
       enrollmentToken: enrollment.enrollmentToken,
-      cloudBaseUrl: getProliferateClient().baseUrl,
-      anyharnessBaseUrl: runtime.url,
     });
     const target = await waitForOnlineDispatchTarget(enrollment.target.id);
     void targetsQuery.refetch();
     return target;
   }, [createTargetEnrollment, dispatchTarget, targetsQuery]);
+
+  const ensureWorkspaceSyncWorker = useCallback(async () => {
+    if (
+      cloudWorkspace?.sandboxType === "local"
+      && cloudWorkspace.targetId
+    ) {
+      await ensureDesktopDispatchWorker({
+        targetId: cloudWorkspace.targetId,
+        enrollmentToken: null,
+      });
+      await waitForOnlineDispatchTarget(cloudWorkspace.targetId);
+      void targetsQuery.refetch();
+      return;
+    }
+  }, [cloudWorkspace, targetsQuery]);
 
   const handleClick = useCallback(async () => {
     if (disabled) {
@@ -147,6 +159,7 @@ export function WorkspaceRemoteAccessFooterControl() {
         await disableMutation.mutateAsync(cloudWorkspaceId);
         showToast("Remote access disabled.");
       } else if (cloudWorkspaceId) {
+        await ensureWorkspaceSyncWorker();
         await enableMutation.mutateAsync(cloudWorkspaceId);
         showToast("Remote access enabled.");
       } else if (localWorkspace?.id) {
@@ -180,6 +193,7 @@ export function WorkspaceRemoteAccessFooterControl() {
     disableMutation,
     enableMutation,
     ensureDispatchTarget,
+    ensureWorkspaceSyncWorker,
     isEnabled,
     localWorkspace,
     logicalWorkspace,

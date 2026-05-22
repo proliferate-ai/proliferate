@@ -137,7 +137,8 @@ async def upsert_synced_workspace(
         workspace.git_branch = git_branch
         workspace.git_base_branch = git_base_branch or workspace.git_base_branch
         workspace.target_id = target_id
-        workspace.origin_json = origin_json if origin_json is not None else workspace.origin_json
+        if workspace.origin_json is None and origin_json is not None:
+            workspace.origin_json = origin_json
         workspace.status = CloudWorkspaceStatus.ready.value
         workspace.status_detail = "Synced from target."
         workspace.last_error = None

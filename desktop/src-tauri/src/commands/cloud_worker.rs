@@ -11,7 +11,11 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::{agent_seed_env::current_target_triple, app_config, sidecar::resolve_shell_path};
+use crate::{
+    agent_seed_env::current_target_triple,
+    app_config,
+    sidecar::{resolve_shell_path, RuntimeStatus, SharedSidecar},
+};
 
 #[derive(Default)]
 pub struct CloudWorkerState {
@@ -37,8 +41,6 @@ impl Drop for CloudWorkerProcess {
 pub struct EnsureDesktopDispatchWorkerInput {
     target_id: String,
     enrollment_token: Option<String>,
-    cloud_base_url: String,
-    anyharness_base_url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -57,10 +59,11 @@ pub fn create_cloud_worker_state() -> SharedCloudWorkerState {
 pub async fn ensure_desktop_dispatch_worker(
     input: EnsureDesktopDispatchWorkerInput,
     state: State<'_, SharedCloudWorkerState>,
+    sidecar: State<'_, SharedSidecar>,
 ) -> Result<EnsureDesktopDispatchWorkerResult, String> {
     let target_id = non_empty("targetId", input.target_id)?;
-    let cloud_base_url = non_empty("cloudBaseUrl", input.cloud_base_url)?;
-    let anyharness_base_url = non_empty("anyharnessBaseUrl", input.anyharness_base_url)?;
+    let cloud_base_url = configured_cloud_base_url()?;
+    let anyharness_base_url = current_anyharness_base_url(&sidecar).await?;
     let enrollment_token = input
         .enrollment_token
         .map(|value| value.trim().to_string())
@@ -138,6 +141,26 @@ fn non_empty(name: &str, value: String) -> Result<String, String> {
     } else {
         Ok(trimmed)
     }
+}
+
+fn configured_cloud_base_url() -> Result<String, String> {
+    let config = app_config::load_app_config_record().unwrap_or_default();
+    let value = config.api_base_url.unwrap_or_else(|| {
+        option_env!("PROLIFERATE_DEFAULT_API_BASE_URL")
+            .unwrap_or("http://127.0.0.1:8000")
+            .to_string()
+    });
+    non_empty("configured Cloud base URL", value)
+        .map(|value| value.trim_end_matches('/').to_string())
+}
+
+async fn current_anyharness_base_url(sidecar: &State<'_, SharedSidecar>) -> Result<String, String> {
+    let guard = sidecar.lock().await;
+    if guard.info.status != RuntimeStatus::Healthy {
+        return Err("AnyHarness must be healthy before remote access can start.".to_string());
+    }
+    non_empty("AnyHarness base URL", guard.info.url.clone())
+        .map(|value| value.trim_end_matches('/').to_string())
 }
 
 struct WorkerPaths {

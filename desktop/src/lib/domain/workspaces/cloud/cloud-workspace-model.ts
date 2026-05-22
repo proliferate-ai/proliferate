@@ -104,6 +104,7 @@ export interface CloudWorkspaceDirectTargetContext {
 
 export interface CloudWorkspaceSummary {
   id: string;
+  targetId?: string | null;
   displayName: string | null;
   repo: CloudWorkspaceRepoRef;
   status: CloudWorkspaceStatus;

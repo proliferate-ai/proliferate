@@ -3,8 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 export interface EnsureDesktopDispatchWorkerInput {
   targetId: string;
   enrollmentToken?: string | null;
-  cloudBaseUrl: string;
-  anyharnessBaseUrl: string;
 }
 
 export interface EnsureDesktopDispatchWorkerResult {

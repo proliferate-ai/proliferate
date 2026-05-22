@@ -62,7 +62,7 @@ def _idempotency_scope_for_command(
     )
 
 
-_MANAGED_SESSION_COMMAND_KINDS = {
+_PROJECTED_SESSION_COMMAND_KINDS = {
     CloudCommandKind.send_prompt.value,
     CloudCommandKind.resolve_interaction.value,
     CloudCommandKind.update_session_config.value,
@@ -120,8 +120,8 @@ async def _resolve_command_workspace(
             exposure=exposure,
         )
         return None, body.payload, cloud_workspace_id
-    if kind in _MANAGED_SESSION_COMMAND_KINDS and _target_requires_cloud_workspace(target):
-        return await _resolve_managed_session_command_workspace(
+    if kind in _PROJECTED_SESSION_COMMAND_KINDS:
+        return await _resolve_projected_session_command_workspace(
             db,
             user=user,
             target=target,
@@ -160,9 +160,13 @@ async def _resolve_command_workspace(
         workspace_id = _direct_start_session_workspace_id(body.payload)
         if workspace_id is None:
             return None, body.payload, None
-        payload = dict(body.payload)
-        payload["workspaceId"] = workspace_id
-        return workspace_id, payload, None
+        return await _resolve_direct_start_session_workspace(
+            db,
+            user=user,
+            target=target,
+            body=body,
+            workspace_id=workspace_id,
+        )
     try:
         cloud_workspace_id = UUID(body.workspace_id or "")
     except ValueError as exc:
@@ -212,9 +216,95 @@ async def _resolve_command_workspace(
                 "Workspace is not attached to the requested target.",
                 status_code=409,
             )
+    exposure = await exposures_store.get_active_workspace_exposure(
+        db,
+        target_id=target.id,
+        cloud_workspace_id=workspace.id,
+    )
+    if (
+        exposure is None
+        or exposure.archived_at is not None
+        or exposure.status != "active"
+        or not exposure.anyharness_workspace_id
+    ):
+        raise CloudApiError(
+            "cloud_command_exposure_not_active",
+            "Workspace is not exposed for Cloud commands.",
+            status_code=409,
+        )
+    if not exposure.commandable:
+        raise CloudApiError(
+            "cloud_command_exposure_not_commandable",
+            "Workspace exposure is read-only.",
+            status_code=409,
+        )
+    await require_workspace_interact(
+        db,
+        actor_user_id=user.id,
+        owner_scope=exposure.owner_scope,
+        owner_user_id=exposure.owner_user_id,
+        organization_id=exposure.organization_id,
+        workspace_archived=workspace.archived_at is not None,
+        exposure=exposure,
+    )
     payload = dict(body.payload)
-    payload["workspaceId"] = workspace.anyharness_workspace_id
-    return workspace.anyharness_workspace_id, payload, str(workspace.id)
+    payload["workspaceId"] = exposure.anyharness_workspace_id
+    return exposure.anyharness_workspace_id, payload, str(workspace.id)
+
+
+async def _resolve_direct_start_session_workspace(
+    db: AsyncSession,
+    *,
+    user: User,
+    target: targets_store.CloudTargetSnapshot,
+    body: CreateCloudCommandRequest,
+    workspace_id: str,
+) -> tuple[str | None, dict[str, object], str | None]:
+    cloud_workspace_id = await events_store.resolve_cloud_workspace_id(
+        db,
+        target_id=target.id,
+        workspace_id=workspace_id,
+    )
+    if cloud_workspace_id is None:
+        raise CloudApiError(
+            "cloud_command_exposure_not_active",
+            "Workspace is not exposed for Cloud commands.",
+            status_code=409,
+        )
+    exposure = await exposures_store.get_active_workspace_exposure(
+        db,
+        target_id=target.id,
+        cloud_workspace_id=cloud_workspace_id,
+    )
+    if (
+        exposure is None
+        or exposure.archived_at is not None
+        or exposure.status != "active"
+        or not exposure.anyharness_workspace_id
+    ):
+        raise CloudApiError(
+            "cloud_command_exposure_not_active",
+            "Workspace is not exposed for Cloud commands.",
+            status_code=409,
+        )
+    if not exposure.commandable:
+        raise CloudApiError(
+            "cloud_command_exposure_not_commandable",
+            "Workspace exposure is read-only.",
+            status_code=409,
+        )
+    await require_workspace_interact(
+        db,
+        actor_user_id=user.id,
+        owner_scope=exposure.owner_scope,
+        owner_user_id=exposure.owner_user_id,
+        organization_id=exposure.organization_id,
+        workspace_archived=False,
+        exposure=exposure,
+    )
+    payload = dict(body.payload)
+    payload["workspaceId"] = exposure.anyharness_workspace_id
+    return exposure.anyharness_workspace_id, payload, str(cloud_workspace_id)
 
 
 async def _resolve_managed_start_session_workspace(
@@ -371,7 +461,7 @@ async def _resolve_backfill_exposed_workspace_command(
     return exposure.anyharness_workspace_id, payload, cloud_workspace_id
 
 
-async def _resolve_managed_session_command_workspace(
+async def _resolve_projected_session_command_workspace(
     db: AsyncSession,
     *,
     user: User,
@@ -381,7 +471,7 @@ async def _resolve_managed_session_command_workspace(
     if not body.session_id:
         raise CloudApiError(
             "cloud_command_session_required",
-            "Managed session commands require sessionId.",
+            "Projected session commands require sessionId.",
             status_code=400,
         )
     projection = await events_store.get_session_projection(
@@ -409,6 +499,12 @@ async def _resolve_managed_session_command_workspace(
         exposure = await exposures_store.get_workspace_exposure_by_id(
             db,
             projection.exposure_id,
+        )
+    if exposure is None and projection.cloud_workspace_id is not None:
+        exposure = await exposures_store.get_active_workspace_exposure(
+            db,
+            target_id=target.id,
+            cloud_workspace_id=projection.cloud_workspace_id,
         )
     if exposure is None or exposure.archived_at is not None or exposure.status != "active":
         raise CloudApiError(

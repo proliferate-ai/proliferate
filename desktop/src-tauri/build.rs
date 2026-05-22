@@ -226,8 +226,11 @@ fn resolve_anyharness_binary(
         }
     }
 
-    let repo_candidates = anyharness_repo_candidates(manifest_dir);
-    let existing_repos: Vec<&PathBuf> = repo_candidates.iter().filter(|p| p.is_dir()).collect();
+    let repo_candidates = proliferate_worker_repo_candidates(manifest_dir);
+    let existing_repos: Vec<&PathBuf> = repo_candidates
+        .iter()
+        .filter(|p| p.join("Cargo.toml").is_file())
+        .collect();
 
     if let Some(primary_repo) = existing_repos.first() {
         if let Some(path) = find_existing_binary(primary_repo, target, profile) {
@@ -336,7 +339,16 @@ fn register_anyharness_rerun_inputs() {
 }
 
 fn register_proliferate_worker_rerun_inputs() {
-    register_anyharness_rerun_inputs();
+    let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") else {
+        return;
+    };
+    let manifest_dir = PathBuf::from(manifest_dir);
+
+    for repo in proliferate_worker_repo_candidates(&manifest_dir) {
+        if repo.join("Cargo.toml").is_file() {
+            println!("cargo:rerun-if-changed={}", repo.display());
+        }
+    }
 }
 
 fn register_proliferate_debug_rerun_inputs() {
@@ -358,6 +370,22 @@ fn anyharness_repo_candidates(manifest_dir: &Path) -> Vec<PathBuf> {
         manifest_dir.join("../../../anyharness-git-slice"),
         manifest_dir.join("../../../anyharness-files"),
     ];
+
+    let mut unique = Vec::new();
+    for candidate in candidates {
+        if !unique
+            .iter()
+            .any(|existing: &PathBuf| existing == &candidate)
+        {
+            unique.push(candidate);
+        }
+    }
+    unique
+}
+
+fn proliferate_worker_repo_candidates(manifest_dir: &Path) -> Vec<PathBuf> {
+    let mut candidates = vec![manifest_dir.join("../..")];
+    candidates.extend(anyharness_repo_candidates(manifest_dir));
 
     let mut unique = Vec::new();
     for candidate in candidates {

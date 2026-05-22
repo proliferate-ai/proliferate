@@ -357,6 +357,26 @@ impl SessionStore {
         })
     }
 
+    pub fn list_events_after_oldest_limited(
+        &self,
+        session_id: &str,
+        after_seq: i64,
+        limit: i64,
+    ) -> anyhow::Result<Vec<SessionEventRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT *
+                 FROM session_events
+                 WHERE session_id = ?1 AND seq > ?2
+                 ORDER BY seq ASC
+                 LIMIT ?3",
+            )?;
+            let rows =
+                stmt.query_map(params![session_id, after_seq, limit], |row| map_event(row))?;
+            rows.collect()
+        })
+    }
+
     pub fn last_event_seq(&self, session_id: &str) -> anyhow::Result<i64> {
         self.db.with_conn(|conn| {
             conn.query_row(

@@ -73,6 +73,17 @@ fn limited_event_reads_return_newest_events_in_ascending_order() {
             .collect::<Vec<_>>(),
         vec![4, 5],
     );
+
+    let oldest_after = store
+        .list_events_after_oldest_limited("session-1", 2, 2)
+        .expect("list oldest events after seq");
+    assert_eq!(
+        oldest_after
+            .iter()
+            .map(|event| event.seq)
+            .collect::<Vec<_>>(),
+        vec![3, 4],
+    );
 }
 
 #[test]
