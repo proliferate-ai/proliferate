@@ -22,8 +22,8 @@ import {
   type ReactNode,
 } from "react";
 import { twMerge } from "tailwind-merge";
-import { Button } from "@proliferate/ui/primitives/Button";
 import { ChatComposerSurface } from "./composer/ChatComposerSurface";
+import { ComposerActionButton } from "./composer/ComposerActionButton";
 import { ComposerControlButton } from "./composer/ComposerControlButton";
 import { ComposerPopoverSurface } from "./composer/ComposerPopoverSurface";
 import { ComposerTextarea } from "./composer/ComposerTextarea";
@@ -159,18 +159,15 @@ function CloudChatComposerControlRow({ composer }: { composer: CloudChatComposer
             composerDisabled={composer.disabled}
           />
         ) : null}
-        <Button
+        <ComposerActionButton
           type="submit"
-          variant="ghost"
-          size="icon-sm"
           aria-label="Send message"
           disabled={!composer.canSubmit || composer.disabled || composer.isSubmitting}
           loading={composer.isSubmitting}
           data-chat-send-button
-          className="size-7 rounded-full bg-[var(--color-composer-send-background)] px-0 text-[color:var(--color-composer-send-foreground)] shadow-none hover:bg-[var(--color-composer-send-background)] hover:opacity-90 disabled:cursor-default disabled:opacity-50"
         >
           {composer.isSubmitting ? null : <ArrowUp size={14} />}
-        </Button>
+        </ComposerActionButton>
       </div>
     </div>
   );

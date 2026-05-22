@@ -95,6 +95,10 @@
       "types": "./dist/chat/composer/ChatComposerSurface.d.ts",
       "import": "./dist/chat/composer/ChatComposerSurface.js"
     },
+    "./chat/composer/ComposerActionButton": {
+      "types": "./dist/chat/composer/ComposerActionButton.d.ts",
+      "import": "./dist/chat/composer/ComposerActionButton.js"
+    },
     "./chat/composer/ComposerControlButton": {
       "types": "./dist/chat/composer/ComposerControlButton.d.ts",
       "import": "./dist/chat/composer/ComposerControlButton.js"
