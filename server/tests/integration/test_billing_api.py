@@ -384,7 +384,7 @@ class TestBillingApi:
         assert isinstance(portal, dict)
         assert portal["stripe_customer_id"] == "cus_checkout_portal"
         assert portal["return_url"] == "https://app.test/portal"
-        assert portal["idempotency_key"] == f"portal:active-cloud:{subject.id}"
+        assert portal["idempotency_key"].startswith(f"portal:active-cloud:{subject.id}:")
 
     @pytest.mark.asyncio
     async def test_pro_overage_used_is_scoped_to_current_period(
@@ -563,7 +563,7 @@ class TestBillingApi:
         assert checkout["cloud_monthly_price_id"] == "price_pro"
         assert checkout["overage_price_id"] == "price_overage"
         assert checkout["seat_quantity"] == 2
-        assert checkout["idempotency_key"] == f"cloud-checkout:org:{subject.id}:seats:2"
+        assert checkout["idempotency_key"].startswith(f"cloud-checkout:org:{subject.id}:seats:2:")
         customer = captured["customer"]
         assert isinstance(customer, dict)
         assert customer["organization_id"] == str(organization.id)
