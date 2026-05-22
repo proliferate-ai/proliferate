@@ -182,7 +182,7 @@ function shouldMaterializeManagedTargetConfig(workspace: CloudWorkspaceDetail): 
   }
   const runtimeAuth = workspace.runtime?.runtimeAuth;
   if (!runtimeAuth) {
-    return true;
+    return false;
   }
   return runtimeAuth.targetCurrent !== true || runtimeAuth.configCurrent !== true;
 }
