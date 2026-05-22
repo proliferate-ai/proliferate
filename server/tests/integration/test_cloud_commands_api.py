@@ -2395,7 +2395,9 @@ class TestCloudCommandsApi:
         self,
         client: AsyncClient,
         db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
@@ -2475,7 +2477,9 @@ class TestCloudCommandsApi:
         self,
         client: AsyncClient,
         db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
@@ -2775,7 +2779,9 @@ class TestCloudCommandsApi:
         self,
         client: AsyncClient,
         db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
