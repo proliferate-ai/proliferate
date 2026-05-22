@@ -66,7 +66,16 @@ class SaveCloudRepoConfigRequest(BaseModel):
     env_vars: dict[str, str] = Field(default_factory=dict, alias="envVars")
     setup_script: str = Field(default="", alias="setupScript")
     run_command: str = Field(default="", alias="runCommand")
-    files: list[SaveCloudRepoConfigFile] = Field(default_factory=list)
+    files: list[SaveCloudRepoConfigFile]
+
+
+class SaveOrganizationCloudRepoConfigRequest(BaseModel):
+    configured: bool
+    default_branch: str | None = Field(default=None, alias="defaultBranch")
+    env_vars: dict[str, str] = Field(default_factory=dict, alias="envVars")
+    setup_script: str = Field(default="", alias="setupScript")
+    run_command: str = Field(default="", alias="runCommand")
+    files: list[SaveCloudRepoConfigFile] | None = None
 
 
 class PutCloudRepoFileRequest(BaseModel):

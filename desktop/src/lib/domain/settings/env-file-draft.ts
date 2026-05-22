@@ -70,3 +70,14 @@ export function envFileVariablesEqual(
   const rightContent = serializeEnvFileVariables(right);
   return leftContent === rightContent;
 }
+
+export function serializeEnvFileVariablesPreservingOriginal(
+  rows: readonly EnvFileVariable[],
+  originalRows: readonly EnvFileVariable[],
+  originalContent: string | null | undefined,
+): string {
+  if (originalContent != null && envFileVariablesEqual(rows, originalRows)) {
+    return originalContent;
+  }
+  return serializeEnvFileVariables(rows);
+}

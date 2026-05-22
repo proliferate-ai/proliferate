@@ -111,3 +111,31 @@ describe("SessionsClient.resume", () => {
     }]);
   });
 });
+
+describe("SessionsClient.listEvents", () => {
+  it("serializes oldest-first pagination", async () => {
+    const calls: Array<{ path: string; options: AnyHarnessRequestOptions | undefined }> = [];
+    const transport = {
+      get: async (path: string, options?: AnyHarnessRequestOptions) => {
+        calls.push({ path, options });
+        return [];
+      },
+    } as unknown as AnyHarnessTransport;
+    const client = new SessionsClient(transport);
+
+    await client.listEvents("session-1", {
+      afterSeq: 10,
+      limit: 25,
+      oldestFirst: true,
+      request: { headers: { "x-trace": "trace-events" } },
+    });
+
+    expect(calls).toEqual([{
+      path: "/v1/sessions/session-1/events?after_seq=10&limit=25&oldest_first=true",
+      options: {
+        headers: { "x-trace": "trace-events" },
+        timingCategory: "session.events.list",
+      },
+    }]);
+  });
+});

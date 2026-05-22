@@ -289,6 +289,9 @@ export class SessionsClient {
     if (options?.limit != null) {
       params.set("limit", String(options.limit));
     }
+    if (options?.oldestFirst != null) {
+      params.set("oldest_first", String(options.oldestFirst));
+    }
     if (options?.turnLimit != null) {
       params.set("turn_limit", String(options.turnLimit));
     }

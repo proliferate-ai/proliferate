@@ -131,6 +131,7 @@ export interface ListSessionEventsOptions {
   afterSeq?: number;
   beforeSeq?: number;
   limit?: number;
+  oldestFirst?: boolean;
   turnLimit?: number;
 }
 

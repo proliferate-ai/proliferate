@@ -3,6 +3,7 @@ import {
   envFileVariablesEqual,
   parseEnvFileVariables,
   serializeEnvFileVariables,
+  serializeEnvFileVariablesPreservingOriginal,
 } from "@/lib/domain/settings/env-file-draft";
 
 describe("env file draft helpers", () => {
@@ -33,5 +34,32 @@ describe("env file draft helpers", () => {
       [{ key: "API_BASE_URL", value: "https://example.internal" }],
       [{ key: " API_BASE_URL ", value: "https://example.internal" }],
     )).toBe(true);
+  });
+
+  it("preserves original content when editable rows have not changed", () => {
+    const originalContent = [
+      "# keep this comment",
+      "export API_BASE_URL='https://example.internal'",
+      "UNSUPPORTED_LINE",
+      "",
+    ].join("\n");
+    const originalRows = parseEnvFileVariables(originalContent);
+
+    expect(serializeEnvFileVariablesPreservingOriginal(
+      [{ key: "API_BASE_URL", value: "https://example.internal" }],
+      originalRows,
+      originalContent,
+    )).toBe(originalContent);
+  });
+
+  it("serializes deterministic content once editable rows change", () => {
+    const originalContent = "# keep this comment\nAPI_BASE_URL=https://example.internal\n";
+    const originalRows = parseEnvFileVariables(originalContent);
+
+    expect(serializeEnvFileVariablesPreservingOriginal(
+      [{ key: "API_BASE_URL", value: "https://example.test" }],
+      originalRows,
+      originalContent,
+    )).toBe("API_BASE_URL=https://example.test\n");
   });
 });

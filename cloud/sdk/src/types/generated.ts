@@ -167,6 +167,8 @@ export type CloudRepoConfigsListResponse = components["schemas"]["CloudRepoConfi
 export type CloudRepoFileMetadata     = components["schemas"]["CloudRepoFileMetadata"];
 export type CloudRepoConfigResponse   = components["schemas"]["CloudRepoConfigResponse"];
 export type SaveCloudRepoConfigRequest = components["schemas"]["SaveCloudRepoConfigRequest"];
+export type SaveOrganizationCloudRepoConfigRequest =
+  components["schemas"]["SaveOrganizationCloudRepoConfigRequest"];
 export type AutomationOwnerScope = "personal" | "organization";
 export type AutomationTargetMode = "local" | "personal_cloud" | "shared_cloud";
 export type AutomationRunStatus =

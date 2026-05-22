@@ -17,6 +17,7 @@ from proliferate.server.cloud.repo_config.models import (
     ResyncCloudWorkspaceFilesResponse,
     RunCloudWorkspaceSetupResponse,
     SaveCloudRepoConfigRequest,
+    SaveOrganizationCloudRepoConfigRequest,
     repo_config_payload,
     repo_config_summary_payload,
     resync_cloud_workspace_files_payload,
@@ -155,7 +156,7 @@ async def save_organization_cloud_repo_config_endpoint(
     organization_id: UUID,
     git_owner: str,
     git_repo_name: str,
-    body: SaveCloudRepoConfigRequest,
+    body: SaveOrganizationCloudRepoConfigRequest,
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudRepoConfigResponse:
