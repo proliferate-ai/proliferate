@@ -40,6 +40,7 @@ type PendingHomePromptDispatchRun = {
 
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
+const DEFAULT_DIRECT_PROMPT_MODEL_ID = "gpt-5.4";
 
 export function ChatScreen() {
   const { workspaceId, chatId } = useParams();
@@ -47,6 +48,7 @@ export function ChatScreen() {
   const client = useCloudClient();
   const [draft, setDraft] = useState("");
   const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
+  const [directPromptDispatching, setDirectPromptDispatching] = useState(false);
   const [pendingHomePrompt, setPendingHomePrompt] = useState<PendingHomePrompt | null>(() =>
     workspaceId ? loadPendingHomePrompt(workspaceId) : null
   );
@@ -56,6 +58,7 @@ export function ChatScreen() {
   const workspaceLive = useWorkspaceLive(workspaceId ?? null, { enabled: Boolean(workspaceId) });
   const snapshot = workspaceLive.snapshot ?? workspaceQuery.data;
   const workspace = snapshot?.workspace;
+  const workspaceStatus = workspace ? effectiveWorkspaceStatus(workspace) : null;
   const sessions = useMemo(
     () => [...(snapshot?.sessions ?? [])].sort(compareSessions),
     [snapshot?.sessions],
@@ -102,7 +105,7 @@ export function ChatScreen() {
   }, [workspaceId]);
 
   useEffect(() => {
-    if (!workspaceId || !workspace || workspace.status === "ready" || workspace.status === "error") {
+    if (!workspaceId || !workspace || workspaceStatus === "ready" || workspaceStatus === "error") {
       return;
     }
     const interval = window.setInterval(() => {
@@ -111,17 +114,17 @@ export function ChatScreen() {
     return () => {
       window.clearInterval(interval);
     };
-  }, [workspace?.status, workspaceId, workspaceQuery.refetch]);
+  }, [workspace, workspaceStatus, workspaceId, workspaceQuery.refetch]);
 
   useEffect(() => {
     if (!pendingHomePrompt || !workspace) {
       return;
     }
-    if (workspace.status === "error" || workspace.status === "archived") {
+    if (workspaceStatus === "error" || workspaceStatus === "archived") {
       setPendingHomePromptStatus("Workspace creation failed before the prompt could be sent.");
       return;
     }
-    if (workspace.status !== "ready") {
+    if (workspaceStatus !== "ready") {
       setPendingHomePromptStatus("Workspace is provisioning; the prompt will send when ready.");
       return;
     }
@@ -197,8 +200,8 @@ export function ChatScreen() {
     pendingHomePrompt,
     workspace?.anyharnessWorkspaceId,
     workspace?.id,
-    workspace?.status,
     workspace?.targetId,
+    workspaceStatus,
     workspaceAllowedAgentKindsKey,
     workspaceReadyAgentKindsKey,
     workspaceQuery.refetch,
@@ -213,7 +216,49 @@ export function ChatScreen() {
 
   async function submitPrompt() {
     const text = draft.trim();
-    if (!text || !workspace || !session) {
+    if (!text || !workspace) {
+      return;
+    }
+    if (!session) {
+      if (workspaceStatus !== "ready") {
+        setPendingHomePromptStatus("Workspace is provisioning; the prompt will send when ready.");
+        return;
+      }
+      if (directPromptDispatching) {
+        return;
+      }
+      setDirectPromptDispatching(true);
+      setPendingHomePromptStatus("Starting a session for this prompt.");
+      const pendingPrompt: PendingHomePrompt = {
+        id: `web-chat:${workspace.id}:${Date.now().toString(36)}`,
+        text,
+        modelId: DEFAULT_DIRECT_PROMPT_MODEL_ID,
+        modeId: null,
+        createdAt: Date.now(),
+      };
+      try {
+        const sessionId = await dispatchPendingHomePrompt({
+          client,
+          workspace,
+          pendingPrompt,
+          modelId: pendingPrompt.modelId,
+          enqueueStartSession: enqueueStartSession.mutateAsync,
+          enqueuePrompt: enqueuePrompt.mutateAsync,
+          setLatestCommandId,
+          onStatus: setPendingHomePromptStatus,
+          shouldContinue: () => true,
+        });
+        setDraft("");
+        setPendingHomePromptStatus(null);
+        await workspaceQuery.refetch();
+        navigate(routes.chat(workspace.id, sessionId));
+      } catch (error) {
+        setPendingHomePromptStatus(
+          error instanceof Error ? error.message : "Prompt could not be sent.",
+        );
+      } finally {
+        setDirectPromptDispatching(false);
+      }
       return;
     }
     const command = await enqueuePrompt.mutateAsync({
@@ -242,7 +287,16 @@ export function ChatScreen() {
     return <MissingState title="Workspace not available" />;
   }
 
-  const canSubmit = Boolean(draft.trim() && session && !enqueuePrompt.isPending && !isUnclaimed);
+  const workspaceCommandReady = workspaceStatus === "ready"
+    && Boolean(workspace.targetId)
+    && Boolean(workspace.anyharnessWorkspaceId);
+  const promptSubmitting = enqueuePrompt.isPending || directPromptDispatching;
+  const canSubmit = Boolean(
+    draft.trim()
+      && !isUnclaimed
+      && !promptSubmitting
+      && (session ? true : workspaceCommandReady),
+  );
   const sessionTitle = session?.title ?? workspace.displayName ?? workspace.repo.name;
   const commandMessage =
     pendingHomePromptStatus ??
@@ -254,7 +308,7 @@ export function ChatScreen() {
       ? "Projection fallback"
       : "No transcript";
   const emptyTitle = !session
-    ? "No projected sessions are available for this workspace yet."
+    ? "No active session yet."
     : sessionEventsQuery.isLoading && transcriptView.source === "empty"
       ? "Loading transcript"
       : "Waiting for the first projected transcript event.";
@@ -265,7 +319,7 @@ export function ChatScreen() {
       eyebrowItems={[
         workspace.sandboxType ?? "cloud",
         workspace.exposureState ?? "tracked",
-        session?.status ?? workspace.status,
+        session?.status ?? workspaceStatus ?? "unknown",
       ]}
       chips={[
         {
@@ -292,7 +346,7 @@ export function ChatScreen() {
       transcriptRows={transcriptView.rows}
       emptyTitle={emptyTitle}
       emptyDescription={
-        !session ? "Create or send a prompt from Desktop or the cloud setup flow." : undefined
+        !session ? "Send a prompt below to start the first projected session." : undefined
       }
       commandMessage={commandMessage}
       primaryAction={isUnclaimed
@@ -308,14 +362,16 @@ export function ChatScreen() {
         value: draft,
         onChange: setDraft,
         onSubmit: () => void submitPrompt(),
-        disabled: !session || isUnclaimed,
+        disabled: isUnclaimed || (!session && !workspaceCommandReady),
         canSubmit,
-        isSubmitting: enqueuePrompt.isPending,
+        isSubmitting: promptSubmitting,
         placeholder: isUnclaimed
           ? "Claim this workspace to reply"
           : session
             ? "Message this session"
-            : "No active projected session",
+            : workspaceCommandReady
+              ? "Start a session with a message"
+              : "Waiting for workspace",
       }}
       onBack={() => navigate(routes.workspaces)}
     />
@@ -338,4 +394,10 @@ function MissingState({ title }: { title: string }) {
 
 function compareSessions(left: CloudSessionProjection, right: CloudSessionProjection): number {
   return (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
+}
+
+function effectiveWorkspaceStatus(
+  workspace: { status?: string | null; workspaceStatus?: string | null },
+): string | null {
+  return workspace.workspaceStatus ?? workspace.status ?? null;
 }
