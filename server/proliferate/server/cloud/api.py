@@ -17,6 +17,7 @@ from proliferate.server.cloud.mcp_oauth.api import router as mcp_oauth_router
 from proliferate.server.cloud.mobility.api import router as mobility_router
 from proliferate.server.cloud.repo_config.api import router as repo_config_router
 from proliferate.server.cloud.repos.api import router as repos_router
+from proliferate.server.cloud.sandbox_profiles.api import router as sandbox_profiles_router
 from proliferate.server.cloud.target_config.api import router as target_config_router
 from proliferate.server.cloud.target_config.api import worker_router as target_config_worker_router
 from proliferate.server.cloud.target_git_identity.api import (
@@ -35,6 +36,7 @@ router.include_router(worktree_policy_router)
 router.include_router(workspaces_router)
 router.include_router(mobility_router)
 router.include_router(credentials_router)
+router.include_router(sandbox_profiles_router)
 router.include_router(agent_auth_router)
 router.include_router(mcp_catalog_router)
 router.include_router(mcp_connections_router)

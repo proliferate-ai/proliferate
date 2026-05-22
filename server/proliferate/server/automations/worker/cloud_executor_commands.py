@@ -42,6 +42,7 @@ async def enqueue_automation_command(
     kind: str,
     payload: dict[str, object],
     workspace_id: str | None = None,
+    cloud_workspace_id: UUID | None = None,
     session_id: str | None = None,
 ) -> commands_store.CloudCommandSnapshot:
     idempotency_scope = _idempotency_scope(claim, target_id=target_id)
@@ -65,6 +66,7 @@ async def enqueue_automation_command(
             source=CloudCommandSource.automation.value,
             workspace_id=workspace_id,
             session_id=session_id,
+            cloud_workspace_id=cloud_workspace_id,
             kind=kind,
             payload_json=compact_command_json(payload) or "{}",
             observed_event_seq=None,

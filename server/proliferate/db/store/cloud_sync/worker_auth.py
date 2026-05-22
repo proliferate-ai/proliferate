@@ -21,6 +21,9 @@ from proliferate.utils.time import utcnow
 class CloudTargetEnrollmentSnapshot:
     id: UUID
     target_id: UUID
+    sandbox_profile_id: UUID | None
+    cloud_sandbox_id: UUID | None
+    slot_generation: int | None
     token_hash: str
     status: str
     created_by_user_id: UUID
@@ -34,6 +37,8 @@ class CloudTargetEnrollmentSnapshot:
 class CloudWorkerSnapshot:
     id: UUID
     target_id: UUID
+    cloud_sandbox_id: UUID | None
+    slot_generation: int | None
     token_hash: str
     machine_fingerprint: str | None
     hostname: str | None
@@ -51,6 +56,9 @@ def _enrollment_snapshot(row: CloudTargetEnrollment) -> CloudTargetEnrollmentSna
     return CloudTargetEnrollmentSnapshot(
         id=row.id,
         target_id=row.target_id,
+        sandbox_profile_id=row.sandbox_profile_id,
+        cloud_sandbox_id=row.cloud_sandbox_id,
+        slot_generation=row.slot_generation,
         token_hash=row.token_hash,
         status=row.status,
         created_by_user_id=row.created_by_user_id,
@@ -65,6 +73,8 @@ def _worker_snapshot(row: CloudWorker) -> CloudWorkerSnapshot:
     return CloudWorkerSnapshot(
         id=row.id,
         target_id=row.target_id,
+        cloud_sandbox_id=row.cloud_sandbox_id,
+        slot_generation=row.slot_generation,
         token_hash=row.token_hash,
         machine_fingerprint=row.machine_fingerprint,
         hostname=row.hostname,
@@ -83,6 +93,9 @@ async def create_enrollment(
     db: AsyncSession,
     *,
     target_id: UUID,
+    sandbox_profile_id: UUID | None = None,
+    cloud_sandbox_id: UUID | None = None,
+    slot_generation: int | None = None,
     token_hash: str,
     created_by_user_id: UUID,
     expires_at: datetime,
@@ -90,6 +103,9 @@ async def create_enrollment(
     now = utcnow()
     row = CloudTargetEnrollment(
         target_id=target_id,
+        sandbox_profile_id=sandbox_profile_id,
+        cloud_sandbox_id=cloud_sandbox_id,
+        slot_generation=slot_generation,
         token_hash=token_hash,
         status=CloudTargetEnrollmentStatus.pending.value,
         created_by_user_id=created_by_user_id,
@@ -136,6 +152,8 @@ async def create_worker(
     db: AsyncSession,
     *,
     target_id: UUID,
+    cloud_sandbox_id: UUID | None,
+    slot_generation: int | None,
     token_hash: str,
     machine_fingerprint: str | None,
     hostname: str | None,
@@ -146,6 +164,8 @@ async def create_worker(
 ) -> CloudWorkerSnapshot:
     row = CloudWorker(
         target_id=target_id,
+        cloud_sandbox_id=cloud_sandbox_id,
+        slot_generation=slot_generation,
         token_hash=token_hash,
         machine_fingerprint=machine_fingerprint,
         hostname=hostname,

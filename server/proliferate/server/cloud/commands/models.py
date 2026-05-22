@@ -21,6 +21,7 @@ class CreateCloudCommandRequest(BaseModel):
     idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=255)
     target_id: UUID = Field(alias="targetId")
     workspace_id: str | None = Field(default=None, alias="workspaceId")
+    cloud_workspace_id: UUID | None = Field(default=None, alias="cloudWorkspaceId")
     session_id: str | None = Field(default=None, alias="sessionId")
     kind: str
     payload: dict[str, object] = Field(default_factory=dict)
@@ -62,6 +63,7 @@ class CloudCommandResponse(BaseModel):
     idempotency_key: str = Field(serialization_alias="idempotencyKey")
     target_id: str = Field(serialization_alias="targetId")
     workspace_id: str | None = Field(default=None, serialization_alias="workspaceId")
+    cloud_workspace_id: str | None = Field(default=None, serialization_alias="cloudWorkspaceId")
     session_id: str | None = Field(default=None, serialization_alias="sessionId")
     kind: str
     source: str
@@ -84,6 +86,7 @@ def command_response_payload(value: CloudCommandSnapshot) -> CloudCommandRespons
         idempotency_key=value.idempotency_key,
         target_id=str(value.target_id),
         workspace_id=value.workspace_id,
+        cloud_workspace_id=str(value.cloud_workspace_id) if value.cloud_workspace_id else None,
         session_id=value.session_id,
         kind=value.kind,
         source=value.source,
