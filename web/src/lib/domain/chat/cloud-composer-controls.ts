@@ -3,7 +3,7 @@ import type {
   SessionLiveConfigSnapshot,
 } from "@anyharness/sdk";
 import type { CloudSessionProjection } from "@proliferate/cloud-sdk";
-import type { CloudChatComposerControlView } from "@proliferate/product-ui/chat/CloudChatSurface";
+import type { CloudChatComposerControlView } from "@proliferate/product-ui/chat/CloudChatComposer";
 
 export type PendingConfigStatus = "sending" | "queued";
 
@@ -46,9 +46,11 @@ export function buildCloudChatComposerControls(input: {
     return [
       {
         id: "launch-model",
+        key: "model",
         label: "Model",
         icon: "bot",
         placement: "trailing",
+        active: true,
         groups: [
           {
             id: "models",
@@ -63,11 +65,13 @@ export function buildCloudChatComposerControls(input: {
       },
       {
         id: "launch-mode",
+        key: "mode",
         label: "Cloud task",
         detail: "Mode",
         icon: "cloud",
         placement: "leading",
         disabled: true,
+        active: true,
         groups: [
           {
             id: "mode",
@@ -85,10 +89,14 @@ export function buildCloudChatComposerControls(input: {
     ];
   }
 
-  return collectNormalizedControls(input.liveConfig).map((control) =>
+  const controls = collectNormalizedControls(input.liveConfig);
+  const leadingModeControl = controls.find(isLeadingModeControl) ?? null;
+
+  return controls.map((control) =>
     buildSessionConfigComposerControl({
       sessionId: input.session!.sessionId,
       control,
+      placement: control.rawConfigId === leadingModeControl?.rawConfigId ? "leading" : "trailing",
       pendingConfigChanges: input.pendingConfigChanges,
       onSelect: input.onSessionConfigSelect,
     })
@@ -140,6 +148,7 @@ function collectNormalizedControls(
 function buildSessionConfigComposerControl(input: {
   sessionId: string;
   control: NormalizedSessionControl;
+  placement: "leading" | "trailing";
   pendingConfigChanges: Record<string, PendingConfigChange>;
   onSelect: (rawConfigId: string, value: string) => void;
 }): CloudChatComposerControlView {
@@ -152,11 +161,13 @@ function buildSessionConfigComposerControl(input: {
     ?? null;
   return {
     id: input.control.rawConfigId,
+    key: input.control.key,
     label: controlLabel(input.control),
     detail: selectedOption?.label ?? null,
-    icon: controlIcon(input.control),
-    placement: isLeadingModeControl(input.control) ? "leading" : "trailing",
+    icon: controlIcon(input.control, input.placement),
+    placement: input.placement,
     disabled: !input.control.settable,
+    active: isActiveControl(input.control, selectedOption?.value ?? selectedValue),
     pendingState: pendingChange?.status ?? null,
     groups: [
       {
@@ -197,7 +208,10 @@ function controlLabel(control: NormalizedSessionControl): string {
   }
 }
 
-function controlIcon(control: NormalizedSessionControl): CloudChatComposerControlView["icon"] {
+function controlIcon(
+  control: NormalizedSessionControl,
+  placement: "leading" | "trailing",
+): CloudChatComposerControlView["icon"] {
   switch (control.key) {
     case "effort":
     case "reasoning":
@@ -206,7 +220,7 @@ function controlIcon(control: NormalizedSessionControl): CloudChatComposerContro
       return "bot";
     case "collaboration_mode":
     case "mode":
-      return isLeadingModeControl(control) ? "cloud" : "settings";
+      return placement === "leading" ? "cloud" : "settings";
     default:
       return "settings";
   }
@@ -220,6 +234,19 @@ function isLeadingModeControl(control: NormalizedSessionControl): boolean {
     const normalized = `${option.value} ${option.label}`.toLowerCase();
     return normalized.includes("plan") || normalized.includes("agent") || normalized.includes("ask");
   });
+}
+
+function isActiveControl(
+  control: NormalizedSessionControl,
+  selectedValue: string | null | undefined,
+): boolean {
+  if (control.key !== "fast_mode" && control.key !== "reasoning") {
+    return true;
+  }
+
+  const selectedOption = control.values.find((option) => option.value === selectedValue) ?? null;
+  const normalized = `${selectedValue ?? ""} ${selectedOption?.label ?? ""}`.toLowerCase();
+  return !/\b(off|false|disabled|none)\b/.test(normalized);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

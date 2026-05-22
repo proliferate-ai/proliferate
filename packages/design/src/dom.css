@@ -15,6 +15,16 @@
     sans-serif;
   background: var(--color-background);
   color: var(--color-foreground);
+  --color-composer-background: var(--color-card);
+  --color-composer-border: var(--color-border);
+  --color-composer-control-foreground: var(--color-muted-foreground);
+  --color-composer-control-active-foreground: var(--color-foreground);
+  --color-composer-control-muted-foreground: var(--color-faint);
+  --color-composer-control-hover: var(--color-muted);
+  --color-composer-send-background: var(--color-foreground);
+  --color-composer-send-foreground: var(--color-background);
+  --color-composer-shadow: var(--shadow-subtle);
+  --color-composer-backdrop-filter: none;
 }
 
 * {
@@ -76,6 +86,15 @@ a {
     black calc(100% - var(--edge-fade-distance)),
     transparent 100%
   );
+}
+
+.chat-composer-surface {
+  background-color: var(--color-composer-background);
+  box-shadow:
+    0 0 0 1px var(--color-composer-border),
+    var(--color-composer-shadow);
+  -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
+  backdrop-filter: var(--color-composer-backdrop-filter);
 }
 
 [data-proliferate-client="web"] {
