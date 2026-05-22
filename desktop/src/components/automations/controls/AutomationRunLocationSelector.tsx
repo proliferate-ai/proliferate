@@ -1,4 +1,5 @@
-import type { AutomationOwnerScope } from "@/lib/access/cloud/client";
+import { useState } from "react";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { SelectionRow } from "@/components/ui/SelectionRow";
 import {
   CloudIcon,
@@ -11,24 +12,30 @@ import type {
   AutomationTargetSelection,
 } from "@/lib/domain/automations/target/selection";
 
+type AutomationRunOwnerScope = "personal" | "organization";
+
 interface AutomationOwnerOption {
-  value: AutomationOwnerScope;
+  value: AutomationRunOwnerScope;
   label: string;
   description: string;
   disabledReason?: string | null;
 }
 
 interface AutomationRunLocationSelectorProps {
-  ownerScope: AutomationOwnerScope;
+  ownerScope: AutomationRunOwnerScope;
   canChangeOwner: boolean;
   ownerOptions: AutomationOwnerOption[];
   personalGroups: AutomationTargetGroup[];
   teamGroups: AutomationTargetGroup[];
   isLoading: boolean;
   disabledReason: string | null;
-  onSelectOwner: (ownerScope: AutomationOwnerScope) => void;
+  onSelectOwner: (ownerScope: AutomationRunOwnerScope) => void;
   onSelectTarget: (target: AutomationTargetSelection) => void;
-  onConfigureCloud: (target: { gitOwner: string; gitRepoName: string }) => void;
+  onConfigureCloud: (target: {
+    gitOwner: string;
+    gitRepoName: string;
+    ownerScope: AutomationRunOwnerScope;
+  }) => void;
 }
 
 export function AutomationRunLocationSelector({
@@ -43,9 +50,10 @@ export function AutomationRunLocationSelector({
   onSelectTarget,
   onConfigureCloud,
 }: AutomationRunLocationSelectorProps) {
+  const [searchValue, setSearchValue] = useState("");
   const personalOption = ownerOptions.find((option) => option.value === "personal");
   const teamOption = ownerOptions.find((option) => option.value === "organization");
-  const visibleSections = canChangeOwner
+  const sections = canChangeOwner
     ? ([
       {
         option: personalOption,
@@ -68,21 +76,40 @@ export function AutomationRunLocationSelector({
         emptyLabel: disabledReason ?? "No target available.",
       },
     ]).filter((section) => section.option);
+  const visibleSections = sections.map((section) => {
+    const groups = filterLocationGroups(section.groups, searchValue);
+    return {
+      ...section,
+      groups,
+      emptyLabel: searchValue.trim()
+        ? "No matching run locations."
+        : section.emptyLabel,
+    };
+  });
 
   return (
     <section className="rounded-lg border border-border bg-foreground/[0.03] p-3">
-      <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
+      <div className="mb-3 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="text-sm font-medium text-foreground">Run location</div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Choose where this automation runs.
           </p>
         </div>
-        {!canChangeOwner ? (
-          <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-            Scope locked
-          </span>
-        ) : null}
+        <div className="flex min-w-0 shrink-0 items-center gap-2">
+          <Input
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+            placeholder="Filter"
+            aria-label="Filter run locations"
+            className="h-8 w-full px-2.5 py-1.5 text-sm sm:w-44"
+          />
+          {!canChangeOwner ? (
+            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+              Scope locked
+            </span>
+          ) : null}
+        </div>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         {visibleSections.map((section) => (
@@ -109,15 +136,19 @@ export function AutomationRunLocationSelector({
 interface RunLocationSectionProps {
   title: string;
   description: string;
-  ownerScope: AutomationOwnerScope;
-  activeOwnerScope: AutomationOwnerScope;
+  ownerScope: AutomationRunOwnerScope;
+  activeOwnerScope: AutomationRunOwnerScope;
   groups: AutomationTargetGroup[];
   isLoading: boolean;
   disabledReason: string | null;
   emptyLabel: string;
-  onSelectOwner: (ownerScope: AutomationOwnerScope) => void;
+  onSelectOwner: (ownerScope: AutomationRunOwnerScope) => void;
   onSelectTarget: (target: AutomationTargetSelection) => void;
-  onConfigureCloud: (target: { gitOwner: string; gitRepoName: string }) => void;
+  onConfigureCloud: (target: {
+    gitOwner: string;
+    gitRepoName: string;
+    ownerScope: AutomationRunOwnerScope;
+  }) => void;
 }
 
 function RunLocationSection({
@@ -184,13 +215,17 @@ function RunLocationSection({
 
 interface RunLocationRowProps {
   row: AutomationTargetRow;
-  ownerScope: AutomationOwnerScope;
-  activeOwnerScope: AutomationOwnerScope;
+  ownerScope: AutomationRunOwnerScope;
+  activeOwnerScope: AutomationRunOwnerScope;
   sectionDisabled: boolean;
   sectionDisabledReason: string | null;
-  onSelectOwner: (ownerScope: AutomationOwnerScope) => void;
+  onSelectOwner: (ownerScope: AutomationRunOwnerScope) => void;
   onSelectTarget: (target: AutomationTargetSelection) => void;
-  onConfigureCloud: (target: { gitOwner: string; gitRepoName: string }) => void;
+  onConfigureCloud: (target: {
+    gitOwner: string;
+    gitRepoName: string;
+    ownerScope: AutomationRunOwnerScope;
+  }) => void;
 }
 
 function RunLocationRow({
@@ -222,6 +257,7 @@ function RunLocationRow({
           onConfigureCloud({
             gitOwner: row.gitOwner,
             gitRepoName: row.gitRepoName,
+            ownerScope,
           });
         }}
       />
@@ -258,4 +294,25 @@ function LocationPlaceholder({ label }: { label: string }) {
       {label}
     </div>
   );
+}
+
+function filterLocationGroups(
+  groups: AutomationTargetGroup[],
+  searchValue: string,
+): AutomationTargetGroup[] {
+  const query = searchValue.trim().toLowerCase();
+  if (!query) {
+    return groups;
+  }
+  return groups
+    .map((group) => ({
+      ...group,
+      rows: group.rows.filter((row) => {
+        const values = row.kind === "configureCloud"
+          ? [row.repoLabel, row.label, row.description]
+          : [row.repoLabel, row.label, row.description, row.target.executionTarget];
+        return values.some((value) => value?.toLowerCase().includes(query));
+      }),
+    }))
+    .filter((group) => group.rows.length > 0);
 }

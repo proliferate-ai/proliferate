@@ -11,7 +11,10 @@ import type {
   CreateAutomationInput,
   UpdateAutomationInput,
 } from "@/lib/domain/automations/run/ui-records";
-import type { AutomationOwnerScope, AutomationTargetMode } from "@/lib/access/cloud/client";
+import type {
+  AutomationOwnerScope,
+  AutomationTargetMode,
+} from "@/lib/domain/automations/run/types";
 import { useAgentRunConfigs } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
 import {
   defaultAutomationTimezone,
@@ -39,7 +42,11 @@ interface AutomationEditorModalProps {
   organizationName?: string | null;
   canManageTeamAutomations: boolean;
   onClose: () => void;
-  onConfigureCloudTarget: (target: { gitOwner: string; gitRepoName: string }) => void;
+  onConfigureCloudTarget: (target: {
+    gitOwner: string;
+    gitRepoName: string;
+    ownerScope: AutomationOwnerScope;
+  }) => void;
   onCreate: (body: CreateAutomationInput) => Promise<void>;
   onUpdate: (automationId: string, body: UpdateAutomationInput) => Promise<void>;
 }
@@ -79,17 +86,30 @@ export function AutomationEditorModal({
   const [pendingConfigureTarget, setPendingConfigureTarget] = useState<{
     gitOwner: string;
     gitRepoName: string;
+    ownerScope: AutomationOwnerScope;
   } | null>(null);
 
-  const targetSelection = useAutomationTargetSelection({
-    automation,
-    selectedTarget: targetOverride,
-    enabled: open,
-  });
   const ownerScope = automation?.ownerScope ?? draftOwnerScope;
   const isTeamAutomation = ownerScope === "organization";
+  const personalTargetSelection = useAutomationTargetSelection({
+    automation: automation?.ownerScope === "personal" ? automation : null,
+    selectedTarget: ownerScope === "personal" ? targetOverride : null,
+    ownerScope: "personal",
+    enabled: open && (!automation || automation.ownerScope === "personal"),
+  });
+  const teamTargetSelection = useAutomationTargetSelection({
+    automation: automation?.ownerScope === "organization" ? automation : null,
+    selectedTarget: ownerScope === "organization" ? targetOverride : null,
+    ownerScope: "organization",
+    organizationId,
+    enabled: open
+      && canManageTeamAutomations
+      && organizationId !== null
+      && (!automation || automation.ownerScope === "organization"),
+  });
+  const activeTargetSelection = isTeamAutomation ? teamTargetSelection : personalTargetSelection;
   const effectiveOrganizationId = isTeamAutomation ? organizationId : null;
-  const selectedTarget = targetSelection.selectedTarget;
+  const selectedTarget = activeTargetSelection.selectedTarget;
   const targetMode: AutomationTargetMode = isTeamAutomation
     ? "shared_cloud"
     : selectedTarget?.executionTarget === "local"
@@ -123,19 +143,21 @@ export function AutomationEditorModal({
           : null,
     },
   ], [canManageTeamAutomations, organizationId, organizationName]);
-  const teamTargetGroups = useMemo(() => targetSelection.groups
+  const teamTargetGroups = useMemo(() => teamTargetSelection.groups
     .map((group) => ({
       ...group,
       rows: group.rows.filter((row) =>
         row.kind === "configureCloud" || row.target.executionTarget === "cloud"
       ),
     }))
-    .filter((group) => group.rows.length > 0), [targetSelection.groups]);
+    .filter((group) => group.rows.length > 0), [teamTargetSelection.groups]);
   const targetDisabledReason = isTeamAutomation
     ? "Select a configured cloud workspace for team automation."
-    : targetSelection.disabledReason;
-  const canSubmitTarget = targetSelection.canSubmit
+    : activeTargetSelection.disabledReason;
+  const canSubmitTarget = activeTargetSelection.canSubmit
     && (!isTeamAutomation || selectedTarget?.executionTarget === "cloud");
+  const targetSelectionLoading = personalTargetSelection.isLoading
+    || teamTargetSelection.isLoading;
 
   useEffect(() => {
     if (!cloudAgentRunConfigId || runConfigsQuery.isLoading) {
@@ -229,7 +251,11 @@ export function AutomationEditorModal({
       || cloudAgentRunConfigId !== (automation?.cloudAgentRunConfigId ?? null);
   };
 
-  const handleConfigureCloudTarget = (target: { gitOwner: string; gitRepoName: string }) => {
+  const handleConfigureCloudTarget = (target: {
+    gitOwner: string;
+    gitRepoName: string;
+    ownerScope: AutomationOwnerScope;
+  }) => {
     if (hasDraftChanges()) {
       setPendingConfigureTarget(target);
       return;
@@ -247,6 +273,9 @@ export function AutomationEditorModal({
   };
 
   const handleOwnerScopeSelect = (nextOwnerScope: AutomationOwnerScope) => {
+    if (nextOwnerScope === ownerScope) {
+      return;
+    }
     setDraftOwnerScope(nextOwnerScope);
     setCloudAgentRunConfigId(null);
     setError(null);
@@ -299,6 +328,18 @@ export function AutomationEditorModal({
             </div>
           )}
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-3">
+            <AutomationRunLocationSelector
+              ownerScope={ownerScope}
+              canChangeOwner={!automation}
+              ownerOptions={ownerOptions}
+              personalGroups={personalTargetSelection.groups}
+              teamGroups={teamTargetGroups}
+              isLoading={targetSelectionLoading}
+              disabledReason={activeTargetSelection.disabledReason}
+              onSelectOwner={handleOwnerScopeSelect}
+              onSelectTarget={setTargetOverride}
+              onConfigureCloud={handleConfigureCloudTarget}
+            />
             <Textarea
               id="automation-prompt"
               variant="ghost"
@@ -306,19 +347,7 @@ export function AutomationEditorModal({
               onChange={(event) => setPrompt(event.target.value)}
               aria-label="Prompt"
               placeholder="Add prompt e.g. look for crashes in $sentry"
-              className="min-h-[16rem] px-0 text-base leading-relaxed placeholder:text-muted-foreground"
-            />
-            <AutomationRunLocationSelector
-              ownerScope={ownerScope}
-              canChangeOwner={!automation}
-              ownerOptions={ownerOptions}
-              personalGroups={targetSelection.groups}
-              teamGroups={teamTargetGroups}
-              isLoading={targetSelection.isLoading}
-              disabledReason={targetSelection.disabledReason}
-              onSelectOwner={handleOwnerScopeSelect}
-              onSelectTarget={setTargetOverride}
-              onConfigureCloud={handleConfigureCloudTarget}
+              className="min-h-[12rem] px-0 text-base leading-relaxed placeholder:text-muted-foreground"
             />
           </div>
           <div className="shrink-0 pt-3">
@@ -351,7 +380,7 @@ export function AutomationEditorModal({
                   type="submit"
                   loading={busy}
                   disabled={
-                    (!automation && (runConfigsQuery.isLoading || targetSelection.isLoading))
+                    (!automation && (runConfigsQuery.isLoading || targetSelectionLoading))
                     || !cloudAgentRunConfigId
                     || !canSubmitTarget
                   }

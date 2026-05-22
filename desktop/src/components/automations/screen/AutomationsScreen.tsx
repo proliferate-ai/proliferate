@@ -15,10 +15,14 @@ import {
   useAutomationRuns,
   useAutomations,
 } from "@/hooks/access/cloud/automations/use-automations";
+import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { buildAutomationRowViewModel } from "@/lib/domain/automations/run/view-model";
-import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
+import {
+  buildCloudRepoSettingsHref,
+  buildSharedCloudRepoSettingsHref,
+} from "@/lib/domain/settings/navigation";
 import { targetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import type {
@@ -27,11 +31,11 @@ import type {
   CreateAutomationInput,
   UpdateAutomationInput,
 } from "@/lib/domain/automations/run/ui-records";
+import type { AutomationOwnerScope } from "@/lib/domain/automations/run/types";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import type { AutomationOwnerScope } from "@/lib/access/cloud/client";
 
 const EMPTY_AUTOMATIONS: AutomationRecord[] = [];
 const EMPTY_AUTOMATION_RUNS: AutomationRunRecord[] = [];
@@ -51,8 +55,9 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const [editorOpen, setEditorOpen] = useState(false);
   const [pendingCloudWorkspaceId, setPendingCloudWorkspaceId] = useState<string | null>(null);
   const { activeOrganization, activeOrganizationId } = useActiveOrganization();
-  const canManageTeamAutomations = activeOrganizationId !== null;
-  const teamAutomationsEnabled = canManageTeamAutomations && activeOrganizationId !== null;
+  const admin = useIsAdmin(activeOrganizationId);
+  const canManageTeamAutomations = activeOrganizationId !== null && admin.isAdmin;
+  const teamAutomationsEnabled = canManageTeamAutomations;
   const personalAutomationListOptions = useMemo(() => ({
     ownerScope: "personal" as AutomationOwnerScope,
     organizationId: null,
@@ -110,9 +115,15 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
 
   const closeEditor = () => setEditorOpen(false);
 
-  const handleConfigureCloudTarget = (target: { gitOwner: string; gitRepoName: string }) => {
+  const handleConfigureCloudTarget = (target: {
+    gitOwner: string;
+    gitRepoName: string;
+    ownerScope: AutomationOwnerScope;
+  }) => {
     setEditorOpen(false);
-    navigate(buildCloudRepoSettingsHref(target.gitOwner, target.gitRepoName));
+    navigate(target.ownerScope === "organization"
+      ? buildSharedCloudRepoSettingsHref(target.gitOwner, target.gitRepoName)
+      : buildCloudRepoSettingsHref(target.gitOwner, target.gitRepoName));
   };
 
   const handleCreate = async (body: CreateAutomationInput) => {

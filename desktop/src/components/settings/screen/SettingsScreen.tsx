@@ -108,6 +108,7 @@ function renderSettingsSection(
           role={adminAccess.role}
           activeOrganizationId={activeOrganizationId}
           repositories={repositories}
+          focus={focus}
           onOpenSettingsSection={onSelectSection}
         />
       );
