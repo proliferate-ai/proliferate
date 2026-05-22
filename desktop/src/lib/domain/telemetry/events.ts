@@ -1,4 +1,3 @@
-import type { CloudAgentKind } from "@/lib/domain/cloud/credentials";
 import type { TelemetryFailureKind } from "./failures";
 
 export type DesktopTelemetryRoute =
@@ -112,12 +111,6 @@ export interface DesktopProductEventMap {
   chat_session_created: {
     agent_kind: string;
     workspace_kind: DesktopWorkspaceKind;
-  };
-  cloud_credential_deleted: {
-    provider: CloudAgentKind;
-  };
-  cloud_credential_synced: {
-    provider: CloudAgentKind;
   };
   cloud_repo_config_saved: {
     env_var_count: number;

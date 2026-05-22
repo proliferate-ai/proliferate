@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from base64 import b64encode
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -50,6 +51,20 @@ from proliferate.integrations.github import GitHubRepoBranches
 from proliferate.server.billing.service import process_pending_seat_adjustments
 from proliferate.server.cloud.workspaces import service as cloud_service
 from tests.helpers.desktop_auth import mint_desktop_token_payload
+
+
+def _claude_file_payload(api_key: str) -> dict[str, object]:
+    return {
+        "authMode": "file",
+        "files": [
+            {
+                "relativePath": ".claude/.credentials.json",
+                "contentBase64": b64encode(
+                    f'{{"claudeAiOauth":{{"accessToken":"{api_key}"}}}}'.encode()
+                ).decode(),
+            }
+        ],
+    }
 
 
 async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
@@ -1633,14 +1648,12 @@ class TestBillingApi:
         user_id = uuid.UUID(session["user_id"])
         await _link_github_account(db_session, session["user_id"])
         billing_subject = await ensure_personal_billing_subject(db_session, user_id)
+        await db_session.commit()
 
         credential_response = await client.put(
-            "/v1/cloud/credentials/claude",
+            "/v1/cloud/agent-auth/credentials/synced/claude",
             headers=headers,
-            json={
-                "authMode": "env",
-                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-            },
+            json=_claude_file_payload("test-anthropic-key"),
         )
         assert credential_response.status_code == 200
 

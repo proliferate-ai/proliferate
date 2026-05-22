@@ -21,7 +21,6 @@ function credential(
     redactedSummary: {},
     status: "ready",
     revision: 1,
-    legacyCloudCredentialId: null,
     activeCredentialShareId: null,
     revokedAt: null,
     ...overrides,

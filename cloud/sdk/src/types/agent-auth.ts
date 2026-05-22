@@ -26,6 +26,11 @@ export type CreateGatewayCredentialRequest =
   components["schemas"]["CreateGatewayCredentialRequest"];
 export type CreateGatewayCredentialResponse =
   components["schemas"]["CreateGatewayCredentialResponse"];
+export type SyncSyncedCredentialRequest =
+  | components["schemas"]["SyncSyncedCredentialEnvRequest"]
+  | components["schemas"]["SyncSyncedCredentialFileRequest"];
+export type SyncSyncedCredentialResponse =
+  components["schemas"]["SyncSyncedCredentialResponse"];
 export type EnsureManagedCreditsRequest =
   components["schemas"]["EnsureManagedCreditsRequest"];
 export type EnsureManagedCreditsResponse =
@@ -78,3 +83,8 @@ export interface SelectAgentAuthCredentialInput {
   credentialShareId?: string | null;
   forceRestart?: boolean;
 }
+
+export type AgentGatewayCapabilities =
+  components["schemas"]["AgentGatewayCapabilities"];
+export type CloudCapabilities =
+  components["schemas"]["CloudCapabilitiesResponse"];

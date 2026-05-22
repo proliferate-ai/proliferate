@@ -1749,6 +1749,7 @@ export interface components {
             protectedEnv?: {
                 [key: string]: string;
             };
+            status?: string | null;
             supportConfig?: {
                 [key: string]: unknown;
             };
@@ -1767,6 +1768,7 @@ export interface components {
             materializationMode: string;
             protectedConfigKeys: string[];
             protectedEnvKeys: string[];
+            status?: string | null;
             supportConfigKeys: string[];
             supportEnvKeys: string[];
             syncedFilePaths: string[];
@@ -1863,6 +1865,7 @@ export interface components {
         };
         ApplyAgentAuthConfigResponse: {
             applied: boolean;
+            noSelectionKinds?: string[];
             /** Format: int64 */
             revision: number;
             selectionCount: number;
@@ -2983,9 +2986,12 @@ export interface components {
             workspace: components["schemas"]["Workspace"];
         };
         ProblemDetails: {
+            agentKind?: string | null;
             code?: string | null;
             detail?: string | null;
             instance?: string | null;
+            resolutionScope?: null | components["schemas"]["AgentAuthExternalScope"];
+            selectionStatus?: string | null;
             /** Format: int32 */
             status: number;
             title: string;

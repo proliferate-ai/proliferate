@@ -41,7 +41,8 @@ class AgentAuthCredentialRecord:
     redacted_summary_json: str
     status: str
     revision: int
-    legacy_cloud_credential_id: UUID | None
+    payload_ciphertext: str | None
+    payload_ciphertext_key_id: str | None
     created_at: datetime
     updated_at: datetime
     revoked_at: datetime | None
@@ -159,6 +160,7 @@ class SandboxProfileTargetStateRecord:
     last_agent_auth_applied_at: datetime | None
     last_agent_auth_error_code: str | None
     last_agent_auth_error_message: str | None
+    pending_agent_auth_cleanup_json: str | None
     applied_runtime_config_sequence: int
     applied_runtime_config_revision_id: str | None
     runtime_config_status: str
@@ -203,6 +205,10 @@ class SandboxProfileTargetStateRecord:
     def last_error_message(self) -> str | None:
         return self.last_agent_auth_error_message
 
+    @property
+    def pending_cleanup_json(self) -> str | None:
+        return self.pending_agent_auth_cleanup_json
+
 
 SandboxProfileAgentAuthTargetStateRecord = SandboxProfileTargetStateRecord
 
@@ -218,6 +224,8 @@ class AgentGatewayRuntimeGrantRecord:
     issued_profile_revision: int
     target_id: UUID
     sandbox_profile_id: UUID
+    cloud_sandbox_id: UUID | None
+    slot_generation: int | None
     organization_id: UUID | None
     user_id: UUID | None
     agent_kind: str
@@ -244,9 +252,12 @@ class AgentAuthAuditEventRecord:
 
 
 @dataclass(frozen=True)
-class LegacyCloudCredentialRecord:
+class AgentAuthSyncedCredentialRecord:
     id: UUID
     provider: str
     auth_mode: str
+    payload_ciphertext: str
+    payload_format: str
     revoked_at: datetime | None
+    last_synced_at: datetime | None
     updated_at: datetime | None

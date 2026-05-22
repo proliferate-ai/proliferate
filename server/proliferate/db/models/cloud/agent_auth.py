@@ -192,11 +192,8 @@ class AgentAuthCredential(Base):
     redacted_summary_json: Mapped[str] = mapped_column(Text, default="{}")
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     revision: Mapped[int] = mapped_column(Integer, default=1)
-    legacy_cloud_credential_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_credential.id", ondelete="SET NULL"),
-        unique=True,
-        nullable=True,
-    )
+    payload_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload_ciphertext_key_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -592,6 +589,7 @@ class SandboxProfileTargetState(Base):
     )
     last_agent_auth_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_agent_auth_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pending_agent_auth_cleanup_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     applied_runtime_config_sequence: Mapped[int] = mapped_column(Integer, default=0)
     applied_runtime_config_revision_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     runtime_config_status: Mapped[str] = mapped_column(String(32), default="applied")
@@ -648,6 +646,11 @@ class AgentGatewayRuntimeGrant(Base):
             "agent_kind",
         ),
         Index(
+            "ix_agent_gateway_runtime_grant_slot",
+            "cloud_sandbox_id",
+            "slot_generation",
+        ),
+        Index(
             "ix_agent_gateway_runtime_grant_selection_revision",
             "selection_id",
             "issued_profile_revision",
@@ -678,6 +681,12 @@ class AgentGatewayRuntimeGrant(Base):
         ForeignKey("sandbox_profile.id", ondelete="CASCADE"),
         index=True,
     )
+    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("organization.id", ondelete="CASCADE"),
         index=True,

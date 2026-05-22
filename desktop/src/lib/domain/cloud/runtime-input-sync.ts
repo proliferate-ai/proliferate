@@ -56,7 +56,6 @@ export interface RuntimeInputSyncQueueState {
 export const MAX_RUNTIME_INPUT_SYNC_TRACKED_FILE_BYTES = 1_048_576;
 
 export const SUPPORTED_CLOUD_CREDENTIAL_ENV_VARS: Record<string, CloudAgentKind> = {
-  ANTHROPIC_API_KEY: "claude",
   GEMINI_API_KEY: "gemini",
   GOOGLE_API_KEY: "gemini",
   GOOGLE_GENAI_USE_VERTEXAI: "gemini",

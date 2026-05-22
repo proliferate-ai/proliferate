@@ -4,19 +4,27 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 from unittest.mock import ANY
 from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.db.models.auth import User
+from proliferate.db.models.cloud.agent_auth import AgentGatewayRuntimeGrant
 from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.store.cloud_agent_auth import store
+from proliferate.db.store.cloud_sandboxes import ensure_profile_slot, supersede_slot
+from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.integrations.litellm import LiteLLMRuntimeResponse, LiteLLMRuntimeStatusError
-from proliferate.server.cloud.agent_auth.service import issue_runtime_grant_for_selection
+from proliferate.server.cloud.agent_auth.service import (
+    issue_runtime_grant_for_selection,
+    reconcile_agent_gateway_runtime_grant_freshness,
+)
 from proliferate.utils.crypto import encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
 
@@ -26,6 +34,8 @@ class _GatewaySeed:
     raw_token: str
     target_id: UUID
     sandbox_profile_id: UUID
+    cloud_sandbox_id: UUID
+    slot_generation: int
     policy_id: UUID
     selection_id: UUID
 
@@ -125,17 +135,39 @@ async def _seed_gateway_grant(
         last_error_code=None,
         last_error_message=None,
     )
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=target.id,
+    )
     result = await issue_runtime_grant_for_selection(
         db_session,
         selection=selection,
         profile=profile,
         target_id=target.id,
+        cloud_sandbox_id=slot.id,
+        slot_generation=slot.slot_generation,
+    )
+    await store.upsert_target_state(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=target.id,
+        desired_revision=profile.agent_auth_revision,
+        applied_revision=profile.agent_auth_revision,
+        status="applied",
+        force_restart_required=False,
+        last_command_id=None,
+        last_worker_id=None,
+        last_error_code=None,
+        last_error_message=None,
     )
     await db_session.commit()
     return _GatewaySeed(
         raw_token=result.raw_token,
         target_id=target.id,
         sandbox_profile_id=profile.id,
+        cloud_sandbox_id=slot.id,
+        slot_generation=slot.slot_generation,
         policy_id=policy.id,
         selection_id=selection.id,
     )
@@ -523,12 +555,16 @@ async def test_runtime_grant_rotation_keeps_one_grace_grant(
         selection=selection,
         profile=profile,
         target_id=seed.target_id,
+        cloud_sandbox_id=seed.cloud_sandbox_id,
+        slot_generation=seed.slot_generation,
     )
     await issue_runtime_grant_for_selection(
         db_session,
         selection=selection,
         profile=profile,
         target_id=seed.target_id,
+        cloud_sandbox_id=seed.cloud_sandbox_id,
+        slot_generation=seed.slot_generation,
     )
     active = await store.list_active_runtime_grants_for_route(
         db_session,
@@ -540,6 +576,42 @@ async def test_runtime_grant_rotation_keeps_one_grace_grant(
     )
 
     assert len(active) == 2
+
+
+@pytest.mark.asyncio
+async def test_runtime_grant_freshness_queues_agent_auth_refresh(
+    db_session: AsyncSession,
+) -> None:
+    seed = await _seed_gateway_grant(db_session)
+    await db_session.execute(
+        update(AgentGatewayRuntimeGrant)
+        .where(AgentGatewayRuntimeGrant.sandbox_profile_id == seed.sandbox_profile_id)
+        .values(expires_at=utcnow() + timedelta(hours=1))
+    )
+    await db_session.commit()
+
+    result = await reconcile_agent_gateway_runtime_grant_freshness(
+        db_session,
+        refresh_window=timedelta(days=2),
+    )
+
+    assert result.grants_checked == 1
+    assert result.targets_refreshed == 1
+    state = await store.get_target_state(
+        db_session,
+        sandbox_profile_id=seed.sandbox_profile_id,
+        target_id=seed.target_id,
+    )
+    assert state is not None
+    assert state.agent_auth_status == "pending"
+    assert state.last_agent_auth_command_id is not None
+    command = await commands_store.get_command_by_id(
+        db_session,
+        state.last_agent_auth_command_id,
+    )
+    assert command is not None
+    assert command.kind == "refresh_agent_auth_config"
+    assert "runtime_grant_expiring" in command.payload_json
 
 
 @pytest.mark.asyncio
@@ -584,3 +656,26 @@ async def test_gateway_models_endpoint_returns_allowed_models(
 
     assert response.status_code == 200
     assert response.json()["data"][0]["id"] == "us.anthropic.claude-sonnet-4-6"
+
+
+@pytest.mark.asyncio
+async def test_gateway_rejects_grant_after_slot_replacement(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    seed = await _seed_gateway_grant(db_session)
+    await supersede_slot(db_session, sandbox_id=seed.cloud_sandbox_id)
+    await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=seed.sandbox_profile_id,
+        target_id=seed.target_id,
+    )
+    await db_session.commit()
+
+    response = await client.get(
+        "/anthropic/v1/models",
+        headers={"Authorization": f"Bearer {seed.raw_token}"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "invalid_gateway_token"

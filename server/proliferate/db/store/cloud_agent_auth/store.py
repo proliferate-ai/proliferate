@@ -22,7 +22,6 @@ from proliferate.db.models.cloud.agent_auth import (
     SandboxProfileAgentAuthRevision,
     SandboxProfileTargetState,
 )
-from proliferate.db.models.cloud.credentials import CloudCredential
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.store.billing import (
@@ -37,13 +36,14 @@ from proliferate.db.store.cloud_agent_auth.records import (
     AgentGatewayPolicyRecord,
     AgentGatewayProviderCredentialRecord,
     AgentGatewayRuntimeGrantRecord,
-    LegacyCloudCredentialRecord,
     SandboxAgentAuthSelectionRecord,
     SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
     SandboxProfileTargetStateRecord,
 )
 from proliferate.utils.time import utcnow
+
+_UNSET = object()
 
 
 def _profile_record(
@@ -81,7 +81,8 @@ def _credential_record(row: AgentAuthCredential) -> AgentAuthCredentialRecord:
         redacted_summary_json=row.redacted_summary_json,
         status=row.status,
         revision=row.revision,
-        legacy_cloud_credential_id=row.legacy_cloud_credential_id,
+        payload_ciphertext=row.payload_ciphertext,
+        payload_ciphertext_key_id=row.payload_ciphertext_key_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
         revoked_at=row.revoked_at,
@@ -209,6 +210,7 @@ def _target_state_record(
         last_agent_auth_applied_at=row.last_agent_auth_applied_at,
         last_agent_auth_error_code=row.last_agent_auth_error_code,
         last_agent_auth_error_message=row.last_agent_auth_error_message,
+        pending_agent_auth_cleanup_json=row.pending_agent_auth_cleanup_json,
         applied_runtime_config_sequence=row.applied_runtime_config_sequence,
         applied_runtime_config_revision_id=row.applied_runtime_config_revision_id,
         runtime_config_status=row.runtime_config_status,
@@ -234,6 +236,8 @@ def _runtime_grant_record(row: AgentGatewayRuntimeGrant) -> AgentGatewayRuntimeG
         issued_profile_revision=row.issued_profile_revision,
         target_id=row.target_id,
         sandbox_profile_id=row.sandbox_profile_id,
+        cloud_sandbox_id=row.cloud_sandbox_id,
+        slot_generation=row.slot_generation,
         organization_id=row.organization_id,
         user_id=row.user_id,
         agent_kind=row.agent_kind,
@@ -258,16 +262,6 @@ def _audit_event_record(row: AgentAuthAuditEvent) -> AgentAuthAuditEventRecord:
         target_id=row.target_id,
         metadata_json=row.metadata_json,
         created_at=row.created_at,
-    )
-
-
-def _legacy_cloud_credential_record(row: CloudCredential) -> LegacyCloudCredentialRecord:
-    return LegacyCloudCredentialRecord(
-        id=row.id,
-        provider=row.provider,
-        auth_mode=row.auth_mode,
-        revoked_at=row.revoked_at,
-        updated_at=row.updated_at,
     )
 
 
@@ -535,7 +529,8 @@ async def create_agent_auth_credential(
     display_name: str,
     redacted_summary_json: str,
     status: str,
-    legacy_cloud_credential_id: UUID | None = None,
+    payload_ciphertext: str | None = None,
+    payload_ciphertext_key_id: str | None = None,
 ) -> AgentAuthCredentialRecord:
     now = utcnow()
     row = AgentAuthCredential(
@@ -549,7 +544,8 @@ async def create_agent_auth_credential(
         redacted_summary_json=redacted_summary_json,
         status=status,
         revision=1,
-        legacy_cloud_credential_id=legacy_cloud_credential_id,
+        payload_ciphertext=payload_ciphertext,
+        payload_ciphertext_key_id=payload_ciphertext_key_id,
         created_at=now,
         updated_at=now,
         revoked_at=None,
@@ -601,72 +597,55 @@ async def revoke_credential(
     return _credential_record(row)
 
 
-async def find_agent_auth_credential_for_legacy_cloud_credential(
+async def get_active_personal_synced_credential_for_update(
     db: AsyncSession,
-    legacy_cloud_credential_id: UUID,
+    *,
+    user_id: UUID,
+    agent_kind: str,
 ) -> AgentAuthCredentialRecord | None:
     row = (
         await db.execute(
-            select(AgentAuthCredential).where(
-                AgentAuthCredential.legacy_cloud_credential_id == legacy_cloud_credential_id
+            select(AgentAuthCredential)
+            .where(
+                AgentAuthCredential.owner_scope == "personal",
+                AgentAuthCredential.owner_user_id == user_id,
+                AgentAuthCredential.organization_id.is_(None),
+                AgentAuthCredential.agent_kind == agent_kind,
+                AgentAuthCredential.credential_kind == "synced_path",
+                AgentAuthCredential.revoked_at.is_(None),
+                AgentAuthCredential.status != "revoked",
             )
+            .order_by(AgentAuthCredential.created_at.asc())
+            .with_for_update()
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
     return _credential_record(row) if row is not None else None
 
 
-async def list_active_legacy_cloud_credentials_for_user(
+async def update_synced_credential_payload(
     db: AsyncSession,
-    user_id: UUID,
-) -> tuple[LegacyCloudCredentialRecord, ...]:
-    return tuple(
-        row
-        for row in await list_legacy_cloud_credentials_for_user(db, user_id)
-        if row.revoked_at is None
-    )
-
-
-async def list_legacy_cloud_credentials_for_user(
-    db: AsyncSession,
-    user_id: UUID,
-) -> tuple[LegacyCloudCredentialRecord, ...]:
-    rows = (
-        (
-            await db.execute(
-                select(CloudCredential)
-                .where(
-                    CloudCredential.user_id == user_id,
-                )
-                .order_by(CloudCredential.updated_at.desc())
-            )
-        )
-        .scalars()
-        .all()
-    )
-    return tuple(_legacy_cloud_credential_record(row) for row in rows)
-
-
-async def list_imported_legacy_credentials_for_user(
-    db: AsyncSession,
-    user_id: UUID,
-) -> tuple[AgentAuthCredentialRecord, ...]:
-    rows = (
-        (
-            await db.execute(
-                select(AgentAuthCredential)
-                .where(
-                    AgentAuthCredential.owner_scope == "personal",
-                    AgentAuthCredential.owner_user_id == user_id,
-                    AgentAuthCredential.legacy_cloud_credential_id.is_not(None),
-                    AgentAuthCredential.revoked_at.is_(None),
-                )
-                .order_by(AgentAuthCredential.updated_at.desc())
-            )
-        )
-        .scalars()
-        .all()
-    )
-    return tuple(_credential_record(row) for row in rows)
+    *,
+    credential_id: UUID,
+    display_name: str,
+    redacted_summary_json: str,
+    payload_ciphertext: str,
+    payload_ciphertext_key_id: str,
+    status: str,
+    increment_revision: bool,
+) -> AgentAuthCredentialRecord | None:
+    row = await db.get(AgentAuthCredential, credential_id)
+    if row is None:
+        return None
+    row.display_name = display_name
+    row.redacted_summary_json = redacted_summary_json
+    row.payload_ciphertext = payload_ciphertext
+    row.payload_ciphertext_key_id = payload_ciphertext_key_id
+    row.status = status
+    if increment_revision:
+        row.revision += 1
+    row.updated_at = utcnow()
+    await db.flush()
+    return _credential_record(row)
 
 
 async def create_or_reactivate_credential_share(
@@ -1160,6 +1139,44 @@ async def list_selections_for_profile(
     return tuple(_selection_record(row) for row in rows)
 
 
+async def list_selected_personal_synced_credentials_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> tuple[AgentAuthCredentialRecord, ...]:
+    rows = (
+        (
+            await db.execute(
+                select(AgentAuthCredential)
+                .join(
+                    SandboxAgentAuthSelection,
+                    SandboxAgentAuthSelection.credential_id == AgentAuthCredential.id,
+                )
+                .join(
+                    SandboxProfile,
+                    SandboxProfile.id == SandboxAgentAuthSelection.sandbox_profile_id,
+                )
+                .where(
+                    SandboxProfile.owner_scope == "personal",
+                    SandboxProfile.owner_user_id == user_id,
+                    SandboxProfile.archived_at.is_(None),
+                    AgentAuthCredential.owner_scope == "personal",
+                    AgentAuthCredential.owner_user_id == user_id,
+                    AgentAuthCredential.credential_kind == "synced_path",
+                    AgentAuthCredential.status == "ready",
+                    AgentAuthCredential.revoked_at.is_(None),
+                    SandboxAgentAuthSelection.status == "active",
+                    SandboxAgentAuthSelection.materialization_mode == "synced_files",
+                    SandboxAgentAuthSelection.selected_revision == AgentAuthCredential.revision,
+                )
+                .order_by(AgentAuthCredential.agent_kind.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_credential_record(row) for row in rows)
+
+
 async def upsert_selection(
     db: AsyncSession,
     *,
@@ -1281,6 +1298,7 @@ async def upsert_target_state(
     last_worker_id: UUID | None,
     last_error_code: str | None,
     last_error_message: str | None,
+    pending_cleanup_json: str | None | object = _UNSET,
 ) -> SandboxProfileAgentAuthTargetStateRecord:
     row = (
         await db.execute(
@@ -1327,6 +1345,9 @@ async def upsert_target_state(
             last_agent_auth_applied_at=applied_at,
             last_agent_auth_error_code=last_error_code,
             last_agent_auth_error_message=last_error_message,
+            pending_agent_auth_cleanup_json=(
+                None if pending_cleanup_json is _UNSET else pending_cleanup_json
+            ),
             applied_runtime_config_sequence=0,
             applied_runtime_config_revision_id=None,
             runtime_config_status="applied",
@@ -1350,6 +1371,10 @@ async def upsert_target_state(
             row.last_agent_auth_applied_at = applied_at
         row.last_agent_auth_error_code = last_error_code
         row.last_agent_auth_error_message = last_error_message
+        if pending_cleanup_json is not _UNSET:
+            row.pending_agent_auth_cleanup_json = pending_cleanup_json
+        elif status == "applied":
+            row.pending_agent_auth_cleanup_json = None
         row.updated_at = now
     await db.flush()
     return _target_state_record(row)
@@ -1366,6 +1391,8 @@ async def create_runtime_grant(
     issued_profile_revision: int,
     target_id: UUID,
     sandbox_profile_id: UUID,
+    cloud_sandbox_id: UUID | None,
+    slot_generation: int | None,
     organization_id: UUID | None,
     user_id: UUID | None,
     agent_kind: str,
@@ -1382,6 +1409,8 @@ async def create_runtime_grant(
         issued_profile_revision=issued_profile_revision,
         target_id=target_id,
         sandbox_profile_id=sandbox_profile_id,
+        cloud_sandbox_id=cloud_sandbox_id,
+        slot_generation=slot_generation,
         organization_id=organization_id,
         user_id=user_id,
         agent_kind=agent_kind,
@@ -1432,6 +1461,56 @@ async def list_active_runtime_grants_for_route(
                     AgentGatewayRuntimeGrant.expires_at > now,
                 )
                 .order_by(AgentGatewayRuntimeGrant.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_runtime_grant_record(row) for row in rows)
+
+
+async def list_runtime_grants_needing_rotation(
+    db: AsyncSession,
+    *,
+    now: datetime,
+    expires_before: datetime,
+    limit: int,
+) -> tuple[AgentGatewayRuntimeGrantRecord, ...]:
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayRuntimeGrant)
+                .join(
+                    SandboxAgentAuthSelection,
+                    SandboxAgentAuthSelection.id == AgentGatewayRuntimeGrant.selection_id,
+                )
+                .join(
+                    AgentAuthCredential,
+                    AgentAuthCredential.id == AgentGatewayRuntimeGrant.credential_id,
+                )
+                .join(
+                    AgentGatewayPolicy,
+                    AgentGatewayPolicy.id == AgentGatewayRuntimeGrant.policy_id,
+                )
+                .join(
+                    SandboxProfile,
+                    SandboxProfile.id == AgentGatewayRuntimeGrant.sandbox_profile_id,
+                )
+                .where(
+                    AgentGatewayRuntimeGrant.revoked_at.is_(None),
+                    AgentGatewayRuntimeGrant.expires_at > now,
+                    AgentGatewayRuntimeGrant.expires_at <= expires_before,
+                    SandboxAgentAuthSelection.status == "active",
+                    SandboxAgentAuthSelection.selected_revision == AgentAuthCredential.revision,
+                    AgentAuthCredential.status == "ready",
+                    AgentAuthCredential.revoked_at.is_(None),
+                    AgentGatewayPolicy.status == "ready",
+                    AgentGatewayPolicy.litellm_sync_status == "synced",
+                    SandboxProfile.archived_at.is_(None),
+                    SandboxProfile.deleted_at.is_(None),
+                )
+                .order_by(AgentGatewayRuntimeGrant.expires_at.asc())
+                .limit(limit)
             )
         )
         .scalars()
@@ -1505,6 +1584,32 @@ async def revoke_runtime_grants_by_ids(
             await db.execute(
                 select(AgentGatewayRuntimeGrant).where(
                     AgentGatewayRuntimeGrant.id.in_(grant_ids),
+                    AgentGatewayRuntimeGrant.revoked_at.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    now = utcnow()
+    for row in rows:
+        row.revoked_at = now
+    await db.flush()
+    return len(rows)
+
+
+async def revoke_runtime_grants_for_profile_target(
+    db: AsyncSession,
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+) -> int:
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayRuntimeGrant).where(
+                    AgentGatewayRuntimeGrant.sandbox_profile_id == sandbox_profile_id,
+                    AgentGatewayRuntimeGrant.target_id == target_id,
                     AgentGatewayRuntimeGrant.revoked_at.is_(None),
                 )
             )

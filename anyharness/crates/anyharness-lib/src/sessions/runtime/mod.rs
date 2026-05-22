@@ -15,7 +15,7 @@ use super::model::SessionRecord;
 use super::service::SessionService;
 use crate::acp::manager::AcpManager;
 use crate::acp::permission_broker::PermissionDecision;
-use crate::domains::agents::auth_config::AgentAuthConfigService;
+use crate::domains::agents::auth_config::{AgentAuthConfigService, AgentAuthSelectionRequired};
 use crate::domains::plans::service::PlanService;
 use crate::domains::runtime_config::service::RuntimeConfigService;
 use crate::sessions::extensions::SessionExtension;
@@ -62,6 +62,7 @@ pub enum CreateAndStartSessionError {
         agent_kind: String,
         mode_id: String,
     },
+    AgentAuthSelectionRequired(AgentAuthSelectionRequired),
     WorkspaceNotFound,
     WorkspaceSingleSession {
         session_id: String,
@@ -76,6 +77,7 @@ pub enum EnsureLiveSessionError {
     SessionNotFound(String),
     SessionClosed,
     RestartRequired(String),
+    AgentAuthSelectionRequired(AgentAuthSelectionRequired),
     Invalid(String),
     MissingDataKey,
     Internal(anyhow::Error),
@@ -227,6 +229,7 @@ pub(super) enum StartSessionError {
     Closed,
     MissingDataKey,
     RestartRequired(String),
+    AgentAuthSelectionRequired(AgentAuthSelectionRequired),
     Internal(anyhow::Error),
     AcpStart(anyhow::Error),
 }

@@ -10,23 +10,19 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from proliferate.constants.cloud import AGENT_GATEWAY_CIPHERTEXT_KEY_ID
 from proliferate.db.models.auth import OAuthAccount, User
-from proliferate.db.models.cloud.credentials import CloudCredential
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store import cloud_workspaces, users
 from proliferate.integrations.anyharness import ResolvedRemoteWorkspace
 from proliferate.integrations.sandbox import SandboxProviderKind
-from proliferate.server.cloud.credentials import session_loader as cloud_credential_session_loader
+from proliferate.server.cloud.agent_auth import session_loader as agent_auth_session_loader
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime import bootstrap as runtime_bootstrap
 from proliferate.server.cloud.runtime import provision as runtime_provision
 from proliferate.server.cloud.runtime import sandbox_exec as runtime_sandbox_exec
 from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
-from proliferate.server.cloud.runtime.credentials import (
-    ClaudeProvisionCredential,
-    CodexProvisionCredential,
-    ProvisionCredentials,
-)
 from proliferate.server.cloud.runtime.models import CloudProvisionInput
 from proliferate.utils.crypto import encrypt_json
 
@@ -64,7 +60,7 @@ def _make_workspace(user_id: uuid.UUID) -> CloudWorkspace:
 def _patched_session_factory(monkeypatch: pytest.MonkeyPatch, test_engine) -> None:
     factory = async_sessionmaker(test_engine, expire_on_commit=False)
     monkeypatch.setattr(
-        cloud_credential_session_loader.db_engine,
+        agent_auth_session_loader.db_engine,
         "async_session_factory",
         factory,
     )
@@ -163,19 +159,43 @@ class TestLoadProvisionInput:
         )
         workspace = _make_workspace(user.id)
         db_session.add(workspace)
-        db_session.add(
-            CloudCredential(
-                user_id=user.id,
-                provider="claude",
-                auth_mode="env",
-                payload_ciphertext=encrypt_json(
-                    {
-                        "authMode": "env",
-                        "envVars": {"ANTHROPIC_API_KEY": "anthropic-key"},
-                    }
-                ),
-                payload_format="json-v1",
-            )
+        profile = await agent_auth_store.ensure_personal_sandbox_profile(
+            db_session,
+            user_id=user.id,
+            created_by_user_id=user.id,
+        )
+        credential = await agent_auth_store.create_agent_auth_credential(
+            db_session,
+            owner_scope="personal",
+            owner_user_id=user.id,
+            organization_id=None,
+            created_by_user_id=user.id,
+            agent_kind="claude",
+            credential_kind="synced_path",
+            display_name="Synced claude auth",
+            redacted_summary_json='{"authMode":"file"}',
+            status="ready",
+            payload_ciphertext=encrypt_json(
+                {
+                    "provider": "claude",
+                    "authMode": "file",
+                    "files": {".claude.json": '{"apiKey":"sk-ant-test"}'},
+                }
+            ),
+            payload_ciphertext_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
+        )
+        await agent_auth_store.upsert_selection(
+            db_session,
+            sandbox_profile_id=profile.id,
+            owner_scope="personal",
+            agent_kind="claude",
+            credential_id=credential.id,
+            credential_share_id=None,
+            materialization_mode="synced_files",
+            selected_revision=credential.revision,
+            status="active",
+            last_error_code=None,
+            last_error_message=None,
         )
         await db_session.commit()
 
@@ -188,8 +208,9 @@ class TestLoadProvisionInput:
         assert result.git_user_name == "Cloud Tester"
         assert result.git_user_email == "provision-input@example.com"
         assert len(result.anyharness_data_key) > 10
-        assert result.credentials.synced_providers == ("claude",)
-        assert result.credentials.claude == ClaudeProvisionCredential(api_key="anthropic-key")
+        assert result.sandbox_profile_id == profile.id
+        assert result.required_agent_auth_revision == 0
+        assert result.agent_auth_agent_kinds == ("claude",)
 
 
 class TestResolveGitIdentity:
@@ -285,6 +306,8 @@ class TestWorkspaceStatusLogging:
 
 
 def _make_provision_input(*, codex_enabled: bool) -> CloudProvisionInput:
+    sandbox_profile_id = uuid.uuid4()
+    target_id = uuid.uuid4()
     return CloudProvisionInput(
         workspace_id=uuid.uuid4(),
         user_id=uuid.uuid4(),
@@ -296,12 +319,10 @@ def _make_provision_input(*, codex_enabled: bool) -> CloudProvisionInput:
         git_user_name="Cloud Tester",
         git_user_email="cloud-tester@example.com",
         anyharness_data_key=generate_anyharness_data_key(),
-        credentials=ProvisionCredentials(
-            claude=ClaudeProvisionCredential(api_key="anthropic-key"),
-            codex=CodexProvisionCredential(auth_json="{}") if codex_enabled else None,
-        ),
-        credential_files_revision="credential-files:v1:test",
-        credential_process_revision="credential-process:v1:test",
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=target_id,
+        required_agent_auth_revision=1,
+        agent_auth_agent_kinds=("claude", "codex") if codex_enabled else ("claude",),
         repo_env_vars={},
     )
 
@@ -837,6 +858,9 @@ class TestLaunchAndConnectRuntime:
             assert _kwargs["await_deferred_startup_cleanup"] is False
             return 20
 
+        async def _request_agent_auth_refresh_and_wait(*_args, **_kwargs) -> None:
+            calls.append("apply_agent_auth")
+
         enrollment_target_id = uuid.uuid4()
 
         async def _ensure_runtime_target_enrollment(*_args, **_kwargs):
@@ -885,6 +909,11 @@ class TestLaunchAndConnectRuntime:
         )
         monkeypatch.setattr(
             runtime_provision,
+            "_request_agent_auth_refresh_and_wait",
+            _request_agent_auth_refresh_and_wait,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
             "ensure_runtime_target_enrollment",
             _ensure_runtime_target_enrollment,
         )
@@ -894,6 +923,8 @@ class TestLaunchAndConnectRuntime:
             ctx,
             provider,
             connected,
+            cloud_sandbox_id=uuid.uuid4(),
+            slot_generation=1,
         )
 
         assert calls == [
@@ -907,6 +938,7 @@ class TestLaunchAndConnectRuntime:
             "wait_for_runtime_health",
             "verify_runtime_auth_enforced",
             "wait_for_worker_target_online",
+            "apply_agent_auth",
             "sync_cloud_worktree_policy_to_runtime",
             "reconcile_remote_agents",
             "resolve_remote_workspace",
@@ -976,7 +1008,7 @@ class TestProvisionWorkspaceGitSetup:
             kind=SandboxProviderKind.daytona,
             template_version="v1",
         )
-        sandbox_record = SimpleNamespace(id=uuid.uuid4())
+        sandbox_record = SimpleNamespace(id=uuid.uuid4(), slot_generation=1)
         connected = SimpleNamespace(
             handle=SimpleNamespace(
                 sandbox_id="sandbox-123",
@@ -1015,9 +1047,6 @@ class TestProvisionWorkspaceGitSetup:
 
         async def _prepare_runtime_template(*args, **kwargs) -> None:
             calls.append("prepare_runtime_template")
-
-        async def _write_credential_files(*args, **kwargs) -> None:
-            calls.append("write_credential_files")
 
         async def _clone_repository(*args, **kwargs) -> None:
             calls.append("clone_repository")
@@ -1075,7 +1104,6 @@ class TestProvisionWorkspaceGitSetup:
             "_prepare_runtime_template",
             _prepare_runtime_template,
         )
-        monkeypatch.setattr(runtime_provision, "write_credential_files", _write_credential_files)
         monkeypatch.setattr(runtime_provision, "clone_repository", _clone_repository)
         monkeypatch.setattr(runtime_provision, "checkout_cloud_branch", _checkout_cloud_branch)
         monkeypatch.setattr(runtime_provision, "configure_git_identity", _configure_git_identity)
@@ -1120,7 +1148,6 @@ class TestProvisionWorkspaceGitSetup:
 
         assert calls == [
             "prepare_runtime_template",
-            "write_credential_files",
             "clone_repository",
             "checkout_cloud_branch",
             "configure_git_identity",
@@ -1167,7 +1194,7 @@ class TestProvisionWorkspaceGitSetup:
 
         async def _connect_existing_environment_sandbox(*args, **kwargs):
             calls.append("connect_existing_runtime")
-            return connected, sandbox_record_id, "stored-runtime-token"
+            return connected, sandbox_record_id, 1, "stored-runtime-token"
 
         async def _authorize_sandbox_start(*args, **kwargs):
             return SimpleNamespace(allowed=True, message=None)
@@ -1179,9 +1206,11 @@ class TestProvisionWorkspaceGitSetup:
             calls.append(f"attach_workspace:{runtime_token}")
             return handshake
 
-        async def _ensure_runtime_environment_credentials_current(*args, **kwargs):
-            calls.append("ensure_credentials_current")
-            return SimpleNamespace(status="current")
+        async def _wait_for_worker_target_online(*args, **kwargs):
+            calls.append("wait_worker_online")
+
+        async def _request_agent_auth_refresh_and_wait(*args, **kwargs):
+            calls.append("refresh_agent_auth")
 
         async def _finalize_workspace_provision_for_ids(*args, **kwargs) -> None:
             calls.append("finalize_workspace")
@@ -1210,15 +1239,19 @@ class TestProvisionWorkspaceGitSetup:
             _unexpected,
         )
         monkeypatch.setattr(runtime_provision, "_prepare_runtime_template", _unexpected)
-        monkeypatch.setattr(runtime_provision, "write_credential_files", _unexpected)
         monkeypatch.setattr(runtime_provision, "clone_repository", _unexpected)
         monkeypatch.setattr(runtime_provision, "checkout_cloud_branch", _unexpected)
         monkeypatch.setattr(runtime_provision, "configure_git_identity", _unexpected)
         monkeypatch.setattr(runtime_provision, "_launch_and_connect_runtime", _unexpected)
         monkeypatch.setattr(
             runtime_provision,
-            "ensure_runtime_environment_credentials_current",
-            _ensure_runtime_environment_credentials_current,
+            "_wait_for_worker_target_online",
+            _wait_for_worker_target_online,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "_request_agent_auth_refresh_and_wait",
+            _request_agent_auth_refresh_and_wait,
         )
         monkeypatch.setattr(
             runtime_provision,
@@ -1256,7 +1289,8 @@ class TestProvisionWorkspaceGitSetup:
 
         assert calls == [
             "connect_existing_runtime",
-            "ensure_credentials_current",
+            "wait_worker_online",
+            "refresh_agent_auth",
             "attach_workspace:stored-runtime-token",
             "finalize_workspace",
         ]
@@ -1342,6 +1376,7 @@ class TestProvisionWorkspaceGitSetup:
         sandbox_record = SimpleNamespace(
             id=uuid.uuid4(),
             external_sandbox_id="sandbox-db-123",
+            slot_generation=1,
         )
         connected = SimpleNamespace(
             handle=SimpleNamespace(

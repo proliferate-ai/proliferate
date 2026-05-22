@@ -1,6 +1,7 @@
 import type {
   AgentAuthAgentKind,
   AgentAuthCredential,
+  AgentGatewayCapabilities,
   SandboxAgentAuthSelection,
   SandboxAgentAuthTargetState,
 } from "@proliferate/cloud-sdk";
@@ -97,6 +98,42 @@ export function isHostedCloudV1AgentAuthCredential(credential: AgentAuthCredenti
     return true;
   }
   return isProliferateManagedCreditsCredential(credential);
+}
+
+export function isAgentAuthCredentialVisibleForCapabilities(
+  credential: AgentAuthCredential,
+  capabilities: AgentGatewayCapabilities | null | undefined,
+): boolean {
+  if (credential.credentialKind === "synced_path") {
+    return true;
+  }
+  if (isProliferateManagedCreditsCredential(credential)) {
+    return true;
+  }
+  return gatewayByokCredentialEnabled(credential, capabilities);
+}
+
+export function gatewayByokCredentialEnabled(
+  credential: AgentAuthCredential,
+  capabilities: AgentGatewayCapabilities | null | undefined,
+): boolean {
+  const providerKind = credential.redactedSummary.providerKind;
+  if (!capabilities?.enabled || !capabilities.byokEnabled) {
+    return false;
+  }
+  if (providerKind === "anthropic_api_key") {
+    return capabilities.byokProviders.anthropicApiKey;
+  }
+  if (providerKind === "openai_api_key") {
+    return capabilities.byokProviders.openaiApiKey;
+  }
+  if (providerKind === "bedrock_assume_role") {
+    return capabilities.byokProviders.bedrockAssumeRole;
+  }
+  if (providerKind === "openai_compatible") {
+    return capabilities.byokProviders.openaiCompatible;
+  }
+  return false;
 }
 
 export function isProliferateManagedCreditsCredential(

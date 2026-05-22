@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from base64 import b64encode
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -62,6 +63,20 @@ def _headers(tokens: dict[str, str]) -> dict[str, str]:
     return {"Authorization": f"Bearer {tokens['access_token']}"}
 
 
+def _claude_file_payload(api_key: str) -> dict[str, object]:
+    return {
+        "authMode": "file",
+        "files": [
+            {
+                "relativePath": ".claude.json",
+                "contentBase64": b64encode(
+                    f'{{"apiKey":"{api_key}"}}'.encode()
+                ).decode("ascii"),
+            }
+        ],
+    }
+
+
 def _enable_anthropic_gateway_byok(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_byok_enabled",
@@ -108,25 +123,27 @@ async def _create_enrolled_target(
 
 
 @pytest.mark.asyncio
-async def test_personal_profile_backfills_legacy_cloud_credentials(
+async def test_synced_credential_sync_creates_personal_profile_selection(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
     tokens = await _create_user_and_get_tokens(
         client,
         db_session,
-        email="agent-auth-backfill@example.com",
+        email="agent-auth-sync-profile@example.com",
     )
 
     response = await client.put(
-        "/v1/cloud/credentials/claude",
+        "/v1/cloud/agent-auth/credentials/synced/claude",
         headers=_headers(tokens),
-        json={
-            "authMode": "env",
-            "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-        },
+        json=_claude_file_payload("sk-ant-test"),
     )
     assert response.status_code == 200
+    sync_result = response.json()
+    assert sync_result["changed"] is True
+    assert sync_result["credential"]["credentialKind"] == "synced_path"
+    assert sync_result["credential"]["status"] == "ready"
+    assert sync_result["selection"]["materializationMode"] == "synced_files"
 
     response = await client.post(
         "/v1/cloud/sandbox-profiles/personal",
@@ -136,7 +153,7 @@ async def test_personal_profile_backfills_legacy_cloud_credentials(
     assert response.status_code == 200
     profile = response.json()
     assert profile["ownerScope"] == "personal"
-    assert profile["agentAuthRevision"] == 1
+    assert profile["desiredAgentAuthRevision"] == 1
 
     response = await client.get(
         f"/v1/cloud/sandbox-profiles/{profile['id']}/agent-auth-selections",
@@ -146,28 +163,50 @@ async def test_personal_profile_backfills_legacy_cloud_credentials(
     selections = response.json()
     assert selections[0]["agentKind"] == "claude"
     assert selections[0]["materializationMode"] == "synced_files"
+    assert selections[0]["status"] == "active"
 
 
 @pytest.mark.asyncio
-async def test_legacy_cloud_credential_update_reconciles_existing_selection(
+async def test_synced_claude_env_payload_is_rejected(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
     tokens = await _create_user_and_get_tokens(
         client,
         db_session,
-        email="agent-auth-legacy-update@example.com",
+        email="agent-auth-claude-env@example.com",
     )
 
     response = await client.put(
-        "/v1/cloud/credentials/claude",
+        "/v1/cloud/agent-auth/credentials/synced/claude",
         headers=_headers(tokens),
         json={
             "authMode": "env",
-            "envVars": {"ANTHROPIC_API_KEY": "first-key"},
+            "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
         },
     )
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "invalid_payload"
+
+
+@pytest.mark.asyncio
+async def test_synced_credential_update_refreshes_existing_selection_revision(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-sync-update@example.com",
+    )
+
+    response = await client.put(
+        "/v1/cloud/agent-auth/credentials/synced/claude",
+        headers=_headers(tokens),
+        json=_claude_file_payload("sk-ant-first"),
+    )
     assert response.status_code == 200
+    original_credential = response.json()["credential"]
 
     response = await client.post(
         "/v1/cloud/sandbox-profiles/personal",
@@ -185,15 +224,15 @@ async def test_legacy_cloud_credential_update_reconciles_existing_selection(
     original_selection = response.json()[0]
 
     response = await client.put(
-        "/v1/cloud/credentials/claude",
+        "/v1/cloud/agent-auth/credentials/synced/claude",
         headers=_headers(tokens),
-        json={
-            "authMode": "env",
-            "envVars": {"ANTHROPIC_API_KEY": "second-key"},
-        },
+        json=_claude_file_payload("sk-ant-second"),
     )
     assert response.status_code == 200
+    updated_credential = response.json()["credential"]
     assert response.json()["changed"] is True
+    assert updated_credential["id"] == original_credential["id"]
+    assert updated_credential["revision"] == original_credential["revision"] + 1
 
     response = await client.post(
         "/v1/cloud/sandbox-profiles/personal",
@@ -201,7 +240,7 @@ async def test_legacy_cloud_credential_update_reconciles_existing_selection(
         json={},
     )
     assert response.status_code == 200
-    assert response.json()["agentAuthRevision"] == 2
+    assert response.json()["desiredAgentAuthRevision"] == 2
 
     response = await client.get(
         f"/v1/cloud/sandbox-profiles/{profile['id']}/agent-auth-selections",
@@ -211,29 +250,28 @@ async def test_legacy_cloud_credential_update_reconciles_existing_selection(
     updated_selection = response.json()[0]
     assert updated_selection["status"] == "active"
     assert updated_selection["agentKind"] == "claude"
-    assert updated_selection["credentialId"] != original_selection["credentialId"]
+    assert updated_selection["credentialId"] == original_selection["credentialId"]
+    assert updated_selection["selectedRevision"] == updated_credential["revision"]
 
 
 @pytest.mark.asyncio
-async def test_legacy_cloud_credential_delete_invalidates_existing_selection(
+async def test_synced_credential_revoke_invalidates_existing_selection(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
     tokens = await _create_user_and_get_tokens(
         client,
         db_session,
-        email="agent-auth-legacy-delete@example.com",
+        email="agent-auth-sync-revoke@example.com",
     )
 
     response = await client.put(
-        "/v1/cloud/credentials/claude",
+        "/v1/cloud/agent-auth/credentials/synced/claude",
         headers=_headers(tokens),
-        json={
-            "authMode": "env",
-            "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
-        },
+        json=_claude_file_payload("sk-ant-test"),
     )
     assert response.status_code == 200
+    credential_id = response.json()["credential"]["id"]
 
     response = await client.post(
         "/v1/cloud/sandbox-profiles/personal",
@@ -243,7 +281,10 @@ async def test_legacy_cloud_credential_delete_invalidates_existing_selection(
     assert response.status_code == 200
     profile = response.json()
 
-    response = await client.delete("/v1/cloud/credentials/claude", headers=_headers(tokens))
+    response = await client.delete(
+        f"/v1/cloud/agent-auth/credentials/{credential_id}",
+        headers=_headers(tokens),
+    )
     assert response.status_code == 200
     assert response.json()["changed"] is True
 
@@ -254,7 +295,118 @@ async def test_legacy_cloud_credential_delete_invalidates_existing_selection(
     assert response.status_code == 200
     selection = response.json()[0]
     assert selection["status"] == "invalid"
-    assert selection["lastErrorCode"] == "legacy_cloud_credential_revoked"
+    assert selection["lastErrorCode"] == "credential_revoked"
+
+
+@pytest.mark.asyncio
+async def test_revoked_synced_selection_materializes_invalid_cleanup_plan(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-sync-revoke-cleanup@example.com",
+    )
+    response = await client.put(
+        "/v1/cloud/agent-auth/credentials/synced/claude",
+        headers=_headers(tokens),
+        json={
+            "authMode": "file",
+            "files": [
+                {
+                    "relativePath": ".claude.json",
+                    "contentBase64": b64encode(
+                        b'{"apiKey":"sk-ant-test"}'
+                    ).decode("ascii"),
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+    credential_id = response.json()["credential"]["id"]
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+    )
+    assert profile_response.status_code == 200
+    profile = profile_response.json()
+    profile_id = UUID(profile["id"])
+    target_id = UUID(profile["primaryTargetId"])
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    worker_token = f"agent-auth-cleanup-{uuid.uuid4()}"
+    await worker_auth_store.create_worker(
+        db_session,
+        target_id=target_id,
+        cloud_sandbox_id=slot.id,
+        slot_generation=slot.slot_generation,
+        token_hash=worker_service._hash_token(
+            domain=CLOUD_WORKER_TOKEN_DOMAIN,
+            token=worker_token,
+        ),
+        machine_fingerprint="agent-auth-cleanup",
+        hostname="agent-auth-cleanup",
+        worker_version="0.1.0",
+        anyharness_version="0.1.0",
+        supervisor_version=None,
+        now=utcnow(),
+    )
+    await db_session.commit()
+    worker_headers = {"Authorization": f"Bearer {worker_token}"}
+    initial_lease = await client.post(
+        "/v1/cloud/worker/commands/lease",
+        headers=worker_headers,
+        json={"supportedKinds": ["refresh_agent_auth_config"], "leaseTimeoutSeconds": 30},
+    )
+    assert initial_lease.status_code == 200
+    initial_command = initial_lease.json()["command"]
+    if initial_command is not None:
+        initial_result = await client.post(
+            f"/v1/cloud/worker/commands/{initial_command['commandId']}/result",
+            headers=worker_headers,
+            json={
+                "status": "accepted",
+                "leaseId": initial_command["leaseId"],
+                "slotGeneration": initial_command["slotGeneration"],
+            },
+        )
+        assert initial_result.status_code == 200
+
+    response = await client.delete(
+        f"/v1/cloud/agent-auth/credentials/{credential_id}",
+        headers=_headers(tokens),
+    )
+    assert response.status_code == 200
+    lease = await client.post(
+        "/v1/cloud/worker/commands/lease",
+        headers=worker_headers,
+        json={"supportedKinds": ["refresh_agent_auth_config"], "leaseTimeoutSeconds": 30},
+    )
+    assert lease.status_code == 200
+    command = lease.json()["command"]
+    assert command["kind"] == "refresh_agent_auth_config"
+
+    materialization = await client.get(
+        f"/v1/cloud/worker/agent-auth-configs/{profile['id']}/materialization",
+        headers=worker_headers,
+        params={
+            "command_id": command["commandId"],
+            "revision": command["payload"]["revision"],
+            "lease_id": command["leaseId"],
+        },
+    )
+    assert materialization.status_code == 200
+    selection = materialization.json()["selections"][0]
+    assert selection["agentKind"] == "claude"
+    assert selection["status"] == "invalid"
+    assert selection["syncedFiles"]["files"] == []
+    assert {
+        cleanup["relativePath"] for cleanup in selection["syncedFiles"]["cleanup"]
+    } == {".claude.json"}
 
 
 @pytest.mark.asyncio

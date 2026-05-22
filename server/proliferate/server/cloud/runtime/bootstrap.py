@@ -13,7 +13,6 @@ from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.integrations.sandbox import SandboxProvider, SandboxRuntimeContext
-from proliferate.server.cloud.runtime.credentials import ProvisionCredentials
 from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
     result_exit_code,
@@ -72,7 +71,6 @@ def _target_sentry_env() -> dict[str, str]:
 
 
 def build_runtime_env(
-    credentials: ProvisionCredentials,
     runtime_token: str,
     *,
     anyharness_data_key: str,
@@ -90,8 +88,6 @@ def build_runtime_env(
         env["ANYHARNESS_SENTRY_RELEASE"] = _runtime_sentry_release()
     if is_vendor_telemetry_enabled():
         env["ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE"] = str(_runtime_sentry_traces_sample_rate())
-    for item in credentials.iter_env_vars():
-        env[item.name] = item.value
     env["ANYHARNESS_BEARER_TOKEN"] = runtime_token
     env["ANYHARNESS_DATA_KEY"] = anyharness_data_key
     if repo_env_vars:

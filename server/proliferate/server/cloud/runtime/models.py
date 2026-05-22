@@ -11,8 +11,7 @@ from uuid import UUID, uuid4
 from proliferate.integrations.sandbox import RuntimeEndpoint, SandboxHandle, SandboxRuntimeContext
 
 if TYPE_CHECKING:
-    from proliferate.server.cloud.runtime.credential_freshness import CredentialFreshnessSnapshot
-    from proliferate.server.cloud.runtime.credentials import ProvisionCredentials
+    from proliferate.server.cloud.runtime.auth_status import RuntimeAuthStateSnapshot
 
 
 class ProvisionStep(StrEnum):
@@ -25,7 +24,7 @@ class ProvisionStep(StrEnum):
     install_node_runtime = "install_node_runtime"
     check_rust_runtime = "check_rust_runtime"
     install_rust_runtime = "install_rust_runtime"
-    sync_credentials = "sync_credentials"
+    apply_agent_auth = "apply_agent_auth"
     clone_repository = "clone_repository"
     checkout_cloud_branch = "checkout_cloud_branch"
     configure_git_identity = "configure_git_identity"
@@ -54,9 +53,10 @@ class CloudProvisionInput:
     git_user_name: str
     git_user_email: str
     anyharness_data_key: str
-    credentials: ProvisionCredentials
-    credential_files_revision: str
-    credential_process_revision: str
+    sandbox_profile_id: UUID
+    target_id: UUID
+    required_agent_auth_revision: int
+    agent_auth_agent_kinds: tuple[str, ...]
     repo_env_vars: dict[str, str]
     requested_base_sha: str | None = None
     runtime_environment_id: UUID = dataclass_field(default_factory=uuid4)
@@ -92,4 +92,4 @@ class RuntimeConnectionTarget:
     anyharness_workspace_id: str | None
     runtime_generation: int
     ready_agent_kinds: list[str]
-    credential_freshness: CredentialFreshnessSnapshot
+    runtime_auth: RuntimeAuthStateSnapshot

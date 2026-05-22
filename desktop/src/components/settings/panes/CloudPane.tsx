@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -8,30 +8,14 @@ import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHea
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { CloudAgentAuthLibrary } from "@/components/settings/panes/cloud/CloudAgentAuthLibrary";
-import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
-import { CLOUD_CREDENTIAL_PROVIDER_ORDER } from "@/config/cloud-providers";
-import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
-import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import {
-  type CloudAgentKind,
-  type CloudCredentialStatus,
-  describeCloudCredentialStatus,
-  isCloudAgentKind,
-} from "@/lib/domain/cloud/credentials";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
-import { useCloudCredentials } from "@/hooks/access/cloud/use-cloud-credentials";
 import {
   cloudRepositoryKey,
   isCloudRepository,
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
-import { useCloudCredentialActions } from "@/hooks/cloud/workflows/use-cloud-credential-actions";
-import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useRuntimeInputSyncSummary } from "@/hooks/cloud/facade/use-runtime-input-sync-summary";
-import { useAuthStore } from "@/stores/auth/auth-store";
-
-const EMPTY_CLOUD_CREDENTIAL_STATUSES: CloudCredentialStatus[] = [];
 
 interface CloudPaneProps {
   repositories: SettingsRepositoryEntry[];
@@ -39,19 +23,8 @@ interface CloudPaneProps {
 
 export function CloudPane({ repositories }: CloudPaneProps) {
   const navigate = useNavigate();
-  const { data: credentialStatuses = EMPTY_CLOUD_CREDENTIAL_STATUSES } = useCloudCredentials();
   const { data: repoConfigs } = useCloudRepoConfigs();
   const runtimeInputSync = useRuntimeInputSyncSummary(repositories);
-  const { syncCloudCredential, deleteCloudCredential } = useCloudCredentialActions();
-  const {
-    signIn: signInWithGitHub,
-    submitting: signingIn,
-    error: signInError,
-  } = useGitHubSignIn();
-  const authStatus = useAuthStore((state) => state.status);
-  const [syncingProvider, setSyncingProvider] = useState<CloudAgentKind | null>(null);
-  const [clearingProvider, setClearingProvider] = useState<CloudAgentKind | null>(null);
-  const canManageCloudCredentials = authStatus === "authenticated" && !isDevAuthBypassed();
   const cloudRepositories = repositories.filter(isCloudRepository);
   const repoConfigMap = useMemo(
     () => new Map(
@@ -62,39 +35,17 @@ export function CloudPane({ repositories }: CloudPaneProps) {
     ),
     [repoConfigs?.configs],
   );
-  const credentialStatusMap = useMemo(() => {
-    const statusMap = new Map<CloudAgentKind, CloudCredentialStatus>();
-    for (const status of credentialStatuses) {
-      if (isCloudAgentKind(status.provider)) {
-        statusMap.set(status.provider, status);
-      }
-    }
-    return statusMap;
-  }, [credentialStatuses]);
-  const syncableCredentialCount = credentialStatuses.filter((status) => (
-    status.localDetected || status.synced
-  )).length;
+  const agentCredentialDescription = runtimeInputSync.rows
+    .find((row) => row.id === "credentials")
+    ?.description ?? "Agent authentication sync is not configured.";
   const configuredEnvironmentCount = cloudRepositories.filter((repository) => {
     const repoKey = cloudRepositoryKey(repository.gitOwner, repository.gitRepoName);
     return repoConfigMap.get(repoKey)?.configured;
   }).length;
-  const automaticSyncDescription = `${formatCount(
-    syncableCredentialCount,
-    "agent credential",
-  )} + ${formatCount(
+  const automaticSyncDescription = `${agentCredentialDescription} ${formatCount(
     configuredEnvironmentCount,
     "repo tracked-file set",
   )}`;
-
-  const rows = CLOUD_CREDENTIAL_PROVIDER_ORDER.map((provider) => {
-    const status = credentialStatusMap.get(provider);
-    return {
-      provider,
-      status,
-      label: getProviderDisplayName(provider),
-      description: describeCloudCredentialStatus(provider, status),
-    };
-  });
 
   return (
     <section className="space-y-6">
@@ -125,78 +76,6 @@ export function CloudPane({ repositories }: CloudPaneProps) {
           </SettingsCardRow>
         </SettingsCard>
       </CloudPaneSection>
-
-      <CloudPaneSection title="Manual sync">
-        <SettingsCard>
-          {rows.map((row) => {
-            const status = row.status;
-            const syncing = syncingProvider === row.provider;
-            const clearing = clearingProvider === row.provider;
-            const requiresSignIn = !canManageCloudCredentials && Boolean(status?.localDetected);
-            const syncDisabled = syncing
-              || (requiresSignIn && signingIn)
-              || (!canManageCloudCredentials && !status?.localDetected)
-              || (!status?.localDetected && !status?.synced);
-            const clearDisabled = clearing || !canManageCloudCredentials || !status?.synced;
-            const syncLabel = requiresSignIn
-              ? signingIn
-                ? AUTH_ACCOUNT_LABELS.signingIn
-                : AUTH_ACCOUNT_LABELS.signIn
-              : syncing
-                ? AUTH_ACCOUNT_LABELS.syncing
-                : AUTH_ACCOUNT_LABELS.sync;
-
-            return (
-              <SettingsCardRow
-                key={row.provider}
-                label={row.label}
-                description={row.description}
-              >
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs ${status?.synced ? "text-foreground" : "text-muted-foreground"}`}>
-                    {status?.synced ? "Synced to cloud" : status?.localDetected ? "Available locally" : "Not detected"}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={syncDisabled}
-                    loading={requiresSignIn ? signingIn : syncing}
-                    onClick={() => {
-                      if (requiresSignIn) {
-                        void signInWithGitHub();
-                        return;
-                      }
-                      setSyncingProvider(row.provider);
-                      void syncCloudCredential(row.provider)
-                        .catch(() => undefined)
-                        .finally(() => setSyncingProvider(null));
-                    }}
-                  >
-                    {syncLabel}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={clearDisabled}
-                    onClick={() => {
-                      setClearingProvider(row.provider);
-                      void deleteCloudCredential(row.provider)
-                        .catch(() => undefined)
-                        .finally(() => setClearingProvider(null));
-                    }}
-                  >
-                    {clearing ? AUTH_ACCOUNT_LABELS.clearing : AUTH_ACCOUNT_LABELS.clear}
-                  </Button>
-                </div>
-              </SettingsCardRow>
-            );
-          })}
-        </SettingsCard>
-      </CloudPaneSection>
-
-      {signInError && !canManageCloudCredentials && (
-        <p className="text-sm text-destructive">{signInError}</p>
-      )}
 
       <CloudAgentAuthLibrary />
 

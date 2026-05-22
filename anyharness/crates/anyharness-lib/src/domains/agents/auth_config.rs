@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -15,6 +16,7 @@ use crate::persistence::Db;
 use crate::sessions::mcp_bindings::crypto::{decrypt_bytes, encrypt_bytes, SessionDataCipher};
 
 const LOCAL_SCOPE_KEY: &str = "local:default";
+const AGENT_AUTH_REQUIRED_AGENT_KINDS: &[&str] = &["claude", "codex", "opencode", "gemini"];
 const PROTECTED_ENV_KEYS: &[&str] = &[
     "ANTHROPIC_AUTH_TOKEN",
     "ANTHROPIC_API_KEY",
@@ -30,11 +32,56 @@ const PROTECTED_ENV_KEYS: &[&str] = &[
     "OPENAI_API_KEY",
     "OPENAI_BASE_URL",
 ];
+const CLAUDE_GATEWAY_PROTECTED_ENV: &[&str] = &[
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_CUSTOM_HEADERS",
+    "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+];
+const CODEX_GATEWAY_PROTECTED_ENV: &[&str] = &["CODEX_API_KEY", "CODEX_HOME"];
+const OPENCODE_GATEWAY_PROTECTED_ENV: &[&str] = &["OPENAI_API_KEY", "OPENAI_BASE_URL"];
+const CLAUDE_SYNCED_PROTECTED_ENV: &[&str] = &[];
+const GEMINI_SYNCED_PROTECTED_ENV: &[&str] = &[
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "GOOGLE_GENAI_USE_VERTEXAI",
+];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AgentAuthLaunchOverlay {
     pub support_env: BTreeMap<String, String>,
     pub protected_env: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AgentAuthSelectionRequired {
+    pub detail: String,
+    pub resolution_scope: Option<AgentAuthExternalScope>,
+    pub agent_kind: String,
+    pub selection_status: String,
+}
+
+#[derive(Debug)]
+pub enum AgentAuthLaunchOverlayError {
+    SelectionRequired(AgentAuthSelectionRequired),
+    Internal(anyhow::Error),
+}
+
+impl fmt::Display for AgentAuthLaunchOverlayError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SelectionRequired(required) => f.write_str(&required.detail),
+            Self::Internal(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl std::error::Error for AgentAuthLaunchOverlayError {}
+
+impl From<anyhow::Error> for AgentAuthLaunchOverlayError {
+    fn from(error: anyhow::Error) -> Self {
+        Self::Internal(error)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -186,17 +233,16 @@ impl AgentAuthConfigService {
             .clone()
             .unwrap_or_else(default_external_scope);
         let scope_key = scope_key(&scope);
-        if self
-            .store
-            .current_revision(&scope_key)?
-            .is_some_and(|current| current > request.revision)
-        {
-            return Ok(ApplyAgentAuthConfigResponse {
-                applied: false,
-                revision: request.revision,
-                selection_count: 0,
-                status: "stale".to_string(),
-            });
+        if let Some(current_revision) = self.store.current_revision(&scope_key)? {
+            if current_revision > request.revision {
+                return Ok(ApplyAgentAuthConfigResponse {
+                    applied: false,
+                    revision: current_revision,
+                    selection_count: 0,
+                    no_selection_kinds: no_selection_kinds(&request.selections),
+                    status: "stale".to_string(),
+                });
+            }
         }
         self.write_managed_config_files(&request)?;
         let plaintext = serde_json::to_vec(&request)?;
@@ -205,10 +251,15 @@ impl AgentAuthConfigService {
             .store
             .upsert(&scope_key, &scope, request.revision, &ciphertext)?;
         if !applied {
+            let current_revision = self
+                .store
+                .current_revision(&scope_key)?
+                .unwrap_or(request.revision);
             return Ok(ApplyAgentAuthConfigResponse {
                 applied: false,
-                revision: request.revision,
+                revision: current_revision,
                 selection_count: 0,
+                no_selection_kinds: no_selection_kinds(&request.selections),
                 status: "stale".to_string(),
             });
         }
@@ -216,6 +267,7 @@ impl AgentAuthConfigService {
             applied: true,
             revision: request.revision,
             selection_count: request.selections.len(),
+            no_selection_kinds: no_selection_kinds(&request.selections),
             status: "applied".to_string(),
         })
     }
@@ -246,7 +298,7 @@ impl AgentAuthConfigService {
         agent_kind: &str,
         scope: Option<&AgentAuthExternalScope>,
         required_revision: Option<i64>,
-    ) -> anyhow::Result<AgentAuthLaunchOverlay> {
+    ) -> Result<AgentAuthLaunchOverlay, AgentAuthLaunchOverlayError> {
         let record = if let Some(scope) = scope {
             let scope_key = scope_key(scope);
             self.store.find_by_scope(&scope_key)?
@@ -255,17 +307,21 @@ impl AgentAuthConfigService {
         };
         let Some(record) = record else {
             if scope.is_some() || required_revision.is_some() {
-                anyhow::bail!("missing required agent auth config");
+                return Err(selection_required_error(
+                    scope.cloned(),
+                    agent_kind,
+                    "missing",
+                ));
             }
             return Ok(AgentAuthLaunchOverlay::default());
         };
         if let Some(required_revision) = required_revision {
             if record.revision < required_revision {
-                anyhow::bail!(
-                    "agent auth config revision {} is older than required revision {}",
-                    record.revision,
-                    required_revision
-                );
+                return Err(selection_required_error(
+                    scope.cloned(),
+                    agent_kind,
+                    "needs_resync",
+                ));
             }
         }
         let config = self.decrypt_record(&record)?;
@@ -274,9 +330,30 @@ impl AgentAuthConfigService {
             .iter()
             .find(|selection| selection.agent_kind == agent_kind)
         else {
+            if scope.is_some() || required_revision.is_some() {
+                return Err(selection_required_error(
+                    scope.cloned(),
+                    agent_kind,
+                    "missing",
+                ));
+            }
             return Ok(AgentAuthLaunchOverlay::default());
         };
-        reject_expired_selection(selection)?;
+        if let Some(status) = selection.status.as_deref() {
+            if !matches!(status, "active" | "ready") {
+                return Err(selection_required_error(
+                    scope.cloned(),
+                    agent_kind,
+                    if status == "needs_resync" {
+                        "needs_resync"
+                    } else {
+                        "invalid"
+                    },
+                ));
+            }
+        }
+        reject_expired_selection(selection)
+            .map_err(|_| selection_required_error(scope.cloned(), agent_kind, "expired"))?;
         let mut protected_env = selection.protected_env.clone();
         if agent_kind == "codex" && selection.protected_config.contains_key("codex") {
             protected_env.insert(
@@ -337,6 +414,7 @@ fn validate_config_request(request: &ApplyAgentAuthConfigRequest) -> anyhow::Res
         }
         validate_env_map(&selection.protected_env)?;
         validate_env_map(&selection.support_env)?;
+        validate_protected_env_allowlist(selection)?;
         for key in selection.support_env.keys() {
             if is_protected_env_key(key) {
                 anyhow::bail!("agent auth supportEnv cannot set protected key {key}");
@@ -367,6 +445,38 @@ fn validate_env_name(name: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn validate_protected_env_allowlist(selection: &AgentAuthSelectionConfig) -> anyhow::Result<()> {
+    let allowed = match (
+        selection.agent_kind.as_str(),
+        selection.materialization_mode.as_str(),
+    ) {
+        ("claude", "gateway_env") => CLAUDE_GATEWAY_PROTECTED_ENV,
+        ("codex", "gateway_env") => CODEX_GATEWAY_PROTECTED_ENV,
+        ("opencode", "gateway_env") => OPENCODE_GATEWAY_PROTECTED_ENV,
+        ("claude", "synced_files") => CLAUDE_SYNCED_PROTECTED_ENV,
+        ("gemini", "synced_files") => GEMINI_SYNCED_PROTECTED_ENV,
+        ("codex", "synced_files") | ("opencode", "synced_files") => &[],
+        _ => {
+            anyhow::bail!(
+                "agent auth protected env policy is unsupported for {}/{}",
+                selection.agent_kind,
+                selection.materialization_mode
+            );
+        }
+    };
+    for key in selection.protected_env.keys() {
+        if !allowed.contains(&key.as_str()) {
+            anyhow::bail!(
+                "agent auth protectedEnv key {} is not allowed for {}/{}",
+                key,
+                selection.agent_kind,
+                selection.materialization_mode
+            );
+        }
+    }
+    Ok(())
+}
+
 fn is_protected_env_key(key: &str) -> bool {
     PROTECTED_ENV_KEYS.contains(&key)
 }
@@ -390,6 +500,7 @@ fn selection_status(selection: &AgentAuthSelectionConfig) -> AgentAuthSelectionS
         materialization_mode: selection.materialization_mode.clone(),
         credential_id: selection.credential_id.clone(),
         credential_revision: selection.credential_revision,
+        status: selection.status.clone(),
         credential_share_id: selection.credential_share_id.clone(),
         expires_at: selection.expires_at.clone(),
         protected_env_keys: selection.protected_env.keys().cloned().collect(),
@@ -398,6 +509,37 @@ fn selection_status(selection: &AgentAuthSelectionConfig) -> AgentAuthSelectionS
         support_config_keys: selection.support_config.keys().cloned().collect(),
         synced_file_paths: selection.synced_file_paths.clone(),
     }
+}
+
+fn no_selection_kinds(selections: &[AgentAuthSelectionConfig]) -> Vec<String> {
+    AGENT_AUTH_REQUIRED_AGENT_KINDS
+        .iter()
+        .filter(|kind| {
+            !selections.iter().any(|selection| {
+                selection.agent_kind == **kind
+                    && selection
+                        .status
+                        .as_deref()
+                        .map_or(true, |status| matches!(status, "active" | "ready"))
+            })
+        })
+        .map(|kind| (*kind).to_string())
+        .collect()
+}
+
+fn selection_required_error(
+    scope: Option<AgentAuthExternalScope>,
+    agent_kind: &str,
+    selection_status: &str,
+) -> AgentAuthLaunchOverlayError {
+    AgentAuthLaunchOverlayError::SelectionRequired(AgentAuthSelectionRequired {
+        detail: format!(
+            "Agent auth selection for {agent_kind} is required before launch ({selection_status})."
+        ),
+        resolution_scope: scope,
+        agent_kind: agent_kind.to_string(),
+        selection_status: selection_status.to_string(),
+    })
 }
 
 fn reject_expired_selection(selection: &AgentAuthSelectionConfig) -> anyhow::Result<()> {
@@ -429,11 +571,16 @@ fn scope_key(scope: &AgentAuthExternalScope) -> String {
     if scope.provider == "local" && scope.id == "default" {
         return LOCAL_SCOPE_KEY.to_string();
     }
-    format!(
+    let mut key = format!(
         "{}:{}",
         sanitize_scope_part(&scope.provider),
-        sanitize_scope_part(&scope.id)
-    )
+        sanitize_scope_part(&scope.id),
+    );
+    if let Some(target_id) = scope.target_id.as_deref().filter(|value| !value.is_empty()) {
+        key.push_str(":target:");
+        key.push_str(&sanitize_scope_part(target_id));
+    }
+    key
 }
 
 fn sanitize_scope_part(value: &str) -> String {
