@@ -3,6 +3,17 @@ export interface CloudSseSubscription<TEvent> {
   readonly closed: boolean;
 }
 
+export class CloudSseErrorEvent extends Event {
+  readonly message: string;
+  readonly status: number | null;
+
+  constructor(message: string, options: { status?: number; type?: string } = {}) {
+    super(options.type ?? "error");
+    this.message = message;
+    this.status = options.status ?? null;
+  }
+}
+
 export interface SubscribeCloudSseOptions<TEvent> {
   url: string;
   eventName?: string;
@@ -42,7 +53,7 @@ export function subscribeCloudSse<TEvent>(
     })
     .catch((error) => {
       if (!closed && !controller.signal.aborted) {
-        options.onError?.(error instanceof Event ? error : new Event("error"));
+        options.onError?.(normalizeCloudSseError(error));
       }
     });
 
@@ -65,7 +76,10 @@ async function pumpCloudSse<TEvent>(
     signal,
   });
   if (!response.ok) {
-    throw new Error(`Cloud stream failed with HTTP ${response.status}`);
+    throw new CloudSseErrorEvent(`Cloud stream failed with HTTP ${response.status}`, {
+      status: response.status,
+      type: "http_error",
+    });
   }
   if (!response.body) {
     throw new Error("Cloud stream response did not include a body.");
@@ -97,6 +111,16 @@ async function defaultFetchResponse(input: {
     headers: input.headers,
     signal: input.signal,
   });
+}
+
+function normalizeCloudSseError(error: unknown): Event {
+  if (error instanceof Event) {
+    return error;
+  }
+  if (error instanceof Error) {
+    return new CloudSseErrorEvent(error.message);
+  }
+  return new CloudSseErrorEvent("Cloud stream failed.");
 }
 
 function dispatchCloudSseFrame<TEvent>(
