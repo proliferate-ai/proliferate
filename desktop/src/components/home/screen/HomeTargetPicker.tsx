@@ -11,7 +11,6 @@ import {
   Check,
   ChevronRight,
   CloudIcon,
-  Folder,
   FolderPlus,
   GitBranchIcon,
   Monitor,
@@ -241,9 +240,7 @@ export function HomeTargetPicker({
       <PopoverButton
         trigger={(
           <PillControlButton
-            icon={destination === "cowork"
-              ? <Sparkles className="size-3.5" />
-              : <Folder className="size-3.5" />}
+            icon={destination === "cowork" ? <Sparkles className="size-3.5" /> : null}
             label={projectLabel({ destination, selectedRepository })}
             disclosure
             aria-label={projectAriaLabel({ destination, selectedRepository })}

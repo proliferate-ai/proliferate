@@ -219,6 +219,40 @@ export function HomeNextScreen() {
             </p>
           </div>
 
+          <div className="mb-2 flex min-w-0 flex-wrap items-center justify-start gap-[5px] px-2">
+            <HomeTargetPicker
+              destination={destination}
+              repoLaunchKind={repoLaunchKind}
+              repositories={homeNext.repositories}
+              selectedRepository={homeNext.selectedRepository}
+              selectedBranchName={homeNext.selectedBranchName}
+              branchOptions={homeNext.branchOptions}
+              branchLoading={homeNext.branchQuery.isLoading}
+              cloudActionBySourceRoot={homeNext.cloudRepoActionBySourceRoot}
+              onSelectCowork={() => {
+                setDestination("cowork");
+              }}
+              onSelectRepository={(sourceRoot) => {
+                const launchKind = resolveLaunchKindForRepository(sourceRoot);
+                setDestination("repository");
+                setRepositorySelection({ kind: "repository", sourceRoot });
+                setRepoLaunchKind(launchKind);
+                if (launchKind === "local") {
+                  setBaseBranchOverride(null);
+                }
+              }}
+              onSelectRuntime={(launchKind) => {
+                setRepoLaunchKind(launchKind);
+                if (launchKind === "local") {
+                  setBaseBranchOverride(null);
+                }
+              }}
+              onSelectBranch={setBaseBranchOverride}
+              onAddRepository={() => handleHomeAction("add-repository")}
+              onConfigureCloud={handleConfigureCloud}
+            />
+          </div>
+
           <ChatComposerSurface>
             <form
               className="relative flex flex-col"
@@ -227,11 +261,8 @@ export function HomeNextScreen() {
                 if (canSubmit) void handleSubmit();
               }}
             >
-              <div className="px-2 py-1.5">
-                <div className="flex w-full flex-wrap items-center justify-start gap-1" />
-              </div>
               <div
-                className="mb-2 flex-grow select-text overflow-y-auto px-4"
+                className="mt-3 mb-2 flex-grow select-text overflow-y-auto px-4"
                 style={{
                   minHeight: `${HOME_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
                   maxHeight: `${HOME_CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
@@ -259,37 +290,6 @@ export function HomeNextScreen() {
 
               <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
                 <div className="flex min-w-0 flex-wrap items-center gap-[5px]">
-                  <HomeTargetPicker
-                    destination={destination}
-                    repoLaunchKind={repoLaunchKind}
-                    repositories={homeNext.repositories}
-                    selectedRepository={homeNext.selectedRepository}
-                    selectedBranchName={homeNext.selectedBranchName}
-                    branchOptions={homeNext.branchOptions}
-                    branchLoading={homeNext.branchQuery.isLoading}
-                    cloudActionBySourceRoot={homeNext.cloudRepoActionBySourceRoot}
-                    onSelectCowork={() => {
-                      setDestination("cowork");
-                    }}
-                    onSelectRepository={(sourceRoot) => {
-                      const launchKind = resolveLaunchKindForRepository(sourceRoot);
-                      setDestination("repository");
-                      setRepositorySelection({ kind: "repository", sourceRoot });
-                      setRepoLaunchKind(launchKind);
-                      if (launchKind === "local") {
-                        setBaseBranchOverride(null);
-                      }
-                    }}
-                    onSelectRuntime={(launchKind) => {
-                      setRepoLaunchKind(launchKind);
-                      if (launchKind === "local") {
-                        setBaseBranchOverride(null);
-                      }
-                    }}
-                    onSelectBranch={setBaseBranchOverride}
-                    onAddRepository={() => handleHomeAction("add-repository")}
-                    onConfigureCloud={handleConfigureCloud}
-                  />
                   <HomeModelPicker
                     groups={homeNext.modelGroups}
                     selectedModel={homeNext.selectedModel}
