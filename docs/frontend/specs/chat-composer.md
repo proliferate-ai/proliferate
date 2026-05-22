@@ -9,12 +9,12 @@ Scope:
 - `desktop/src/components/workspace/chat/content/PlanReferenceAttachmentCard.tsx`
 - `desktop/src/components/workspace/chat/plans/**`
 - `desktop/src/components/workspace/reviews/**`
-- `desktop/src/hooks/chat/use-composer-dock-slots.tsx`
+- `desktop/src/hooks/chat/ui/use-composer-dock-slots.tsx`
 - `packages/product-model/src/chats/composer/resolve-dock-slots.ts`
-- `desktop/src/hooks/chat/use-active-todo-tracker.ts`
+- `desktop/src/hooks/chat/derived/use-active-todo-tracker.ts`
 - `desktop/src/hooks/reviews/**`
-- `desktop/src/lib/domain/chat/active-todo-tracker.ts`
-- `desktop/src/lib/domain/chat/claude-plan-tool-call.ts`
+- `packages/product-model/src/chats/tools/active-todo-tracker.ts`
+- `packages/product-model/src/chats/tools/claude-plan-tool-call.ts`
 - `desktop/src/lib/domain/reviews/**`
 - `desktop/src/stores/reviews/**`
 
@@ -62,7 +62,7 @@ Non-negotiable:
 `resolveComposerDockSlots`
 (`packages/product-model/src/chats/composer/resolve-dock-slots.ts`) owns the
 pure precedence rules for the named regions above the composer.
-`useComposerDockSlots` (`desktop/src/hooks/chat/use-composer-dock-slots.tsx`)
+`useComposerDockSlots` (`desktop/src/hooks/chat/ui/use-composer-dock-slots.tsx`)
 adapts that data resolution to Desktop React nodes. Classify each inhabitant by
 state role first, not by component family. They always render in this order:
 
