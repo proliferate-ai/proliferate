@@ -56,7 +56,7 @@ export function buildCloudTranscriptView(input: {
       envelopes as SessionEventEnvelope[],
     );
     const rows = buildRowsFromTranscriptState(transcript);
-    if (rows.length > 0) {
+    if (rows.length > 0 && !projectionIsAhead(input.fallbackItems, input.events)) {
       return {
         rows,
         source: "events",
@@ -81,6 +81,24 @@ export function buildCloudTranscriptView(input: {
     envelopeCount: envelopes.length,
     missingEnvelopeCount,
   };
+}
+
+function projectionIsAhead(
+  items: readonly CloudTranscriptItem[],
+  events: readonly CloudSessionEvent[],
+): boolean {
+  return latestProjectedItemSeq(items) > latestEventSeq(events);
+}
+
+function latestProjectedItemSeq(items: readonly CloudTranscriptItem[]): number {
+  return items.reduce(
+    (maxSeq, item) => Math.max(maxSeq, item.lastSeq, item.completedSeq ?? 0),
+    0,
+  );
+}
+
+function latestEventSeq(events: readonly CloudSessionEvent[]): number {
+  return events.reduce((maxSeq, event) => Math.max(maxSeq, event.seq), 0);
 }
 
 function emptyCloudTranscriptView(): CloudTranscriptViewResult {

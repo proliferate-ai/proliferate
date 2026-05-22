@@ -211,8 +211,14 @@ export function ChatScreen() {
     if (!session || !sessionLive.lastPatchAt) {
       return;
     }
+    void transcriptQuery.refetch();
     void sessionEventsQuery.refetch();
-  }, [session?.sessionId, sessionLive.lastPatchAt, sessionEventsQuery.refetch]);
+  }, [
+    session?.sessionId,
+    sessionLive.lastPatchAt,
+    sessionEventsQuery.refetch,
+    transcriptQuery.refetch,
+  ]);
 
   useEffect(() => {
     if (session && !pendingHomePrompt && !directPromptDispatching) {
