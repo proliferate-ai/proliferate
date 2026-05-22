@@ -1,4 +1,4 @@
-import { Apple, Cloud, CreditCard, Github, LifeBuoy, Monitor, ShieldCheck } from "lucide-react";
+import { Apple, CircleUserRound, Cloud, CreditCard, Github, LifeBuoy, Palette } from "lucide-react";
 import { useState } from "react";
 
 import type { AuthProviderName, BillingPlanInfo, CloudOwnerSelection } from "@proliferate/cloud-sdk";
@@ -23,6 +23,7 @@ import { startWebAuthFlow } from "../../../lib/access/cloud/auth/web-auth-flow";
 import { useAuthToken } from "../../../providers/WebCloudProvider";
 
 type SettingsSectionId = "account" | "appearance" | "cloud" | "billing" | "support";
+const SETTINGS_ICON_SIZE = 14;
 
 export function SettingsScreen() {
   const viewer = useAuthViewer();
@@ -68,27 +69,27 @@ export function SettingsScreen() {
               {
                 id: "account",
                 label: "Account",
-                icon: <ShieldCheck size={15} />,
+                icon: <CircleUserRound size={SETTINGS_ICON_SIZE} />,
               },
               {
                 id: "appearance",
                 label: "Appearance",
-                icon: <Monitor size={15} />,
+                icon: <Palette size={SETTINGS_ICON_SIZE} />,
               },
               {
                 id: "cloud",
                 label: "Cloud",
-                icon: <Cloud size={15} />,
+                icon: <Cloud size={SETTINGS_ICON_SIZE} />,
               },
               {
                 id: "billing",
                 label: "Billing",
-                icon: <CreditCard size={15} />,
+                icon: <CreditCard size={SETTINGS_ICON_SIZE} />,
               },
               {
                 id: "support",
                 label: "Support",
-                icon: <LifeBuoy size={15} />,
+                icon: <LifeBuoy size={SETTINGS_ICON_SIZE} />,
               },
             ],
           },

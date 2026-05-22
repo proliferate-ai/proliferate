@@ -74,6 +74,10 @@ describe("ProductSidebar", () => {
     expect(screen.getAllByText("Shared cloud").length).toBeGreaterThan(0);
     expect(screen.getByText("Investigate worker CI")).toBeTruthy();
     expect(screen.getByText("Claimable Slack thread")).toBeTruthy();
+    expect(
+      screen.getByText("Repositories").compareDocumentPosition(screen.getByText("Threads"))
+      & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByText("Pablo")).toBeTruthy();
     expect(screen.getByText("⌘B").className).toContain("opacity-100");
     expect(screen.getByText("⌥⌘1").className).toContain("opacity-100");
