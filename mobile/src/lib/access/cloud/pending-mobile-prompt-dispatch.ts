@@ -31,6 +31,10 @@ type EnqueueCloudCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,
 ) => Promise<CloudCommandResponse>;
 
+export class RetryablePendingPromptDispatchError extends Error {
+  readonly retryable = true;
+}
+
 export async function dispatchPendingMobilePrompt(args: {
   client: ProliferateCloudClient;
   workspace: CloudWorkspaceDetail;
@@ -214,16 +218,29 @@ async function loadExistingSessionIds(args: {
   workspaceId: string;
   targetId: string;
 }): Promise<Set<string>> {
-  try {
-    const snapshot = await getWorkspaceSnapshot(args.workspaceId, args.client);
-    return new Set(
-      snapshot.sessions
-        .filter((session) => session.targetId === args.targetId)
-        .map((session) => session.sessionId),
-    );
-  } catch {
-    return new Set();
+  let lastError: unknown = null;
+  let delayMs = 500;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const snapshot = await getWorkspaceSnapshot(args.workspaceId, args.client);
+      return new Set(
+        snapshot.sessions
+          .filter((session) => session.targetId === args.targetId)
+          .map((session) => session.sessionId),
+      );
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) {
+        await sleep(delayMs);
+        delayMs = nextPollDelay(delayMs);
+      }
+    }
   }
+  throw new RetryablePendingPromptDispatchError(
+    lastError instanceof Error
+      ? `Could not load existing sessions before starting a new one: ${lastError.message}`
+      : "Could not load existing sessions before starting a new one.",
+  );
 }
 
 async function findStartedSession(args: {

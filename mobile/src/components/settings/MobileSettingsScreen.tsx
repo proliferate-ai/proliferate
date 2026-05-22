@@ -36,11 +36,20 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
     || account.name;
   const email = viewer.data?.user.email ?? account.handle;
   const githubConnected = Boolean(viewer.data?.githubConnected);
-  const githubStateLabel = viewer.isError
+  const githubChecking = viewer.isLoading && !viewer.data;
+  const githubStateLabel = githubChecking
+    ? "Checking"
+    : viewer.isError
     ? "Unknown"
     : githubConnected
       ? "Linked"
       : "Required";
+  const githubNeedsAttention = !githubChecking && (viewer.isError || !githubConnected);
+  const githubIconColor = githubChecking
+    ? colors.faint
+    : githubConnected && !viewer.isError
+      ? colors.success
+      : colors.warning;
   const configuredRepos = (repoConfigs.data?.configs ?? []).filter((repo) => repo.configured);
   const organizationRows = organizations.data?.organizations ?? [];
 
@@ -66,13 +75,13 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
           title="GitHub"
           subtitle="Required for cloud sessions"
           trailing={
-            <View style={[styles.connected, !githubConnected && styles.warningChip]}>
+            <View style={[styles.connected, githubNeedsAttention && styles.warningChip]}>
               <MobileIcon
                 name={githubConnected && !viewer.isError ? "check" : "external"}
                 size={12}
-                color={githubConnected && !viewer.isError ? colors.success : colors.warning}
+                color={githubIconColor}
               />
-              <Text style={[styles.connectedText, !githubConnected && styles.warningText]}>
+              <Text style={[styles.connectedText, githubNeedsAttention && styles.warningText]}>
                 {githubStateLabel}
               </Text>
             </View>

@@ -239,7 +239,14 @@ function NewAutomationSheet({
     }
   }
 
-  const canCreate = Boolean(prompt.trim() && selectedRepo && selectedConfig && !createAutomation.isPending);
+  const canCreate = Boolean(
+    prompt.trim()
+      && selectedRepo
+      && selectedConfig
+      && !repoConfigs.isError
+      && !agentConfigs.isError
+      && !createAutomation.isPending,
+  );
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -262,6 +269,11 @@ function NewAutomationSheet({
               <OptionGroup>
                 {repoConfigs.isLoading ? (
                   <Text style={styles.loadingText}>Loading repositories...</Text>
+                ) : repoConfigs.isError ? (
+                  <QueryErrorOption
+                    message="Could not load repositories."
+                    onRetry={() => void repoConfigs.refetch()}
+                  />
                 ) : repoOptions.length === 0 ? (
                   <Text style={styles.loadingText}>No configured personal repositories.</Text>
                 ) : (
@@ -282,6 +294,11 @@ function NewAutomationSheet({
               <OptionGroup>
                 {agentConfigs.isLoading ? (
                   <Text style={styles.loadingText}>Loading agent configs...</Text>
+                ) : agentConfigs.isError ? (
+                  <QueryErrorOption
+                    message="Could not load agent configs."
+                    onRetry={() => void agentConfigs.refetch()}
+                  />
                 ) : runConfigs.length === 0 ? (
                   <Text style={styles.loadingText}>No personal cloud agent configs are available.</Text>
                 ) : (
@@ -375,6 +392,26 @@ function OptionButton({
     >
       <Text style={styles.optionButtonText} numberOfLines={1}>{label}</Text>
       {selected ? <MobileIcon name="check" size={14} color={colors.success} /> : null}
+    </Pressable>
+  );
+}
+
+function QueryErrorOption({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Retry"
+      onPress={onRetry}
+      style={({ pressed }) => [styles.retryOption, pressed && styles.pressed]}
+    >
+      <Text style={styles.retryOptionText}>{message}</Text>
+      <Text style={styles.retryOptionAction}>Retry</Text>
     </Pressable>
   );
 }
@@ -569,6 +606,25 @@ const styles = StyleSheet.create({
     color: colors.faint,
     fontSize: 12.5,
     lineHeight: 17,
+  },
+  retryOption: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing[3],
+    paddingHorizontal: spacing[3],
+  },
+  retryOptionText: {
+    flex: 1,
+    color: colors.destructive,
+    fontSize: 12.5,
+    lineHeight: 17,
+  },
+  retryOptionAction: {
+    color: colors.fg,
+    fontSize: 12.5,
+    fontWeight: "700",
   },
   errorText: {
     color: colors.destructive,

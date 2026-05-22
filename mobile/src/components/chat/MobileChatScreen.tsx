@@ -56,6 +56,7 @@ import {
 } from "../../lib/access/cloud/pending-mobile-prompt-store";
 import {
   dispatchPendingMobilePrompt,
+  RetryablePendingPromptDispatchError,
   type SendPromptPayload,
   type StartSessionPayload,
 } from "../../lib/access/cloud/pending-mobile-prompt-dispatch";
@@ -63,7 +64,9 @@ import { colors, radius, spacing } from "../../styles/tokens";
 
 interface MobileChatScreenProps {
   chat: MobileCloudChat;
+  ownerUserId: string | null;
   onBack: () => void;
+  onSessionSelected?: (sessionId: string) => void;
 }
 
 type OptimisticPromptStatus = "sending" | "queued" | "failed";
@@ -85,7 +88,12 @@ type UpdateSessionConfigPayload = {
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
 
-export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
+export function MobileChatScreen({
+  chat,
+  ownerUserId,
+  onBack,
+  onSessionSelected,
+}: MobileChatScreenProps) {
   const client = useCloudClient();
   const [draft, setDraft] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(chat.sessionId);
@@ -95,6 +103,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
   const [latestConfigCommandId, setLatestConfigCommandId] = useState<string | null>(null);
   const [pendingPrompt, setPendingPrompt] = useState<MobilePendingPrompt | null>(null);
   const [pendingPromptStatus, setPendingPromptStatus] = useState<string | null>(null);
+  const [pendingPromptFailed, setPendingPromptFailed] = useState(false);
   const [directPromptDispatching, setDirectPromptDispatching] = useState(false);
   const [optimisticPrompts, setOptimisticPrompts] = useState<OptimisticPrompt[]>([]);
   const [pendingConfigChanges, setPendingConfigChanges] = useState<
@@ -103,6 +112,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
   const [activeControl, setActiveControl] = useState<CloudChatComposerControlView | null>(null);
   const [claimedLocally, setClaimedLocally] = useState(false);
   const directPromptDispatchingRef = useRef(false);
+  const sessionPromptDispatchingRef = useRef(false);
   const pendingDispatchRunRef = useRef<{ key: string; active: boolean } | null>(null);
   const pendingConfigMutationIdRef = useRef(0);
 
@@ -176,18 +186,60 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
       ),
     [activeSessionId, optimisticPrompts],
   );
+  const pendingPromptTranscriptState = useMemo(() => {
+    if (
+      !pendingPrompt?.dispatchedSessionId
+      || activeSessionId !== pendingPrompt.dispatchedSessionId
+    ) {
+      return { agentStarted: false, promptVisible: false };
+    }
+    const prompt = optimisticPromptFromPending(pendingPrompt, pendingPrompt.dispatchedSessionId);
+    return {
+      agentStarted: transcriptHasAgentProgressAfterPrompt(
+        prompt,
+        transcriptItems,
+        transcriptView.rows,
+        false,
+      ),
+      promptVisible: transcriptHasUserPrompt(prompt, transcriptItems, transcriptView.rows, false),
+    };
+  }, [
+    activeSessionId,
+    pendingPrompt,
+    transcriptItems,
+    transcriptView.rows,
+  ]);
+  const pendingPromptDurable = pendingPromptTranscriptState.agentStarted;
   const visibleTranscriptRows = useMemo(
     () => [
       ...transcriptView.rows,
-      ...buildPendingPromptRows(pendingPrompt, activeSessionId),
+      ...buildPendingPromptRows(
+        pendingPrompt,
+        activeSessionId,
+        pendingPromptFailed,
+        pendingPromptStatus,
+        pendingPromptTranscriptState.promptVisible,
+        pendingPromptTranscriptState.agentStarted,
+      ),
       ...buildOptimisticPromptRows({
         prompts: optimisticPrompts,
         sessionId: activeSessionId,
         transcriptItems,
         transcriptRows: transcriptView.rows,
+        allowTextOnlyRowFallback: false,
       }),
     ],
-    [activeSessionId, optimisticPrompts, pendingPrompt, transcriptItems, transcriptView.rows],
+    [
+      activeSessionId,
+      optimisticPrompts,
+      pendingPrompt,
+      pendingPromptFailed,
+      pendingPromptStatus,
+      pendingPromptTranscriptState.agentStarted,
+      pendingPromptTranscriptState.promptVisible,
+      transcriptItems,
+      transcriptView.rows,
+    ],
   );
 
   useEffect(() => {
@@ -195,6 +247,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
     setDraft("");
     setNewSessionMode(false);
     setPendingPromptStatus(null);
+    setPendingPromptFailed(false);
     setOptimisticPrompts([]);
     setPendingConfigChanges({});
     setLatestConfigCommandId(null);
@@ -202,16 +255,31 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
   }, [chat.workspaceId, chat.sessionId]);
 
   useEffect(() => {
+    if (!ownerUserId) {
+      setPendingPrompt(null);
+      setPendingPromptFailed(false);
+      return;
+    }
     let active = true;
-    void loadPendingMobilePrompt(chat.workspaceId).then((stored) => {
+    void loadPendingMobilePrompt(chat.workspaceId, ownerUserId).then((stored) => {
       if (active) {
         setPendingPrompt(stored);
+        setPendingPromptFailed(Boolean(stored?.failedAt));
+        setPendingPromptStatus(stored?.failureMessage ?? null);
+        if (stored?.dispatchedSessionId) {
+          setSelectedSessionId(stored.dispatchedSessionId);
+          setNewSessionMode(false);
+          onSessionSelected?.(stored.dispatchedSessionId);
+        } else if (stored) {
+          setSelectedSessionId(null);
+          setNewSessionMode(true);
+        }
       }
     });
     return () => {
       active = false;
     };
-  }, [chat.workspaceId]);
+  }, [chat.workspaceId, onSessionSelected, ownerUserId]);
 
   useEffect(() => {
     if (!workspace || workspaceStatus === "ready" || workspaceStatus === "error") {
@@ -270,7 +338,12 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
       current.filter((prompt) =>
         prompt.sessionId !== session.sessionId
         || prompt.status === "failed"
-        || !transcriptHasAgentProgressAfterPrompt(prompt, transcriptItems, transcriptView.rows)
+        || !transcriptHasAgentProgressAfterPrompt(
+          prompt,
+          transcriptItems,
+          transcriptView.rows,
+          false,
+        )
       )
     );
   }, [session?.sessionId, transcriptItems, transcriptView.rows]);
@@ -348,11 +421,21 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
   ]);
 
   useEffect(() => {
-    if (!pendingPrompt || !workspace) {
+    if (!pendingPrompt || !workspace || pendingPromptFailed) {
+      return;
+    }
+    if (pendingPrompt.dispatchedSessionId) {
       return;
     }
     if (workspaceStatus === "error" || workspaceStatus === "archived") {
-      setPendingPromptStatus("Workspace creation failed before the prompt could be sent.");
+      const message = "Workspace creation failed before the prompt could be sent.";
+      const failedPrompt = markPendingPromptFailed(pendingPrompt, message);
+      setPendingPrompt(failedPrompt);
+      setPendingPromptStatus(message);
+      setPendingPromptFailed(true);
+      if (ownerUserId) {
+        void savePendingMobilePrompt(workspace.id, ownerUserId, failedPrompt);
+      }
       return;
     }
     if (workspaceStatus !== "ready") {
@@ -376,6 +459,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
     pendingDispatchRunRef.current = run;
     const isCurrentRun = () => pendingDispatchRunRef.current === run && run.active;
     setPendingPromptStatus("Starting a session for the queued prompt.");
+    setPendingPromptFailed(false);
 
     void dispatchPendingMobilePrompt({
       client,
@@ -400,32 +484,47 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
         if (!isCurrentRun()) {
           return;
         }
+        const dispatchedPrompt: MobilePendingPrompt = {
+          ...pendingPrompt,
+          dispatchedSessionId: sessionId,
+          failedAt: null,
+          failureMessage: null,
+        };
         setNewSessionMode(false);
         setSelectedSessionId(sessionId);
-        setOptimisticPrompts((current) => [
-          ...current,
-          {
-            id: `${pendingPrompt.id}:optimistic`,
-            sessionId,
-            text: pendingPrompt.text,
-            baseTranscriptSeq: 0,
-            status: "queued",
-          },
-        ]);
-        setPendingPrompt(null);
+        onSessionSelected?.(sessionId);
+        setPendingPrompt(dispatchedPrompt);
         setPendingPromptStatus(null);
-        void clearPendingMobilePrompt(workspace.id);
+        setPendingPromptFailed(false);
+        if (ownerUserId) {
+          void savePendingMobilePrompt(workspace.id, ownerUserId, dispatchedPrompt);
+        }
         void workspaceQuery.refetch();
       })
       .catch((error: unknown) => {
         if (!isCurrentRun()) {
           return;
         }
-        setPendingPromptStatus(
-          error instanceof Error ? error.message : "Queued prompt could not be sent.",
-        );
-        setPendingPrompt(null);
-        void clearPendingMobilePrompt(workspace.id);
+        const message = error instanceof Error ? error.message : "Queued prompt could not be sent.";
+        if (error instanceof RetryablePendingPromptDispatchError) {
+          setPendingPromptStatus(message);
+          setTimeout(() => {
+            if (!run.active) {
+              return;
+            }
+            setPendingPrompt((current) =>
+              current?.id === pendingPrompt.id ? { ...current } : current
+            );
+          }, 2500);
+          return;
+        }
+        const failedPrompt = markPendingPromptFailed(pendingPrompt, message);
+        setPendingPrompt(failedPrompt);
+        setPendingPromptStatus(message);
+        setPendingPromptFailed(true);
+        if (ownerUserId) {
+          void savePendingMobilePrompt(workspace.id, ownerUserId, failedPrompt);
+        }
       })
       .finally(() => {
         if (pendingDispatchRunRef.current === run) {
@@ -440,7 +539,9 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
     client,
     enqueuePrompt.mutateAsync,
     enqueueStartSession.mutateAsync,
+    ownerUserId,
     pendingPrompt,
+    pendingPromptFailed,
     workspace?.actionBlockReason,
     workspace?.anyharnessWorkspaceId,
     workspace?.id,
@@ -449,13 +550,37 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
     workspaceQuery.refetch,
   ]);
 
+  useEffect(() => {
+    if (
+      !pendingPrompt?.dispatchedSessionId
+      || !pendingPromptDurable
+      || !ownerUserId
+      || !workspace
+    ) {
+      return;
+    }
+    setPendingPrompt(null);
+    setPendingPromptStatus(null);
+    setPendingPromptFailed(false);
+    void clearPendingMobilePrompt(workspace.id, ownerUserId);
+  }, [
+    ownerUserId,
+    pendingPrompt?.dispatchedSessionId,
+    pendingPromptDurable,
+    workspace?.id,
+  ]);
+
   async function submitPrompt() {
     const text = draft.trim();
     if (!text || !workspace) {
       return;
     }
     if (!session) {
-      if (directPromptDispatchingRef.current || pendingPrompt) {
+      if (!ownerUserId) {
+        setPendingPromptStatus("Account is still loading. Try again in a moment.");
+        return;
+      }
+      if (directPromptDispatchingRef.current || (pendingPrompt && !pendingPromptFailed)) {
         return;
       }
       directPromptDispatchingRef.current = true;
@@ -469,9 +594,10 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
       setDraft("");
       setPendingPrompt(prompt);
       setPendingPromptStatus("Starting a session for this prompt.");
+      setPendingPromptFailed(false);
       setDirectPromptDispatching(true);
       try {
-        await savePendingMobilePrompt(workspace.id, prompt);
+        await savePendingMobilePrompt(workspace.id, ownerUserId, prompt);
       } catch (error) {
         setPendingPrompt(null);
         setPendingPromptStatus(
@@ -484,11 +610,15 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
       return;
     }
 
+    if (sessionPromptDispatchingRef.current || hasActiveOptimisticPrompt) {
+      return;
+    }
+    sessionPromptDispatchingRef.current = true;
     const optimisticPrompt: OptimisticPrompt = {
       id: `mobile:${workspace.id}:${session.sessionId}:${Date.now()}`,
       sessionId: session.sessionId,
       text,
-      baseTranscriptSeq: latestTranscriptItemSeq(transcriptItems),
+      baseTranscriptSeq: latestTranscriptSeq(transcriptItems, transcriptView.rows),
       status: "sending",
     };
     setOptimisticPrompts((current) => [...current, optimisticPrompt]);
@@ -522,6 +652,8 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
         )
       );
       setPendingPromptStatus(error instanceof Error ? error.message : "Prompt could not be sent.");
+    } finally {
+      sessionPromptDispatchingRef.current = false;
     }
   }
 
@@ -591,12 +723,17 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
     setNewSessionMode(true);
     setDraft("");
     setPendingPromptStatus(null);
+    setPendingPromptFailed(false);
   }
 
   const isUnclaimed = workspace?.visibility === "shared_unclaimed" && !claimedLocally;
   const workspaceCommandReady =
     workspaceStatus === "ready" && Boolean(workspace?.targetId) && Boolean(workspace?.anyharnessWorkspaceId);
-  const promptSubmitting = enqueuePrompt.isPending || directPromptDispatching || Boolean(pendingPrompt);
+  const promptSubmitting =
+    enqueuePrompt.isPending
+    || directPromptDispatching
+    || (Boolean(pendingPrompt) && !pendingPromptFailed)
+    || hasActiveOptimisticPrompt;
   const canSubmit = Boolean(
     draft.trim()
       && !isUnclaimed
@@ -890,25 +1027,47 @@ function messageLabel(row: CloudChatTranscriptRowView): string {
 function buildPendingPromptRows(
   pendingPrompt: MobilePendingPrompt | null,
   sessionId: string | null,
+  failed: boolean,
+  failureMessage: string | null,
+  promptVisible: boolean,
+  agentStarted: boolean,
 ): CloudChatTranscriptRowView[] {
-  if (!pendingPrompt || sessionId) {
+  if (!pendingPrompt) {
     return [];
   }
-  return [
-    {
+  if (pendingPrompt.dispatchedSessionId) {
+    if (sessionId !== pendingPrompt.dispatchedSessionId || agentStarted) {
+      return [];
+    }
+  } else if (sessionId) {
+    return [];
+  }
+  const promptFailed = failed || Boolean(pendingPrompt.failedAt);
+  const rows: CloudChatTranscriptRowView[] = [];
+  if (!promptVisible) {
+    rows.push({
       id: `${pendingPrompt.id}:pending-user`,
       kind: "user",
       body: pendingPrompt.text,
-      status: "Queued",
-      streaming: true,
-    },
-    {
+      status: promptFailed ? "Failed" : "Queued",
+      streaming: !promptFailed,
+    });
+  }
+  if (promptFailed || !agentStarted) {
+    rows.push({
       id: `${pendingPrompt.id}:pending-assistant`,
       kind: "assistant",
-      body: "Preparing workspace and session...",
-      streaming: true,
-    },
-  ];
+      body: promptFailed
+        ? pendingPrompt.failureMessage
+          ?? failureMessage
+          ?? "Queued prompt could not be sent."
+        : pendingPrompt.dispatchedSessionId
+          ? "Waiting for response..."
+          : "Preparing workspace and session...",
+      streaming: !promptFailed,
+    });
+  }
+  return rows;
 }
 
 function buildOptimisticPromptRows(input: {
@@ -916,6 +1075,7 @@ function buildOptimisticPromptRows(input: {
   sessionId: string | null;
   transcriptItems: readonly CloudTranscriptItem[];
   transcriptRows: readonly CloudChatTranscriptRowView[];
+  allowTextOnlyRowFallback: boolean;
 }): CloudChatTranscriptRowView[] {
   if (!input.sessionId) {
     return [];
@@ -929,11 +1089,13 @@ function buildOptimisticPromptRows(input: {
       prompt,
       input.transcriptItems,
       input.transcriptRows,
+      input.allowTextOnlyRowFallback,
     );
     const agentStarted = transcriptHasAgentProgressAfterPrompt(
       prompt,
       input.transcriptItems,
       input.transcriptRows,
+      input.allowTextOnlyRowFallback,
     );
     if (!promptVisible) {
       rows.push({
@@ -972,18 +1134,55 @@ function transcriptHasUserPrompt(
   prompt: OptimisticPrompt,
   transcriptItems: readonly CloudTranscriptItem[],
   transcriptRows: readonly CloudChatTranscriptRowView[],
+  allowTextOnlyRowFallback: boolean,
 ): boolean {
   return transcriptItems.some((item) => isPromptItemForOptimisticPrompt(item, prompt))
     || (
       transcriptItems.length === 0
-      && transcriptRows.some((row) => row.kind === "user" && textMatches(row.body, prompt.text))
+      && transcriptRows.some((row) =>
+        row.kind === "user"
+        && rowIsAfterPromptBaseline(row, prompt)
+        && textMatches(row.body, prompt.text)
+      )
+    )
+    || (
+      allowTextOnlyRowFallback
+      && transcriptItems.length === 0
+      && transcriptRows.some((row) =>
+        row.kind === "user" && textMatches(row.body, prompt.text)
+      )
     );
+}
+
+function optimisticPromptFromPending(
+  prompt: MobilePendingPrompt,
+  sessionId: string,
+): OptimisticPrompt {
+  return {
+    id: `${prompt.id}:pending`,
+    sessionId,
+    text: prompt.text,
+    baseTranscriptSeq: 0,
+    status: "queued",
+  };
+}
+
+function markPendingPromptFailed(
+  prompt: MobilePendingPrompt,
+  message: string,
+): MobilePendingPrompt {
+  return {
+    ...prompt,
+    failedAt: Date.now(),
+    failureMessage: message,
+  };
 }
 
 function transcriptHasAgentProgressAfterPrompt(
   prompt: OptimisticPrompt,
   transcriptItems: readonly CloudTranscriptItem[],
   transcriptRows: readonly CloudChatTranscriptRowView[],
+  allowTextOnlyRowFallback: boolean,
 ): boolean {
   const promptItem = [...transcriptItems]
     .filter((item) => isPromptItemForOptimisticPrompt(item, prompt))
@@ -997,12 +1196,22 @@ function transcriptHasAgentProgressAfterPrompt(
     return false;
   }
   const promptRowIndex = transcriptRows.findIndex((row) =>
-    row.kind === "user" && textMatches(row.body, prompt.text)
+    row.kind === "user"
+    && rowIsAfterPromptBaseline(row, prompt)
+    && textMatches(row.body, prompt.text)
   );
-  if (promptRowIndex === -1) {
+  const fallbackPromptRowIndex = allowTextOnlyRowFallback
+    ? transcriptRows.findIndex((row) =>
+      row.kind === "user" && textMatches(row.body, prompt.text)
+    )
+    : -1;
+  const resolvedPromptRowIndex = promptRowIndex === -1 ? fallbackPromptRowIndex : promptRowIndex;
+  if (resolvedPromptRowIndex === -1) {
     return false;
   }
-  return transcriptRows.slice(promptRowIndex + 1).some((row) => row.kind !== "user");
+  return transcriptRows
+    .slice(resolvedPromptRowIndex + 1)
+    .some((row) => row.kind !== "user" && rowIsAfterPromptBaseline(row, prompt));
 }
 
 function isPromptItemForOptimisticPrompt(
@@ -1012,6 +1221,13 @@ function isPromptItemForOptimisticPrompt(
   return item.firstSeq > prompt.baseTranscriptSeq
     && isPromptTranscriptKind(item.kind)
     && textMatches(item.text, prompt.text);
+}
+
+function rowIsAfterPromptBaseline(
+  row: CloudChatTranscriptRowView,
+  prompt: OptimisticPrompt,
+): boolean {
+  return typeof row.firstSeq === "number" && row.firstSeq > prompt.baseTranscriptSeq;
 }
 
 function isPromptTranscriptKind(kind: string | null | undefined): boolean {
@@ -1028,6 +1244,16 @@ function normalizePromptText(value: string | null | undefined): string {
 
 function latestTranscriptItemSeq(items: readonly CloudTranscriptItem[]): number {
   return items.reduce((maxSeq, item) => Math.max(maxSeq, item.lastSeq), 0);
+}
+
+function latestTranscriptSeq(
+  items: readonly CloudTranscriptItem[],
+  rows: readonly CloudChatTranscriptRowView[],
+): number {
+  return Math.max(
+    latestTranscriptItemSeq(items),
+    rows.reduce((maxSeq, row) => Math.max(maxSeq, row.lastSeq ?? row.firstSeq ?? 0), 0),
+  );
 }
 
 function compareSessions(left: CloudSessionProjection, right: CloudSessionProjection): number {

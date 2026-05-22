@@ -46,6 +46,8 @@ export interface CloudChatTranscriptRowView {
   detail?: string | null;
   status?: string | null;
   streaming?: boolean;
+  firstSeq?: number | null;
+  lastSeq?: number | null;
 }
 
 type CloudChatTranscriptRowWithSource = CloudChatTranscriptRowView & {
@@ -81,11 +83,7 @@ export function buildCloudTranscriptView(input: {
       envelopes as SessionEventEnvelope[],
     );
     const rows = buildRowsFromTranscriptState(transcript);
-    if (
-      rows.length > 0
-      && missingEnvelopeCount === 0
-      && !projectionIsAhead(input.fallbackItems, input.events)
-    ) {
+    if (rows.length > 0 && shouldUseEventRows(input, missingEnvelopeCount)) {
       const rowsWithPending = appendPendingPromptRows(
         rows,
         input.pendingInteractions ?? [],
@@ -119,6 +117,22 @@ export function buildCloudTranscriptView(input: {
     envelopeCount: envelopes.length,
     missingEnvelopeCount,
   };
+}
+
+function shouldUseEventRows(
+  input: {
+    events: readonly CloudSessionEvent[];
+    fallbackItems: readonly CloudTranscriptItem[];
+  },
+  missingEnvelopeCount: number,
+): boolean {
+  if (projectionIsAhead(input.fallbackItems, input.events)) {
+    return false;
+  }
+  if (missingEnvelopeCount === 0 || input.fallbackItems.length === 0) {
+    return true;
+  }
+  return latestProjectedItemSeq(input.fallbackItems) < latestEventSeq(input.events);
 }
 
 function projectionIsAhead(
@@ -256,6 +270,7 @@ function transcriptItemToRow(
   item: TranscriptItem,
   id: string,
 ): CloudChatTranscriptRowView | null {
+  const seq = transcriptItemSeq(item);
   switch (item.kind) {
     case "user_message":
       return item.text.trim()
@@ -264,6 +279,7 @@ function transcriptItemToRow(
           kind: "user",
           body: item.text,
           streaming: item.isStreaming,
+          ...seq,
         }
         : null;
     case "assistant_prose":
@@ -273,6 +289,7 @@ function transcriptItemToRow(
           kind: "assistant",
           body: item.text,
           streaming: item.isStreaming,
+          ...seq,
         }
         : null;
     case "thought":
@@ -282,6 +299,7 @@ function transcriptItemToRow(
         title: "Reasoning",
         body: previewText(item.text),
         status: item.isStreaming ? "streaming" : statusLabel(item.status),
+        ...seq,
       };
     case "tool_call":
       return toolCallItemToRow(item, id);
@@ -291,6 +309,7 @@ function transcriptItemToRow(
         kind: "assistant",
         title: item.plan.title || "Plan",
         body: item.plan.bodyMarkdown,
+        ...seq,
       };
     case "error":
       return {
@@ -298,6 +317,7 @@ function transcriptItemToRow(
         kind: "error",
         title: item.code ?? "Error",
         body: item.message,
+        ...seq,
       };
     case "unknown":
       return {
@@ -305,6 +325,7 @@ function transcriptItemToRow(
         kind: "system",
         title: "Unknown event",
         detail: item.eventType,
+        ...seq,
       };
     case "plan":
       return null;
@@ -325,6 +346,7 @@ function toolCallItemToRow(
     detail: command ?? display.hint ?? item.nativeToolName ?? item.toolKind,
     body: previewText(toolOutputPreview(item)),
     status: statusLabel(item.status),
+    ...transcriptItemSeq(item),
   };
 }
 
@@ -340,6 +362,8 @@ function buildRowsFromProjectedItems(
       body: previewText(item.text ?? projectedPayloadText(item.payload)),
       status: item.status ?? undefined,
       detail: item.sourceAgentKind ?? undefined,
+      firstSeq: item.firstSeq,
+      lastSeq: item.lastSeq,
     }));
 }
 
@@ -488,6 +512,15 @@ function findLastMatchingUserRowIndex(
 
 function isPromptTranscriptKind(kind: string | null | undefined): boolean {
   return kind === "user_message" || kind === "prompt";
+}
+
+function transcriptItemSeq(item: TranscriptItem): { firstSeq: number; lastSeq: number } {
+  return {
+    firstSeq: item.startedSeq,
+    lastSeq: "lastUpdatedSeq" in item
+      ? item.completedSeq ?? item.lastUpdatedSeq
+      : item.startedSeq,
+  };
 }
 
 function projectedItemKind(item: CloudTranscriptItem): CloudChatTranscriptRowView["kind"] {

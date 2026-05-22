@@ -43,10 +43,11 @@ const MODEL_OPTIONS: ModelOption[] = [
 ];
 
 interface MobileHomeScreenProps {
+  ownerUserId: string | null;
   onOpenChat: (chat: MobileCloudChat) => void;
 }
 
-export function MobileHomeScreen({ onOpenChat }: MobileHomeScreenProps) {
+export function MobileHomeScreen({ ownerUserId, onOpenChat }: MobileHomeScreenProps) {
   const submitInFlightRef = useRef(false);
   const [draft, setDraft] = useState("");
   const [repoId, setRepoId] = useState("");
@@ -72,6 +73,10 @@ export function MobileHomeScreen({ onOpenChat }: MobileHomeScreenProps) {
     if (!text || !selectedRepo || submitInFlightRef.current) {
       return;
     }
+    if (!ownerUserId) {
+      setSubmitError("Account is still loading. Try again in a moment.");
+      return;
+    }
 
     submitInFlightRef.current = true;
     setSubmitError(null);
@@ -92,7 +97,7 @@ export function MobileHomeScreen({ onOpenChat }: MobileHomeScreenProps) {
         displayName: buildWorkspaceDisplayName(text),
         ownerScope: "personal",
       });
-      await savePendingMobilePrompt(workspace.id, pendingPrompt);
+      await savePendingMobilePrompt(workspace.id, ownerUserId, pendingPrompt);
       setDraft("");
       onOpenChat({
         workspaceId: workspace.id,

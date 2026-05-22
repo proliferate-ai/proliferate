@@ -29,6 +29,7 @@ import { mobileEnv } from "../config/env";
 
 const ACCESS_TOKEN_KEY = "proliferate.mobile.accessToken";
 const REFRESH_TOKEN_KEY = "proliferate.mobile.refreshToken";
+const SIGNED_OUT_KEY = "proliferate.mobile.signedOutAt";
 const DEV_REFRESH_TOKEN_PARAM = "proliferateDevRefreshToken";
 
 export type MobileAuthState = "bootstrapping" | "signed_out" | "needs_github" | "active";
@@ -131,7 +132,17 @@ export function MobileAuthProvider({ children }: { children: ReactNode }) {
       async signOut() {
         setLoadingAction(null);
         setError(null);
-        await clearStoredSession();
+        let tombstoneWritten = false;
+        try {
+          await setMobileStorageItem(SIGNED_OUT_KEY, new Date().toISOString());
+          tombstoneWritten = true;
+          await clearStoredSession();
+        } catch (signOutError) {
+          if (!tombstoneWritten) {
+            setError(errorMessage(signOutError));
+            return;
+          }
+        }
         setAccessToken(null);
         setUser(null);
         setAuthState("signed_out");
@@ -156,6 +167,10 @@ export function useMobileAuth() {
 }
 
 async function bootstrapSession(): Promise<AuthSessionResponse | null> {
+  if (await getMobileStorageItem(SIGNED_OUT_KEY)) {
+    await clearStoredSession().catch(() => undefined);
+    return null;
+  }
   const refreshToken =
     readDevWebRefreshTokenFromLocation() ?? (await getMobileStorageItem(REFRESH_TOKEN_KEY));
   if (!refreshToken) {
@@ -228,7 +243,10 @@ async function applySession(
 ): Promise<void> {
   setAccessToken(session.accessToken);
   setUser(session.user);
-  await setMobileStorageItem(ACCESS_TOKEN_KEY, session.accessToken);
+  await Promise.all([
+    setMobileStorageItem(ACCESS_TOKEN_KEY, session.accessToken),
+    deleteMobileStorageItem(SIGNED_OUT_KEY),
+  ]);
   if (session.refreshToken) {
     await setMobileStorageItem(REFRESH_TOKEN_KEY, session.refreshToken);
   }

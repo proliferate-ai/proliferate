@@ -27,11 +27,11 @@ import {
 import type {
   CloudChatComposerFooterControlView,
 } from "@proliferate/product-ui/chat/CloudChatComposer";
-import type {
-  CloudChatTranscriptRowView,
-} from "@proliferate/product-ui/chat/CloudChatTranscript";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { buildCloudTranscriptView } from "@proliferate/product-model/chats/cloud/transcript-view";
+import {
+  buildCloudTranscriptView,
+  type CloudChatTranscriptRowView,
+} from "@proliferate/product-model/chats/cloud/transcript-view";
 import {
   buildCloudChatComposerControls,
   DEFAULT_DIRECT_PROMPT_MODEL_ID,
@@ -170,6 +170,7 @@ export function ChatScreen() {
         transcriptItems,
         transcriptRows: transcriptView.rows,
         pendingInteractions,
+        allowTextOnlyRowFallback: false,
       }),
       ...buildPendingHomePromptRows({
         pendingPrompt: pendingHomePrompt,
@@ -378,7 +379,12 @@ export function ChatScreen() {
       current.filter((prompt) =>
         prompt.sessionId !== session.sessionId
         || prompt.status === "failed"
-        || !transcriptHasAgentProgressAfterPrompt(prompt, transcriptItems, transcriptView.rows)
+        || !transcriptHasAgentProgressAfterPrompt(
+          prompt,
+          transcriptItems,
+          transcriptView.rows,
+          false,
+        )
       )
     );
   }, [session?.sessionId, transcriptItems, transcriptView.rows]);
@@ -643,7 +649,7 @@ export function ChatScreen() {
       workspaceId: workspace.id,
       sessionId: session.sessionId,
       text,
-      baseTranscriptSeq: latestTranscriptItemSeq(transcriptItems),
+      baseTranscriptSeq: latestTranscriptSeq(transcriptItems, transcriptView.rows),
       status: "sending",
     };
     setOptimisticPrompts((current) => [
@@ -988,6 +994,7 @@ function buildOptimisticPromptRows(input: {
   transcriptItems: readonly CloudTranscriptItem[];
   transcriptRows: readonly CloudChatTranscriptRowView[];
   pendingInteractions: readonly CloudPendingInteraction[];
+  allowTextOnlyRowFallback: boolean;
 }): CloudChatTranscriptRowView[] {
   if (!input.workspaceId) {
     return [];
@@ -1008,10 +1015,20 @@ function buildOptimisticPromptRows(input: {
       continue;
     }
     const promptVisible = input.sessionId
-      ? transcriptHasUserPrompt(prompt, input.transcriptItems, input.transcriptRows)
+      ? transcriptHasUserPrompt(
+        prompt,
+        input.transcriptItems,
+        input.transcriptRows,
+        input.allowTextOnlyRowFallback,
+      )
       : false;
     const agentStarted = input.sessionId
-      ? transcriptHasAgentProgressAfterPrompt(prompt, input.transcriptItems)
+      ? transcriptHasAgentProgressAfterPrompt(
+        prompt,
+        input.transcriptItems,
+        input.transcriptRows,
+        input.allowTextOnlyRowFallback,
+      )
       : false;
     if (!promptVisible) {
       rows.push({
@@ -1180,16 +1197,32 @@ function isFailureStatusText(status: string | null): boolean {
 function transcriptHasUserPrompt(
   prompt: OptimisticPrompt,
   transcriptItems: readonly CloudTranscriptItem[],
-  transcriptRows: readonly CloudChatTranscriptRowView[] = [],
+  transcriptRows: readonly CloudChatTranscriptRowView[],
+  allowTextOnlyRowFallback: boolean,
 ): boolean {
   return transcriptItems.some((item) => isPromptItemForOptimisticPrompt(item, prompt))
-    || transcriptRows.some((row) => row.kind === "user" && textMatches(row.body, prompt.text));
+    || (
+      transcriptItems.length === 0
+      && transcriptRows.some((row) =>
+        row.kind === "user"
+        && rowIsAfterPromptBaseline(row, prompt)
+        && textMatches(row.body, prompt.text)
+      )
+    )
+    || (
+      allowTextOnlyRowFallback
+      && transcriptItems.length === 0
+      && transcriptRows.some((row) =>
+        row.kind === "user" && textMatches(row.body, prompt.text)
+      )
+    );
 }
 
 function transcriptHasAgentProgressAfterPrompt(
   prompt: OptimisticPrompt,
   transcriptItems: readonly CloudTranscriptItem[],
-  transcriptRows: readonly CloudChatTranscriptRowView[] = [],
+  transcriptRows: readonly CloudChatTranscriptRowView[],
+  allowTextOnlyRowFallback: boolean,
 ): boolean {
   const promptItem = [...transcriptItems]
     .filter((item) => isPromptItemForOptimisticPrompt(item, prompt))
@@ -1202,26 +1235,23 @@ function transcriptHasAgentProgressAfterPrompt(
       return true;
     }
   }
-  const promptRowIndex = findLastMatchingPromptRowIndex(transcriptRows, prompt.text);
-  if (promptRowIndex !== -1) {
-    return transcriptRows.slice(promptRowIndex + 1).some((row) =>
-      row.kind !== "user" && row.kind !== "system"
-    );
+  const promptRowIndex = transcriptRows.findIndex((row) =>
+    row.kind === "user"
+    && rowIsAfterPromptBaseline(row, prompt)
+    && textMatches(row.body, prompt.text)
+  );
+  const fallbackPromptRowIndex = allowTextOnlyRowFallback
+    ? transcriptRows.findIndex((row) =>
+      row.kind === "user" && textMatches(row.body, prompt.text)
+    )
+    : -1;
+  const resolvedPromptRowIndex = promptRowIndex === -1 ? fallbackPromptRowIndex : promptRowIndex;
+  if (resolvedPromptRowIndex === -1) {
+    return false;
   }
-  return false;
-}
-
-function findLastMatchingPromptRowIndex(
-  transcriptRows: readonly CloudChatTranscriptRowView[],
-  text: string,
-): number {
-  for (let index = transcriptRows.length - 1; index >= 0; index -= 1) {
-    const row = transcriptRows[index];
-    if (row.kind === "user" && textMatches(row.body, text)) {
-      return index;
-    }
-  }
-  return -1;
+  return transcriptRows
+    .slice(resolvedPromptRowIndex + 1)
+    .some((row) => row.kind !== "user" && rowIsAfterPromptBaseline(row, prompt));
 }
 
 function isPromptItemForOptimisticPrompt(
@@ -1231,6 +1261,13 @@ function isPromptItemForOptimisticPrompt(
   return item.firstSeq > prompt.baseTranscriptSeq
     && isPromptTranscriptKind(item.kind)
     && textMatches(item.text, prompt.text);
+}
+
+function rowIsAfterPromptBaseline(
+  row: CloudChatTranscriptRowView,
+  prompt: OptimisticPrompt,
+): boolean {
+  return typeof row.firstSeq === "number" && row.firstSeq > prompt.baseTranscriptSeq;
 }
 
 function isPromptTranscriptKind(kind: string | null | undefined): boolean {
@@ -1247,6 +1284,16 @@ function normalizePromptText(value: string | null | undefined): string {
 
 function latestTranscriptItemSeq(items: readonly CloudTranscriptItem[]): number {
   return items.reduce((maxSeq, item) => Math.max(maxSeq, item.lastSeq), 0);
+}
+
+function latestTranscriptSeq(
+  items: readonly CloudTranscriptItem[],
+  rows: readonly CloudChatTranscriptRowView[],
+): number {
+  return Math.max(
+    latestTranscriptItemSeq(items),
+    rows.reduce((maxSeq, row) => Math.max(maxSeq, row.lastSeq ?? row.firstSeq ?? 0), 0),
+  );
 }
 
 function isRejectedCommandStatus(status: CloudCommandStatus): boolean {

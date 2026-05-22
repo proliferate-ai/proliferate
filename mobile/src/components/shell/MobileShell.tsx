@@ -43,6 +43,7 @@ import { colors, radius, shadow, spacing } from "../../styles/tokens";
 
 const SHELL_ROUTE_KEY = "proliferate.mobile.shell.route";
 const SHELL_CHAT_KEY = "proliferate.mobile.shell.chat";
+const SHELL_STORAGE_VERSION = 1;
 
 export function MobileShell() {
   const {
@@ -71,6 +72,7 @@ export function MobileShell() {
   const subtitle = useMemo(() => routeSubtitle(route), [route]);
   const account = useMemo(() => accountSummary(user), [user]);
   const telemetryScreen = selectedChat ? "chat" : route;
+  const ownerUserId = user?.id ?? null;
 
   useMobileScreenTelemetry(authState, telemetryScreen);
   const canRecordAuthenticatedActivity = authState === "active" || authState === "needs_github";
@@ -128,29 +130,38 @@ export function MobileShell() {
       setNavigationRestored(true);
       return;
     }
+    if (!ownerUserId) {
+      return;
+    }
     let cancelled = false;
-    void restoreShellNavigation().then((stored) => {
-      if (cancelled) {
-        return;
-      }
-      if (stored.chat) {
-        setSelectedChat(stored.chat);
-      } else if (stored.route) {
-        setRoute(stored.route);
-      }
-      setNavigationRestored(true);
-    });
+    void restoreShellNavigation(ownerUserId)
+      .then((stored) => {
+        if (cancelled) {
+          return;
+        }
+        if (stored.chat) {
+          setSelectedChat(stored.chat);
+        } else if (stored.route) {
+          setRoute(stored.route);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) {
+          setNavigationRestored(true);
+        }
+      });
     return () => {
       cancelled = true;
     };
-  }, [authState, initialLinkChecked]);
+  }, [authState, initialLinkChecked, ownerUserId]);
 
   useEffect(() => {
-    if (authState !== "active" || !navigationRestored) {
+    if (authState !== "active" || !navigationRestored || !ownerUserId) {
       return;
     }
-    void persistShellNavigation(route, selectedChat);
-  }, [authState, navigationRestored, route, selectedChat]);
+    void persistShellNavigation(ownerUserId, route, selectedChat);
+  }, [authState, navigationRestored, ownerUserId, route, selectedChat]);
 
   useEffect(() => {
     if (!linkedWorkspaceId || !linkedWorkspace.data) {
@@ -201,7 +212,11 @@ export function MobileShell() {
     setDrawerOpen(false);
   }
 
-  function handleSignOut() {
+  const markSelectedChatSession = useCallback((sessionId: string) => {
+    setSelectedChat((current) => current ? { ...current, sessionId } : current);
+  }, []);
+
+  async function handleSignOut() {
     setRoute("home");
     setDrawerOpen(false);
     setSelectedChat(null);
@@ -209,8 +224,8 @@ export function MobileShell() {
     setLinkedWorkspaceSessionId(null);
     setNavigationRestored(false);
     initialLinkAppliedRef.current = false;
-    void clearShellNavigation();
-    signOut();
+    await clearShellNavigation(ownerUserId).catch(() => undefined);
+    await signOut();
   }
 
   if (authState === "bootstrapping") {
@@ -244,7 +259,7 @@ export function MobileShell() {
         <StatusBar style="light" />
         <MobileConnectGitHubScreen
           onConnect={() => void connectGitHub()}
-          onSignOut={handleSignOut}
+          onSignOut={() => void handleSignOut()}
           loading={loadingAction === "github_link"}
           error={error}
         />
@@ -257,7 +272,12 @@ export function MobileShell() {
       <StatusBar style="light" />
 
       {selectedChat ? (
-        <MobileChatScreen chat={selectedChat} onBack={() => setSelectedChat(null)} />
+        <MobileChatScreen
+          chat={selectedChat}
+          ownerUserId={ownerUserId}
+          onBack={() => setSelectedChat(null)}
+          onSessionSelected={markSelectedChatSession}
+        />
       ) : (
         <>
           <MobileTopBar
@@ -274,7 +294,7 @@ export function MobileShell() {
 
           <View style={styles.body}>
             {route === "home" ? (
-              <MobileHomeScreen onOpenChat={openChat} />
+              <MobileHomeScreen ownerUserId={ownerUserId} onOpenChat={openChat} />
             ) : route === "workspaces" ? (
               <MobileWorkspacesScreen onOpenChat={openChat} />
             ) : route === "sessions" ? (
@@ -282,7 +302,7 @@ export function MobileShell() {
             ) : route === "automations" ? (
               <MobileAutomationsScreen />
             ) : (
-              <MobileSettingsScreen account={account} onSignOut={handleSignOut} />
+              <MobileSettingsScreen account={account} onSignOut={() => void handleSignOut()} />
             )}
           </View>
 
@@ -304,7 +324,7 @@ export function MobileShell() {
           activeRoute={route}
           onNavigate={navigate}
           onClose={() => setDrawerOpen(false)}
-          onSignOut={handleSignOut}
+          onSignOut={() => void handleSignOut()}
           account={account}
         />
       )}
@@ -390,84 +410,165 @@ function workspaceLinkFromUrl(url: string | null): { workspaceId: string; sessio
   }
 }
 
-async function restoreShellNavigation(): Promise<{
+interface StoredShellRoute {
+  version: number;
+  ownerUserId: string;
+  route: RouteId;
+  updatedAt: number;
+}
+
+interface StoredShellChat {
+  version: number;
+  ownerUserId: string;
+  chat: MobileCloudChat;
+  updatedAt: number;
+}
+
+async function restoreShellNavigation(ownerUserId: string): Promise<{
   chat: MobileCloudChat | null;
   route: RouteId | null;
 }> {
   const [storedChat, storedRoute] = await Promise.all([
-    getMobileStorageItem(SHELL_CHAT_KEY),
-    getMobileStorageItem(SHELL_ROUTE_KEY),
+    getMobileStorageItem(shellChatKey(ownerUserId)),
+    getMobileStorageItem(shellRouteKey(ownerUserId)),
   ]);
-  const chat = parseStoredChat(storedChat);
+  void Promise.all([
+    deleteMobileStorageItem(SHELL_CHAT_KEY),
+    deleteMobileStorageItem(SHELL_ROUTE_KEY),
+  ]).catch(() => undefined);
+  const chat = parseStoredShellChat(storedChat, ownerUserId);
   if (chat) {
     return { chat, route: null };
   }
-  return { chat: null, route: parseStoredRoute(storedRoute) };
+  return { chat: null, route: parseStoredShellRoute(storedRoute, ownerUserId) };
 }
 
 async function persistShellNavigation(
+  ownerUserId: string,
   route: RouteId,
   selectedChat: MobileCloudChat | null,
 ): Promise<void> {
   if (selectedChat) {
     await Promise.all([
-      setMobileStorageItem(SHELL_CHAT_KEY, JSON.stringify(selectedChat)),
-      setMobileStorageItem(SHELL_ROUTE_KEY, route),
+      setMobileStorageItem(
+        shellChatKey(ownerUserId),
+        JSON.stringify({
+          version: SHELL_STORAGE_VERSION,
+          ownerUserId,
+          chat: selectedChat,
+          updatedAt: Date.now(),
+        } satisfies StoredShellChat),
+      ),
+      setMobileStorageItem(
+        shellRouteKey(ownerUserId),
+        JSON.stringify({
+          version: SHELL_STORAGE_VERSION,
+          ownerUserId,
+          route,
+          updatedAt: Date.now(),
+        } satisfies StoredShellRoute),
+      ),
     ]);
     return;
   }
   await Promise.all([
-    deleteMobileStorageItem(SHELL_CHAT_KEY),
-    setMobileStorageItem(SHELL_ROUTE_KEY, route),
+    deleteMobileStorageItem(shellChatKey(ownerUserId)),
+    setMobileStorageItem(
+      shellRouteKey(ownerUserId),
+      JSON.stringify({
+        version: SHELL_STORAGE_VERSION,
+        ownerUserId,
+        route,
+        updatedAt: Date.now(),
+      } satisfies StoredShellRoute),
+    ),
   ]);
 }
 
-async function clearShellNavigation(): Promise<void> {
-  await Promise.all([
+async function clearShellNavigation(ownerUserId: string | null): Promise<void> {
+  const deletes = [
     deleteMobileStorageItem(SHELL_CHAT_KEY),
     deleteMobileStorageItem(SHELL_ROUTE_KEY),
-  ]);
+  ];
+  if (ownerUserId) {
+    deletes.push(
+      deleteMobileStorageItem(shellChatKey(ownerUserId)),
+      deleteMobileStorageItem(shellRouteKey(ownerUserId)),
+    );
+  }
+  await Promise.all(deletes);
 }
 
-function parseStoredRoute(value: string | null): RouteId | null {
-  return drawerRoutes.some((route) => route.id === value) ? (value as RouteId) : null;
-}
-
-function parseStoredChat(value: string | null): MobileCloudChat | null {
+function parseStoredShellRoute(value: string | null, ownerUserId: string): RouteId | null {
   if (!value) {
     return null;
   }
   try {
-    const parsed = JSON.parse(value) as Partial<MobileCloudChat>;
+    const parsed = JSON.parse(value) as Partial<StoredShellRoute>;
     if (
-      typeof parsed.workspaceId === "string"
-      && typeof parsed.workspaceName === "string"
-      && typeof parsed.repoLabel === "string"
-      && typeof parsed.branchLabel === "string"
-      && (typeof parsed.targetId === "string" || parsed.targetId === null)
-      && (typeof parsed.workspaceRuntimeId === "string" || parsed.workspaceRuntimeId === null)
-      && (typeof parsed.sessionId === "string" || parsed.sessionId === null)
-      && typeof parsed.title === "string"
-      && typeof parsed.status === "string"
-      && typeof parsed.visibility === "string"
+      parsed.version === SHELL_STORAGE_VERSION
+      && parsed.ownerUserId === ownerUserId
+      && drawerRoutes.some((route) => route.id === parsed.route)
     ) {
-      return {
-        workspaceId: parsed.workspaceId,
-        workspaceName: parsed.workspaceName,
-        repoLabel: parsed.repoLabel,
-        branchLabel: parsed.branchLabel,
-        targetId: parsed.targetId,
-        workspaceRuntimeId: parsed.workspaceRuntimeId,
-        sessionId: parsed.sessionId,
-        title: parsed.title,
-        status: parsed.status,
-        visibility: parsed.visibility,
-      };
+      return parsed.route as RouteId;
     }
   } catch {
     return null;
   }
   return null;
+}
+
+function parseStoredShellChat(value: string | null, ownerUserId: string): MobileCloudChat | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value) as Partial<StoredShellChat>;
+    if (parsed.version === SHELL_STORAGE_VERSION && parsed.ownerUserId === ownerUserId) {
+      return parseStoredChatValue(parsed.chat);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function parseStoredChatValue(value: unknown): MobileCloudChat | null {
+  const parsed = value as Partial<MobileCloudChat>;
+  if (
+    typeof parsed.workspaceId === "string"
+    && typeof parsed.workspaceName === "string"
+    && typeof parsed.repoLabel === "string"
+    && typeof parsed.branchLabel === "string"
+    && (typeof parsed.targetId === "string" || parsed.targetId === null)
+    && (typeof parsed.workspaceRuntimeId === "string" || parsed.workspaceRuntimeId === null)
+    && (typeof parsed.sessionId === "string" || parsed.sessionId === null)
+    && typeof parsed.title === "string"
+    && typeof parsed.status === "string"
+    && typeof parsed.visibility === "string"
+  ) {
+    return {
+      workspaceId: parsed.workspaceId,
+      workspaceName: parsed.workspaceName,
+      repoLabel: parsed.repoLabel,
+      branchLabel: parsed.branchLabel,
+      targetId: parsed.targetId,
+      workspaceRuntimeId: parsed.workspaceRuntimeId,
+      sessionId: parsed.sessionId,
+      title: parsed.title,
+      status: parsed.status,
+      visibility: parsed.visibility,
+    };
+  }
+  return null;
+}
+
+function shellRouteKey(ownerUserId: string): string {
+  return `${SHELL_ROUTE_KEY}.${encodeURIComponent(ownerUserId)}`;
+}
+
+function shellChatKey(ownerUserId: string): string {
+  return `${SHELL_CHAT_KEY}.${encodeURIComponent(ownerUserId)}`;
 }
 
 function linkedChatForWorkspace(

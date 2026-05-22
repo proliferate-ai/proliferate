@@ -96,10 +96,17 @@ local Gmail OAuth callbacks. The generated Tauri config points the desktop at
 web app on `PROLIFERATE_HOSTED_WEB_PORT` and sets `FRONTEND_BASE_URL` to that
 hosted web origin. Server CORS includes the desktop renderer, hosted web, Expo
 mobile web, and Tauri origins. For browser-based mobile smoke tests, run Expo
-web on the profile's `PROLIFERATE_MOBILE_WEB_PORT`. On macOS, profile dev also
-uses a generated Tauri runner so the unbundled debug app appears as
-`Proliferate (<profile>)` in the app bar instead of every profile appearing as
-`proliferate`.
+web from the same profile environment so Mobile uses the profile API and
+reserved mobile web port:
+
+```bash
+source ~/.proliferate-local/dev/profiles/<name>/launch.env
+pnpm --dir mobile web:profile
+```
+
+On macOS, profile dev also uses a generated Tauri runner so the unbundled debug
+app appears as `Proliferate (<profile>)` in the app bar instead of every profile
+appearing as `proliferate`.
 
 ## Scope Notes
 

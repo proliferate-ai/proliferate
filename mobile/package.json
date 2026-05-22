@@ -9,6 +9,7 @@
     "ios": "pnpm build:shared && expo start --ios",
     "android": "pnpm build:shared && expo start --android",
     "web": "pnpm build:shared && expo start --web",
+    "web:profile": "pnpm build:shared && expo start --web --host localhost --port ${PROLIFERATE_MOBILE_WEB_PORT:-5175}",
     "typecheck": "pnpm build:shared && tsc --noEmit",
     "build:ios": "pnpm build:shared && pnpm dlx eas-cli@18.13.0 build --platform ios --profile production",
     "build:ios:preview": "pnpm build:shared && pnpm dlx eas-cli@18.13.0 build --platform ios --profile preview",

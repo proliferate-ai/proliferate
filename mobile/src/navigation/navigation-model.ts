@@ -27,6 +27,9 @@ export interface MobilePendingPrompt {
   modelId: string | null;
   modeId: string | null;
   createdAt: number;
+  dispatchedSessionId?: string | null;
+  failedAt?: number | null;
+  failureMessage?: string | null;
 }
 
 export const drawerRoutes: DrawerRoute[] = [
