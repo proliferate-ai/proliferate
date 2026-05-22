@@ -2468,6 +2468,7 @@ class TestCloudCommandsApi:
         assert payload["workspaceId"] == "anyharness-managed-runtime-config-cloud-workspace"
         assert payload["requiredRuntimeConfigRevisionId"] == str(revision.id)
         assert command.cloud_workspace_id == UUID(cloud_workspace_id)
+        await db_session.rollback()
 
     @pytest.mark.asyncio
     async def test_agent_auth_preflight_requires_applied_target_state(
