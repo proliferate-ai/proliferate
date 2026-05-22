@@ -50,7 +50,11 @@ export function SettingsShell({
 
         {onNavigateHome ? (
           <div className="mb-3">
-            <SidebarRowSurface as="button" onPress={onNavigateHome}>
+            <SidebarRowSurface
+              as="button"
+              onPress={onNavigateHome}
+              className="h-7 px-2 text-[13px] leading-4"
+            >
               <span className="truncate">Back to app</span>
             </SidebarRowSurface>
           </div>
@@ -71,8 +75,9 @@ export function SettingsShell({
                   active={item.id === activeSectionId}
                   disabled={item.disabled}
                   onPress={() => onSelectSection(item.id)}
+                  className="h-7 gap-2 px-2 text-[13px] leading-4"
                 >
-                  <span className="flex size-4 shrink-0 items-center justify-center text-sidebar-muted-foreground">
+                  <span className="flex size-3.5 shrink-0 items-center justify-center text-sidebar-muted-foreground transition-colors group-data-[active=true]:text-sidebar-foreground">
                     {item.icon}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{item.label}</span>

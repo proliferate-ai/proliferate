@@ -1,18 +1,21 @@
 import type { ComponentType } from "react";
 import {
   Blocks,
-  BrainOutline,
-  CircleQuestion,
+  BotMessageSquare,
+  Building2,
   CircleUser,
-  CloudIcon,
+  ClipboardList,
   CreditCard,
   FolderList,
   Keyboard,
-  MessageSquare,
+  LifeBuoy,
+  Palette,
   RefreshCw,
+  Server,
   Settings,
   Shield,
-  Sparkles,
+  SlidersHorizontal,
+  UsersRound,
 } from "@/components/ui/icons";
 import type { IconProps } from "@/components/ui/icons";
 import type { SettingsSection } from "@/config/settings";
@@ -39,7 +42,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     heading: "Preferences",
     items: [
       { kind: "section", id: "general", label: "General", icon: Settings },
-      { kind: "section", id: "appearance", label: "Appearance", icon: Sparkles },
+      { kind: "section", id: "appearance", label: "Appearance", icon: Palette },
       { kind: "section", id: "keyboard", label: "Keyboard", icon: Keyboard },
     ],
   },
@@ -48,7 +51,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     heading: "Organization & Account",
     items: [
       { kind: "section", id: "account", label: "Account", icon: CircleUser },
-      { kind: "section", id: "organization", label: "Organization", icon: CircleUser },
+      { kind: "section", id: "organization", label: "Organization", icon: Building2 },
       { kind: "section", id: "billing", label: "Billing", icon: CreditCard },
     ],
   },
@@ -61,10 +64,10 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         kind: "section",
         id: "shared-environments",
         label: "Shared environments",
-        icon: CircleUser,
+        icon: UsersRound,
         adminOnly: true,
       },
-      { kind: "section", id: "compute", label: "Compute", icon: CloudIcon },
+      { kind: "section", id: "compute", label: "Compute", icon: Server },
     ],
   },
   {
@@ -72,14 +75,14 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     heading: "Agents",
     items: [
       { kind: "section", id: "agents", label: "Agents", icon: Blocks },
-      { kind: "section", id: "agent-defaults", label: "Agent Defaults", icon: Settings },
+      { kind: "section", id: "agent-defaults", label: "Agent Defaults", icon: SlidersHorizontal },
       {
         kind: "section",
         id: "agent-authentication",
         label: "Agent Authentication",
         icon: Shield,
       },
-      { kind: "section", id: "review", label: "Review", icon: BrainOutline },
+      { kind: "section", id: "review", label: "Review", icon: ClipboardList },
     ],
   },
   {
@@ -90,7 +93,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         kind: "section",
         id: "slack-bot",
         label: "Slack bot",
-        icon: MessageSquare,
+        icon: BotMessageSquare,
         adminOnly: true,
       },
     ],
@@ -99,7 +102,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     id: "help",
     heading: "Help",
     items: [
-      { kind: "action", id: "support", label: "Support", icon: CircleQuestion },
+      { kind: "action", id: "support", label: "Support", icon: LifeBuoy },
       {
         kind: "action",
         id: "checkForUpdates",
