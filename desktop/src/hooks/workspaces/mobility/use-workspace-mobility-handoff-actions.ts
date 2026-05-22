@@ -60,7 +60,11 @@ export function useWorkspaceMobilityHandoffActions(state: WorkspaceMobilityState
   });
   const pushMutation = usePushGitMutation({ workspaceId: state.localWorkspaceId });
 
-  const preparePrompt = useCallback(async (requestId?: number) => {
+  const preparePrompt = useCallback(async (
+    requestId?: number,
+    options: { notifyOnSlow?: boolean } = {},
+  ) => {
+    const notifyOnSlow = options.notifyOnSlow ?? true;
     const startedAt = startLatencyTimer();
     const direction = state.canMoveToCloud
       ? "local_to_cloud"
@@ -75,16 +79,19 @@ export function useWorkspaceMobilityHandoffActions(state: WorkspaceMobilityState
     });
     try {
       if (state.canMoveToCloud) {
-        await notifyIfSlow(
-          prepareLocalToCloud(requestId),
-          PROMPT_PREPARE_TIMEOUT_MS,
-          () => {
-            if (!isPromptRequestActive(state.selectedLogicalWorkspaceId, requestId)) {
-              return;
-            }
-            showToast(PROMPT_PREPARE_TIMEOUT_MESSAGE, "info");
-          },
-        );
+        const preparePromise = prepareLocalToCloud(requestId);
+        await (notifyOnSlow
+          ? notifyIfSlow(
+            preparePromise,
+            PROMPT_PREPARE_TIMEOUT_MS,
+            () => {
+              if (!isPromptRequestActive(state.selectedLogicalWorkspaceId, requestId)) {
+                return;
+              }
+              showToast(PROMPT_PREPARE_TIMEOUT_MESSAGE, "info");
+            },
+          )
+          : preparePromise);
         logLatency("mobility.prepare.complete", {
           requestId,
           logicalWorkspaceId: state.selectedLogicalWorkspaceId,
@@ -94,16 +101,19 @@ export function useWorkspaceMobilityHandoffActions(state: WorkspaceMobilityState
         return;
       }
       if (state.canBringBackLocal) {
-        await notifyIfSlow(
-          prepareCloudToLocal(requestId),
-          PROMPT_PREPARE_TIMEOUT_MS,
-          () => {
-            if (!isPromptRequestActive(state.selectedLogicalWorkspaceId, requestId)) {
-              return;
-            }
-            showToast(PROMPT_PREPARE_TIMEOUT_MESSAGE, "info");
-          },
-        );
+        const preparePromise = prepareCloudToLocal(requestId);
+        await (notifyOnSlow
+          ? notifyIfSlow(
+            preparePromise,
+            PROMPT_PREPARE_TIMEOUT_MS,
+            () => {
+              if (!isPromptRequestActive(state.selectedLogicalWorkspaceId, requestId)) {
+                return;
+              }
+              showToast(PROMPT_PREPARE_TIMEOUT_MESSAGE, "info");
+            },
+          )
+          : preparePromise);
         logLatency("mobility.prepare.complete", {
           requestId,
           logicalWorkspaceId: state.selectedLogicalWorkspaceId,

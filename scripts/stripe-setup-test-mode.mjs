@@ -269,9 +269,9 @@ const envValues = {
   STRIPE_SANDBOX_METER_EVENT_NAME: meter.event_name,
   STRIPE_SANDBOX_OVERAGE_PRICE_ID: overage.id,
   STRIPE_REFILL_10H_PRICE_ID: refill.id,
-  STRIPE_CHECKOUT_SUCCESS_URL: "http://localhost:1420/settings/cloud?checkout=success",
-  STRIPE_CHECKOUT_CANCEL_URL: "http://localhost:1420/settings/cloud?checkout=cancel",
-  STRIPE_CUSTOMER_PORTAL_RETURN_URL: "http://localhost:1420/settings/cloud",
+  STRIPE_CHECKOUT_SUCCESS_URL: "http://127.0.0.1:5174/settings?section=billing&checkout=success",
+  STRIPE_CHECKOUT_CANCEL_URL: "http://127.0.0.1:5174/settings?section=billing&checkout=cancel",
+  STRIPE_CUSTOMER_PORTAL_RETURN_URL: "http://127.0.0.1:5174/settings?section=billing",
 };
 
 if (writeEnvLocal) {

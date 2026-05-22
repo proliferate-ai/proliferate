@@ -1,4 +1,5 @@
 import type { AgentAuthAgentKind } from "@proliferate/cloud-sdk";
+import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
@@ -26,6 +27,13 @@ export function CloudAgentAuthLibrary({ initialAgentKind = null }: CloudAgentAut
 
   return (
     <div className="space-y-6">
+      <AgentAuthScopeOverviewCard
+        selectedOrganizationName={library.selectedOrganization?.name ?? null}
+        isAdminForSelectedOrganization={library.isAdminForSelectedOrganization}
+        gatewayAvailable={library.capabilities?.enabled === true}
+        byokAvailable={library.capabilities?.byokEnabled === true}
+      />
+
       <section className="space-y-3">
         <div className="space-y-1">
           <h2 className="text-sm font-medium text-foreground">
@@ -125,6 +133,59 @@ export function CloudAgentAuthLibrary({ initialAgentKind = null }: CloudAgentAut
         </section>
       )}
     </div>
+  );
+}
+
+function AgentAuthScopeOverviewCard({
+  selectedOrganizationName,
+  isAdminForSelectedOrganization,
+  gatewayAvailable,
+  byokAvailable,
+}: {
+  selectedOrganizationName: string | null;
+  isAdminForSelectedOrganization: boolean;
+  gatewayAvailable: boolean;
+  byokAvailable: boolean;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="space-y-1">
+        <h2 className="text-sm font-medium text-foreground">
+          {agentAuthenticationCopy.scopeOverviewTitle}
+        </h2>
+        <p className="max-w-2xl text-xs leading-4 text-muted-foreground">
+          Agent auth is sandbox-scoped. Personal cloud and shared cloud can use
+          different credentials for the same harness.
+        </p>
+      </div>
+      <SettingsCard>
+        <SettingsCardRow
+          label={agentAuthenticationCopy.personalCloudScopeTitle}
+          description={agentAuthenticationCopy.personalCloudScopeDescription}
+        >
+          <Badge>Per user</Badge>
+        </SettingsCardRow>
+        <SettingsCardRow
+          label={agentAuthenticationCopy.sharedCloudScopeTitle}
+          description={agentAuthenticationCopy.sharedCloudScopeDescription}
+        >
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {selectedOrganizationName ? <Badge>{selectedOrganizationName}</Badge> : null}
+            <Badge tone={isAdminForSelectedOrganization ? "success" : "neutral"}>
+              {isAdminForSelectedOrganization ? "Admin configurable" : "Admin managed"}
+            </Badge>
+          </div>
+        </SettingsCardRow>
+        <SettingsCardRow
+          label={agentAuthenticationCopy.gatewayScopeTitle}
+          description={agentAuthenticationCopy.gatewayScopeDescription}
+        >
+          <Badge tone={gatewayAvailable ? "success" : "neutral"}>
+            {gatewayAvailable ? byokAvailable ? "BYOK available" : "Managed only" : "Disabled"}
+          </Badge>
+        </SettingsCardRow>
+      </SettingsCard>
+    </section>
   );
 }
 

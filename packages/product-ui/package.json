@@ -63,6 +63,10 @@
       "types": "./dist/automations/AutomationsList.d.ts",
       "import": "./dist/automations/AutomationsList.js"
     },
+    "./billing/BillingSettingsPane": {
+      "types": "./dist/billing/BillingSettingsPane.d.ts",
+      "import": "./dist/billing/BillingSettingsPane.js"
+    },
     "./brand/ProliferateMark": {
       "types": "./dist/brand/ProliferateMark.d.ts",
       "import": "./dist/brand/ProliferateMark.js"

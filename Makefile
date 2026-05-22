@@ -123,11 +123,11 @@ dev: sdk-build server-db-ready
 		use_profile_db=1; \
 	fi; \
 	export API_BASE_URL="http://127.0.0.1:$$PROLIFERATE_API_PORT"; \
-	export FRONTEND_BASE_URL="$${FRONTEND_BASE_URL:-http://localhost:$$PROLIFERATE_HOSTED_WEB_PORT}"; \
+	export FRONTEND_BASE_URL="$${FRONTEND_BASE_URL:-http://127.0.0.1:$$PROLIFERATE_HOSTED_WEB_PORT}"; \
 	export CORS_ALLOW_ORIGINS="http://localhost:$$PROLIFERATE_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_WEB_PORT,http://localhost:$$PROLIFERATE_HOSTED_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_HOSTED_WEB_PORT,http://tauri.localhost,tauri://localhost"; \
-	export STRIPE_CHECKOUT_SUCCESS_URL="http://localhost:$$PROLIFERATE_WEB_PORT/settings/cloud?checkout=success"; \
-	export STRIPE_CHECKOUT_CANCEL_URL="http://localhost:$$PROLIFERATE_WEB_PORT/settings/cloud?checkout=cancel"; \
-	export STRIPE_CUSTOMER_PORTAL_RETURN_URL="http://localhost:$$PROLIFERATE_WEB_PORT/settings/cloud"; \
+	export STRIPE_CHECKOUT_SUCCESS_URL="$$FRONTEND_BASE_URL/settings?section=billing&checkout=success"; \
+	export STRIPE_CHECKOUT_CANCEL_URL="$$FRONTEND_BASE_URL/settings?section=billing&checkout=cancel"; \
+	export STRIPE_CUSTOMER_PORTAL_RETURN_URL="$$FRONTEND_BASE_URL/settings?section=billing"; \
 	export STRIPE_FORWARD_TO="http://127.0.0.1:$$PROLIFERATE_API_PORT/v1/billing/webhooks/stripe"; \
 	if [ "$$use_profile_db" = "1" ]; then \
 		LOCAL_PGHOST="$(LOCAL_PGHOST)" \

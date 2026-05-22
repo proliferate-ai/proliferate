@@ -48,8 +48,8 @@ interface UseOpenInDefaultEditorResult {
  *
  * Resolution rules:
  *  - Reads `defaultOpenInTargetId` from user preferences.
- *  - Falls back to the first detected editor target, then to the first target
- *    of any kind (matches existing `resolvePreferredOpenTarget` semantics).
+ *  - Falls back through the product default target, Finder, then the first
+ *    available target (matches `resolvePreferredOpenTarget` semantics).
  *  - Strips any `:line[:col]` suffix before invoking the shell command,
  *    because the underlying Tauri commands take a plain path.
  */

@@ -136,8 +136,9 @@ export function useWorkspaceMobilityFooterFlow() {
   ]);
 
   useEffect(() => {
+    resetPromptState();
     setOptimisticProgressDirection(null);
-  }, [mobilityState.selectedLogicalWorkspaceId]);
+  }, [mobilityState.selectedLogicalWorkspaceId, resetPromptState]);
 
   useEffect(() => {
     if (

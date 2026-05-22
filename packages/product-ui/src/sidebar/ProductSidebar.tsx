@@ -340,7 +340,7 @@ export function ProductSidebarNavRow({
       className={`h-[30px] gap-1.5 px-2 py-1 text-sm leading-4 focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
-      <div className="flex w-4 shrink-0 items-center justify-center">
+      <div className="flex w-3.5 shrink-0 items-center justify-center">
         {item.icon}
       </div>
       <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-current">

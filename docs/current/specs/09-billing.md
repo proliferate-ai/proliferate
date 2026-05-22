@@ -361,13 +361,17 @@ same value.
 
 ```text
 desktop/src/components/settings/panes/BillingPane.tsx
-  CloudBillingSummary (personal)
-  OrganizationBillingSection (when active org)
-  plan, hours used/remaining, upgrade/manage buttons
+packages/product-ui/src/billing/BillingSettingsPane.tsx
+  shared personal/org owner cards
+  plan comparison, hours used/remaining, upgrade/manage/overage/invoice actions
 ```
 
-**Web billing UI**: none. `web/src/pages/SettingsPage.tsx` has no
-billing section.
+**Web billing UI**:
+
+```text
+web/src/components/settings/screen/BillingSettingsSection.tsx
+  consumes the shared product-ui billing pane through cloud-sdk-react
+```
 
 **Mobile billing UI**: none.
 
@@ -787,18 +791,18 @@ sandbox before it sends a `paused` event.
 
 ### 5.8 Web Settings → Billing pane
 
-Mirror of Desktop's `BillingPane.tsx`:
+Mirror of Desktop's shared billing surface:
 
 ```text
-web/src/pages/SettingsPage.tsx
-  add Billing section under Organization & Account
+web/src/components/settings/screen/SettingsScreen.tsx
+  Billing section under Organization & Account
+  honors ?section=billing for Stripe and direct links
 
-web/src/components/settings/billing/
-  PersonalBillingSummary.tsx
-  OrganizationBillingSection.tsx
-  OverageSettingsCard.tsx
-  BillingPlanCard.tsx
-  UsageHistoryList.tsx
+web/src/components/settings/screen/BillingSettingsSection.tsx
+  owner-specific personal/org billing controllers
+
+packages/product-ui/src/billing/BillingSettingsPane.tsx
+  shared billing cards and plan comparison
 ```
 
 Consumes the same Cloud SDK billing client (no schema change).
@@ -908,14 +912,10 @@ cloud/sdk/src/types/generated.ts                                  regen
 Web:
 
 ```text
-web/src/pages/SettingsPage.tsx                                   add Billing section
-web/src/components/settings/billing/                             (new)
-  PersonalBillingSummary.tsx
-  OrganizationBillingSection.tsx
-  OverageSettingsCard.tsx
-  BillingPlanCard.tsx
-  UsageHistoryList.tsx
-web/src/hooks/access/cloud/billing/                              (new; mirrors Desktop)
+web/src/components/settings/screen/SettingsScreen.tsx            Billing section routing
+web/src/components/settings/screen/BillingSettingsSection.tsx    Billing owner controllers
+cloud/sdk-react/src/hooks/billing.ts                             Shared web SDK hooks
+packages/product-ui/src/billing/BillingSettingsPane.tsx          Shared presentation
 ```
 
 Desktop:
@@ -1116,10 +1116,8 @@ cd web && pnpm test -- --run && pnpm typecheck
 Targeted web tests:
 
 ```text
-web/src/components/settings/billing/PersonalBillingSummary.test.tsx
-web/src/components/settings/billing/OrganizationBillingSection.test.tsx
-web/src/components/settings/billing/OverageSettingsCard.test.tsx
-web/src/pages/SettingsPage.test.tsx
+web/src/components/settings/screen/BillingSettingsSection.test.tsx
+web/src/components/settings/screen/SettingsScreen.test.tsx
   - Billing section visible
   - Stripe portal manage button
 ```

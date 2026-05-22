@@ -1,7 +1,8 @@
 import { Apple, CircleUserRound, Cloud, CreditCard, Github, LifeBuoy, Palette } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
-import type { AuthProviderName, BillingPlanInfo, CloudOwnerSelection } from "@proliferate/cloud-sdk";
+import type { AuthProviderName } from "@proliferate/cloud-sdk";
 import type {
   AccountProviderView,
   AccountSettingsPaneProps,
@@ -14,23 +15,54 @@ import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPag
 import { SettingsShell } from "@proliferate/product-ui/settings/SettingsShell";
 import {
   useAuthViewer,
-  useCloudBilling,
-  useCloudBillingActions,
-  useOrganizations,
 } from "@proliferate/cloud-sdk-react";
 
 import { startWebAuthFlow } from "../../../lib/access/cloud/auth/web-auth-flow";
 import { useAuthToken } from "../../../providers/WebCloudProvider";
+import { BillingSettingsSection } from "./BillingSettingsSection";
 
 type SettingsSectionId = "account" | "appearance" | "cloud" | "billing" | "support";
 const SETTINGS_ICON_SIZE = 14;
+const SETTINGS_SECTION_IDS = new Set<SettingsSectionId>([
+  "account",
+  "appearance",
+  "cloud",
+  "billing",
+  "support",
+]);
+
+function settingsSectionFromParams(searchParams: URLSearchParams): SettingsSectionId {
+  const section = searchParams.get("section");
+  return section && SETTINGS_SECTION_IDS.has(section as SettingsSectionId)
+    ? section as SettingsSectionId
+    : "account";
+}
 
 export function SettingsScreen() {
   const viewer = useAuthViewer();
   const { token, clearToken } = useAuthToken();
-  const [activeSection, setActiveSection] = useState<SettingsSectionId>("account");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>(() =>
+    settingsSectionFromParams(searchParams)
+  );
   const [loadingProvider, setLoadingProvider] = useState<AuthProviderName | "sign-out" | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActiveSection(settingsSectionFromParams(searchParams));
+  }, [searchParams]);
+
+  function selectSection(id: string) {
+    const section = SETTINGS_SECTION_IDS.has(id as SettingsSectionId)
+      ? id as SettingsSectionId
+      : "account";
+    setActiveSection(section);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("section", section);
+      return next;
+    }, { replace: true });
+  }
 
   async function startProvider(provider: AuthProviderName, purpose: "link" | "required_github_link" = "link") {
     if (loadingProvider || !token) {
@@ -94,7 +126,7 @@ export function SettingsScreen() {
             ],
           },
         ]}
-        onSelectSection={(id) => setActiveSection(id as SettingsSectionId)}
+        onSelectSection={selectSection}
       >
         {activeSection === "account" ? (
           <AccountSection
@@ -109,7 +141,7 @@ export function SettingsScreen() {
             })}
           />
         ) : activeSection === "billing" ? (
-          <BillingSection />
+          <BillingSettingsSection />
         ) : (
           <PlaceholderSection id={activeSection} />
         )}
@@ -128,190 +160,6 @@ function AccountSection({ props }: { props: AccountSettingsPaneProps }) {
       <AccountSettingsPane {...props} />
     </section>
   );
-}
-
-function BillingSection() {
-  const organizations = useOrganizations();
-  const adminOrganizations = (organizations.data?.organizations ?? []).filter((organization) => {
-    const role = organization.membership?.role;
-    return organization.membership?.status === "active" && (role === "owner" || role === "admin");
-  });
-
-  return (
-    <section className="space-y-6">
-      <SettingsPageHeader
-        title="Billing"
-        description="Manage cloud access, included runtime, and billing status."
-      />
-      <BillingOwnerCard title="Personal billing" />
-      {organizations.isLoading ? (
-        <SettingsCard>
-          <SettingsCardRow label="Organization billing" description="Loading organizations..." />
-        </SettingsCard>
-      ) : null}
-      {adminOrganizations.map((organization) => (
-        <BillingOwnerCard
-          key={organization.id}
-          title={`${organization.name} billing`}
-          owner={{ ownerScope: "organization", organizationId: organization.id }}
-        />
-      ))}
-    </section>
-  );
-}
-
-function BillingOwnerCard({
-  title,
-  owner,
-}: {
-  title: string;
-  owner?: CloudOwnerSelection;
-}) {
-  const billing = useCloudBilling(owner);
-  const billingActions = useCloudBillingActions(owner);
-  const billingPlan = billing.data;
-  const busy = billingActions.creatingBillingPortal || billingActions.creatingCloudCheckout;
-  const [actionError, setActionError] = useState<string | null>(null);
-
-  async function openBillingAction(action: "checkout" | "portal") {
-    setActionError(null);
-    try {
-      const response = action === "portal"
-        ? await billingActions.createBillingPortal()
-        : await billingActions.createCloudCheckout();
-      window.location.assign(response.url);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Billing action could not start.");
-    }
-  }
-
-  return (
-    <SettingsCard>
-      {billing.isLoading && !billingPlan ? (
-        <SettingsCardRow label={title} description="Loading billing state..." />
-      ) : null}
-      {billing.isError ? (
-        <SettingsCardRow
-          label={title}
-          description="Billing details could not be loaded."
-        >
-          <ActionButton onClick={() => void billing.refetch()}>Retry</ActionButton>
-        </SettingsCardRow>
-      ) : null}
-      {actionError ? (
-        <SettingsCardRow label="Billing action failed" description={actionError} />
-      ) : null}
-      {billingPlan ? (
-        <>
-          <SettingsCardRow
-            label={`${title}: ${planLabel(billingPlan)}`}
-            description={billingDescription(billingPlan)}
-          >
-            {billingPlan.isPaidCloud ? (
-              <ActionButton
-                disabled={busy}
-                onClick={() => void openBillingAction("portal")}
-              >
-                Manage
-              </ActionButton>
-            ) : (
-              <ActionButton
-                disabled={busy}
-                onClick={() => void openBillingAction("checkout")}
-              >
-                Upgrade
-              </ActionButton>
-            )}
-          </SettingsCardRow>
-          <SettingsCardRow
-            label="Cloud runtime"
-            description={`${formatHours(runtimeRemainingHours(billingPlan))} remaining · ${
-              billingPlan.activeSandboxCount
-            } active`}
-          />
-          {billingPlan.billingMode === "enforce" && billingPlan.startBlocked ? (
-            <SettingsCardRow
-              label="Cloud is paused"
-              description={startBlockLabel(billingPlan.startBlockReason)}
-            />
-          ) : null}
-        </>
-      ) : null}
-    </SettingsCard>
-  );
-}
-
-function ActionButton({
-  children,
-  disabled,
-  onClick,
-}: {
-  children: string;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="rounded-md border border-border-light bg-surface px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-border-heavy disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      {children}
-    </button>
-  );
-}
-
-function planLabel(plan: BillingPlanInfo): string {
-  if (plan.isUnlimited) {
-    return "Unlimited";
-  }
-  if (plan.isPaidCloud) {
-    return "Pro";
-  }
-  return "Free";
-}
-
-function billingDescription(plan: BillingPlanInfo): string {
-  if (plan.billingMode === "enforce" && plan.startBlocked) {
-    return startBlockLabel(plan.startBlockReason);
-  }
-  if (plan.isPaidCloud) {
-    return "Personal cloud billing is active.";
-  }
-  return "Upgrade when you need more included cloud runtime.";
-}
-
-function runtimeRemainingHours(plan: BillingPlanInfo): number | null {
-  return (
-    plan.proBillingEnabled && plan.isPaidCloud
-      ? plan.remainingManagedCloudHours
-      : plan.remainingSandboxHours
-  ) ?? null;
-}
-
-function formatHours(value: number | null | undefined): string {
-  if (value === null || value === undefined) {
-    return "Unlimited";
-  }
-  return `${Math.max(value, 0).toFixed(value < 10 ? 1 : 0)}h`;
-}
-
-function startBlockLabel(reason: string | null | undefined): string {
-  switch (reason) {
-    case "credits_exhausted":
-      return "Included cloud runtime has been used.";
-    case "overage_disabled":
-      return "Overage billing is off.";
-    case "cap_exhausted":
-      return "The overage cap has been reached.";
-    case "payment_failed":
-      return "Payment needs attention.";
-    case "concurrency_limit":
-      return "The active sandbox limit has been reached.";
-    default:
-      return "Cloud usage is blocked until billing is resolved.";
-  }
 }
 
 function PlaceholderSection({

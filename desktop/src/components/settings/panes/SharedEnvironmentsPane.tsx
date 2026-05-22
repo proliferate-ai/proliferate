@@ -178,19 +178,6 @@ export function SharedEnvironmentsPane({
 
       <SettingsCard>
         <SettingsCardRow
-          label="Agents"
-          description="Choose which harnesses are installed and available across shared workspaces."
-        >
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onOpenSettingsSection("agents")}
-          >
-            Open
-          </Button>
-        </SettingsCardRow>
-        <SettingsCardRow
           label="Plugins & MCPs"
           description="Manage MCP servers and skill plugins enabled across shared workspaces."
         >

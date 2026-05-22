@@ -1,25 +1,27 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
+import type { CloudOwnerSelection } from "@proliferate/cloud-sdk";
 import {
   BillingOwnerCard,
   BillingSettingsPane,
   type BillingActionView,
   type BillingOwnerCardView,
 } from "@proliferate/product-ui/billing/BillingSettingsPane";
-
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
+import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import {
   useCloudBilling,
   useCloudBillingActions,
-} from "@/hooks/cloud/facade/use-cloud-billing";
-import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import type { CloudOwnerSelection } from "@/lib/domain/cloud/billing";
+  useOrganizations,
+} from "@proliferate/cloud-sdk-react";
 
-export function BillingPane() {
-  const { activeOrganization, activeOrganizationId } = useActiveOrganization();
-  const admin = useIsAdmin(activeOrganizationId);
+export function BillingSettingsSection() {
+  const organizations = useOrganizations();
+  const adminOrganizations = (organizations.data?.organizations ?? []).filter((organization) => {
+    const role = organization.membership?.role;
+    return organization.membership?.status === "active" && (role === "owner" || role === "admin");
+  });
 
   return (
     <section className="space-y-6">
@@ -27,28 +29,28 @@ export function BillingPane() {
         title="Billing"
         description="Manage personal and organization cloud usage, included runtime, overage, and plan changes."
       />
-
       <BillingSettingsPane>
-        {activeOrganization ? (
-          <BillingOwnerController
-            title={`${activeOrganization.name} billing`}
-            description={
-              admin.isAdmin
-                ? "Applies to shared cloud workspaces, team automations, Slack sessions, and shared sandbox usage."
-                : "Organization billing is managed by owners and admins."
-            }
-            iconKind="organization"
-            owner={{ ownerScope: "organization", organizationId: activeOrganization.id }}
-            actionsEnabled={admin.isAdmin}
-          />
-        ) : null}
-
         <BillingOwnerController
           title="Personal billing"
           description="Applies to your personal cloud sandbox, local-to-cloud work, and personal dispatch usage."
           iconKind="personal"
-          actionsEnabled
         />
+
+        {organizations.isLoading ? (
+          <SettingsCard>
+            <SettingsCardRow label="Organization billing" description="Loading organizations..." />
+          </SettingsCard>
+        ) : null}
+
+        {adminOrganizations.map((organization) => (
+          <BillingOwnerController
+            key={organization.id}
+            title={`${organization.name} billing`}
+            description="Applies to shared cloud workspaces, team automations, Slack sessions, and shared sandbox usage."
+            iconKind="organization"
+            owner={{ ownerScope: "organization", organizationId: organization.id }}
+          />
+        ))}
       </BillingSettingsPane>
     </section>
   );
@@ -59,43 +61,33 @@ function BillingOwnerController({
   description,
   iconKind,
   owner,
-  actionsEnabled,
 }: {
   title: string;
   description: string;
   iconKind: "personal" | "organization";
   owner?: CloudOwnerSelection;
-  actionsEnabled: boolean;
 }) {
   const billing = useCloudBilling(owner);
   const billingActions = useCloudBillingActions(owner);
   const billingPlan = billing.data;
   const [actionError, setActionError] = useState<string | null>(null);
   const invoiceUrl = billingPlan?.hostedInvoiceUrl ?? null;
-  const openInvoice = useOpenExternalUrl(invoiceUrl);
 
   async function openBillingAction(action: "checkout" | "portal" | "refill") {
-    if (!actionsEnabled) {
-      return;
-    }
     setActionError(null);
     try {
-      if (action === "portal") {
-        await billingActions.createBillingPortal();
-      } else if (action === "refill") {
-        await billingActions.createRefillCheckout();
-      } else {
-        await billingActions.createCloudCheckout();
-      }
+      const response = action === "portal"
+        ? await billingActions.createBillingPortal()
+        : action === "refill"
+          ? await billingActions.createRefillCheckout()
+          : await billingActions.createCloudCheckout();
+      window.location.assign(response.url);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Billing action could not start.");
     }
   }
 
   async function updateOverage(enabled: boolean) {
-    if (!actionsEnabled) {
-      return;
-    }
     setActionError(null);
     try {
       await billingActions.updateOverageEnabled({ enabled });
@@ -120,28 +112,21 @@ function BillingOwnerController({
           },
         }
       : undefined,
-    manageAction: actionsEnabled
-      ? {
-          label: "Manage billing",
-          loading: billingActions.creatingBillingPortal,
-          onClick: () => {
-            void openBillingAction("portal");
-          },
-        }
-      : undefined,
-    upgradeAction: actionsEnabled
-      ? {
-          label: iconKind === "organization" ? "Upgrade organization" : "Upgrade account",
-          loading: billingActions.creatingCloudCheckout,
-          onClick: () => {
-            void openBillingAction("checkout");
-          },
-        }
-      : undefined,
-    refillAction: actionsEnabled
-      && billingPlan?.isPaidCloud
-      && !billingPlan.proBillingEnabled
-      && !billingPlan.hasUnlimitedCloudHours
+    manageAction: {
+      label: "Manage billing",
+      loading: billingActions.creatingBillingPortal,
+      onClick: () => {
+        void openBillingAction("portal");
+      },
+    },
+    upgradeAction: {
+      label: iconKind === "organization" ? "Upgrade organization" : "Upgrade account",
+      loading: billingActions.creatingCloudCheckout,
+      onClick: () => {
+        void openBillingAction("checkout");
+      },
+    },
+    refillAction: billingPlan?.isPaidCloud && !billingPlan.proBillingEnabled && !billingPlan.hasUnlimitedCloudHours
       ? {
           label: "Refill 10h",
           loading: billingActions.creatingRefillCheckout,
@@ -150,17 +135,17 @@ function BillingOwnerController({
           },
         }
       : undefined,
-    overageAction: actionsEnabled
-      ? overageActionForPlan({
-          plan: billingPlan,
-          loading: billingActions.updatingOverage,
-          onUpdate: updateOverage,
-        })
-      : undefined,
-    invoiceAction: actionsEnabled && invoiceUrl
+    overageAction: overageActionForPlan({
+      plan: billingPlan,
+      loading: billingActions.updatingOverage,
+      onUpdate: updateOverage,
+    }),
+    invoiceAction: invoiceUrl
       ? {
           label: "View invoice",
-          onClick: openInvoice,
+          onClick: () => {
+            window.location.assign(invoiceUrl);
+          },
         }
       : undefined,
   };
@@ -208,15 +193,4 @@ function overageActionForPlan({
       void onUpdate(nextEnabled);
     },
   };
-}
-
-function useOpenExternalUrl(url: string | null) {
-  const { openExternal } = useTauriShellActions();
-
-  return useCallback(() => {
-    if (!url) {
-      return;
-    }
-    void openExternal(url);
-  }, [openExternal, url]);
 }

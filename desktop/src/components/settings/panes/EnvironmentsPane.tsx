@@ -100,8 +100,8 @@ export function EnvironmentsPane({
             )}
           </EnvironmentPanel>
       </EnvironmentSection>
-      <AutomaticSyncSection repositories={repositories} />
       <WorktreeStorageSection />
+      <AutomaticSyncSection repositories={repositories} />
     </section>
   );
 }
@@ -119,12 +119,10 @@ export function EnvironmentsPane({
           <ChevronRight className="size-4" />
           <span className="text-foreground">{selectedRepository.name}</span>
         </Button>
-        <SettingsPageHeader title="Environments" />
-        <EnvironmentPanel>
-          <EnvironmentPanelRow>
-            <RepositoryIdentityRow repository={selectedRepository} />
-          </EnvironmentPanelRow>
-        </EnvironmentPanel>
+        <SettingsPageHeader
+          title={selectedRepository.name}
+          description={selectedRepository.secondaryLabel ?? selectedRepository.sourceRoot}
+        />
       </div>
 
       <LocalRepoSection repository={selectedRepository} />

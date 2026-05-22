@@ -76,7 +76,7 @@ function EditActionRow({
         role={hasDetails ? "button" : undefined}
         tabIndex={hasDetails ? 0 : undefined}
         {...(hasDetails ? { "data-chat-transcript-ignore": true } : {})}
-        className={`group/action-row flex min-w-0 items-center gap-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground/80 ${action === "Edited" ? "my-2" : ""}`}
+        className={`group/action-row flex min-w-0 items-center gap-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground/80 ${action === "Edited" ? "my-1" : ""}`}
         onClick={() => {
           if (hasDetails) setExpanded((value) => !value);
         }}

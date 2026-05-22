@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { Badge } from "@/components/ui/Badge";
-import { Archive, Check, RefreshCw } from "@/components/ui/icons";
+import { Archive, Check, RefreshCw, Server } from "@/components/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@/components/ui/Label";
@@ -129,19 +129,18 @@ export function ComputeTargetDetails({
 
   if (loading) {
     return (
-      <SettingsCard>
-        <div className="p-3 text-sm text-muted-foreground">Loading target details...</div>
+      <SettingsCard className="min-h-[320px]">
+        <div className="space-y-4 p-4">
+          <div className="h-4 w-48 rounded-full bg-foreground/10" />
+          <div className="h-24 rounded-md bg-foreground/5" />
+          <div className="h-24 rounded-md bg-foreground/5" />
+          <p className="text-sm text-muted-foreground">Loading target details...</p>
+        </div>
       </SettingsCard>
     );
   }
   if (!target || !draftAppearance) {
-    return (
-      <SettingsCard>
-        <div className="p-3 text-sm text-muted-foreground">
-          Select a compute target to view its worker, inventory, and readiness.
-        </div>
-      </SettingsCard>
-    );
+    return <ComputeTargetEmptyState />;
   }
 
   const canTestConnection = target.kind === "ssh"
@@ -223,16 +222,18 @@ export function ComputeTargetDetails({
             <Badge tone={computeTargetStatusTone(target.status)}>
               {computeTargetStatusLabel(target.status)}
             </Badge>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={!canTestConnection}
-              loading={directProfile.testing}
-              onClick={() => { void handleTestConnection(); }}
-            >
-              <RefreshCw className="size-3.5" />
-              {COMPUTE_COPY.testConnection}
-            </Button>
+            {target.kind === "ssh" && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={!canTestConnection}
+                loading={directProfile.testing}
+                onClick={() => { void handleTestConnection(); }}
+              >
+                <RefreshCw className="size-3.5" />
+                {COMPUTE_COPY.testConnection}
+              </Button>
+            )}
             <Button type="button" onClick={() => { void handleSave(); }}>
               <Check className="size-3.5" />
               {COMPUTE_COPY.save}
@@ -432,6 +433,24 @@ export function ComputeTargetDetails({
             </div>
           </>
         )}
+      </div>
+    </SettingsCard>
+  );
+}
+
+function ComputeTargetEmptyState() {
+  return (
+    <SettingsCard className="min-h-[320px]">
+      <div className="flex min-h-[320px] flex-col items-center justify-center gap-4 p-8 text-center">
+        <span className="inline-flex size-11 items-center justify-center rounded-lg bg-foreground/5 text-muted-foreground">
+          <Server className="size-5" aria-hidden="true" />
+        </span>
+        <div className="max-w-sm space-y-2">
+          <h3 className="text-sm font-medium text-foreground">{COMPUTE_COPY.selectTargetTitle}</h3>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {COMPUTE_COPY.selectTargetDescription}
+          </p>
+        </div>
       </div>
     </SettingsCard>
   );
