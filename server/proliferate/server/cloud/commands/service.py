@@ -632,7 +632,7 @@ def _command_has_managed_cloud_workspace(
         return False
     if kind == CloudCommandKind.start_session.value:
         return body.cloud_workspace_id is not None or body.workspace_id is not None
-    if kind == CloudCommandKind.send_prompt.value:
+    if kind in _PROJECTED_SESSION_COMMAND_KINDS:
         return body.cloud_workspace_id is not None
     return False
 
@@ -724,6 +724,11 @@ async def enqueue_command(
         actor_user_id=user.id,
         target=target,
         kind=kind,
+        require_target_config=not _command_has_managed_cloud_workspace(
+            target=target,
+            kind=kind,
+            body=body,
+        ),
     )
     command_body = body.model_copy(update={"payload": payload})
     resolved_workspace_id, payload, cloud_workspace_id = await _resolve_command_workspace(
@@ -1046,6 +1051,7 @@ async def _validate_managed_runtime_config_current_for_command(
     actor_user_id: UUID,
     target: targets_store.CloudTargetSnapshot,
     kind: str,
+    require_target_config: bool = True,
 ) -> None:
     if kind not in {
         CloudCommandKind.resolve_interaction.value,
@@ -1062,13 +1068,14 @@ async def _validate_managed_runtime_config_current_for_command(
             "Runtime config sandbox profile not found.",
             status_code=404,
         )
-    configs = await target_config_store.list_target_configs(db, target_id=target.id)
-    if not configs:
-        raise CloudApiError(
-            "cloud_command_target_config_required",
-            "Managed targets require a materialized target config before sessions can start.",
-            status_code=409,
-        )
+    if require_target_config:
+        configs = await target_config_store.list_target_configs(db, target_id=target.id)
+        if not configs:
+            raise CloudApiError(
+                "cloud_command_target_config_required",
+                "Managed targets require a materialized target config before sessions can start.",
+                status_code=409,
+            )
     _current, current_revision = await runtime_config_store.get_current(
         db,
         sandbox_profile_id=target.sandbox_profile_id,

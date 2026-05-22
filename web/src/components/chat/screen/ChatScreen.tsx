@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   desktopWorkspaceDeepLink,
+  type CloudCommandStatus,
   type CloudSessionEvent,
   type CloudSessionProjection,
   type CloudTranscriptItem,
@@ -34,6 +35,14 @@ import {
   loadPendingHomePrompt,
   type PendingHomePrompt,
 } from "../../../lib/access/cloud/pending-home-prompt-store";
+import {
+  buildCloudChatComposerControls,
+  DEFAULT_DIRECT_PROMPT_MODEL_ID,
+  getLiveConfigControlValue,
+  pendingConfigChangeKey,
+  readSessionLiveConfig,
+  type PendingConfigChange,
+} from "../../../lib/domain/chat/cloud-composer-controls";
 import { buildCloudTranscriptView } from "../../../lib/domain/chat/cloud-transcript-view";
 
 type PendingHomePromptDispatchRun = {
@@ -51,23 +60,33 @@ type OptimisticPrompt = {
   status: OptimisticPromptStatus;
 };
 
+type UpdateSessionConfigPayload = {
+  configId: string;
+  value: string;
+};
+
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
-const DEFAULT_DIRECT_PROMPT_MODEL_ID = "gpt-5.4";
 
 export function ChatScreen() {
   const { workspaceId, chatId } = useParams();
   const navigate = useNavigate();
   const client = useCloudClient();
   const [draft, setDraft] = useState("");
+  const [draftModelId, setDraftModelId] = useState(DEFAULT_DIRECT_PROMPT_MODEL_ID);
   const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
+  const [latestConfigCommandId, setLatestConfigCommandId] = useState<string | null>(null);
   const [directPromptDispatching, setDirectPromptDispatching] = useState(false);
   const [optimisticPrompts, setOptimisticPrompts] = useState<OptimisticPrompt[]>([]);
+  const [pendingConfigChanges, setPendingConfigChanges] = useState<
+    Record<string, PendingConfigChange>
+  >({});
   const [pendingHomePrompt, setPendingHomePrompt] = useState<PendingHomePrompt | null>(() =>
     workspaceId ? loadPendingHomePrompt(workspaceId) : null
   );
   const [pendingHomePromptStatus, setPendingHomePromptStatus] = useState<string | null>(null);
   const pendingHomePromptDispatchRunRef = useRef<PendingHomePromptDispatchRun | null>(null);
+  const pendingConfigMutationIdRef = useRef(0);
   const workspaceQuery = useCloudWorkspaceSnapshot(workspaceId ?? null, Boolean(workspaceId));
   const workspaceLive = useWorkspaceLive(workspaceId ?? null, { enabled: Boolean(workspaceId) });
   const snapshot = workspaceLive.snapshot ?? workspaceQuery.data;
@@ -119,16 +138,31 @@ export function ChatScreen() {
   );
   const enqueuePrompt = useEnqueueCloudCommand<SendPromptPayload>();
   const enqueueStartSession = useEnqueueCloudCommand<StartSessionPayload>();
+  const enqueueConfig = useEnqueueCloudCommand<UpdateSessionConfigPayload>();
   const claimWorkspace = useClaimCloudWorkspace();
   const commandStatus = useCommandStatus(latestCommandId);
+  const configCommandStatus = useCommandStatus(latestConfigCommandId);
   const isUnclaimed = workspace?.visibility === "shared_unclaimed";
   const workspaceReadyAgentKindsKey = workspace?.readyAgentKinds?.join("\0") ?? "";
   const workspaceAllowedAgentKindsKey = workspace?.allowedAgentKinds?.join("\0") ?? "";
+  const liveConfig = readSessionLiveConfig(session);
+  const composerControls = buildCloudChatComposerControls({
+    session,
+    liveConfig,
+    pendingConfigChanges,
+    launchModelId: draftModelId,
+    onLaunchModelSelect: setDraftModelId,
+    onSessionConfigSelect: (rawConfigId, value) => {
+      void submitSessionConfig(rawConfigId, value);
+    },
+  });
 
   useEffect(() => {
     setPendingHomePrompt(workspaceId ? loadPendingHomePrompt(workspaceId) : null);
     setPendingHomePromptStatus(null);
     setOptimisticPrompts([]);
+    setPendingConfigChanges({});
+    setLatestConfigCommandId(null);
   }, [workspaceId]);
 
   useEffect(() => {
@@ -266,6 +300,56 @@ export function ChatScreen() {
     );
   }, [session?.sessionId, transcriptItems, transcriptView.rows]);
 
+  useEffect(() => {
+    if (!session || !liveConfig) {
+      return;
+    }
+    setPendingConfigChanges((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const [key, pendingChange] of Object.entries(current)) {
+        if (pendingChange.sessionId !== session.sessionId) {
+          continue;
+        }
+        if (getLiveConfigControlValue(liveConfig, pendingChange.rawConfigId) === pendingChange.value) {
+          delete next[key];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [liveConfig, session?.sessionId]);
+
+  useEffect(() => {
+    const command = configCommandStatus.data;
+    if (!command || !isRejectedCommandStatus(command.status)) {
+      return;
+    }
+    if (
+      !Object.values(pendingConfigChanges).some((change) =>
+        change.commandId === command.commandId
+      )
+    ) {
+      return;
+    }
+    setPendingConfigChanges((current) => {
+      const next = Object.fromEntries(
+        Object.entries(current).filter(([_key, change]) =>
+          change.commandId !== command.commandId
+        ),
+      );
+      return Object.keys(next).length === Object.keys(current).length ? current : next;
+    });
+    setPendingHomePromptStatus(
+      command.errorMessage || sessionConfigCommandFailureMessage(command.status),
+    );
+  }, [
+    configCommandStatus.data?.commandId,
+    configCommandStatus.data?.errorMessage,
+    configCommandStatus.data?.status,
+    pendingConfigChanges,
+  ]);
+
   async function submitPrompt() {
     const text = draft.trim();
     if (!text || !workspace) {
@@ -284,7 +368,7 @@ export function ChatScreen() {
       const pendingPrompt: PendingHomePrompt = {
         id: `web-chat:${workspace.id}:${Date.now().toString(36)}`,
         text,
-        modelId: DEFAULT_DIRECT_PROMPT_MODEL_ID,
+        modelId: draftModelId,
         modeId: null,
         createdAt: Date.now(),
       };
@@ -350,6 +434,62 @@ export function ChatScreen() {
       );
       setPendingHomePromptStatus(
         error instanceof Error ? error.message : "Prompt could not be sent.",
+      );
+    }
+  }
+
+  async function submitSessionConfig(rawConfigId: string, value: string) {
+    if (!workspace || !session) {
+      return;
+    }
+    const mutationId = pendingConfigMutationIdRef.current + 1;
+    pendingConfigMutationIdRef.current = mutationId;
+    const changeKey = pendingConfigChangeKey(session.sessionId, rawConfigId);
+    setPendingConfigChanges((current) => ({
+      ...current,
+      [changeKey]: {
+        sessionId: session.sessionId,
+        rawConfigId,
+        value,
+        status: "sending",
+        mutationId,
+      },
+    }));
+    try {
+      const command = await enqueueConfig.mutateAsync({
+        idempotencyKey: `web:${workspace.id}:${session.sessionId}:config:${rawConfigId}:${value}:${mutationId}`,
+        targetId: session.targetId,
+        workspaceId: session.workspaceId,
+        cloudWorkspaceId: workspace.id,
+        sessionId: session.sessionId,
+        kind: "update_session_config",
+        source: "web",
+        observedEventSeq: session.lastEventSeq ?? null,
+        payload: { configId: rawConfigId, value },
+      });
+      setLatestCommandId(command.commandId);
+      setLatestConfigCommandId(command.commandId);
+      setPendingConfigChanges((current) => {
+        const existing = current[changeKey];
+        if (!existing || existing.mutationId !== mutationId) {
+          return current;
+        }
+        return {
+          ...current,
+          [changeKey]: { ...existing, commandId: command.commandId, status: "queued" },
+        };
+      });
+    } catch (error) {
+      setPendingConfigChanges((current) => {
+        const existing = current[changeKey];
+        if (!existing || existing.mutationId !== mutationId) {
+          return current;
+        }
+        const { [changeKey]: _removed, ...rest } = current;
+        return rest;
+      });
+      setPendingHomePromptStatus(
+        error instanceof Error ? error.message : "Session configuration could not be updated.",
       );
     }
   }
@@ -441,6 +581,7 @@ export function ChatScreen() {
         value: draft,
         onChange: setDraft,
         onSubmit: () => void submitPrompt(),
+        controls: composerControls,
         disabled: isUnclaimed || (!session && !workspaceCommandReady),
         canSubmit,
         isSubmitting: promptSubmitting,
@@ -601,4 +742,25 @@ function normalizePromptText(value: string | null | undefined): string {
 
 function latestTranscriptItemSeq(items: readonly CloudTranscriptItem[]): number {
   return items.reduce((maxSeq, item) => Math.max(maxSeq, item.lastSeq), 0);
+}
+
+function isRejectedCommandStatus(status: CloudCommandStatus): boolean {
+  return status === "rejected"
+    || status === "expired"
+    || status === "superseded"
+    || status === "failed_delivery";
+}
+
+function sessionConfigCommandFailureMessage(status: CloudCommandStatus): string {
+  switch (status) {
+    case "expired":
+      return "Session configuration update expired before it was applied.";
+    case "superseded":
+      return "Session configuration update was superseded.";
+    case "failed_delivery":
+      return "Session configuration update could not be delivered.";
+    case "rejected":
+    default:
+      return "Session configuration update was rejected.";
+  }
 }

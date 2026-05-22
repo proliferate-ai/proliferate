@@ -81,6 +81,7 @@ async function startSessionForPrompt(args: {
   }
   const agentKind = resolveAgentKind(args.workspace);
   const modelId = agentKind === "codex" ? args.modelId : null;
+  const modeId = args.pendingPrompt.modeId;
   const command = await args.enqueueStartSession({
     idempotencyKey: `${args.pendingPrompt.id}:start-session`,
     targetId,
@@ -92,6 +93,7 @@ async function startSessionForPrompt(args: {
       workspaceId: anyharnessWorkspaceId,
       agentKind,
       ...(modelId ? { modelId } : {}),
+      ...(modeId ? { modeId } : {}),
       subagentsEnabled: false,
       origin: { kind: "system", entrypoint: "cloud" },
     },

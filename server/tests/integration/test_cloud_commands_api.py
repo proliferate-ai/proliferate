@@ -2698,6 +2698,97 @@ class TestCloudCommandsApi:
         await db_session.rollback()
 
     @pytest.mark.asyncio
+    async def test_managed_update_session_config_with_cloud_workspace_uses_runtime_state(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-update-config-runtime-state",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="update-config-runtime-state",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_auth_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+        )
+        revision, _created = await runtime_config_store.upsert_revision_and_current(
+            db_session,
+            sandbox_profile_id=profile.id,
+            content_hash=f"sha256:{profile.id.hex}:update-config-runtime-state",
+            manifest_json='{"mcpServers":[],"skills":[],"blockingErrors":[]}',
+            warnings_json=None,
+            source="test",
+            generated_by_user_id=UUID(auth.user_id),
+        )
+        state = (
+            await db_session.execute(
+                select(SandboxProfileTargetState).where(
+                    SandboxProfileTargetState.sandbox_profile_id == profile.id,
+                    SandboxProfileTargetState.target_id == target_uuid,
+                )
+            )
+        ).scalar_one()
+        state.runtime_config_status = "applied"
+        state.applied_runtime_config_revision_id = str(revision.id)
+        state.applied_runtime_config_sequence = revision.sequence
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="update-config-runtime-state",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-update-config-runtime-state",
+        )
+        assert not await target_config_store.list_target_configs(
+            db_session,
+            target_id=target_uuid,
+        )
+        await db_session.commit()
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "update-config-runtime-state",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-update-config-runtime-state",
+                "kind": "update_session_config",
+                "payload": {"configId": "model", "value": "gpt-5.4-mini"},
+            },
+        )
+
+        assert created.status_code == 200, created.text
+        command = await db_session.get(
+            CloudCommand,
+            UUID(created.json()["commandId"]),
+        )
+        assert command is not None
+        assert json.loads(command.payload_json) == {
+            "configId": "model",
+            "value": "gpt-5.4-mini",
+        }
+        assert command.cloud_workspace_id == UUID(cloud_workspace_id)
+        await db_session.rollback()
+
+    @pytest.mark.asyncio
     async def test_agent_auth_preflight_requires_applied_target_state(
         self,
         client: AsyncClient,
