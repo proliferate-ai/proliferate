@@ -36,6 +36,7 @@ from proliferate.db.store.cloud_workspaces import (
     create_managed_cloud_workspace_for_profile,
     get_active_sandbox,
 )
+from proliferate.server.cloud.commands import service as command_service
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.worker import service as worker_service
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
@@ -614,7 +615,9 @@ async def test_managed_materialize_workspace_requires_cloud_workspace_id(
 async def test_managed_materialize_workspace_keeps_cloud_metadata_out_of_payload(
     client: AsyncClient,
     db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
     auth, profile_id, target_id = await _create_personal_profile(
         client,
         db_session,
