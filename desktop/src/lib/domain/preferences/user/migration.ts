@@ -82,6 +82,19 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     changed = true;
   }
 
+  const sanitizedDefaultOpenInTargetId = typeof next.defaultOpenInTargetId === "string"
+    ? next.defaultOpenInTargetId.trim()
+    : "";
+  if (sanitizedDefaultOpenInTargetId) {
+    if (sanitizedDefaultOpenInTargetId !== next.defaultOpenInTargetId) {
+      next.defaultOpenInTargetId = sanitizedDefaultOpenInTargetId;
+      changed = true;
+    }
+  } else {
+    next.defaultOpenInTargetId = PERSISTED_RECORD_BACKFILL.defaultOpenInTargetId;
+    changed = true;
+  }
+
   if (typeof next.transparentChromeEnabled !== "boolean") {
     next.transparentChromeEnabled = PERSISTED_RECORD_BACKFILL.transparentChromeEnabled;
     changed = true;

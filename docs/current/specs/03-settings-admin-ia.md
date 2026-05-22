@@ -144,7 +144,7 @@ Help                   support (action), checkForUpdates (action)
 AccountPane.tsx              AgentDefaultsPane.tsx
 AgentsPane.tsx               AppearancePane.tsx
 BillingPane.tsx              CloudAuthUnavailablePane.tsx
-CloudBillingSummary.tsx      CloudPane.tsx
+CloudPane.tsx
 CloudSignInRequiredPane.tsx  CloudUnavailablePane.tsx
 ComputePane.tsx              EnvironmentsPane.tsx
 GeneralPane.tsx              KeyboardShortcutsPane.tsx
@@ -152,7 +152,6 @@ ModelRegistryPane.tsx        OrganizationPane.tsx
 ReviewSettingsPane.tsx       WorktreesPane.tsx
 
 subfolders:
-  billing/                       OrganizationBillingSection.tsx
   cloud/                         CloudAgentAuthLibrary.tsx,
                                  CloudAgentAuthCredentialForm.tsx
   compute/                       AddSshTargetDialog.tsx,

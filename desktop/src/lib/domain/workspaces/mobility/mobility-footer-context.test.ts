@@ -91,6 +91,7 @@ describe("buildMobilityFooterContext", () => {
 
     expect(context).toMatchObject({
       locationLabel: "Local workspace",
+      movementLabel: "Move to cloud",
     });
   });
 
@@ -109,7 +110,10 @@ describe("buildMobilityFooterContext", () => {
       status: makeStatus(),
     });
 
-    expect(context?.locationLabel).toBe("Local worktree");
+    expect(context).toMatchObject({
+      locationLabel: "Local worktree",
+      movementLabel: "Move to cloud",
+    });
   });
 
   it("labels cloud workspaces even when a local repo root exists", () => {
@@ -160,6 +164,7 @@ describe("buildMobilityFooterContext", () => {
 
     expect(context).toMatchObject({
       locationLabel: "Cloud workspace",
+      movementLabel: "Bring back local",
     });
   });
 
@@ -179,6 +184,7 @@ describe("buildMobilityFooterContext", () => {
 
     expect(context).toMatchObject({
       locationLabel: "Cloud workspace",
+      movementLabel: "Bring back local",
     });
   });
 

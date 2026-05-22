@@ -262,7 +262,7 @@ describe("resolveConfiguredLaunchSelection", () => {
 });
 
 describe("resolvePreferredOpenTarget", () => {
-  it("falls back to the first available editor when the saved target is missing", () => {
+  it("falls back to Cursor when the saved target is missing and Cursor is available", () => {
     const resolved = resolvePreferredOpenTarget(
       [
         { id: "finder", label: "Finder", kind: "finder", iconId: "finder" },
@@ -275,7 +275,20 @@ describe("resolvePreferredOpenTarget", () => {
     expect(resolved?.id).toBe("cursor");
   });
 
-  it("falls back to the first target when no editors are available", () => {
+  it("falls back to another editor before Finder when Cursor is not available", () => {
+    const resolved = resolvePreferredOpenTarget(
+      [
+        { id: "finder", label: "Finder", kind: "finder", iconId: "finder" },
+        { id: "code", label: "VS Code", kind: "editor", iconId: "vscode" },
+        { id: "terminal", label: "Terminal", kind: "terminal", iconId: "terminal" },
+      ],
+      { defaultOpenInTargetId: "missing-editor" },
+    );
+
+    expect(resolved?.id).toBe("code");
+  });
+
+  it("falls back to Finder when no editor is available", () => {
     const resolved = resolvePreferredOpenTarget(
       [
         { id: "finder", label: "Finder", kind: "finder", iconId: "finder" },
@@ -285,5 +298,16 @@ describe("resolvePreferredOpenTarget", () => {
     );
 
     expect(resolved?.id).toBe("finder");
+  });
+
+  it("falls back to the first available target when neither Cursor nor Finder is available", () => {
+    const resolved = resolvePreferredOpenTarget(
+      [
+        { id: "terminal", label: "Terminal", kind: "terminal", iconId: "terminal" },
+      ],
+      { defaultOpenInTargetId: "missing-editor" },
+    );
+
+    expect(resolved?.id).toBe("terminal");
   });
 });

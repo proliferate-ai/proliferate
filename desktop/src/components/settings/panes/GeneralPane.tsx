@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/Switch";
 import { OpenTargetIcon } from "@/components/ui/OpenTargetIcon";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useAvailableEditors } from "@/hooks/access/tauri/shell/use-available-editors";
+import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { emitTurnEnd } from "@/lib/infra/events/turn-end-events";
 import type { TurnEndSoundId } from "@/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
@@ -72,8 +73,10 @@ export function GeneralPane() {
     return items;
   }, [editors]);
 
-  const currentTarget = targets.find((target) => target.id === preferences.defaultOpenInTargetId) ?? null;
-  const currentTargetLabel = currentTarget?.label ?? preferences.defaultOpenInTargetId;
+  const currentTarget = resolvePreferredOpenTarget(targets, {
+    defaultOpenInTargetId: preferences.defaultOpenInTargetId,
+  });
+  const currentTargetLabel = currentTarget?.label ?? "Open";
   const currentBranchPrefixLabel = BRANCH_PREFIX_OPTIONS.find(
     (option) => option.id === preferences.branchPrefixType,
   )?.label ?? "None";
@@ -99,7 +102,7 @@ export function GeneralPane() {
                   id: target.id,
                   label: target.label,
                   icon: <OpenTargetIcon iconId={target.iconId} className="size-4 rounded-sm" />,
-                  selected: preferences.defaultOpenInTargetId === target.id,
+                  selected: currentTarget?.id === target.id,
                   onSelect: () => preferences.set("defaultOpenInTargetId", target.id),
                 })),
               }]}

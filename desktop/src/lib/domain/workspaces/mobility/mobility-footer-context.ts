@@ -9,6 +9,7 @@ import {
   type WorkspaceMobilityStatusModel,
 } from "@/lib/domain/workspaces/mobility/mobility-state-machine";
 import {
+  mobilityActionableCopy,
   mobilityLocationLabel,
 } from "@/lib/domain/workspaces/mobility/presentation";
 import type { WorkspaceMobilityLocationKind } from "@/lib/domain/workspaces/mobility/types";
@@ -18,6 +19,7 @@ export type WorkspaceMobilitySelectedMaterializationKind = "local" | "cloud";
 export interface MobilityFooterContext {
   locationKind: WorkspaceMobilityLocationKind;
   locationLabel: string;
+  movementLabel: string;
   isInteractive: boolean;
   isActive: boolean;
 }
@@ -70,6 +72,7 @@ export function buildMobilityFooterContext(args: {
   return {
     locationKind,
     locationLabel: mobilityLocationLabel(locationKind),
+    movementLabel: mobilityActionableCopy(locationKind).actionLabel,
     isInteractive: !isWorkspaceMobilityTransitionPhase(status.phase),
     isActive: status.isBlocking,
   };
@@ -87,6 +90,7 @@ export function buildPendingMobilityFooterContext(
   return {
     locationKind,
     locationLabel: mobilityLocationLabel(locationKind),
+    movementLabel: mobilityActionableCopy(locationKind).actionLabel,
     isInteractive: false,
     isActive: true,
   };

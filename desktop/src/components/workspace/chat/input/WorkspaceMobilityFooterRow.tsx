@@ -65,7 +65,8 @@ export function WorkspaceMobilityFooterRow() {
   const locationButton = (
     <ComposerControlButton
       icon={locationIcon(footerContext.locationKind)}
-      label="Move session"
+      label={footerContext.movementLabel}
+      detail={footerContext.locationLabel}
       trailing={prompt ? <ChevronDown className="size-3.5 text-muted-foreground/70" /> : undefined}
       active={flow.popoverOpen || footerContext.isActive}
       disabled={!prompt || !footerContext.isInteractive}

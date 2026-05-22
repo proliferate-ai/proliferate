@@ -17,22 +17,22 @@ export function AutomaticSyncSection({ repositories }: AutomaticSyncSectionProps
 
   return (
     <EnvironmentSection
-      title="Automatic syncing"
-      description="Keep supported local inputs synced to personal cloud in the background."
+      title="Cloud input sync"
+      description="Keep local credentials and tracked repo files synced for personal cloud workspaces."
     >
       <EnvironmentPanel>
         <EnvironmentPanelRow>
           <div className="flex w-full items-center justify-between gap-3">
             <div className="space-y-1">
-              <h3 className="text-sm font-medium text-foreground">Sync local cloud inputs</h3>
+              <h3 className="text-sm font-medium text-foreground">Sync personal cloud inputs</h3>
               <p className="text-sm text-muted-foreground">
-                Agent credentials and repo tracked files use the selections below.
+                Runs in the background when Desktop is open.
               </p>
             </div>
             <Switch
               checked={runtimeInputSync.enabled}
               onChange={runtimeInputSync.setEnabled}
-              aria-label="Automatically sync cloud inputs"
+              aria-label="Automatically sync personal cloud inputs"
             />
           </div>
         </EnvironmentPanelRow>

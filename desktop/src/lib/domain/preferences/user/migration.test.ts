@@ -72,6 +72,7 @@ describe("user preference migration", () => {
       cloudRuntimeInputSyncEnabled: "yes" as unknown as boolean,
       worktreeAutoDeleteLimit: 8,
       pasteAttachmentsEnabled: "yes" as unknown as boolean,
+      defaultOpenInTargetId: "  ",
       uiFontSizeId: "giant" as typeof USER_PREFERENCE_DEFAULTS.uiFontSizeId,
       readableCodeFontSizeId: "tiny" as typeof USER_PREFERENCE_DEFAULTS.readableCodeFontSizeId,
     });
@@ -82,6 +83,7 @@ describe("user preference migration", () => {
     expect(result.preferences.cloudRuntimeInputSyncEnabled).toBe(false);
     expect(result.preferences.worktreeAutoDeleteLimit).toBe(WORKTREE_AUTO_DELETE_LIMIT_DEFAULT);
     expect(result.preferences.pasteAttachmentsEnabled).toBe(true);
+    expect(result.preferences.defaultOpenInTargetId).toBe("cursor");
     expect(result.preferences.uiFontSizeId).toBe("default");
     expect(result.preferences.readableCodeFontSizeId).toBe("default");
     expect(USER_PREFERENCE_DEFAULTS.transparentChromeEnabled).toBe(false);

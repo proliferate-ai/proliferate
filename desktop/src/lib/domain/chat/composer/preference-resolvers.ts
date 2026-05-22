@@ -1,5 +1,9 @@
 import type { UserPreferences } from "@/lib/domain/preferences/user/model";
 import {
+  DEFAULT_OPEN_IN_TARGET_ID,
+  FALLBACK_OPEN_IN_TARGET_ID,
+} from "@/config/open-target-defaults";
+import {
   buildAgentModelGroups,
   defaultAgentModelForGroup,
   findAgentModelSelection,
@@ -221,7 +225,14 @@ export function resolvePreferredOpenTarget<T extends { id: string; kind?: string
   targets: T[],
   prefs: Pick<UserPreferences, "defaultOpenInTargetId">,
 ): T | null {
-  const preferred = targets.find((target) => target.id === prefs.defaultOpenInTargetId);
+  const preferredId = prefs.defaultOpenInTargetId.trim();
+  const preferred = preferredId
+    ? targets.find((target) => target.id === preferredId)
+    : undefined;
   if (preferred) return preferred;
-  return targets.find((target) => target.kind === "editor") ?? targets[0] ?? null;
+  return targets.find((target) => target.id === DEFAULT_OPEN_IN_TARGET_ID)
+    ?? targets.find((target) => target.kind === "editor")
+    ?? targets.find((target) => target.id === FALLBACK_OPEN_IN_TARGET_ID)
+    ?? targets[0]
+    ?? null;
 }
