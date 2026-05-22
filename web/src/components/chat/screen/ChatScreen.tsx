@@ -552,7 +552,10 @@ export function ChatScreen() {
         baseTranscriptSeq: 0,
         status: "sending",
       };
-      setOptimisticPrompts((current) => [...current, optimisticPrompt]);
+      setOptimisticPrompts((current) => [
+        ...removeRetryReplacedFailedPrompts(current, optimisticPrompt),
+        optimisticPrompt,
+      ]);
       setDraft("");
       setDirectPromptDispatching(true);
       setPendingHomePromptStatus("Starting a session for this prompt.");
@@ -622,7 +625,10 @@ export function ChatScreen() {
       baseTranscriptSeq: latestTranscriptItemSeq(transcriptItems),
       status: "sending",
     };
-    setOptimisticPrompts((current) => [...current, optimisticPrompt]);
+    setOptimisticPrompts((current) => [
+      ...removeRetryReplacedFailedPrompts(current, optimisticPrompt),
+      optimisticPrompt,
+    ]);
     setDraft("");
     setPendingHomePromptStatus(null);
     try {
@@ -1079,6 +1085,18 @@ function pendingInteractionMatchesOptimisticPrompt(
         && pendingInteractionCommandId(interaction) === prompt.commandId
       )
     )
+  );
+}
+
+function removeRetryReplacedFailedPrompts(
+  prompts: readonly OptimisticPrompt[],
+  replacement: OptimisticPrompt,
+): OptimisticPrompt[] {
+  return prompts.filter((prompt) =>
+    prompt.status !== "failed"
+    || prompt.workspaceId !== replacement.workspaceId
+    || prompt.sessionId !== replacement.sessionId
+    || !textMatches(prompt.text, replacement.text)
   );
 }
 
