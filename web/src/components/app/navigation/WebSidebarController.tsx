@@ -1,28 +1,44 @@
 import {
   Blocks,
   CalendarClock,
+  CircleAlert,
   Cloud,
   CloudOff,
   House,
   LifeBuoy,
+  LoaderCircle,
   MessageSquare,
+  Plus,
+  Radio,
   Settings,
   Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { useCloudWorkspaces } from "@proliferate/cloud-sdk-react";
-import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
+import { useCloudWorkspaceSnapshot, useCloudWorkspaces } from "@proliferate/cloud-sdk-react";
 import type {
   SidebarActionEvent,
   SidebarChatRowView,
   SidebarNavItemView,
+  SidebarSectionMessageView,
   SidebarWorkspaceGroupView,
 } from "@proliferate/product-ui/sidebar/ProductSidebar";
 import { ProductSidebar } from "@proliferate/product-ui/sidebar/ProductSidebar";
 
 import { routes } from "../../../config/routes";
+import {
+  buildCloudSidebarSessionModels,
+  buildCloudSidebarWorkspaceGroups,
+  mergeCloudSidebarWorkspaces,
+  parseCloudSidebarRoute,
+  type CloudSidebarSessionModel,
+  type CloudSidebarWorkspace,
+  type CloudSidebarWorkspaceModel,
+  type CloudSidebarRouteState,
+} from "../../../lib/domain/sidebar/cloud-sidebar-model";
+
+const EMPTY_ACTIVE_WORKSPACE_SESSIONS = [] as const;
 
 export function WebSidebarController() {
   const location = useLocation();
@@ -30,27 +46,76 @@ export function WebSidebarController() {
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const workspaces = useCloudWorkspaces({ scope: "my" });
-  const cloudWorkspaces = workspaces.data ?? [];
-
-  const navItems = useMemo(
-    () => buildNavItems(location.pathname),
+  const routeState = useMemo(
+    () => parseCloudSidebarRoute(location.pathname),
     [location.pathname],
   );
+  const workspaces = useCloudWorkspaces({ scope: "exposed" });
+  const activeWorkspaceSnapshot = useCloudWorkspaceSnapshot(
+    routeState.workspaceId,
+    Boolean(routeState.workspaceId),
+  );
+  const cloudWorkspaces = useMemo(
+    () => mergeCloudSidebarWorkspaces(
+      workspaces.data ?? [],
+      activeWorkspaceSnapshot.data?.workspace ?? null,
+    ),
+    [activeWorkspaceSnapshot.data?.workspace, workspaces.data],
+  );
+  const activeWorkspaceSessions =
+    activeWorkspaceSnapshot.data?.sessions ?? EMPTY_ACTIVE_WORKSPACE_SESSIONS;
+
+  const navItems = useMemo(
+    () => buildNavItems(location.pathname, routeState),
+    [location.pathname, routeState],
+  );
+  const workspaceSectionMessage = useMemo(
+    () => buildWorkspaceSectionMessage({
+      isLoading: (workspaces.isLoading || activeWorkspaceSnapshot.isLoading) &&
+        cloudWorkspaces.length === 0,
+      hasError: Boolean(workspaces.error) && cloudWorkspaces.length === 0,
+      hasWorkspaces: cloudWorkspaces.length > 0,
+    }),
+    [
+      activeWorkspaceSnapshot.isLoading,
+      cloudWorkspaces.length,
+      workspaces.error,
+      workspaces.isLoading,
+    ],
+  );
   const workspaceGroups = useMemo(
-    () => buildWorkspaceGroups(cloudWorkspaces, location.pathname, collapsedGroupIds),
-    [cloudWorkspaces, collapsedGroupIds, location.pathname],
+    () => buildWorkspaceGroups({
+      workspaces: cloudWorkspaces,
+      routeState,
+      collapsedGroupIds,
+    }),
+    [cloudWorkspaces, collapsedGroupIds, routeState],
+  );
+  const sessionModels = useMemo(
+    () => buildCloudSidebarSessionModels({
+      workspaces: cloudWorkspaces,
+      activeWorkspaceSessions,
+      route: routeState,
+    }),
+    [activeWorkspaceSessions, cloudWorkspaces, routeState],
   );
   const chatRows = useMemo(
-    () => buildChatRows(cloudWorkspaces, location.pathname),
-    [cloudWorkspaces, location.pathname],
+    () => buildChatRows(sessionModels),
+    [sessionModels],
   );
   const chatWorkspaceBySessionId = useMemo(() => {
+    const lookup = new Map<string, string>();
+    for (const session of sessionModels) {
+      lookup.set(session.id, session.workspaceId);
+    }
+    return lookup;
+  }, [sessionModels]);
+  const latestSessionByWorkspaceId = useMemo(() => {
     const lookup = new Map<string, string>();
     for (const workspace of cloudWorkspaces) {
       const sessionId = workspace.lastSessionSummary?.sessionId;
       if (sessionId) {
-        lookup.set(sessionId, workspace.id);
+        lookup.set(workspace.id, sessionId);
       }
     }
     return lookup;
@@ -103,16 +168,46 @@ export function WebSidebarController() {
   }
 
   function handleAction(event: SidebarActionEvent) {
+    if (event.scope === "header" && event.actionId === "new-chat") {
+      navigate(routes.home);
+      return;
+    }
     if (event.scope === "footer" && event.actionId === "settings") {
       navigate(routes.settings);
+      return;
+    }
+    if (
+      event.scope === "workspace" &&
+      event.actionId === "open-latest-session" &&
+      event.itemId
+    ) {
+      const sessionId = latestSessionByWorkspaceId.get(event.itemId);
+      if (sessionId) {
+        navigate(routes.chat(event.itemId, sessionId));
+      }
+      return;
+    }
+    if (event.scope === "chat" && event.actionId === "open-workspace" && event.itemId) {
+      const workspaceId = chatWorkspaceBySessionId.get(event.itemId);
+      if (workspaceId) {
+        navigate(routes.workspace(workspaceId));
+      }
     }
   }
 
   return (
     <div className="contents" data-telemetry-block>
       <ProductSidebar
+        showHeader
+        title="Proliferate"
+        headerAction={{
+          id: "new-chat",
+          label: "New chat",
+          icon: <Plus className="size-3.5" />,
+        }}
         navItems={navItems}
         workspaceGroups={workspaceGroups}
+        workspaceSectionMessage={workspaceSectionMessage}
         chatRows={chatRows}
         footerActions={[
           {
@@ -131,7 +226,10 @@ export function WebSidebarController() {
   );
 }
 
-function buildNavItems(pathname: string): SidebarNavItemView[] {
+function buildNavItems(
+  pathname: string,
+  routeState: CloudSidebarRouteState,
+): SidebarNavItemView[] {
   return [
     {
       id: "home",
@@ -143,7 +241,7 @@ function buildNavItems(pathname: string): SidebarNavItemView[] {
       id: "workspaces",
       label: "Workspaces",
       icon: <Cloud className="size-4" />,
-      active: pathname.startsWith(routes.workspaces),
+      active: routeState.workspacesActive,
     },
     {
       id: "plugins",
@@ -166,144 +264,143 @@ function buildNavItems(pathname: string): SidebarNavItemView[] {
   ];
 }
 
-function buildWorkspaceGroups(
-  workspaces: CloudWorkspaceSummary[],
-  pathname: string,
-  collapsedGroupIds: ReadonlySet<string>,
-): SidebarWorkspaceGroupView[] {
-  const groups = new Map<string, CloudWorkspaceSummary[]>();
-  for (const workspace of sortedWorkspaces(workspaces)) {
-    const groupId = repoGroupId(workspace);
-    const group = groups.get(groupId);
-    if (group) {
-      group.push(workspace);
-    } else {
-      groups.set(groupId, [workspace]);
-    }
-  }
-
-  return Array.from(groups.entries()).map(([groupId, groupWorkspaces]) => ({
-    id: groupId,
-    label: repoGroupLabel(groupWorkspaces[0]),
-    count: groupWorkspaces.length,
-    collapsed: collapsedGroupIds.has(groupId),
+function buildWorkspaceGroups(input: {
+  workspaces: readonly CloudSidebarWorkspace[];
+  routeState: CloudSidebarRouteState;
+  collapsedGroupIds: ReadonlySet<string>;
+}): SidebarWorkspaceGroupView[] {
+  return buildCloudSidebarWorkspaceGroups({
+    workspaces: input.workspaces,
+    route: input.routeState,
+    collapsedGroupIds: input.collapsedGroupIds,
+  }).map((group) => ({
+    id: group.id,
+    label: group.label,
+    count: group.count,
+    collapsed: group.collapsed,
     icon: <Cloud className="size-4" />,
     expandedIcon: <Cloud className="size-4" />,
-    rows: groupWorkspaces.map((workspace) => ({
+    rows: group.workspaces.map((workspace) => ({
       id: workspace.id,
-      label: workspaceRowLabel(workspace),
-      active: isWorkspaceRouteActive(pathname, workspace.id),
-      archived: workspace.status === "archived" || workspace.visibility === "archived",
+      label: workspace.label,
+      subtitle: workspace.subtitle,
+      active: workspace.active,
+      archived: workspace.archived,
       status: workspaceStatusIcon(workspace),
-      detail: workspace.visibility !== "private" ? (
-        <Users className="size-3.5" aria-label={workspaceVisibilityLabel(workspace)} />
-      ) : null,
-      trailingLabel: workspaceTrailingLabel(workspace),
-      actions: [],
+      detail: <WorkspaceDetailIndicators workspace={workspace} />,
+      trailingLabel: workspace.trailingLabel,
+      actions: workspace.lastSessionId
+        ? [
+          {
+            id: "open-latest-session",
+            label: "Open latest session",
+            icon: <MessageSquare className="size-3.5" />,
+          },
+        ]
+        : [],
     })),
     actions: [],
   }));
 }
 
 function buildChatRows(
-  workspaces: CloudWorkspaceSummary[],
-  pathname: string,
+  sessions: CloudSidebarSessionModel[],
 ): SidebarChatRowView[] {
-  return sortedWorkspaces(workspaces)
-    .filter((workspace) => Boolean(workspace.lastSessionSummary?.sessionId))
-    .slice(0, 12)
-    .map((workspace) => {
-      const session = workspace.lastSessionSummary!;
-      return {
-        id: session.sessionId,
-        label: session.title ?? workspace.displayName ?? workspace.repo.name,
-        subtitle: workspace.displayName ?? null,
-        active: pathname === routes.chat(workspace.id, session.sessionId),
-        status: <MessageSquare className="size-3.5" />,
-        detail: workspace.visibility !== "private" ? <Users className="size-3.5" /> : null,
-        trailingLabel: session.status,
-        actions: [],
-      };
-    });
+  return sessions.map((session) => ({
+    id: session.id,
+    label: session.label,
+    subtitle: session.subtitle,
+    active: session.active,
+    status: <MessageSquare className="size-3.5" />,
+    detail: session.sourceAgentKind ? (
+      <span
+        className="rounded-sm border border-sidebar-border px-1 text-[10px] uppercase leading-4 text-sidebar-muted-foreground"
+        title={`Agent: ${session.sourceAgentKind}`}
+      >
+        {session.sourceAgentKind.slice(0, 2)}
+      </span>
+    ) : null,
+    trailingLabel: session.statusLabel,
+    actions: [
+      {
+        id: "open-workspace",
+        label: "Open workspace",
+        icon: <Cloud className="size-3.5" />,
+      },
+    ],
+  }));
 }
 
-function sortedWorkspaces(workspaces: CloudWorkspaceSummary[]): CloudWorkspaceSummary[] {
-  return [...workspaces].sort((left, right) => {
-    const leftTime = workspaceSortTime(left);
-    const rightTime = workspaceSortTime(right);
-    if (leftTime !== rightTime) {
-      return rightTime - leftTime;
-    }
-    return workspaceRowLabel(left).localeCompare(workspaceRowLabel(right));
-  });
+function WorkspaceDetailIndicators({
+  workspace,
+}: {
+  workspace: CloudSidebarWorkspaceModel;
+}) {
+  const labels = [
+    workspace.visibilityLabel,
+    workspace.exposureLabel,
+    workspace.runtimeLabel,
+  ].filter(Boolean);
+
+  return (
+    <div className="flex min-w-0 items-center justify-end gap-1">
+      {workspace.exposureLabel === "Live" ? (
+        <Radio className="size-3 text-success" aria-label="Live exposure" />
+      ) : null}
+      <Users className="size-3.5" aria-label={workspace.visibilityLabel} />
+      <span
+        className="max-w-[54px] truncate text-[10px] uppercase leading-4 text-sidebar-muted-foreground"
+        title={labels.join(" - ")}
+      >
+        {workspace.visibilityLabel}
+      </span>
+    </div>
+  );
 }
 
-function workspaceSortTime(workspace: CloudWorkspaceSummary): number {
-  const timestamp =
-    workspace.lastSessionSummary?.lastEventAt ??
-    workspace.lastActivityAt ??
-    workspace.updatedAt ??
-    workspace.createdAt;
-  return timestamp ? Date.parse(timestamp) || 0 : 0;
-}
-
-function repoGroupId(workspace: CloudWorkspaceSummary): string {
-  return `${workspace.repo.owner}/${workspace.repo.name}`;
-}
-
-function repoGroupLabel(workspace: CloudWorkspaceSummary): string {
-  return `${workspace.repo.owner}/${workspace.repo.name}`;
-}
-
-function workspaceRowLabel(workspace: CloudWorkspaceSummary): string {
-  return workspace.displayName ?? workspace.repo.branch ?? workspace.repo.baseBranch ?? "Cloud workspace";
-}
-
-function workspaceTrailingLabel(workspace: CloudWorkspaceSummary): string {
-  if (workspace.visibility === "shared_unclaimed") {
-    return "team";
+function workspaceStatusIcon(workspace: CloudSidebarWorkspaceModel) {
+  if (workspace.statusKind === "archived") {
+    return (
+      <CloudOff
+        className="size-3.5 text-sidebar-muted-foreground"
+        aria-label={workspace.statusLabel}
+      />
+    );
   }
-  if (workspace.visibility === "claimed") {
-    return "claimed";
-  }
-  if (workspace.sandboxType === "managed_shared") {
-    return "shared";
-  }
-  if (workspace.sandboxType === "ssh") {
-    return "ssh";
-  }
-  return workspace.status;
-}
-
-function workspaceVisibilityLabel(workspace: CloudWorkspaceSummary): string {
-  if (workspace.visibility === "shared_unclaimed") {
-    return "Shared unclaimed";
-  }
-  if (workspace.visibility === "claimed") {
-    return "Claimed";
-  }
-  return workspace.visibility;
-}
-
-function workspaceStatusIcon(workspace: CloudWorkspaceSummary) {
-  if (workspace.status === "archived" || workspace.exposureState === "revoked") {
-    return <CloudOff className="size-3.5 text-sidebar-muted-foreground" />;
-  }
-  if (workspace.status === "error" || workspace.exposureState === "stale") {
+  if (workspace.statusKind === "blocked") {
     return <span className="size-2 rounded-full bg-destructive" aria-label="Needs attention" />;
   }
-  if (workspace.status === "ready") {
-    return <span className="size-2 rounded-full bg-emerald-500" aria-label="Ready" />;
+  if (workspace.statusKind === "ready") {
+    return <span className="size-2 rounded-full bg-success" aria-label="Ready" />;
   }
-  return <span className="size-2 rounded-full bg-amber-500" aria-label="Starting" />;
+  return <span className="size-2 rounded-full bg-warning" aria-label={workspace.statusLabel} />;
 }
 
-function isWorkspaceRouteActive(pathname: string, workspaceId: string): boolean {
-  const legacyWorkspacePath = `/workspaces/${workspaceId}`;
-  return (
-    pathname === routes.workspace(workspaceId) ||
-    pathname.startsWith(`${routes.workspace(workspaceId)}/`) ||
-    pathname === legacyWorkspacePath ||
-    pathname.startsWith(`${legacyWorkspacePath}/`)
-  );
+function buildWorkspaceSectionMessage(input: {
+  isLoading: boolean;
+  hasError: boolean;
+  hasWorkspaces: boolean;
+}): SidebarSectionMessageView | null {
+  if (input.hasWorkspaces) {
+    return null;
+  }
+  if (input.isLoading) {
+    return {
+      title: "Loading cloud workspaces",
+      description: "Fetching exposed and claimed workspaces for this account.",
+      status: <LoaderCircle className="size-3.5 animate-spin" />,
+    };
+  }
+  if (input.hasError) {
+    return {
+      title: "Could not load workspaces",
+      description: "Refresh the page or sign in again.",
+      tone: "danger",
+      status: <CircleAlert className="size-3.5" />,
+    };
+  }
+  return {
+    title: "No cloud workspaces",
+    description: "Create a workspace from Home or open a shared workspace link.",
+  };
 }

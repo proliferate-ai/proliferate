@@ -110,14 +110,14 @@ Web
 
 ### 6. Sidebar And Workspace Bar
 
-- [ ] Web sidebar groups cloud workspaces by repo like Desktop groups workspace/session context.
-- [ ] Active workspace and active chat selection are obvious and stable.
-- [ ] Workspace status, exposure, claimed/unclaimed state, and branch are visible.
-- [ ] Recent/active sessions are listed in the same navigation surface.
-- [ ] Reload does not make workspaces disappear due to scope mismatch.
-- [ ] Workspace routes and legacy/cloud routes resolve consistently.
-- [ ] Sidebar actions include create/open/new-session paths where relevant.
-- [ ] Empty/loading/error states match Desktop product tone.
+- [x] Web sidebar groups cloud workspaces by repo like Desktop groups workspace/session context.
+- [x] Active workspace and active chat selection are obvious and stable.
+- [x] Workspace status, exposure, claimed/unclaimed state, and branch are visible.
+- [x] Recent/active sessions are listed in the same navigation surface.
+- [x] Reload does not make workspaces disappear due to scope mismatch.
+- [x] Workspace routes and legacy/cloud routes resolve consistently.
+- [x] Sidebar actions include create/open/new-session paths where relevant.
+- [x] Empty/loading/error states match Desktop product tone.
 
 ### 7. New Session In Existing Workspace
 
@@ -175,7 +175,7 @@ Use this section to mark incremental progress during implementation.
 - [x] Composer controls grouped like Desktop.
 - [x] Composer footer added.
 - [x] Transcript presentation extraction started.
-- [ ] Sidebar/workspace parity started.
+- [x] Sidebar/workspace parity started.
 - [x] New-session flow started.
 - [ ] Automations create/manage started.
 - [ ] Settings shell parity started.
