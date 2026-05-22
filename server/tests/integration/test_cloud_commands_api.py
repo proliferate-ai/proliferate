@@ -909,6 +909,20 @@ class TestCloudCommandsApi:
             email_prefix="cloud-command-close-session",
         )
         target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
+        cloud_workspace_id = await _create_ready_cloud_workspace(
+            db_session,
+            auth,
+            target_id=target_id,
+            anyharness_workspace_id="workspace-1",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=UUID(target_id),
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-1",
+        )
+        await db_session.commit()
 
         missing_session = await client.post(
             "/v1/cloud/commands",
@@ -934,7 +948,7 @@ class TestCloudCommandsApi:
                 "payload": {},
             },
         )
-        assert created.status_code == 200
+        assert created.status_code == 200, created.text
         command_id = created.json()["commandId"]
 
         lease = await client.post(
@@ -1771,7 +1785,36 @@ class TestCloudCommandsApi:
             db_session,
             auth,
             suffix="second",
+            kind="desktop_dispatch",
         )
+        cloud_workspace_id = await _create_ready_cloud_workspace(
+            db_session,
+            auth,
+            target_id=first_target_id,
+            anyharness_workspace_id="workspace-1",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=UUID(first_target_id),
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-1",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=UUID(first_target_id),
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-2",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=UUID(second_target_id),
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-1",
+        )
+        await db_session.commit()
 
         first = await client.post(
             "/v1/cloud/commands",
