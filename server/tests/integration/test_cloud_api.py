@@ -668,13 +668,20 @@ class TestCloudRepoConfig:
                 "envVars": {"API_BASE_URL": "https://example.internal"},
                 "setupScript": "pnpm install",
                 "runCommand": "make dev",
-                "files": [],
+                "files": [
+                    {
+                        "relativePath": ".env.shared",
+                        "content": "API_BASE_URL=https://example.internal\nSHARED_TOKEN=dev\n",
+                    },
+                ],
             },
         )
 
         assert save_response.status_code == 200
         assert save_response.json()["defaultBranch"] == "release"
         assert save_response.json()["runCommand"] == "make dev"
+        assert save_response.json()["trackedFiles"][0]["relativePath"] == ".env.shared"
+        assert save_response.json()["trackedFiles"][0].get("content") is None
 
         get_response = await client.get(
             "/v1/cloud/repos/proliferate-ai/proliferate/config",
@@ -683,6 +690,8 @@ class TestCloudRepoConfig:
         assert get_response.status_code == 200
         assert get_response.json()["defaultBranch"] == "release"
         assert get_response.json()["runCommand"] == "make dev"
+        assert get_response.json()["trackedFiles"][0]["relativePath"] == ".env.shared"
+        assert get_response.json()["trackedFiles"][0].get("content") is None
 
         record = (
             await db_session.execute(
@@ -695,6 +704,51 @@ class TestCloudRepoConfig:
         ).scalar_one()
         assert record.default_branch == "release"
         assert record.run_command == "make dev"
+
+        organizations_response = await client.get("/v1/organizations", headers=headers)
+        assert organizations_response.status_code == 200
+        organization_id = organizations_response.json()["organizations"][0]["id"]
+
+        organization_save_response = await client.put(
+            (
+                f"/v1/cloud/organizations/{organization_id}/repos/"
+                "proliferate-ai/proliferate/config"
+            ),
+            headers=headers,
+            json={
+                "configured": True,
+                "defaultBranch": "release",
+                "envVars": {"API_BASE_URL": "https://example.internal"},
+                "setupScript": "pnpm install",
+                "runCommand": "make dev",
+                "files": [
+                    {
+                        "relativePath": ".env.shared",
+                        "content": "API_BASE_URL=https://example.internal\nSHARED_TOKEN=team\n",
+                    },
+                ],
+            },
+        )
+        assert organization_save_response.status_code == 200
+        assert organization_save_response.json()["trackedFiles"][0]["relativePath"] == ".env.shared"
+        assert (
+            organization_save_response.json()["trackedFiles"][0]["content"]
+            == "API_BASE_URL=https://example.internal\nSHARED_TOKEN=team\n"
+        )
+
+        organization_get_response = await client.get(
+            (
+                f"/v1/cloud/organizations/{organization_id}/repos/"
+                "proliferate-ai/proliferate/config"
+            ),
+            headers=headers,
+        )
+        assert organization_get_response.status_code == 200
+        assert organization_get_response.json()["trackedFiles"][0]["relativePath"] == ".env.shared"
+        assert (
+            organization_get_response.json()["trackedFiles"][0]["content"]
+            == "API_BASE_URL=https://example.internal\nSHARED_TOKEN=team\n"
+        )
 
     @pytest.mark.asyncio
     async def test_free_plan_repo_config_limit_blocks_second_configured_repo(

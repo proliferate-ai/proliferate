@@ -7,12 +7,11 @@ import { Badge } from "@/components/ui/Badge";
 import { CloudIcon } from "@/components/ui/icons";
 import {
   EnvironmentField,
-  EnvironmentPanel,
-  EnvironmentPanelRow,
   EnvironmentSection,
 } from "@/components/ui/EnvironmentLayout";
 import { RepoEnvVarsCard } from "@/components/cloud/repo-settings/RepoEnvVarsCard";
 import { RepoRunCommandCard } from "@/components/cloud/repo-settings/RepoRunCommandCard";
+import { RepoSharedEnvFilesCard } from "@/components/cloud/repo-settings/RepoSharedEnvFilesCard";
 import { RepoSetupScriptCard } from "@/components/cloud/repo-settings/RepoSetupScriptCard";
 import { AdminOnlyPlaceholder } from "@/components/settings/shared/AdminOnlyPlaceholder";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
@@ -271,6 +270,7 @@ function SharedEnvironmentDetail({
       envVars: draft.savePayload.envVars,
       setupScript: draft.savePayload.setupScript,
       runCommand: draft.savePayload.runCommand,
+      files: draft.sharedEnvFilePayloads,
     });
     const profile = await authMutations.ensureOrganizationProfile({ organizationId });
     await authMutations.enableProfileCloud({ sandboxProfileId: profile.id });
@@ -359,18 +359,15 @@ function SharedEnvironmentDetail({
           onRemoveRow={draft.removeEnvVarRow}
         />
 
-        <EnvironmentField
-          label="Shared env files"
-          description="Shared files are admin-authored and written into newly created shared workspaces."
-        >
-          <EnvironmentPanel>
-            <EnvironmentPanelRow>
-              <p className="text-sm text-muted-foreground">
-                Existing shared file metadata is preserved by this editor. File content editing needs the follow-up shared-file content API, since current cloud repo responses intentionally return metadata rather than plaintext.
-              </p>
-            </EnvironmentPanelRow>
-          </EnvironmentPanel>
-        </EnvironmentField>
+        <RepoSharedEnvFilesCard
+          files={draft.sharedEnvFiles}
+          onAddFile={draft.addSharedEnvFile}
+          onUpdateFilePath={draft.updateSharedEnvFilePath}
+          onAddRow={draft.addSharedEnvFileRow}
+          onUpdateRow={draft.updateSharedEnvFileRow}
+          onRemoveRow={draft.removeSharedEnvFileRow}
+          onRemoveFile={draft.removeSharedEnvFile}
+        />
       </EnvironmentSection>
     </section>
   );

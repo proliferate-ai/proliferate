@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   saveOrganizationCloudRepoConfig,
 } from "@proliferate/cloud-sdk/client/repo-configs";
+import type { SaveCloudRepoConfigRequest } from "@proliferate/cloud-sdk/types";
 import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
 import {
   organizationCloudRepoConfigKey,
@@ -17,6 +18,7 @@ interface SaveOrganizationCloudRepoConfigInput {
   envVars: Record<string, string>;
   setupScript: string;
   runCommand: string;
+  files?: SaveCloudRepoConfigRequest["files"];
 }
 
 export function useSaveOrganizationCloudRepoConfig() {
@@ -32,6 +34,7 @@ export function useSaveOrganizationCloudRepoConfig() {
       envVars,
       setupScript,
       runCommand,
+      files,
     }) => await saveOrganizationCloudRepoConfig(
       organizationId,
       gitOwner,
@@ -42,6 +45,7 @@ export function useSaveOrganizationCloudRepoConfig() {
         envVars,
         setupScript,
         runCommand,
+        ...(files ? { files } : {}),
       },
     ),
     onSuccess: async (_response, variables) => {

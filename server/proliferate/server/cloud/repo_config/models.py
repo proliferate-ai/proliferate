@@ -41,6 +41,7 @@ class CloudRepoFileMetadata(BaseModel):
     byte_size: int = Field(serialization_alias="byteSize")
     updated_at: str = Field(serialization_alias="updatedAt")
     last_synced_at: str = Field(serialization_alias="lastSyncedAt")
+    content: str | None = None
 
 
 class CloudRepoConfigResponse(BaseModel):
@@ -113,6 +114,8 @@ def repo_config_summary_payload(value: CloudRepoConfigSummaryValue) -> CloudRepo
 
 def repo_file_metadata_payload(
     value: CloudRepoFileValue | RepoConfigTrackedFileStatus,
+    *,
+    include_content: bool = False,
 ) -> CloudRepoFileMetadata:
     return CloudRepoFileMetadata(
         relative_path=value.relative_path,
@@ -120,10 +123,15 @@ def repo_file_metadata_payload(
         byte_size=value.byte_size,
         updated_at=value.updated_at.isoformat(),
         last_synced_at=value.last_synced_at.isoformat(),
+        content=value.content if include_content and isinstance(value, CloudRepoFileValue) else None,
     )
 
 
-def repo_config_payload(value: CloudRepoConfigValue) -> CloudRepoConfigResponse:
+def repo_config_payload(
+    value: CloudRepoConfigValue,
+    *,
+    include_file_content: bool = False,
+) -> CloudRepoConfigResponse:
     return CloudRepoConfigResponse(
         configured=value.configured,
         configured_at=_to_iso(value.configured_at),
@@ -132,7 +140,10 @@ def repo_config_payload(value: CloudRepoConfigValue) -> CloudRepoConfigResponse:
         setup_script=value.setup_script,
         run_command=value.run_command,
         files_version=value.files_version,
-        tracked_files=[repo_file_metadata_payload(item) for item in value.tracked_files],
+        tracked_files=[
+            repo_file_metadata_payload(item, include_content=include_file_content)
+            for item in value.tracked_files
+        ],
     )
 
 
