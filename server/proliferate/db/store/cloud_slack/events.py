@@ -102,9 +102,7 @@ async def mark_job_processing(
 ) -> SlackInboundEventJobRecord | None:
     row = (
         await db.execute(
-            select(SlackInboundEventJob)
-            .where(SlackInboundEventJob.id == job_id)
-            .with_for_update()
+            select(SlackInboundEventJob).where(SlackInboundEventJob.id == job_id).with_for_update()
         )
     ).scalar_one_or_none()
     if row is None or row.status not in {

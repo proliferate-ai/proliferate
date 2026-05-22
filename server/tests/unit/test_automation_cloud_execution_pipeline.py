@@ -106,9 +106,7 @@ def _target_snapshot(
         owner_user_id=owner_user_id,
         organization_id=organization_id,
         created_by_user_id=created_by_user_id,
-        sandbox_profile_id=(
-            sandbox_profile_id if sandbox_profile_id is not None else uuid.uuid4()
-        )
+        sandbox_profile_id=(sandbox_profile_id if sandbox_profile_id is not None else uuid.uuid4())
         if attach_profile
         else None,
         profile_target_role="primary",

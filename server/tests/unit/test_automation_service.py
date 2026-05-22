@@ -6,10 +6,15 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from proliferate.constants.cloud import CloudTargetKind, CloudTargetStatus
+from proliferate.constants.automations import (
+    AUTOMATION_OWNER_SCOPE_PERSONAL,
+    AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+)
 from proliferate.db import engine as engine_module
 from proliferate.db.models.automations import Automation
 from proliferate.db.models.auth import User
 from proliferate.db.models.billing import BillingSubject
+from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.targets import (
     CloudTarget,
     CloudTargetStatus as CloudTargetStatusRow,
@@ -75,6 +80,27 @@ async def _create_online_target(  # type: ignore[no-untyped-def]
     return target
 
 
+async def _create_agent_run_config(session, *, user_id: uuid.UUID) -> CloudAgentRunConfig:  # type: ignore[no-untyped-def]
+    config = CloudAgentRunConfig(
+        owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+        owner_user_id=user_id,
+        organization_id=None,
+        created_by_user_id=user_id,
+        name="Automation test config",
+        agent_kind="codex",
+        model_id="gpt-5.4",
+        control_values_json={"mode": "code", "effort": "medium"},
+        usable_in_personal_sandboxes=True,
+        usable_in_shared_sandboxes=False,
+        seed_key=None,
+        system_default_rank=None,
+        status="active",
+    )
+    session.add(config)
+    await session.flush()
+    return config
+
+
 def test_automation_service_error_is_product_error() -> None:
     error = AutomationServiceError(
         "automation_failed",
@@ -106,7 +132,7 @@ async def test_create_automation_bootstraps_repo_config(
     try:
         async with engine_module.async_session_factory() as session, session.begin():
             await _add_user(session, user_id, email="automation-repo-config@example.com")
-            target = await _create_online_target(session, user_id=user_id)
+            run_config = await _create_agent_run_config(session, user_id=user_id)
             response = await automation_service.create_automation(
                 session,
                 user_id,
@@ -119,9 +145,8 @@ async def test_create_automation_bootstraps_repo_config(
                         rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
                         timezone="UTC",
                     ),
-                    executionTarget="cloud",
-                    targetId=target.id,
-                    agentKind="codex",
+                    targetMode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+                    cloudAgentRunConfigId=run_config.id,
                 ),
             )
 
@@ -160,7 +185,7 @@ async def test_create_automation_repo_bootstrap_uses_request_transaction(
     try:
         async with engine_module.async_session_factory() as session:
             await _add_user(session, user_id, email="automation-rollback@example.com")
-            target = await _create_online_target(session, user_id=user_id)
+            run_config = await _create_agent_run_config(session, user_id=user_id)
             await automation_service.create_automation(
                 session,
                 user_id,
@@ -173,9 +198,8 @@ async def test_create_automation_repo_bootstrap_uses_request_transaction(
                         rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
                         timezone="UTC",
                     ),
-                    executionTarget="cloud",
-                    targetId=target.id,
-                    agentKind="codex",
+                    targetMode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+                    cloudAgentRunConfigId=run_config.id,
                 ),
             )
             await session.rollback()
@@ -203,7 +227,7 @@ async def test_create_automation_repo_bootstrap_uses_request_transaction(
 
 
 @pytest.mark.asyncio
-async def test_resume_cloud_automation_requires_agent_kind(
+async def test_resume_cloud_automation_with_run_config(
     test_engine,  # type: ignore[no-untyped-def]
 ) -> None:
     original_factory = engine_module.async_session_factory
@@ -214,9 +238,11 @@ async def test_resume_cloud_automation_requires_agent_kind(
 
     try:
         async with engine_module.async_session_factory() as session:
+            await _add_user(session, user_id, email="automation-resume@example.com")
             session.add(
                 CloudRepoConfig(
                     id=repo_config_id,
+                    owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
                     user_id=user_id,
                     git_owner="proliferate-ai",
                     git_repo_name="proliferate",
@@ -224,18 +250,22 @@ async def test_resume_cloud_automation_requires_agent_kind(
                 )
             )
             await session.flush()
+            run_config = await _create_agent_run_config(session, user_id=user_id)
             session.add(
                 Automation(
                     id=automation_id,
-                    user_id=user_id,
+                    owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+                    owner_user_id=user_id,
+                    organization_id=None,
+                    created_by_user_id=user_id,
                     cloud_repo_config_id=repo_config_id,
                     title="Daily check",
                     prompt="Check the repo.",
                     schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
                     schedule_timezone="UTC",
                     schedule_summary="Daily at 09:00 UTC",
-                    execution_target="cloud",
-                    agent_kind=None,
+                    target_mode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+                    cloud_agent_run_config_id=run_config.id,
                     enabled=False,
                     paused_at=datetime(2026, 4, 20, 12, 0, tzinfo=UTC),
                     next_run_at=None,
@@ -244,16 +274,16 @@ async def test_resume_cloud_automation_requires_agent_kind(
             await session.commit()
 
         async with engine_module.async_session_factory() as session:
-            with pytest.raises(AutomationInvalidField) as exc:
-                await automation_service.resume_automation(session, user_id, automation_id)
+            resumed = await automation_service.resume_automation(session, user_id, automation_id)
 
-        assert exc.value.code == "automation_agent_required"
+        assert resumed.enabled is True
+        assert resumed.next_run_at is not None
     finally:
         engine_module.async_session_factory = original_factory
 
 
 @pytest.mark.asyncio
-async def test_create_cloud_automation_requires_agent_kind(
+async def test_create_cloud_automation_requires_run_config(
     monkeypatch: pytest.MonkeyPatch,
     test_engine,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -269,8 +299,7 @@ async def test_create_cloud_automation_requires_agent_kind(
     try:
         async with engine_module.async_session_factory() as session, session.begin():
             await _add_user(session, user_id, email="automation-agent-required@example.com")
-            target = await _create_online_target(session, user_id=user_id)
-            with pytest.raises(AutomationInvalidField) as exc:
+            with pytest.raises(AutomationServiceError) as exc:
                 await automation_service.create_automation(
                     session,
                     user_id,
@@ -283,18 +312,18 @@ async def test_create_cloud_automation_requires_agent_kind(
                             rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
                             timezone="UTC",
                         ),
-                        executionTarget="cloud",
-                        targetId=target.id,
+                        targetMode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+                        cloudAgentRunConfigId=uuid.uuid4(),
                     ),
                 )
 
-        assert exc.value.code == "automation_agent_required"
+        assert exc.value.code == "agent_run_config_not_found"
     finally:
         engine_module.async_session_factory = original_factory
 
 
 @pytest.mark.asyncio
-async def test_cloud_automation_snapshots_selected_target(
+async def test_cloud_automation_snapshots_selected_run_config(
     monkeypatch: pytest.MonkeyPatch,
     test_engine,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -310,11 +339,7 @@ async def test_cloud_automation_snapshots_selected_target(
     try:
         async with engine_module.async_session_factory() as session, session.begin():
             await _add_user(session, user_id, email="automation-target@example.com")
-            target = await _create_online_target(
-                session,
-                user_id=user_id,
-                kind=CloudTargetKind.ssh.value,
-            )
+            run_config = await _create_agent_run_config(session, user_id=user_id)
 
             automation = await automation_service.create_automation(
                 session,
@@ -328,23 +353,23 @@ async def test_cloud_automation_snapshots_selected_target(
                         rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
                         timezone="UTC",
                     ),
-                    executionTarget="cloud",
-                    targetId=target.id,
-                    agentKind="codex",
+                    targetMode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+                    cloudAgentRunConfigId=run_config.id,
                 ),
             )
             run = await automation_service.run_automation_now(session, user_id, automation.id)
 
-        assert automation.cloud_target_id == target.id
-        assert automation.cloud_target_kind == CloudTargetKind.ssh.value
-        assert run.cloud_target_id_snapshot == target.id
-        assert run.cloud_target_kind_snapshot == CloudTargetKind.ssh.value
+        assert automation.cloud_agent_run_config_id == run_config.id
+        assert run.agent_run_config_snapshot_json is not None
+        assert run.agent_run_config_snapshot_json["config_id"] == str(run_config.id)
+        assert run.agent_kind == "codex"
+        assert run.model_id == "gpt-5.4"
     finally:
         engine_module.async_session_factory = original_factory
 
 
 @pytest.mark.asyncio
-async def test_cloud_automation_uses_online_managed_target_default(
+async def test_cloud_automation_uses_personal_cloud_target_mode_default(
     monkeypatch: pytest.MonkeyPatch,
     test_engine,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -360,7 +385,7 @@ async def test_cloud_automation_uses_online_managed_target_default(
     try:
         async with engine_module.async_session_factory() as session, session.begin():
             await _add_user(session, user_id, email="automation-default-target@example.com")
-            target = await _create_online_target(session, user_id=user_id)
+            run_config = await _create_agent_run_config(session, user_id=user_id)
 
             automation = await automation_service.create_automation(
                 session,
@@ -374,22 +399,21 @@ async def test_cloud_automation_uses_online_managed_target_default(
                         rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
                         timezone="UTC",
                     ),
-                    executionTarget="cloud",
-                    agentKind="codex",
+                    cloudAgentRunConfigId=run_config.id,
                 ),
             )
             run = await automation_service.run_automation_now(session, user_id, automation.id)
 
-        assert automation.cloud_target_id == target.id
-        assert automation.cloud_target_kind == CloudTargetKind.managed_cloud.value
-        assert run.cloud_target_id_snapshot == target.id
-        assert run.cloud_target_kind_snapshot == CloudTargetKind.managed_cloud.value
+        assert automation.target_mode == AUTOMATION_TARGET_MODE_PERSONAL_CLOUD
+        assert run.target_mode == AUTOMATION_TARGET_MODE_PERSONAL_CLOUD
+        assert run.agent_run_config_snapshot_json is not None
+        assert run.agent_run_config_snapshot_json["config_id"] == str(run_config.id)
     finally:
         engine_module.async_session_factory = original_factory
 
 
 @pytest.mark.asyncio
-async def test_manual_run_resolves_target_for_legacy_cloud_automation(
+async def test_manual_run_for_existing_automation_uses_current_run_config(
     monkeypatch: pytest.MonkeyPatch,
     test_engine,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -407,10 +431,10 @@ async def test_manual_run_resolves_target_for_legacy_cloud_automation(
     try:
         async with engine_module.async_session_factory() as session, session.begin():
             await _add_user(session, user_id, email="automation-legacy-target@example.com")
-            target = await _create_online_target(session, user_id=user_id)
             session.add(
                 CloudRepoConfig(
                     id=repo_config_id,
+                    owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
                     user_id=user_id,
                     git_owner="proliferate-ai",
                     git_repo_name="proliferate",
@@ -418,20 +442,22 @@ async def test_manual_run_resolves_target_for_legacy_cloud_automation(
                 )
             )
             await session.flush()
+            run_config = await _create_agent_run_config(session, user_id=user_id)
             session.add(
                 Automation(
                     id=automation_id,
-                    user_id=user_id,
+                    owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+                    owner_user_id=user_id,
+                    organization_id=None,
+                    created_by_user_id=user_id,
                     cloud_repo_config_id=repo_config_id,
-                    title="Legacy target",
+                    title="Existing automation",
                     prompt="Check the repo.",
                     schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
                     schedule_timezone="UTC",
                     schedule_summary="Daily at 09:00 UTC",
-                    execution_target="cloud",
-                    cloud_target_id=None,
-                    cloud_target_kind_snapshot=None,
-                    agent_kind="codex",
+                    target_mode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+                    cloud_agent_run_config_id=run_config.id,
                     enabled=True,
                     paused_at=None,
                     next_run_at=None,
@@ -441,14 +467,15 @@ async def test_manual_run_resolves_target_for_legacy_cloud_automation(
 
             run = await automation_service.run_automation_now(session, user_id, automation_id)
 
-        assert run.cloud_target_id_snapshot == target.id
-        assert run.cloud_target_kind_snapshot == CloudTargetKind.managed_cloud.value
+        assert run.agent_run_config_snapshot_json is not None
+        assert run.agent_run_config_snapshot_json["config_id"] == str(run_config.id)
+        assert run.agent_kind == "codex"
     finally:
         engine_module.async_session_factory = original_factory
 
 
 @pytest.mark.asyncio
-async def test_cloud_automation_requires_target_when_no_default(
+async def test_personal_automation_rejects_shared_cloud_target_mode(
     monkeypatch: pytest.MonkeyPatch,
     test_engine,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -464,8 +491,9 @@ async def test_cloud_automation_requires_target_when_no_default(
     try:
         async with engine_module.async_session_factory() as session, session.begin():
             await _add_user(session, user_id, email="automation-no-target@example.com")
+            run_config = await _create_agent_run_config(session, user_id=user_id)
 
-            with pytest.raises(AutomationServiceError) as exc:
+            with pytest.raises(AutomationInvalidField) as exc:
                 await automation_service.create_automation(
                     session,
                     user_id,
@@ -478,18 +506,18 @@ async def test_cloud_automation_requires_target_when_no_default(
                             rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
                             timezone="UTC",
                         ),
-                        executionTarget="cloud",
-                        agentKind="codex",
+                        targetMode="shared_cloud",
+                        cloudAgentRunConfigId=run_config.id,
                     ),
                 )
 
-        assert exc.value.code == "target_required"
+        assert exc.value.code == "automation_invalid_field"
     finally:
         engine_module.async_session_factory = original_factory
 
 
 @pytest.mark.asyncio
-async def test_cloud_automation_rejects_offline_target(
+async def test_create_automation_rejects_run_config_not_usable_for_personal_cloud(
     monkeypatch: pytest.MonkeyPatch,
     test_engine,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -505,16 +533,9 @@ async def test_cloud_automation_rejects_offline_target(
     try:
         async with engine_module.async_session_factory() as session, session.begin():
             await _add_user(session, user_id, email="automation-offline-target@example.com")
-            target = await targets_store.create_target(
-                session,
-                display_name="Offline target",
-                kind=CloudTargetKind.ssh.value,
-                owner_scope="personal",
-                owner_user_id=user_id,
-                organization_id=None,
-                created_by_user_id=user_id,
-                default_workspace_root="~/work",
-            )
+            run_config = await _create_agent_run_config(session, user_id=user_id)
+            run_config.usable_in_personal_sandboxes = False
+            await session.flush()
 
             with pytest.raises(AutomationServiceError) as exc:
                 await automation_service.create_automation(
@@ -529,12 +550,11 @@ async def test_cloud_automation_rejects_offline_target(
                             rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
                             timezone="UTC",
                         ),
-                        executionTarget="cloud",
-                        targetId=target.id,
-                        agentKind="codex",
+                        targetMode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+                        cloudAgentRunConfigId=run_config.id,
                     ),
                 )
 
-        assert exc.value.code == "target_offline"
+        assert exc.value.code == "agent_run_config_not_usable"
     finally:
         engine_module.async_session_factory = original_factory

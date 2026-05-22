@@ -24,7 +24,9 @@ from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
-from proliferate.server.cloud.agent_auth.service import request_agent_auth_refresh_for_profile_target
+from proliferate.server.cloud.agent_auth.service import (
+    request_agent_auth_refresh_for_profile_target,
+)
 from proliferate.server.cloud.commands import service as command_service
 from proliferate.server.cloud.worker import service as worker_service
 from proliferate.utils.crypto import encrypt_json
@@ -372,10 +374,25 @@ class TestCloudCommandsApi:
             email_prefix="cloud-commands",
         )
         target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
+        cloud_workspace_id = await _create_ready_cloud_workspace(
+            db_session,
+            auth,
+            target_id=target_id,
+            anyharness_workspace_id="workspace-1",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=UUID(target_id),
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-1",
+        )
+        await db_session.commit()
 
         command_body = {
             "idempotencyKey": "prompt-1",
             "targetId": target_id,
+            "cloudWorkspaceId": cloud_workspace_id,
             "workspaceId": "workspace-1",
             "sessionId": "session-1",
             "kind": "send_prompt",
@@ -391,7 +408,7 @@ class TestCloudCommandsApi:
             headers=auth.headers,
             json=command_body,
         )
-        assert created.status_code == 200
+        assert created.status_code == 200, created.text
         command = created.json()
         assert command["status"] == "queued"
         assert command["targetId"] == target_id
@@ -475,6 +492,20 @@ class TestCloudCommandsApi:
             target_id=target_id,
             anyharness_workspace_id="workspace-1",
         )
+        await exposures_store.upsert_workspace_exposure(
+            db_session,
+            target_id=UUID(target_id),
+            cloud_workspace_id=UUID(cloud_workspace_id),
+            anyharness_workspace_id="workspace-1",
+            owner_scope="personal",
+            owner_user_id=UUID(auth.user_id),
+            organization_id=None,
+            visibility="private",
+            default_projection_level="live",
+            commandable=True,
+            origin="manual_web",
+        )
+        await db_session.commit()
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -488,7 +519,7 @@ class TestCloudCommandsApi:
                 "source": "automation",
             },
         )
-        assert created.status_code == 200
+        assert created.status_code == 200, created.text
         command_id = created.json()["commandId"]
 
         lease = await client.post(
@@ -544,10 +575,10 @@ class TestCloudCommandsApi:
                 "idempotencyKey": "start-session-materialized-workspace",
                 "targetId": target_id,
                 "kind": "start_session",
-                "payload": {"workspaceId": "anyharness-workspace-1", "agentKind": "codex"},
+                "payload": {"workspaceId": "workspace-1", "agentKind": "codex"},
             },
         )
-        assert direct_materialized_workspace.status_code == 200
+        assert direct_materialized_workspace.status_code == 200, direct_materialized_workspace.text
         direct_command_id = direct_materialized_workspace.json()["commandId"]
 
         direct_lease = await client.post(
@@ -558,8 +589,8 @@ class TestCloudCommandsApi:
         assert direct_lease.status_code == 200
         direct_command = direct_lease.json()["command"]
         assert direct_command["commandId"] == direct_command_id
-        assert direct_command["workspaceId"] == "anyharness-workspace-1"
-        assert direct_command["payload"]["workspaceId"] == "anyharness-workspace-1"
+        assert direct_command["workspaceId"] == "workspace-1"
+        assert direct_command["payload"]["workspaceId"] == "workspace-1"
 
     @pytest.mark.asyncio
     async def test_materialize_workspace_command_is_target_scoped(
@@ -878,6 +909,20 @@ class TestCloudCommandsApi:
             email_prefix="cloud-command-close-session",
         )
         target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
+        cloud_workspace_id = await _create_ready_cloud_workspace(
+            db_session,
+            auth,
+            target_id=target_id,
+            anyharness_workspace_id="workspace-1",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=UUID(target_id),
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-1",
+        )
+        await db_session.commit()
 
         missing_session = await client.post(
             "/v1/cloud/commands",
@@ -903,7 +948,7 @@ class TestCloudCommandsApi:
                 "payload": {},
             },
         )
-        assert created.status_code == 200
+        assert created.status_code == 200, created.text
         command_id = created.json()["commandId"]
 
         lease = await client.post(
@@ -932,9 +977,8 @@ class TestCloudCommandsApi:
             json={
                 "idempotencyKey": "stale-lease",
                 "targetId": target_id,
-                "sessionId": "session-1",
-                "kind": "cancel_turn",
-                "payload": {},
+                "kind": "materialize_workspace",
+                "payload": {"mode": "existing_path", "path": "/tmp/stale-lease"},
             },
         )
         assert created.status_code == 200
@@ -943,7 +987,7 @@ class TestCloudCommandsApi:
         first = await client.post(
             "/v1/cloud/worker/commands/lease",
             headers=worker_headers,
-            json={"supportedKinds": ["cancel_turn"], "leaseTimeoutSeconds": 0},
+            json={"supportedKinds": ["materialize_workspace"], "leaseTimeoutSeconds": 0},
         )
         assert first.status_code == 200
         first_lease = first.json()["command"]["leaseId"]
@@ -951,7 +995,7 @@ class TestCloudCommandsApi:
         immediate_recovery = await client.post(
             "/v1/cloud/worker/commands/lease",
             headers=worker_headers,
-            json={"supportedKinds": ["cancel_turn"], "leaseTimeoutSeconds": 30},
+            json={"supportedKinds": ["materialize_workspace"], "leaseTimeoutSeconds": 30},
         )
         assert immediate_recovery.status_code == 200
         assert immediate_recovery.json()["command"] is None
@@ -964,7 +1008,7 @@ class TestCloudCommandsApi:
         recovered = await client.post(
             "/v1/cloud/worker/commands/lease",
             headers=worker_headers,
-            json={"supportedKinds": ["cancel_turn"], "leaseTimeoutSeconds": 30},
+            json={"supportedKinds": ["materialize_workspace"], "leaseTimeoutSeconds": 30},
         )
         assert recovered.status_code == 200
         recovered_command = recovered.json()["command"]
@@ -997,9 +1041,8 @@ class TestCloudCommandsApi:
             json={
                 "idempotencyKey": "delivered-lease",
                 "targetId": target_id,
-                "sessionId": "session-1",
-                "kind": "send_prompt",
-                "payload": {"text": "do not duplicate"},
+                "kind": "materialize_workspace",
+                "payload": {"mode": "existing_path", "path": "/tmp/delivered-lease"},
             },
         )
         assert created.status_code == 200
@@ -1008,7 +1051,7 @@ class TestCloudCommandsApi:
         first = await client.post(
             "/v1/cloud/worker/commands/lease",
             headers=worker_headers,
-            json={"supportedKinds": ["send_prompt"], "leaseTimeoutSeconds": 0},
+            json={"supportedKinds": ["materialize_workspace"], "leaseTimeoutSeconds": 0},
         )
         assert first.status_code == 200
         first_lease = first.json()["command"]["leaseId"]
@@ -1024,7 +1067,7 @@ class TestCloudCommandsApi:
         recovered = await client.post(
             "/v1/cloud/worker/commands/lease",
             headers=worker_headers,
-            json={"supportedKinds": ["send_prompt"], "leaseTimeoutSeconds": 30},
+            json={"supportedKinds": ["materialize_workspace"], "leaseTimeoutSeconds": 30},
         )
         assert recovered.status_code == 200
         assert recovered.json()["command"] is None
@@ -1032,7 +1075,17 @@ class TestCloudCommandsApi:
         result = await client.post(
             f"/v1/cloud/worker/commands/{command_id}/result",
             headers=worker_headers,
-            json={"leaseId": first_lease, "status": "accepted"},
+            json={
+                "leaseId": first_lease,
+                "status": "accepted",
+                "result": {
+                    "mode": "existing_path",
+                    "anyharnessWorkspaceId": "workspace-1",
+                    "repoRootId": "root-1",
+                    "path": "/tmp/delivered-lease",
+                    "kind": "existing_path",
+                },
+            },
         )
         assert result.status_code == 200
         assert result.json()["status"] == "accepted"
@@ -1732,7 +1785,36 @@ class TestCloudCommandsApi:
             db_session,
             auth,
             suffix="second",
+            kind="desktop_dispatch",
         )
+        cloud_workspace_id = await _create_ready_cloud_workspace(
+            db_session,
+            auth,
+            target_id=first_target_id,
+            anyharness_workspace_id="workspace-1",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=UUID(first_target_id),
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-1",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=UUID(first_target_id),
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-2",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=UUID(second_target_id),
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-1",
+        )
+        await db_session.commit()
 
         first = await client.post(
             "/v1/cloud/commands",
@@ -2309,11 +2391,13 @@ class TestCloudCommandsApi:
         assert created.json()["detail"]["code"] == "cloud_command_target_config_required"
 
     @pytest.mark.asyncio
-    async def test_managed_start_session_with_cloud_workspace_uses_runtime_state_without_target_config(
+    async def test_managed_start_session_with_cloud_workspace_uses_runtime_state(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
@@ -2386,13 +2470,16 @@ class TestCloudCommandsApi:
         assert payload["workspaceId"] == "anyharness-managed-runtime-config-cloud-workspace"
         assert payload["requiredRuntimeConfigRevisionId"] == str(revision.id)
         assert command.cloud_workspace_id == UUID(cloud_workspace_id)
+        await db_session.rollback()
 
     @pytest.mark.asyncio
     async def test_agent_auth_preflight_requires_applied_target_state(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
@@ -2692,7 +2779,9 @@ class TestCloudCommandsApi:
         self,
         client: AsyncClient,
         db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,

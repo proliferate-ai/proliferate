@@ -361,7 +361,7 @@ def _validate_agent_auth_scope(
         code="cloud_command_agent_auth_scope_invalid",
         message=f"{kind} agentAuthScope must contain id.",
     )
-    target_id = _required_string(
+    _required_string(
         scope,
         "targetId",
         code="cloud_command_agent_auth_scope_invalid",

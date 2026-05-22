@@ -300,42 +300,46 @@ def _upgrade_mcp_connection() -> None:
         unique=True,
         postgresql_where=sa.text("owner_scope = 'organization'"),
     )
-    op.execute(
-        """
-        INSERT INTO cloud_mcp_connection_auth (
-            id,
-            connection_db_id,
-            auth_kind,
-            auth_status,
-            payload_ciphertext,
-            payload_format,
-            auth_version,
-            token_expires_at,
-            last_error_code,
-            created_at,
-            updated_at
+    if _has_column("cloud_mcp_connection", "payload_ciphertext") and _has_column(
+        "cloud_mcp_connection",
+        "payload_format",
+    ):
+        op.execute(
+            """
+            INSERT INTO cloud_mcp_connection_auth (
+                id,
+                connection_db_id,
+                auth_kind,
+                auth_status,
+                payload_ciphertext,
+                payload_format,
+                auth_version,
+                token_expires_at,
+                last_error_code,
+                created_at,
+                updated_at
+            )
+            SELECT
+                gen_random_uuid(),
+                connection.id,
+                'secret',
+                'ready',
+                connection.payload_ciphertext,
+                connection.payload_format,
+                1,
+                NULL,
+                NULL,
+                now(),
+                now()
+            FROM cloud_mcp_connection AS connection
+            WHERE connection.payload_ciphertext IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM cloud_mcp_connection_auth AS auth
+                  WHERE auth.connection_db_id = connection.id
+              )
+            """
         )
-        SELECT
-            gen_random_uuid(),
-            connection.id,
-            'secret',
-            'ready',
-            connection.payload_ciphertext,
-            connection.payload_format,
-            1,
-            NULL,
-            NULL,
-            now(),
-            now()
-        FROM cloud_mcp_connection AS connection
-        WHERE connection.payload_ciphertext IS NOT NULL
-          AND NOT EXISTS (
-              SELECT 1
-              FROM cloud_mcp_connection_auth AS auth
-              WHERE auth.connection_db_id = connection.id
-          )
-        """
-    )
     _drop_column_once("cloud_mcp_connection", "payload_ciphertext")
     _drop_column_once("cloud_mcp_connection", "payload_format")
 

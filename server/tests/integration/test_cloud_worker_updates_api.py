@@ -6,7 +6,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store.billing import ensure_personal_billing_subject
 from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import exposures as exposures_store
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 from tests.e2e.cloud.helpers.shared import AuthSession
@@ -360,10 +363,54 @@ class TestCloudWorkerUpdatesApi:
         assert update_revoke.status_code == 409
         assert update_revoke.json()["detail"]["code"] == "cloud_compute_target_update_in_progress"
 
+        billing_subject = await ensure_personal_billing_subject(db_session, auth.user_id)
+        workspace = CloudWorkspace(
+            user_id=auth.user_id,
+            owner_scope="personal",
+            owner_user_id=auth.user_id,
+            organization_id=None,
+            created_by_user_id=auth.user_id,
+            billing_subject_id=billing_subject.id,
+            target_id=UUID(target_id),
+            display_name="acme/rocket",
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            normalized_repo_key="github/acme/rocket",
+            git_branch="main",
+            git_base_branch="main",
+            worktree_path="/workspace/rocket",
+            origin="manual_web",
+            origin_json='{"kind":"human","entrypoint":"cloud"}',
+            status="ready",
+            status_detail="Ready",
+            template_version="v1",
+            runtime_generation=0,
+            anyharness_workspace_id="workspace-1",
+            repo_post_ready_phase="idle",
+            repo_post_ready_files_total=0,
+            repo_post_ready_files_applied=0,
+            cleanup_state="none",
+        )
+        db_session.add(workspace)
+        await db_session.flush()
+        await exposures_store.upsert_workspace_exposure(
+            db_session,
+            target_id=UUID(target_id),
+            cloud_workspace_id=workspace.id,
+            anyharness_workspace_id="workspace-1",
+            owner_scope="personal",
+            owner_user_id=auth.user_id,
+            organization_id=None,
+            visibility="private",
+            default_projection_level="live",
+            commandable=True,
+            origin="manual_web",
+        )
         await events_store.upsert_session_projection(
             db_session,
             target_id=UUID(target_id),
-            cloud_workspace_id=None,
+            cloud_workspace_id=workspace.id,
             workspace_id="workspace-1",
             session_id="session-1",
             seq=1,
@@ -386,6 +433,7 @@ class TestCloudWorkerUpdatesApi:
             json={
                 "idempotencyKey": "safe-stop-command",
                 "targetId": target_id,
+                "cloudWorkspaceId": str(workspace.id),
                 "sessionId": "session-1",
                 "kind": "cancel_turn",
                 "payload": {},

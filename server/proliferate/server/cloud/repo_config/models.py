@@ -132,7 +132,9 @@ def repo_file_metadata_payload(
         byte_size=value.byte_size,
         updated_at=value.updated_at.isoformat(),
         last_synced_at=value.last_synced_at.isoformat(),
-        content=value.content if include_content and isinstance(value, CloudRepoFileValue) else None,
+        content=value.content
+        if include_content and isinstance(value, CloudRepoFileValue)
+        else None,
     )
 
 

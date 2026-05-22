@@ -88,7 +88,8 @@ def upgrade() -> None:
             sa.Column("config_version", sa.Integer(), nullable=False, server_default="1"),
         )
 
-    op.alter_column("cloud_mcp_connection", "payload_ciphertext", nullable=True)
+    if _has_column("cloud_mcp_connection", "payload_ciphertext"):
+        op.alter_column("cloud_mcp_connection", "payload_ciphertext", nullable=True)
     if _has_column("cloud_mcp_connection", "user_id") and not _has_check_constraint(
         "cloud_mcp_connection",
         "ck_cloud_mcp_connection_v1_user_id",
@@ -228,7 +229,8 @@ def downgrade() -> None:
         "cloud_mcp_connection",
         type_="check",
     )
-    op.alter_column("cloud_mcp_connection", "payload_ciphertext", nullable=False)
+    if _has_column("cloud_mcp_connection", "payload_ciphertext"):
+        op.alter_column("cloud_mcp_connection", "payload_ciphertext", nullable=False)
     for column_name in (
         "config_version",
         "settings_json",

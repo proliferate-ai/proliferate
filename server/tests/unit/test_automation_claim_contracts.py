@@ -9,15 +9,20 @@ from proliferate.constants.automations import (
     AUTOMATION_EXECUTION_TARGET_CLOUD,
     AUTOMATION_EXECUTION_TARGET_LOCAL,
     AUTOMATION_EXECUTOR_KIND_CLOUD,
+    AUTOMATION_OWNER_SCOPE_PERSONAL,
     AUTOMATION_RUN_STATUS_CLAIMED,
     AUTOMATION_RUN_STATUS_CREATING_SESSION,
     AUTOMATION_RUN_STATUS_CREATING_WORKSPACE,
     AUTOMATION_RUN_STATUS_DISPATCHED,
     AUTOMATION_RUN_STATUS_FAILED,
     AUTOMATION_RUN_STATUS_PROVISIONING_WORKSPACE,
+    AUTOMATION_TARGET_MODE_LOCAL,
+    AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
 )
 from proliferate.db import engine as engine_module
+from proliferate.db.models.auth import User
 from proliferate.db.models.automations import Automation, AutomationRun
+from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.server.automations.domain.claim_lifecycle import (
@@ -51,8 +56,26 @@ async def _create_automation(
     git_owner: str = "proliferate-ai",
     git_repo_name: str = "proliferate",
 ) -> uuid.UUID:
+    target_mode = (
+        AUTOMATION_TARGET_MODE_LOCAL
+        if execution_target == AUTOMATION_EXECUTION_TARGET_LOCAL
+        else AUTOMATION_TARGET_MODE_PERSONAL_CLOUD
+    )
     async with engine_module.async_session_factory() as session:
+        if await session.get(User, user_id) is None:
+            session.add(
+                User(
+                    id=user_id,
+                    email=f"automation-claim-{user_id}@example.com",
+                    hashed_password="!",
+                    is_active=True,
+                    is_superuser=False,
+                    is_verified=True,
+                )
+            )
+            await session.flush()
         repo = CloudRepoConfig(
+            owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
             user_id=user_id,
             git_owner=git_owner,
             git_repo_name=git_repo_name,
@@ -69,21 +92,45 @@ async def _create_automation(
         )
         session.add(repo)
         await session.flush()
+        run_config = CloudAgentRunConfig(
+            owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+            owner_user_id=user_id,
+            organization_id=None,
+            created_by_user_id=user_id,
+            name=f"{execution_target} automation config",
+            agent_kind="codex",
+            model_id=(
+                "gpt-5.4" if execution_target == AUTOMATION_EXECUTION_TARGET_CLOUD else "auto"
+            ),
+            control_values_json=(
+                {"mode": "code", "effort": "medium"}
+                if execution_target == AUTOMATION_EXECUTION_TARGET_CLOUD
+                else {}
+            ),
+            usable_in_personal_sandboxes=True,
+            usable_in_shared_sandboxes=False,
+            seed_key=None,
+            system_default_rank=None,
+            status="active",
+            archived_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(run_config)
+        await session.flush()
         automation = Automation(
-            user_id=user_id,
+            owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+            owner_user_id=user_id,
+            organization_id=None,
+            created_by_user_id=user_id,
             cloud_repo_config_id=repo.id,
             title=f"{execution_target} automation",
             prompt="Check the repo",
             schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
             schedule_timezone="UTC",
             schedule_summary="Daily at 09:00 in UTC",
-            execution_target=execution_target,
-            agent_kind="codex",
-            model_id="gpt-5.4" if execution_target == AUTOMATION_EXECUTION_TARGET_CLOUD else None,
-            mode_id="code" if execution_target == AUTOMATION_EXECUTION_TARGET_CLOUD else None,
-            reasoning_effort=(
-                "medium" if execution_target == AUTOMATION_EXECUTION_TARGET_CLOUD else None
-            ),
+            target_mode=target_mode,
+            cloud_agent_run_config_id=run_config.id,
             enabled=True,
             paused_at=None,
             next_run_at=now,

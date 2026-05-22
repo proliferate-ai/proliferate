@@ -715,10 +715,7 @@ class TestCloudRepoConfig:
         organization_id = organizations_response.json()["organizations"][0]["id"]
 
         organization_save_response = await client.put(
-            (
-                f"/v1/cloud/organizations/{organization_id}/repos/"
-                "proliferate-ai/proliferate/config"
-            ),
+            (f"/v1/cloud/organizations/{organization_id}/repos/proliferate-ai/proliferate/config"),
             headers=headers,
             json={
                 "configured": True,
@@ -735,17 +732,16 @@ class TestCloudRepoConfig:
             },
         )
         assert organization_save_response.status_code == 200
-        assert organization_save_response.json()["trackedFiles"][0]["relativePath"] == ".env.shared"
+        assert (
+            organization_save_response.json()["trackedFiles"][0]["relativePath"] == ".env.shared"
+        )
         assert (
             organization_save_response.json()["trackedFiles"][0]["content"]
             == "API_BASE_URL=https://example.internal\nSHARED_TOKEN=team\n"
         )
 
         organization_get_response = await client.get(
-            (
-                f"/v1/cloud/organizations/{organization_id}/repos/"
-                "proliferate-ai/proliferate/config"
-            ),
+            (f"/v1/cloud/organizations/{organization_id}/repos/proliferate-ai/proliferate/config"),
             headers=headers,
         )
         assert organization_get_response.status_code == 200
@@ -756,10 +752,7 @@ class TestCloudRepoConfig:
         )
 
         organization_preserve_response = await client.put(
-            (
-                f"/v1/cloud/organizations/{organization_id}/repos/"
-                "proliferate-ai/proliferate/config"
-            ),
+            (f"/v1/cloud/organizations/{organization_id}/repos/proliferate-ai/proliferate/config"),
             headers=headers,
             json={
                 "configured": True,
@@ -788,10 +781,7 @@ class TestCloudRepoConfig:
         await db_session.commit()
         member_headers = {"Authorization": f"Bearer {member_session['access_token']}"}
         member_get_response = await client.get(
-            (
-                f"/v1/cloud/organizations/{organization_id}/repos/"
-                "proliferate-ai/proliferate/config"
-            ),
+            (f"/v1/cloud/organizations/{organization_id}/repos/proliferate-ai/proliferate/config"),
             headers=member_headers,
         )
         assert member_get_response.status_code == 403
@@ -802,14 +792,13 @@ class TestCloudRepoConfig:
         outsider_session = await _register_and_login(client, "cloud-outsider@example.com")
         outsider_headers = {"Authorization": f"Bearer {outsider_session['access_token']}"}
         outsider_get_response = await client.get(
-            (
-                f"/v1/cloud/organizations/{organization_id}/repos/"
-                "proliferate-ai/proliferate/config"
-            ),
+            (f"/v1/cloud/organizations/{organization_id}/repos/proliferate-ai/proliferate/config"),
             headers=outsider_headers,
         )
         assert outsider_get_response.status_code == 404
-        assert outsider_get_response.json()["detail"]["code"] == "organization_repo_config_not_found"
+        assert (
+            outsider_get_response.json()["detail"]["code"] == "organization_repo_config_not_found"
+        )
 
     @pytest.mark.asyncio
     async def test_free_plan_repo_config_limit_blocks_second_configured_repo(

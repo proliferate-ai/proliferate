@@ -3,7 +3,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import type { SlackWorkspaceConnection } from "@/lib/access/cloud/client";
+import type { SlackWorkspaceConnection } from "@proliferate/cloud-sdk";
 import { SlackConnectionStatusBadge } from "@/components/settings/panes/slack/SlackStatusBadge";
 
 interface ConnectionSectionProps {

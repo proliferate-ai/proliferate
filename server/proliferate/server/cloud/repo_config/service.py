@@ -99,7 +99,6 @@ async def _load_authorized_workspace_for_repo_config(
     workspace = await get_cloud_workspace_by_id(db, workspace_id)
     if workspace is None:
         _raise_workspace_not_found()
-    await db.refresh(workspace)
 
     if workspace.owner_scope == "personal":
         if workspace.owner_user_id != user_id:

@@ -83,8 +83,7 @@ async def auth_test(*, bot_token: str) -> SlackAuthTestResult:
         team_id=_required_string(payload, "team_id"),
         team_name=_required_string(payload, "team"),
         bot_user_id=(
-            _string_or_none(payload.get("bot_id"))
-            or _string_or_none(payload.get("user_id"))
+            _string_or_none(payload.get("bot_id")) or _string_or_none(payload.get("user_id"))
         ),
     )
 

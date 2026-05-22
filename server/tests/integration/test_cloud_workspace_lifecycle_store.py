@@ -358,7 +358,7 @@ async def test_stop_and_destroy_preserve_retry_state_after_provider_failure(
         async def destroy_sandbox(self, _sandbox_id: str) -> None:
             raise RuntimeError("destroy failed")
 
-    async def _load_active_sandbox_for_workspace(_workspace: CloudWorkspace):
+    async def _load_workspace_owned_runtime_sandbox(_workspace: CloudWorkspace):
         return sandbox
 
     async def _update_sandbox_status(_sandbox: CloudSandbox, status: str, **_kwargs) -> None:
@@ -375,8 +375,8 @@ async def test_stop_and_destroy_preserve_retry_state_after_provider_failure(
 
     monkeypatch.setattr(
         workspace_service,
-        "load_active_sandbox_for_workspace",
-        _load_active_sandbox_for_workspace,
+        "_load_workspace_owned_runtime_sandbox",
+        _load_workspace_owned_runtime_sandbox,
     )
     monkeypatch.setattr(
         workspace_service,

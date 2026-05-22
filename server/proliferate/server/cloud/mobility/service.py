@@ -1030,9 +1030,7 @@ async def fail_cloud_workspace_handoff(
             else HANDOFF_PHASE_HANDOFF_FAILED
         )
         lifecycle_state = (
-            "cleanup_failed"
-            if phase == HANDOFF_PHASE_CLEANUP_FAILED
-            else LIFECYCLE_HANDOFF_FAILED
+            "cleanup_failed" if phase == HANDOFF_PHASE_CLEANUP_FAILED else LIFECYCLE_HANDOFF_FAILED
         )
         return await fail_cloud_workspace_handoff_op_for_user(
             db,
