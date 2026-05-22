@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ToolCallItem } from "@anyharness/sdk";
-import { deriveSkillsToolResultPresentation } from "@/lib/domain/chat/tools/skills-tool-result";
+import { deriveSkillsToolResultPresentation } from "./skills-tool-result";
 
 describe("deriveSkillsToolResultPresentation", () => {
   it("formats activate_skill JSON emitted as result text", () => {

@@ -14,7 +14,7 @@ import {
   formatListingLabel,
   formatParsedCommandLabel,
   formatSearchLabel,
-} from "@/lib/domain/chat/tools/collapsed-action-labels";
+} from "@proliferate/product-model/chats/tools/collapsed-action-labels";
 import { CommandActionRow } from "./CollapsedCommandActionRow";
 import { EditRows } from "./CollapsedEditActionRows";
 import { GenericActionRow } from "./CollapsedGenericActionRow";

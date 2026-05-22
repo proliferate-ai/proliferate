@@ -8,7 +8,7 @@ import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/
 import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
-} from "@/lib/domain/chat/tools/claude-plan-tool-call";
+} from "@proliferate/product-model/chats/tools/claude-plan-tool-call";
 import {
   isAgentSessionProvenance,
   isSubagentWakeProvenance,

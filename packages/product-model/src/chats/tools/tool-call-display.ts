@@ -3,7 +3,7 @@ import {
   formatMcpActionLabel,
   formatMcpServerHint,
   parseMcpToolName,
-} from "@/lib/domain/chat/tools/mcp-tool-presentation";
+} from "./mcp-tool-presentation";
 import { resolveSubagentLaunchDisplay } from "@proliferate/product-model/chats/subagents/subagent-launch";
 import {
   formatSubagentMcpActionLabel,

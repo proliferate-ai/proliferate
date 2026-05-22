@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTranscriptState, type TranscriptState } from "@anyharness/sdk";
-import { deriveActiveTodoTracker } from "@/lib/domain/chat/tools/active-todo-tracker";
+import { deriveActiveTodoTracker } from "./active-todo-tracker";
 
 describe("active todo tracker derivation", () => {
   it("returns active structured plans for non-Claude agents", () => {

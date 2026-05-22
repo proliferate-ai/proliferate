@@ -3,7 +3,7 @@ import {
   formatMcpActionLabel,
   formatMcpServerHint,
   parseMcpToolName,
-} from "@/lib/domain/chat/tools/mcp-tool-presentation";
+} from "./mcp-tool-presentation";
 
 describe("parseMcpToolName", () => {
   it("parses cowork artifact tool names", () => {

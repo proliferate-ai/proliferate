@@ -3,7 +3,7 @@ import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { ChevronRight, ExternalLink } from "@/components/ui/icons";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-model/chats/tools/tool-call-layout";
 import { useState } from "react";
 import type {
   SubagentExecutionState,

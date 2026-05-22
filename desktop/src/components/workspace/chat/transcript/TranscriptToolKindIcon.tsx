@@ -8,7 +8,7 @@ import {
   Terminal,
 } from "@/components/ui/icons";
 import { ProliferateIcon } from "@/components/ui/proliferate-icons";
-import type { ToolDisplayIconKey } from "@/lib/domain/chat/tools/tool-call-display";
+import type { ToolDisplayIconKey } from "@proliferate/product-model/chats/tools/tool-call-display";
 
 export function ToolKindIcon({ iconKey }: { iconKey: ToolDisplayIconKey }) {
   const className = "size-3 text-faint";

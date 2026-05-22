@@ -8,10 +8,10 @@ import type {
 import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
-} from "@/lib/domain/chat/tools/claude-plan-tool-call";
-import { deriveCoworkCodingToolPresentation } from "@/lib/domain/chat/tools/cowork-coding-tool-presentation";
-import { describeToolCallDisplay } from "@/lib/domain/chat/tools/tool-call-display";
-import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
+} from "@proliferate/product-model/chats/tools/claude-plan-tool-call";
+import { deriveCoworkCodingToolPresentation } from "@proliferate/product-model/chats/tools/cowork-coding-tool-presentation";
+import { describeToolCallDisplay } from "@proliferate/product-model/chats/tools/tool-call-display";
+import { normalizeToolResultText } from "@proliferate/product-model/chats/tools/tool-result-text";
 import {
   formatReviewFeedbackTranscriptText,
   formatWakePromptTranscriptText,

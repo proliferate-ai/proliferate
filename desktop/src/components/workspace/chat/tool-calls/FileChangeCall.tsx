@@ -12,7 +12,7 @@ import {
   Minus,
 } from "@/components/ui/icons";
 import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-model/chats/tools/tool-call-layout";
 import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
 import { ToolActionRow } from "./ToolActionRow";

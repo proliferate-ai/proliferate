@@ -10,7 +10,7 @@ import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCall
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
 import {
   collectTurnCoworkArtifactToolCalls,
-} from "@/lib/domain/chat/tools/cowork-artifact-tool-presentation";
+} from "@proliferate/product-model/chats/tools/cowork-artifact-tool-presentation";
 import {
   blockBelongsToCompletedHistory,
   collectToolCallIdsWithProposedPlanForBlocks,

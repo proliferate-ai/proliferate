@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ToolCallItem } from "@anyharness/sdk";
-import { describeToolCallDisplay } from "@/lib/domain/chat/tools/tool-call-display";
+import { describeToolCallDisplay } from "./tool-call-display";
 
 describe("describeToolCallDisplay", () => {
   it("prettifies generic MCP tool names", () => {

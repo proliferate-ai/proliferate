@@ -4,7 +4,7 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
-import { describeToolCallDisplay } from "@/lib/domain/chat/tools/tool-call-display";
+import { describeToolCallDisplay } from "@proliferate/product-model/chats/tools/tool-call-display";
 import { ToolKindIcon } from "./TranscriptToolKindIcon";
 import { TranscriptAgentGroupBlock } from "./TranscriptAgentGroupBlock";
 import { TranscriptToolCallItemBlock } from "./TranscriptToolCallItemBlock";

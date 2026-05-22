@@ -3,7 +3,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { FileText, Spinner } from "@/components/ui/icons";
 import { ToolActionRow } from "./ToolActionRow";
-import { deriveCoworkArtifactToolPresentation } from "@/lib/domain/chat/tools/cowork-artifact-tool-presentation";
+import { deriveCoworkArtifactToolPresentation } from "@proliferate/product-model/chats/tools/cowork-artifact-tool-presentation";
 
 interface CoworkArtifactToolActionRowProps {
   item: ToolCallItem;

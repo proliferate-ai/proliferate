@@ -1,5 +1,5 @@
 import type { ToolCallItem } from "@anyharness/sdk";
-import { parseMcpToolName } from "@/lib/domain/chat/tools/mcp-tool-presentation";
+import { parseMcpToolName } from "./mcp-tool-presentation";
 
 export type SkillsToolResultPresentation =
   | SkillsListResultPresentation

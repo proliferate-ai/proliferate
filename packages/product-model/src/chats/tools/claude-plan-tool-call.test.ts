@@ -3,7 +3,7 @@ import type { ToolCallItem } from "@anyharness/sdk";
 import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
-} from "@/lib/domain/chat/tools/claude-plan-tool-call";
+} from "./claude-plan-tool-call";
 
 describe("isClaudeExitPlanModeCall", () => {
   it("returns true for Claude ExitPlanMode native tool name", () => {

@@ -16,9 +16,9 @@ import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolAction
 import {
   deriveCoworkCodingToolPresentation,
   type CoworkCodingAction,
-} from "@/lib/domain/chat/tools/cowork-coding-tool-presentation";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
-import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
+} from "@proliferate/product-model/chats/tools/cowork-coding-tool-presentation";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-model/chats/tools/tool-call-layout";
+import { normalizeToolResultText } from "@proliferate/product-model/chats/tools/tool-result-text";
 
 interface CoworkCodingToolActionRowProps {
   item: ToolCallItem;

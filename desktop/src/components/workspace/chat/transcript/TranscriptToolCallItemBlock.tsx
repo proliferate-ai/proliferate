@@ -19,9 +19,9 @@ import { SubagentToolActionRow } from "@/components/workspace/chat/tool-calls/Su
 import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { deriveSubagentMcpReceiptPresentation } from "@proliferate/product-model/chats/subagents/subagent-tool-presentation";
-import { deriveSkillsToolResultPresentation } from "@/lib/domain/chat/tools/skills-tool-result";
-import { describeToolCallDisplay } from "@/lib/domain/chat/tools/tool-call-display";
-import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
+import { deriveSkillsToolResultPresentation } from "@proliferate/product-model/chats/tools/skills-tool-result";
+import { describeToolCallDisplay } from "@proliferate/product-model/chats/tools/tool-call-display";
+import { normalizeToolResultText } from "@proliferate/product-model/chats/tools/tool-result-text";
 import { CHAT_VISIBLE_FILE_CHANGE_LIMIT } from "@/lib/domain/workspaces/changes/diff-display-policy";
 import { ToolKindIcon } from "./TranscriptToolKindIcon";
 

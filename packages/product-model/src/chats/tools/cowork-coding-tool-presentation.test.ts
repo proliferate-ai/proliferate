@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ToolCallItem } from "@anyharness/sdk";
-import { deriveCoworkCodingToolPresentation } from "@/lib/domain/chat/tools/cowork-coding-tool-presentation";
+import { deriveCoworkCodingToolPresentation } from "./cowork-coding-tool-presentation";
 
 describe("deriveCoworkCodingToolPresentation", () => {
   it("treats workspace creation as pure provisioning without a prompt", () => {

@@ -3,7 +3,7 @@ import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { Settings, Sparkles } from "@/components/ui/icons";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolActionRow";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-model/chats/tools/tool-call-layout";
 
 export function TranscriptPreviewShell({ children }: { children: ReactNode }) {
   return <div className="flex flex-col gap-3">{children}</div>;

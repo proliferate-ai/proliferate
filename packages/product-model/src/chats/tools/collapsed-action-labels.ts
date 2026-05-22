@@ -9,7 +9,7 @@ import {
   getToolCallShellCommand,
   type ParsedToolCommand,
 } from "@proliferate/product-model/chats/transcript/transcript-tool-commands";
-import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
+import { normalizeToolResultText } from "./tool-result-text";
 
 export function formatSearchLabel(item: ToolCallItem): string {
   const shellCommand = getToolCallShellCommand(item);

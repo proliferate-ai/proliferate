@@ -19,8 +19,8 @@ import { TurnSeparator } from "@/components/workspace/chat/transcript/TurnSepara
 import {
   ScopedTranscriptBlocks,
 } from "@/components/workspace/chat/transcript/ScopedTranscriptBlocks";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
-import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-model/chats/tools/tool-call-layout";
+import { normalizeToolResultText } from "@proliferate/product-model/chats/tools/tool-result-text";
 import {
   parseAsyncSubagentLaunch,
   parseSubagentLaunchResult,

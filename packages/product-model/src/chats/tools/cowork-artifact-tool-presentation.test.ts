@@ -3,7 +3,7 @@ import type { CoworkArtifactSummary, ToolCallItem, TranscriptState } from "@anyh
 import {
   collectTurnCoworkArtifactToolCalls,
   deriveCoworkArtifactToolPresentation,
-} from "@/lib/domain/chat/tools/cowork-artifact-tool-presentation";
+} from "./cowork-artifact-tool-presentation";
 
 const SUMMARY: CoworkArtifactSummary = {
   id: "art_123",
