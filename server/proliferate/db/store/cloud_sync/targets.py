@@ -298,6 +298,32 @@ async def create_target(
     return _target_snapshot(target, status, None, None)
 
 
+async def get_active_personal_target_by_kind(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    kind: str,
+) -> CloudTargetSnapshot | None:
+    row = (
+        await db.execute(
+            select(CloudTarget, CloudTargetStatusRow, CloudTargetInventory, CloudWorker)
+            .outerjoin(CloudTargetStatusRow, CloudTargetStatusRow.target_id == CloudTarget.id)
+            .outerjoin(CloudTargetInventory, CloudTargetInventory.target_id == CloudTarget.id)
+            .outerjoin(CloudWorker, CloudWorker.id == CloudTargetStatusRow.worker_id)
+            .where(CloudTarget.owner_scope == "personal")
+            .where(CloudTarget.owner_user_id == owner_user_id)
+            .where(CloudTarget.kind == kind)
+            .where(CloudTarget.status != CloudTargetStatus.archived.value)
+            .order_by(CloudTarget.updated_at.desc(), CloudTarget.created_at.desc())
+            .limit(1)
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    target, status, inventory, worker = row
+    return _target_snapshot(target, status, inventory, worker)
+
+
 async def ensure_primary_profile_target(
     db: AsyncSession,
     *,

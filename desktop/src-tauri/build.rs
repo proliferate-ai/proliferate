@@ -6,6 +6,7 @@ use std::process::Command;
 fn main() {
     println!("cargo:rerun-if-changed=tauri.conf.json");
     println!("cargo:rerun-if-env-changed=ANYHARNESS_BIN");
+    println!("cargo:rerun-if-env-changed=PROLIFERATE_WORKER_BIN");
     println!("cargo:rerun-if-env-changed=PROLIFERATE_DEBUG_BIN");
     println!("cargo:rerun-if-env-changed=CARGO_PRIMARY_PACKAGE");
     println!("cargo:rerun-if-env-changed=TAURI_ENV_TARGET_TRIPLE");
@@ -13,6 +14,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=PROFILE");
     propagate_native_telemetry_env();
     register_anyharness_rerun_inputs();
+    register_proliferate_worker_rerun_inputs();
     register_proliferate_debug_rerun_inputs();
 
     if let Err(err) = stage_dependency_placeholders() {
@@ -22,6 +24,9 @@ fn main() {
     if building_primary_package() {
         if let Err(err) = stage_anyharness_binary() {
             panic!("failed to stage AnyHarness sidecar binary: {err}");
+        }
+        if let Err(err) = stage_proliferate_worker_binary() {
+            panic!("failed to stage Proliferate Worker sidecar binary: {err}");
         }
         if let Err(err) = stage_proliferate_debug_binary() {
             panic!("failed to stage Proliferate debug helper binary: {err}");
@@ -90,12 +95,20 @@ fn stage_dependency_placeholders() -> Result<(), String> {
     } else {
         binaries_dir.join(format!("anyharness-{target}"))
     };
+    let worker_dest = if target.contains("windows") {
+        binaries_dir.join(format!("proliferate-worker-{target}.exe"))
+    } else {
+        binaries_dir.join(format!("proliferate-worker-{target}"))
+    };
 
     if !helper_dest.exists() {
         write_placeholder_sidecar(&helper_dest, &target)?;
     }
     if !anyharness_dest.exists() {
         write_placeholder_sidecar(&anyharness_dest, &target)?;
+    }
+    if !worker_dest.exists() {
+        write_placeholder_sidecar(&worker_dest, &target)?;
     }
 
     Ok(())
@@ -166,6 +179,41 @@ fn stage_anyharness_binary() -> Result<(), String> {
     Ok(())
 }
 
+fn stage_proliferate_worker_binary() -> Result<(), String> {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?);
+    let target = env::var("TAURI_ENV_TARGET_TRIPLE")
+        .or_else(|_| env::var("TARGET"))
+        .map_err(|e| e.to_string())?;
+    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+
+    let binaries_dir = manifest_dir.join("binaries");
+    fs::create_dir_all(&binaries_dir).map_err(|e| e.to_string())?;
+    let dest_name = if target.contains("windows") {
+        format!("proliferate-worker-{target}.exe")
+    } else {
+        format!("proliferate-worker-{target}")
+    };
+    let dest = binaries_dir.join(dest_name);
+
+    if !is_supported_sidecar_target(&target) {
+        write_placeholder_sidecar(&dest, &target)?;
+        println!(
+            "cargo:warning=staged placeholder Proliferate Worker sidecar for unsupported target {target}; set PROLIFERATE_WORKER_BIN to override"
+        );
+        return Ok(());
+    }
+
+    let source = resolve_proliferate_worker_binary(&manifest_dir, &target, &profile)?;
+    copy_executable(&source, &dest)?;
+
+    println!(
+        "cargo:warning=staged Proliferate Worker sidecar from {}",
+        source.display()
+    );
+    println!("cargo:warning=worker resource path {}", dest.display());
+    Ok(())
+}
+
 fn resolve_anyharness_binary(
     manifest_dir: &Path,
     target: &str,
@@ -220,6 +268,60 @@ fn resolve_anyharness_binary(
     ))
 }
 
+fn resolve_proliferate_worker_binary(
+    manifest_dir: &Path,
+    target: &str,
+    profile: &str,
+) -> Result<PathBuf, String> {
+    if let Ok(explicit) = env::var("PROLIFERATE_WORKER_BIN") {
+        let path = PathBuf::from(explicit);
+        if path.is_file() {
+            return Ok(path);
+        }
+    }
+
+    let repo_candidates = anyharness_repo_candidates(manifest_dir);
+    let existing_repos: Vec<&PathBuf> = repo_candidates.iter().filter(|p| p.is_dir()).collect();
+
+    if let Some(primary_repo) = existing_repos.first() {
+        if let Some(path) = find_named_binary(primary_repo, target, profile, "proliferate-worker") {
+            return Ok(path);
+        }
+        build_proliferate_worker(primary_repo, target, profile)?;
+        if let Some(path) = find_named_binary(primary_repo, target, profile, "proliferate-worker") {
+            return Ok(path);
+        }
+    }
+
+    for repo in existing_repos.iter().skip(1) {
+        if let Some(path) = find_named_binary(repo, target, profile, "proliferate-worker") {
+            return Ok(path);
+        }
+    }
+
+    for repo in existing_repos.iter().skip(1) {
+        build_proliferate_worker(repo, target, profile)?;
+        if let Some(path) = find_named_binary(repo, target, profile, "proliferate-worker") {
+            return Ok(path);
+        }
+    }
+
+    let path_candidates = [
+        home_dir().map(|h| h.join(".cargo/bin/proliferate-worker")),
+        Some(PathBuf::from("/usr/local/bin/proliferate-worker")),
+        Some(PathBuf::from("/opt/homebrew/bin/proliferate-worker")),
+    ];
+    for candidate in path_candidates.into_iter().flatten() {
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(format!(
+        "could not find or build proliferate-worker for target {target}; tried PROLIFERATE_WORKER_BIN, sibling repos, and common install locations"
+    ))
+}
+
 fn register_anyharness_rerun_inputs() {
     let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") else {
         return;
@@ -231,6 +333,10 @@ fn register_anyharness_rerun_inputs() {
             println!("cargo:rerun-if-changed={}", repo.display());
         }
     }
+}
+
+fn register_proliferate_worker_rerun_inputs() {
+    register_anyharness_rerun_inputs();
 }
 
 fn register_proliferate_debug_rerun_inputs() {
@@ -289,6 +395,31 @@ fn build_anyharness(repo_root: &Path, target: &str, profile: &str) -> Result<(),
     } else {
         Err(format!(
             "cargo build -p anyharness failed in {}",
+            repo_root.display()
+        ))
+    }
+}
+
+fn build_proliferate_worker(repo_root: &Path, target: &str, profile: &str) -> Result<(), String> {
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(repo_root)
+        .env("CARGO_TARGET_DIR", repo_root.join("target"))
+        .arg("build")
+        .arg("-p")
+        .arg("proliferate-worker")
+        .arg("--target")
+        .arg(target);
+
+    if profile == "release" {
+        cmd.arg("--release");
+    }
+
+    let status = cmd.status().map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "cargo build -p proliferate-worker failed in {}",
             repo_root.display()
         ))
     }

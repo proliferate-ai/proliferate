@@ -20,6 +20,10 @@ from proliferate.constants.billing import (
     WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
 )
 from proliferate.constants.cloud import (
+    CloudCommandKind,
+    CloudCommandSource,
+    CloudTargetKind,
+    CloudTargetStatus,
     SUPPORTED_GIT_PROVIDER,
     CloudWorkspaceStatus,
 )
@@ -37,6 +41,7 @@ from proliferate.db.store.automations import (
 )
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
+    ensure_personal_billing_subject,
 )
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_claims import claims as claims_store
@@ -49,13 +54,16 @@ from proliferate.db.store.cloud_runtime_environments import (
     get_runtime_environment_for_workspace,
     load_runtime_environment_for_workspace,
 )
+from proliferate.db.store.cloud_sync import backfill as backfill_store
 from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
     create_cloud_workspace_for_user,
     delete_cloud_workspace_records_for_workspace,
     get_existing_managed_cloud_workspace_for_profile,
+    get_cloud_workspace_by_id,
     list_claimed_organization_workspaces_for_user,
     list_exposed_cloud_workspaces_for_user,
     list_organization_workspaces_for_admin_audit,
@@ -92,6 +100,8 @@ from proliferate.server.cloud._logging import format_exception_message, log_clou
 from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
 from proliferate.server.cloud.claims.access import load_workspace_exposure_and_claim
 from proliferate.server.cloud.claims.domain.policy import is_org_admin_role
+from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
+from proliferate.server.cloud.commands.service import enqueue_command
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config.service import (
     bootstrap_repo_config,
@@ -114,6 +124,7 @@ from proliferate.server.cloud.runtime.service import (
 )
 from proliferate.server.cloud.workspaces.access import (
     cloud_workspace_user_can_archive,
+    cloud_workspace_user_can_archive_with_db,
     cloud_workspace_user_can_interact,
     cloud_workspace_user_can_interact_with_db,
     cloud_workspace_user_can_read,
@@ -126,6 +137,7 @@ from proliferate.server.cloud.workspaces.domain.lifecycle import (
     start_request_should_return_existing,
 )
 from proliferate.server.cloud.workspaces.models import (
+    BootstrapWorkspaceRemoteAccessRequest,
     WorkspaceConnection,
     WorkspaceCreatorContext,
     WorkspaceDetail,
@@ -143,7 +155,9 @@ from proliferate.utils.time import duration_ms, utcnow
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'
+CLOUD_DESKTOP_REMOTE_ACCESS_ORIGIN_JSON = '{"kind":"human","entrypoint":"desktop"}'
 CLOUD_SYSTEM_ORIGIN_JSON = '{"kind":"system","entrypoint":"cloud"}'
+CLOUD_REMOTE_ACCESS_TEMPLATE_VERSION = "desktop-remote-access-v1"
 
 
 def _raise_org_cloud_not_ready() -> NoReturn:
@@ -496,6 +510,235 @@ async def get_cloud_workspace_detail(
     workspace_id: UUID,
 ) -> WorkspaceDetail:
     workspace = await cloud_workspace_user_can_read_with_db(db, user_id, workspace_id)
+    return await _build_workspace_detail_for_request(db, workspace)
+
+
+def _exposure_owner_fields(workspace: CloudWorkspace) -> tuple[UUID | None, UUID | None, str]:
+    if workspace.owner_scope == "personal":
+        if workspace.owner_user_id is None:
+            raise CloudApiError(
+                "workspace_owner_invalid",
+                "Personal workspace is missing its owner.",
+                status_code=409,
+            )
+        return workspace.owner_user_id, None, "private"
+    if workspace.owner_scope == "organization":
+        if workspace.organization_id is None:
+            raise CloudApiError(
+                "workspace_owner_invalid",
+                "Organization workspace is missing its organization.",
+                status_code=409,
+            )
+        return None, workspace.organization_id, "shared_unclaimed"
+    raise CloudApiError(
+        "workspace_owner_invalid",
+        "Workspace owner scope is not supported for remote access.",
+        status_code=409,
+    )
+
+
+def _remote_access_repo_fields(
+    body: BootstrapWorkspaceRemoteAccessRequest,
+) -> tuple[str, str, str, str, str]:
+    repo = body.repo
+    fallback_name = (
+        (body.display_name or "").strip()
+        or body.anyharness_workspace_id.strip()
+        or "workspace"
+    )
+    if repo is None:
+        return "local", "local", fallback_name, "default", "default"
+
+    provider = repo.provider.strip() or "local"
+    owner = repo.owner.strip() or "local"
+    name = repo.name.strip() or fallback_name
+    branch = repo.branch.strip() or "default"
+    base_branch = (repo.base_branch or "").strip() or branch
+    return provider, owner, name, branch, base_branch
+
+
+async def bootstrap_workspace_remote_access(
+    db: AsyncSession,
+    user: User,
+    body: BootstrapWorkspaceRemoteAccessRequest,
+) -> WorkspaceDetail:
+    target = await targets_store.get_visible_target_by_id(
+        db,
+        target_id=body.target_id,
+        user_id=user.id,
+    )
+    if target is None:
+        raise CloudApiError(
+            "remote_access_target_not_found",
+            "Target not found.",
+            status_code=404,
+        )
+    if target.owner_scope != "personal" or target.owner_user_id != user.id:
+        raise CloudApiError(
+            "remote_access_target_not_personal",
+            "Enabling remote access for an existing workspace requires a personal target.",
+            status_code=409,
+        )
+    if target.kind not in {
+        CloudTargetKind.desktop_dispatch.value,
+        CloudTargetKind.ssh.value,
+        CloudTargetKind.self_hosted_cloud.value,
+    }:
+        raise CloudApiError(
+            "remote_access_target_kind_unsupported",
+            "This target cannot backfill an existing workspace for remote access.",
+            status_code=409,
+        )
+    if target.status != CloudTargetStatus.online.value:
+        raise CloudApiError(
+            "remote_access_target_offline",
+            "Remote access requires the target worker to be online.",
+            status_code=409,
+        )
+
+    billing_subject = await ensure_personal_billing_subject(db, user.id)
+    git_provider, git_owner, git_repo_name, git_branch, git_base_branch = (
+        _remote_access_repo_fields(body)
+    )
+    mapped = await backfill_store.upsert_synced_workspace(
+        db,
+        target_id=target.id,
+        anyharness_workspace_id=body.anyharness_workspace_id,
+        billing_subject_id=billing_subject.id,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        created_by_user_id=user.id,
+        display_name=body.display_name,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        git_branch=git_branch,
+        git_base_branch=git_base_branch,
+        origin_json=CLOUD_DESKTOP_REMOTE_ACCESS_ORIGIN_JSON,
+        template_version=CLOUD_REMOTE_ACCESS_TEMPLATE_VERSION,
+    )
+    workspace = await get_cloud_workspace_by_id(db, mapped.id)
+    if workspace is None:
+        raise CloudApiError(
+            "remote_access_workspace_missing",
+            "Remote access workspace could not be created.",
+            status_code=500,
+        )
+
+    exposure = await exposures_store.upsert_workspace_exposure(
+        db,
+        target_id=target.id,
+        cloud_workspace_id=workspace.id,
+        anyharness_workspace_id=body.anyharness_workspace_id,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        visibility="private",
+        claimed_by_user_id=None,
+        default_projection_level="live",
+        commandable=True,
+        status="active",
+        origin="manual_desktop",
+    )
+    await enqueue_command(
+        db,
+        user=user,
+        body=CreateCloudCommandRequest.model_validate(
+            {
+                "idempotencyKey": (
+                    "remote-access-bootstrap:"
+                    f"{target.id}:{workspace.id}:{exposure.id}:{exposure.revision}"
+                ),
+                "targetId": target.id,
+                "workspaceId": body.anyharness_workspace_id,
+                "cloudWorkspaceId": workspace.id,
+                "kind": CloudCommandKind.backfill_exposed_workspace.value,
+                "payload": {
+                    "workspaceId": body.anyharness_workspace_id,
+                    "sessionId": body.anyharness_session_id,
+                },
+                "source": CloudCommandSource.api.value,
+            }
+        ),
+    )
+    await db.commit()
+    return await _build_workspace_detail_for_request(db, workspace)
+
+
+async def enable_cloud_workspace_remote_access(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+) -> WorkspaceDetail:
+    workspace = await cloud_workspace_user_can_interact_with_db(db, user.id, workspace_id)
+    if workspace.target_id is None or not workspace.anyharness_workspace_id:
+        raise CloudApiError(
+            "remote_access_workspace_not_materialized",
+            "Remote access requires a materialized target workspace.",
+            status_code=409,
+        )
+    target = await targets_store.get_target_by_id(db, workspace.target_id)
+    if target is None:
+        raise CloudApiError(
+            "remote_access_target_not_found",
+            "Target not found.",
+            status_code=404,
+        )
+
+    owner_user_id, organization_id, visibility = _exposure_owner_fields(workspace)
+    exposure = await exposures_store.upsert_workspace_exposure(
+        db,
+        target_id=workspace.target_id,
+        cloud_workspace_id=workspace.id,
+        anyharness_workspace_id=workspace.anyharness_workspace_id,
+        owner_scope=workspace.owner_scope,
+        owner_user_id=owner_user_id,
+        organization_id=organization_id,
+        visibility=visibility,
+        claimed_by_user_id=None,
+        default_projection_level="live",
+        commandable=True,
+        status="active",
+        origin=workspace.origin,
+    )
+    await enqueue_command(
+        db,
+        user=user,
+        body=CreateCloudCommandRequest.model_validate(
+            {
+                "idempotencyKey": (
+                    f"remote-access-backfill:{workspace.id}:{exposure.id}:{exposure.revision}"
+                ),
+                "targetId": workspace.target_id,
+                "workspaceId": workspace.anyharness_workspace_id,
+                "cloudWorkspaceId": workspace.id,
+                "kind": CloudCommandKind.backfill_exposed_workspace.value,
+                "payload": {"workspaceId": workspace.anyharness_workspace_id},
+                "source": CloudCommandSource.api.value,
+            }
+        ),
+    )
+    await db.commit()
+    return await _build_workspace_detail_for_request(db, workspace)
+
+
+async def disable_cloud_workspace_remote_access(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+) -> WorkspaceDetail:
+    workspace = await cloud_workspace_user_can_archive_with_db(db, user.id, workspace_id)
+    if workspace.target_id is None:
+        return await _build_workspace_detail_for_request(db, workspace)
+    exposure = await exposures_store.get_active_workspace_exposure(
+        db,
+        target_id=workspace.target_id,
+        cloud_workspace_id=workspace.id,
+    )
+    if exposure is not None:
+        await exposures_store.archive_workspace_exposure(db, exposure_id=exposure.id)
+        await db.commit()
     return await _build_workspace_detail_for_request(db, workspace)
 
 

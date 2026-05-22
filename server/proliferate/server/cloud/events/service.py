@@ -9,6 +9,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db import engine as db_engine
 from proliferate.db.store import cloud_workspaces
 from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -43,7 +44,10 @@ from proliferate.server.cloud.live.service import (
     projection_patch_from_event,
     publish_session_patch,
 )
-from proliferate.server.cloud.slack.service import enqueue_post_session_event
+from proliferate.server.cloud.slack.service import (
+    enqueue_post_session_event,
+    process_due_outbound_messages,
+)
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 
 SESSION_DURABLE_EVENT_HARD_CAP = 10_000
@@ -82,6 +86,7 @@ async def ingest_worker_event_batch(
     cloud_workspace_by_session: dict[str, UUID | None] = {}
     projection_patches: list[CloudSessionPatchResponse] = []
     event_acks: list[WorkerEventAck] = []
+    slack_outbound_queued = False
 
     for event in body.events:
         if event.seq <= 0:
@@ -223,6 +228,7 @@ async def ingest_worker_event_batch(
                     event_payload=event.event,
                     seq=event.seq,
                 )
+                slack_outbound_queued = True
             if policy.live_fanout:
                 projection_patches.append(patch)
             continue
@@ -306,6 +312,7 @@ async def ingest_worker_event_batch(
                 event_payload=event.event,
                 seq=event.seq,
             )
+            slack_outbound_queued = True
         if policy.live_fanout:
             projection_patches.append(patch)
 
@@ -335,6 +342,9 @@ async def ingest_worker_event_batch(
 
     for patch in projection_patches:
         await publish_session_patch(patch)
+
+    if slack_outbound_queued:
+        db_engine.defer_after_commit(db, process_due_outbound_messages)
 
     return WorkerEventBatchResponse(
         accepted_events=accepted_events,

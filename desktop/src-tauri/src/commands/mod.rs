@@ -1,4 +1,5 @@
 pub mod anonymous_telemetry;
+pub mod cloud_worker;
 pub mod config;
 pub mod diagnostics;
 pub mod google_workspace_mcp;

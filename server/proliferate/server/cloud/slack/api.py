@@ -6,7 +6,7 @@ import json
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +28,7 @@ from proliferate.server.cloud.slack.models import (
     connection_payload,
     repo_routing_profile_payload,
 )
+from proliferate.db.store import cloud_repo_config as repo_store
 from proliferate.server.cloud.slack.service import (
     complete_oauth_install,
     disconnect,
@@ -35,7 +36,6 @@ from proliferate.server.cloud.slack.service import (
     ingest_slack_event,
     list_channels,
     list_repo_routing_profiles,
-    process_due_outbound_messages,
     start_oauth_install,
     update_bot_config,
     upsert_repo_routing_profile,
@@ -44,6 +44,31 @@ from proliferate.server.cloud.slack.service import (
 from proliferate.server.cloud.slack.signature import verify_slack_signature
 
 router = APIRouter(prefix="/slack", tags=["cloud-slack"])
+
+
+async def _repo_profile_response(
+    db: AsyncSession,
+    organization_id: UUID,
+    profiles,
+) -> SlackRepoRoutingProfilesResponse:
+    repo_by_id = {
+        repo.id: repo
+        for repo in await repo_store.list_organization_cloud_repo_configs(
+            db,
+            organization_id=organization_id,
+        )
+    }
+    payloads = []
+    for profile in profiles:
+        repo = repo_by_id.get(profile.cloud_repo_config_id)
+        payloads.append(
+            repo_routing_profile_payload(
+                profile,
+                git_owner=repo.git_owner if repo else None,
+                git_repo_name=repo.git_repo_name if repo else None,
+            )
+        )
+    return SlackRepoRoutingProfilesResponse(profiles=payloads)
 
 
 @router.get("/oauth/start", response_model=SlackOAuthStartResponse)
@@ -160,9 +185,7 @@ async def list_slack_repo_routing_profiles_endpoint(
     user: User = Depends(current_product_user),
 ) -> SlackRepoRoutingProfilesResponse:
     profiles = await list_repo_routing_profiles(db, user, organization_id=organization_id)
-    return SlackRepoRoutingProfilesResponse(
-        profiles=[repo_routing_profile_payload(profile) for profile in profiles],
-    )
+    return await _repo_profile_response(db, organization_id, profiles)
 
 
 @router.put("/repo-routing-profiles", response_model=SlackRepoRoutingProfilesResponse)
@@ -181,15 +204,12 @@ async def upsert_slack_repo_routing_profile_endpoint(
         description=body.description,
     )
     profiles = await list_repo_routing_profiles(db, user, organization_id=organization_id)
-    return SlackRepoRoutingProfilesResponse(
-        profiles=[repo_routing_profile_payload(profile) for profile in profiles],
-    )
+    return await _repo_profile_response(db, organization_id, profiles)
 
 
 @router.post("/events")
 async def slack_events_endpoint(
     request: Request,
-    background_tasks: BackgroundTasks,
     x_slack_request_timestamp: Annotated[str | None, Header()] = None,
     x_slack_signature: Annotated[str | None, Header()] = None,
     db: AsyncSession = Depends(get_async_session),
@@ -211,9 +231,7 @@ async def slack_events_endpoint(
         ) from exc
     if not isinstance(payload, dict):
         raise CloudApiError("slack_payload_invalid", "Slack payload is invalid.", status_code=400)
-    result = await ingest_slack_event(db, payload=payload, background_tasks=background_tasks)
-    background_tasks.add_task(process_due_outbound_messages)
-    return result
+    return await ingest_slack_event(db, payload=payload)
 
 
 def _settings_redirect(

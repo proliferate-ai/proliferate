@@ -892,6 +892,11 @@ async def lease_worker_command(
     )
     if command is not None:
         await publish_command_status_after_commit(db, command)
+        # Workers report delivery immediately after receiving a lease. The lease
+        # must be committed before the HTTP response is returned, otherwise the
+        # delivery request can race the request-session commit and fail closed as
+        # "not leased by this worker."
+        await db.commit()
     return WorkerCommandLeaseResponse(
         command=_command_envelope(command) if command is not None else None,
         server_time=now.isoformat(),
@@ -1086,9 +1091,7 @@ async def list_worker_exposures(
         target_id=auth.target_id,
     )
     responses: list[WorkerExposureSnapshotResponse] = []
-    cursor_exposure_ids = set()
     for cursor in cursors:
-        cursor_exposure_ids.add(cursor.exposure_id)
         responses.append(
             WorkerExposureSnapshotResponse(
                 exposure_id=str(cursor.exposure_id),
@@ -1105,7 +1108,7 @@ async def list_worker_exposures(
             )
         )
     for exposure in exposures:
-        if not exposure.anyharness_workspace_id or exposure.id in cursor_exposure_ids:
+        if not exposure.anyharness_workspace_id:
             continue
         responses.append(
             WorkerExposureSnapshotResponse(

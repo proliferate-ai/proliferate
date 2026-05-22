@@ -1,4 +1,4 @@
-use std::{path::PathBuf, time::Duration};
+use std::{collections::HashSet, path::PathBuf, time::Duration};
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
@@ -111,6 +111,12 @@ impl WorkerStore {
                 error_code TEXT,
                 error_message TEXT,
                 result_json TEXT,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS worker_workspace_discovery (
+                exposure_id TEXT PRIMARY KEY,
+                anyharness_workspace_id TEXT NOT NULL,
+                last_checked_unix_ms INTEGER NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             "#,
@@ -378,6 +384,74 @@ impl WorkerStore {
             params![command_id],
         )?;
         Ok(())
+    }
+
+    pub fn list_known_session_ids_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> Result<HashSet<String>, WorkerError> {
+        let conn = self.connection()?;
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT session_id
+            FROM sync_sessions
+            WHERE workspace_id = ?1
+            "#,
+        )?;
+        let rows = stmt.query_map(params![workspace_id], |row| row.get::<_, String>(0))?;
+        let mut sessions = HashSet::new();
+        for row in rows {
+            sessions.insert(row?);
+        }
+        Ok(sessions)
+    }
+
+    pub fn should_discover_workspace(
+        &self,
+        exposure_id: &str,
+        workspace_id: &str,
+        now_unix_ms: i64,
+        min_interval_ms: i64,
+    ) -> Result<bool, WorkerError> {
+        let conn = self.connection()?;
+        let last_checked = conn
+            .query_row(
+                r#"
+                SELECT anyharness_workspace_id, last_checked_unix_ms
+                FROM worker_workspace_discovery
+                WHERE exposure_id = ?1
+                "#,
+                params![exposure_id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .optional()?;
+        let should_discover = match last_checked {
+            None => true,
+            Some((last_workspace_id, last_checked_unix_ms)) => {
+                last_workspace_id != workspace_id
+                    || now_unix_ms.saturating_sub(last_checked_unix_ms) >= min_interval_ms
+                    || now_unix_ms < last_checked_unix_ms
+            }
+        };
+        if should_discover {
+            conn.execute(
+                r#"
+                INSERT INTO worker_workspace_discovery (
+                    exposure_id,
+                    anyharness_workspace_id,
+                    last_checked_unix_ms,
+                    updated_at
+                )
+                VALUES (?1, ?2, ?3, CURRENT_TIMESTAMP)
+                ON CONFLICT(exposure_id) DO UPDATE SET
+                    anyharness_workspace_id = excluded.anyharness_workspace_id,
+                    last_checked_unix_ms = excluded.last_checked_unix_ms,
+                    updated_at = CURRENT_TIMESTAMP
+                "#,
+                params![exposure_id, workspace_id, now_unix_ms],
+            )?;
+        }
+        Ok(should_discover)
     }
 }
 

@@ -124,6 +124,22 @@ class UpdateCloudWorkspaceDisplayNameRequest(BaseModel):
     display_name: str | None = Field(default=None, alias="displayName")
 
 
+class RemoteAccessRepoRef(BaseModel):
+    provider: str = "local"
+    owner: str = "local"
+    name: str
+    branch: str = "default"
+    base_branch: str | None = Field(default=None, alias="baseBranch")
+
+
+class BootstrapWorkspaceRemoteAccessRequest(BaseModel):
+    target_id: UUID = Field(alias="targetId")
+    anyharness_workspace_id: str = Field(alias="anyharnessWorkspaceId", min_length=1)
+    anyharness_session_id: str | None = Field(default=None, alias="anyharnessSessionId")
+    display_name: str | None = Field(default=None, alias="displayName")
+    repo: RemoteAccessRepoRef | None = None
+
+
 def _to_iso(value: object) -> str | None:
     if value is None:
         return None

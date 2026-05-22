@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.cloud import CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN
+from proliferate.constants.cloud import CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN, CloudTargetKind
 from proliferate.db.models.auth import User
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -78,19 +78,27 @@ async def create_target_enrollment(
         require_target_admin_membership(membership)
     owner_user_id = user.id if owner_scope == "personal" else None
     await require_user_github_auth(db, user_id=user.id)
-    target = await targets_store.create_target(
-        db,
-        display_name=display_name,
-        kind=kind,
-        owner_scope=owner_scope,
-        owner_user_id=owner_user_id,
-        organization_id=organization_id,
-        created_by_user_id=user.id,
-        default_workspace_root=default_workspace_root_for_kind(
-            kind,
-            body.default_workspace_root,
-        ),
-    )
+    target = None
+    if kind == CloudTargetKind.desktop_dispatch.value and owner_scope == "personal":
+        target = await targets_store.get_active_personal_target_by_kind(
+            db,
+            owner_user_id=user.id,
+            kind=kind,
+        )
+    if target is None:
+        target = await targets_store.create_target(
+            db,
+            display_name=display_name,
+            kind=kind,
+            owner_scope=owner_scope,
+            owner_user_id=owner_user_id,
+            organization_id=organization_id,
+            created_by_user_id=user.id,
+            default_workspace_root=default_workspace_root_for_kind(
+                kind,
+                body.default_workspace_root,
+            ),
+        )
     token = secrets.token_urlsafe(48)
     ttl_seconds = clamp_enrollment_ttl_seconds(body.ttl_seconds)
     expires_at = utcnow() + timedelta(seconds=ttl_seconds)

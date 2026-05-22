@@ -8,7 +8,6 @@ from datetime import timedelta
 from uuid import UUID
 
 from cryptography.fernet import InvalidToken
-from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
@@ -83,6 +82,7 @@ from proliferate.server.cloud.slack.domain.mention_parse import (
 from proliferate.server.cloud.slack.domain.message_format import (
     ack_blocks,
     clarification_blocks,
+    configuration_blocks,
     completion_blocks,
 )
 from proliferate.server.cloud.slack.domain.policy import require_active_slack_bot
@@ -106,6 +106,18 @@ SLACK_BOT_SCOPES = (
 )
 _SYSTEM_SLACK_USER_UUID = UUID("00000000-0000-0000-0000-000000000007")
 SLACK_COMMAND_WAIT_TIMEOUT = timedelta(seconds=240)
+_SLACK_CONFIGURATION_ERROR_CODES = {
+    "slack_agent_run_config_invalid",
+    "slack_agent_run_config_missing",
+    "slack_bot_config_not_found",
+    "slack_bot_disabled",
+    "slack_channel_not_allowed",
+    "slack_connection_reauth_required",
+    "slack_connection_requires_reauth",
+    "slack_fixed_repo_required",
+    "slack_not_connected",
+    "slack_repo_mode_invalid",
+}
 
 
 async def start_oauth_install(
@@ -320,6 +332,26 @@ async def list_repo_routing_profiles(
     organization_id: UUID,
 ) -> list[CloudRepoRoutingProfileRecord]:
     await _require_org_admin(db, user_id=user.id, organization_id=organization_id)
+    repos = await repo_store.list_organization_cloud_repo_configs(
+        db,
+        organization_id=organization_id,
+    )
+    for repo in repos:
+        if not repo.configured:
+            continue
+        existing = await routing_profile_store.get_profile_for_repo(
+            db,
+            cloud_repo_config_id=repo.id,
+        )
+        if existing is not None:
+            continue
+        await routing_profile_store.upsert_profile(
+            db,
+            cloud_repo_config_id=repo.id,
+            organization_id=organization_id,
+            display_name=f"{repo.git_owner}/{repo.git_repo_name}",
+            description=None,
+        )
     return await routing_profile_store.list_profiles_for_org(
         db,
         organization_id=organization_id,
@@ -350,7 +382,6 @@ async def ingest_slack_event(
     db: AsyncSession,
     *,
     payload: dict[str, object],
-    background_tasks: BackgroundTasks,
 ) -> dict[str, object]:
     if payload.get("type") == "url_verification":
         return {"challenge": str(payload.get("challenge") or "")}
@@ -381,8 +412,16 @@ async def ingest_slack_event(
         event_type=str(event_type or "unknown"),
         payload_json=payload,
     )
-    background_tasks.add_task(process_inbound_job_by_id, job.id)
+    db_engine.defer_after_commit(
+        db,
+        lambda job_id=job.id: _process_inbound_job_and_due_outbound(job_id),
+    )
     return {"ok": True}
+
+
+async def _process_inbound_job_and_due_outbound(job_id: UUID) -> None:
+    await process_inbound_job_by_id(job_id)
+    await process_due_outbound_messages()
 
 
 async def process_inbound_job_by_id(job_id: UUID) -> None:
@@ -529,11 +568,12 @@ async def _handle_app_mention(
         parsed=parsed,
     )
     if repo is None:
-        fallback, blocks = clarification_blocks(
+        fallback, blocks = configuration_blocks(
             message=(
                 "I could not tell which repository to use. Set a fixed Slack repo "
                 "or add `--repo owner/name`."
             ),
+            settings_url=_slack_settings_url(),
         )
         await _queue_message(
             db,
@@ -1134,7 +1174,13 @@ async def _queue_job_error(
     thread_ts = _string_or_none(event.get("thread_ts")) or _string_or_none(event.get("ts"))
     if not channel_id or not thread_ts:
         return
-    fallback, blocks = clarification_blocks(message=f"{message} ({error_code})")
+    if error_code in _SLACK_CONFIGURATION_ERROR_CODES:
+        fallback, blocks = configuration_blocks(
+            message=f"{message} ({error_code})",
+            settings_url=_slack_settings_url(),
+        )
+    else:
+        fallback, blocks = clarification_blocks(message=f"{message} ({error_code})")
     await _queue_message(
         db,
         connection=connection,
@@ -1333,6 +1379,12 @@ def _workspace_url(cloud_workspace_id: UUID | None) -> str | None:
     if cloud_workspace_id is None or not settings.frontend_base_url:
         return None
     return f"{settings.frontend_base_url.rstrip('/')}/cloud/workspaces/{cloud_workspace_id}"
+
+
+def _slack_settings_url() -> str | None:
+    if not settings.frontend_base_url:
+        return None
+    return f"{settings.frontend_base_url.rstrip('/')}/settings?section=slack-bot"
 
 
 def _slack_branch_name(*, prompt: str, job_id: UUID) -> str:

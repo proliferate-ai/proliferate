@@ -1,5 +1,7 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use tokio::time::{sleep, Duration};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     anyharness_client::{
@@ -17,6 +19,7 @@ use crate::{
 };
 
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(500);
+const WORKSPACE_DISCOVERY_INTERVAL: Duration = Duration::from_secs(5);
 const ERROR_SLEEP: Duration = Duration::from_secs(5);
 const ANYHARNESS_EVENT_LIMIT: usize = 100;
 
@@ -52,7 +55,8 @@ async fn sync_once(
     cloud: &CloudClient,
     identity: &WorkerIdentity,
 ) -> Result<(), WorkerError> {
-    reconcile_projection_cursors(store, cloud, identity).await?;
+    let exposures = reconcile_projection_cursors(store, cloud, identity).await?;
+    discover_workspace_sessions(store, anyharness, cloud, identity, &exposures).await?;
     let cursors = store.list_active_projection_cursors()?;
     for cursor in cursors {
         if let Err(error) =
@@ -74,7 +78,7 @@ async fn reconcile_projection_cursors(
     store: &WorkerStore,
     cloud: &CloudClient,
     identity: &WorkerIdentity,
-) -> Result<(), WorkerError> {
+) -> Result<Vec<WorkerExposureSnapshot>, WorkerError> {
     let response = cloud.list_worker_exposures(&identity.worker_token).await?;
     let max_revision = response
         .exposures
@@ -102,6 +106,60 @@ async fn reconcile_projection_cursors(
         first_cloud_workspace_id,
         "reconciled worker projection cursors"
     );
+    Ok(response.exposures)
+}
+
+async fn discover_workspace_sessions(
+    store: &WorkerStore,
+    anyharness: &AnyHarnessClient,
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    exposures: &[WorkerExposureSnapshot],
+) -> Result<(), WorkerError> {
+    let min_interval_ms = duration_ms(WORKSPACE_DISCOVERY_INTERVAL);
+    for exposure in exposures {
+        if exposure.status != "active" || exposure.anyharness_session_id.is_some() {
+            continue;
+        }
+        let workspace_id = exposure.anyharness_workspace_id.as_str();
+        if workspace_id.is_empty() {
+            continue;
+        }
+        if !store.should_discover_workspace(
+            &exposure.exposure_id,
+            workspace_id,
+            now_unix_ms(),
+            min_interval_ms,
+        )? {
+            continue;
+        }
+        let snapshot = anyharness.backfill_snapshot(Some(workspace_id)).await?;
+        let known_sessions = store.list_known_session_ids_for_workspace(workspace_id)?;
+        let missing_session_count = snapshot
+            .sessions
+            .iter()
+            .filter(|session| session.workspace_id == workspace_id)
+            .filter(|session| !known_sessions.contains(&session.id))
+            .count();
+        if missing_session_count == 0 {
+            continue;
+        }
+        info!(
+            exposure_id = %exposure.exposure_id,
+            cloud_workspace_id = %exposure.cloud_workspace_id,
+            workspace_id,
+            missing_session_count,
+            "worker discovered unmapped sessions for exposed workspace"
+        );
+        super::backfill::backfill_exposed_workspace(
+            store,
+            anyharness,
+            cloud,
+            identity,
+            Some(workspace_id),
+        )
+        .await?;
+    }
     Ok(())
 }
 
@@ -194,6 +252,17 @@ fn projection_cursor_upsert(snapshot: &WorkerExposureSnapshot) -> Option<Project
         last_uploaded_seq: snapshot.last_uploaded_seq,
         status: snapshot.status.clone(),
     })
+}
+
+fn duration_ms(duration: Duration) -> i64 {
+    duration.as_millis().try_into().unwrap_or(i64::MAX)
+}
+
+fn now_unix_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration_ms(duration))
+        .unwrap_or(0)
 }
 
 fn worker_event(

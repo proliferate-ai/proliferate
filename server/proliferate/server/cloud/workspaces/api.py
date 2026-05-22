@@ -12,6 +12,7 @@ from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.workspaces.models import (
+    BootstrapWorkspaceRemoteAccessRequest,
     CreateCloudWorkspaceRequest,
     UpdateCloudWorkspaceBranchRequest,
     UpdateCloudWorkspaceDisplayNameRequest,
@@ -20,8 +21,11 @@ from proliferate.server.cloud.workspaces.models import (
     WorkspaceSummary,
 )
 from proliferate.server.cloud.workspaces.service import (
+    bootstrap_workspace_remote_access,
     create_cloud_workspace,
     delete_cloud_workspace,
+    disable_cloud_workspace_remote_access,
+    enable_cloud_workspace_remote_access,
     get_cloud_connection,
     get_cloud_workspace_detail,
     list_cloud_workspaces_for_user,
@@ -85,6 +89,18 @@ async def create_cloud_workspace_endpoint(
     return payload
 
 
+@router.post("/workspaces/remote-access", response_model=WorkspaceDetail)
+async def bootstrap_workspace_remote_access_endpoint(
+    body: BootstrapWorkspaceRemoteAccessRequest,
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkspaceDetail:
+    try:
+        return await bootstrap_workspace_remote_access(db, user, body)
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
 @router.get("/workspaces/{workspace_id}", response_model=WorkspaceDetail)
 async def get_cloud_workspace_endpoint(
     workspace_id: UUID,
@@ -104,6 +120,30 @@ async def get_cloud_workspace_connection_endpoint(
 ) -> WorkspaceConnection:
     try:
         return await get_cloud_connection(user.id, workspace_id)
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.post("/workspaces/{workspace_id}/remote-access/enable", response_model=WorkspaceDetail)
+async def enable_cloud_workspace_remote_access_endpoint(
+    workspace_id: UUID,
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkspaceDetail:
+    try:
+        return await enable_cloud_workspace_remote_access(db, user, workspace_id)
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.post("/workspaces/{workspace_id}/remote-access/disable", response_model=WorkspaceDetail)
+async def disable_cloud_workspace_remote_access_endpoint(
+    workspace_id: UUID,
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkspaceDetail:
+    try:
+        return await disable_cloud_workspace_remote_access(db, user, workspace_id)
     except CloudApiError as error:
         raise_cloud_error(error)
 

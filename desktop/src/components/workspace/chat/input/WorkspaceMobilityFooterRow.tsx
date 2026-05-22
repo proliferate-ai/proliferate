@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/icons";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { WorkspaceMobilityLocationPopover } from "./WorkspaceMobilityLocationPopover";
+import { WorkspaceRemoteAccessFooterControl } from "./WorkspaceRemoteAccessFooterControl";
 
 function FooterDetailLabel({ value }: { value: string }) {
   return (
@@ -110,6 +111,8 @@ export function WorkspaceMobilityFooterRow() {
     <div className="rounded-[var(--radius-composer)] px-2 pt-2">
       <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
         {locationTrigger}
+
+        <WorkspaceRemoteAccessFooterControl />
 
         {footerContext.detailValue && (
           <ComposerControlButton

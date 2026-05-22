@@ -57,6 +57,7 @@ from proliferate.server.cloud.runtime.repo_config_apply import (
 )
 from proliferate.server.cloud.runtime.service import get_workspace_connection
 from proliferate.server.cloud.targets.domain.policy import require_target_admin_membership
+from proliferate.db.store.cloud_slack import repo_routing_profiles as slack_routing_profile_store
 
 
 class _WorkspaceRepoConfigRecord(Protocol):
@@ -352,7 +353,7 @@ async def save_organization_repo_config(
         if "files" in body.model_fields_set
         else None
     )
-    return await save_organization_cloud_repo_config(
+    value = await save_organization_cloud_repo_config(
         db,
         organization_id=organization_id,
         git_owner=git_owner,
@@ -364,6 +365,15 @@ async def save_organization_repo_config(
         run_command=body.run_command,
         files=files,
     )
+    if value.configured:
+        await slack_routing_profile_store.upsert_profile(
+            db,
+            cloud_repo_config_id=value.id,
+            organization_id=organization_id,
+            display_name=f"{value.git_owner}/{value.git_repo_name}",
+            description=None,
+        )
+    return value
 
 
 async def save_repo_file(
