@@ -1,5 +1,5 @@
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
@@ -28,6 +28,11 @@ import { MobileWorkspacesScreen } from "../workspaces/MobileWorkspacesScreen";
 import { useMobileClientDailyActivity } from "../../hooks/telemetry/use-mobile-client-daily-activity";
 import { useMobileScreenTelemetry } from "../../hooks/telemetry/use-mobile-screen-telemetry";
 import {
+  deleteMobileStorageItem,
+  getMobileStorageItem,
+  setMobileStorageItem,
+} from "../../lib/access/mobile-storage";
+import {
   drawerRoutes,
   routeTitle,
   type MobileCloudChat,
@@ -35,6 +40,9 @@ import {
 } from "../../navigation/navigation-model";
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
 import { colors, radius, shadow, spacing } from "../../styles/tokens";
+
+const SHELL_ROUTE_KEY = "proliferate.mobile.shell.route";
+const SHELL_CHAT_KEY = "proliferate.mobile.shell.chat";
 
 export function MobileShell() {
   const {
@@ -51,6 +59,9 @@ export function MobileShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<MobileCloudChat | null>(null);
   const [linkedWorkspaceId, setLinkedWorkspaceId] = useState<string | null>(null);
+  const [initialLinkChecked, setInitialLinkChecked] = useState(false);
+  const [navigationRestored, setNavigationRestored] = useState(false);
+  const initialLinkAppliedRef = useRef(false);
   const linkedWorkspace = useCloudWorkspaceSnapshot(
     linkedWorkspaceId,
     authState === "active" && linkedWorkspaceId !== null,
@@ -68,24 +79,32 @@ export function MobileShell() {
     routeOrScreen: authState === "needs_github" ? "connect_github" : telemetryScreen,
     viewingChat: authState === "active" && selectedChat !== null,
   });
-  const applyWorkspaceLink = useCallback((url: string | null) => {
+  const applyWorkspaceLink = useCallback((url: string | null): boolean => {
     const workspaceId = workspaceIdFromUrl(url);
     if (!workspaceId) {
-      return;
+      return false;
     }
+    initialLinkAppliedRef.current = true;
     setLinkedWorkspaceId(workspaceId);
     setRoute("workspaces");
     setSelectedChat(null);
     setDrawerOpen(false);
+    return true;
   }, []);
 
   useEffect(() => {
     let active = true;
-    void Linking.getInitialURL().then((url) => {
-      if (active) {
-        applyWorkspaceLink(url);
-      }
-    });
+    void Linking.getInitialURL()
+      .then((url) => {
+        if (active) {
+          applyWorkspaceLink(url);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setInitialLinkChecked(true);
+        }
+      });
     const subscription = Linking.addEventListener("url", ({ url }) => {
       applyWorkspaceLink(url);
     });
@@ -94,6 +113,42 @@ export function MobileShell() {
       subscription.remove();
     };
   }, [applyWorkspaceLink]);
+
+  useEffect(() => {
+    if (authState !== "active") {
+      setNavigationRestored(false);
+      return;
+    }
+    if (!initialLinkChecked) {
+      return;
+    }
+    if (initialLinkAppliedRef.current) {
+      setNavigationRestored(true);
+      return;
+    }
+    let cancelled = false;
+    void restoreShellNavigation().then((stored) => {
+      if (cancelled) {
+        return;
+      }
+      if (stored.chat) {
+        setSelectedChat(stored.chat);
+      } else if (stored.route) {
+        setRoute(stored.route);
+      }
+      setNavigationRestored(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authState, initialLinkChecked]);
+
+  useEffect(() => {
+    if (authState !== "active" || !navigationRestored) {
+      return;
+    }
+    void persistShellNavigation(route, selectedChat);
+  }, [authState, navigationRestored, route, selectedChat]);
 
   useEffect(() => {
     if (!linkedWorkspaceId || !linkedWorkspace.data) {
@@ -143,6 +198,9 @@ export function MobileShell() {
     setRoute("home");
     setDrawerOpen(false);
     setSelectedChat(null);
+    setNavigationRestored(false);
+    initialLinkAppliedRef.current = false;
+    void clearShellNavigation();
     signOut();
   }
 
@@ -297,6 +355,86 @@ function workspaceIdFromUrl(url: string | null): string | null {
     /^(?:proliferate:\/\/workspaces\/|https:\/\/app\.proliferate\.ai\/workspaces\/)([^/?#]+)/u,
   );
   return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+async function restoreShellNavigation(): Promise<{
+  chat: MobileCloudChat | null;
+  route: RouteId | null;
+}> {
+  const [storedChat, storedRoute] = await Promise.all([
+    getMobileStorageItem(SHELL_CHAT_KEY),
+    getMobileStorageItem(SHELL_ROUTE_KEY),
+  ]);
+  const chat = parseStoredChat(storedChat);
+  if (chat) {
+    return { chat, route: null };
+  }
+  return { chat: null, route: parseStoredRoute(storedRoute) };
+}
+
+async function persistShellNavigation(
+  route: RouteId,
+  selectedChat: MobileCloudChat | null,
+): Promise<void> {
+  if (selectedChat) {
+    await Promise.all([
+      setMobileStorageItem(SHELL_CHAT_KEY, JSON.stringify(selectedChat)),
+      setMobileStorageItem(SHELL_ROUTE_KEY, route),
+    ]);
+    return;
+  }
+  await Promise.all([
+    deleteMobileStorageItem(SHELL_CHAT_KEY),
+    setMobileStorageItem(SHELL_ROUTE_KEY, route),
+  ]);
+}
+
+async function clearShellNavigation(): Promise<void> {
+  await Promise.all([
+    deleteMobileStorageItem(SHELL_CHAT_KEY),
+    deleteMobileStorageItem(SHELL_ROUTE_KEY),
+  ]);
+}
+
+function parseStoredRoute(value: string | null): RouteId | null {
+  return drawerRoutes.some((route) => route.id === value) ? (value as RouteId) : null;
+}
+
+function parseStoredChat(value: string | null): MobileCloudChat | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value) as Partial<MobileCloudChat>;
+    if (
+      typeof parsed.workspaceId === "string"
+      && typeof parsed.workspaceName === "string"
+      && typeof parsed.repoLabel === "string"
+      && typeof parsed.branchLabel === "string"
+      && (typeof parsed.targetId === "string" || parsed.targetId === null)
+      && (typeof parsed.workspaceRuntimeId === "string" || parsed.workspaceRuntimeId === null)
+      && (typeof parsed.sessionId === "string" || parsed.sessionId === null)
+      && typeof parsed.title === "string"
+      && typeof parsed.status === "string"
+      && typeof parsed.visibility === "string"
+    ) {
+      return {
+        workspaceId: parsed.workspaceId,
+        workspaceName: parsed.workspaceName,
+        repoLabel: parsed.repoLabel,
+        branchLabel: parsed.branchLabel,
+        targetId: parsed.targetId,
+        workspaceRuntimeId: parsed.workspaceRuntimeId,
+        sessionId: parsed.sessionId,
+        title: parsed.title,
+        status: parsed.status,
+        visibility: parsed.visibility,
+      };
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function linkedChatForWorkspace(
