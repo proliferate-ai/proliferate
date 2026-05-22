@@ -105,6 +105,11 @@ detail views, automation edit/delete/run details, richer settings actions,
 pull-to-refresh, native simulator/device E2E smoke runs, and shared/unclaimed
 claim-path coverage with a real shared workspace fixture.
 
+The latest mobile-web pass verified prompt dispatch from existing ready
+workspaces. Treat the home-created workspace first-prompt path as implemented
+but still requiring an explicit real-runtime smoke unless a later verification
+note calls it out directly.
+
 Latest manual verification, 2026-05-22:
 
 - Mobile web full-stack profile `mobileqa` authenticated through the dev mobile
@@ -511,7 +516,8 @@ Desktop settings tree.
 - [x] Create workspace from mobile.
 - [x] Persist and dispatch first prompt when workspace is ready.
 - [x] Route into a pending/final-looking chat shell immediately.
-- [x] Verify the full first-prompt path against a real cloud runtime.
+- [ ] Verify the home-created workspace first-prompt path against a real cloud
+  runtime.
 
 ### Phase 3 - Mobile Chat Surface
 

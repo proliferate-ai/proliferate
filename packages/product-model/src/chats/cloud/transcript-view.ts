@@ -48,12 +48,9 @@ export interface CloudChatTranscriptRowView {
   streaming?: boolean;
   firstSeq?: number | null;
   lastSeq?: number | null;
-}
-
-type CloudChatTranscriptRowWithSource = CloudChatTranscriptRowView & {
   sourceRequestId?: string | null;
   sourceCommandId?: string | null;
-};
+}
 
 export interface CloudTranscriptViewResult {
   rows: CloudChatTranscriptRowView[];
@@ -347,6 +344,7 @@ function transcriptItemToRow(
           kind: "user",
           body: item.text,
           streaming: item.isStreaming,
+          sourceRequestId: item.promptId ?? null,
           ...seq,
         }
         : null;
@@ -423,16 +421,20 @@ function buildRowsFromProjectedItems(
 ): CloudChatTranscriptRowView[] {
   return [...items]
     .sort((left, right) => left.firstSeq - right.firstSeq)
-    .map((item): CloudChatTranscriptRowView => ({
-      id: `projection:${item.itemId}`,
-      kind: projectedItemKind(item),
-      title: item.title ?? item.kind ?? "Projected event",
-      body: previewText(item.text ?? projectedPayloadText(item.payload)),
-      status: item.status ?? undefined,
-      detail: item.sourceAgentKind ?? undefined,
-      firstSeq: item.firstSeq,
-      lastSeq: item.lastSeq,
-    }));
+    .map((item): CloudChatTranscriptRowView => {
+      const kind = projectedItemKind(item);
+      return {
+        id: `projection:${item.itemId}`,
+        kind,
+        title: item.title ?? item.kind ?? "Projected event",
+        body: previewText(item.text ?? projectedPayloadText(item.payload)),
+        status: item.status ?? undefined,
+        detail: item.sourceAgentKind ?? undefined,
+        firstSeq: item.firstSeq,
+        lastSeq: item.lastSeq,
+        sourceRequestId: kind === "user" ? projectedItemPromptId(item) : null,
+      };
+    });
 }
 
 function appendPendingPromptRows(
@@ -453,8 +455,7 @@ function buildRowsFromPendingPromptInteractions(
   pendingInteractions: readonly CloudPendingInteraction[],
   projectedItems: readonly CloudTranscriptItem[],
 ): CloudChatTranscriptRowView[] {
-  const existingRowsWithSource = existingRows as readonly CloudChatTranscriptRowWithSource[];
-  const rows: CloudChatTranscriptRowWithSource[] = [];
+  const rows: CloudChatTranscriptRowView[] = [];
   for (const interaction of pendingInteractions) {
     if (
       (interaction.status !== "pending" && interaction.status !== "failed")
@@ -464,17 +465,7 @@ function buildRowsFromPendingPromptInteractions(
     }
     const text = pendingPromptText(interaction);
     const commandId = pendingPromptCommandId(interaction);
-    if (
-      !text
-      || existingRowsWithSource.some((row) =>
-        row.sourceRequestId === interaction.requestId
-        || (
-          row.sourceCommandId !== null
-          && row.sourceCommandId !== undefined
-          && row.sourceCommandId === commandId
-        )
-      )
-    ) {
+    if (!text) {
       continue;
     }
     const promptItem = projectedPromptItemForPendingInteraction(
@@ -482,15 +473,13 @@ function buildRowsFromPendingPromptInteractions(
       interaction,
       text,
     );
-    const promptRowIndex = findLastMatchingUserRowIndex(existingRows, text);
+    const promptRowIndex = findLastMatchingUserRowIndex(existingRows, interaction, text);
     const promptVisible = promptItem !== null
       || promptRowIndex !== -1;
     const agentProgressVisible = promptItem
       ? projectedAgentProgressAfterPrompt(projectedItems, promptItem)
       : promptRowIndex !== -1
-        && existingRows.slice(promptRowIndex + 1).some((row) =>
-          row.kind !== "user" && row.kind !== "system"
-        );
+        && rowHasAgentProgressAfter(existingRows, promptRowIndex);
     const failed = interaction.status === "failed";
     if (!promptVisible) {
       rows.push({
@@ -549,9 +538,14 @@ function projectedPromptItemForPendingInteraction(
 ): CloudTranscriptItem | null {
   return [...items]
     .filter((item) =>
-      item.firstSeq > interaction.requestedSeq
-      && isPromptTranscriptKind(item.kind)
-      && textMatches(item.text, text)
+      isPromptTranscriptKind(item.kind)
+      && (
+        projectedItemPromptId(item) === interaction.requestId
+        || (
+          item.firstSeq > interaction.requestedSeq
+          && textMatches(item.text, text)
+        )
+      )
     )
     .sort((left, right) => right.lastSeq - left.lastSeq)[0] ?? null;
 }
@@ -567,15 +561,42 @@ function projectedAgentProgressAfterPrompt(
 
 function findLastMatchingUserRowIndex(
   rows: readonly CloudChatTranscriptRowView[],
+  interaction: CloudPendingInteraction,
   text: string,
 ): number {
   for (let index = rows.length - 1; index >= 0; index -= 1) {
     const row = rows[index];
-    if (row.kind === "user" && textMatches(row.body, text)) {
+    if (
+      row.kind === "user"
+      && (
+        row.sourceRequestId === interaction.requestId
+        || (
+          rowIsAfterSeq(row, interaction.requestedSeq)
+          && textMatches(row.body, text)
+        )
+      )
+    ) {
       return index;
     }
   }
   return -1;
+}
+
+function rowHasAgentProgressAfter(
+  rows: readonly CloudChatTranscriptRowView[],
+  promptRowIndex: number,
+): boolean {
+  const promptRow = rows[promptRowIndex];
+  const promptSeq = promptRow.lastSeq ?? promptRow.firstSeq ?? null;
+  return rows.slice(promptRowIndex + 1).some((row) =>
+    row.kind !== "user"
+    && row.kind !== "system"
+    && (
+      typeof promptSeq !== "number"
+      || typeof row.firstSeq !== "number"
+      || row.firstSeq > promptSeq
+    )
+  );
 }
 
 function isPromptTranscriptKind(kind: string | null | undefined): boolean {
@@ -647,6 +668,26 @@ function projectedPayloadText(payload: CloudTranscriptItem["payload"]): string |
   return text ?? null;
 }
 
+function projectedItemPromptId(item: CloudTranscriptItem): string | null {
+  const payload = item.payload;
+  if (!payload) {
+    return null;
+  }
+  const directPromptId = readString(payload.promptId);
+  if (directPromptId) {
+    return directPromptId;
+  }
+  const event = payload.event;
+  if (!isRecord(event)) {
+    return null;
+  }
+  const eventItem = event.item;
+  if (!isRecord(eventItem)) {
+    return null;
+  }
+  return readString(eventItem.promptId);
+}
+
 function resolveGroupStatus(
   itemIds: readonly string[],
   transcript: TranscriptState,
@@ -715,6 +756,10 @@ function rowIsAfterPromptBaseline(
   prompt: CloudOptimisticPromptReference,
 ): boolean {
   return typeof row.firstSeq === "number" && row.firstSeq > prompt.baseTranscriptSeq;
+}
+
+function rowIsAfterSeq(row: CloudChatTranscriptRowView, seq: number): boolean {
+  return typeof row.firstSeq === "number" && row.firstSeq > seq;
 }
 
 function textMatches(value: string | null | undefined, expected: string): boolean {

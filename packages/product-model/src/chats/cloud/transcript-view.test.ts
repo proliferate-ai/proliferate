@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
 import type {
+  CloudPendingInteraction,
   CloudSessionEvent,
   CloudTranscriptItem,
 } from "@proliferate/cloud-sdk";
@@ -281,6 +282,66 @@ describe("buildCloudTranscriptView", () => {
       transcriptRows: rows,
     })).toBe(true);
   });
+
+  it("does not dedupe a pending repeated prompt against older matching transcript rows", () => {
+    const fallbackItems: CloudTranscriptItem[] = [
+      {
+        itemId: "old-user",
+        turnId: "turn-1",
+        kind: "user_message",
+        status: "completed",
+        text: "repeatable prompt",
+        firstSeq: 1,
+        lastSeq: 1,
+      },
+      {
+        itemId: "old-assistant",
+        turnId: "turn-1",
+        kind: "assistant_message",
+        status: "completed",
+        text: "old response",
+        firstSeq: 2,
+        lastSeq: 2,
+      },
+    ];
+    const pendingInteractions: CloudPendingInteraction[] = [
+      pendingPromptInteraction({
+        requestId: "prompt-2",
+        requestedSeq: 2,
+        text: "repeatable prompt",
+      }),
+    ];
+
+    const view = buildCloudTranscriptView({
+      sessionId: "session-1",
+      events: [],
+      fallbackItems,
+      pendingInteractions,
+    });
+
+    expect(view.rows).toEqual([
+      expect.objectContaining({
+        id: "projection:old-user",
+        body: "repeatable prompt",
+        kind: "user",
+      }),
+      expect.objectContaining({
+        id: "projection:old-assistant",
+        body: "old response",
+        kind: "assistant",
+      }),
+      expect.objectContaining({
+        id: "pending-prompt:prompt-2:user",
+        body: "repeatable prompt",
+        kind: "user",
+      }),
+      expect.objectContaining({
+        id: "pending-prompt:prompt-2:assistant-waiting",
+        body: "Waiting for response.",
+        kind: "assistant",
+      }),
+    ]);
+  });
 });
 
 function userEnvelope(seq: number, text: string): SessionEventEnvelope {
@@ -299,5 +360,28 @@ function userEnvelope(seq: number, text: string): SessionEventEnvelope {
         contentParts: [{ type: "text", text }],
       },
     },
+  };
+}
+
+function pendingPromptInteraction(input: {
+  requestId: string;
+  requestedSeq: number;
+  text: string;
+}): CloudPendingInteraction {
+  return {
+    requestId: input.requestId,
+    kind: "send_prompt",
+    status: "pending",
+    title: "Queued prompt",
+    description: "Waiting for response.",
+    payload: {
+      text: input.text,
+      promptId: input.requestId,
+      commandId: `command-${input.requestId}`,
+    },
+    requestedSeq: input.requestedSeq,
+    resolvedSeq: null,
+    requestedAt: "2026-05-22T00:00:00Z",
+    resolvedAt: null,
   };
 }

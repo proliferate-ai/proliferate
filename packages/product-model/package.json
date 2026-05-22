@@ -273,9 +273,9 @@
     }
   },
   "scripts": {
-    "build": "pnpm --filter @anyharness/sdk build && tsc -p tsconfig.json",
+    "build": "pnpm --filter @anyharness/sdk build && pnpm --filter @proliferate/cloud-sdk build && tsc -p tsconfig.json",
     "test": "vitest run",
-    "typecheck": "pnpm --filter @anyharness/sdk build && tsc -p tsconfig.json --noEmit"
+    "typecheck": "pnpm --filter @anyharness/sdk build && pnpm --filter @proliferate/cloud-sdk build && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@anyharness/sdk": "workspace:*",

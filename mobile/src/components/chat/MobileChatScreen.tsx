@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import type {
   CloudCommandStatus,
+  CloudPendingInteraction,
   CloudSessionEvent,
   CloudSessionProjection,
   CloudTranscriptItem,
@@ -93,6 +94,7 @@ type UpdateSessionConfigPayload = {
 
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
+const EMPTY_PENDING_INTERACTIONS: CloudPendingInteraction[] = [];
 
 export function MobileChatScreen({
   chat,
@@ -131,10 +133,15 @@ export function MobileChatScreen({
     () => [...(snapshot?.sessions ?? [])].sort(compareSessions),
     [snapshot?.sessions],
   );
+  const fallbackSession = useMemo(() => sessionProjectionFromChat(chat), [chat]);
   const selectedSession = selectedSessionId
-    ? sessions.find((candidate) => candidate.sessionId === selectedSessionId) ?? null
+    ? sessions.find((candidate) => candidate.sessionId === selectedSessionId)
+      ?? (fallbackSession?.sessionId === selectedSessionId ? fallbackSession : null)
     : chat.sessionId
-      ? sessions.find((candidate) => candidate.sessionId === chat.sessionId) ?? sessions[0] ?? null
+      ? sessions.find((candidate) => candidate.sessionId === chat.sessionId)
+        ?? fallbackSession
+        ?? sessions[0]
+        ?? null
       : sessions[0] ?? null;
   const session = newSessionMode ? null : selectedSession;
   const activeSessionId = session?.sessionId ?? selectedSessionId;
@@ -158,20 +165,30 @@ export function MobileChatScreen({
     sessionLive.snapshot?.transcriptItems
     ?? transcriptQuery.data?.transcriptItems
     ?? EMPTY_TRANSCRIPT_ITEMS;
+  const pendingInteractions =
+    sessionLive.snapshot?.pendingInteractions
+    ?? transcriptQuery.data?.pendingInteractions
+    ?? EMPTY_PENDING_INTERACTIONS;
+  const pendingPromptCommandId = useMemo(
+    () => latestPendingPromptCommandId(pendingInteractions),
+    [pendingInteractions],
+  );
   const sessionEvents = sessionEventsQuery.data?.events ?? EMPTY_SESSION_EVENTS;
   const transcriptView = useMemo(
     () => buildCloudTranscriptView({
       sessionId: session?.sessionId ?? null,
       events: sessionEvents,
       fallbackItems: transcriptItems,
+      pendingInteractions,
     }),
-    [session?.sessionId, sessionEvents, transcriptItems],
+    [pendingInteractions, session?.sessionId, sessionEvents, transcriptItems],
   );
   const enqueuePrompt = useEnqueueCloudCommand<SendPromptPayload>();
   const enqueueStartSession = useEnqueueCloudCommand<StartSessionPayload>();
   const enqueueConfig = useEnqueueCloudCommand<UpdateSessionConfigPayload>();
   const claimWorkspace = useClaimCloudWorkspace();
-  const commandStatus = useCommandStatus(latestCommandId);
+  const observedPromptCommandId = pendingPromptCommandId ?? latestCommandId;
+  const commandStatus = useCommandStatus(observedPromptCommandId);
   const configCommandStatus = useCommandStatus(latestConfigCommandId);
   const liveConfig = readSessionLiveConfig(session);
   const composerControls = buildCloudChatComposerControls({
@@ -225,6 +242,7 @@ export function MobileChatScreen({
       ...buildPendingPromptRows(
         pendingPrompt,
         activeSessionId,
+        pendingInteractions,
         pendingPromptFailed,
         pendingPromptStatus,
         pendingPromptTranscriptState.promptVisible,
@@ -235,6 +253,7 @@ export function MobileChatScreen({
         sessionId: activeSessionId,
         transcriptItems,
         transcriptRows: transcriptView.rows,
+        pendingInteractions,
         allowTextOnlyRowFallback: false,
       }),
     ],
@@ -244,6 +263,7 @@ export function MobileChatScreen({
       pendingPrompt,
       pendingPromptFailed,
       pendingPromptStatus,
+      pendingInteractions,
       pendingPromptTranscriptState.agentStarted,
       pendingPromptTranscriptState.promptVisible,
       transcriptItems,
@@ -427,6 +447,24 @@ export function MobileChatScreen({
     commandStatus.data?.errorMessage,
     commandStatus.data?.status,
     optimisticPrompts,
+  ]);
+
+  useEffect(() => {
+    const command = commandStatus.data;
+    if (!command || command.commandId !== pendingPromptCommandId) {
+      return;
+    }
+    if (!isTerminalCommandStatus(command.status)) {
+      return;
+    }
+    void transcriptQuery.refetch();
+    void sessionEventsQuery.refetch();
+  }, [
+    commandStatus.data?.commandId,
+    commandStatus.data?.status,
+    pendingPromptCommandId,
+    sessionEventsQuery.refetch,
+    transcriptQuery.refetch,
   ]);
 
   useEffect(() => {
@@ -1041,12 +1079,16 @@ function messageLabel(row: CloudChatTranscriptRowView): string {
 function buildPendingPromptRows(
   pendingPrompt: MobilePendingPrompt | null,
   sessionId: string | null,
+  pendingInteractions: readonly CloudPendingInteraction[],
   failed: boolean,
   failureMessage: string | null,
   promptVisible: boolean,
   agentStarted: boolean,
 ): CloudChatTranscriptRowView[] {
   if (!pendingPrompt) {
+    return [];
+  }
+  if (pendingInteractionMatchesPendingPrompt(pendingPrompt, pendingInteractions)) {
     return [];
   }
   if (pendingPrompt.dispatchedSessionId) {
@@ -1089,6 +1131,7 @@ function buildOptimisticPromptRows(input: {
   sessionId: string | null;
   transcriptItems: readonly CloudTranscriptItem[];
   transcriptRows: readonly CloudChatTranscriptRowView[];
+  pendingInteractions: readonly CloudPendingInteraction[];
   allowTextOnlyRowFallback: boolean;
 }): CloudChatTranscriptRowView[] {
   if (!input.sessionId) {
@@ -1097,6 +1140,9 @@ function buildOptimisticPromptRows(input: {
   const rows: CloudChatTranscriptRowView[] = [];
   for (const prompt of input.prompts) {
     if (prompt.sessionId !== input.sessionId) {
+      continue;
+    }
+    if (pendingInteractionMatchesOptimisticPrompt(prompt, input.pendingInteractions)) {
       continue;
     }
     const promptVisible = cloudTranscriptHasUserPrompt({
@@ -1132,6 +1178,75 @@ function buildOptimisticPromptRows(input: {
   return rows;
 }
 
+function latestPendingPromptCommandId(
+  pendingInteractions: readonly CloudPendingInteraction[],
+): string | null {
+  return [...pendingInteractions]
+    .filter((interaction) =>
+      interaction.kind === "send_prompt"
+      && interaction.status === "pending"
+    )
+    .map((interaction) => ({
+      commandId: pendingInteractionCommandId(interaction),
+      requestedSeq: interaction.requestedSeq,
+    }))
+    .filter((candidate): candidate is { commandId: string; requestedSeq: number } =>
+      candidate.commandId !== null
+    )
+    .sort((left, right) => right.requestedSeq - left.requestedSeq)[0]?.commandId ?? null;
+}
+
+function pendingInteractionMatchesOptimisticPrompt(
+  prompt: OptimisticPrompt,
+  pendingInteractions: readonly CloudPendingInteraction[],
+): boolean {
+  return pendingInteractions.some((interaction) =>
+    interaction.kind === "send_prompt"
+    && (interaction.status === "pending" || interaction.status === "failed")
+    && (
+      interaction.requestId === prompt.id
+      || (
+        prompt.commandId !== null
+        && prompt.commandId !== undefined
+        && pendingInteractionCommandId(interaction) === prompt.commandId
+      )
+    )
+  );
+}
+
+function pendingInteractionMatchesPendingPrompt(
+  prompt: MobilePendingPrompt,
+  pendingInteractions: readonly CloudPendingInteraction[],
+): boolean {
+  return pendingInteractions.some((interaction) =>
+    interaction.kind === "send_prompt"
+    && (interaction.status === "pending" || interaction.status === "failed")
+    && (
+      interaction.requestId === prompt.id
+      || interaction.requestId === `${prompt.id}:send`
+      || pendingInteractionPromptId(interaction) === prompt.id
+    )
+  );
+}
+
+function pendingInteractionCommandId(interaction: CloudPendingInteraction): string | null {
+  const payload = interaction.payload;
+  if (!payload) {
+    return null;
+  }
+  const commandId = payload.commandId;
+  return typeof commandId === "string" && commandId.trim() ? commandId.trim() : null;
+}
+
+function pendingInteractionPromptId(interaction: CloudPendingInteraction): string | null {
+  const payload = interaction.payload;
+  if (!payload) {
+    return null;
+  }
+  const promptId = payload.promptId;
+  return typeof promptId === "string" && promptId.trim() ? promptId.trim() : null;
+}
+
 function optimisticPromptStatusLabel(status: OptimisticPromptStatus): string {
   switch (status) {
     case "failed":
@@ -1154,6 +1269,28 @@ function optimisticPromptFromPending(
     text: prompt.text,
     baseTranscriptSeq: 0,
     status: "queued",
+  };
+}
+
+function sessionProjectionFromChat(chat: MobileCloudChat): CloudSessionProjection | null {
+  if (!chat.sessionId || !chat.targetId) {
+    return null;
+  }
+  return {
+    targetId: chat.targetId,
+    cloudWorkspaceId: chat.workspaceId,
+    workspaceId: chat.workspaceRuntimeId,
+    sessionId: chat.sessionId,
+    nativeSessionId: null,
+    sourceAgentKind: null,
+    title: chat.title,
+    status: chat.status,
+    phase: null,
+    liveConfig: null,
+    lastEventSeq: 0,
+    lastEventAt: null,
+    startedAt: null,
+    endedAt: null,
   };
 }
 
@@ -1204,6 +1341,12 @@ function isRejectedCommandStatus(status: CloudCommandStatus): boolean {
     || status === "expired"
     || status === "superseded"
     || status === "failed_delivery";
+}
+
+function isTerminalCommandStatus(status: CloudCommandStatus): boolean {
+  return status === "accepted"
+    || status === "accepted_but_queued"
+    || isRejectedCommandStatus(status);
 }
 
 function sessionConfigCommandFailureMessage(status: CloudCommandStatus): string {
