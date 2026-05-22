@@ -10,8 +10,8 @@ import {
   Plus,
   Settings,
 } from "@/components/ui/icons";
-import { ComposerControlButton } from "./ComposerControlButton";
-import { ComposerPopoverSurface } from "./ComposerPopoverSurface";
+import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
+import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { PlanPickerContentBody } from "./PlanPickerPopover";
 
 interface ReviewAnchor {

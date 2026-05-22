@@ -3,8 +3,8 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Check, ChevronDown } from "@/components/ui/icons";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
-import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
-import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
+import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
+import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 
 export interface PlanHandoffModePickerProps {
   options: ConfiguredSessionControlValue[];

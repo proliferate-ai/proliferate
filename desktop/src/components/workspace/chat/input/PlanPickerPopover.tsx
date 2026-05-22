@@ -2,8 +2,8 @@ import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { AddPlan, ClipboardList, Spinner } from "@/components/ui/icons";
-import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
-import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
+import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
+import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { usePlanPicker } from "@/hooks/plans/ui/use-plan-picker";
 import {
   formatPlanAgentKindLabel,

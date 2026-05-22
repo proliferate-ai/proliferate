@@ -1,6 +1,6 @@
 import { Globe, Spinner } from "@/components/ui/icons";
 import { useWorkspaceRemoteAccessActions } from "@/hooks/workspaces/remote-access/use-workspace-remote-access-actions";
-import { ComposerControlButton } from "./ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 
 export function WorkspaceRemoteAccessFooterControl() {
   const { disabled, handleClick, isEnabled, isPending, label, title } =

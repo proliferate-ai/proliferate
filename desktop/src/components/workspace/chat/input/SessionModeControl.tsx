@@ -8,7 +8,7 @@ import { SessionControlIcon } from "@/components/session-controls/SessionControl
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { Check, ChevronDown } from "@/components/ui/icons";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { ComposerControlButton } from "./ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
 type ModeControlDescriptor = LiveSessionControlDescriptor & {

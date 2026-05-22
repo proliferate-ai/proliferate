@@ -5,7 +5,7 @@ import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { ComposerControlButton } from "./ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 
 export function WorkspaceOpenInWebFooterControl() {
   const mobility = useWorkspaceMobilityState();

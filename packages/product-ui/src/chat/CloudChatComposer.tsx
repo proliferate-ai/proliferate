@@ -23,7 +23,11 @@ import {
 } from "react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { ChatComposerSurface } from "./composer/ChatComposerSurface";
+import { ComposerControlButton } from "./composer/ComposerControlButton";
+import { ComposerPopoverSurface } from "./composer/ComposerPopoverSurface";
+import { ComposerTextarea } from "./composer/ComposerTextarea";
+import { ComposerTextareaFrame } from "./composer/ComposerTextareaFrame";
 
 export interface CloudChatComposerControlOptionView {
   id: string;
@@ -104,28 +108,27 @@ export function CloudChatComposer({ composer }: { composer: CloudChatComposerVie
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col">
-      <form
-        onSubmit={submitComposer}
-        className="chat-composer-surface relative flex flex-col rounded-[var(--radius-composer)]"
-      >
-        <div className="mb-1 flex-grow select-text px-4 pt-3">
-          <Textarea
-            rows={2}
-            value={composer.value}
-            onChange={(event) => composer.onChange(event.currentTarget.value)}
-            onKeyDown={handleComposerKeyDown}
-            disabled={composer.disabled}
-            className="min-h-[2.25rem] resize-none border-0 bg-transparent px-0 py-0 text-[length:0.6875rem] leading-[1.125rem] text-foreground shadow-none outline-none placeholder:text-[color:color-mix(in_oklab,var(--color-faint)_50%,transparent)] focus:ring-0"
-            placeholder={composer.placeholder}
-            spellCheck={false}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            data-telemetry-mask
-          />
-        </div>
-        <CloudChatComposerControlRow composer={composer} />
-      </form>
+      <ChatComposerSurface>
+        <form onSubmit={submitComposer} className="relative flex flex-col">
+          <ComposerTextareaFrame topInset="standard">
+            <ComposerTextarea
+              rows={2}
+              value={composer.value}
+              onChange={(event) => composer.onChange(event.currentTarget.value)}
+              onKeyDown={handleComposerKeyDown}
+              disabled={composer.disabled}
+              className="min-h-[2.25rem]"
+              placeholder={composer.placeholder}
+              spellCheck={false}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              data-telemetry-mask
+            />
+          </ComposerTextareaFrame>
+          <CloudChatComposerControlRow composer={composer} />
+        </form>
+      </ChatComposerSurface>
       <CloudChatComposerFooter controls={composer.footerControls ?? []} />
     </div>
   );
@@ -233,6 +236,7 @@ function CloudChatSingleControl({
       <ComposerControlButton
         disabled
         tone={control.active ? "accent" : "quiet"}
+        active={control.active}
         icon={<Icon size={14} />}
         label={displayLabel}
         detail={displayDetail}
@@ -399,72 +403,6 @@ function ComposerControlMenuRows({
         ))
       )}
     </>
-  );
-}
-
-function ComposerControlButton({
-  icon,
-  label,
-  detail = null,
-  trailing,
-  tone = "neutral",
-  active = false,
-  className = "",
-  type = "button",
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  icon?: ReactNode;
-  label: ReactNode;
-  detail?: ReactNode | null;
-  trailing?: ReactNode;
-  tone?: "neutral" | "accent" | "quiet";
-  active?: boolean;
-}) {
-  const classes = active || tone === "accent"
-    ? "text-[color:var(--color-composer-control-active-foreground)]"
-    : "text-[color:var(--color-composer-control-foreground)]";
-  return (
-    <Button
-      type={type}
-      variant="ghost"
-      size="sm"
-      className={twMerge(
-        "h-7 min-w-0 max-w-full !justify-start gap-1 rounded-full border border-transparent bg-transparent px-2 py-0 text-left text-sm leading-[18px] transition-colors hover:bg-[var(--color-composer-control-hover)] hover:text-current focus:outline-none data-[state=open]:bg-[var(--color-composer-control-hover)]",
-        tone === "quiet" ? "text-[color:var(--color-composer-control-foreground)]" : classes,
-        className,
-      )}
-      {...props}
-    >
-      {icon ? <span className="shrink-0">{icon}</span> : null}
-      <span className="flex min-w-0 items-center gap-1">
-        <span className="min-w-0 truncate text-left">{label}</span>
-        {detail ? (
-          <span className="truncate text-left text-[color:var(--color-composer-control-muted-foreground)]">
-            {detail}
-          </span>
-        ) : null}
-      </span>
-      {trailing ? <span className="ml-auto shrink-0">{trailing}</span> : null}
-    </Button>
-  );
-}
-
-function ComposerPopoverSurface({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={twMerge(
-        "rounded-[18px] border border-border/60 bg-popover/96 p-1.5 text-popover-foreground shadow-floating backdrop-blur-lg",
-        className,
-      )}
-    >
-      {children}
-    </div>
   );
 }
 

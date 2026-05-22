@@ -18,7 +18,7 @@ import {
 import { ProviderIcon } from "@/components/ui/provider-icons";
 import { useModelSelectorMenu } from "@/hooks/chat/ui/use-model-selector-menu";
 import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
-import { ComposerControlButton } from "./ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
 export function ModelSelector({

@@ -91,6 +91,26 @@
       "types": "./dist/chat/CloudChatTranscript.d.ts",
       "import": "./dist/chat/CloudChatTranscript.js"
     },
+    "./chat/composer/ChatComposerSurface": {
+      "types": "./dist/chat/composer/ChatComposerSurface.d.ts",
+      "import": "./dist/chat/composer/ChatComposerSurface.js"
+    },
+    "./chat/composer/ComposerControlButton": {
+      "types": "./dist/chat/composer/ComposerControlButton.d.ts",
+      "import": "./dist/chat/composer/ComposerControlButton.js"
+    },
+    "./chat/composer/ComposerPopoverSurface": {
+      "types": "./dist/chat/composer/ComposerPopoverSurface.d.ts",
+      "import": "./dist/chat/composer/ComposerPopoverSurface.js"
+    },
+    "./chat/composer/ComposerTextarea": {
+      "types": "./dist/chat/composer/ComposerTextarea.d.ts",
+      "import": "./dist/chat/composer/ComposerTextarea.js"
+    },
+    "./chat/composer/ComposerTextareaFrame": {
+      "types": "./dist/chat/composer/ComposerTextareaFrame.d.ts",
+      "import": "./dist/chat/composer/ComposerTextareaFrame.js"
+    },
     "./feedback/LoadingState": {
       "types": "./dist/feedback/LoadingState.d.ts",
       "import": "./dist/feedback/LoadingState.js"
