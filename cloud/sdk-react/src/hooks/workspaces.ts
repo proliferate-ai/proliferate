@@ -1,13 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createCloudWorkspace,
   listCloudWorkspaces,
   getWorkspaceSnapshot,
   type CloudWorkspaceSummary,
+  type CloudWorkspaceDetail,
   type CloudWorkspaceSnapshot,
   type CloudWorkspaceListSelection,
   type CloudWorkspaceListScope,
+  type CreateCloudWorkspaceRequest,
 } from "@proliferate/cloud-sdk";
 import {
+  cloudRootKey,
   cloudWorkspacesKey,
   cloudWorkspaceSnapshotKey,
   personalCloudOwnerKey,
@@ -48,5 +52,28 @@ export function useCloudWorkspaceSnapshot(workspaceId: string | null, enabled = 
     queryKey: cloudWorkspaceSnapshotKey(workspaceId),
     queryFn: () => getWorkspaceSnapshot(workspaceId!, client),
     enabled: enabled && workspaceId !== null,
+  });
+}
+
+export function useCreateCloudWorkspace(options?: {
+  ownerScope?: CloudOwnerScope;
+  organizationId?: string | null;
+}) {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  const owner = options
+    ? {
+      ...personalCloudOwnerKey(),
+      ownerScope: options.ownerScope ?? "personal",
+      organizationId: options.organizationId ?? null,
+    }
+    : undefined;
+  return useMutation<CloudWorkspaceDetail, Error, CreateCloudWorkspaceRequest>({
+    mutationFn: (input) => createCloudWorkspace(input, owner, client),
+    onSuccess() {
+      void queryClient.invalidateQueries({
+        queryKey: [...cloudRootKey(), "workspaces"],
+      });
+    },
   });
 }

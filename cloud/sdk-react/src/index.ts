@@ -10,6 +10,7 @@ export * from "./hooks/events.js";
 export * from "./hooks/live.js";
 export * from "./hooks/organizations.js";
 export * from "./hooks/runtime-config.js";
+export * from "./hooks/repo-configs.js";
 export * from "./hooks/sessions.js";
 export * from "./hooks/targets.js";
 export * from "./hooks/workspaces.js";

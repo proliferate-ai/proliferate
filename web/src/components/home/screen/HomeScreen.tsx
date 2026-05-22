@@ -1,57 +1,129 @@
-import { Bot, Cloud, GitBranch, GitPullRequest, Smartphone, Users } from "lucide-react";
-import { useState } from "react";
+import { Bot, Cloud, GitBranch, GitPullRequest } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  useCloudRepoConfigs,
+  useCreateCloudWorkspace,
+} from "@proliferate/cloud-sdk-react";
 
-import type { NewChatPickerId, PickerView } from "@proliferate/product-ui/new-chat/NewChatSurface";
+import type {
+  NewChatPickerId,
+  NoticeView,
+  PickerView,
+} from "@proliferate/product-ui/new-chat/NewChatSurface";
 import { NewChatSurface } from "@proliferate/product-ui/new-chat/NewChatSurface";
 
-type ModeId = "dispatch" | "shared" | "personal";
+import { webEnv } from "../../../config/env";
+import { routes } from "../../../config/routes";
+import { savePendingHomePrompt } from "../../../lib/access/cloud/pending-home-prompt-store";
 
-const MODE_PLACEHOLDERS: Record<ModeId, string> = {
-  dispatch: "Describe a quick remote task...",
-  shared: "Ask the shared sandbox to take this on...",
-  personal: "Ask Proliferate to work in your sandbox...",
-};
+const HOME_PLACEHOLDER = "Describe a quick remote task...";
+
+interface RepoOption {
+  id: string;
+  gitOwner: string;
+  gitRepoName: string;
+  label: string;
+  description: string;
+}
 
 export function HomeScreen() {
+  const navigate = useNavigate();
+  const submitInFlightRef = useRef(false);
   const [draft, setDraft] = useState("");
-  const [targetId, setTargetId] = useState("personal-cloud");
+  const [repoId, setRepoId] = useState(() =>
+    readLastRepoId() ?? normalizeRepoId(webEnv.defaultCloudRepo) ?? ""
+  );
   const [modelId, setModelId] = useState("gpt-5.4");
-  const [modeId, setModeId] = useState<ModeId>("dispatch");
-  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const repoConfigs = useCloudRepoConfigs();
+  const createWorkspace = useCreateCloudWorkspace();
+  const repoOptions = useMemo(
+    () => buildRepoOptions(repoConfigs.data?.configs ?? [], webEnv.defaultCloudRepo),
+    [repoConfigs.data?.configs],
+  );
+  const selectedRepo = useMemo(
+    () => repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null,
+    [repoId, repoOptions],
+  );
+
+  useEffect(() => {
+    if (!selectedRepo && repoOptions[0]) {
+      setRepoId(repoOptions[0].id);
+    }
+  }, [repoOptions, selectedRepo]);
 
   function handlePickerSelect(picker: NewChatPickerId, itemId: string) {
     if (picker === "target") {
-      setTargetId(itemId);
+      setRepoId(itemId);
+      writeLastRepoId(itemId);
       return;
     }
     if (picker === "model") {
       setModelId(itemId);
       return;
     }
-    setModeId(itemId as ModeId);
   }
 
-  function handleSubmit() {
-    if (!draft.trim()) return;
-    setSubmitting(true);
-    window.setTimeout(() => {
-      setSubmitting(false);
+  async function handleSubmit() {
+    const text = draft.trim();
+    if (!text || !selectedRepo || submitInFlightRef.current) return;
+
+    submitInFlightRef.current = true;
+    setSubmitError(null);
+    try {
+      const pendingPrompt = {
+        id: `web-home:${Date.now().toString(36)}`,
+        text,
+        modelId,
+        modeId: null,
+        createdAt: Date.now(),
+      };
+      const workspace = await createWorkspace.mutateAsync({
+        gitProvider: "github",
+        gitOwner: selectedRepo.gitOwner,
+        gitRepoName: selectedRepo.gitRepoName,
+        branchName: buildBranchName(text),
+        displayName: buildWorkspaceDisplayName(text),
+        ownerScope: "personal",
+      });
+      savePendingHomePrompt(workspace.id, pendingPrompt);
       setDraft("");
-    }, 500);
+      navigate(routes.workspace(workspace.id));
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Could not create workspace.");
+    } finally {
+      submitInFlightRef.current = false;
+    }
   }
+
+  const submitting = createWorkspace.isPending || submitInFlightRef.current;
+  const repoNotice = selectedRepo
+    ? null
+    : {
+      id: "repo-required",
+      tone: "warning" as const,
+      text: "Select a GitHub repository before sending.",
+    };
+  const errorNotice = submitError
+    ? { id: "submit-error", tone: "error" as const, text: submitError }
+    : null;
+  const notices: NoticeView[] = [];
+  if (repoNotice) notices.push(repoNotice);
+  if (errorNotice) notices.push(errorNotice);
 
   return (
     <div className="h-full" data-telemetry-block>
       <NewChatSurface
         heading="What should we run?"
         draft={draft}
-        placeholder={MODE_PLACEHOLDERS[modeId]}
-        canSubmit={Boolean(draft.trim()) && !submitting}
+        placeholder={HOME_PLACEHOLDER}
+        canSubmit={Boolean(draft.trim()) && Boolean(selectedRepo) && !submitting}
         submitting={submitting}
-        target={buildTargetPicker(targetId)}
+        target={buildTargetPicker(repoId, repoOptions, repoConfigs.isLoading)}
         model={buildModelPicker(modelId)}
-        mode={buildModePicker(modeId)}
-        notices={[]}
+        mode={buildModePicker()}
+        notices={notices}
         actions={[
           {
             id: "branch",
@@ -70,38 +142,32 @@ export function HomeScreen() {
           },
         ]}
         onDraftChange={setDraft}
-        onSubmit={handleSubmit}
+        onSubmit={() => void handleSubmit()}
         onPickerSelect={handlePickerSelect}
       />
     </div>
   );
 }
 
-function buildTargetPicker(selectedId: string): PickerView {
-  const targets = [
-    {
-      id: "personal-cloud",
-      label: "Personal cloud",
-      description: "Your cloud sandbox",
-      icon: <Cloud size={13} />,
-    },
-    {
-      id: "shared-cloud",
-      label: "Shared cloud",
-      description: "Team sandbox",
-      icon: <Users size={13} />,
-    },
-  ];
+function buildTargetPicker(
+  selectedId: string,
+  repoOptions: RepoOption[],
+  loading: boolean,
+): PickerView {
   return {
-    label: "Target",
-    icon: <Cloud size={13} />,
+    label: loading ? "Loading repos" : "Repository",
+    icon: <GitBranch size={13} />,
+    disabled: loading || repoOptions.length === 0,
     groups: [
       {
-        id: "targets",
-        label: "Cloud targets",
-        items: targets.map((target) => ({
-          ...target,
-          selected: target.id === selectedId,
+        id: "repositories",
+        label: "GitHub repositories",
+        items: repoOptions.map((repo) => ({
+          id: repo.id,
+          label: repo.label,
+          description: repo.description,
+          icon: <GitBranch size={13} />,
+          selected: repo.id === selectedId,
         })),
       },
     ],
@@ -129,38 +195,118 @@ function buildModelPicker(selectedId: string): PickerView {
   };
 }
 
-function buildModePicker(selectedId: ModeId): PickerView {
-  const modes = [
-    {
-      id: "dispatch",
-      label: "Dispatch",
-      description: "Lightweight remote task",
-      icon: <Smartphone size={13} />,
-    },
-    {
-      id: "shared",
-      label: "Shared chat",
-      description: "Team sandbox, claimable",
-      icon: <Users size={13} />,
-    },
-    {
-      id: "personal",
-      label: "Personal cloud",
-      description: "Your repos and tools",
-      icon: <Cloud size={13} />,
-    },
-  ];
+function buildModePicker(): PickerView {
   return {
     label: "Mode",
-    icon: <Smartphone size={13} />,
+    icon: <Cloud size={13} />,
+    disabled: true,
     groups: [
       {
         id: "modes",
-        items: modes.map((mode) => ({
-          ...mode,
-          selected: mode.id === selectedId,
-        })),
+        items: [
+          {
+            id: "cloud-task",
+            label: "Cloud task",
+            description: "Create a workspace and send this prompt",
+            icon: <Cloud size={13} />,
+            selected: true,
+          },
+        ],
       },
     ],
   };
+}
+
+function buildRepoOptions(
+  configs: readonly {
+    gitOwner: string;
+    gitRepoName: string;
+    configured: boolean;
+  }[],
+  defaultRepo: string | null,
+): RepoOption[] {
+  const options = new Map<string, RepoOption>();
+  for (const config of configs) {
+    if (!config.configured) {
+      continue;
+    }
+    const id = repoId(config.gitOwner, config.gitRepoName);
+    options.set(id, {
+      id,
+      gitOwner: config.gitOwner,
+      gitRepoName: config.gitRepoName,
+      label: id,
+      description: "Configured cloud repo",
+    });
+  }
+
+  const normalizedDefault = normalizeRepoId(defaultRepo);
+  if (normalizedDefault && !options.has(normalizedDefault)) {
+    const parsed = parseRepoId(normalizedDefault);
+    if (parsed) {
+      options.set(normalizedDefault, {
+        id: normalizedDefault,
+        gitOwner: parsed.gitOwner,
+        gitRepoName: parsed.gitRepoName,
+        label: normalizedDefault,
+        description: "Development default",
+      });
+    }
+  }
+  return Array.from(options.values());
+}
+
+function buildBranchName(prompt: string): string {
+  const slug = prompt
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .slice(0, 42)
+    .replace(/-+$/gu, "") || "web-task";
+  return `proliferate/${slug}-${Date.now().toString(36)}`;
+}
+
+function buildWorkspaceDisplayName(prompt: string): string {
+  const firstLine = prompt.split(/\r?\n/u)[0]?.trim() || "Web task";
+  return firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine;
+}
+
+function repoId(gitOwner: string, gitRepoName: string): string {
+  return `${gitOwner}/${gitRepoName}`;
+}
+
+function normalizeRepoId(value: string | null | undefined): string | null {
+  const parsed = parseRepoId(value);
+  return parsed ? repoId(parsed.gitOwner, parsed.gitRepoName) : null;
+}
+
+function parseRepoId(value: string | null | undefined): {
+  gitOwner: string;
+  gitRepoName: string;
+} | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const [gitOwner, gitRepoName, ...rest] = trimmed.split("/");
+  if (!gitOwner || !gitRepoName || rest.length > 0) {
+    return null;
+  }
+  return { gitOwner, gitRepoName };
+}
+
+function readLastRepoId(): string | null {
+  try {
+    return normalizeRepoId(window.localStorage.getItem("proliferate.web.homeRepo"));
+  } catch {
+    return null;
+  }
+}
+
+function writeLastRepoId(repo: string): void {
+  try {
+    window.localStorage.setItem("proliferate.web.homeRepo", repo);
+  } catch {
+    // Ignore storage failures; the picker state remains in memory.
+  }
 }

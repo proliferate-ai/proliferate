@@ -120,9 +120,10 @@ export async function getCloudWorkspace(
 export async function createCloudWorkspace(
   input: CreateCloudWorkspaceRequest,
   owner?: CloudOwnerSelection,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudWorkspaceDetail> {
   const data = (
-    await getProliferateClient().POST("/v1/cloud/workspaces", {
+    await client.POST("/v1/cloud/workspaces", {
       body: {
         ...input,
         ownerScope: owner?.ownerScope ?? input.ownerScope ?? "personal",

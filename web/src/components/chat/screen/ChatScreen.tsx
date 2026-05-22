@@ -6,7 +6,7 @@ import {
   Send,
   Users,
 } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   desktopWorkspaceDeepLink,
@@ -15,6 +15,7 @@ import {
 } from "@proliferate/cloud-sdk";
 import {
   useClaimCloudWorkspace,
+  useCloudClient,
   useCloudTranscriptSnapshot,
   useCloudWorkspaceSnapshot,
   useCommandStatus,
@@ -28,16 +29,33 @@ import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
 import { routes } from "../../../config/routes";
+import {
+  dispatchPendingHomePrompt,
+  type SendPromptPayload,
+  type StartSessionPayload,
+} from "../../../lib/access/cloud/pending-home-prompt-dispatch";
+import {
+  clearPendingHomePrompt,
+  loadPendingHomePrompt,
+  type PendingHomePrompt,
+} from "../../../lib/access/cloud/pending-home-prompt-store";
 
-type SendPromptPayload = {
-  text: string;
+type PendingHomePromptDispatchRun = {
+  key: string;
+  active: boolean;
 };
 
 export function ChatScreen() {
   const { workspaceId, chatId } = useParams();
   const navigate = useNavigate();
+  const client = useCloudClient();
   const [draft, setDraft] = useState("");
   const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
+  const [pendingHomePrompt, setPendingHomePrompt] = useState<PendingHomePrompt | null>(() =>
+    workspaceId ? loadPendingHomePrompt(workspaceId) : null
+  );
+  const [pendingHomePromptStatus, setPendingHomePromptStatus] = useState<string | null>(null);
+  const pendingHomePromptDispatchRunRef = useRef<PendingHomePromptDispatchRun | null>(null);
   const workspaceQuery = useCloudWorkspaceSnapshot(workspaceId ?? null, Boolean(workspaceId));
   const workspaceLive = useWorkspaceLive(workspaceId ?? null, { enabled: Boolean(workspaceId) });
   const snapshot = workspaceLive.snapshot ?? workspaceQuery.data;
@@ -60,9 +78,120 @@ export function ChatScreen() {
   const transcriptItems =
     sessionLive.snapshot?.transcriptItems ?? transcriptQuery.data?.transcriptItems ?? [];
   const enqueuePrompt = useEnqueueCloudCommand<SendPromptPayload>();
+  const enqueueStartSession = useEnqueueCloudCommand<StartSessionPayload>();
   const claimWorkspace = useClaimCloudWorkspace();
   const commandStatus = useCommandStatus(latestCommandId);
   const isUnclaimed = workspace?.visibility === "shared_unclaimed";
+  const workspaceReadyAgentKindsKey = workspace?.readyAgentKinds?.join("\0") ?? "";
+  const workspaceAllowedAgentKindsKey = workspace?.allowedAgentKinds?.join("\0") ?? "";
+
+  useEffect(() => {
+    setPendingHomePrompt(workspaceId ? loadPendingHomePrompt(workspaceId) : null);
+    setPendingHomePromptStatus(null);
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || !workspace || workspace.status === "ready" || workspace.status === "error") {
+      return;
+    }
+    const interval = window.setInterval(() => {
+      void workspaceQuery.refetch();
+    }, 2500);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [workspace?.status, workspaceId, workspaceQuery.refetch]);
+
+  useEffect(() => {
+    if (!pendingHomePrompt || !workspace) {
+      return;
+    }
+    if (workspace.status === "error" || workspace.status === "archived") {
+      setPendingHomePromptStatus("Workspace creation failed before the prompt could be sent.");
+      return;
+    }
+    if (workspace.status !== "ready") {
+      setPendingHomePromptStatus("Workspace is provisioning; the prompt will send when ready.");
+      return;
+    }
+
+    const runKey = `${workspace.id}:${pendingHomePrompt.id}`;
+    const currentRun = pendingHomePromptDispatchRunRef.current;
+    if (currentRun?.key === runKey && currentRun.active) {
+      return;
+    }
+
+    const run: PendingHomePromptDispatchRun = { key: runKey, active: true };
+    pendingHomePromptDispatchRunRef.current = run;
+    const isCurrentRun = () => pendingHomePromptDispatchRunRef.current === run && run.active;
+    const setCurrentStatus = (status: string) => {
+      if (isCurrentRun()) {
+        setPendingHomePromptStatus(status);
+      }
+    };
+
+    setPendingHomePromptStatus("Starting a session for the queued prompt.");
+    const timeoutId = window.setTimeout(() => {
+      if (!isCurrentRun()) {
+        return;
+      }
+      void dispatchPendingHomePrompt({
+        client,
+        workspace,
+        pendingPrompt: pendingHomePrompt,
+        modelId: pendingHomePrompt.modelId,
+        enqueueStartSession: enqueueStartSession.mutateAsync,
+        enqueuePrompt: enqueuePrompt.mutateAsync,
+        setLatestCommandId: (commandId) => {
+          if (isCurrentRun()) {
+            setLatestCommandId(commandId);
+          }
+        },
+        onStatus: setCurrentStatus,
+        shouldContinue: isCurrentRun,
+      })
+        .then((sessionId) => {
+          if (!isCurrentRun()) {
+            return;
+          }
+          clearPendingHomePrompt(workspace.id);
+          setPendingHomePrompt(null);
+          setPendingHomePromptStatus(null);
+          void workspaceQuery.refetch();
+          navigate(routes.chat(workspace.id, sessionId), { replace: true });
+        })
+        .catch((error: unknown) => {
+          if (!isCurrentRun()) {
+            return;
+          }
+          setPendingHomePromptStatus(
+            error instanceof Error ? error.message : "Queued prompt could not be sent.",
+          );
+        })
+        .finally(() => {
+          if (pendingHomePromptDispatchRunRef.current === run) {
+            pendingHomePromptDispatchRunRef.current = null;
+          }
+        });
+    }, 0);
+    return () => {
+      run.active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    client,
+    enqueuePrompt.mutateAsync,
+    enqueueStartSession.mutateAsync,
+    navigate,
+    pendingHomePrompt,
+    workspace?.anyharnessWorkspaceId,
+    workspace?.id,
+    workspace?.status,
+    workspace?.targetId,
+    workspaceAllowedAgentKindsKey,
+    workspaceReadyAgentKindsKey,
+    workspaceQuery.refetch,
+  ]);
 
   async function submitPrompt(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -99,6 +228,7 @@ export function ChatScreen() {
   const canSubmit = Boolean(draft.trim() && session && !enqueuePrompt.isPending && !isUnclaimed);
   const sessionTitle = session?.title ?? workspace.displayName ?? workspace.repo.name;
   const commandMessage =
+    pendingHomePromptStatus ??
     commandStatus.data?.errorMessage ??
     (commandStatus.data?.status ? `Command ${commandStatus.data.status}` : null);
 
