@@ -8,30 +8,69 @@ import {
   Text,
   View,
 } from "react-native";
-
-import { deriveClaimState, getPrimaryChatAction } from "@proliferate/product-model/chats/claiming";
-import { chatKindPresentation } from "@proliferate/product-model/chats/presentation";
-import type { ProductChat } from "@proliferate/product-model/chats/model";
+import {
+  useCloudTranscriptSnapshot,
+  useCommandStatus,
+  useClaimCloudWorkspace,
+  useEnqueueCloudCommand,
+  useSessionLive,
+} from "@proliferate/cloud-sdk-react";
+import type { CloudTranscriptItem } from "@proliferate/cloud-sdk";
 
 import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileStatusDot } from "../primitives/MobileStatusDot";
 import { MobileTextInput } from "../primitives/MobileTextInput";
 import { MobileTopBar, MobileTopBarIconButton } from "../primitives/MobileTopBar";
-import { chatMessages, currentUser, workspaceForChat } from "../../lib/fixtures/mobile-fixtures";
+import type { MobileCloudChat } from "../../navigation/navigation-model";
 import { colors, radius, spacing } from "../../styles/tokens";
 
 interface MobileChatScreenProps {
-  chat: ProductChat;
+  chat: MobileCloudChat;
   onBack: () => void;
 }
 
+type SendPromptPayload = {
+  text: string;
+};
+
 export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
   const [draft, setDraft] = useState("");
-  const workspace = workspaceForChat(chat);
-  const presentation = chatKindPresentation(chat.kind);
-  const claimState = deriveClaimState(chat, currentUser);
-  const action = getPrimaryChatAction(chat, currentUser);
-  const canSubmit = action.kind === "claim" || Boolean(draft.trim());
+  const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
+  const [claimedLocally, setClaimedLocally] = useState(false);
+  const sessionLive = useSessionLive(chat.sessionId, {
+    targetId: chat.targetId,
+  });
+  const transcript = useCloudTranscriptSnapshot(chat.targetId, chat.sessionId);
+  const enqueuePrompt = useEnqueueCloudCommand<SendPromptPayload>();
+  const claimWorkspace = useClaimCloudWorkspace();
+  const commandStatus = useCommandStatus(latestCommandId);
+  const messages = sessionLive.snapshot?.transcriptItems ?? transcript.data?.transcriptItems ?? [];
+  const isUnclaimed = chat.visibility === "shared_unclaimed" && !claimedLocally;
+  const canSubmit = Boolean(draft.trim() && !enqueuePrompt.isPending && !isUnclaimed);
+
+  async function submitPrompt() {
+    const text = draft.trim();
+    if (!text) {
+      return;
+    }
+    const command = await enqueuePrompt.mutateAsync({
+      idempotencyKey: `mobile:${chat.workspaceId}:${chat.sessionId}:${Date.now()}`,
+      targetId: chat.targetId,
+      workspaceId: chat.workspaceRuntimeId,
+      cloudWorkspaceId: chat.workspaceId,
+      sessionId: chat.sessionId,
+      kind: "send_prompt",
+      source: "mobile",
+      payload: { text },
+    });
+    setLatestCommandId(command.commandId);
+    setDraft("");
+  }
+
+  async function claimChat() {
+    await claimWorkspace.mutateAsync({ workspaceId: chat.workspaceId });
+    setClaimedLocally(true);
+  }
 
   return (
     <KeyboardAvoidingView
@@ -42,11 +81,11 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
       <View style={styles.headerWrapper}>
         <MobileTopBar
           title={chat.title}
-          subtitle={`${workspace?.name ?? "Unknown"} · ${presentation.label}`}
+          subtitle={`${chat.workspaceName} · ${chat.repoLabel}`}
           leading={{ kind: "back", onPress: onBack }}
           trailing={
             <View style={styles.headerStatus}>
-              <MobileStatusDot status={chat.status} />
+              <MobileStatusDot status={mobileStatus(chat.status)} />
               <MobileTopBarIconButton name="more" accessibilityLabel="Chat menu" />
             </View>
           }
@@ -58,7 +97,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        {claimState.kind === "unclaimed" ? (
+        {isUnclaimed ? (
           <View style={styles.claimBanner}>
             <View style={styles.claimIcon}>
               <MobileIcon name="hand" size={16} color={colors.success} />
@@ -66,29 +105,52 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
             <View style={styles.claimText}>
               <Text style={styles.claimTitle}>Unclaimed shared chat</Text>
               <Text style={styles.claimBody}>
-                Claim this to take control. Anyone on the team can pick it up
-                until then.
+                Claim this work before sending prompts from mobile.
               </Text>
             </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Claim shared chat"
+              accessibilityState={{ disabled: claimWorkspace.isPending }}
+              disabled={claimWorkspace.isPending}
+              onPress={() => void claimChat()}
+              style={({ pressed }) => [
+                styles.claimButton,
+                claimWorkspace.isPending && styles.claimButtonDisabled,
+                pressed && styles.claimButtonPressed,
+              ]}
+            >
+              <Text style={styles.claimButtonText}>
+                {claimWorkspace.isPending ? "Claiming" : "Claim"}
+              </Text>
+            </Pressable>
           </View>
         ) : null}
 
-        {claimState.kind === "claimed_by_me" ? (
-          <View style={styles.controlNote}>
-            <Text style={styles.controlNoteText}>You control this chat.</Text>
-          </View>
-        ) : null}
+        <View style={styles.controlNote}>
+          <Text style={styles.controlNoteText}>
+            {sessionLive.isConnected ? "Live cloud projection" : "Snapshot projection"}
+          </Text>
+        </View>
 
         <View style={styles.messages}>
-          {chatMessages.map((message) => (
-            <Message key={message.id} role={message.role} body={message.body} />
-          ))}
+          {messages.length > 0 ? (
+            messages.map((message) => <Message key={message.itemId} item={message} />)
+          ) : (
+            <View style={styles.message}>
+              <Text style={styles.messageRole}>system</Text>
+              <Text style={styles.messageBody}>Waiting for projected transcript events.</Text>
+            </View>
+          )}
         </View>
 
-        <View style={styles.actionChips}>
-          <ActionChip icon="git-branch" label="Diff" />
-          <ActionChip icon="external" label="Create PR" />
-        </View>
+        {commandStatus.data?.status ? (
+          <View style={styles.controlNote}>
+            <Text style={styles.controlNoteText}>
+              {commandStatus.data.errorMessage ?? `Command ${commandStatus.data.status}`}
+            </Text>
+          </View>
+        ) : null}
       </ScrollView>
 
       <View style={styles.composer}>
@@ -96,37 +158,30 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
           multiline
           value={draft}
           onChangeText={setDraft}
-          placeholder={
-            action.kind === "claim"
-              ? "Claim and reply..."
-              : "Message this session"
-          }
+          placeholder={isUnclaimed ? "Claim this chat to reply" : "Message this session"}
           style={styles.composerInput}
         />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={action.kind === "claim" ? "Claim" : "Send"}
+          accessibilityLabel="Send"
           accessibilityState={{ disabled: !canSubmit }}
           disabled={!canSubmit}
-          onPress={() => setDraft("")}
+          onPress={() => void submitPrompt()}
           style={({ pressed }) => [
             styles.send,
             !canSubmit && styles.sendDisabled,
             pressed && styles.sendPressed,
           ]}
         >
-          <MobileIcon
-            name={action.kind === "claim" ? "hand" : "send"}
-            size={16}
-            color={canSubmit ? colors.background : colors.faint}
-          />
+          <MobileIcon name="send" size={16} color={canSubmit ? colors.background : colors.faint} />
         </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-function Message({ role, body }: { role: string; body: string }) {
+function Message({ item }: { item: CloudTranscriptItem }) {
+  const role = transcriptRole(item);
   const isAssistant = role === "assistant";
   const isSystem = role === "system";
   return (
@@ -138,23 +193,37 @@ function Message({ role, body }: { role: string; body: string }) {
       ]}
     >
       <Text style={styles.messageRole}>{role}</Text>
-      <Text style={styles.messageBody}>{body}</Text>
+      <Text style={styles.messageBody}>
+        {item.text ?? item.title ?? item.kind ?? "Projected event"}
+      </Text>
     </View>
   );
 }
 
-function ActionChip({ icon, label }: { icon: "git-branch" | "external"; label: string }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: true }}
-      disabled
-      style={styles.chip}
-    >
-      <MobileIcon name={icon} size={13} color={colors.mutedForeground} />
-      <Text style={styles.chipText}>{label}</Text>
-    </Pressable>
-  );
+function transcriptRole(item: CloudTranscriptItem): "user" | "assistant" | "system" {
+  if (item.kind === "user_message" || item.kind === "prompt") {
+    return "user";
+  }
+  if (item.kind === "system" || item.kind === "tool") {
+    return "system";
+  }
+  return "assistant";
+}
+
+function mobileStatus(status: string): "running" | "idle" | "paused" | "failed" | "done" {
+  if (status === "running") {
+    return "running";
+  }
+  if (status === "failed" || status === "error") {
+    return "failed";
+  }
+  if (status === "paused") {
+    return "paused";
+  }
+  if (status === "ended" || status === "done" || status === "completed") {
+    return "done";
+  }
+  return "idle";
 }
 
 const styles = StyleSheet.create({
@@ -212,6 +281,23 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 17,
   },
+  claimButton: {
+    borderRadius: radius.md,
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  claimButtonPressed: {
+    opacity: 0.82,
+  },
+  claimButtonDisabled: {
+    opacity: 0.56,
+  },
+  claimButtonText: {
+    color: colors.background,
+    fontSize: 12,
+    fontWeight: "700",
+  },
   controlNote: {
     paddingVertical: spacing[2],
     paddingHorizontal: spacing[3],
@@ -247,7 +333,7 @@ const styles = StyleSheet.create({
     color: colors.faint,
     fontSize: 10.5,
     fontWeight: "600",
-    letterSpacing: 0.6,
+    letterSpacing: 0,
     textTransform: "uppercase",
     marginBottom: 6,
   },
@@ -255,30 +341,6 @@ const styles = StyleSheet.create({
     color: colors.fg,
     fontSize: 14.5,
     lineHeight: 21,
-  },
-  actionChips: {
-    flexDirection: "row",
-    gap: spacing[2],
-    marginTop: spacing[1],
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: spacing[3],
-    paddingVertical: 7,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  chipPressed: {
-    opacity: 0.78,
-  },
-  chipText: {
-    color: colors.mutedForeground,
-    fontSize: 12.5,
-    fontWeight: "500",
   },
   composer: {
     flexDirection: "row",

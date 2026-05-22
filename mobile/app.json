@@ -21,6 +21,9 @@
       "buildNumber": "4",
       "supportsTablet": true,
       "usesAppleSignIn": true,
+      "associatedDomains": [
+        "applinks:app.proliferate.ai"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -33,7 +36,24 @@
         "backgroundColor": "#181818"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "app.proliferate.ai",
+              "pathPrefix": "/workspaces/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

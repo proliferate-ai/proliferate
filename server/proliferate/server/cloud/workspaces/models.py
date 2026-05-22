@@ -29,6 +29,7 @@ class WorkspaceRecord(Protocol):
     git_repo_name: str
     git_branch: str
     git_base_branch: str | None
+    origin: str
     origin_json: str | None
     status: str
     status_detail: str | None
@@ -47,8 +48,13 @@ class WorkspaceRecord(Protocol):
 
 
 class WorkspaceExposureRecord(Protocol):
+    id: UUID
     visibility: str
     claimed_by_user_id: UUID | None
+    default_projection_level: str
+    commandable: bool
+    status: str
+    last_projected_at: datetime | None
 
 
 class WorkspaceClaimRecord(Protocol):
@@ -56,6 +62,15 @@ class WorkspaceClaimRecord(Protocol):
     claimed_by_user_id: UUID | None
     claimed_at: datetime
     source_kind: str
+
+
+class WorkspaceSessionSummaryRecord(Protocol):
+    target_id: UUID
+    workspace_id: str | None
+    session_id: str
+    title: str | None
+    status: str
+    last_event_at: str | None
 
 
 class RuntimeEnvironmentRecord(Protocol):
@@ -112,7 +127,16 @@ class OriginContext(BaseModel):
     """Advisory provenance metadata; not authoritative for policy decisions."""
 
     kind: Literal["human", "cowork", "api", "system"]
-    entrypoint: Literal["desktop", "cloud", "local_runtime", "cowork"]
+    entrypoint: Literal[
+        "desktop",
+        "web",
+        "mobile",
+        "cloud",
+        "local_runtime",
+        "cowork",
+        "slack",
+        "api",
+    ]
 
 
 class WorkspaceCreatorContext(BaseModel):
@@ -137,6 +161,25 @@ class WorkspaceDirectTargetContext(BaseModel):
     target_id: str = Field(serialization_alias="targetId")
     target_kind: str = Field(serialization_alias="targetKind")
     anyharness_workspace_id: str = Field(serialization_alias="anyharnessWorkspaceId")
+
+
+class WorkspaceExposureSummary(BaseModel):
+    id: str
+    visibility: Literal["private", "shared_unclaimed", "claimed", "archived"]
+    claimed_by_user_id: str | None = Field(default=None, serialization_alias="claimedByUserId")
+    default_projection_level: str = Field(serialization_alias="defaultProjectionLevel")
+    commandable: bool
+    status: Literal["active", "paused", "stale", "revoked"]
+
+
+class LastSessionSummary(BaseModel):
+    target_id: str = Field(serialization_alias="targetId")
+    workspace_id: str | None = Field(default=None, serialization_alias="workspaceId")
+    session_id: str = Field(serialization_alias="sessionId")
+    title: str | None = None
+    status: str
+    last_event_at: str | None = Field(default=None, serialization_alias="lastEventAt")
+    preview: str | None = None
 
 
 class WorkspaceSummary(BaseModel):
@@ -173,6 +216,23 @@ class WorkspaceSummary(BaseModel):
         serialization_alias="directTargetContext",
     )
     visibility: Literal["private", "shared_unclaimed", "claimed", "archived"] = "private"
+    exposure: WorkspaceExposureSummary | None = None
+    exposure_state: Literal["untracked", "tracked", "live", "paused", "stale", "revoked"] = Field(
+        default="untracked",
+        serialization_alias="exposureState",
+    )
+    sandbox_type: Literal[
+        "local",
+        "ssh",
+        "managed_personal",
+        "managed_shared",
+        "self_hosted",
+    ] = Field(default="managed_personal", serialization_alias="sandboxType")
+    last_activity_at: str | None = Field(default=None, serialization_alias="lastActivityAt")
+    last_session_summary: LastSessionSummary | None = Field(
+        default=None,
+        serialization_alias="lastSessionSummary",
+    )
     claimed_by_user_id: str | None = Field(default=None, serialization_alias="claimedByUserId")
     claim_id: str | None = Field(default=None, serialization_alias="claimId")
     claimed_at: str | None = Field(default=None, serialization_alias="claimedAt")
@@ -243,7 +303,7 @@ def _repo_ref(workspace: WorkspaceRecord) -> RepoRef:
 
 def _origin_payload(workspace: WorkspaceRecord) -> OriginContext | None:
     if not workspace.origin_json:
-        return None
+        return _origin_context_from_legacy_origin(workspace.origin)
     try:
         raw = json.loads(workspace.origin_json)
         if not isinstance(raw, dict):
@@ -254,7 +314,23 @@ def _origin_payload(workspace: WorkspaceRecord) -> OriginContext | None:
             "invalid cloud workspace origin JSON",
             extra={"table": "cloud_workspace", "row_id": str(workspace.id), "error": str(exc)},
         )
-        return None
+        return _origin_context_from_legacy_origin(workspace.origin)
+
+
+def _origin_context_from_legacy_origin(origin: str | None) -> OriginContext | None:
+    if origin == "manual_desktop":
+        return OriginContext(kind="human", entrypoint="desktop")
+    if origin == "manual_web":
+        return OriginContext(kind="human", entrypoint="web")
+    if origin == "manual_mobile":
+        return OriginContext(kind="human", entrypoint="mobile")
+    if origin == "automation":
+        return OriginContext(kind="system", entrypoint="cloud")
+    if origin == "slack":
+        return OriginContext(kind="system", entrypoint="slack")
+    if origin == "cowork_api":
+        return OriginContext(kind="api", entrypoint="api")
+    return None
 
 
 def runtime_auth_payload(
@@ -276,6 +352,75 @@ def runtime_auth_payload(
     )
 
 
+def exposure_payload(exposure: WorkspaceExposureRecord | None) -> WorkspaceExposureSummary | None:
+    if exposure is None:
+        return None
+    visibility = (
+        exposure.visibility
+        if exposure.visibility
+        in {
+            "private",
+            "shared_unclaimed",
+            "claimed",
+            "archived",
+        }
+        else "private"
+    )
+    status = (
+        exposure.status if exposure.status in {"active", "paused", "stale", "revoked"} else "stale"
+    )
+    return WorkspaceExposureSummary(
+        id=str(exposure.id),
+        visibility=visibility,
+        claimed_by_user_id=(
+            str(exposure.claimed_by_user_id) if exposure.claimed_by_user_id is not None else None
+        ),
+        default_projection_level=exposure.default_projection_level,
+        commandable=exposure.commandable,
+        status=status,
+    )
+
+
+def exposure_state_payload(exposure: WorkspaceExposureRecord | None) -> str:
+    if exposure is None:
+        return "untracked"
+    if exposure.status in {"paused", "stale", "revoked"}:
+        return exposure.status
+    if exposure.status == "active" and exposure.last_projected_at is not None:
+        return "live"
+    return "tracked"
+
+
+def sandbox_type_payload(workspace: WorkspaceRecord, target_kind: str | None) -> str:
+    if target_kind == "ssh":
+        return "ssh"
+    if target_kind in {"desktop_dispatch", "local_direct"}:
+        return "local"
+    if target_kind == "self_hosted_cloud":
+        return "self_hosted"
+    return (
+        "managed_shared"
+        if getattr(workspace, "owner_scope", None) == "organization"
+        else "managed_personal"
+    )
+
+
+def last_session_summary_payload(
+    session: WorkspaceSessionSummaryRecord | None,
+) -> LastSessionSummary | None:
+    if session is None:
+        return None
+    return LastSessionSummary(
+        target_id=str(session.target_id),
+        workspace_id=session.workspace_id,
+        session_id=session.session_id,
+        title=session.title,
+        status=session.status,
+        last_event_at=session.last_event_at,
+        preview=session.title,
+    )
+
+
 def workspace_summary_payload(
     workspace: WorkspaceRecord,
     *,
@@ -287,6 +432,8 @@ def workspace_summary_payload(
     direct_target_context: WorkspaceDirectTargetContext | None = None,
     exposure: WorkspaceExposureRecord | None = None,
     claim: WorkspaceClaimRecord | None = None,
+    last_session_summary: WorkspaceSessionSummaryRecord | None = None,
+    target_kind: str | None = None,
 ) -> WorkspaceSummary:
     runtime_status = (
         runtime_environment.status
@@ -298,6 +445,7 @@ def workspace_summary_payload(
     workspace_status = workspace.status
     if workspace_status not in {"pending", "materializing", "ready", "archived", "error"}:
         workspace_status = CloudWorkspaceStatus.error.value
+    session_summary = last_session_summary_payload(last_session_summary)
     return WorkspaceSummary(
         id=str(workspace.id),
         display_name=workspace.display_name,
@@ -334,6 +482,15 @@ def workspace_summary_payload(
         creator_context=creator_context,
         direct_target_context=direct_target_context,
         visibility=exposure.visibility if exposure is not None else "private",
+        exposure=exposure_payload(exposure),
+        exposure_state=exposure_state_payload(exposure),
+        sandbox_type=sandbox_type_payload(workspace, target_kind),
+        last_activity_at=(
+            session_summary.last_event_at
+            if session_summary is not None and session_summary.last_event_at is not None
+            else _to_iso(workspace.updated_at)
+        ),
+        last_session_summary=session_summary,
         claimed_by_user_id=(
             str(exposure.claimed_by_user_id)
             if exposure is not None and exposure.claimed_by_user_id is not None
@@ -357,6 +514,8 @@ def workspace_detail_payload(
     direct_target_context: WorkspaceDirectTargetContext | None = None,
     exposure: WorkspaceExposureRecord | None = None,
     claim: WorkspaceClaimRecord | None = None,
+    last_session_summary: WorkspaceSessionSummaryRecord | None = None,
+    target_kind: str | None = None,
 ) -> WorkspaceDetail:
     summary = workspace_summary_payload(
         workspace,
@@ -368,6 +527,8 @@ def workspace_detail_payload(
         direct_target_context=direct_target_context,
         exposure=exposure,
         claim=claim,
+        last_session_summary=last_session_summary,
+        target_kind=target_kind,
     )
     return WorkspaceDetail(
         **summary.model_dump(),

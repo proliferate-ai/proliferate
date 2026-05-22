@@ -19,7 +19,11 @@ from proliferate.constants.cloud import (
     WorkspacePostReadyPhase,
     WorkspaceStatus,
 )
-from proliferate.constants.organizations import ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
+from proliferate.constants.organizations import (
+    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_ROLE_ADMIN,
+    ORGANIZATION_ROLE_OWNER,
+)
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
@@ -144,6 +148,76 @@ async def list_claimed_organization_workspaces_for_user(
         .scalars()
         .all()
     )
+
+
+async def list_exposed_cloud_workspaces_for_user(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    organization_id: UUID | None = None,
+) -> list[CloudWorkspace]:
+    personal_query = (
+        select(CloudWorkspace)
+        .join(
+            CloudWorkspaceExposure,
+            CloudWorkspaceExposure.cloud_workspace_id == CloudWorkspace.id,
+        )
+        .where(
+            CloudWorkspace.owner_scope == "personal",
+            CloudWorkspace.owner_user_id == user_id,
+            CloudWorkspace.archived_at.is_(None),
+            CloudWorkspaceExposure.owner_scope == "personal",
+            CloudWorkspaceExposure.owner_user_id == user_id,
+            CloudWorkspaceExposure.archived_at.is_(None),
+            CloudWorkspaceExposure.status == "active",
+        )
+        .order_by(CloudWorkspace.updated_at.desc())
+    )
+    if organization_id is not None:
+        personal_rows: list[CloudWorkspace] = []
+    else:
+        personal_rows = list((await db.execute(personal_query)).scalars().all())
+
+    organization_query = (
+        select(CloudWorkspace)
+        .join(
+            CloudWorkspaceExposure,
+            CloudWorkspaceExposure.cloud_workspace_id == CloudWorkspace.id,
+        )
+        .join(
+            OrganizationMembership,
+            OrganizationMembership.organization_id == CloudWorkspace.organization_id,
+        )
+        .where(
+            CloudWorkspace.owner_scope == "organization",
+            OrganizationMembership.user_id == user_id,
+            OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            CloudWorkspace.archived_at.is_(None),
+            CloudWorkspaceExposure.owner_scope == "organization",
+            CloudWorkspaceExposure.archived_at.is_(None),
+            CloudWorkspaceExposure.status == "active",
+            (
+                (CloudWorkspaceExposure.visibility == "shared_unclaimed")
+                | (CloudWorkspaceExposure.claimed_by_user_id == user_id)
+                | (
+                    OrganizationMembership.role.in_(
+                        (ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN),
+                    )
+                )
+            ),
+        )
+        .order_by(CloudWorkspace.updated_at.desc())
+    )
+    if organization_id is not None:
+        organization_query = organization_query.where(
+            CloudWorkspace.organization_id == organization_id,
+        )
+    organization_rows = list((await db.execute(organization_query)).scalars().all())
+
+    by_id: dict[UUID, CloudWorkspace] = {}
+    for workspace in [*personal_rows, *organization_rows]:
+        by_id[workspace.id] = workspace
+    return sorted(by_id.values(), key=lambda workspace: workspace.updated_at, reverse=True)
 
 
 async def list_unclaimed_organization_workspaces(

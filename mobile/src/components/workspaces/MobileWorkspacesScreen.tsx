@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
-
-import type { ProductChat, ProductWorkspace } from "@proliferate/product-model/chats/model";
-import { isTeamChat } from "@proliferate/product-model/chats/claiming";
+import type { ReactNode } from "react";
+import { useCloudWorkspaces } from "@proliferate/cloud-sdk-react";
+import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 
 import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileListRow } from "../primitives/MobileListRow";
@@ -10,19 +10,26 @@ import {
   MobileScreen,
   MobileSectionLabel,
 } from "../primitives/MobileLayout";
-import { chats, workspaces } from "../../lib/fixtures/mobile-fixtures";
 import { colors, radius, spacing } from "../../styles/tokens";
 
 export function MobileWorkspacesScreen() {
-  const shared = workspaces.filter((workspace) => workspace.kind === "shared");
-  const personal = workspaces.filter((workspace) => workspace.kind !== "shared");
+  const workspaces = useCloudWorkspaces({ scope: "exposed" });
+  const shared = (workspaces.data ?? []).filter((workspace) => workspace.visibility !== "private");
+  const personal = (workspaces.data ?? []).filter((workspace) => workspace.visibility === "private");
 
   return (
     <MobileScreen contentStyle={styles.screenContent}>
-      {workspaces.length === 0 ? (
+      {workspaces.isLoading ? (
+        <MobileEmptyState title="Loading workspaces" body="Fetching cloud workspaces." />
+      ) : workspaces.error ? (
         <MobileEmptyState
-          title="No workspaces yet"
-          body="Create or join a workspace from the desktop app."
+          title="Could not load workspaces"
+          body="Refresh from Desktop or sign in again."
+        />
+      ) : (workspaces.data ?? []).length === 0 ? (
+        <MobileEmptyState
+          title="No cloud workspaces yet"
+          body="Continue a workspace remotely from Desktop to see it here."
         />
       ) : (
         <View style={styles.stack}>
@@ -49,8 +56,11 @@ function Section({
 }: {
   label: string;
   count: number;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
+  if (count === 0) {
+    return null;
+  }
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -62,40 +72,37 @@ function Section({
   );
 }
 
-function WorkspaceRow({ workspace }: { workspace: ProductWorkspace }) {
-  const ws = workspace;
-  const wsChats = chats.filter((c) => c.workspaceId === ws.id);
-  const running = wsChats.filter((c) => c.status === "running").length;
-  const unclaimed = wsChats.filter((c: ProductChat) => isTeamChat(c.kind) && !c.claimantUserId).length;
-
+function WorkspaceRow({ workspace }: { workspace: CloudWorkspaceSummary }) {
+  const lastSession = workspace.lastSessionSummary;
   return (
     <MobileListRow
       leading={
         <View style={styles.icon}>
           <MobileIcon
-            name={ws.kind === "shared" ? "users" : "folder"}
+            name={workspace.visibility === "private" ? "folder" : "users"}
             size={17}
             color={colors.mutedForeground}
           />
         </View>
       }
-      title={ws.name}
-      subtitle={`${ws.repoLabel} · ${ws.branchLabel}`}
+      title={workspace.displayName ?? workspace.repo.name}
+      subtitle={`${workspace.repo.owner}/${workspace.repo.name} · ${
+        workspace.repo.branch ?? workspace.repo.baseBranch ?? "main"
+      }`}
       trailing={
         <View style={styles.trailing}>
-          {unclaimed > 0 ? (
+          {workspace.visibility === "shared_unclaimed" ? (
             <View style={styles.unclaimed}>
               <MobileIcon name="hand" size={11} color={colors.success} />
-              <Text style={styles.unclaimedText}>{unclaimed}</Text>
+              <Text style={styles.unclaimedText}>Claim</Text>
             </View>
           ) : null}
           <Text style={styles.meta}>
-            {wsChats.length} chat{wsChats.length === 1 ? "" : "s"}
-            {running ? ` · ${running} running` : ""}
+            {lastSession?.title ?? workspace.exposureState ?? workspace.status}
           </Text>
         </View>
       }
-      showChevron
+      showChevron={Boolean(lastSession)}
     />
   );
 }

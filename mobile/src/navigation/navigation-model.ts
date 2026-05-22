@@ -8,6 +8,19 @@ export interface DrawerRoute {
   icon: MobileIconName;
 }
 
+export interface MobileCloudChat {
+  workspaceId: string;
+  workspaceName: string;
+  repoLabel: string;
+  branchLabel: string;
+  targetId: string;
+  workspaceRuntimeId: string | null;
+  sessionId: string;
+  title: string;
+  status: string;
+  visibility: string;
+}
+
 export const drawerRoutes: DrawerRoute[] = [
   { id: "home", label: "Home", icon: "home" },
   { id: "workspaces", label: "Workspaces", icon: "workspaces" },

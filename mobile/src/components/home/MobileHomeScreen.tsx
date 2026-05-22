@@ -9,7 +9,6 @@ import {
 } from "../primitives/MobileLayout";
 import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileTextInput } from "../primitives/MobileTextInput";
-import { workspaces } from "../../lib/fixtures/mobile-fixtures";
 import { colors, radius, spacing } from "../../styles/tokens";
 
 type Mode = "dispatch" | "shared" | "personal";
@@ -58,7 +57,6 @@ export function MobileHomeScreen({ onOpenSessions }: MobileHomeScreenProps) {
   const [mode, setMode] = useState<Mode>("dispatch");
   const [draft, setDraft] = useState("");
   const meta = MODES.find((m) => m.id === mode) ?? MODES[0];
-  const workspace = workspaces[0];
 
   return (
     <MobileScreen>
@@ -114,11 +112,11 @@ export function MobileHomeScreen({ onOpenSessions }: MobileHomeScreenProps) {
               style={styles.composerInput}
             />
             <View style={styles.composerFooter}>
-              {mode === "personal" && workspace ? (
+              {mode === "personal" ? (
                 <View style={styles.context}>
-                  <MobileIcon name="git-branch" size={13} color={colors.faint} />
+                  <MobileIcon name="cloud" size={13} color={colors.faint} />
                   <Text style={styles.contextText} numberOfLines={1}>
-                    {workspace.repoLabel} · {workspace.branchLabel}
+                    Personal cloud sandbox
                   </Text>
                 </View>
               ) : (

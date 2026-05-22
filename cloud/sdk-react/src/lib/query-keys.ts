@@ -118,8 +118,18 @@ export function cloudWorkspaceConnectionKey(
   ] as const;
 }
 
-export function cloudWorkspacesKey() {
-  return [...cloudRootKey(), "workspaces", "list"] as const;
+export function cloudWorkspacesKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+  scope: string | null = null,
+) {
+  return [
+    ...cloudRootKey(),
+    "workspaces",
+    "list",
+    owner.ownerScope,
+    owner.organizationId,
+    scope,
+  ] as const;
 }
 
 export function isCloudWorkspaceConnectionQueryKey(

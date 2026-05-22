@@ -4,8 +4,6 @@ import { useState } from "react";
 import type { NewChatPickerId, PickerView } from "@proliferate/product-ui/new-chat/NewChatSurface";
 import { NewChatSurface } from "@proliferate/product-ui/new-chat/NewChatSurface";
 
-import { workspaces } from "../../../lib/fixtures/web-fixtures";
-
 type ModeId = "dispatch" | "shared" | "personal";
 
 const MODE_PLACEHOLDERS: Record<ModeId, string> = {
@@ -16,7 +14,7 @@ const MODE_PLACEHOLDERS: Record<ModeId, string> = {
 
 export function HomeScreen() {
   const [draft, setDraft] = useState("");
-  const [targetId, setTargetId] = useState(workspaces[0]?.id ?? "shared-cloud");
+  const [targetId, setTargetId] = useState("personal-cloud");
   const [modelId, setModelId] = useState("gpt-5.4");
   const [modeId, setModeId] = useState<ModeId>("dispatch");
   const [submitting, setSubmitting] = useState(false);
@@ -53,13 +51,7 @@ export function HomeScreen() {
         target={buildTargetPicker(targetId)}
         model={buildModelPicker(modelId)}
         mode={buildModePicker(modeId)}
-        notices={[
-          {
-            id: "mock-cloud",
-            tone: "neutral",
-            text: "Cloud API wiring is intentionally light in this PR; this surface is using shared UI and fixture targets.",
-          },
-        ]}
+        notices={[]}
         actions={[
           {
             id: "branch",
@@ -86,6 +78,20 @@ export function HomeScreen() {
 }
 
 function buildTargetPicker(selectedId: string): PickerView {
+  const targets = [
+    {
+      id: "personal-cloud",
+      label: "Personal cloud",
+      description: "Your cloud sandbox",
+      icon: <Cloud size={13} />,
+    },
+    {
+      id: "shared-cloud",
+      label: "Shared cloud",
+      description: "Team sandbox",
+      icon: <Users size={13} />,
+    },
+  ];
   return {
     label: "Target",
     icon: <Cloud size={13} />,
@@ -93,12 +99,9 @@ function buildTargetPicker(selectedId: string): PickerView {
       {
         id: "targets",
         label: "Cloud targets",
-        items: workspaces.map((workspace) => ({
-          id: workspace.id,
-          label: workspace.name,
-          description: `${workspace.repoLabel} · ${workspace.branchLabel}`,
-          selected: workspace.id === selectedId,
-          icon: workspace.kind === "shared" ? <Users size={13} /> : <Cloud size={13} />,
+        items: targets.map((target) => ({
+          ...target,
+          selected: target.id === selectedId,
         })),
       },
     ],
