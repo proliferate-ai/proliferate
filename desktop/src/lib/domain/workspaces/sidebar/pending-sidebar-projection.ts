@@ -85,6 +85,10 @@ export function buildPendingSidebarProjection(args: {
       cloudStatus: null,
       lastInteracted: createdAt,
       needsReview: false,
+      workspaceLocationCopyLabel: null,
+      workspaceLocationCopyValue: null,
+      workspaceLocationCopyToastLabel: null,
+      branchName: null,
     },
     sortRecency: {
       activityAt: null,

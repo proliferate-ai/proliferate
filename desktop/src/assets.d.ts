@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_PROLIFERATE_API_BASE_URL?: string;
+  readonly VITE_PROLIFERATE_WEB_BASE_URL?: string;
   readonly VITE_PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT?: string;
   readonly VITE_PROLIFERATE_ENVIRONMENT?: string;
   readonly VITE_PROLIFERATE_RELEASE?: string;

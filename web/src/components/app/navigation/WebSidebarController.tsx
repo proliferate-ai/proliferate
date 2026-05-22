@@ -299,8 +299,11 @@ function workspaceStatusIcon(workspace: CloudWorkspaceSummary) {
 }
 
 function isWorkspaceRouteActive(pathname: string, workspaceId: string): boolean {
+  const legacyWorkspacePath = `/workspaces/${workspaceId}`;
   return (
     pathname === routes.workspace(workspaceId) ||
-    pathname.startsWith(`${routes.workspace(workspaceId)}/`)
+    pathname.startsWith(`${routes.workspace(workspaceId)}/`) ||
+    pathname === legacyWorkspacePath ||
+    pathname.startsWith(`${legacyWorkspacePath}/`)
   );
 }

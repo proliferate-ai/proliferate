@@ -60,6 +60,33 @@ describe("WorkspaceItem", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it("shows workspace copy actions in the context menu", () => {
+    const onCopyWorkspacePath = vi.fn();
+    const onCopyBranchName = vi.fn();
+
+    render(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        onSelect={vi.fn()}
+        workspaceLocationCopyLabel="Copy workspace path"
+        onCopyWorkspaceLocation={onCopyWorkspacePath}
+        onCopyBranchName={onCopyBranchName}
+      />,
+    );
+
+    const row = screen.getByText("Feature worktree").closest('[role="button"]');
+    expect(row).not.toBeNull();
+
+    fireEvent.contextMenu(row!);
+    fireEvent.click(screen.getByRole("button", { name: "Copy workspace pathCtrl+Shift+C" }));
+    fireEvent.contextMenu(row!);
+    fireEvent.click(screen.getByRole("button", { name: "Copy branch nameCtrl+Alt+C" }));
+
+    expect(onCopyWorkspacePath).toHaveBeenCalledTimes(1);
+    expect(onCopyBranchName).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the timestamp on active workspace rows", () => {
     render(
       <WorkspaceItem

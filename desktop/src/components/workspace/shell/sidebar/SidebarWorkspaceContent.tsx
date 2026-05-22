@@ -10,6 +10,7 @@ import {
 import { visibleSidebarGroupItems } from "@/lib/domain/workspaces/sidebar/sidebar-visible-items";
 import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { SkeletonBlock } from "@/components/feedback/Skeleton";
+import { useWorkspaceCopyActions } from "@/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { RepoGroup } from "./RepoGroup";
 import { SidebarShowToggleRow } from "./SidebarShowToggleRow";
 import { WorkspaceItem } from "./WorkspaceItem";
@@ -88,6 +89,8 @@ export function SidebarWorkspaceContent({
   onRemoveRepo,
   onOpenRepoSettings,
 }: SidebarWorkspaceContentProps) {
+  const { copyWorkspaceLocation, copyBranchName } = useWorkspaceCopyActions();
+
   if (isLoading && emptyState === "noWorkspaces") {
     return <SidebarLoadingState />;
   }
@@ -197,6 +200,22 @@ export function SidebarWorkspaceContent({
                 shortcutRevealVisible={shortcutRevealVisible}
                 onSelect={() => onSelectWorkspace(item.id)}
                 onIndicatorAction={onIndicatorAction}
+                workspaceLocationCopyLabel={item.workspaceLocationCopyLabel}
+                onCopyWorkspaceLocation={
+                  item.workspaceLocationCopyValue && item.workspaceLocationCopyToastLabel
+                    ? () => void copyWorkspaceLocation({
+                      value: item.workspaceLocationCopyValue!,
+                      menuLabel: item.workspaceLocationCopyLabel ?? "Copy workspace location",
+                      toastLabel: item.workspaceLocationCopyToastLabel!,
+                      missingLabel: "No workspace location to copy.",
+                    })
+                    : undefined
+                }
+                onCopyBranchName={
+                  item.branchName
+                    ? () => void copyBranchName(item.branchName)
+                    : undefined
+                }
                 onMarkDone={
                   item.variant === "worktree" && !item.archived && item.localWorkspaceId
                     ? () => onMarkWorkspaceDone(item.localWorkspaceId!, item.id)

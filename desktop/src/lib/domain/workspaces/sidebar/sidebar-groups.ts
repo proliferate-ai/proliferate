@@ -26,6 +26,7 @@ import type {
 import { buildPendingSidebarProjection } from "@/lib/domain/workspaces/sidebar/pending-sidebar-projection";
 import { resolveSidebarWorkspaceTypes } from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 import { isWorkspaceNeedsReview } from "@/lib/domain/workspaces/sidebar/sidebar-review";
+import { workspaceCopyMetadataForLogicalWorkspace } from "@/lib/domain/workspaces/workspace-copy-metadata";
 import {
   compareLogicalWorkspaceRecency,
   compareResolvedLogicalWorkspaceRecency,
@@ -182,6 +183,7 @@ export function buildSidebarGroupStates(args: {
           lastViewedAt: latestLogicalWorkspaceTimestamp(args.lastViewedAt, entry),
         });
         const activity = activeWorkspaceActivity(entry, args.workspaceActivities);
+        const copyMetadata = workspaceCopyMetadataForLogicalWorkspace(entry);
 
         return {
           workspace: entry,
@@ -214,6 +216,10 @@ export function buildSidebarGroupStates(args: {
               : null,
             lastInteracted,
             needsReview,
+            workspaceLocationCopyLabel: copyMetadata.workspaceLocation?.menuLabel ?? null,
+            workspaceLocationCopyValue: copyMetadata.workspaceLocation?.value ?? null,
+            workspaceLocationCopyToastLabel: copyMetadata.workspaceLocation?.toastLabel ?? null,
+            branchName: copyMetadata.branchName,
           },
         };
       });

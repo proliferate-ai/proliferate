@@ -15,7 +15,7 @@ import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/prolifer
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
 
 export function useWorkspaceMobilityFooterFlow() {
-  const { copyText, openExternal } = useTauriShellActions();
+  const { openExternal } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
   const {
     signIn: signInWithGitHub,
@@ -196,18 +196,6 @@ export function useWorkspaceMobilityFooterFlow() {
     resetPromptState,
   ]);
 
-  const handleCopy = useCallback(async (value: string | null, label: string) => {
-    if (!value) {
-      return;
-    }
-    try {
-      await copyText(value);
-      showToast(`${label} copied`, "info");
-    } catch {
-      showToast(`Failed to copy ${label.toLowerCase()}.`);
-    }
-  }, [showToast]);
-
   const closePopover = useCallback(() => {
     setPopoverOpen(false);
     resetPromptState();
@@ -345,7 +333,6 @@ export function useWorkspaceMobilityFooterFlow() {
         || (prompt.primaryActionKind === "connect_github" && githubSignInSubmitting)
         || (prompt.primaryActionKind === "manage_github_access" && isOpeningGitHubAccess)
       : false,
-    handleCopy,
     handlePopoverOpenChange,
     closePopover,
     handlePrimaryAction,

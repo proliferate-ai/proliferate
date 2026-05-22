@@ -4,20 +4,16 @@ import {
   mobilityActionableCopy,
   mobilityBlockerCopy,
   mobilityBranchSyncLoadingCopy,
-  mobilityDetailCopyLabel,
   mobilityLocationLabel,
   mobilityReconnectCopy,
   mobilityStatusCopy,
 } from "@/lib/domain/workspaces/mobility/presentation";
 
 describe("workspace mobility presentation", () => {
-  it("maps workspace locations to labels, detail labels, and primary actions", () => {
+  it("maps workspace locations to labels and primary actions", () => {
     expect(mobilityLocationLabel("local_workspace")).toBe("Local workspace");
     expect(mobilityLocationLabel("local_worktree")).toBe("Local worktree");
     expect(mobilityLocationLabel("cloud_workspace")).toBe("Cloud workspace");
-
-    expect(mobilityDetailCopyLabel("local_workspace")).toBe("Path");
-    expect(mobilityDetailCopyLabel("cloud_workspace")).toBe("Repository");
 
     expect(mobilityActionableCopy("local_workspace")).toEqual({
       headline: "Move to cloud",

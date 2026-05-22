@@ -83,7 +83,7 @@ function makeMobilityWorkspace(): NonNullable<LogicalWorkspace["mobilityWorkspac
 }
 
 describe("buildMobilityFooterContext", () => {
-  it("labels local workspaces with their local path and branch", () => {
+  it("labels local workspaces", () => {
     const context = buildMobilityFooterContext({
       logicalWorkspace: makeLogicalWorkspace(),
       status: makeStatus(),
@@ -91,10 +91,6 @@ describe("buildMobilityFooterContext", () => {
 
     expect(context).toMatchObject({
       locationLabel: "Local workspace",
-      detailKind: "path",
-      detailValue: "/Users/pablo/proliferate",
-      detailCopyLabel: "Path",
-      branchLabel: "feature/workspace-mobility",
     });
   });
 
@@ -114,14 +110,9 @@ describe("buildMobilityFooterContext", () => {
     });
 
     expect(context?.locationLabel).toBe("Local worktree");
-    expect(context).toMatchObject({
-      detailKind: "path",
-      detailValue: "/Users/pablo/proliferate-worktree",
-      detailCopyLabel: "Path",
-    });
   });
 
-  it("uses repository identity for cloud workspaces even when a local repo root exists", () => {
+  it("labels cloud workspaces even when a local repo root exists", () => {
     const context = buildMobilityFooterContext({
       logicalWorkspace: makeLogicalWorkspace({
         cloudWorkspace: {
@@ -169,13 +160,10 @@ describe("buildMobilityFooterContext", () => {
 
     expect(context).toMatchObject({
       locationLabel: "Cloud workspace",
-      detailKind: "repository",
-      detailValue: "openai/proliferate",
-      detailCopyLabel: "Repository",
     });
   });
 
-  it("uses mobility workspace repo metadata for cloud workspace identity", () => {
+  it("labels mobility workspaces owned by cloud", () => {
     const context = buildMobilityFooterContext({
       logicalWorkspace: makeLogicalWorkspace({
         cloudWorkspace: null,
@@ -191,9 +179,6 @@ describe("buildMobilityFooterContext", () => {
 
     expect(context).toMatchObject({
       locationLabel: "Cloud workspace",
-      detailKind: "repository",
-      detailValue: "proliferate-ai/proliferate",
-      detailCopyLabel: "Repository",
     });
   });
 
@@ -287,25 +272,16 @@ describe("buildMobilityFooterContext", () => {
 
     expect(local).toMatchObject({
       locationLabel: "Local workspace",
-      detailKind: "path",
-      detailValue: "/Users/pablo/proliferate",
-      branchValue: null,
       isInteractive: false,
       isActive: true,
     });
     expect(worktree).toMatchObject({
       locationLabel: "Local worktree",
-      detailKind: "path",
-      detailValue: "/Users/pablo/.proliferate/worktrees/proliferate/workspace-abc",
-      branchValue: "pablo/workspace-abc",
       isInteractive: false,
       isActive: true,
     });
     expect(cloud).toMatchObject({
       locationLabel: "Cloud workspace",
-      detailKind: "repository",
-      detailValue: "proliferate-ai/proliferate",
-      branchValue: "pablo/workspace-cloud",
       isInteractive: false,
       isActive: true,
     });
