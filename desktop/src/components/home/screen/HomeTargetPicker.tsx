@@ -267,10 +267,9 @@ export function HomeTargetPicker({
                 return (
                   <PopoverMenuItem
                     key={repository.sourceRoot}
-                    icon={<Folder className="size-4" />}
                     label={repository.name}
                     trailing={isSelected ? <Check className="size-4" /> : null}
-                    className="rounded-lg px-2.5 py-1.5 text-sm"
+                    className="rounded-lg px-3 py-1.5 text-sm"
                     onClick={() => {
                       onSelectRepository(repository.sourceRoot);
                       clearSearch();
