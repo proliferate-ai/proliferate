@@ -1,6 +1,12 @@
 # Web Desktop Parity Plan
 
-Status: working implementation checklist.
+Status: target checklist and historical implementation tracker.
+
+Current-state note: this file describes the desired Web/Desktop parity goal and
+some implementation progress, but its checked items are not a literal guarantee
+that Web already reuses the exact Desktop chat UI. For the concrete component
+inventory and extraction plan, use
+`docs/frontend/specs/web-chat-home-component-audit.md`.
 
 Scope:
 
