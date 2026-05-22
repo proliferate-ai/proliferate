@@ -134,6 +134,12 @@ class Settings(BaseSettings):
     cloud_target_sentry_environment: str = ""
     cloud_target_sentry_release: str = ""
     cloud_target_sentry_traces_sample_rate: float = 1.0
+    cloud_jwt_signing_key_pem: str = ""
+    cloud_jwt_signing_key_id: str = "local-dev"
+    cloud_jwt_verification_keys_json: str = "[]"
+    cloud_jwt_issuer: str = "https://api.proliferate.ai"
+    cloud_jwt_audience_anyharness: str = "anyharness"
+    cloud_jwt_direct_attach_ttl_seconds: int = 1200
     cloud_mcp_enabled: bool = True
     automation_cloud_executor_claim_ttl_seconds: float = 300.0
     automation_cloud_executor_heartbeat_seconds: float = 30.0

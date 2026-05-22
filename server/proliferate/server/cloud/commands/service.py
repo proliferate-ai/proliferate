@@ -25,6 +25,7 @@ from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.server.cloud.claims.access import require_workspace_interact
 from proliferate.server.cloud.commands.domain.rules import (
     compact_command_json,
     validate_active_command_kind,
@@ -37,6 +38,7 @@ from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.runtime.domain.wake import command_kind_requires_wake
 from proliferate.server.cloud.runtime.wake import kick_off_managed_slot_wake
+from proliferate.server.cloud.workspaces.access import cloud_workspace_user_can_read_with_db
 
 
 def _idempotency_scope_for_command(
@@ -107,16 +109,27 @@ async def _resolve_command_workspace(
                 "Workspace exposure is read-only.",
                 status_code=409,
             )
+        await require_workspace_interact(
+            db,
+            actor_user_id=user.id,
+            owner_scope=exposure.owner_scope,
+            owner_user_id=exposure.owner_user_id,
+            organization_id=exposure.organization_id,
+            workspace_archived=False,
+            exposure=exposure,
+        )
         return None, body.payload, cloud_workspace_id
     if kind in _MANAGED_SESSION_COMMAND_KINDS and _target_requires_cloud_workspace(target):
         return await _resolve_managed_session_command_workspace(
             db,
+            user=user,
             target=target,
             body=body,
         )
     if kind == CloudCommandKind.backfill_exposed_workspace.value:
         return await _resolve_backfill_exposed_workspace_command(
             db,
+            user=user,
             target=target,
             body=body,
         )
@@ -129,6 +142,7 @@ async def _resolve_command_workspace(
             )
         return await _resolve_managed_start_session_workspace(
             db,
+            user=user,
             target=target,
             body=body,
         )
@@ -205,6 +219,7 @@ async def _resolve_command_workspace(
 async def _resolve_managed_start_session_workspace(
     db: AsyncSession,
     *,
+    user: User,
     target: targets_store.CloudTargetSnapshot,
     body: CreateCloudCommandRequest,
 ) -> tuple[str | None, dict[str, object], str | None]:
@@ -266,6 +281,15 @@ async def _resolve_managed_start_session_workspace(
             "Workspace exposure is read-only.",
             status_code=409,
         )
+    await require_workspace_interact(
+        db,
+        actor_user_id=user.id,
+        owner_scope=workspace.owner_scope,
+        owner_user_id=workspace.owner_user_id,
+        organization_id=workspace.organization_id,
+        workspace_archived=workspace.archived_at is not None,
+        exposure=exposure,
+    )
     payload = dict(body.payload)
     payload["workspaceId"] = exposure.anyharness_workspace_id
     return exposure.anyharness_workspace_id, payload, str(workspace.id)
@@ -274,6 +298,7 @@ async def _resolve_managed_start_session_workspace(
 async def _resolve_backfill_exposed_workspace_command(
     db: AsyncSession,
     *,
+    user: User,
     target: targets_store.CloudTargetSnapshot,
     body: CreateCloudCommandRequest,
 ) -> tuple[str | None, dict[str, object], str | None]:
@@ -310,6 +335,15 @@ async def _resolve_backfill_exposed_workspace_command(
             "Backfill workspace id does not match the active exposure.",
             status_code=409,
         )
+    await require_workspace_interact(
+        db,
+        actor_user_id=user.id,
+        owner_scope=exposure.owner_scope,
+        owner_user_id=exposure.owner_user_id,
+        organization_id=exposure.organization_id,
+        workspace_archived=False,
+        exposure=exposure,
+    )
     payload = dict(body.payload)
     payload["workspaceId"] = exposure.anyharness_workspace_id
     return exposure.anyharness_workspace_id, payload, cloud_workspace_id
@@ -318,6 +352,7 @@ async def _resolve_backfill_exposed_workspace_command(
 async def _resolve_managed_session_command_workspace(
     db: AsyncSession,
     *,
+    user: User,
     target: targets_store.CloudTargetSnapshot,
     body: CreateCloudCommandRequest,
 ) -> tuple[str | None, dict[str, object], str | None]:
@@ -365,6 +400,15 @@ async def _resolve_managed_session_command_workspace(
             "Session exposure is read-only.",
             status_code=409,
         )
+    await require_workspace_interact(
+        db,
+        actor_user_id=user.id,
+        owner_scope=exposure.owner_scope,
+        owner_user_id=exposure.owner_user_id,
+        organization_id=exposure.organization_id,
+        workspace_archived=False,
+        exposure=exposure,
+    )
     return (
         projection.workspace_id or body.workspace_id,
         body.payload,
@@ -824,6 +868,12 @@ async def get_command_status(
             "cloud_command_not_found",
             "Command not found.",
             status_code=404,
+        )
+    if command.cloud_workspace_id is not None:
+        await cloud_workspace_user_can_read_with_db(
+            db,
+            user_id,
+            command.cloud_workspace_id,
         )
     return command
 

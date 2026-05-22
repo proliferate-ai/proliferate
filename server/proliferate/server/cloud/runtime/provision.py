@@ -796,6 +796,7 @@ async def _launch_and_connect_runtime(
     runtime_env = build_runtime_env(
         runtime_token,
         anyharness_data_key=ctx.anyharness_data_key,
+        target_id=ctx.target_id,
         repo_env_vars=ctx.repo_env_vars,
     )
 

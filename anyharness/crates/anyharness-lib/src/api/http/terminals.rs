@@ -1,8 +1,12 @@
 use axum::extract::{Path, State};
 use axum::response::IntoResponse;
-use axum::Json;
+use axum::{Extension, Json};
 
-use crate::api::http::access::{assert_terminal_mutable, assert_workspace_mutable};
+use crate::api::auth::AuthContext;
+use crate::api::http::access::{
+    assert_terminal_auth_scope, assert_terminal_command_auth_scope, assert_terminal_mutable,
+    assert_workspace_auth_scope, assert_workspace_mutable,
+};
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
 use crate::terminals::model::{
@@ -53,8 +57,10 @@ fn resolve_workspace(state: &AppState, workspace_id: &str) -> Result<WorkspaceRe
 )]
 pub async fn list_terminals(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(workspace_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
+    assert_workspace_auth_scope(&auth, &workspace_id)?;
     let ws = resolve_workspace(&state, &workspace_id)?;
     let terminals = state.terminal_service.list_terminals(&ws.id).await;
     Ok(Json(
@@ -79,9 +85,11 @@ pub async fn list_terminals(
 )]
 pub async fn create_terminal(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(workspace_id): Path<String>,
     Json(request): Json<CreateTerminalRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    assert_workspace_auth_scope(&auth, &workspace_id)?;
     let _lease = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::TerminalCommand)
@@ -157,9 +165,11 @@ pub async fn create_terminal(
 )]
 pub async fn start_terminal_command(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(terminal_id): Path<String>,
     Json(request): Json<StartTerminalCommandRequest>,
 ) -> Result<Json<StartTerminalCommandResponse>, ApiError> {
+    assert_terminal_auth_scope(&state, &auth, &terminal_id).await?;
     let terminal_for_gate = state
         .terminal_service
         .get_terminal(&terminal_id)
@@ -216,8 +226,10 @@ pub async fn start_terminal_command(
 )]
 pub async fn get_terminal_command_run(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(command_run_id): Path<String>,
 ) -> Result<Json<ContractTerminalCommandRunDetail>, ApiError> {
+    assert_terminal_command_auth_scope(&state, &auth, &command_run_id)?;
     let run = state
         .terminal_service
         .get_command_run(&command_run_id)
@@ -238,8 +250,10 @@ pub async fn get_terminal_command_run(
 )]
 pub async fn get_terminal(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(terminal_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
+    assert_terminal_auth_scope(&state, &auth, &terminal_id).await?;
     let record = state
         .terminal_service
         .get_terminal(&terminal_id)
@@ -262,9 +276,11 @@ pub async fn get_terminal(
 )]
 pub async fn update_terminal_title(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(terminal_id): Path<String>,
     Json(request): Json<UpdateTerminalTitleRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    assert_terminal_auth_scope(&state, &auth, &terminal_id).await?;
     assert_terminal_mutable(&state, &terminal_id).await?;
     let title = validate_terminal_title(request.title)?;
     let record = state
@@ -288,9 +304,11 @@ pub async fn update_terminal_title(
 )]
 pub async fn resize_terminal(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(terminal_id): Path<String>,
     Json(request): Json<ResizeTerminalRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    assert_terminal_auth_scope(&state, &auth, &terminal_id).await?;
     assert_terminal_mutable(&state, &terminal_id).await?;
     let record = state
         .terminal_service
@@ -318,8 +336,10 @@ pub async fn resize_terminal(
 )]
 pub async fn delete_terminal(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(terminal_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
+    assert_terminal_auth_scope(&state, &auth, &terminal_id).await?;
     assert_terminal_mutable(&state, &terminal_id).await?;
     state
         .terminal_service

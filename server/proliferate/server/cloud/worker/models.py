@@ -206,3 +206,17 @@ class WorkerProjectionGapRequest(BaseModel):
 
 class WorkerProjectionGapResponse(BaseModel):
     updated: bool
+
+
+class WorkerRevokedJtiEntry(BaseModel):
+    jti_hash: str = Field(serialization_alias="jtiHash")
+    hash_key_id: str = Field(serialization_alias="hashKeyId")
+    expires_at: str = Field(serialization_alias="expiresAt")
+    revoked_at: str = Field(serialization_alias="revokedAt")
+
+
+class WorkerRevokedJtisResponse(BaseModel):
+    revoked_jtis: list[WorkerRevokedJtiEntry] = Field(serialization_alias="revokedJtis")
+    server_time: str = Field(serialization_alias="serverTime")
+    next_cursor: str = Field(serialization_alias="nextCursor")
+    has_more: bool = Field(serialization_alias="hasMore")

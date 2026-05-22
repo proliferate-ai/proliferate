@@ -35,6 +35,7 @@ def compile_runtime_config_manifest(
     plan: ResolvedRuntimeConfigPlan,
     *,
     sandbox_profile_id: str,
+    direct_attach_auth: dict[str, object] | None = None,
 ) -> CompiledRuntimeConfigManifest:
     warning_payloads = [_warning_payload(warning) for warning in plan.warnings]
     blocking_error_payloads = tuple(_warning_payload(blocker) for blocker in plan.blocking_errors)
@@ -55,6 +56,8 @@ def compile_runtime_config_manifest(
         "artifacts": [_artifact_payload(artifact) for artifact in plan.artifacts],
         "warnings": warning_payloads,
     }
+    if direct_attach_auth is not None:
+        runtime_manifest_payload["directAttachAuth"] = direct_attach_auth
     manifest_without_hash = {
         "runtimeConfigVersion": 1,
         "externalScope": {

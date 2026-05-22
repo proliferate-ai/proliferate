@@ -13,10 +13,13 @@ use anyharness_contract::v1::{
 use axum::{
     extract::{Path, State},
     http::HeaderMap,
-    Json,
+    Extension, Json,
 };
 
-use super::access::{assert_workspace_mutable, assert_workspace_not_retired, map_access_error};
+use super::access::{
+    assert_workspace_auth_scope, assert_workspace_mutable, assert_workspace_not_retired,
+    map_access_error,
+};
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::workspaces_contract::{
@@ -24,6 +27,7 @@ use super::workspaces_contract::{
     setup_command_run_to_contract, workspace_cleanup_operation_to_contract,
     workspace_to_contract_with_summary,
 };
+use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
@@ -237,6 +241,7 @@ pub async fn create_worktree(
 )]
 pub async fn list_workspaces(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<Workspace>>, ApiError> {
     let latency = LatencyRequestContext::from_headers(&headers);
@@ -284,8 +289,17 @@ pub async fn list_workspaces(
         "[anyharness-latency] workspace.http.list.execution_summaries_loaded"
     );
     let response_started = Instant::now();
+    let scoped_workspace_id = match &auth {
+        AuthContext::UserClaim(claim) => Some(claim.anyharness_workspace_id.as_str()),
+        _ => None,
+    };
     let response = records
         .into_iter()
+        .filter(|record| {
+            scoped_workspace_id
+                .map(|workspace_id| record.id == workspace_id)
+                .unwrap_or(true)
+        })
         .map(|record| {
             let workspace_id = record.id.clone();
             workspace_to_contract_with_summary(
@@ -323,8 +337,10 @@ pub async fn list_workspaces(
 )]
 pub async fn get_workspace(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<Workspace>, ApiError> {
+    assert_workspace_auth_scope(&auth, &workspace_id)?;
     let workspace_runtime = state.workspace_runtime.clone();
     let record = run_blocking("get", move || {
         workspace_runtime.get_workspace(&workspace_id)

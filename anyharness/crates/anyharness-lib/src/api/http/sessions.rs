@@ -11,13 +11,16 @@ use axum::{
     body::Bytes,
     extract::{Path, Query, State},
     http::{HeaderMap, HeaderValue},
-    Json,
+    Extension, Json,
 };
 use serde::Deserialize;
 
-use super::access::assert_session_mutable;
+use super::access::{
+    assert_session_auth_scope, assert_session_mutable, assert_workspace_auth_scope,
+};
 use super::error::ApiError;
 use crate::acp::permission_broker::PermissionDecision;
+use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
@@ -65,6 +68,7 @@ pub struct ListSessionEventsQuery {
 )]
 pub async fn create_session(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     headers: HeaderMap,
     Json(req): Json<CreateSessionRequest>,
 ) -> Result<Json<Session>, ApiError> {
@@ -76,6 +80,7 @@ pub async fn create_session(
     let model_id = req.model_id.clone();
     let mode_id = req.mode_id.clone();
     let origin = request_origin_or_api_default(req.origin.clone(), "create_session");
+    assert_workspace_auth_scope(&auth, &workspace_id)?;
     let runtime_inputs = if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
         Some(
             state
@@ -169,9 +174,11 @@ pub async fn create_session(
 )]
 pub async fn update_session_title(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(session_id): Path<String>,
     Json(req): Json<UpdateSessionTitleRequest>,
 ) -> Result<Json<Session>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     assert_session_mutable(&state, &session_id)?;
     let record = state
         .session_service
@@ -193,8 +200,10 @@ pub async fn update_session_title(
 )]
 pub async fn get_live_session_config(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(session_id): Path<String>,
 ) -> Result<Json<GetSessionLiveConfigResponse>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let live_config = state
         .session_service
         .get_live_config_snapshot_checked(&session_id)
@@ -216,9 +225,11 @@ pub async fn get_live_session_config(
 )]
 pub async fn set_session_config_option(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(session_id): Path<String>,
     Json(req): Json<SetSessionConfigOptionRequest>,
 ) -> Result<Json<SetSessionConfigOptionResponse>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     tracing::debug!(
         session_id = %session_id,
         config_id = %req.config_id,
@@ -268,10 +279,12 @@ pub async fn set_session_config_option(
 )]
 pub async fn prompt_session(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     headers: HeaderMap,
     Path(session_id): Path<String>,
     Json(req): Json<PromptSessionRequest>,
 ) -> Result<Json<PromptSessionResponse>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let latency = LatencyRequestContext::from_headers(&headers);
     let latency_fields = latency_trace_fields(latency.as_ref());
     let prompt_id = request_prompt_id(req.prompt_id.as_deref(), latency_fields.prompt_id)?;
@@ -385,9 +398,11 @@ fn normalize_prompt_id(prompt_id: Option<&str>) -> Result<Option<String>, ApiErr
 )]
 pub async fn fork_session(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(session_id): Path<String>,
     body: Bytes,
 ) -> Result<Json<ForkSessionResponse>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let req = parse_optional_fork_request(body)?;
     let _lease = acquire_session_exclusive_operation_lease(
         &state,
@@ -472,9 +487,11 @@ fn parse_optional_fork_request(body: Bytes) -> Result<ForkSessionRequest, ApiErr
 )]
 pub async fn edit_pending_prompt(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((session_id, seq)): Path<(String, i64)>,
     Json(req): Json<EditPendingPromptRequest>,
 ) -> Result<Json<Session>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let blocks = req.blocks.unwrap_or_else(|| {
         vec![PromptInputBlock::Text {
             text: req.text.unwrap_or_default(),
@@ -506,8 +523,10 @@ pub async fn edit_pending_prompt(
 )]
 pub async fn delete_pending_prompt(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((session_id, seq)): Path<(String, i64)>,
 ) -> Result<Json<Session>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let _lease =
         acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionPrompt)
             .await?;
@@ -534,8 +553,10 @@ pub async fn delete_pending_prompt(
 )]
 pub async fn get_prompt_attachment(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((session_id, attachment_id)): Path<(String, String)>,
 ) -> Result<(HeaderMap, Vec<u8>), ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     state
         .session_service
         .get_session(&session_id)
@@ -593,10 +614,12 @@ pub async fn get_prompt_attachment(
 )]
 pub async fn resume_session(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     headers: HeaderMap,
     Path(session_id): Path<String>,
     body: Bytes,
 ) -> Result<Json<Session>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let latency = LatencyRequestContext::from_headers(&headers);
     let req = parse_optional_resume_request(body)?;
     let has_live_session = state.session_runtime.has_live_session(&session_id).await;
@@ -708,8 +731,10 @@ async fn acquire_session_exclusive_operation_lease(
 )]
 pub async fn cancel_session(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(session_id): Path<String>,
 ) -> Result<Json<Session>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let updated = state
         .session_runtime
         .cancel_live_session(&session_id)
@@ -736,8 +761,10 @@ pub async fn cancel_session(
 )]
 pub async fn close_session(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(session_id): Path<String>,
 ) -> Result<Json<Session>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let record = state
         .session_runtime
         .close_live_session(&session_id)
@@ -758,8 +785,10 @@ pub async fn close_session(
 )]
 pub async fn dismiss_session(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(session_id): Path<String>,
 ) -> Result<Json<Session>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let record = state
         .session_runtime
         .dismiss_live_session(&session_id)
@@ -779,9 +808,11 @@ pub async fn dismiss_session(
 )]
 pub async fn restore_dismissed_session(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     headers: HeaderMap,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<Option<Session>>, ApiError> {
+    assert_workspace_auth_scope(&auth, &workspace_id)?;
     let latency = LatencyRequestContext::from_headers(&headers);
     let latency_fields = latency_trace_fields(latency.as_ref());
     let started = Instant::now();
@@ -834,14 +865,26 @@ pub async fn restore_dismissed_session(
 )]
 pub async fn list_sessions(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Query(query): Query<ListSessionsQuery>,
 ) -> Result<Json<Vec<Session>>, ApiError> {
+    let workspace_id = match &auth {
+        AuthContext::UserClaim(claim) => {
+            if let Some(requested_workspace_id) = query.workspace_id.as_deref() {
+                if requested_workspace_id != claim.anyharness_workspace_id {
+                    return Err(ApiError::forbidden(
+                        "Direct-attach token is not scoped to this workspace.",
+                        "DIRECT_ATTACH_SCOPE_MISMATCH",
+                    ));
+                }
+            }
+            Some(claim.anyharness_workspace_id.as_str())
+        }
+        _ => query.workspace_id.as_deref(),
+    };
     let records = state
         .session_service
-        .list_sessions(
-            query.workspace_id.as_deref(),
-            query.include_dismissed.unwrap_or(false),
-        )
+        .list_sessions(workspace_id, query.include_dismissed.unwrap_or(false))
         .map_err(|e| ApiError::internal(e.to_string()))?;
     let mut sessions = Vec::with_capacity(records.len());
     for record in &records {
@@ -862,8 +905,10 @@ pub async fn list_sessions(
 )]
 pub async fn get_session(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(session_id): Path<String>,
 ) -> Result<Json<Session>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let record = state
         .session_service
         .get_session(&session_id)
@@ -896,10 +941,12 @@ pub async fn get_session(
 )]
 pub async fn list_session_events(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     headers: HeaderMap,
     Path(session_id): Path<String>,
     Query(query): Query<ListSessionEventsQuery>,
 ) -> Result<Json<Vec<SessionEventEnvelope>>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let latency = LatencyRequestContext::from_headers(&headers);
     let latency_fields = latency_trace_fields(latency.as_ref());
     let started = Instant::now();
@@ -992,9 +1039,11 @@ fn is_unsupported_event_history_window(
 )]
 pub async fn list_session_raw_notifications(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path(session_id): Path<String>,
     Query(query): Query<ListSessionEventsQuery>,
 ) -> Result<Json<Vec<SessionRawNotificationEnvelope>>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let raw_records = state
         .session_service
         .list_session_raw_notification_records(&session_id, query.after_seq.map(|seq| seq.max(0)))
@@ -1031,9 +1080,11 @@ pub async fn list_session_raw_notifications(
 )]
 pub async fn resolve_interaction(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((session_id, request_id)): Path<(String, String)>,
     Json(req): Json<ResolveInteractionRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let resolution = resolve_interaction_input(req);
 
     state
@@ -1061,6 +1112,7 @@ pub async fn resolve_interaction(
 )]
 pub async fn reveal_mcp_elicitation_url(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Path((session_id, request_id)): Path<(String, String)>,
 ) -> Result<
     (
@@ -1069,6 +1121,7 @@ pub async fn reveal_mcp_elicitation_url(
     ),
     ApiError,
 > {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
     let response = state
         .session_runtime
         .reveal_mcp_elicitation_url(&session_id, &request_id)

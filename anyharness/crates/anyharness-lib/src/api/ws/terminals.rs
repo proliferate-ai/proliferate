@@ -1,10 +1,14 @@
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
+use axum::Extension;
 use futures::stream::StreamExt;
 use futures::SinkExt;
 use serde::Deserialize;
 
+use crate::api::auth::AuthContext;
+use crate::api::http::access::assert_terminal_auth_scope;
+use crate::api::http::error::ApiError;
 use crate::app::AppState;
 use crate::terminals::model::ResizeTerminalOptions;
 use crate::terminals::service::terminal_frame_to_json;
@@ -19,9 +23,15 @@ pub async fn terminal_ws(
     ws: WebSocketUpgrade,
     Path(terminal_id): Path<String>,
     Query(query): Query<TerminalWsQuery>,
+    Extension(auth): Extension<AuthContext>,
     State(state): State<AppState>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_terminal_ws(socket, terminal_id, query.after_seq, state))
+) -> Result<impl IntoResponse, ApiError> {
+    assert_terminal_auth_scope(&state, &auth, &terminal_id).await?;
+    Ok(
+        ws.on_upgrade(move |socket| {
+            handle_terminal_ws(socket, terminal_id, query.after_seq, state)
+        }),
+    )
 }
 
 #[derive(Debug, Deserialize)]

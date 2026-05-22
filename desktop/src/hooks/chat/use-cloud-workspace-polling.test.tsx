@@ -164,5 +164,6 @@ function cloudWorkspace(input: {
     postReadyFilesApplied: 0,
     postReadyStartedAt: null,
     postReadyCompletedAt: null,
+    visibility: "private",
   };
 }

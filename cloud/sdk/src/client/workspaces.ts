@@ -12,6 +12,11 @@ import type {
 } from "../types/index.js";
 import type { CloudOwnerSelection } from "./billing.js";
 
+export type CloudWorkspaceListScope = "my" | "unclaimed" | "claimable" | "org-all";
+export type CloudWorkspaceListSelection = CloudOwnerSelection & {
+  scope?: CloudWorkspaceListScope;
+};
+
 type CloudWorkspaceTransport = Record<string, unknown> & {
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
@@ -60,7 +65,7 @@ function normalizeCloudWorkspace<T extends CloudWorkspaceTransport>(
 
 export async function listCloudWorkspaces(
   options?: CloudMeasurementOptions,
-  owner?: CloudOwnerSelection,
+  owner?: CloudWorkspaceListSelection,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudWorkspaceSummary[]> {
   const data = await measureCloudRequest({
@@ -73,6 +78,7 @@ export async function listCloudWorkspaces(
           query: {
             ownerScope: owner?.ownerScope ?? "personal",
             organizationId: owner?.organizationId ?? undefined,
+            scope: owner?.scope,
           },
         },
         signal: options?.signal,
