@@ -5781,6 +5781,8 @@ export interface operations {
                 limit?: number;
                 /** @description Return complete newest turns, bounded by the limit event budget */
                 turn_limit?: number;
+                /** @description When after_seq and limit are set, page from the oldest matching event instead of the newest matching window */
+                oldest_first?: boolean;
             };
             header?: never;
             path: {

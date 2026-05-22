@@ -1810,6 +1810,15 @@
               "type": "integer",
               "format": "int64"
             }
+          },
+          {
+            "name": "oldest_first",
+            "in": "query",
+            "description": "When after_seq and limit are set, page from the oldest matching event instead of the newest matching window",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
