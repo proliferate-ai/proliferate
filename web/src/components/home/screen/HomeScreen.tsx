@@ -1,4 +1,4 @@
-import { Bot, Cloud, GitBranch, GitPullRequest } from "lucide-react";
+import { Bot, Cloud, GitBranch } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -12,6 +12,7 @@ import type {
   PickerView,
 } from "@proliferate/product-ui/new-chat/NewChatSurface";
 import { NewChatSurface } from "@proliferate/product-ui/new-chat/NewChatSurface";
+import type { CloudChatTranscriptRowView } from "@proliferate/product-ui/chat/CloudChatTranscript";
 
 import { webEnv } from "../../../config/env";
 import { routes } from "../../../config/routes";
@@ -27,6 +28,13 @@ interface RepoOption {
   description: string;
 }
 
+interface HomePendingPrompt {
+  id: string;
+  text: string;
+  status: "creating" | "failed";
+  detail?: string | null;
+}
+
 export function HomeScreen() {
   const navigate = useNavigate();
   const submitInFlightRef = useRef(false);
@@ -36,6 +44,7 @@ export function HomeScreen() {
   );
   const [modelId, setModelId] = useState("gpt-5.4");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [pendingPrompt, setPendingPrompt] = useState<HomePendingPrompt | null>(null);
   const repoConfigs = useCloudRepoConfigs();
   const createWorkspace = useCreateCloudWorkspace();
   const repoOptions = useMemo(
@@ -71,9 +80,17 @@ export function HomeScreen() {
 
     submitInFlightRef.current = true;
     setSubmitError(null);
+    const pendingPrompt = {
+      id: `web-home:${Date.now().toString(36)}`,
+      text,
+      status: "creating" as const,
+    };
+    setPendingPrompt(pendingPrompt);
+    setDraft("");
     try {
-      const pendingPrompt = {
-        id: `web-home:${Date.now().toString(36)}`,
+      await waitForNextPaint();
+      const workspacePendingPrompt = {
+        id: pendingPrompt.id,
         text,
         modelId,
         modeId: null,
@@ -87,17 +104,26 @@ export function HomeScreen() {
         displayName: buildWorkspaceDisplayName(text),
         ownerScope: "personal",
       });
-      savePendingHomePrompt(workspace.id, pendingPrompt);
-      setDraft("");
+      savePendingHomePrompt(workspace.id, workspacePendingPrompt);
       navigate(routes.workspace(workspace.id));
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Could not create workspace.");
+      const message = error instanceof Error ? error.message : "Could not create workspace.";
+      setSubmitError(message);
+      setPendingPrompt({
+        ...pendingPrompt,
+        status: "failed",
+        detail: message,
+      });
     } finally {
       submitInFlightRef.current = false;
     }
   }
 
   const submitting = createWorkspace.isPending || submitInFlightRef.current;
+  const transcriptRows = useMemo(
+    () => buildPendingPromptRows(pendingPrompt),
+    [pendingPrompt],
+  );
   const repoNotice = selectedRepo
     ? null
     : {
@@ -105,9 +131,23 @@ export function HomeScreen() {
       tone: "warning" as const,
       text: "Select a GitHub repository before sending.",
     };
-  const errorNotice = submitError
-    ? { id: "submit-error", tone: "error" as const, text: submitError }
+  const errorNotice: NoticeView | null = submitError
+    ? {
+      id: "submit-error",
+      tone: "error",
+      text: submitError,
+    }
     : null;
+  if (errorNotice && pendingPrompt?.status === "failed") {
+    errorNotice.action = {
+      label: "Retry",
+      onClick: () => {
+        setDraft(pendingPrompt.text);
+        setPendingPrompt(null);
+        setSubmitError(null);
+      },
+    };
+  }
   const notices: NoticeView[] = [];
   if (repoNotice) notices.push(repoNotice);
   if (errorNotice) notices.push(errorNotice);
@@ -124,29 +164,63 @@ export function HomeScreen() {
         model={buildModelPicker(modelId)}
         mode={buildModePicker()}
         notices={notices}
-        actions={[
-          {
-            id: "branch",
-            label: "Open from branch",
-            icon: <GitBranch size={14} />,
-          },
-          {
-            id: "pr",
-            label: "Review pull request",
-            icon: <GitPullRequest size={14} />,
-          },
-          {
-            id: "agent",
-            label: "Use saved agent",
-            icon: <Bot size={14} />,
-          },
-        ]}
+        transcriptRows={transcriptRows}
+        commandMessage={
+          pendingPrompt?.status === "creating"
+            ? "Creating a cloud workspace. The prompt will send as soon as the workspace is ready."
+            : null
+        }
+        actions={[]}
         onDraftChange={setDraft}
         onSubmit={() => void handleSubmit()}
         onPickerSelect={handlePickerSelect}
       />
     </div>
   );
+}
+
+function buildPendingPromptRows(
+  pendingPrompt: HomePendingPrompt | null,
+): CloudChatTranscriptRowView[] {
+  if (!pendingPrompt) {
+    return [];
+  }
+  const isCreating = pendingPrompt.status === "creating";
+  return [
+    {
+      id: `${pendingPrompt.id}:user`,
+      kind: "user",
+      body: pendingPrompt.text,
+      status: isCreating ? "Creating workspace" : "Failed",
+      streaming: isCreating,
+    },
+    isCreating
+      ? {
+        id: `${pendingPrompt.id}:assistant`,
+        kind: "assistant",
+        title: "Cloud setup",
+        body: "Preparing the workspace and queuing this prompt.",
+        status: "Waiting",
+        streaming: true,
+      }
+      : {
+        id: `${pendingPrompt.id}:error`,
+        kind: "error",
+        title: "Workspace creation failed",
+        body: pendingPrompt.detail ?? "The prompt was not sent.",
+        status: "Failed",
+      },
+  ];
+}
+
+function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        resolve();
+      });
+    });
+  });
 }
 
 function buildTargetPicker(

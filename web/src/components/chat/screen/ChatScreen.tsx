@@ -232,6 +232,13 @@ export function ChatScreen() {
     if (!pendingHomePrompt || !workspace) {
       return;
     }
+    if (pendingHomePrompt.status === "failed") {
+      setPendingHomePromptStatus(
+        pendingHomePrompt.errorMessage ?? "Queued prompt could not be sent.",
+      );
+      setDraft((current) => current.trim() ? current : pendingHomePrompt.text);
+      return;
+    }
     if (workspaceStatus === "error" || workspaceStatus === "archived") {
       setPendingHomePromptStatus("Workspace creation failed before the prompt could be sent.");
       return;
@@ -306,11 +313,16 @@ export function ChatScreen() {
           if (!isCurrentRun()) {
             return;
           }
-          clearPendingHomePrompt(workspace.id);
-          setPendingHomePrompt(null);
-          setPendingHomePromptStatus(
-            error instanceof Error ? error.message : "Queued prompt could not be sent.",
-          );
+          const message = error instanceof Error ? error.message : "Queued prompt could not be sent.";
+          const failedPrompt: PendingHomePrompt = {
+            ...pendingHomePrompt,
+            status: "failed",
+            errorMessage: message,
+          };
+          savePendingHomePrompt(workspace.id, failedPrompt);
+          setPendingHomePrompt(failedPrompt);
+          setPendingHomePromptStatus(message);
+          setDraft((current) => current.trim() ? current : pendingHomePrompt.text);
         })
         .finally(() => {
           if (pendingHomePromptDispatchRunRef.current === run) {
@@ -587,11 +599,16 @@ export function ChatScreen() {
             prompt.id === optimisticPrompt.id ? { ...prompt, status: "failed" } : prompt
           )
         );
-        clearPendingHomePrompt(workspace.id);
-        setPendingHomePrompt(null);
-        setPendingHomePromptStatus(
-          error instanceof Error ? error.message : "Prompt could not be sent.",
-        );
+        const message = error instanceof Error ? error.message : "Prompt could not be sent.";
+        setDraft((current) => current.trim() ? current : text);
+        const failedPrompt: PendingHomePrompt = {
+          ...pendingPrompt,
+          status: "failed",
+          errorMessage: message,
+        };
+        savePendingHomePrompt(workspace.id, failedPrompt);
+        setPendingHomePrompt(failedPrompt);
+        setPendingHomePromptStatus(message);
       } finally {
         setDirectPromptDispatching(false);
       }
@@ -647,6 +664,7 @@ export function ChatScreen() {
           prompt.id === optimisticPrompt.id ? { ...prompt, status: "failed" } : prompt
         )
       );
+      setDraft((current) => current.trim() ? current : text);
       setPendingHomePromptStatus(
         error instanceof Error ? error.message : "Prompt could not be sent.",
       );
@@ -991,7 +1009,8 @@ function buildPendingHomePromptRows(input: {
   if (duplicateOptimisticPrompt) {
     return [];
   }
-  const failed = isFailureStatusText(input.status);
+  const failed = input.pendingPrompt.status === "failed" || isFailureStatusText(input.status);
+  const failureMessage = input.pendingPrompt.errorMessage ?? input.status;
   return [
     {
       id: `${input.pendingPrompt.id}:user`,
@@ -1004,7 +1023,7 @@ function buildPendingHomePromptRows(input: {
       id: `${input.pendingPrompt.id}:assistant-waiting`,
       kind: failed ? "error" : "assistant",
       body: failed
-        ? input.status ?? "Queued prompt could not be sent."
+        ? failureMessage ?? "Queued prompt could not be sent."
         : input.status ?? "Waiting for the workspace to be ready...",
       streaming: !failed,
     },

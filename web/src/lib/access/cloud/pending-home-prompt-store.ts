@@ -4,6 +4,8 @@ export interface PendingHomePrompt {
   modelId: string | null;
   modeId: string | null;
   createdAt: number;
+  status?: "pending" | "failed";
+  errorMessage?: string | null;
 }
 
 const PENDING_HOME_PROMPT_KEY_PREFIX = "proliferate.web.pendingHomePrompt:";
@@ -49,6 +51,8 @@ export function loadPendingHomePrompt(workspaceId: string): PendingHomePrompt | 
       modelId: typeof parsed.modelId === "string" ? parsed.modelId : null,
       modeId: typeof parsed.modeId === "string" ? parsed.modeId : null,
       createdAt: typeof parsed.createdAt === "number" ? parsed.createdAt : Date.now(),
+      status: parsed.status === "failed" ? "failed" : "pending",
+      errorMessage: typeof parsed.errorMessage === "string" ? parsed.errorMessage : null,
     };
   } catch {
     return null;

@@ -50,14 +50,14 @@ Web
 
 ### 1. Main New Chat Page
 
-- [ ] Web new chat page uses Desktop-grade launch/composer presentation, not a lightweight form.
-- [ ] Repo/workspace chooser matches Desktop interaction density and hierarchy.
-- [ ] Prompt box uses the same shared composer surface and controls.
-- [ ] Model/config choices are available before session creation when cloud capabilities allow.
-- [ ] Creating a new cloud workspace from Web shows immediate pending shell state.
-- [ ] Sending an initial prompt from new chat shows optimistic user work immediately.
-- [ ] Successful workspace/session creation navigates into the real chat route without visual reset.
-- [ ] Failure keeps the pending prompt/workspace inspectable and retryable.
+- [x] Web new chat page uses Desktop-grade launch/composer presentation, not a lightweight form.
+- [x] Repo/workspace chooser matches Desktop interaction density and hierarchy.
+- [x] Prompt box uses the same shared composer surface and controls.
+- [x] Model/config choices are available before session creation when cloud capabilities allow.
+- [x] Creating a new cloud workspace from Web shows immediate pending shell state.
+- [x] Sending an initial prompt from new chat shows optimistic user work immediately.
+- [x] Successful workspace/session creation navigates into the real chat route without visual reset.
+- [x] Failure keeps the pending prompt/workspace inspectable and retryable.
 
 ### 2. Chat Transcript
 
@@ -125,7 +125,7 @@ Web
 - [x] New session uses the same composer/config presentation.
 - [x] Session creation uses cloud commands and navigates to the created session.
 - [x] Pending session appears immediately in sidebar/chat shell.
-- [ ] Failed session creation remains visible and retryable.
+- [x] Failed session creation remains visible and retryable.
 
 ### 8. Automations
 
@@ -156,9 +156,10 @@ Web
 - [x] Browser-test existing-session follow-up prompt.
 - [x] Browser-test live transcript updates without sending another message.
 - [x] Browser-test config update success.
-- [ ] Browser-test config update failure.
-- [ ] Browser-test shared-unclaimed claim flow.
+- [ ] Browser-test config update failure. Deterministic API fixture path identified; real browser forcing still needs a controllable worker fixture.
+- [ ] Browser-test shared-unclaimed claim flow. Existing server seed helper identified; local browser fixture still needs a shared-unclaimed workspace seeded into the running dev profile.
 - [x] Browser-test new session in existing workspace.
+- [x] Browser-test new chat page creates a cloud workspace, shows pending UI, sends the initial prompt, renders the reply, and survives reload.
 - [x] Browser-test automations list/create if API support exists.
 - [x] Browser-test settings modal/page navigation.
 
@@ -183,6 +184,7 @@ Use this section to mark incremental progress during implementation.
 - [x] Web persisted pending prompt rows through chat reload.
 - [x] Browser-verified real Web prompt delivery in an existing session.
 - [x] Browser-verified real Web prompt delivery for a new session in an existing workspace.
+- [x] Browser-verified real Web prompt delivery from the main new-chat page into a newly-created cloud workspace.
 - [x] Browser-verified workspace list reload, settings routes, composer config update, and automation create validation.
 - [ ] Browser-test shared-unclaimed claim flow when a shared-unclaimed fixture is available.
 
