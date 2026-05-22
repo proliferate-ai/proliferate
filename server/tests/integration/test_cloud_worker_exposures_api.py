@@ -156,7 +156,13 @@ async def test_worker_exposures_returns_active_projection_cursors(
 
     assert response.status_code == 200
     body = response.json()
-    exposures = sorted(body["exposures"], key=lambda row: row["anyharnessSessionId"])
+    exposures = sorted(
+        body["exposures"],
+        key=lambda row: (
+            row["anyharnessSessionId"] is None,
+            row["anyharnessSessionId"] or "",
+        ),
+    )
     assert exposures == [
         {
             "exposureId": str(exposure.id),
@@ -183,6 +189,19 @@ async def test_worker_exposures_returns_active_projection_cursors(
             "status": "active",
             "revision": 1,
             "lastUploadedSeq": 3,
+        },
+        {
+            "exposureId": str(exposure.id),
+            "targetId": str(target_id),
+            "cloudWorkspaceId": str(workspace.id),
+            "sessionProjectionId": None,
+            "anyharnessWorkspaceId": "workspace-1",
+            "anyharnessSessionId": None,
+            "projectionLevel": "live",
+            "commandable": True,
+            "status": "active",
+            "revision": 1,
+            "lastUploadedSeq": 0,
         },
     ]
 
