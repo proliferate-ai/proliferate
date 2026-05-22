@@ -16,17 +16,21 @@ from proliferate.constants.cloud import (
     CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
     CLOUD_TARGET_HEARTBEAT_STALE_SECONDS,
     CLOUD_WORKER_TOKEN_DOMAIN,
+    CloudCommandKind,
     CloudCommandStatus,
     CloudTargetStatus,
     CloudTargetUpdateStatus,
     CloudWorkerStatus,
 )
+from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_claims import tokens as claim_tokens_store
+from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
 from proliferate.db.store.cloud_sandboxes import load_active_slot_for_profile_target
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import inventory as inventory_store
 from proliferate.db.store.cloud_sync import projections as projections_store
+from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
@@ -42,6 +46,7 @@ from proliferate.server.cloud.live.service import (
     publish_target_patch_after_commit,
 )
 from proliferate.server.cloud.observability import log_worker_update_status
+from proliferate.server.cloud.target_config.models import TargetConfigMaterializationPlan
 from proliferate.server.cloud.target_git_identity.service import materialize_target_git_identity
 from proliferate.server.cloud.worker.domain.rules import (
     clamp_command_lease_seconds,
@@ -90,6 +95,7 @@ from proliferate.server.cloud.worker.slot_guard import (
     require_current_managed_worker_slot,
     target_requires_worker_slot,
 )
+from proliferate.utils.crypto import decrypt_json
 from proliferate.utils.time import utcnow
 
 _REVOKED_JTI_PAGE_SIZE = 500
@@ -209,6 +215,306 @@ def _sandbox_profile_id_from_payload(payload_json: str) -> str | None:
     value = _parse_json_dict(payload_json) or {}
     sandbox_profile_id = value.get("sandboxProfileId")
     return sandbox_profile_id if isinstance(sandbox_profile_id, str) else None
+
+
+def _optional_int(value: object) -> int | None:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return None
+
+
+def _uuid_value(value: object) -> UUID | None:
+    if value is None:
+        return None
+    try:
+        return UUID(str(value))
+    except ValueError:
+        return None
+
+
+def _optional_uuid(value: object, *, field_name: str) -> UUID | None:
+    if value is None:
+        return None
+    try:
+        return UUID(str(value))
+    except ValueError as exc:
+        raise CloudApiError(
+            "cloud_worker_invalid_uuid",
+            f"{field_name} must be a UUID.",
+            status_code=400,
+        ) from exc
+
+
+def _payload_dict(command: commands_store.CloudCommandSnapshot) -> dict[str, object]:
+    try:
+        parsed = json.loads(command.payload_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _result_dict(
+    *,
+    command: commands_store.CloudCommandSnapshot,
+    body: WorkerCommandResultRequest,
+) -> dict[str, object]:
+    if body.result is not None:
+        return body.result
+    try:
+        parsed = json.loads(command.result_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _final_worker_state_already_recorded(
+    status: str,
+    *,
+    command_status: str,
+) -> bool:
+    return status in {"applied", "failed", "superseded"} and command_status in {
+        CloudCommandStatus.accepted.value,
+        CloudCommandStatus.accepted_but_queued.value,
+        CloudCommandStatus.rejected.value,
+        CloudCommandStatus.failed_delivery.value,
+    }
+
+
+async def _record_agent_auth_state_from_command_result(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    command: commands_store.CloudCommandSnapshot,
+    body: WorkerCommandResultRequest,
+) -> None:
+    if command.kind != CloudCommandKind.refresh_agent_auth_config.value:
+        return
+    payload = _payload_dict(command)
+    sandbox_profile_id = _uuid_value(payload.get("sandboxProfileId"))
+    revision = _optional_int(payload.get("revision"))
+    if sandbox_profile_id is None or revision is None:
+        return
+    profile = await agent_auth_store.get_sandbox_profile(db, sandbox_profile_id)
+    if profile is None:
+        return
+    existing = await agent_auth_store.get_target_state(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=command.target_id,
+    )
+    if (
+        existing is not None
+        and existing.last_command_id == command.id
+        and _final_worker_state_already_recorded(
+            existing.status,
+            command_status=command.status,
+        )
+    ):
+        return
+    result = _result_dict(command=command, body=body)
+    current_revision = _optional_int(result.get("currentRevision"))
+    applied_revision = _optional_int(result.get("revision"))
+    desired_revision = max(profile.agent_auth_revision, current_revision or revision)
+    previous_applied = existing.applied_revision if existing is not None else None
+    state_status: str | None = None
+    next_applied = previous_applied
+    error_code: str | None = None
+    error_message: str | None = None
+    if command.status == CloudCommandStatus.superseded.value:
+        state_status = "superseded"
+        error_code = command.error_code
+        error_message = command.error_message
+    elif command.status in {
+        CloudCommandStatus.rejected.value,
+        CloudCommandStatus.failed_delivery.value,
+    }:
+        state_status = "failed"
+        error_code = command.error_code or body.error_code or "agent_auth_materialization_failed"
+        error_message = command.error_message or body.error_message
+    elif command.status in {
+        CloudCommandStatus.accepted.value,
+        CloudCommandStatus.accepted_but_queued.value,
+    }:
+        applied = result.get("applied")
+        reason = result.get("reason")
+        if applied is True:
+            next_applied = applied_revision or revision
+            if next_applied < desired_revision:
+                state_status = "superseded"
+            else:
+                state_status = "applied"
+                desired_revision = next_applied
+        elif reason == "superseded" or current_revision is not None:
+            state_status = "superseded"
+        else:
+            return
+    else:
+        return
+    if state_status is None:
+        return
+    force_restart_required = existing.force_restart_required if existing is not None else False
+    if state_status == "applied" and next_applied == desired_revision:
+        force_restart_required = False
+    await agent_auth_store.upsert_target_state(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=command.target_id,
+        desired_revision=desired_revision,
+        applied_revision=next_applied,
+        status=state_status,
+        force_restart_required=force_restart_required,
+        last_command_id=command.id,
+        last_worker_id=auth.worker_id,
+        last_error_code=error_code,
+        last_error_message=error_message,
+    )
+
+
+async def _runtime_config_summary_from_command_result(
+    db: AsyncSession,
+    *,
+    command: commands_store.CloudCommandSnapshot,
+    body: WorkerCommandResultRequest,
+) -> dict[str, object] | None:
+    result = _result_dict(command=command, body=body)
+    summary = result.get("runtimeConfig")
+    if isinstance(summary, dict):
+        return summary
+    payload = _payload_dict(command)
+    config_id = _uuid_value(payload.get("targetConfigId"))
+    config_version = _optional_int(payload.get("configVersion"))
+    if config_id is None or config_version is None:
+        return None
+    config = await target_config_store.get_target_config_by_id(db, config_id)
+    if (
+        config is None
+        or config.target_id != command.target_id
+        or config.config_version != config_version
+    ):
+        return None
+    try:
+        plan = TargetConfigMaterializationPlan.model_validate(
+            decrypt_json(config.payload_ciphertext)
+        )
+    except (TypeError, ValueError):
+        return None
+    if plan.runtime_config is None:
+        return None
+    return {
+        "revisionId": plan.runtime_config.revision_id,
+        "sandboxProfileId": plan.runtime_config.sandbox_profile_id,
+        "sequence": plan.runtime_config.sequence,
+    }
+
+
+async def _record_runtime_config_state_from_command_result(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    command: commands_store.CloudCommandSnapshot,
+    body: WorkerCommandResultRequest,
+) -> None:
+    if command.kind != CloudCommandKind.materialize_environment.value:
+        return
+    summary = await _runtime_config_summary_from_command_result(
+        db,
+        command=command,
+        body=body,
+    )
+    if summary is None:
+        return
+    revision_id = _uuid_value(summary.get("revisionId"))
+    sandbox_profile_id = _uuid_value(summary.get("sandboxProfileId"))
+    sequence = _optional_int(summary.get("sequence"))
+    if revision_id is None or sandbox_profile_id is None or sequence is None:
+        return
+    revision = await runtime_config_store.get_revision_by_id(db, revision_id)
+    if (
+        revision is None
+        or revision.sandbox_profile_id != sandbox_profile_id
+        or revision.sequence != sequence
+    ):
+        return
+    existing = await agent_auth_store.get_target_state(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=command.target_id,
+    )
+    if (
+        existing is not None
+        and existing.last_runtime_config_command_id == command.id
+        and _final_worker_state_already_recorded(
+            existing.runtime_config_status,
+            command_status=command.status,
+        )
+    ):
+        return
+    state_status: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    if command.status == CloudCommandStatus.superseded.value:
+        state_status = "superseded"
+        error_code = command.error_code
+        error_message = command.error_message
+    elif command.status in {
+        CloudCommandStatus.rejected.value,
+        CloudCommandStatus.failed_delivery.value,
+    }:
+        state_status = "failed"
+        error_code = (
+            command.error_code or body.error_code or "runtime_config_materialization_failed"
+        )
+        error_message = command.error_message or body.error_message
+    elif command.status in {
+        CloudCommandStatus.accepted.value,
+        CloudCommandStatus.accepted_but_queued.value,
+    }:
+        _current, current_revision = await runtime_config_store.get_current(
+            db,
+            sandbox_profile_id=sandbox_profile_id,
+        )
+        state_status = (
+            "applied"
+            if current_revision is not None and current_revision.id == revision_id
+            else "superseded"
+        )
+    else:
+        return
+    if state_status is None:
+        return
+    await agent_auth_store.record_runtime_config_worker_status(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=command.target_id,
+        sequence=sequence,
+        revision_id=revision_id,
+        worker_id=auth.worker_id,
+        status=state_status,
+        error_code=error_code,
+        error_message=error_message,
+        command_id=command.id,
+    )
+
+
+async def _record_materialization_state_from_command_result(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    command: commands_store.CloudCommandSnapshot,
+    body: WorkerCommandResultRequest,
+) -> None:
+    await _record_agent_auth_state_from_command_result(
+        db,
+        auth=auth,
+        command=command,
+        body=body,
+    )
+    await _record_runtime_config_state_from_command_result(
+        db,
+        auth=auth,
+        command=command,
+        body=body,
+    )
 
 
 def _target_desired_versions(target: targets_store.CloudTargetSnapshot) -> DesiredVersions:
@@ -344,19 +650,6 @@ async def _require_enrollment_slot_for_target(
             "Enrollment sandbox slot is no longer active.",
             status_code=409,
         )
-
-
-def _optional_uuid(value: str | None, *, field_name: str) -> UUID | None:
-    if value is None:
-        return None
-    try:
-        return UUID(value)
-    except ValueError as exc:
-        raise CloudApiError(
-            "cloud_worker_invalid_uuid",
-            f"{field_name} must be a UUID.",
-            status_code=400,
-        ) from exc
 
 
 async def enroll_worker(
@@ -910,6 +1203,12 @@ async def record_command_result(
             "Command is not leased by this worker.",
             status_code=404,
         )
+    await _record_materialization_state_from_command_result(
+        db,
+        auth=auth,
+        command=command,
+        body=body,
+    )
     await publish_command_status_after_commit(db, command)
     return WorkerCommandStatusResponse(
         command_id=str(command.id),

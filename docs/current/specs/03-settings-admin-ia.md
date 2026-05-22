@@ -553,7 +553,7 @@ RuntimeReadinessPanel
     target online state, worker version,
     runtime_config_status (applied / pending / failed),
     agent_auth_status,
-    sandbox slot state (creating / running / paused / blocked / error)
+    sandbox slot state (creating / provisioning / running / paused / blocked / error)
     each with a "fix" CTA that deep-links to the owning pane.
   Used by:
     ComputePane per-target detail

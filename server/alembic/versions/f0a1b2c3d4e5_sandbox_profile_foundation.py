@@ -422,7 +422,8 @@ def _upgrade_cloud_sandbox() -> None:
         ["sandbox_profile_id", "target_id"],
         unique=True,
         postgresql_where=sa.text(
-            "superseded_at IS NULL AND status IN ('creating','running','paused','blocked')"
+            "superseded_at IS NULL "
+            "AND status IN ('creating','provisioning','running','paused','blocked')"
         ),
     )
 

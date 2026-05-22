@@ -1078,7 +1078,7 @@ async def provision_workspace(
                 external_sandbox_id=None,
                 provider=provider.kind.value,
                 template_version=provider.template_version,
-                status="allocating",
+                status="creating",
                 started_at=None,
                 concurrent_sandbox_limit=(
                     (

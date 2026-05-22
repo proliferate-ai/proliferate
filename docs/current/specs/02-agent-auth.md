@@ -25,8 +25,9 @@ In scope:
     private LiteLLM.
 - Rebind to spec 00's renamed `sandbox_profile_target_state` (gain the
   active-slot fence; agent-auth columns become the auth axis of that row).
-- Drop `SandboxProfile.managed_target_id` readers — derive primary target
-  from `cloud_targets.sandbox_profile_id + profile_target_role='primary'`.
+- Primary target derivation from
+  `cloud_targets.sandbox_profile_id + profile_target_role='primary'`; no
+  `SandboxProfile.managed_target_id` reader remains.
 - Close the four shipped-stack gaps:
   1. Proactive runtime grant rotation before TTL expiry.
   2. Cleanup-on-revoke for synced auth files (worker actually executes the
@@ -39,6 +40,11 @@ In scope:
   `AGENT_GATEWAY_BYOK_ENABLED = false`.
 - Stricter `protected_env` allowlist per agent + materialization mode.
 - Better `needs_resync` detection for native auth expiry.
+- Settings/API support for the concrete product target in
+  `docs/current/mockups/settings-sample.html` and
+  `reference/jsx/sample.html`: personal credentials, admin "Agent
+  Authentication", team defaults, shared credential rows, Team sync overview,
+  managed-credit status, and sandbox target-state readiness.
 
 Out of scope:
 
@@ -51,8 +57,8 @@ Out of scope:
 - Gemini through gateway (V1 keeps Gemini on synced auth only).
 - OpenCode native sync export in the Desktop agent-auth path.
 - Subscription/billing entitlement for `included_budget_usd` (→ spec 09).
-- Settings/Admin IA layout for agent-auth UI (→ spec 03 owns placement;
-  this spec names the components).
+- New settings navigation chrome (→ spec 03 owns placement). This spec still
+  owns the backend/API state required by the shown admin auth surfaces.
 
 ## 2. Mental Model
 
@@ -146,21 +152,22 @@ Verified against the current repository worktree on 2026-05-20.
 ```text
 SandboxProfile
   id, owner_scope, owner_user_id, organization_id,
-  managed_target_id, agent_auth_revision, status,
+  desired_agent_auth_revision, status,
   created_at, updated_at, deleted_at
-  -- managed_target_id will be dropped by spec 00
 
 SandboxProfileAgentAuthRevision
   id, sandbox_profile_id, revision, reason, force_restart,
   created_by_user_id, created_at
 
-SandboxProfileAgentAuthTargetState
-  -- being renamed by spec 00 to sandbox_profile_target_state;
-  -- agent-auth columns become the auth axis of that row.
-  id, sandbox_profile_id, target_id, desired_revision,
-  applied_revision, status, force_restart_required,
-  last_command_id, last_worker_id, last_attempted_at,
-  last_applied_at, last_error_code, last_error_message
+SandboxProfileTargetState
+  id, sandbox_profile_id, target_id, active_sandbox_id, slot_generation,
+  desired_agent_auth_revision, applied_agent_auth_revision,
+  agent_auth_status, agent_auth_force_restart_required,
+  last_agent_auth_command_id, last_agent_auth_worker_id,
+  last_agent_auth_attempted_at, last_agent_auth_applied_at,
+  last_agent_auth_error_code, last_agent_auth_error_message,
+  applied_runtime_config_sequence, applied_runtime_config_revision_id,
+  runtime_config_status, last_runtime_config_command_id, ...
 
 AgentAuthCredential
   id, owner_scope (system|personal|organization), owner_user_id,
@@ -427,10 +434,11 @@ agent_gateway_opencode_enabled                    default False
    uniformly wired. Stale Claude/Codex credentials may pass `ready`
    until launch.
 
-8. **`SandboxProfile.managed_target_id` is still read.** The current
-   `agent_auth/service.py` reads `managed_target_id` directly when
-   resolving the primary target. Spec 00 drops the column; this spec
-   updates the readers.
+8. **Fallback command-result ingest must remain slot-fenced.** New workers
+   report agent-auth state through `/worker/agent-auth-configs/.../status`.
+   The generic `/worker/commands/{id}/result` compatibility path still has
+   to map refresh results to `sandbox_profile_target_state`, but only from
+   the effective stored command status after stale-slot checks.
 
 9. **OpenCode native sync is not exposed by Desktop.** The auth-file
    allowlist for OpenCode exists in worker; the Desktop sync API does not
@@ -443,10 +451,9 @@ agent_gateway_opencode_enabled                    default False
 
 ### 5.1 Rebind to spec 00's `sandbox_profile_target_state`
 
-The agent-auth columns of the old
-`sandbox_profile_agent_auth_target_state` become the auth axis of the new
-unified row. Spec 00 owns the rename and data copy; this spec owns the
-new column names and the agent-auth service refactor.
+Agent-auth columns live on the unified `sandbox_profile_target_state` row as
+the auth axis next to the runtime-config axis and active-slot fence. The
+old `sandbox_profile_agent_auth_target_state` path is not retained.
 
 After the rename:
 
@@ -486,7 +493,7 @@ slot replacement clears applied_agent_auth_revision; the next
 refresh_agent_auth_config rematerializes on the new slot.
 ```
 
-Cloud agent-auth service stops reading
+Cloud agent-auth service does not read
 `SandboxProfile.managed_target_id`. It loads the profile's primary
 target with:
 
@@ -903,13 +910,12 @@ Server (Python):
 
 ```text
 server/proliferate/db/models/cloud/agent_auth.py
-  - drop SandboxProfile.managed_target_id  (carried by spec 00)
-  - the SandboxProfileAgentAuthTargetState rename is owned by spec 00;
-    update the SQLAlchemy class to its new shape
+  - SandboxProfile has desired_agent_auth_revision, not managed_target_id
+  - SandboxProfileTargetState is the unified target-state model
 
 server/proliferate/db/store/cloud_agent_auth/store.py
-  - replace managed_target_id reads with load_primary_target_for_profile
-  - update FK references after spec 00 rename
+  - keep primary-target lookup on cloud_targets.profile_target_role
+  - keep writes on SandboxProfileTargetState
   - return SandboxProfileTargetStateSnapshot (agent-auth view)
 
 server/proliferate/server/cloud/agent_auth/service.py
@@ -1046,7 +1052,7 @@ that PR, not staged rollout.
 
 ```text
 Chunk A  Rebind to spec 00
-  - drop SandboxProfile.managed_target_id readers
+  - assert no SandboxProfile.managed_target_id readers remain
   - load_primary_target_for_profile helper using
     cloud_targets.profile_target_role = 'primary'
   - update all agent-auth store/service references to the renamed

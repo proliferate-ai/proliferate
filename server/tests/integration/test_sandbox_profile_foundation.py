@@ -28,15 +28,19 @@ from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_sandboxes import ensure_profile_slot, supersede_slot
-from proliferate.db.store.cloud_runtime_config import store as runtime_config_store
+from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.db.store.cloud_workspaces import create_managed_cloud_workspace_for_profile
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.commands import service as command_service
 from proliferate.server.cloud.worker import service as worker_service
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
-from proliferate.server.cloud.worker.models import WorkerInventoryRequest
+from proliferate.server.cloud.worker.models import (
+    WorkerCommandResultRequest,
+    WorkerInventoryRequest,
+)
 from proliferate.utils.time import utcnow
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 
@@ -206,6 +210,10 @@ async def test_slot_generation_and_runtime_access_reject_stale_slot_reports(
         target_id=target_id,
     )
     assert first_slot.slot_generation == 1
+    first_slot_row = await db_session.get(CloudSandbox, first_slot.id)
+    assert first_slot_row is not None
+    first_slot_row.status = "provisioning"
+    await db_session.flush()
     same_slot = await ensure_profile_slot(
         db_session,
         sandbox_profile_id=profile_id,
@@ -560,7 +568,13 @@ async def test_managed_materialize_workspace_requires_cloud_workspace_id(
 async def test_managed_materialize_workspace_keeps_cloud_metadata_out_of_payload(
     client: AsyncClient,
     db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        command_service,
+        "kick_off_managed_slot_wake",
+        lambda _target_id, _command_id=None: None,
+    )
     auth, profile_id, target_id = await _create_personal_profile(
         client,
         db_session,
@@ -610,6 +624,7 @@ async def test_managed_materialize_workspace_keeps_cloud_metadata_out_of_payload
     assert payload["repoRootId"] == "repo-root-1"
     assert "cloudWorkspaceId" not in payload
     assert "sandboxProfileId" not in payload
+    await db_session.rollback()
 
 
 @pytest.mark.asyncio
@@ -717,6 +732,117 @@ async def test_stale_managed_worker_agent_auth_side_channel_fails_closed(
 
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "cloud_worker_slot_stale"
+
+
+@pytest.mark.asyncio
+async def test_worker_result_fallback_supersedes_agent_auth_on_stale_slot(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth, profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="agent-auth-result-stale-slot",
+    )
+    slot, worker = await _create_profile_slot_worker(
+        db_session,
+        profile_id=profile_id,
+        target_id=target_id,
+        worker_name="agent-auth-result-stale-slot-worker",
+    )
+    profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
+        db_session,
+        sandbox_profile_id=profile_id,
+        reason="result_fallback",
+        actor_user_id=uuid.UUID(auth.user_id),
+        force_restart=False,
+    )
+    assert profile is not None
+    command = await commands_store.create_command(
+        db_session,
+        idempotency_scope="agent-auth-result-stale-slot",
+        idempotency_key="agent-auth-result-stale-slot",
+        target_id=target_id,
+        organization_id=None,
+        actor_user_id=uuid.UUID(auth.user_id),
+        actor_kind="system",
+        source="api",
+        workspace_id=None,
+        cloud_workspace_id=None,
+        session_id=None,
+        kind=CloudCommandKind.refresh_agent_auth_config.value,
+        payload_json=json.dumps(
+            {
+                "sandboxProfileId": str(profile_id),
+                "revision": profile.agent_auth_revision,
+                "reason": "result_fallback",
+                "forceRestart": False,
+            }
+        ),
+        observed_event_seq=None,
+        preconditions_json=None,
+        authorization_context_json=None,
+    )
+    lease_id = "agent-auth-result-stale-slot-lease"
+    leased = await commands_store.lease_next_command(
+        db_session,
+        target_id=target_id,
+        worker_id=worker.id,
+        supported_kinds=(CloudCommandKind.refresh_agent_auth_config.value,),
+        lease_id=lease_id,
+        lease_expires_at=utcnow() + timedelta(minutes=5),
+        now=utcnow(),
+    )
+    assert leased is not None
+    await agent_auth_store.upsert_target_state(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        desired_revision=profile.agent_auth_revision,
+        applied_revision=None,
+        status="materializing",
+        force_restart_required=False,
+        last_command_id=command.id,
+        last_worker_id=worker.id,
+        last_error_code=None,
+        last_error_message=None,
+    )
+    await supersede_slot(db_session, sandbox_id=slot.id)
+
+    response = await worker_service.record_command_result(
+        db_session,
+        auth=WorkerAuthContext(
+            worker_id=worker.id,
+            target_id=target_id,
+            cloud_sandbox_id=slot.id,
+            slot_generation=slot.slot_generation,
+        ),
+        command_id=command.id,
+        body=WorkerCommandResultRequest.model_validate(
+            {
+                "leaseId": lease_id,
+                "slotGeneration": slot.slot_generation,
+                "status": CloudCommandStatus.accepted.value,
+                "result": {
+                    "applied": True,
+                    "revision": profile.agent_auth_revision,
+                    "currentRevision": profile.agent_auth_revision,
+                    "appliedCleanupPaths": [],
+                },
+            }
+        ),
+    )
+
+    assert response.status == CloudCommandStatus.superseded.value
+    state = await agent_auth_store.get_target_state(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    assert state is not None
+    assert state.agent_auth_status == "superseded"
+    assert state.applied_agent_auth_revision is None
+    assert state.last_agent_auth_command_id == command.id
 
 
 @pytest.mark.asyncio
@@ -1022,6 +1148,114 @@ async def test_stale_worker_runtime_config_status_does_not_regress_target_state(
     assert state.runtime_config_status == "pending"
     assert state.applied_runtime_config_revision_id == str(second_revision.id)
     assert state.applied_runtime_config_sequence == second_revision.sequence
+
+
+@pytest.mark.asyncio
+async def test_worker_result_fallback_marks_runtime_config_applied_with_slot(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth, profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="runtime-config-result-applied",
+    )
+    slot, worker = await _create_profile_slot_worker(
+        db_session,
+        profile_id=profile_id,
+        target_id=target_id,
+        worker_name="runtime-config-result-applied-worker",
+    )
+    revision, _created = await runtime_config_store.upsert_revision_and_current(
+        db_session,
+        sandbox_profile_id=profile_id,
+        content_hash="sha256:runtime-result-applied",
+        manifest_json='{"mcpServers":[],"skills":[],"artifacts":[],"warnings":[]}',
+        warnings_json=None,
+        source="test",
+        generated_by_user_id=uuid.UUID(auth.user_id),
+    )
+    await agent_auth_store.mark_runtime_config_pending(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        sequence=revision.sequence,
+        revision_id=revision.id,
+    )
+    command = await commands_store.create_command(
+        db_session,
+        idempotency_scope="runtime-config-result-applied",
+        idempotency_key="runtime-config-result-applied",
+        target_id=target_id,
+        organization_id=None,
+        actor_user_id=uuid.UUID(auth.user_id),
+        actor_kind="system",
+        source="api",
+        workspace_id=None,
+        cloud_workspace_id=None,
+        session_id=None,
+        kind=CloudCommandKind.materialize_environment.value,
+        payload_json=json.dumps({"targetConfigId": str(uuid.uuid4()), "configVersion": 1}),
+        observed_event_seq=None,
+        preconditions_json=None,
+        authorization_context_json=None,
+    )
+    await agent_auth_store.record_runtime_config_command(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        command_id=command.id,
+    )
+    lease_id = "runtime-config-result-applied-lease"
+    leased = await commands_store.lease_next_command(
+        db_session,
+        target_id=target_id,
+        worker_id=worker.id,
+        supported_kinds=(CloudCommandKind.materialize_environment.value,),
+        lease_id=lease_id,
+        lease_expires_at=utcnow() + timedelta(minutes=5),
+        now=utcnow(),
+    )
+    assert leased is not None
+
+    response = await worker_service.record_command_result(
+        db_session,
+        auth=WorkerAuthContext(
+            worker_id=worker.id,
+            target_id=target_id,
+            cloud_sandbox_id=slot.id,
+            slot_generation=slot.slot_generation,
+        ),
+        command_id=command.id,
+        body=WorkerCommandResultRequest.model_validate(
+            {
+                "leaseId": lease_id,
+                "slotGeneration": slot.slot_generation,
+                "status": CloudCommandStatus.accepted.value,
+                "result": {
+                    "runtimeConfig": {
+                        "revisionId": str(revision.id),
+                        "sandboxProfileId": str(profile_id),
+                        "sequence": revision.sequence,
+                    }
+                },
+            }
+        ),
+    )
+
+    assert response.status == CloudCommandStatus.accepted.value
+    state = await agent_auth_store.get_target_state(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    assert state is not None
+    assert state.runtime_config_status == "applied"
+    assert state.applied_runtime_config_revision_id == str(revision.id)
+    assert state.applied_runtime_config_sequence == revision.sequence
+    assert state.active_sandbox_id == slot.id
+    assert state.slot_generation == slot.slot_generation
+    assert state.last_runtime_config_command_id == command.id
 
 
 @pytest.mark.asyncio

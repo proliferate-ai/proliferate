@@ -422,3 +422,92 @@ async def test_stop_and_destroy_preserve_retry_state_after_provider_failure(
 class _NoopDb:
     async def commit(self) -> None:
         return None
+
+
+@pytest.mark.asyncio
+async def test_stop_and_destroy_mark_slot_without_provider_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace_id = uuid.uuid4()
+    sandbox_id = uuid.uuid4()
+    workspace = CloudWorkspace(
+        id=workspace_id,
+        user_id=uuid.uuid4(),
+        billing_subject_id=uuid.uuid4(),
+        display_name="acme/rocket",
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name="rocket",
+        git_branch="feature/cloud",
+        git_base_branch="main",
+        status="ready",
+        status_detail="Ready",
+        template_version="v1",
+        runtime_generation=1,
+        active_sandbox_id=sandbox_id,
+        runtime_url="https://runtime.example",
+        runtime_token_ciphertext="ciphertext",
+        anyharness_workspace_id="workspace-123",
+    )
+    sandbox = CloudSandbox(
+        id=sandbox_id,
+        cloud_workspace_id=workspace_id,
+        provider="e2b",
+        external_sandbox_id=None,
+        status="creating",
+        template_version="v1",
+    )
+    sandbox_statuses: list[str] = []
+    stopped: list[CloudWorkspace] = []
+    destroyed: list[CloudWorkspace] = []
+
+    async def _load_active_sandbox_for_workspace(_workspace: CloudWorkspace):
+        return sandbox
+
+    async def _update_sandbox_status(_sandbox: CloudSandbox, status: str, **_kwargs) -> None:
+        sandbox_statuses.append(status)
+        _sandbox.status = status
+
+    async def _persist_workspace_stop_state(_workspace: CloudWorkspace) -> None:
+        stopped.append(_workspace)
+        await persist_workspace_stop(_NoopDb(), _workspace)
+
+    async def _persist_workspace_destroy_state(_workspace: CloudWorkspace) -> None:
+        destroyed.append(_workspace)
+        await persist_workspace_destroy(_NoopDb(), _workspace)
+
+    def _unexpected_provider(_provider: str):
+        raise AssertionError("provider should not be called without an external sandbox id")
+
+    monkeypatch.setattr(
+        workspace_service,
+        "load_active_sandbox_for_workspace",
+        _load_active_sandbox_for_workspace,
+    )
+    monkeypatch.setattr(workspace_service, "get_sandbox_provider", _unexpected_provider)
+    monkeypatch.setattr(workspace_service, "update_sandbox_status", _update_sandbox_status)
+    monkeypatch.setattr(
+        workspace_service,
+        "persist_workspace_stop_state",
+        _persist_workspace_stop_state,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "persist_workspace_destroy_state",
+        _persist_workspace_destroy_state,
+    )
+    monkeypatch.setattr(workspace_service, "log_cloud_event", lambda *args, **kwargs: None)
+
+    await workspace_service._stop_workspace_runtime(workspace)
+
+    assert sandbox_statuses == ["paused"]
+    assert stopped == [workspace]
+    assert workspace.status == "archived"
+
+    workspace.status = "ready"
+    await workspace_service._destroy_workspace_runtime(workspace)
+
+    assert sandbox_statuses == ["paused", "destroyed"]
+    assert destroyed == [workspace]
+    assert workspace.status == "archived"
+    assert workspace.active_sandbox_id is None

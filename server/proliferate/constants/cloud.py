@@ -220,6 +220,17 @@ SUPPORTED_AGENT_GATEWAY_PROTOCOL_FACADES: tuple[str, ...] = tuple(
     facade.value for facade in AgentGatewayProtocolFacade
 )
 
+# Non-terminal managed sandbox slot statuses. These rows continue to fence
+# worker leases, target state, runtime access, and the profile/target uniqueness
+# constraint until the slot is explicitly superseded or destroyed.
+ACTIVE_MANAGED_CLOUD_SLOT_STATUSES: tuple[str, ...] = (
+    "creating",
+    "provisioning",
+    "running",
+    "paused",
+    "blocked",
+)
+
 AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN: Final = "agent-gateway-runtime-grant"
 AGENT_GATEWAY_TOKEN_HASH_KEY_ID: Final = "cloud_secret_key:v1"
 AGENT_GATEWAY_CIPHERTEXT_KEY_ID: Final = "cloud_secret_key:v1"

@@ -10,7 +10,11 @@ from uuid import UUID
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
+from proliferate.constants.cloud import (
+    ACTIVE_MANAGED_CLOUD_SLOT_STATUSES,
+    CloudCommandKind,
+    CloudCommandStatus,
+)
 from proliferate.db.models.cloud.agent_auth import SandboxProfile, SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
@@ -24,9 +28,6 @@ from proliferate.db.models.cloud.targets import CloudTarget, CloudWorker
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
 from proliferate.utils.time import utcnow
-
-ACTIVE_SLOT_STATUSES: tuple[str, ...] = ("creating", "running", "paused", "blocked")
-
 
 @dataclass(frozen=True)
 class CloudCommandSnapshot:
@@ -265,7 +266,7 @@ async def lease_next_command(
                     CloudSandbox.target_id == target_id,
                     CloudSandbox.slot_generation == worker.slot_generation,
                     CloudSandbox.superseded_at.is_(None),
-                    CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
+                    CloudSandbox.status.in_(ACTIVE_MANAGED_CLOUD_SLOT_STATUSES),
                 )
             )
         ).scalar_one_or_none()
@@ -402,12 +403,17 @@ async def _runtime_config_lease_blocker(
     required_sequence = payload.get("requiredRuntimeConfigSequence")
     required_content_hash = payload.get("requiredRuntimeConfigContentHash")
     if (
-        sandbox_profile_id is None
-        and required_revision_id is None
+        required_revision_id is None
         and required_sequence is None
         and required_content_hash is None
     ):
         return None
+    if sandbox_profile_id is None:
+        return (
+            CloudCommandStatus.rejected.value,
+            "runtime_config_profile_invalid",
+            "Launch command runtime config profile is invalid.",
+        )
     try:
         profile_id = UUID(str(sandbox_profile_id))
     except (TypeError, ValueError):
@@ -939,7 +945,7 @@ async def _leased_slot_is_stale(
                 CloudSandbox.target_id == row.target_id,
                 CloudSandbox.slot_generation == row.leased_slot_generation,
                 CloudSandbox.superseded_at.is_(None),
-                CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
+                CloudSandbox.status.in_(ACTIVE_MANAGED_CLOUD_SLOT_STATUSES),
             )
         )
     ).scalar_one_or_none()
@@ -972,7 +978,7 @@ async def _target_state_slot_is_stale(
                 CloudSandbox.sandbox_profile_id == target.sandbox_profile_id,
                 CloudSandbox.target_id == target.id,
                 CloudSandbox.superseded_at.is_(None),
-                CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
+                CloudSandbox.status.in_(ACTIVE_MANAGED_CLOUD_SLOT_STATUSES),
             )
         )
     ).scalar_one_or_none()

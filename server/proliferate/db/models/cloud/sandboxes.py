@@ -28,7 +28,8 @@ class CloudSandbox(Base):
             "target_id",
             unique=True,
             postgresql_where=text(
-                "superseded_at IS NULL AND status IN ('creating','running','paused','blocked')"
+                "superseded_at IS NULL "
+                "AND status IN ('creating','provisioning','running','paused','blocked')"
             ),
         ),
     )

@@ -10,7 +10,11 @@ from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
-from proliferate.constants.cloud import CloudTargetStatus, CloudTargetUpdateStatus
+from proliferate.constants.cloud import (
+    ACTIVE_MANAGED_CLOUD_SLOT_STATUSES,
+    CloudTargetStatus,
+    CloudTargetUpdateStatus,
+)
 from proliferate.constants.organizations import ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
 from proliferate.db.models.cloud.agent_auth import SandboxProfile
 from proliferate.db.models.cloud.cloud_target_runtime_access import CloudTargetRuntimeAccess
@@ -588,7 +592,7 @@ async def update_target_runtime_access(
                 CloudSandbox.slot_generation == slot_generation,
                 CloudSandbox.superseded_at.is_(None),
             )
-            .where(CloudSandbox.status.in_(("creating", "running", "paused", "blocked")))
+            .where(CloudSandbox.status.in_(ACTIVE_MANAGED_CLOUD_SLOT_STATUSES))
         )
     ).scalar_one_or_none()
     if active_slot is None:
@@ -626,7 +630,7 @@ async def update_target_runtime_access(
             previous_slot_is_current = (
                 previous_slot is not None
                 and previous_slot.superseded_at is None
-                and previous_slot.status in ("creating", "running", "paused", "blocked")
+                and previous_slot.status in ACTIVE_MANAGED_CLOUD_SLOT_STATUSES
             )
             if previous_slot_is_current:
                 return None

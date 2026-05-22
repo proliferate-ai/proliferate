@@ -23,6 +23,11 @@ In scope:
   through cloud_commands, the worker wire contract, command leasing,
   delivery, result ingest, and event ingest.
 - Slot-fence command leasing and result ingest per spec 00 §5.8.
+- Worker command-result ingest is authoritative only after the store returns
+  the effective command status. `refresh_agent_auth_config` and
+  `materialize_environment` results update `sandbox_profile_target_state` as
+  applied, failed, or superseded from that effective status, so stale-slot
+  results cannot mark auth/runtime config applied.
 - `_validate_runtime_config_preflight()` peer of the existing
   `_validate_agent_auth_preflight()` (per spec 01).
 - Worker dispatcher synthesizes `AgentAuthExternalScope` from
@@ -44,6 +49,9 @@ In scope:
   the columns; spec 04 closes the call sites at
   `repo_config_apply.py`, `anyharness_api.py`, and runtime
   `service.py`).
+- Managed stop/delete cleanup destroys or pauses the provider sandbox and
+  closes slot state by managed `(sandbox_profile_id, target_id)` lookup when
+  the legacy workspace `active_sandbox_id` pointer is absent.
 - "Passive UI" invariant: list workspace/session/transcript state
   from Cloud DB without waking the sandbox. Enforced by review +
   tests.
@@ -172,7 +180,7 @@ enqueue_command(...)
 
 _validate_agent_auth_preflight(...)
   - reads sandboxProfileId + requiredAgentAuthRevision from payload
-  - loads sandbox_profile_agent_auth_target_state for (profile, target)
+  - loads sandbox_profile_target_state for (profile, target)
   - rejects if profile missing / belongs to other target / applied <
     required
 ```

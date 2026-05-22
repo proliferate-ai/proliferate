@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.billing import ACTIVE_SANDBOX_STATUSES
 from proliferate.constants.cloud import (
+    ACTIVE_MANAGED_CLOUD_SLOT_STATUSES,
     WORKSPACE_REPO_APPLY_LOCK_SALT,
     CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
@@ -569,11 +570,27 @@ async def get_active_sandbox(
     workspace: CloudWorkspace,
 ) -> CloudSandbox | None:
     """Load the active sandbox for *workspace*, if one exists."""
-    if not workspace.active_sandbox_id:
+    if workspace.active_sandbox_id:
+        sandbox = (
+            await db.execute(
+                select(CloudSandbox).where(CloudSandbox.id == workspace.active_sandbox_id)
+            )
+        ).scalar_one_or_none()
+        if sandbox is not None:
+            return sandbox
+    if workspace.sandbox_profile_id is None or workspace.target_id is None:
         return None
     return (
         await db.execute(
-            select(CloudSandbox).where(CloudSandbox.id == workspace.active_sandbox_id)
+            select(CloudSandbox)
+            .where(
+                CloudSandbox.sandbox_profile_id == workspace.sandbox_profile_id,
+                CloudSandbox.target_id == workspace.target_id,
+                CloudSandbox.superseded_at.is_(None),
+                CloudSandbox.status.in_(ACTIVE_MANAGED_CLOUD_SLOT_STATUSES),
+            )
+            .order_by(CloudSandbox.slot_generation.desc(), CloudSandbox.created_at.desc())
+            .limit(1)
         )
     ).scalar_one_or_none()
 
@@ -1081,10 +1098,8 @@ async def create_cloud_workspace_for_user(
 async def load_active_sandbox_for_workspace(
     workspace: CloudWorkspace,
 ) -> CloudSandbox | None:
-    if not workspace.active_sandbox_id:
-        return None
     async with db_engine.async_session_factory() as db:
-        return await db.get(CloudSandbox, workspace.active_sandbox_id)
+        return await get_active_sandbox(db, workspace)
 
 
 async def load_cloud_sandbox_by_id(

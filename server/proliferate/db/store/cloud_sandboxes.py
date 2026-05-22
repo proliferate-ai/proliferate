@@ -9,15 +9,13 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.cloud import ACTIVE_MANAGED_CLOUD_SLOT_STATUSES
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.store.cloud_profile_target_guard import require_primary_managed_profile_target
 from proliferate.db.store.cloud_sync.sandbox_profile_target_state import (
     invalidate_applied_on_slot_replacement,
 )
 from proliferate.utils.time import utcnow
-
-ACTIVE_SLOT_STATUSES: tuple[str, ...] = ("creating", "running", "paused", "blocked")
-
 
 @dataclass(frozen=True)
 class SlotSnapshot:
@@ -74,7 +72,7 @@ async def load_active_slot_for_profile_target(
                 CloudSandbox.sandbox_profile_id == sandbox_profile_id,
                 CloudSandbox.target_id == target_id,
                 CloudSandbox.superseded_at.is_(None),
-                CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
+                CloudSandbox.status.in_(ACTIVE_MANAGED_CLOUD_SLOT_STATUSES),
             )
         )
     ).scalar_one_or_none()
@@ -148,7 +146,7 @@ async def supersede_slot(
         return None
     row.superseded_at = row.superseded_at or utcnow()
     row.superseded_by_sandbox_id = superseded_by_sandbox_id
-    if row.status in ACTIVE_SLOT_STATUSES:
+    if row.status in ACTIVE_MANAGED_CLOUD_SLOT_STATUSES:
         row.status = status
     row.updated_at = utcnow()
     await db.flush()

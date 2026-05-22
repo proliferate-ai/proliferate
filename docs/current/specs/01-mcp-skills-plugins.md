@@ -34,7 +34,11 @@ In scope:
   against the applied revision.
 - Lazy artifact/credential resolution path used only for repair, not as the
   product synchronization model.
-- Plugins UI integration (basic enable/disable + publicize + readiness).
+- Settings integration for the concrete product surfaces in
+  `docs/current/mockups/settings-sample.html` and
+  `reference/jsx/sample.html`: personal "Plugins & MCPs" controls, admin
+  "Shared environments" controls, org-wide public/shared MCP enablement,
+  publicize/unpublicize actions, and readiness/error state.
 
 Out of scope:
 
@@ -49,7 +53,9 @@ Out of scope:
   launch boundary.
 - Shared sandbox claim/access policy beyond `public_to_org` filtering
   (spec 05).
-- Settings/Admin IA placement (spec 03).
+- New settings navigation chrome (spec 03 owns placement). This spec still
+  requires the backend/API state that makes the shown settings surfaces
+  functional.
 
 ## 2. Mental Model
 
@@ -1589,8 +1595,8 @@ Manual smoke cases:
    into child MCPs/skills only?**
 
    Decision: ship the table, but treat it as a thin grouping marker. Reasons:
-   - "Plugin installed" is a real product concept (Settings/Admin IA wants
-     a Plugins list).
+   - "Plugin installed" is a real product concept surfaced in Settings
+     as a Plugins list.
    - Uninstall/re-enable is cleaner when there is a parent row.
    - Audit and `public_status` on the plugin row are useful.
    The cost is a tiny extra table. Pros outweigh.
@@ -1622,8 +1628,8 @@ Manual smoke cases:
 
    Decision: as a section inside the Plugins page (so plugin-provided skills
    live next to their plugin) plus a top-level "Skills" tab for
-   user-authored skills. Spec 03 (Settings/Admin IA) makes the final
-   call.
+   user-authored skills. Spec 03 owns navigation chrome, but the backend
+   state must support those settings rows.
 
 6. **Should user-authored skills land in V1?**
 

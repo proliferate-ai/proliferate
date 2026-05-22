@@ -8,7 +8,10 @@ from uuid import UUID
 from sqlalchemy import and_, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.cloud import AGENT_GATEWAY_BUDGET_DURATION_V1
+from proliferate.constants.cloud import (
+    ACTIVE_MANAGED_CLOUD_SLOT_STATUSES,
+    AGENT_GATEWAY_BUDGET_DURATION_V1,
+)
 from proliferate.db.models.cloud.agent_auth import (
     AgentAuthAuditEvent,
     AgentAuthCredential,
@@ -1326,7 +1329,7 @@ async def upsert_target_state(
                     CloudSandbox.sandbox_profile_id == sandbox_profile_id,
                     CloudSandbox.target_id == target_id,
                     CloudSandbox.superseded_at.is_(None),
-                    CloudSandbox.status.in_(("creating", "running", "paused", "blocked")),
+                    CloudSandbox.status.in_(ACTIVE_MANAGED_CLOUD_SLOT_STATUSES),
                 )
             )
         ).scalar_one_or_none()
@@ -1471,6 +1474,7 @@ async def record_runtime_config_worker_status(
     status: str,
     error_code: str | None,
     error_message: str | None,
+    command_id: UUID | None = None,
 ) -> SandboxProfileAgentAuthTargetStateRecord:
     row = await _get_or_create_target_state_for_update(
         db,
@@ -1480,16 +1484,38 @@ async def record_runtime_config_worker_status(
     )
     now = utcnow()
     row.runtime_config_status = status
+    if command_id is not None:
+        row.last_runtime_config_command_id = command_id
     row.last_runtime_config_worker_id = worker_id
     row.last_runtime_config_attempted_at = now
     row.last_runtime_config_error_code = error_code
     row.last_runtime_config_error_message = error_message
     if status == "applied":
+        active_slot = (
+            await db.execute(
+                select(CloudSandbox).where(
+                    CloudSandbox.sandbox_profile_id == sandbox_profile_id,
+                    CloudSandbox.target_id == target_id,
+                    CloudSandbox.superseded_at.is_(None),
+                    CloudSandbox.status.in_(ACTIVE_MANAGED_CLOUD_SLOT_STATUSES),
+                )
+            )
+        ).scalar_one_or_none()
+        if active_slot is not None:
+            row.active_sandbox_id = active_slot.id
+            row.slot_generation = active_slot.slot_generation
         row.applied_runtime_config_sequence = sequence
         row.applied_runtime_config_revision_id = str(revision_id)
         row.last_runtime_config_applied_at = now
         row.last_runtime_config_error_code = None
         row.last_runtime_config_error_message = None
+    elif (
+        status == "failed"
+        and row.applied_runtime_config_revision_id == str(revision_id)
+        and row.applied_runtime_config_sequence >= sequence
+    ):
+        row.applied_runtime_config_sequence = 0
+        row.applied_runtime_config_revision_id = None
     row.updated_at = now
     await db.flush()
     return _target_state_record(row)

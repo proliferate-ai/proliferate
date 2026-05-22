@@ -1212,6 +1212,7 @@ async def delete_cloud_workspace(
     workspace_id: UUID,
 ) -> None:
     workspace = await cloud_workspace_user_can_archive(user_id, workspace_id)
+    await _destroy_workspace_runtime(workspace)
     await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_deleted")
     await delete_cloud_workspace_records_for_workspace(workspace)
 
@@ -1251,32 +1252,40 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
         status=workspace.status,
     )
     sandbox = await load_active_sandbox_for_workspace(workspace)
-    if sandbox is not None and sandbox.external_sandbox_id:
-        provider = get_sandbox_provider(sandbox.provider)
-        try:
-            await provider.pause_sandbox(sandbox.external_sandbox_id)
-        except Exception:
-            failure_state = provider_failure_debug_state("stop")
-            await update_sandbox_status(sandbox, failure_state.sandbox_status)
-            log_cloud_event(
-                "cloud sandbox pause failed",
-                level=logging.WARNING,
-                workspace_id=workspace.id,
-                sandbox_id=sandbox.id,
-                external_sandbox_id=sandbox.external_sandbox_id,
-            )
+    if sandbox is not None:
+        if sandbox.external_sandbox_id:
+            provider = get_sandbox_provider(sandbox.provider)
+            try:
+                await provider.pause_sandbox(sandbox.external_sandbox_id)
+            except Exception:
+                failure_state = provider_failure_debug_state("stop")
+                await update_sandbox_status(sandbox, failure_state.sandbox_status)
+                log_cloud_event(
+                    "cloud sandbox pause failed",
+                    level=logging.WARNING,
+                    workspace_id=workspace.id,
+                    sandbox_id=sandbox.id,
+                    external_sandbox_id=sandbox.external_sandbox_id,
+                )
+            else:
+                await close_usage_segment_for_sandbox(
+                    sandbox_id=sandbox.id,
+                    ended_at=utcnow(),
+                    closed_by=USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
+                )
+                await update_sandbox_status(sandbox, "paused", stopped_at_now=True)
+                log_cloud_event(
+                    "cloud sandbox paused",
+                    workspace_id=workspace.id,
+                    sandbox_id=sandbox.id,
+                    external_sandbox_id=sandbox.external_sandbox_id,
+                )
         else:
-            await close_usage_segment_for_sandbox(
-                sandbox_id=sandbox.id,
-                ended_at=utcnow(),
-                closed_by=USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
-            )
             await update_sandbox_status(sandbox, "paused", stopped_at_now=True)
             log_cloud_event(
-                "cloud sandbox paused",
+                "cloud sandbox pause skipped without provider id",
                 workspace_id=workspace.id,
                 sandbox_id=sandbox.id,
-                external_sandbox_id=sandbox.external_sandbox_id,
             )
 
     if workspace.status != CloudWorkspaceStatus.archived.value:
@@ -1299,32 +1308,40 @@ async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
     """Destroy the active sandbox and mark the workspace as stopped."""
     destroy_started = time.perf_counter()
     sandbox = await load_active_sandbox_for_workspace(workspace)
-    if sandbox is not None and sandbox.external_sandbox_id:
-        provider = get_sandbox_provider(sandbox.provider)
-        try:
-            await provider.destroy_sandbox(sandbox.external_sandbox_id)
-        except Exception:
-            failure_state = provider_failure_debug_state("destroy")
-            await update_sandbox_status(sandbox, failure_state.sandbox_status)
-            log_cloud_event(
-                "cloud sandbox destroy failed",
-                level=logging.WARNING,
-                workspace_id=workspace.id,
-                sandbox_id=sandbox.id,
-                external_sandbox_id=sandbox.external_sandbox_id,
-            )
+    if sandbox is not None:
+        if sandbox.external_sandbox_id:
+            provider = get_sandbox_provider(sandbox.provider)
+            try:
+                await provider.destroy_sandbox(sandbox.external_sandbox_id)
+            except Exception:
+                failure_state = provider_failure_debug_state("destroy")
+                await update_sandbox_status(sandbox, failure_state.sandbox_status)
+                log_cloud_event(
+                    "cloud sandbox destroy failed",
+                    level=logging.WARNING,
+                    workspace_id=workspace.id,
+                    sandbox_id=sandbox.id,
+                    external_sandbox_id=sandbox.external_sandbox_id,
+                )
+            else:
+                await close_usage_segment_for_sandbox(
+                    sandbox_id=sandbox.id,
+                    ended_at=utcnow(),
+                    closed_by=USAGE_SEGMENT_CLOSED_BY_DESTROY,
+                )
+                await update_sandbox_status(sandbox, "destroyed", stopped_at_now=True)
+                log_cloud_event(
+                    "cloud sandbox destroyed",
+                    workspace_id=workspace.id,
+                    sandbox_id=sandbox.id,
+                    external_sandbox_id=sandbox.external_sandbox_id,
+                )
         else:
-            await close_usage_segment_for_sandbox(
-                sandbox_id=sandbox.id,
-                ended_at=utcnow(),
-                closed_by=USAGE_SEGMENT_CLOSED_BY_DESTROY,
-            )
             await update_sandbox_status(sandbox, "destroyed", stopped_at_now=True)
             log_cloud_event(
-                "cloud sandbox destroyed",
+                "cloud sandbox destroy skipped without provider id",
                 workspace_id=workspace.id,
                 sandbox_id=sandbox.id,
-                external_sandbox_id=sandbox.external_sandbox_id,
             )
 
     transition_workspace_status(workspace, CloudWorkspaceStatus.archived, status_detail="Archived")
