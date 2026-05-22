@@ -32,6 +32,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { routes } from "../../../config/routes";
 import {
   dispatchPendingHomePrompt,
+  ensureManagedWorkspaceTargetConfigReady,
   type SendPromptPayload,
   type StartSessionPayload,
 } from "../../../lib/access/cloud/pending-home-prompt-dispatch";
@@ -469,6 +470,14 @@ export function ChatScreen() {
     setDraft("");
     setPendingHomePromptStatus(null);
     try {
+      await ensureManagedWorkspaceTargetConfigReady({
+        client,
+        workspace,
+        idempotencyKey: `${optimisticPrompt.id}:target-config`,
+        setLatestCommandId,
+        onStatus: setPendingHomePromptStatus,
+        shouldContinue: () => true,
+      });
       const command = await enqueuePrompt.mutateAsync({
         idempotencyKey: optimisticPrompt.id,
         targetId: session.targetId,
@@ -485,6 +494,7 @@ export function ChatScreen() {
           prompt.id === optimisticPrompt.id ? { ...prompt, status: "queued" } : prompt
         )
       );
+      setPendingHomePromptStatus(null);
       void transcriptQuery.refetch();
       void sessionEventsQuery.refetch();
     } catch (error) {

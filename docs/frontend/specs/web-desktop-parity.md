@@ -171,6 +171,7 @@ Use this section to mark incremental progress during implementation.
 - [x] Web first-prompt optimistic row behavior implemented.
 - [x] Web existing-session optimistic row behavior implemented.
 - [x] Web prompt handoff keeps optimistic rows visible after session materialization.
+- [x] Web materializes managed personal target config before starting/sending prompts.
 - [x] Composer controls grouped like Desktop.
 - [x] Composer footer added.
 - [x] Transcript presentation extraction started.
