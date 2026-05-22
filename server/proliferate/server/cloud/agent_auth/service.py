@@ -15,6 +15,7 @@ from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 from uuid import UUID
 
+from cryptography.fernet import InvalidToken
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -293,12 +294,16 @@ async def sync_synced_credential_for_user(
     )
     payload_changed = True
     if existing is not None and existing.payload_ciphertext:
-        existing_payload = decrypt_json(existing.payload_ciphertext)
-        payload_changed = (
-            existing.status != "ready"
-            or existing_payload != normalized.payload
-            or existing.redacted_summary_json != redacted_summary_json
-        )
+        try:
+            existing_payload = decrypt_json(existing.payload_ciphertext)
+        except (InvalidToken, ValueError):
+            payload_changed = True
+        else:
+            payload_changed = (
+                existing.status != "ready"
+                or existing_payload != normalized.payload
+                or existing.redacted_summary_json != redacted_summary_json
+            )
 
     display_name = f"Synced {agent_kind} auth"
     if existing is None:

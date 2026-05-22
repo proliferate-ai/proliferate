@@ -78,16 +78,22 @@ export async function updateAutomation(
   });
 }
 
-export async function pauseAutomation(automationId: string): Promise<AutomationResponse> {
-  return getProliferateClient().requestJson<AutomationResponse>({
+export async function pauseAutomation(
+  automationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AutomationResponse> {
+  return client.requestJson<AutomationResponse>({
     method: "POST",
     path: "/v1/automations/{automation_id}/pause",
     pathParams: { automation_id: automationId },
   });
 }
 
-export async function resumeAutomation(automationId: string): Promise<AutomationResponse> {
-  return getProliferateClient().requestJson<AutomationResponse>({
+export async function resumeAutomation(
+  automationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AutomationResponse> {
+  return client.requestJson<AutomationResponse>({
     method: "POST",
     path: "/v1/automations/{automation_id}/resume",
     pathParams: { automation_id: automationId },
@@ -96,8 +102,9 @@ export async function resumeAutomation(automationId: string): Promise<Automation
 
 export async function runAutomationNow(
   automationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AutomationRunResponse> {
-  return getProliferateClient().requestJson<AutomationRunResponse>({
+  return client.requestJson<AutomationRunResponse>({
     method: "POST",
     path: "/v1/automations/{automation_id}/run-now",
     pathParams: { automation_id: automationId },

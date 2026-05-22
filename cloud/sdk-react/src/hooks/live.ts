@@ -54,6 +54,7 @@ export function useSessionLive(
   sessionId: string | null,
   options: UseSessionLiveOptions,
 ): CloudLiveState<CloudSessionSnapshot> {
+  const client = useCloudClient();
   const queryClient = useQueryClient();
   const [state, setState] = useState<CloudLiveState<CloudSessionSnapshot>>(emptyLiveState);
   const cursorRef = useRef(0);
@@ -77,62 +78,66 @@ export function useSessionLive(
         return;
       }
       subscription?.close();
-      subscription = subscribeSession(sessionId, {
-        targetId,
-        afterSeq: cursorRef.current,
-        onEvent(event) {
-          if (!active) {
-            return;
-          }
-          if (isCloudHeartbeat(event)) {
-            setState((current) => ({ ...current, isConnected: true, error: undefined }));
-            return;
-          }
-          attempt = 0;
-          if (isCloudSessionSnapshot(event)) {
-            cursorRef.current = event.session.lastEventSeq;
-            queryClient.setQueryData(cloudSessionSnapshotKey(targetId, sessionId), event);
-            setState({
-              snapshot: event,
-              lastPatchAt: new Date(),
-              isConnected: true,
-              error: undefined,
-            });
-            return;
-          }
-          if (isCloudSessionProjectionPatch(event)) {
-            cursorRef.current = Math.max(cursorRef.current, event.patch.seq);
-            setState((current) => {
-              const snapshot = reduceSessionSnapshot(current.snapshot, event);
-              if (snapshot) {
-                queryClient.setQueryData(cloudSessionSnapshotKey(targetId, sessionId), snapshot);
-              }
-              return {
-                snapshot,
+      subscription = subscribeSession(
+        sessionId,
+        {
+          targetId,
+          afterSeq: cursorRef.current,
+          onEvent(event) {
+            if (!active) {
+              return;
+            }
+            if (isCloudHeartbeat(event)) {
+              setState((current) => ({ ...current, isConnected: true, error: undefined }));
+              return;
+            }
+            attempt = 0;
+            if (isCloudSessionSnapshot(event)) {
+              cursorRef.current = event.session.lastEventSeq;
+              queryClient.setQueryData(cloudSessionSnapshotKey(targetId, sessionId), event);
+              setState({
+                snapshot: event,
                 lastPatchAt: new Date(),
                 isConnected: true,
                 error: undefined,
-              };
-            });
-            return;
-          }
-          if (isCloudCommandStatusPatch(event)) {
-            queryClient.setQueryData(cloudCommandKey(event.command.commandId), event.command);
-            setState((current) => ({ ...current, isConnected: true, error: undefined }));
-          }
+              });
+              return;
+            }
+            if (isCloudSessionProjectionPatch(event)) {
+              cursorRef.current = Math.max(cursorRef.current, event.patch.seq);
+              setState((current) => {
+                const snapshot = reduceSessionSnapshot(current.snapshot, event);
+                if (snapshot) {
+                  queryClient.setQueryData(cloudSessionSnapshotKey(targetId, sessionId), snapshot);
+                }
+                return {
+                  snapshot,
+                  lastPatchAt: new Date(),
+                  isConnected: true,
+                  error: undefined,
+                };
+              });
+              return;
+            }
+            if (isCloudCommandStatusPatch(event)) {
+              queryClient.setQueryData(cloudCommandKey(event.command.commandId), event.command);
+              setState((current) => ({ ...current, isConnected: true, error: undefined }));
+            }
+          },
+          onError(error) {
+            if (!active) {
+              return;
+            }
+            setState((current) => ({
+              ...current,
+              isConnected: false,
+              error: normalizeStreamError(error),
+            }));
+            reconnectTimer = setTimeout(connect, reconnectDelay(attempt++));
+          },
         },
-        onError(error) {
-          if (!active) {
-            return;
-          }
-          setState((current) => ({
-            ...current,
-            isConnected: false,
-            error: normalizeStreamError(error),
-          }));
-          reconnectTimer = setTimeout(connect, reconnectDelay(attempt++));
-        },
-      });
+        client,
+      );
     };
 
     connect();
@@ -143,7 +148,7 @@ export function useSessionLive(
         clearTimeout(reconnectTimer);
       }
     };
-  }, [enabled, queryClient, sessionId, targetId]);
+  }, [client, enabled, queryClient, sessionId, targetId]);
 
   return state;
 }
@@ -152,6 +157,7 @@ export function useWorkspaceLive(
   workspaceId: string | null,
   options: CloudLiveHookOptions = {},
 ): CloudLiveState<CloudWorkspaceSnapshot> {
+  const client = useCloudClient();
   const queryClient = useQueryClient();
   const [state, setState] = useState<CloudLiveState<CloudWorkspaceSnapshot>>(emptyLiveState);
   const cursorRef = useRef(0);
@@ -174,59 +180,63 @@ export function useWorkspaceLive(
         return;
       }
       subscription?.close();
-      subscription = subscribeWorkspace(workspaceId, {
-        afterSeq: cursorRef.current,
-        onEvent(event) {
-          if (!active) {
-            return;
-          }
-          if (isCloudHeartbeat(event)) {
-            setState((current) => ({ ...current, isConnected: true, error: undefined }));
-            return;
-          }
-          attempt = 0;
-          if (isCloudWorkspaceSnapshot(event)) {
-            cursorRef.current = Math.max(
-              0,
-              ...event.sessions.map((session) => session.lastEventSeq),
-            );
-            queryClient.setQueryData(cloudWorkspaceSnapshotKey(workspaceId), event);
-            setState({
-              snapshot: event,
-              lastPatchAt: new Date(),
-              isConnected: true,
-              error: undefined,
-            });
-            return;
-          }
-          if (isCloudWorkspaceProjectionPatch(event)) {
-            cursorRef.current = Math.max(cursorRef.current, event.patch.seq);
-            setState((current) => {
-              const snapshot = reduceWorkspaceSnapshot(current.snapshot, event);
-              if (snapshot) {
-                queryClient.setQueryData(cloudWorkspaceSnapshotKey(workspaceId), snapshot);
-              }
-              return {
-                snapshot,
+      subscription = subscribeWorkspace(
+        workspaceId,
+        {
+          afterSeq: cursorRef.current,
+          onEvent(event) {
+            if (!active) {
+              return;
+            }
+            if (isCloudHeartbeat(event)) {
+              setState((current) => ({ ...current, isConnected: true, error: undefined }));
+              return;
+            }
+            attempt = 0;
+            if (isCloudWorkspaceSnapshot(event)) {
+              cursorRef.current = Math.max(
+                0,
+                ...event.sessions.map((session) => session.lastEventSeq),
+              );
+              queryClient.setQueryData(cloudWorkspaceSnapshotKey(workspaceId), event);
+              setState({
+                snapshot: event,
                 lastPatchAt: new Date(),
                 isConnected: true,
                 error: undefined,
-              };
-            });
-          }
+              });
+              return;
+            }
+            if (isCloudWorkspaceProjectionPatch(event)) {
+              cursorRef.current = Math.max(cursorRef.current, event.patch.seq);
+              setState((current) => {
+                const snapshot = reduceWorkspaceSnapshot(current.snapshot, event);
+                if (snapshot) {
+                  queryClient.setQueryData(cloudWorkspaceSnapshotKey(workspaceId), snapshot);
+                }
+                return {
+                  snapshot,
+                  lastPatchAt: new Date(),
+                  isConnected: true,
+                  error: undefined,
+                };
+              });
+            }
+          },
+          onError(error) {
+            if (!active) {
+              return;
+            }
+            setState((current) => ({
+              ...current,
+              isConnected: false,
+              error: normalizeStreamError(error),
+            }));
+            reconnectTimer = setTimeout(connect, reconnectDelay(attempt++));
+          },
         },
-        onError(error) {
-          if (!active) {
-            return;
-          }
-          setState((current) => ({
-            ...current,
-            isConnected: false,
-            error: normalizeStreamError(error),
-          }));
-          reconnectTimer = setTimeout(connect, reconnectDelay(attempt++));
-        },
-      });
+        client,
+      );
     };
 
     connect();
@@ -237,7 +247,7 @@ export function useWorkspaceLive(
         clearTimeout(reconnectTimer);
       }
     };
-  }, [enabled, queryClient, workspaceId]);
+  }, [client, enabled, queryClient, workspaceId]);
 
   return state;
 }
@@ -246,6 +256,7 @@ export function useTargetLive(
   targetId: string | null,
   options: CloudLiveHookOptions = {},
 ): CloudTargetLiveState {
+  const client = useCloudClient();
   const queryClient = useQueryClient();
   const [state, setState] = useState<CloudTargetLiveState>(emptyLiveState);
   const cursorRef = useRef(0);
@@ -268,54 +279,58 @@ export function useTargetLive(
         return;
       }
       subscription?.close();
-      subscription = subscribeTarget(targetId, {
-        afterSeq: cursorRef.current,
-        onEvent(event) {
-          if (!active) {
-            return;
-          }
-          if (isCloudHeartbeat(event)) {
-            setState((current) => ({ ...current, isConnected: true, error: undefined }));
-            return;
-          }
-          attempt = 0;
-          if (isCloudTargetPatch(event)) {
-            queryClient.setQueryData(cloudTargetKey(targetId), event.target);
-            setState({
-              snapshot: { target: event.target },
-              lastPatchAt: new Date(),
-              isConnected: true,
-              error: undefined,
-            });
-            return;
-          }
-          if (isCloudTargetSnapshot(event)) {
-            queryClient.setQueryData(cloudTargetKey(targetId), event.target);
-            setState({
-              snapshot: event,
-              lastPatchAt: new Date(),
-              isConnected: true,
-              error: undefined,
-            });
-            return;
-          }
-          if (isCloudCommandStatusPatch(event)) {
-            queryClient.setQueryData(cloudCommandKey(event.command.commandId), event.command);
-            setState((current) => ({ ...current, isConnected: true, error: undefined }));
-          }
+      subscription = subscribeTarget(
+        targetId,
+        {
+          afterSeq: cursorRef.current,
+          onEvent(event) {
+            if (!active) {
+              return;
+            }
+            if (isCloudHeartbeat(event)) {
+              setState((current) => ({ ...current, isConnected: true, error: undefined }));
+              return;
+            }
+            attempt = 0;
+            if (isCloudTargetPatch(event)) {
+              queryClient.setQueryData(cloudTargetKey(targetId), event.target);
+              setState({
+                snapshot: { target: event.target },
+                lastPatchAt: new Date(),
+                isConnected: true,
+                error: undefined,
+              });
+              return;
+            }
+            if (isCloudTargetSnapshot(event)) {
+              queryClient.setQueryData(cloudTargetKey(targetId), event.target);
+              setState({
+                snapshot: event,
+                lastPatchAt: new Date(),
+                isConnected: true,
+                error: undefined,
+              });
+              return;
+            }
+            if (isCloudCommandStatusPatch(event)) {
+              queryClient.setQueryData(cloudCommandKey(event.command.commandId), event.command);
+              setState((current) => ({ ...current, isConnected: true, error: undefined }));
+            }
+          },
+          onError(error) {
+            if (!active) {
+              return;
+            }
+            setState((current) => ({
+              ...current,
+              isConnected: false,
+              error: normalizeStreamError(error),
+            }));
+            reconnectTimer = setTimeout(connect, reconnectDelay(attempt++));
+          },
         },
-        onError(error) {
-          if (!active) {
-            return;
-          }
-          setState((current) => ({
-            ...current,
-            isConnected: false,
-            error: normalizeStreamError(error),
-          }));
-          reconnectTimer = setTimeout(connect, reconnectDelay(attempt++));
-        },
-      });
+        client,
+      );
     };
 
     connect();
@@ -326,7 +341,7 @@ export function useTargetLive(
         clearTimeout(reconnectTimer);
       }
     };
-  }, [enabled, queryClient, targetId]);
+  }, [client, enabled, queryClient, targetId]);
 
   return state;
 }
