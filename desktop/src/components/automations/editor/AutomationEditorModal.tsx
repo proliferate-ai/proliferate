@@ -26,8 +26,7 @@ import {
   AutomationTemplatePopover,
 } from "./AutomationEditorControls";
 import { AutomationAgentRunConfigPicker } from "@/components/automations/controls/AutomationAgentRunConfigPicker";
-import { AutomationOwnerPicker } from "@/components/automations/controls/AutomationOwnerPicker";
-import { AutomationTargetPicker } from "@/components/automations/controls/AutomationTargetPicker";
+import { AutomationRunLocationSelector } from "@/components/automations/controls/AutomationRunLocationSelector";
 
 type SchedulePresetValue = AutomationSchedulePresetOrCustom;
 
@@ -124,23 +123,14 @@ export function AutomationEditorModal({
           : null,
     },
   ], [canManageTeamAutomations, organizationId, organizationName]);
-  const targetGroups = useMemo(() => {
-    if (!isTeamAutomation) {
-      return targetSelection.groups;
-    }
-    return targetSelection.groups
-      .map((group) => ({
-        ...group,
-        rows: group.rows.filter((row) =>
-          row.kind === "configureCloud" || row.target.executionTarget === "cloud"
-        ),
-      }))
-      .filter((group) => group.rows.length > 0);
-  }, [isTeamAutomation, targetSelection.groups]);
-  const selectedTargetRow = isTeamAutomation
-    && targetSelection.selectedRow?.target.executionTarget !== "cloud"
-    ? null
-    : targetSelection.selectedRow;
+  const teamTargetGroups = useMemo(() => targetSelection.groups
+    .map((group) => ({
+      ...group,
+      rows: group.rows.filter((row) =>
+        row.kind === "configureCloud" || row.target.executionTarget === "cloud"
+      ),
+    }))
+    .filter((group) => group.rows.length > 0), [targetSelection.groups]);
   const targetDisabledReason = isTeamAutomation
     ? "Select a configured cloud workspace for team automation."
     : targetSelection.disabledReason;
@@ -308,7 +298,7 @@ export function AutomationEditorModal({
               {error}
             </div>
           )}
-          <div className="min-h-0 flex-1 overflow-y-auto py-3">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-3">
             <Textarea
               id="automation-prompt"
               variant="ghost"
@@ -318,31 +308,22 @@ export function AutomationEditorModal({
               placeholder="Add prompt e.g. look for crashes in $sentry"
               className="min-h-[16rem] px-0 text-base leading-relaxed placeholder:text-muted-foreground"
             />
+            <AutomationRunLocationSelector
+              ownerScope={ownerScope}
+              canChangeOwner={!automation}
+              ownerOptions={ownerOptions}
+              personalGroups={targetSelection.groups}
+              teamGroups={teamTargetGroups}
+              isLoading={targetSelection.isLoading}
+              disabledReason={targetSelection.disabledReason}
+              onSelectOwner={handleOwnerScopeSelect}
+              onSelectTarget={setTargetOverride}
+              onConfigureCloud={handleConfigureCloudTarget}
+            />
           </div>
           <div className="shrink-0 pt-3">
-            {!automation && !targetSelection.isLoading && targetSelection.groups.length === 0 && (
-              <p className="mb-2 text-xs text-muted-foreground">
-                Add a local repository with a GitHub remote, or create a cloud workspace first.
-              </p>
-            )}
             <div className="flex w-full flex-wrap items-center justify-between gap-2">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-                {!automation && (
-                  <AutomationOwnerPicker
-                    value={ownerScope}
-                    organizationName={organizationName}
-                    options={ownerOptions}
-                    onSelect={handleOwnerScopeSelect}
-                  />
-                )}
-                <AutomationTargetPicker
-                  groups={targetGroups}
-                  selectedRow={selectedTargetRow}
-                  isLoading={targetSelection.isLoading}
-                  disabledReason={targetDisabledReason}
-                  onSelect={setTargetOverride}
-                  onConfigureCloud={handleConfigureCloudTarget}
-                />
                 <AutomationSchedulePopover
                   schedulePreset={schedulePreset}
                   rrule={rrule}
