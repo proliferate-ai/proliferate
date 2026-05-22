@@ -209,11 +209,19 @@ function CloudChatTranscriptRow({ row }: { row: CloudChatTranscriptRowView }) {
   if (row.kind === "user") {
     return (
       <article className="flex justify-end">
-        <div
-          className="max-w-[77%] whitespace-pre-wrap break-words rounded-2xl bg-foreground/5 px-3 py-2 text-sm leading-6 text-foreground"
-          data-telemetry-mask
-        >
-          {row.body}
+        <div className="flex max-w-[77%] flex-col items-end gap-1">
+          <div
+            className="whitespace-pre-wrap break-words rounded-2xl bg-foreground/5 px-3 py-2 text-sm leading-6 text-foreground"
+            data-telemetry-mask
+          >
+            {row.body}
+          </div>
+          {row.status || row.streaming ? (
+            <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              {row.streaming ? <Loader2 size={12} className="animate-spin" /> : null}
+              {row.status ?? "Sending"}
+            </div>
+          ) : null}
         </div>
       </article>
     );
