@@ -98,7 +98,7 @@ describe("HomeTargetPicker", () => {
     const callbacks = renderPicker();
 
     fireEvent.click(screen.getByRole("button", { name: /New worktree/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Local checkout/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Work locally/i }));
 
     expect(callbacks.onSelectRuntime).toHaveBeenCalledWith("local");
   });
@@ -123,14 +123,14 @@ describe("HomeTargetPicker", () => {
       selectedRepository: null,
     });
 
-    expect(screen.getByRole("button", { name: /Cowork/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /No project/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /No repository/i })).toBeNull();
   });
 
-  it("selects a base branch from the runtime picker without changing runtime", () => {
+  it("selects a base branch from the branch picker without changing runtime", () => {
     const callbacks = renderPicker();
 
-    fireEvent.click(screen.getByRole("button", { name: /Runtime: New worktree, main/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Branch: main/i }));
     fireEvent.click(screen.getByRole("button", { name: "staging" }));
 
     expect(callbacks.onSelectBranch).toHaveBeenCalledWith("staging");
@@ -141,7 +141,7 @@ describe("HomeTargetPicker", () => {
     renderPicker();
 
     fireEvent.click(screen.getByRole("button", { name: /Project: Keystone repository/i }));
-    fireEvent.change(screen.getByPlaceholderText("Search repositories"), {
+    fireEvent.change(screen.getByPlaceholderText("Search projects"), {
       target: { value: "prolif" },
     });
 
@@ -149,14 +149,14 @@ describe("HomeTargetPicker", () => {
     expect(screen.queryByText(keystoneRepository.sourceRoot)).toBeNull();
 
     fireEvent.keyDown(window, { key: "Escape" });
-    fireEvent.click(screen.getByRole("button", { name: /Runtime: New worktree, main/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Branch: main/i }));
     fireEvent.change(screen.getByPlaceholderText("Search branches"), {
       target: { value: "stag" },
     });
 
     expect(screen.getByRole("button", { name: "staging" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "main" })).toBeNull();
-    expect(screen.getByRole("button", { name: /Local checkout/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Work locally/i })).toBeNull();
   });
 
   it("disables unavailable cloud runtime choices", () => {
@@ -166,7 +166,7 @@ describe("HomeTargetPicker", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Runtime: New worktree, main/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Runtime: New worktree/i }));
     const cloudButton = screen.getByRole("button", { name: /Cloud unavailable/i });
 
     expect((cloudButton as HTMLButtonElement).disabled).toBe(true);
