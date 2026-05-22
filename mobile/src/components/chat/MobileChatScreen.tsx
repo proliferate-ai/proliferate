@@ -116,6 +116,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
     ?? sessions.find((candidate) => candidate.sessionId === chat.sessionId)
     ?? sessions[0]
     ?? null;
+  const activeSessionId = session?.sessionId ?? selectedSessionId;
   const targetId = session?.targetId ?? workspace?.targetId ?? chat.targetId;
   const workspaceRuntimeId = session?.workspaceId ?? workspace?.anyharnessWorkspaceId ?? chat.workspaceRuntimeId;
   const workspaceStatus = workspace ? effectiveWorkspaceStatus(workspace) : chat.status;
@@ -163,18 +164,26 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
       void submitSessionConfig(rawConfigId, value);
     },
   });
+  const hasActiveOptimisticPrompt = useMemo(
+    () =>
+      activeSessionId !== null &&
+      optimisticPrompts.some((prompt) =>
+        prompt.sessionId === activeSessionId && prompt.status !== "failed"
+      ),
+    [activeSessionId, optimisticPrompts],
+  );
   const visibleTranscriptRows = useMemo(
     () => [
       ...transcriptView.rows,
-      ...buildPendingPromptRows(pendingPrompt, session?.sessionId ?? null),
+      ...buildPendingPromptRows(pendingPrompt, activeSessionId),
       ...buildOptimisticPromptRows({
         prompts: optimisticPrompts,
-        sessionId: session?.sessionId ?? null,
+        sessionId: activeSessionId,
         transcriptItems,
         transcriptRows: transcriptView.rows,
       }),
     ],
-    [optimisticPrompts, pendingPrompt, session?.sessionId, transcriptItems, transcriptView.rows],
+    [activeSessionId, optimisticPrompts, pendingPrompt, transcriptItems, transcriptView.rows],
   );
 
   useEffect(() => {
@@ -222,6 +231,30 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
     sessionEventsQuery.refetch,
     sessionLive.lastPatchAt,
     transcriptQuery.refetch,
+  ]);
+
+  useEffect(() => {
+    if (!pendingPrompt && !hasActiveOptimisticPrompt) {
+      return;
+    }
+    const interval = setInterval(() => {
+      void workspaceQuery.refetch();
+      if (session && targetId) {
+        void transcriptQuery.refetch();
+        void sessionEventsQuery.refetch();
+      }
+    }, 2500);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [
+    hasActiveOptimisticPrompt,
+    pendingPrompt,
+    session?.sessionId,
+    sessionEventsQuery.refetch,
+    targetId,
+    transcriptQuery.refetch,
+    workspaceQuery.refetch,
   ]);
 
   useEffect(() => {

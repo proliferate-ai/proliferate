@@ -1,6 +1,9 @@
-import * as SecureStore from "expo-secure-store";
-
 import type { MobilePendingPrompt } from "../../../navigation/navigation-model";
+import {
+  deleteMobileStorageItem,
+  getMobileStorageItem,
+  setMobileStorageItem,
+} from "../mobile-storage";
 
 const PENDING_PROMPT_PREFIX = "proliferate.mobile.pendingPrompt.";
 
@@ -8,13 +11,13 @@ export async function savePendingMobilePrompt(
   workspaceId: string,
   prompt: MobilePendingPrompt,
 ): Promise<void> {
-  await SecureStore.setItemAsync(promptKey(workspaceId), JSON.stringify(prompt));
+  await setMobileStorageItem(promptKey(workspaceId), JSON.stringify(prompt));
 }
 
 export async function loadPendingMobilePrompt(
   workspaceId: string,
 ): Promise<MobilePendingPrompt | null> {
-  const raw = await SecureStore.getItemAsync(promptKey(workspaceId));
+  const raw = await getMobileStorageItem(promptKey(workspaceId));
   if (!raw) {
     return null;
   }
@@ -36,7 +39,7 @@ export async function loadPendingMobilePrompt(
 }
 
 export async function clearPendingMobilePrompt(workspaceId: string): Promise<void> {
-  await SecureStore.deleteItemAsync(promptKey(workspaceId));
+  await deleteMobileStorageItem(promptKey(workspaceId));
 }
 
 function promptKey(workspaceId: string): string {

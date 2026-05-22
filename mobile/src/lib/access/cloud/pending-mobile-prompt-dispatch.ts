@@ -1,5 +1,6 @@
 import {
   getCommandStatus,
+  getWorkspaceSnapshot,
   type CloudCommandEnvelope,
   type CloudCommandResponse,
   type CloudSessionProjection,
@@ -58,9 +59,8 @@ export async function dispatchPendingMobilePrompt(args: {
     },
   });
   args.setLatestCommandId(command.commandId);
-  assertCommandAccepted(
-    await waitForCommandTerminal(command.commandId, args.client, args.shouldContinue),
-  );
+  assertCommandEnqueued(command);
+  await waitForCommandAccepted(command, args.client, args.shouldContinue);
   return session.sessionId;
 }
 
@@ -82,6 +82,11 @@ async function startSessionForPrompt(args: {
   const agentKind = resolveAgentKind(args.workspace);
   const modelId = agentKind === "codex" ? args.modelId : null;
   const modeId = args.pendingPrompt.modeId;
+  const existingSessionIds = await loadExistingSessionIds({
+    client: args.client,
+    workspaceId: args.workspace.id,
+    targetId,
+  });
   const command = await args.enqueueStartSession({
     idempotencyKey: `${args.pendingPrompt.id}:start-session`,
     targetId,
@@ -99,27 +104,17 @@ async function startSessionForPrompt(args: {
     },
   });
   args.setLatestCommandId(command.commandId);
+  assertCommandEnqueued(command);
   args.onStatus("Waiting for the session to start.");
-  const completed = await waitForCommandTerminal(
-    command.commandId,
-    args.client,
-    args.shouldContinue,
-  );
-  assertCommandAccepted(completed);
-  assertStillCurrent(args.shouldContinue);
-  return {
+  return waitForStartedSession({
+    client: args.client,
+    command,
+    workspaceId: args.workspace.id,
     targetId,
-    workspaceId: anyharnessWorkspaceId,
-    sessionId: parseStartedSessionId(completed),
-    title: null,
-    status: "running",
-    lastEventSeq: 0,
-    lastEventAt: null,
-    itemCount: 0,
-    pendingInteractionCount: 0,
-    updatedAt: null,
-    createdAt: null,
-  } as CloudSessionProjection;
+    fallbackWorkspaceId: anyharnessWorkspaceId,
+    existingSessionIds,
+    shouldContinue: args.shouldContinue,
+  });
 }
 
 function resolveAgentKind(workspace: CloudWorkspaceDetail): string {
@@ -129,25 +124,138 @@ function resolveAgentKind(workspace: CloudWorkspaceDetail): string {
   return workspace.readyAgentKinds?.[0] ?? workspace.allowedAgentKinds?.[0] ?? "codex";
 }
 
-async function waitForCommandTerminal(
-  commandId: string,
+async function waitForStartedSession(args: {
+  client: ProliferateCloudClient;
+  command: CloudCommandResponse;
+  workspaceId: string;
+  targetId: string;
+  fallbackWorkspaceId: string;
+  existingSessionIds: Set<string>;
+  shouldContinue: () => boolean;
+}): Promise<CloudSessionProjection> {
+  const deadline = Date.now() + 240_000;
+  let latestCommand = args.command;
+  let expectedSessionId = parseStartedSessionId(latestCommand);
+  assertStillCurrent(args.shouldContinue);
+  while (true) {
+    latestCommand = await refreshCommandStatus(
+      latestCommand,
+      args.client,
+      args.shouldContinue,
+    );
+    assertCommandEnqueued(latestCommand);
+    expectedSessionId = expectedSessionId ?? parseStartedSessionId(latestCommand);
+
+    const session = await findStartedSession({
+      client: args.client,
+      workspaceId: args.workspaceId,
+      targetId: args.targetId,
+      expectedSessionId,
+      existingSessionIds: args.existingSessionIds,
+      shouldContinue: args.shouldContinue,
+    });
+    if (session) {
+      return {
+        ...session,
+        workspaceId: session.workspaceId || args.fallbackWorkspaceId,
+        targetId: session.targetId || args.targetId,
+      };
+    }
+    assertStillCurrent(args.shouldContinue);
+    if (Date.now() >= deadline) {
+      throw new Error("Timed out waiting for the cloud session to start.");
+    }
+    await sleep(500);
+  }
+}
+
+async function waitForCommandAccepted(
+  initialCommand: CloudCommandResponse,
   client: ProliferateCloudClient,
   shouldContinue: () => boolean,
 ): Promise<CloudCommandResponse> {
   const deadline = Date.now() + 240_000;
+  let latestCommand = initialCommand;
   assertStillCurrent(shouldContinue);
-  let latest = await getCommandStatus(commandId, client);
-  while (!isTerminalStatus(latest.status)) {
+  while (true) {
+    latestCommand = await refreshCommandStatus(latestCommand, client, shouldContinue);
+    assertCommandEnqueued(latestCommand);
+    if (latestCommand.status === "accepted" || latestCommand.status === "accepted_but_queued") {
+      return latestCommand;
+    }
     assertStillCurrent(shouldContinue);
     if (Date.now() >= deadline) {
-      throw new Error("Timed out waiting for the cloud command to finish.");
+      throw new Error("Timed out waiting for the cloud command to be accepted.");
     }
     await sleep(500);
-    assertStillCurrent(shouldContinue);
-    latest = await getCommandStatus(commandId, client);
   }
+}
+
+async function refreshCommandStatus(
+  fallback: CloudCommandResponse,
+  client: ProliferateCloudClient,
+  shouldContinue: () => boolean,
+): Promise<CloudCommandResponse> {
   assertStillCurrent(shouldContinue);
-  return latest;
+  try {
+    return await getCommandStatus(fallback.commandId, client);
+  } catch {
+    // Command-status reads can briefly race the command creation response.
+    return fallback;
+  }
+}
+
+async function loadExistingSessionIds(args: {
+  client: ProliferateCloudClient;
+  workspaceId: string;
+  targetId: string;
+}): Promise<Set<string>> {
+  try {
+    const snapshot = await getWorkspaceSnapshot(args.workspaceId, args.client);
+    return new Set(
+      snapshot.sessions
+        .filter((session) => session.targetId === args.targetId)
+        .map((session) => session.sessionId),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+async function findStartedSession(args: {
+  client: ProliferateCloudClient;
+  workspaceId: string;
+  targetId: string;
+  expectedSessionId: string | null;
+  existingSessionIds: Set<string>;
+  shouldContinue: () => boolean;
+}): Promise<CloudSessionProjection | null> {
+  assertStillCurrent(args.shouldContinue);
+  try {
+    const snapshot = await getWorkspaceSnapshot(args.workspaceId, args.client);
+    const sessionsForTarget = snapshot.sessions.filter((candidate) =>
+      candidate.targetId === args.targetId
+    );
+    if (args.expectedSessionId) {
+      return sessionsForTarget.find((candidate) =>
+        candidate.sessionId === args.expectedSessionId
+      ) ?? null;
+    }
+    return sessionsForTarget
+      .filter((candidate) => !args.existingSessionIds.has(candidate.sessionId))
+      .sort(compareSessionFreshness)[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function compareSessionFreshness(
+  left: CloudSessionProjection,
+  right: CloudSessionProjection,
+): number {
+  const rightTime = Date.parse(right.startedAt ?? right.lastEventAt ?? "") || 0;
+  const leftTime = Date.parse(left.startedAt ?? left.lastEventAt ?? "") || 0;
+  return rightTime - leftTime || (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
 }
 
 function assertStillCurrent(shouldContinue: () => boolean): void {
@@ -156,23 +264,20 @@ function assertStillCurrent(shouldContinue: () => boolean): void {
   }
 }
 
-function isTerminalStatus(status: CloudCommandResponse["status"]): boolean {
-  return status === "accepted"
-    || status === "accepted_but_queued"
-    || status === "rejected"
-    || status === "expired"
-    || status === "superseded"
-    || status === "failed_delivery";
-}
-
-function assertCommandAccepted(command: CloudCommandResponse): void {
-  if (command.status !== "accepted" && command.status !== "accepted_but_queued") {
+function assertCommandEnqueued(command: CloudCommandResponse): void {
+  if (
+    command.status === "rejected" ||
+    command.status === "expired" ||
+    command.status === "superseded" ||
+    command.status === "failed_delivery"
+  ) {
     throw new Error(command.errorMessage || `Cloud command ${command.status}.`);
   }
 }
 
-function parseStartedSessionId(command: CloudCommandResponse): string {
+function parseStartedSessionId(command: CloudCommandResponse): string | null {
   const candidates = [
+    command.sessionId,
     command.result?.sessionId,
     command.result?.session_id,
     nestedString(command.result?.body, "sessionId"),
@@ -185,7 +290,7 @@ function parseStartedSessionId(command: CloudCommandResponse): string {
       return candidate.trim();
     }
   }
-  throw new Error("Cloud session command completed without a session id.");
+  return null;
 }
 
 function nestedObject(value: unknown, key: string): Record<string, unknown> | null {
