@@ -1,10 +1,6 @@
 import "@/lib/access/cloud/client";
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  buildSlackOAuthStartUrl,
-  getSlackBotConfig,
-} from "@proliferate/cloud-sdk/client/slack";
+import { getSlackBotConfig } from "@proliferate/cloud-sdk/client/slack";
 import type {
   SlackBotConfigResponse,
   SlackWorkspaceConnection,
@@ -17,10 +13,6 @@ export function useSlackConnection(
   enabled = true,
 ) {
   const { cloudActive } = useCloudAvailabilityState();
-  const oauthStartUrl = useMemo(
-    () => organizationId ? buildSlackOAuthStartUrl({ organizationId }) : null,
-    [organizationId],
-  );
 
   const query = useQuery<SlackBotConfigResponse, Error, SlackWorkspaceConnection | null>({
     queryKey: slackBotConfigKey(organizationId),
@@ -32,6 +24,5 @@ export function useSlackConnection(
   return {
     ...query,
     connection: query.data ?? null,
-    oauthStartUrl,
   };
 }

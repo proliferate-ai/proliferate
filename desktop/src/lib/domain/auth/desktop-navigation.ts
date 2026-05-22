@@ -13,7 +13,7 @@ export function desktopNavigationTarget(url: string): string | null {
 
   if (parsed.hostname === "settings" && parsed.pathname === "/cloud") {
     const params = new URLSearchParams(parsed.search);
-    params.set("section", "cloud");
+    params.set("section", "billing");
     return `/settings?${params.toString()}`;
   }
 

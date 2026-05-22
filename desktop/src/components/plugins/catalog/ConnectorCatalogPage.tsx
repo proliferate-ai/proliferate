@@ -3,7 +3,7 @@ import { useConnectorsCatalogState } from "@/hooks/mcp/ui/use-connectors-catalog
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Search } from "@/components/ui/icons";
+import { Globe, Search } from "@/components/ui/icons";
 import {
   AvailablePluginPackageRow,
   ConnectedPluginPackageRow,
@@ -77,6 +77,13 @@ export function ConnectorCatalogPage() {
           </div>
         ) : (
           <>
+            <SharedCloudExposureNotice
+              activeOrganizationName={state.sharedExposure.activeOrganizationName}
+              canManage={state.sharedExposure.canManage}
+              hasOrganization={state.sharedExposure.hasOrganization}
+              isLoading={state.sharedExposure.isLoading}
+            />
+
             {state.connected.length > 0 && (
               <section className="space-y-4">
                 <div className="border-b border-border/60 pb-2">
@@ -90,9 +97,21 @@ export function ConnectorCatalogPage() {
                       pending={actions.installedConnectorActions.isPending(
                         model.record.metadata.connectionId,
                       )}
+                      canManageSharedExposure={state.sharedExposure.canManage}
+                      organizationId={state.sharedExposure.activeOrganizationId}
                       onDelete={() => actions.requestDelete(model.record)}
                       onManage={() => state.openManage(model.record.metadata.connectionId)}
                       onReconnect={() => state.openManage(model.record.metadata.connectionId)}
+                      onSetSharedExposure={(publicToOrg) => {
+                        if (!state.sharedExposure.activeOrganizationId) {
+                          return;
+                        }
+                        void actions.installedConnectorActions.onSetSharedExposure(
+                          model.record,
+                          state.sharedExposure.activeOrganizationId,
+                          publicToOrg,
+                        );
+                      }}
                       onStatusClick={() => state.openRecovery(model.record)}
                       onToggle={(enabled) => {
                         void actions.installedConnectorActions.onToggle(model.record, enabled);
@@ -162,5 +181,47 @@ export function ConnectorCatalogPage() {
         />
       )}
     </>
+  );
+}
+
+function SharedCloudExposureNotice({
+  activeOrganizationName,
+  canManage,
+  hasOrganization,
+  isLoading,
+}: {
+  activeOrganizationName: string | null;
+  canManage: boolean;
+  hasOrganization: boolean;
+  isLoading: boolean;
+}) {
+  const title = canManage
+    ? `Shared cloud access${activeOrganizationName ? ` for ${activeOrganizationName}` : ""}`
+    : "Shared cloud access";
+  const description = !hasOrganization
+    ? "Join an organization before making MCPs, plugins, and skills available to shared cloud."
+    : canManage
+      ? "Make installed MCP, plugin, and skill items public here. Public items can be used by team automations, Slack, and shared cloud work; shared environments inherit this sandbox-wide set."
+      : "Installed items show whether they are private or public. Organization owners and admins can make them public for team automations, Slack, and shared cloud work.";
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-surface-elevated-secondary px-4 py-3">
+      <div className="flex gap-3">
+        <span
+          aria-hidden="true"
+          className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/20 text-muted-foreground"
+        >
+          <Globe className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-foreground">
+            {isLoading ? "Checking shared cloud access" : title}
+          </div>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">
+            {description}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

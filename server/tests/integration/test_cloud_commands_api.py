@@ -19,11 +19,12 @@ from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
-from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
+from proliferate.db.store.cloud_sandboxes import ensure_profile_slot, supersede_slot
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
+from proliferate.server.cloud.agent_auth.service import request_agent_auth_refresh_for_profile_target
 from proliferate.server.cloud.commands import service as command_service
 from proliferate.server.cloud.worker import service as worker_service
 from proliferate.utils.crypto import encrypt_json
@@ -296,6 +297,12 @@ async def _create_ready_managed_cloud_workspace(
     )
     workspace.status = CloudWorkspaceStatus.ready.value
     workspace.anyharness_workspace_id = f"anyharness-managed-{suffix}"
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    workspace.materialized_slot_generation = slot.slot_generation
     await exposures_store.upsert_workspace_exposure(
         db_session,
         target_id=target_id,
@@ -1827,6 +1834,284 @@ class TestCloudCommandsApi:
         assert created.json()["detail"]["code"] == "cloud_command_internal_only"
 
     @pytest.mark.asyncio
+    async def test_agent_auth_refresh_result_marks_target_state_applied(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-agent-auth-result-state",
+        )
+        target_id, worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="agent-auth-result-state",
+        )
+        target_uuid = UUID(target_id)
+        profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
+            db_session,
+            sandbox_profile_id=profile.id,
+            reason="test_result_state",
+            actor_user_id=UUID(auth.user_id),
+            force_restart=False,
+        )
+        assert profile is not None
+        await request_agent_auth_refresh_for_profile_target(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+            actor_user_id=UUID(auth.user_id),
+            reason="test_result_state",
+            force_restart=False,
+        )
+        await db_session.commit()
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert lease.status_code == 200
+        leased_command = lease.json()["command"]
+        assert leased_command["kind"] == "refresh_agent_auth_config"
+
+        result = await client.post(
+            f"/v1/cloud/worker/commands/{leased_command['commandId']}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": leased_command["leaseId"],
+                "slotGeneration": leased_command["slotGeneration"],
+                "status": "accepted",
+                "result": {
+                    "applied": True,
+                    "revision": profile.agent_auth_revision,
+                    "currentRevision": profile.agent_auth_revision,
+                    "selectionCount": 0,
+                    "syncedFileCount": 0,
+                    "appliedCleanupPaths": [],
+                },
+            },
+        )
+        assert result.status_code == 200
+
+        await db_session.rollback()
+        state = await agent_auth_store.get_target_state(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        assert state is not None
+        assert state.status == "applied"
+        assert state.applied_revision == profile.agent_auth_revision
+        assert state.last_command_id == UUID(leased_command["commandId"])
+        assert state.last_worker_id is not None
+
+    @pytest.mark.asyncio
+    async def test_stale_agent_auth_refresh_result_does_not_regress_target_state(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-agent-auth-stale-result",
+        )
+        target_id, worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="agent-auth-stale-result",
+        )
+        target_uuid = UUID(target_id)
+        first_profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
+            db_session,
+            sandbox_profile_id=profile.id,
+            reason="test_stale_result_first",
+            actor_user_id=UUID(auth.user_id),
+            force_restart=False,
+        )
+        assert first_profile is not None
+        await request_agent_auth_refresh_for_profile_target(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+            actor_user_id=UUID(auth.user_id),
+            reason="test_stale_result_first",
+            force_restart=False,
+        )
+        await db_session.commit()
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert lease.status_code == 200
+        first_command = lease.json()["command"]
+        assert first_command["kind"] == "refresh_agent_auth_config"
+
+        second_profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
+            db_session,
+            sandbox_profile_id=profile.id,
+            reason="test_stale_result_second",
+            actor_user_id=UUID(auth.user_id),
+            force_restart=False,
+        )
+        assert second_profile is not None
+        await request_agent_auth_refresh_for_profile_target(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+            actor_user_id=UUID(auth.user_id),
+            reason="test_stale_result_second",
+            force_restart=False,
+        )
+        newer_state = await agent_auth_store.get_target_state(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        assert newer_state is not None
+        assert newer_state.desired_revision == second_profile.agent_auth_revision
+        second_command_id = newer_state.last_command_id
+        await db_session.commit()
+
+        result = await client.post(
+            f"/v1/cloud/worker/commands/{first_command['commandId']}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": first_command["leaseId"],
+                "slotGeneration": first_command["slotGeneration"],
+                "status": "accepted",
+                "result": {
+                    "applied": True,
+                    "revision": first_profile.agent_auth_revision,
+                    "currentRevision": first_profile.agent_auth_revision,
+                    "selectionCount": 0,
+                    "syncedFileCount": 0,
+                    "appliedCleanupPaths": [],
+                },
+            },
+        )
+        assert result.status_code == 200
+
+        await db_session.rollback()
+        state = await agent_auth_store.get_target_state(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        assert state is not None
+        assert state.desired_revision == second_profile.agent_auth_revision
+        assert state.applied_revision is None
+        assert state.status == "pending"
+        assert state.last_command_id == second_command_id
+
+    @pytest.mark.asyncio
+    async def test_stale_slot_agent_auth_refresh_result_does_not_apply_target_state(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-agent-auth-stale-slot-result",
+        )
+        target_id, worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="agent-auth-stale-slot-result",
+        )
+        target_uuid = UUID(target_id)
+        profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
+            db_session,
+            sandbox_profile_id=profile.id,
+            reason="test_stale_slot_result",
+            actor_user_id=UUID(auth.user_id),
+            force_restart=False,
+        )
+        assert profile is not None
+        await request_agent_auth_refresh_for_profile_target(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+            actor_user_id=UUID(auth.user_id),
+            reason="test_stale_slot_result",
+            force_restart=False,
+        )
+        await db_session.commit()
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert lease.status_code == 200
+        leased_command = lease.json()["command"]
+        assert leased_command["kind"] == "refresh_agent_auth_config"
+
+        old_slot = await ensure_profile_slot(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        old_slot_id = old_slot.id
+        await supersede_slot(db_session, sandbox_id=old_slot_id)
+        await ensure_profile_slot(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        await db_session.commit()
+
+        result = await client.post(
+            f"/v1/cloud/worker/commands/{leased_command['commandId']}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": leased_command["leaseId"],
+                "slotGeneration": leased_command["slotGeneration"],
+                "status": "accepted",
+                "result": {
+                    "applied": True,
+                    "revision": profile.agent_auth_revision,
+                    "currentRevision": profile.agent_auth_revision,
+                    "selectionCount": 0,
+                    "syncedFileCount": 0,
+                    "appliedCleanupPaths": [],
+                },
+            },
+        )
+        assert result.status_code == 200
+        assert result.json()["status"] == "superseded"
+
+        await db_session.rollback()
+        state = await agent_auth_store.get_target_state(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        assert state is not None
+        assert state.desired_revision == profile.agent_auth_revision
+        assert state.applied_revision is None
+        assert state.status == "pending"
+        assert state.last_command_id == UUID(leased_command["commandId"])
+
+    @pytest.mark.asyncio
     async def test_managed_profile_preflight_blocks_revision_zero_without_state(
         self,
         client: AsyncClient,
@@ -2141,6 +2426,75 @@ class TestCloudCommandsApi:
             restart_required.json()["detail"]["code"]
             == "cloud_command_agent_auth_restart_required"
         )
+
+    @pytest.mark.asyncio
+    async def test_agent_auth_preflight_rejects_stale_slot_state(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-agent-auth-stale-slot",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="agent-auth-stale-slot",
+        )
+        target_uuid = UUID(target_id)
+        profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
+            db_session,
+            sandbox_profile_id=profile.id,
+            reason="test_stale_slot",
+            actor_user_id=UUID(auth.user_id),
+            force_restart=False,
+        )
+        assert profile is not None
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        stale_state = (
+            await db_session.execute(
+                select(SandboxProfileTargetState).where(
+                    SandboxProfileTargetState.sandbox_profile_id == profile.id,
+                    SandboxProfileTargetState.target_id == target_uuid,
+                )
+            )
+        ).scalar_one()
+        stale_state.active_sandbox_id = None
+        stale_state.slot_generation = None
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="agent-auth-stale-slot",
+        )
+        await db_session.commit()
+
+        response = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "agent-auth-preflight-stale-slot",
+                "targetId": target_id,
+                "workspaceId": cloud_workspace_id,
+                "kind": "start_session",
+                "payload": {
+                    "agentKind": "claude",
+                    "sandboxProfileId": str(profile.id),
+                    "requiredAgentAuthRevision": profile.agent_auth_revision,
+                },
+            },
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "cloud_command_agent_auth_not_ready"
 
     @pytest.mark.asyncio
     async def test_agent_auth_preflight_command_requires_refresh_capable_worker(

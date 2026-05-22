@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from proliferate.constants.automations import (
     AUTOMATION_EXECUTION_TARGET_CLOUD,
     AUTOMATION_EXECUTOR_KIND_CLOUD,
+    AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+    AUTOMATION_TARGET_MODE_SHARED_CLOUD,
 )
 from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus, CloudTargetKind
 from proliferate.db import engine as engine_module
@@ -27,14 +29,27 @@ from proliferate.server.automations.worker.cloud_executor_commands import (
 )
 
 
-def _claim(*, run_id: uuid.UUID, user_id: uuid.UUID) -> AutomationRunClaimValue:
+def _claim(
+    *,
+    run_id: uuid.UUID,
+    user_id: uuid.UUID,
+    owner_scope: str = "personal",
+    owner_user_id: uuid.UUID | None = None,
+    organization_id: uuid.UUID | None = None,
+    target_mode: str = AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+) -> AutomationRunClaimValue:
     return AutomationRunClaimValue(
         id=run_id,
         automation_id=uuid.uuid4(),
+        owner_scope=owner_scope,
+        owner_user_id=(
+            owner_user_id if owner_user_id is not None or owner_scope != "personal" else user_id
+        ),
+        organization_id=organization_id,
         user_id=user_id,
         status="creating_session",
         execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
-        target_mode="cloud",
+        target_mode=target_mode,
         title="Daily check",
         prompt="Check the repo",
         git_provider="github",
@@ -223,7 +238,14 @@ async def test_cloud_executor_command_preserves_target_organization_id(
                 default_workspace_root=None,
             )
 
-        claim = _claim(run_id=uuid.uuid4(), user_id=user_id)
+        claim = _claim(
+            run_id=uuid.uuid4(),
+            user_id=user_id,
+            owner_scope="organization",
+            owner_user_id=None,
+            organization_id=organization_id,
+            target_mode=AUTOMATION_TARGET_MODE_SHARED_CLOUD,
+        )
         command = await enqueue_automation_command(
             claim,
             target_id=target.id,

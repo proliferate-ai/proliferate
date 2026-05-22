@@ -83,7 +83,7 @@ function desktopDeepLinkScheme(): "proliferate" | "proliferate-local" {
 
 function cloudSettingsPath(search: string): string {
   const nextParams = new URLSearchParams(search)
-  nextParams.set("section", "cloud")
+  nextParams.set("section", "billing")
   return `/settings?${nextParams.toString()}`
 }
 

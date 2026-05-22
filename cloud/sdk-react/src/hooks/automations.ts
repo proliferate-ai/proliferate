@@ -6,6 +6,7 @@ import {
   type AutomationListResponse,
   type AutomationResponse,
   type AutomationRunListResponse,
+  type ListAutomationsOptions,
 } from "@proliferate/cloud-sdk";
 import {
   automationDetailKey,
@@ -29,11 +30,26 @@ function hasActiveAutomationRun(
   return data?.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status)) ?? false;
 }
 
-export function useAutomations(enabled = true) {
+export function useAutomations(optionsOrEnabled: UseAutomationsOptions | boolean = true) {
   const client = useCloudClient();
+  return useAutomationsQuery(
+    typeof optionsOrEnabled === "boolean" ? { enabled: optionsOrEnabled } : optionsOrEnabled,
+    client,
+  );
+}
+
+export interface UseAutomationsOptions extends ListAutomationsOptions {
+  enabled?: boolean;
+}
+
+function useAutomationsQuery(
+  options: UseAutomationsOptions,
+  client: ReturnType<typeof useCloudClient>,
+) {
+  const { enabled = true, ...listOptions } = options;
   return useQuery<AutomationListResponse>({
-    queryKey: automationsListKey(),
-    queryFn: () => listAutomations(client),
+    queryKey: automationsListKey(listOptions),
+    queryFn: () => listAutomations(listOptions, client),
     enabled,
   });
 }

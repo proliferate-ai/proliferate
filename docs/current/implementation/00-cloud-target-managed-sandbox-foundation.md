@@ -588,7 +588,7 @@ Active-slot invariant:
 ```text
 unique active slot per sandbox_profile_id + target_id
   where superseded_at is null
-  and status in ('creating', 'running', 'paused', 'blocked')
+  and status in ('creating', 'provisioning', 'running', 'paused', 'blocked')
 ```
 
 `ensure_profile_slot(profile_id, target_id)` must lock the target/profile pair,

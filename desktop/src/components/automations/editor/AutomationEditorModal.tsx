@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
@@ -11,7 +11,7 @@ import type {
   CreateAutomationInput,
   UpdateAutomationInput,
 } from "@/lib/domain/automations/run/ui-records";
-import type { AutomationTargetMode } from "@/lib/access/cloud/client";
+import type { AutomationOwnerScope, AutomationTargetMode } from "@/lib/access/cloud/client";
 import { useAgentRunConfigs } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
 import {
   defaultAutomationTimezone,
@@ -26,6 +26,7 @@ import {
   AutomationTemplatePopover,
 } from "./AutomationEditorControls";
 import { AutomationAgentRunConfigPicker } from "@/components/automations/controls/AutomationAgentRunConfigPicker";
+import { AutomationOwnerPicker } from "@/components/automations/controls/AutomationOwnerPicker";
 import { AutomationTargetPicker } from "@/components/automations/controls/AutomationTargetPicker";
 
 type SchedulePresetValue = AutomationSchedulePresetOrCustom;
@@ -34,6 +35,10 @@ interface AutomationEditorModalProps {
   open: boolean;
   automation: AutomationRecord | null;
   busy: boolean;
+  initialOwnerScope: AutomationOwnerScope;
+  organizationId: string | null;
+  organizationName?: string | null;
+  canManageTeamAutomations: boolean;
   onClose: () => void;
   onConfigureCloudTarget: (target: { gitOwner: string; gitRepoName: string }) => void;
   onCreate: (body: CreateAutomationInput) => Promise<void>;
@@ -44,6 +49,10 @@ export function AutomationEditorModal({
   open,
   automation,
   busy,
+  initialOwnerScope,
+  organizationId,
+  organizationName = null,
+  canManageTeamAutomations,
   onClose,
   onConfigureCloudTarget,
   onCreate,
@@ -52,6 +61,9 @@ export function AutomationEditorModal({
   const [title, setTitle] = useState(automation?.title ?? "");
   const [prompt, setPrompt] = useState(automation?.prompt ?? "");
   const [targetOverride, setTargetOverride] = useState<AutomationTargetSelection | null>(null);
+  const [draftOwnerScope, setDraftOwnerScope] = useState<AutomationOwnerScope>(
+    automation?.ownerScope ?? initialOwnerScope,
+  );
   const [schedulePreset, setSchedulePreset] = useState<SchedulePresetValue>(
     automation ? presetForRrule(automation.schedule.rrule) : "daily",
   );
@@ -75,16 +87,74 @@ export function AutomationEditorModal({
     selectedTarget: targetOverride,
     enabled: open,
   });
+  const ownerScope = automation?.ownerScope ?? draftOwnerScope;
+  const isTeamAutomation = ownerScope === "organization";
+  const effectiveOrganizationId = isTeamAutomation ? organizationId : null;
   const selectedTarget = targetSelection.selectedTarget;
-  const targetMode: AutomationTargetMode = selectedTarget?.executionTarget === "local"
-    ? "local"
-    : "personal_cloud";
+  const targetMode: AutomationTargetMode = isTeamAutomation
+    ? "shared_cloud"
+    : selectedTarget?.executionTarget === "local"
+      ? "local"
+      : "personal_cloud";
   const runConfigsQuery = useAgentRunConfigs({
-    ownerScope: "personal",
-    usableIn: targetMode === "local" ? "personal_sandboxes" : "personal_sandboxes",
+    ownerScope: isTeamAutomation ? undefined : ownerScope,
+    organizationId: effectiveOrganizationId,
+    usableIn: isTeamAutomation ? "shared_sandboxes" : "personal_sandboxes",
     status: "active",
-  }, open);
-  const runConfigs = runConfigsQuery.data?.configs ?? [];
+  }, open && (!isTeamAutomation || effectiveOrganizationId !== null));
+  const runConfigs = (runConfigsQuery.data?.configs ?? []).filter((config) =>
+    !isTeamAutomation || config.ownerScope !== "personal"
+  );
+  const ownerOptions = useMemo(() => [
+    {
+      value: "personal" as const,
+      label: "Personal",
+      description: "Run with your local or personal cloud setup.",
+    },
+    {
+      value: "organization" as const,
+      label: "Team",
+      description: organizationName
+        ? `Run in ${organizationName}'s shared cloud sandbox.`
+        : "Run in the shared cloud sandbox.",
+      disabledReason: !organizationId
+        ? "Select an organization first."
+        : !canManageTeamAutomations
+          ? "Only organization admins can create team automations."
+          : null,
+    },
+  ], [canManageTeamAutomations, organizationId, organizationName]);
+  const targetGroups = useMemo(() => {
+    if (!isTeamAutomation) {
+      return targetSelection.groups;
+    }
+    return targetSelection.groups
+      .map((group) => ({
+        ...group,
+        rows: group.rows.filter((row) =>
+          row.kind === "configureCloud" || row.target.executionTarget === "cloud"
+        ),
+      }))
+      .filter((group) => group.rows.length > 0);
+  }, [isTeamAutomation, targetSelection.groups]);
+  const selectedTargetRow = isTeamAutomation
+    && targetSelection.selectedRow?.target.executionTarget !== "cloud"
+    ? null
+    : targetSelection.selectedRow;
+  const targetDisabledReason = isTeamAutomation
+    ? "Select a configured cloud workspace for team automation."
+    : targetSelection.disabledReason;
+  const canSubmitTarget = targetSelection.canSubmit
+    && (!isTeamAutomation || selectedTarget?.executionTarget === "cloud");
+
+  useEffect(() => {
+    if (!cloudAgentRunConfigId || runConfigsQuery.isLoading) {
+      return;
+    }
+    if (!runConfigs.some((config) => config.id === cloudAgentRunConfigId)) {
+      setCloudAgentRunConfigId(null);
+    }
+  }, [cloudAgentRunConfigId, runConfigs, runConfigsQuery.isLoading]);
 
   const submit = async () => {
     setError(null);
@@ -92,8 +162,16 @@ export function AutomationEditorModal({
       setError("Add a title and prompt before saving.");
       return;
     }
-    if (!targetSelection.canSubmit || !selectedTarget) {
-      setError(targetSelection.disabledReason ?? "Select a target before saving.");
+    if (isTeamAutomation && !effectiveOrganizationId) {
+      setError("Select an organization before creating a team automation.");
+      return;
+    }
+    if (isTeamAutomation && !canManageTeamAutomations) {
+      setError("Only organization admins can create team automations.");
+      return;
+    }
+    if (!canSubmitTarget || !selectedTarget) {
+      setError(targetDisabledReason ?? "Select a target before saving.");
       return;
     }
     if (!cloudAgentRunConfigId) {
@@ -127,6 +205,8 @@ export function AutomationEditorModal({
           gitOwner: selectedTarget.gitOwner,
           gitRepoName: selectedTarget.gitRepoName,
           schedule,
+          ownerScope,
+          organizationId: effectiveOrganizationId,
           targetMode,
           cloudAgentRunConfigId,
         });
@@ -155,6 +235,7 @@ export function AutomationEditorModal({
       || rrule.trim() !== initialRrule.trim()
       || timezone.trim() !== initialTimezone.trim()
       || targetOverride !== null
+      || draftOwnerScope !== (automation?.ownerScope ?? initialOwnerScope)
       || cloudAgentRunConfigId !== (automation?.cloudAgentRunConfigId ?? null);
   };
 
@@ -173,6 +254,15 @@ export function AutomationEditorModal({
     }
     setPendingConfigureTarget(null);
     onConfigureCloudTarget(target);
+  };
+
+  const handleOwnerScopeSelect = (nextOwnerScope: AutomationOwnerScope) => {
+    setDraftOwnerScope(nextOwnerScope);
+    setCloudAgentRunConfigId(null);
+    setError(null);
+    if (nextOwnerScope === "organization" && targetOverride?.executionTarget === "local") {
+      setTargetOverride(null);
+    }
   };
 
   return (
@@ -237,11 +327,19 @@ export function AutomationEditorModal({
             )}
             <div className="flex w-full flex-wrap items-center justify-between gap-2">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+                {!automation && (
+                  <AutomationOwnerPicker
+                    value={ownerScope}
+                    organizationName={organizationName}
+                    options={ownerOptions}
+                    onSelect={handleOwnerScopeSelect}
+                  />
+                )}
                 <AutomationTargetPicker
-                  groups={targetSelection.groups}
-                  selectedRow={targetSelection.selectedRow}
+                  groups={targetGroups}
+                  selectedRow={selectedTargetRow}
                   isLoading={targetSelection.isLoading}
-                  disabledReason={targetSelection.disabledReason}
+                  disabledReason={targetDisabledReason}
                   onSelect={setTargetOverride}
                   onConfigureCloud={handleConfigureCloudTarget}
                 />
@@ -258,7 +356,9 @@ export function AutomationEditorModal({
                   configs={runConfigs}
                   selectedConfigId={cloudAgentRunConfigId}
                   isLoading={runConfigsQuery.isLoading}
-                  disabledReason="No agent run configs"
+                  disabledReason={isTeamAutomation
+                    ? "No shared team agent configs"
+                    : "No agent run configs"}
                   onSelect={(config) => setCloudAgentRunConfigId(config?.id ?? null)}
                 />
               </div>
@@ -272,7 +372,7 @@ export function AutomationEditorModal({
                   disabled={
                     (!automation && (runConfigsQuery.isLoading || targetSelection.isLoading))
                     || !cloudAgentRunConfigId
-                    || !targetSelection.canSubmit
+                    || !canSubmitTarget
                   }
                 >
                   {automation ? "Save" : "Create"}

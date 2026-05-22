@@ -27,9 +27,9 @@ describe("desktopNavigationTarget", () => {
     ).toBe("/plugins?source=mcp_oauth_callback&status=completed");
   });
 
-  it("keeps settings cloud deep links routed to the cloud settings section", () => {
+  it("routes legacy settings cloud deep links to billing", () => {
     expect(desktopNavigationTarget("proliferate://settings/cloud?checkout=done")).toBe(
-      "/settings?checkout=done&section=cloud",
+      "/settings?checkout=done&section=billing",
     );
   });
 

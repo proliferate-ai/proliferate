@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core.js";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   RefreshRuntimeConfigRequest,
   RuntimeConfigStatusResponse,
@@ -6,24 +6,24 @@ import type {
 
 export async function getSandboxProfileRuntimeConfig(
   sandboxProfileId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<RuntimeConfigStatusResponse> {
-  return (await getProliferateClient().GET(
-    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/runtime-config",
-    {
-      params: { path: { sandbox_profile_id: sandboxProfileId } },
-    },
-  )).data!;
+  return client.requestJson<RuntimeConfigStatusResponse>({
+    method: "GET",
+    path: "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/runtime-config",
+    pathParams: { sandbox_profile_id: sandboxProfileId },
+  });
 }
 
 export async function refreshSandboxProfileRuntimeConfig(
   sandboxProfileId: string,
   body: RefreshRuntimeConfigRequest = { reason: "manual_refresh" },
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<RuntimeConfigStatusResponse> {
-  return (await getProliferateClient().POST(
-    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/runtime-config/refresh",
-    {
-      params: { path: { sandbox_profile_id: sandboxProfileId } },
-      body,
-    },
-  )).data!;
+  return client.requestJson<RuntimeConfigStatusResponse>({
+    method: "POST",
+    path: "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/runtime-config/refresh",
+    pathParams: { sandbox_profile_id: sandboxProfileId },
+    body,
+  });
 }

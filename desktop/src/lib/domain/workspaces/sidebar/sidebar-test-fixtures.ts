@@ -102,6 +102,10 @@ export function makeCloudWorkspace(args: {
   origin?: SidebarCloudWorkspaceSummary["origin"];
   creatorContext?: SidebarCloudWorkspaceSummary["creatorContext"];
   directTargetContext?: SidebarCloudWorkspaceSummary["directTargetContext"];
+  visibility?: SidebarCloudWorkspaceSummary["visibility"];
+  exposureState?: SidebarCloudWorkspaceSummary["exposureState"];
+  claimedByUserId?: string | null;
+  claimId?: string | null;
   status?: SidebarCloudWorkspaceSummary["status"];
   updatedAt?: string;
 }): SidebarCloudWorkspaceSummary {
@@ -113,6 +117,10 @@ export function makeCloudWorkspace(args: {
     origin = null,
     creatorContext = null,
     directTargetContext = null,
+    visibility = "private",
+    exposureState,
+    claimedByUserId = null,
+    claimId = null,
     status = "ready",
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
@@ -150,7 +158,10 @@ export function makeCloudWorkspace(args: {
     postReadyFilesApplied: 0,
     postReadyStartedAt: null,
     postReadyCompletedAt: null,
-    visibility: "private",
+    visibility,
+    exposureState,
+    claimedByUserId,
+    claimId,
   };
 }
 
@@ -220,6 +231,10 @@ export function makeCloudLogicalWorkspace(args: {
   branch?: string;
   origin?: SidebarCloudWorkspaceSummary["origin"];
   creatorContext?: SidebarCloudWorkspaceSummary["creatorContext"];
+  visibility?: SidebarCloudWorkspaceSummary["visibility"];
+  exposureState?: SidebarCloudWorkspaceSummary["exposureState"];
+  claimedByUserId?: string | null;
+  claimId?: string | null;
   updatedAt?: string;
 }): LogicalWorkspace {
   const {
@@ -229,6 +244,10 @@ export function makeCloudLogicalWorkspace(args: {
     branch = "main",
     origin,
     creatorContext,
+    visibility,
+    exposureState,
+    claimedByUserId,
+    claimId,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
   const cloudWorkspace = makeCloudWorkspace({
@@ -237,6 +256,10 @@ export function makeCloudLogicalWorkspace(args: {
     branch,
     origin,
     creatorContext,
+    visibility,
+    exposureState,
+    claimedByUserId,
+    claimId,
     updatedAt,
   });
 

@@ -37,6 +37,8 @@ export type EnsureManagedCreditsResponse =
   components["schemas"]["EnsureManagedCreditsResponse"];
 export type SandboxProfile =
   components["schemas"]["SandboxProfileResponse"];
+export type SandboxProfileTargetState =
+  components["schemas"]["SandboxProfileTargetStateResponse"];
 export type SandboxAgentAuthSelection =
   components["schemas"]["SandboxAgentAuthSelectionResponse"];
 export type SandboxAgentAuthTargetState =

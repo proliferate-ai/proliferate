@@ -25,7 +25,13 @@ from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
 from proliferate.utils.time import utcnow
 
-ACTIVE_SLOT_STATUSES: tuple[str, ...] = ("creating", "running", "paused", "blocked")
+ACTIVE_SLOT_STATUSES: tuple[str, ...] = (
+    "creating",
+    "provisioning",
+    "running",
+    "paused",
+    "blocked",
+)
 
 
 @dataclass(frozen=True)

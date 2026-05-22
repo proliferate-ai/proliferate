@@ -11,10 +11,10 @@ import {
   EnvironmentPanelRow,
   EnvironmentSection,
 } from "@/components/ui/EnvironmentLayout";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/facade/use-worktree-cleanup-policy";
 import {
   useWorktreeSettingsTargets,
+  type WorktreeSettingsTargetState,
 } from "@/hooks/workspaces/facade/use-worktree-settings-targets";
 import {
   worktreeRetentionRunMessage,
@@ -24,10 +24,7 @@ import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_ROWS: WorktreeInventoryRow[] = [];
 
-type WorktreeSettingsTargetState =
-  ReturnType<typeof useWorktreeSettingsTargets>["targets"][number];
-
-export function WorktreesPane() {
+export function WorktreeStorageSection() {
   const settings = useWorktreeSettingsTargets();
   const cleanupPolicy = useWorktreeCleanupPolicy(
     settings.targets,
@@ -58,12 +55,7 @@ export function WorktreesPane() {
   };
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
-        title="Worktree storage"
-        description="Recommended for most users. Automatic cleanup only removes clean Proliferate-managed checkouts; it does not snapshot, push, or back up work before deleting a checkout."
-      />
-
+    <>
       <AutomaticCleanupSection
         draftValue={cleanupPolicy.draftValue}
         onDraftValueChange={cleanupPolicy.setDraftValue}
@@ -129,7 +121,7 @@ export function WorktreesPane() {
           );
         }}
       />
-    </section>
+    </>
   );
 }
 
@@ -150,8 +142,8 @@ function AutomaticCleanupSection({
 }) {
   return (
     <EnvironmentSection
-      title="Automatic cleanup"
-      description="This policy is global. Inventories and manual actions below remain runtime-specific."
+      title="Worktree cleanup"
+      description="Automatic cleanup only removes clean Proliferate-managed checkouts; it does not snapshot, push, or back up work before deleting a checkout."
     >
       <EnvironmentPanel>
         <EnvironmentPanelRow>
@@ -184,17 +176,15 @@ function AutomaticCleanupSection({
                 ) : null}
               </div>
             </EnvironmentField>
-            <div className="flex shrink-0 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!canApply}
-                onClick={onApply}
-              >
-                Apply
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!canApply}
+              onClick={onApply}
+            >
+              Apply
+            </Button>
           </div>
         </EnvironmentPanelRow>
       </EnvironmentPanel>

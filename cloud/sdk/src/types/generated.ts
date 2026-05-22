@@ -307,12 +307,28 @@ export type CreateCloudMcpConnectionRequest =
   components["schemas"]["CreateCloudMcpConnectionRequest"];
 export type PatchCloudMcpConnectionRequest =
   components["schemas"]["PatchCloudMcpConnectionRequest"];
+export type PublicizeCloudMcpConnectionRequest =
+  components["schemas"]["PublicizeCloudMcpConnectionRequest"];
 export type PutCloudMcpSecretAuthRequest =
   components["schemas"]["PutCloudMcpSecretAuthRequest"];
 export type CloudMcpOAuthFlowStatusResponse =
   components["schemas"]["CloudMcpOAuthFlowStatusResponse"];
 export type StartCloudMcpOAuthFlowResponse =
   components["schemas"]["StartCloudMcpOAuthFlowResponse"];
+export type CloudPluginConfiguredItem =
+  components["schemas"]["PluginConfiguredItemResponse"];
+export type CloudPluginConfiguredItemsResponse =
+  components["schemas"]["PluginConfiguredItemsResponse"];
+export type PatchPluginConfiguredItemRequest =
+  components["schemas"]["PatchPluginConfiguredItemRequest"];
+export type CloudSkillConfiguredItem =
+  components["schemas"]["SkillConfiguredItemResponse"];
+export type CloudSkillConfiguredItemsResponse =
+  components["schemas"]["SkillConfiguredItemsResponse"];
+export type CreateSkillConfiguredItemRequest =
+  components["schemas"]["CreateSkillConfiguredItemRequest"];
+export type PatchSkillConfiguredItemRequest =
+  components["schemas"]["PatchSkillConfiguredItemRequest"];
 export type PutCloudRepoFileRequest   = components["schemas"]["PutCloudRepoFileRequest"];
 export type CloudWorkspaceRepoConfigStatusResponse = components["schemas"]["CloudWorkspaceRepoConfigStatusResponse"];
 export type ResyncCloudWorkspaceFilesResponse = components["schemas"]["ResyncCloudWorkspaceFilesResponse"];

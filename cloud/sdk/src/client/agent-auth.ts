@@ -17,6 +17,7 @@ import type {
   SandboxAgentAuthSelection,
   SandboxAgentAuthTargetState,
   SandboxProfile,
+  SandboxProfileTargetState,
   SelectAgentAuthCredentialInput,
   SyncSyncedCredentialRequest,
   SyncSyncedCredentialResponse,
@@ -200,6 +201,28 @@ export async function ensureOrganizationSandboxProfile(
     method: "POST",
     path: "/v1/cloud/organizations/{organization_id}/sandbox-profile",
     pathParams: { organization_id: organizationId },
+  });
+}
+
+export async function getSandboxProfileTargetState(
+  sandboxProfileId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<SandboxProfileTargetState> {
+  return client.requestJson<SandboxProfileTargetState>({
+    method: "GET",
+    path: "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/target-state",
+    pathParams: { sandbox_profile_id: sandboxProfileId },
+  });
+}
+
+export async function enableSandboxProfileCloud(
+  sandboxProfileId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<SandboxProfileTargetState> {
+  return client.requestJson<SandboxProfileTargetState>({
+    method: "POST",
+    path: "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/enable-cloud",
+    pathParams: { sandbox_profile_id: sandboxProfileId },
   });
 }
 

@@ -181,6 +181,7 @@ async def attach_cloud_target_snapshot_to_run(
     claim_id: UUID,
     cloud_target_id: UUID,
     cloud_target_kind: str,
+    sandbox_profile_id: UUID | None = None,
     now: datetime,
     transition: ClaimTransitionRule,
     claim_is_active: ClaimActivePredicate,
@@ -200,6 +201,8 @@ async def attach_cloud_target_snapshot_to_run(
             return None
         run.cloud_target_id_snapshot = cloud_target_id
         run.cloud_target_kind_snapshot = cloud_target_kind
+        if sandbox_profile_id is not None:
+            run.sandbox_profile_id = sandbox_profile_id
         run.updated_at = now
         return claim_value(run)
 

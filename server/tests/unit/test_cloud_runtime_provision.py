@@ -1009,6 +1009,7 @@ class TestProvisionWorkspaceGitSetup:
             template_version="v1",
         )
         sandbox_record = SimpleNamespace(id=uuid.uuid4(), slot_generation=1)
+        slot_kwargs: dict[str, object] = {}
         connected = SimpleNamespace(
             handle=SimpleNamespace(
                 sandbox_id="sandbox-123",
@@ -1039,10 +1040,14 @@ class TestProvisionWorkspaceGitSetup:
         async def _connect_existing_environment_sandbox(*args, **kwargs):
             return None
 
+        async def _connect_existing_profile_slot(*args, **kwargs):
+            return None
+
         async def _authorize_sandbox_start(*args, **kwargs):
             return SimpleNamespace(allowed=True, message=None)
 
-        async def _reserve_and_attach_sandbox_for_environment(*args, **kwargs):
+        async def _ensure_profile_slot(*args, **kwargs):
+            slot_kwargs.update(kwargs)
             return sandbox_record
 
         async def _prepare_runtime_template(*args, **kwargs) -> None:
@@ -1076,6 +1081,9 @@ class TestProvisionWorkspaceGitSetup:
         async def _save_runtime_environment_state(*args, **kwargs) -> None:
             return None
 
+        async def _persist_target_runtime_access(*args, **kwargs) -> None:
+            return None
+
         monkeypatch.setattr(runtime_provision, "_load_provision_input", _load_provision_input)
         monkeypatch.setattr(runtime_provision, "get_configured_sandbox_provider", lambda: provider)
         monkeypatch.setattr(runtime_provision, "_set_workspace_status", _noop_status)
@@ -1083,6 +1091,11 @@ class TestProvisionWorkspaceGitSetup:
             runtime_provision,
             "_create_and_connect_sandbox",
             _create_and_connect_sandbox,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "_connect_existing_profile_slot",
+            _connect_existing_profile_slot,
         )
         monkeypatch.setattr(
             runtime_provision,
@@ -1095,9 +1108,9 @@ class TestProvisionWorkspaceGitSetup:
             _authorize_sandbox_start,
         )
         monkeypatch.setattr(
-            runtime_provision,
-            "reserve_and_attach_sandbox_for_environment",
-            _reserve_and_attach_sandbox_for_environment,
+            runtime_provision.cloud_sandboxes,
+            "ensure_profile_slot",
+            _ensure_profile_slot,
         )
         monkeypatch.setattr(
             runtime_provision,
@@ -1121,6 +1134,11 @@ class TestProvisionWorkspaceGitSetup:
             runtime_provision,
             "save_runtime_environment_state",
             _save_runtime_environment_state,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "_persist_target_runtime_access",
+            _persist_target_runtime_access,
         )
         monkeypatch.setattr(
             runtime_provision,
@@ -1154,6 +1172,7 @@ class TestProvisionWorkspaceGitSetup:
             "launch_runtime",
             "finalize_workspace",
         ]
+        assert slot_kwargs["status"] == "creating"
 
     @pytest.mark.asyncio
     async def test_provision_workspace_reuses_existing_runtime_without_relaunch(
@@ -1196,6 +1215,9 @@ class TestProvisionWorkspaceGitSetup:
             calls.append("connect_existing_runtime")
             return connected, sandbox_record_id, 1, "stored-runtime-token"
 
+        async def _connect_existing_profile_slot(*args, **kwargs):
+            return None
+
         async def _authorize_sandbox_start(*args, **kwargs):
             return SimpleNamespace(allowed=True, message=None)
 
@@ -1224,20 +1246,23 @@ class TestProvisionWorkspaceGitSetup:
         async def _apply_workspace_repo_config_after_provision(*args, **kwargs) -> None:
             return None
 
+        async def _persist_target_runtime_access(*args, **kwargs) -> None:
+            return None
+
         monkeypatch.setattr(runtime_provision, "_load_provision_input", _load_provision_input)
         monkeypatch.setattr(runtime_provision, "get_configured_sandbox_provider", lambda: provider)
         monkeypatch.setattr(runtime_provision, "_set_workspace_status", _noop_status)
+        monkeypatch.setattr(
+            runtime_provision,
+            "_connect_existing_profile_slot",
+            _connect_existing_profile_slot,
+        )
         monkeypatch.setattr(
             runtime_provision,
             "_connect_existing_environment_sandbox",
             _connect_existing_environment_sandbox,
         )
         monkeypatch.setattr(runtime_provision, "authorize_sandbox_start", _authorize_sandbox_start)
-        monkeypatch.setattr(
-            runtime_provision,
-            "reserve_and_attach_sandbox_for_environment",
-            _unexpected,
-        )
         monkeypatch.setattr(runtime_provision, "_prepare_runtime_template", _unexpected)
         monkeypatch.setattr(runtime_provision, "clone_repository", _unexpected)
         monkeypatch.setattr(runtime_provision, "checkout_cloud_branch", _unexpected)
@@ -1278,6 +1303,11 @@ class TestProvisionWorkspaceGitSetup:
             "apply_workspace_repo_config_after_provision",
             _apply_workspace_repo_config_after_provision,
         )
+        monkeypatch.setattr(
+            runtime_provision,
+            "_persist_target_runtime_access",
+            _persist_target_runtime_access,
+        )
         monkeypatch.setattr(runtime_provision, "log_cloud_event", lambda *args, **kwargs: None)
         monkeypatch.setattr(
             runtime_provision,
@@ -1297,7 +1327,7 @@ class TestProvisionWorkspaceGitSetup:
         assert runtime_state_kwargs[-1]["increment_runtime_generation"] is False
 
     @pytest.mark.asyncio
-    async def test_provision_workspace_blocks_when_sandbox_reservation_limit_is_reached(
+    async def test_provision_workspace_blocks_when_authorization_denies_start(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -1308,18 +1338,15 @@ class TestProvisionWorkspaceGitSetup:
             return ctx
 
         async def _authorize_sandbox_start(*args, **kwargs):
-            return SimpleNamespace(allowed=True, message=None)
+            return SimpleNamespace(
+                allowed=False,
+                message="Cloud usage is currently unavailable.",
+            )
 
         provider = SimpleNamespace(
             kind=SandboxProviderKind.daytona,
             template_version="v1",
         )
-
-        async def _reserve_and_attach_sandbox_for_environment(*args, **kwargs):
-            return None
-
-        async def _connect_existing_environment_sandbox(*args, **kwargs):
-            return None
 
         async def _set_workspace_status(*args, **kwargs) -> None:
             return None
@@ -1333,17 +1360,7 @@ class TestProvisionWorkspaceGitSetup:
 
         monkeypatch.setattr(runtime_provision, "_load_provision_input", _load_provision_input)
         monkeypatch.setattr(runtime_provision, "get_configured_sandbox_provider", lambda: provider)
-        monkeypatch.setattr(
-            runtime_provision,
-            "_connect_existing_environment_sandbox",
-            _connect_existing_environment_sandbox,
-        )
         monkeypatch.setattr(runtime_provision, "authorize_sandbox_start", _authorize_sandbox_start)
-        monkeypatch.setattr(
-            runtime_provision,
-            "reserve_and_attach_sandbox_for_environment",
-            _reserve_and_attach_sandbox_for_environment,
-        )
         monkeypatch.setattr(
             runtime_provision,
             "mark_workspace_error_by_id",
@@ -1361,11 +1378,8 @@ class TestProvisionWorkspaceGitSetup:
             await runtime_provision.provision_workspace(ctx.workspace_id)
 
         assert exc_info.value.code == "quota_exceeded"
-        assert "Sandbox limit reached" in exc_info.value.message
-        assert errors == [
-            "Sandbox limit reached. Archive or delete another cloud workspace before "
-            "starting a new one."
-        ]
+        assert exc_info.value.message == "Cloud usage is currently unavailable."
+        assert errors == ["Cloud usage is currently unavailable."]
 
     @pytest.mark.asyncio
     async def test_provision_workspace_cleans_up_new_sandbox_after_setup_failure(
@@ -1409,7 +1423,10 @@ class TestProvisionWorkspaceGitSetup:
         async def _connect_existing_environment_sandbox(*args, **kwargs):
             return None
 
-        async def _reserve_and_attach_sandbox_for_environment(*args, **kwargs):
+        async def _connect_existing_profile_slot(*args, **kwargs):
+            return None
+
+        async def _ensure_profile_slot(*args, **kwargs):
             return sandbox_record
 
         async def _create_and_connect_sandbox(*args, **kwargs):
@@ -1438,13 +1455,18 @@ class TestProvisionWorkspaceGitSetup:
         monkeypatch.setattr(runtime_provision, "authorize_sandbox_start", _authorize_sandbox_start)
         monkeypatch.setattr(
             runtime_provision,
+            "_connect_existing_profile_slot",
+            _connect_existing_profile_slot,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
             "_connect_existing_environment_sandbox",
             _connect_existing_environment_sandbox,
         )
         monkeypatch.setattr(
-            runtime_provision,
-            "reserve_and_attach_sandbox_for_environment",
-            _reserve_and_attach_sandbox_for_environment,
+            runtime_provision.cloud_sandboxes,
+            "ensure_profile_slot",
+            _ensure_profile_slot,
         )
         monkeypatch.setattr(
             runtime_provision,

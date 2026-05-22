@@ -260,6 +260,27 @@ async def _resolve_managed_start_session_workspace(
             "Workspace is not attached to the requested target.",
             status_code=409,
         )
+    if workspace.sandbox_profile_id is None or workspace.target_id is None:
+        raise CloudApiError(
+            "cloud_command_workspace_slot_missing",
+            "Workspace is missing its managed sandbox profile target.",
+            status_code=409,
+        )
+    active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
+        db,
+        sandbox_profile_id=workspace.sandbox_profile_id,
+        target_id=workspace.target_id,
+    )
+    if (
+        active_slot is None
+        or active_slot.slot_generation is None
+        or workspace.materialized_slot_generation != active_slot.slot_generation
+    ):
+        raise CloudApiError(
+            "cloud_command_workspace_slot_stale",
+            "Workspace must be rematerialized on the active managed sandbox before commands run.",
+            status_code=409,
+        )
     exposure = await exposures_store.get_active_workspace_exposure(
         db,
         target_id=target.id,
@@ -725,11 +746,27 @@ async def _validate_agent_auth_preflight(
         sandbox_profile_id=profile.id,
         target_id=target.id,
     )
+    requires_slot = _target_requires_cloud_workspace(target)
+    active_slot = None
+    if requires_slot:
+        active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
+            db,
+            sandbox_profile_id=profile.id,
+            target_id=target.id,
+        )
     if (
         state is None
         or state.status != "applied"
         or state.applied_revision is None
         or state.applied_revision < required_revision
+        or (
+            active_slot is not None
+            and (
+                state.active_sandbox_id != active_slot.id
+                or state.slot_generation != active_slot.slot_generation
+            )
+        )
+        or (requires_slot and active_slot is None)
     ):
         raise CloudApiError(
             "cloud_command_agent_auth_not_ready",

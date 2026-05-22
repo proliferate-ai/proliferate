@@ -14,6 +14,7 @@ import {
 } from "@/lib/domain/workspaces/cloud/cloud-runtime-state";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useCloudWorkspaceConnection } from "@/hooks/access/cloud/use-cloud-workspace-connection";
+import { useCloudWorkspaceClaimMutation } from "@/hooks/access/cloud/workspaces/use-cloud-workspace-claim-mutation";
 import { startCloudWorkspace as startCloudWorkspaceRequest } from "@proliferate/cloud-sdk/client/workspaces";
 import { useWorkspaceSelectionCache } from "@/hooks/workspaces/cache/use-workspace-selection-cache";
 import { captureTelemetryException, trackProductEvent } from "@/lib/integrations/telemetry/client";
@@ -26,6 +27,8 @@ export interface SelectedCloudRuntimeState {
   state: SelectedCloudRuntimeViewModel | null;
   connectionInfo: CloudConnectionInfo | null;
   retry: (() => void) | null;
+  claim: (() => void) | null;
+  claimPending: boolean;
 }
 
 export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
@@ -68,12 +71,14 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
       });
     },
   });
+  const claimMutation = useCloudWorkspaceClaimMutation();
   const persistedStatus = (selectedCloudWorkspace?.status ?? null) as CloudWorkspaceStatus | null;
   const usesDirectAttach = selectedCloudWorkspace?.visibility === "claimed";
+  const needsClaim = selectedCloudWorkspace?.visibility === "shared_unclaimed";
   const isWarm = selectedWorkspaceId !== null && hasWorkspaceBootstrappedInSession(selectedWorkspaceId);
   const connectionQuery = useCloudWorkspaceConnection(
     selectedCloudWorkspace?.id ?? null,
-    persistedStatus === "ready" && !hotPaintPending && !usesDirectAttach,
+    persistedStatus === "ready" && !hotPaintPending && !usesDirectAttach && !needsClaim,
   );
 
   const connectionState = useMemo(() => {
@@ -104,6 +109,7 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
   const state = useMemo(() => buildSelectedCloudRuntimeViewModel({
     persistedStatus,
     connectionState,
+    visibility: selectedCloudWorkspace?.visibility ?? null,
     runtimeAuth: connectionQuery.data?.runtimeAuth
       ?? selectedCloudWorkspace?.runtime?.runtimeAuth
       ?? null,
@@ -114,16 +120,17 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
     isWarm,
     persistedStatus,
     selectedCloudWorkspace?.runtime?.runtimeAuth,
+    selectedCloudWorkspace?.visibility,
   ]);
 
   return {
     workspaceId: selectedWorkspaceId,
     cloudWorkspaceId,
     state,
-    connectionInfo: persistedStatus === "ready" && !usesDirectAttach
+    connectionInfo: persistedStatus === "ready" && !usesDirectAttach && !needsClaim
       ? connectionQuery.data ?? null
       : null,
-    retry: persistedStatus === "ready" && !usesDirectAttach
+    retry: persistedStatus === "ready" && !usesDirectAttach && !needsClaim
       ? () => {
         if (
           connectionState === "failed"
@@ -139,5 +146,16 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
         void connectionQuery.refetch();
       }
       : null,
+    claim: selectedCloudWorkspace?.id && needsClaim
+      ? () => {
+        claimMutation.mutate(selectedCloudWorkspace.id, {
+          onSuccess: async () => {
+            await clearCachedCloudWorkspaceConnections(selectedCloudWorkspace.id);
+            await invalidateCloudWorkspaceStartState(runtimeUrl);
+          },
+        });
+      }
+      : null,
+    claimPending: claimMutation.isPending,
   };
 }

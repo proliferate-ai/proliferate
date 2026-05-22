@@ -9,6 +9,7 @@ import {
 import { connectorSettingsToCloud as domainConnectorSettingsToCloud } from "@/lib/domain/mcp/settings-schema";
 import { normalizeConnectorSecretValue, validateConnectorSecretValue } from "@/lib/domain/mcp/validation";
 import type {
+  ConfiguredCapabilityItemState,
   ConnectorCatalogEntry,
   ConnectorSettings,
   ConnectOAuthConnectorResult,
@@ -19,8 +20,19 @@ import {
   deleteCloudMcpConnectionV2,
   listCloudMcpConnections,
   patchCloudMcpConnection,
+  publicizeCloudMcpConnection,
   putCloudMcpSecretAuth,
+  unpublicizeCloudMcpConnection,
 } from "@proliferate/cloud-sdk/client/mcp_connections";
+import {
+  installConfiguredPlugin,
+  listConfiguredPlugins,
+  patchConfiguredPlugin,
+} from "@proliferate/cloud-sdk/client/plugins";
+import {
+  listConfiguredSkills,
+  patchConfiguredSkill,
+} from "@proliferate/cloud-sdk/client/skills";
 import {
   cancelCloudMcpOAuthFlow,
   getCloudMcpOAuthFlowStatus,
@@ -30,6 +42,8 @@ import { getCloudMcpCatalog } from "@proliferate/cloud-sdk/client/mcp_catalog";
 import type {
   CloudMcpCatalogEntry,
   CloudMcpConnection,
+  CloudPluginConfiguredItem,
+  CloudSkillConfiguredItem,
 } from "@/lib/access/cloud/client";
 import type { PluginPackageCatalogEntry } from "@/lib/domain/plugins/types";
 import { cloudPluginPackageToLocal } from "@/lib/domain/plugins/cloud-plugin-package";
@@ -56,9 +70,11 @@ export async function loadConnectorPaneData(): Promise<ConnectorPaneData> {
 }
 
 async function loadCloudConnectorPaneData(): Promise<ConnectorPaneData> {
-  const [catalog, connectionsResponse] = await Promise.all([
+  const [catalog, connectionsResponse, pluginsResponse, skillsResponse] = await Promise.all([
     getCloudMcpCatalog(),
     listCloudMcpConnections(),
+    listConfiguredPlugins(),
+    listConfiguredSkills(),
   ]);
   const packagesByCatalogEntryId = new Map(
     (catalog.pluginPackages ?? []).map((pluginPackage) => [
@@ -73,8 +89,18 @@ async function loadCloudConnectorPaneData(): Promise<ConnectorPaneData> {
     ))
     .filter(isConnectorCatalogEntryAvailable);
   const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
+  const pluginItemsByPluginId = new Map(
+    pluginsResponse.plugins.map((item) => [item.pluginId, item]),
+  );
+  const skillItemsByPluginId = groupSkillItemsByPluginId(skillsResponse.skills);
   const installedBase = connectionsResponse.connections
-    .map((connection) => cloudConnectionToInstalledRecord(connection, entriesById))
+    .map((connection) =>
+      cloudConnectionToInstalledRecord(
+        connection,
+        entriesById,
+        pluginItemsByPluginId,
+        skillItemsByPluginId,
+      ))
     .filter((record): record is InstalledConnectorRecord => record !== null);
   const installed = await augmentLocalOAuthInstalledStatus(installedBase);
   void reconcileLocalOAuthPendingSetups(installed);
@@ -233,6 +259,8 @@ function assertNeverTemplateSource(source: never): never {
 function cloudConnectionToInstalledRecord(
   connection: CloudMcpConnection,
   entriesById: Map<string, ConnectorCatalogEntry>,
+  pluginItemsByPluginId: Map<string, CloudPluginConfiguredItem>,
+  skillItemsByPluginId: Map<string, CloudSkillConfiguredItem[]>,
 ): InstalledConnectorRecord | null {
   const catalogEntry = entriesById.get(connection.catalogEntryId)
     ?? unavailableInstalledCatalogEntry(connection);
@@ -240,19 +268,113 @@ function cloudConnectionToInstalledRecord(
     return null;
   }
   const settings = sanitizeCloudConnectorSettings(catalogEntry, connection.settings);
+  const pluginPackage = catalogEntry.pluginPackage;
+  const configuredPlugin = pluginPackage
+    ? pluginItemToConfiguredState(
+        pluginItemsByPluginId.get(pluginPackage.id),
+        pluginPackage.displayName || catalogEntry.name,
+      )
+    : null;
+  const configuredSkills = pluginPackage
+    ? (skillItemsByPluginId.get(pluginPackage.id) ?? []).map((item) =>
+        skillItemToConfiguredState(
+          item,
+          pluginPackage.skills.find((skill) => skill.id === item.skillId)?.displayName
+            ?? item.skillId,
+        ))
+    : [];
   return {
     catalogEntry,
     broken: connection.authStatus !== "ready",
     metadata: {
       connectionId: connection.connectionId,
       catalogEntryId: catalogEntry.id,
+      catalogEntryVersion: connection.catalogEntryVersion,
+      ownerScope: connection.ownerScope ?? "personal",
+      ownerUserId: connection.ownerUserId ?? null,
+      organizationId: connection.organizationId ?? null,
       enabled: connection.enabled,
       serverName: connection.serverName,
+      publicToOrg: connection.publicToOrg ?? false,
+      publicOrganizationId: connection.publicOrganizationId ?? null,
+      publicStatus: connection.publicStatus ?? "private",
+      publicUpdatedAt: connection.publicUpdatedAt ?? null,
+      publicUpdatedByUserId: connection.publicUpdatedByUserId ?? null,
+      configuredPlugin,
+      configuredSkills,
       createdAt: connection.createdAt,
       updatedAt: connection.updatedAt,
       lastSyncedAt: connection.updatedAt,
       settings,
     },
+  };
+}
+
+function groupSkillItemsByPluginId(
+  skills: readonly CloudSkillConfiguredItem[],
+): Map<string, CloudSkillConfiguredItem[]> {
+  const grouped = new Map<string, CloudSkillConfiguredItem[]>();
+  for (const item of skills) {
+    if (!item.pluginId) {
+      continue;
+    }
+    const existing = grouped.get(item.pluginId) ?? [];
+    existing.push(item);
+    grouped.set(item.pluginId, existing);
+  }
+  return grouped;
+}
+
+function pluginItemToConfiguredState(
+  item: CloudPluginConfiguredItem | undefined,
+  label: string,
+): ConfiguredCapabilityItemState | null {
+  if (!item) {
+    return null;
+  }
+  return {
+    kind: "plugin",
+    id: item.id,
+    sourceId: item.pluginId,
+    sourceKind: "plugin",
+    sourceVersion: item.pluginVersion ?? null,
+    label,
+    enabled: item.enabled,
+    ownerScope: item.ownerScope,
+    ownerUserId: item.ownerUserId ?? null,
+    organizationId: item.organizationId ?? null,
+    publicToOrg: item.publicToOrg,
+    publicOrganizationId: item.publicOrganizationId ?? null,
+    publicStatus: item.publicStatus,
+    configVersion: item.configVersion,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+function skillItemToConfiguredState(
+  item: CloudSkillConfiguredItem,
+  label: string,
+): ConfiguredCapabilityItemState {
+  return {
+    kind: "skill",
+    id: item.id,
+    sourceId: item.skillId,
+    sourceKind: item.skillSourceKind,
+    sourceVersion: item.skillVersion ?? null,
+    sourcePluginId: item.pluginId,
+    sourcePluginVersion: item.pluginVersion ?? null,
+    label,
+    enabled: item.enabled,
+    ownerScope: item.ownerScope,
+    ownerUserId: item.ownerUserId ?? null,
+    organizationId: item.organizationId ?? null,
+    publicToOrg: item.publicToOrg,
+    publicOrganizationId: item.publicOrganizationId ?? null,
+    publicStatus: item.publicStatus,
+    configVersion: item.configVersion,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
   };
 }
 
@@ -270,6 +392,7 @@ export async function installConnector(
   }
   if (catalogEntry.setupKind === "local_oauth") {
     await installLocalOAuthConnector(catalogEntry, settings);
+    await installPluginPackageIfPresent(catalogEntry);
     return;
   }
 
@@ -286,6 +409,7 @@ export async function installConnector(
       secretFields: normalizedSecrets,
     });
   }
+  await installPluginPackageIfPresent(catalogEntry);
 }
 
 export async function connectOAuthConnector(
@@ -314,8 +438,19 @@ export async function connectOAuthConnector(
   const result = await runCloudOAuthFlow(connection.connectionId, pendingAliasConnectionId);
   if (result.kind === "canceled") {
     await deleteCloudMcpConnectionV2(connection.connectionId).catch(() => undefined);
+  } else {
+    await installPluginPackageIfPresent(catalogEntry);
   }
   return result;
+}
+
+async function installPluginPackageIfPresent(
+  catalogEntry: ConnectorCatalogEntry,
+): Promise<void> {
+  if (!catalogEntry.pluginPackage) {
+    return;
+  }
+  await installConfiguredPlugin(catalogEntry.pluginPackage.id);
 }
 
 export { cancelLocalOAuthConnectorConnect } from "./local-oauth-persistence";
@@ -468,6 +603,31 @@ export async function setConnectorEnabled(
   enabled: boolean,
 ): Promise<void> {
   await patchCloudMcpConnection(connectionId, { enabled });
+}
+
+export async function setConnectorPublicExposure(
+  record: InstalledConnectorRecord,
+  organizationId: string,
+  publicToOrg: boolean,
+): Promise<void> {
+  if (record.metadata.ownerScope === "organization") {
+    return;
+  }
+  const publicBody = publicToOrg
+    ? { publicToOrg: true, publicOrganizationId: organizationId }
+    : { publicToOrg: false, publicOrganizationId: null };
+  const operations: Array<Promise<unknown>> = [
+    publicToOrg
+      ? publicizeCloudMcpConnection(record.metadata.connectionId, { organizationId })
+      : unpublicizeCloudMcpConnection(record.metadata.connectionId),
+  ];
+  if (record.metadata.configuredPlugin) {
+    operations.push(patchConfiguredPlugin(record.metadata.configuredPlugin.id, publicBody));
+  }
+  for (const skill of record.metadata.configuredSkills) {
+    operations.push(patchConfiguredSkill(skill.id, publicBody));
+  }
+  await Promise.all(operations);
 }
 
 export async function deleteConnector(connectionId: string): Promise<void> {

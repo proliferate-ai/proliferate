@@ -1,24 +1,23 @@
 export const SETTINGS_CONTENT_SECTIONS = [
   "general",
-  "agent-defaults",
-  "agents",
-  "review",
   "appearance",
-  "account",
   "keyboard",
-  "billing",
-  "cloud",
+  "account",
   "organization",
-  "repo",
-  "worktrees",
+  "billing",
+  "environments",
+  "shared-environments",
   "compute",
+  "agents",
+  "agent-defaults",
+  "agent-authentication",
+  "review",
   "slack-bot",
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_CONTENT_SECTIONS)[number];
-export type SettingsStaticSection = Exclude<SettingsSection, "repo">;
 
-export const SETTINGS_DEFAULT_SECTION: SettingsStaticSection = "general";
+export const SETTINGS_DEFAULT_SECTION: SettingsSection = "general";
 
 export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "general",
@@ -27,11 +26,12 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "account",
   "organization",
   "billing",
-  "repo",
-  "worktrees",
+  "environments",
+  "shared-environments",
   "compute",
-  "cloud",
   "agents",
   "agent-defaults",
+  "agent-authentication",
   "review",
+  "slack-bot",
 ] as const satisfies readonly SettingsSection[];

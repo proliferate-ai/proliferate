@@ -194,6 +194,28 @@ async def get_cloud_repo_config(
     return _repo_config_value(record, files)
 
 
+async def get_organization_cloud_repo_config(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+) -> CloudRepoConfigValue | None:
+    record = (
+        await db.execute(
+            select(CloudRepoConfig).where(
+                CloudRepoConfig.owner_scope == "organization",
+                CloudRepoConfig.organization_id == organization_id,
+                CloudRepoConfig.git_owner == git_owner,
+                CloudRepoConfig.git_repo_name == git_repo_name,
+            )
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        return None
+    return _repo_config_value(record, await _load_repo_file_rows(db, record.id))
+
+
 async def get_cloud_repo_config_by_id(
     db: AsyncSession,
     *,

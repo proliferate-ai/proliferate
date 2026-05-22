@@ -66,9 +66,12 @@ export interface SlackDisconnectResponse {
   connection: SlackWorkspaceConnection | null;
 }
 
-export interface SlackOAuthStartUrlOptions {
+export interface SlackOAuthStartOptions {
   organizationId: string;
-  returnTo?: string | null;
+}
+
+export interface SlackOAuthStartResponse {
+  authorizeUrl: string;
 }
 
 export interface SlackChannel {

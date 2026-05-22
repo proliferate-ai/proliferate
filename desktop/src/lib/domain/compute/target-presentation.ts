@@ -45,3 +45,7 @@ export function computeTargetStatusLabel(status: ComputeTargetStatus): string {
       return "Archived";
   }
 }
+
+export function computeTargetOwnerLabel(ownerScope: "personal" | "organization"): string {
+  return ownerScope === "organization" ? "Organization" : "Personal";
+}

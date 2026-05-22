@@ -19,11 +19,15 @@ from proliferate.constants.organizations import (
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
+from proliferate.db.store.cloud_claims import claims as claims_store
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
-from proliferate.db.store.cloud_workspaces import create_managed_cloud_workspace_for_profile
+from proliferate.db.store.cloud_workspaces import (
+    create_managed_cloud_workspace_for_profile,
+    get_cloud_workspace_by_id,
+)
 from proliferate.utils.time import utcnow
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
@@ -47,6 +51,38 @@ async def test_claim_workspace_is_one_way_and_blocks_nonclaimer_commands(
         db_session,
         suffix="one-way",
     )
+    workspace = await get_cloud_workspace_by_id(db_session, workspace_id)
+    assert workspace is not None
+    assert workspace.organization_id is not None
+    organization_id = workspace.organization_id
+    unclaimed_exposure = await exposures_store.get_active_workspace_exposure(
+        db_session,
+        target_id=target_id,
+        cloud_workspace_id=workspace_id,
+    )
+    assert unclaimed_exposure is not None
+    assert unclaimed_exposure.visibility == "shared_unclaimed"
+    initial_exposure_revision = unclaimed_exposure.revision
+
+    unclaimed_list = await client.get(
+        "/v1/cloud/workspaces",
+        headers=member.headers,
+        params={
+            "ownerScope": "organization",
+            "organizationId": str(organization_id),
+            "scope": "unclaimed",
+        },
+    )
+    assert unclaimed_list.status_code == 200
+    assert str(workspace_id) in _workspace_ids(unclaimed_list.json())
+
+    member_my_before_claim = await client.get(
+        "/v1/cloud/workspaces",
+        headers=member.headers,
+        params={"scope": "my"},
+    )
+    assert member_my_before_claim.status_code == 200
+    assert str(workspace_id) not in _workspace_ids(member_my_before_claim.json())
 
     claimed = await client.post(
         f"/v1/cloud/workspaces/{workspace_id}/claim",
@@ -57,6 +93,64 @@ async def test_claim_workspace_is_one_way_and_blocks_nonclaimer_commands(
     claimed_body = claimed.json()
     assert claimed_body["cloudWorkspaceId"] == str(workspace_id)
     assert claimed_body["claimedByUserId"] == member.user_id
+    claim_row = await claims_store.get_claim_for_workspace(db_session, workspace_id)
+    assert claim_row is not None
+    assert str(claim_row.claimed_by_user_id) == member.user_id
+    assert claim_row.source_kind == "automation"
+    claimed_exposure = await exposures_store.get_active_workspace_exposure(
+        db_session,
+        target_id=target_id,
+        cloud_workspace_id=workspace_id,
+    )
+    assert claimed_exposure is not None
+    assert claimed_exposure.visibility == "claimed"
+    assert str(claimed_exposure.claimed_by_user_id) == member.user_id
+    assert claimed_exposure.revision == initial_exposure_revision + 1
+
+    unclaimed_after_claim = await client.get(
+        "/v1/cloud/workspaces",
+        headers=member.headers,
+        params={
+            "ownerScope": "organization",
+            "organizationId": str(organization_id),
+            "scope": "unclaimed",
+        },
+    )
+    assert unclaimed_after_claim.status_code == 200
+    assert str(workspace_id) not in _workspace_ids(unclaimed_after_claim.json())
+
+    member_my_after_claim = await client.get(
+        "/v1/cloud/workspaces",
+        headers=member.headers,
+        params={"scope": "my"},
+    )
+    assert member_my_after_claim.status_code == 200
+    claimed_summary = _workspace_by_id(member_my_after_claim.json(), workspace_id)
+    assert claimed_summary["visibility"] == "claimed"
+    assert claimed_summary["claimedByUserId"] == member.user_id
+    assert claimed_summary["claimId"] == claimed_body["claimId"]
+
+    owner_my_after_claim = await client.get(
+        "/v1/cloud/workspaces",
+        headers=owner.headers,
+        params={"scope": "my"},
+    )
+    assert owner_my_after_claim.status_code == 200
+    assert str(workspace_id) not in _workspace_ids(owner_my_after_claim.json())
+
+    owner_audit_after_claim = await client.get(
+        "/v1/cloud/workspaces",
+        headers=owner.headers,
+        params={
+            "ownerScope": "organization",
+            "organizationId": str(organization_id),
+            "scope": "org-all",
+        },
+    )
+    assert owner_audit_after_claim.status_code == 200
+    audit_summary = _workspace_by_id(owner_audit_after_claim.json(), workspace_id)
+    assert audit_summary["visibility"] == "claimed"
+    assert audit_summary["claimedByUserId"] == member.user_id
 
     duplicate = await client.post(
         f"/v1/cloud/workspaces/{workspace_id}/claim",
@@ -320,6 +414,16 @@ async def _seed_claimable_workspace(
         worker_id = None
     await db_session.commit()
     return owner, member, workspace.id, target_id, profile_id, worker_id, workspace_runtime_id
+
+
+def _workspace_ids(items: list[dict[str, object]]) -> set[str]:
+    return {str(item["id"]) for item in items}
+
+
+def _workspace_by_id(items: list[dict[str, object]], workspace_id: uuid.UUID) -> dict[str, object]:
+    matches = [item for item in items if item["id"] == str(workspace_id)]
+    assert len(matches) == 1
+    return matches[0]
 
 
 async def _mark_runtime_config_applied(

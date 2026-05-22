@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { useCloudTargetMutations } from "@/hooks/access/cloud/targets/use-cloud-target-mutations";
-import { setSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile";
+import {
+  setComputeTargetAppearancePreference,
+  setSshDirectTargetProfile,
+} from "@/lib/access/tauri/ssh-target-profile";
+import type {
+  ComputeTargetColorId,
+  ComputeTargetIconId,
+} from "@/lib/domain/compute/target-appearance";
 
 interface StartSshEnrollmentInput {
   displayName: string;
@@ -11,6 +18,11 @@ interface StartSshEnrollmentInput {
     sshPort: number;
     identityFile?: string | null;
     remoteAnyHarnessPort: number;
+    workspaceRoot?: string | null;
+  } | null;
+  appearance?: {
+    iconId: ComputeTargetIconId;
+    colorId: ComputeTargetColorId;
   } | null;
 }
 
@@ -38,6 +50,14 @@ export function useComputeTargetEnrollment() {
         await setSshDirectTargetProfile({
           targetId: next.target.id,
           ...input.directAccess,
+        });
+      }
+      if (input.appearance) {
+        await setComputeTargetAppearancePreference({
+          targetId: next.target.id,
+          displayName: input.displayName,
+          iconId: input.appearance.iconId,
+          colorId: input.appearance.colorId,
         });
       }
       const result = {

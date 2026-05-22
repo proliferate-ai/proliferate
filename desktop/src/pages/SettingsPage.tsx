@@ -9,6 +9,7 @@ export function SettingsPage({ returnTo = "/" }: { returnTo?: string }) {
   const {
     activeSection,
     activeRepoSourceRoot,
+    focus,
     selectSection,
     selectRepo,
   } = useSettingsNavigation({ repositories });
@@ -17,6 +18,7 @@ export function SettingsPage({ returnTo = "/" }: { returnTo?: string }) {
     <SettingsScreen
       activeSection={activeSection}
       activeRepoSourceRoot={activeRepoSourceRoot}
+      focus={focus}
       repositories={repositories}
       onNavigateHome={() => navigate(returnTo || "/")}
       onSelectSection={selectSection}

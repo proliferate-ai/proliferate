@@ -41,6 +41,14 @@ export function sandboxAgentAuthTargetStatesKey(sandboxProfileId: string | null)
   return [...sandboxProfileKey(sandboxProfileId), "target-states"] as const;
 }
 
+export function sandboxProfileTargetStateKey(sandboxProfileId: string | null) {
+  return [...sandboxProfileKey(sandboxProfileId), "target-state"] as const;
+}
+
+export function sandboxProfileRuntimeConfigKey(sandboxProfileId: string | null) {
+  return [...sandboxProfileKey(sandboxProfileId), "runtime-config"] as const;
+}
+
 export function agentAuthManagedCreditsKey(organizationId: string | null) {
   return [...agentAuthRootKey(), "managed-credits", organizationId] as const;
 }
@@ -154,8 +162,18 @@ export function automationsRootKey() {
   return ["automations"] as const;
 }
 
-export function automationsListKey() {
-  return [...automationsRootKey(), "list"] as const;
+export interface AutomationsListKeyOptions {
+  ownerScope?: CloudOwnerScope | null;
+  organizationId?: string | null;
+}
+
+export function automationsListKey(options: AutomationsListKeyOptions = {}) {
+  return [
+    ...automationsRootKey(),
+    "list",
+    options.ownerScope ?? "personal",
+    options.organizationId ?? null,
+  ] as const;
 }
 
 export function automationDetailKey(automationId: string | null) {

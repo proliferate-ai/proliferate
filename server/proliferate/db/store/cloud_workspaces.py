@@ -37,6 +37,7 @@ from proliferate.db.store.billing import (
 )
 from proliferate.db.store.cloud_profile_target_guard import require_primary_managed_profile_target
 from proliferate.db.store.cloud_runtime_environments import ensure_runtime_environment_for_repo
+from proliferate.db.store.cloud_sandboxes import ACTIVE_SLOT_STATUSES
 from proliferate.utils.time import utcnow
 
 _UNSET: Final = object()
@@ -318,6 +319,31 @@ async def get_existing_cloud_workspace(
     ).scalar_one_or_none()
 
 
+async def get_existing_managed_cloud_workspace_for_profile(
+    db: AsyncSession,
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+    git_branch: str,
+) -> CloudWorkspace | None:
+    return (
+        await db.execute(
+            select(CloudWorkspace).where(
+                CloudWorkspace.sandbox_profile_id == sandbox_profile_id,
+                CloudWorkspace.target_id == target_id,
+                CloudWorkspace.git_provider == git_provider,
+                CloudWorkspace.git_owner == git_owner,
+                CloudWorkspace.git_repo_name == git_repo_name,
+                CloudWorkspace.git_branch == git_branch,
+                CloudWorkspace.archived_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+
+
 async def update_workspace_branch(
     db: AsyncSession,
     workspace: CloudWorkspace,
@@ -431,6 +457,7 @@ async def create_managed_cloud_workspace_for_profile(
     worktree_path: str | None,
     origin_json: str | None,
     template_version: str,
+    origin: str = "manual_desktop",
     repo_env_vars_ciphertext: str | None = None,
 ) -> CloudWorkspace:
     profile, _target = await require_primary_managed_profile_target(
@@ -473,6 +500,7 @@ async def create_managed_cloud_workspace_for_profile(
         git_branch=git_branch,
         git_base_branch=git_base_branch,
         worktree_path=worktree_path,
+        origin=origin,
         origin_json=origin_json,
         status=CloudWorkspaceStatus.pending.value,
         status_detail="Pending",
@@ -569,11 +597,34 @@ async def get_active_sandbox(
     workspace: CloudWorkspace,
 ) -> CloudSandbox | None:
     """Load the active sandbox for *workspace*, if one exists."""
-    if not workspace.active_sandbox_id:
+    if workspace.active_sandbox_id:
+        sandbox = (
+            await db.execute(
+                select(CloudSandbox).where(CloudSandbox.id == workspace.active_sandbox_id)
+            )
+        ).scalar_one_or_none()
+        if sandbox is not None:
+            return sandbox
+    return await _get_active_profile_target_sandbox(db, workspace)
+
+
+async def _get_active_profile_target_sandbox(
+    db: AsyncSession,
+    workspace: CloudWorkspace,
+) -> CloudSandbox | None:
+    if workspace.sandbox_profile_id is None or workspace.target_id is None:
         return None
     return (
         await db.execute(
-            select(CloudSandbox).where(CloudSandbox.id == workspace.active_sandbox_id)
+            select(CloudSandbox)
+            .where(
+                CloudSandbox.sandbox_profile_id == workspace.sandbox_profile_id,
+                CloudSandbox.target_id == workspace.target_id,
+                CloudSandbox.superseded_at.is_(None),
+                CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
+            )
+            .order_by(CloudSandbox.updated_at.desc())
+            .limit(1)
         )
     ).scalar_one_or_none()
 
@@ -774,6 +825,7 @@ async def finalize_workspace_provision(
     workspace.runtime_token_ciphertext = runtime_token_ciphertext
     workspace.anyharness_workspace_id = anyharness_workspace_id
     workspace.template_version = template_version
+    workspace.materialized_slot_generation = sandbox.slot_generation
     workspace.runtime_generation = workspace.runtime_generation + 1
     workspace.status = WorkspaceStatus.ready
     workspace.status_detail = "Ready"
@@ -1081,10 +1133,8 @@ async def create_cloud_workspace_for_user(
 async def load_active_sandbox_for_workspace(
     workspace: CloudWorkspace,
 ) -> CloudSandbox | None:
-    if not workspace.active_sandbox_id:
-        return None
     async with db_engine.async_session_factory() as db:
-        return await db.get(CloudSandbox, workspace.active_sandbox_id)
+        return await get_active_sandbox(db, workspace)
 
 
 async def load_cloud_sandbox_by_id(

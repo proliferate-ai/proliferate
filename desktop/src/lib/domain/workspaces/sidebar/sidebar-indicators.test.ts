@@ -97,6 +97,66 @@ describe("sidebar indicators", () => {
       .toEqual(["automation", "materialization"]);
   });
 
+  it("surfaces shared unclaimed cloud workspace access and projection state", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeCloudLogicalWorkspace({
+          id: "slack-shared-cloud",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          origin: { kind: "human", entrypoint: "slack" },
+          visibility: "shared_unclaimed",
+          exposureState: "live",
+        }),
+      ],
+    });
+
+    const indicators = groups[0]?.items[0]?.detailIndicators ?? [];
+    expect(indicators.map((indicator) => indicator.kind))
+      .toEqual(["origin", "cloud_access", "cloud_exposure", "materialization"]);
+    expect(indicators[0]).toMatchObject({ tooltip: "Started from Slack" });
+    expect(indicators[1]).toMatchObject({
+      kind: "cloud_access",
+      tone: "warning",
+      tooltip: "Shared team work · unclaimed",
+    });
+    expect(indicators[2]).toMatchObject({
+      kind: "cloud_exposure",
+      tone: "success",
+      tooltip: "Cloud projection live",
+    });
+  });
+
+  it("surfaces claimed cloud workspace access state", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeCloudLogicalWorkspace({
+          id: "claimed-cloud",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          visibility: "claimed",
+          exposureState: "stale",
+          claimedByUserId: "user-1",
+          claimId: "claim-1",
+        }),
+      ],
+    });
+
+    const indicators = groups[0]?.items[0]?.detailIndicators ?? [];
+    expect(indicators.map((indicator) => indicator.kind))
+      .toEqual(["cloud_access", "cloud_exposure", "materialization"]);
+    expect(indicators[0]).toMatchObject({
+      kind: "cloud_access",
+      tone: "success",
+      tooltip: "Claimed shared work · user-1",
+    });
+    expect(indicators[1]).toMatchObject({
+      kind: "cloud_exposure",
+      tone: "warning",
+      tooltip: "Cloud projection stale",
+    });
+  });
+
   it("prefers precise automation creator context over legacy provenance", () => {
     const groups = buildGroups({
       logicalWorkspaces: [

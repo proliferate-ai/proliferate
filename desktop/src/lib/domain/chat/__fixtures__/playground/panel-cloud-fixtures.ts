@@ -119,6 +119,7 @@ export const CLOUD_RUNTIME_RECONNECTING: SelectedCloudRuntimeViewModel = {
   actionBlockReason: "Cloud workspace is reconnecting. Runtime-backed actions are paused until it comes back.",
   preserveVisibleContent: true,
   showRetry: false,
+  showClaim: false,
 };
 
 export const CLOUD_RUNTIME_RECONNECT_ERROR: SelectedCloudRuntimeViewModel = {
@@ -130,4 +131,5 @@ export const CLOUD_RUNTIME_RECONNECT_ERROR: SelectedCloudRuntimeViewModel = {
   actionBlockReason: "Cloud workspace couldn't reconnect. Retry to restore chat, files, and terminals.",
   preserveVisibleContent: true,
   showRetry: true,
+  showClaim: false,
 };
