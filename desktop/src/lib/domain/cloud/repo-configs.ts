@@ -4,6 +4,7 @@ export interface CloudRepoFileMetadata {
   byteSize: number;
   updatedAt: string;
   lastSyncedAt: string;
+  content?: string | null;
 }
 
 export interface CloudRepoConfig {

@@ -4496,6 +4496,8 @@ export interface components {
             updatedAt: string;
             /** Lastsyncedat */
             lastSyncedAt: string;
+            /** Content */
+            content?: string | null;
         };
         /** CloudSessionEventResponse */
         CloudSessionEventResponse: {

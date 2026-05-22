@@ -119,7 +119,11 @@ async def get_organization_cloud_repo_config_endpoint(
         )
     except CloudApiError as error:
         raise_cloud_error(error)
-    return _default_repo_config_response() if value is None else repo_config_payload(value)
+    return (
+        _default_repo_config_response()
+        if value is None
+        else repo_config_payload(value, include_file_content=True)
+    )
 
 
 @router.put("/repos/{git_owner}/{git_repo_name}/config", response_model=CloudRepoConfigResponse)
@@ -166,7 +170,7 @@ async def save_organization_cloud_repo_config_endpoint(
         )
     except CloudApiError as error:
         raise_cloud_error(error)
-    return repo_config_payload(value)
+    return repo_config_payload(value, include_file_content=True)
 
 
 @router.put("/repos/{git_owner}/{git_repo_name}/files", response_model=CloudRepoConfigResponse)
