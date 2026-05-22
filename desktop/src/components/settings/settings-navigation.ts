@@ -7,23 +7,29 @@ import {
   CloudIcon,
   CreditCard,
   FolderList,
-  GitBranch,
   Keyboard,
   MessageSquare,
   RefreshCw,
   Settings,
+  Shield,
   Sparkles,
 } from "@/components/ui/icons";
 import type { IconProps } from "@/components/ui/icons";
 import type { SettingsSection } from "@/config/settings";
 
 export type SettingsNavItem =
-  | { kind: "section"; id: SettingsSection; label: string; icon: ComponentType<IconProps> }
+  | {
+    kind: "section";
+    id: SettingsSection;
+    label: string;
+    icon: ComponentType<IconProps>;
+    adminOnly?: boolean;
+  }
   | { kind: "action"; id: "checkForUpdates" | "support"; label: string; icon: ComponentType<IconProps> };
 
 export interface SettingsNavGroup {
-  id: "preferences" | "organization_account" | "environments" | "workflows" | "slack" | "help";
-  heading: string;
+  id: "preferences" | "organization_account" | "workspace" | "agents" | "slack_bot" | "help";
+  heading: string | null;
   items: SettingsNavItem[];
 }
 
@@ -47,29 +53,46 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     ],
   },
   {
-    id: "environments",
-    heading: "Environments",
+    id: "workspace",
+    heading: "Workspace",
     items: [
-      { kind: "section", id: "repo", label: "Environments", icon: FolderList },
-      { kind: "section", id: "worktrees", label: "Worktrees", icon: GitBranch },
+      { kind: "section", id: "environments", label: "Environments", icon: FolderList },
+      {
+        kind: "section",
+        id: "shared-environments",
+        label: "Shared environments",
+        icon: CircleUser,
+        adminOnly: true,
+      },
       { kind: "section", id: "compute", label: "Compute", icon: CloudIcon },
-      { kind: "section", id: "cloud", label: "Cloud", icon: CloudIcon },
     ],
   },
   {
-    id: "workflows",
-    heading: "Workflows",
+    id: "agents",
+    heading: "Agents",
     items: [
       { kind: "section", id: "agents", label: "Agents", icon: Blocks },
       { kind: "section", id: "agent-defaults", label: "Agent Defaults", icon: Settings },
+      {
+        kind: "section",
+        id: "agent-authentication",
+        label: "Agent Authentication",
+        icon: Shield,
+      },
       { kind: "section", id: "review", label: "Review", icon: BrainOutline },
     ],
   },
   {
-    id: "slack",
-    heading: "Slack bot",
+    id: "slack_bot",
+    heading: null,
     items: [
-      { kind: "section", id: "slack-bot", label: "Slack bot", icon: MessageSquare },
+      {
+        kind: "section",
+        id: "slack-bot",
+        label: "Slack bot",
+        icon: MessageSquare,
+        adminOnly: true,
+      },
     ],
   },
   {

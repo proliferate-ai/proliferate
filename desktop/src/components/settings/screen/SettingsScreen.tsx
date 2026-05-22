@@ -3,6 +3,7 @@ import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { type SettingsSection } from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
+import { AgentAuthenticationPane } from "@/components/settings/panes/AgentAuthenticationPane";
 import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
 import { AgentsPane } from "@/components/settings/panes/AgentsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
@@ -13,22 +14,25 @@ import { ReviewSettingsPane } from "@/components/settings/panes/ReviewSettingsPa
 import { SlackBotPane } from "@/components/settings/panes/SlackBotPane";
 import { BillingPane } from "@/components/settings/panes/BillingPane";
 import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthUnavailablePane";
-import { CloudPane } from "@/components/settings/panes/CloudPane";
 import { CloudSignInRequiredPane } from "@/components/settings/panes/CloudSignInRequiredPane";
 import { CloudUnavailablePane } from "@/components/settings/panes/CloudUnavailablePane";
 import { ComputePane } from "@/components/settings/panes/ComputePane";
 import { EnvironmentsPane } from "@/components/settings/panes/EnvironmentsPane";
-import { WorktreesPane } from "@/components/settings/panes/WorktreesPane";
+import { SharedEnvironmentsPane } from "@/components/settings/panes/SharedEnvironmentsPane";
 import {
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
+import type { SettingsFocus } from "@/lib/domain/settings/navigation";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
+import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
+import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 
 interface SettingsScreenProps {
   activeSection: SettingsSection;
   activeRepoSourceRoot: string | null;
+  focus: SettingsFocus;
   repositories: SettingsRepositoryEntry[];
   onNavigateHome: () => void;
   onSelectSection: (section: SettingsSection) => void;
@@ -37,12 +41,14 @@ interface SettingsScreenProps {
 
 function renderSettingsSection(
   activeSection: SettingsSection,
+  focus: SettingsFocus,
   repository: SettingsRepositoryEntry | null,
   repositories: SettingsRepositoryEntry[],
   cloudEnabled: boolean,
   cloudActive: boolean,
   cloudSignInChecking: boolean,
   cloudSignInAvailable: boolean,
+  adminAccess: { isAdmin: boolean; isLoading: boolean; role: string | null },
   onSelectSection: (section: SettingsSection) => void,
   onSelectRepo: (sourceRoot: string) => void,
 ): ReactNode {
@@ -64,9 +70,6 @@ function renderSettingsSection(
   if (activeSection === "keyboard") {
     return <KeyboardShortcutsPane />;
   }
-  if (activeSection === "worktrees") {
-    return <WorktreesPane />;
-  }
   if (activeSection === "account") {
     return <AccountPane />;
   }
@@ -76,13 +79,13 @@ function renderSettingsSection(
   if (activeSection === "organization") {
     return <OrganizationPane />;
   }
-  if (activeSection === "slack-bot") {
+  if (activeSection === "agent-authentication") {
     if (!cloudEnabled) {
       return <CloudUnavailablePane />;
     }
 
     if (cloudActive) {
-      return <SlackBotPane />;
+      return <AgentAuthenticationPane />;
     }
 
     if (cloudSignInChecking) {
@@ -91,13 +94,35 @@ function renderSettingsSection(
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
-  if (activeSection === "cloud") {
+  if (activeSection === "shared-environments") {
     if (!cloudEnabled) {
       return <CloudUnavailablePane />;
     }
 
     if (cloudActive) {
-      return <CloudPane repositories={repositories} />;
+      return (
+        <SharedEnvironmentsPane
+          isAdmin={adminAccess.isAdmin}
+          isCheckingAdmin={adminAccess.isLoading}
+          role={adminAccess.role}
+          onOpenSettingsSection={onSelectSection}
+        />
+      );
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
+  if (activeSection === "slack-bot") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <SlackBotPane />;
     }
 
     if (cloudSignInChecking) {
@@ -123,6 +148,7 @@ function renderSettingsSection(
   }
   return (
     <EnvironmentsPane
+      focus={focus}
       repositories={repositories}
       selectedRepository={repository}
       cloudEnabled={cloudEnabled}
@@ -130,7 +156,7 @@ function renderSettingsSection(
       cloudSignInChecking={cloudSignInChecking}
       cloudSignInAvailable={cloudSignInAvailable}
       onSelectRepository={onSelectRepo}
-      onBackToList={() => onSelectSection("repo")}
+      onBackToList={() => onSelectSection("environments")}
     />
   );
 }
@@ -138,12 +164,15 @@ function renderSettingsSection(
 export function SettingsScreen({
   activeSection,
   activeRepoSourceRoot,
+  focus,
   repositories,
   onNavigateHome,
   onSelectSection,
   onSelectRepo,
 }: SettingsScreenProps) {
   const { cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
+  const { activeOrganizationId } = useActiveOrganization();
+  const admin = useIsAdmin(activeOrganizationId);
   const {
     phase,
     availableVersion,
@@ -161,9 +190,18 @@ export function SettingsScreen({
     <div className="flex h-screen bg-surface-under text-foreground" data-telemetry-block>
       <SettingsSidebar
         activeSection={activeSection}
+        adminAccess={{
+          isAdmin: admin.isAdmin,
+          isLoading: admin.isLoading,
+        }}
         onNavigateHome={onNavigateHome}
         onSelectSection={onSelectSection}
-        disabledSections={{ cloud: !cloudEnabled, compute: !cloudEnabled, "slack-bot": !cloudEnabled }}
+        disabledSections={{
+          "agent-authentication": !cloudEnabled,
+          "shared-environments": !cloudEnabled,
+          compute: !cloudEnabled,
+          "slack-bot": !cloudEnabled,
+        }}
         onCheckForUpdates={() => { void checkNow(); }}
         updateActionState={{
           availableVersion,
@@ -185,12 +223,18 @@ export function SettingsScreen({
               <SettingsContentBoundary section={activeSection}>
                 {renderSettingsSection(
                   activeSection,
+                  focus,
                   activeRepository,
                   repositories,
                   cloudEnabled,
                   cloudActive,
                   cloudSignInChecking,
                   cloudSignInAvailable,
+                  {
+                    isAdmin: admin.isAdmin,
+                    isLoading: admin.isLoading,
+                    role: admin.role,
+                  },
                   onSelectSection,
                   onSelectRepo,
                 )}

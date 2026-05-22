@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCloudRepoSettingsHref,
+  buildCloudSettingsHref,
   buildSettingsHref,
   resolveSettingsSelection,
 } from "@/lib/domain/settings/navigation";
@@ -28,6 +30,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "general",
       activeRepoSourceRoot: null,
+      focus: {},
       inviteHandoff: null,
     });
   });
@@ -39,6 +42,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "agent-defaults",
       activeRepoSourceRoot: null,
+      focus: {},
       inviteHandoff: null,
     });
 
@@ -48,6 +52,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "agent-defaults",
       activeRepoSourceRoot: null,
+      focus: {},
       inviteHandoff: null,
     });
   });
@@ -59,6 +64,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "general",
       activeRepoSourceRoot: null,
+      focus: {},
       inviteHandoff: null,
     });
   });
@@ -70,6 +76,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "review",
       activeRepoSourceRoot: null,
+      focus: {},
       inviteHandoff: null,
     });
   });
@@ -80,8 +87,9 @@ describe("settings navigation", () => {
       rawRepo: "/repo-a",
       repositories: [repo({ sourceRoot: "/repo-a" })],
     })).toEqual({
-      activeSection: "repo",
+      activeSection: "environments",
       activeRepoSourceRoot: "/repo-a",
+      focus: {},
       inviteHandoff: null,
     });
   });
@@ -91,8 +99,9 @@ describe("settings navigation", () => {
       rawSection: "repo",
       repositories: [repo({ sourceRoot: "/repo-a" })],
     })).toEqual({
-      activeSection: "repo",
+      activeSection: "environments",
       activeRepoSourceRoot: null,
+      focus: {},
       inviteHandoff: null,
     });
   });
@@ -103,8 +112,9 @@ describe("settings navigation", () => {
       rawRepo: "/repo-a",
       repositories: [],
     })).toEqual({
-      activeSection: "repo",
+      activeSection: "environments",
       activeRepoSourceRoot: null,
+      focus: {},
       inviteHandoff: null,
     });
   });
@@ -116,13 +126,17 @@ describe("settings navigation", () => {
       rawCloudRepoName: "name",
       repositories: [repo({ sourceRoot: "/repo-a" })],
     })).toEqual({
-      activeSection: "repo",
+      activeSection: "environments",
       activeRepoSourceRoot: "/repo-a",
+      focus: {
+        cloudRepoOwner: "owner",
+        cloudRepoName: "name",
+      },
       inviteHandoff: null,
     });
   });
 
-  it("falls legacy cloudRepo links back to Cloud when multiple local repos match", () => {
+  it("falls legacy cloudRepo links back to environments when multiple local repos match", () => {
     expect(resolveSettingsSelection({
       rawSection: "cloudRepo",
       rawCloudRepoOwner: "owner",
@@ -132,8 +146,59 @@ describe("settings navigation", () => {
         repo({ sourceRoot: "/repo-b", repoRootId: "repo-b" }),
       ],
     })).toEqual({
-      activeSection: "cloud",
+      activeSection: "environments",
       activeRepoSourceRoot: null,
+      focus: {
+        cloudRepoOwner: "owner",
+        cloudRepoName: "name",
+      },
+      inviteHandoff: null,
+    });
+  });
+
+  it("redirects legacy cloud links by focus", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "cloud",
+      repositories: [],
+    })).toEqual({
+      activeSection: "agent-authentication",
+      activeRepoSourceRoot: null,
+      focus: {},
+      inviteHandoff: null,
+    });
+
+    expect(resolveSettingsSelection({
+      rawSection: "cloud",
+      rawTarget: "target-1",
+      repositories: [],
+    })).toEqual({
+      activeSection: "compute",
+      activeRepoSourceRoot: null,
+      focus: { target: "target-1" },
+      inviteHandoff: null,
+    });
+
+    expect(resolveSettingsSelection({
+      rawSection: "cloud",
+      rawCredential: "credential-1",
+      rawKind: "claude",
+      repositories: [],
+    })).toEqual({
+      activeSection: "agent-authentication",
+      activeRepoSourceRoot: null,
+      focus: { credential: "credential-1", kind: "claude" },
+      inviteHandoff: null,
+    });
+  });
+
+  it("redirects legacy worktrees links to environments with worktree focus", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "worktrees",
+      repositories: [],
+    })).toEqual({
+      activeSection: "environments",
+      activeRepoSourceRoot: null,
+      focus: { focus: "worktrees" },
       inviteHandoff: null,
     });
   });
@@ -146,6 +211,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "organization",
       activeRepoSourceRoot: null,
+      focus: {},
       inviteHandoff: "handoff-token",
     });
 
@@ -156,6 +222,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "general",
       activeRepoSourceRoot: null,
+      focus: {},
       inviteHandoff: null,
     });
   });
@@ -168,5 +235,30 @@ describe("settings navigation", () => {
       section: "organization",
       inviteHandoff: "handoff-token",
     })).toBe("/settings?section=organization&inviteHandoff=handoff-token");
+  });
+
+  it("builds new settings links for cloud and cloud repo helpers", () => {
+    expect(buildCloudSettingsHref()).toBe("/settings?section=agent-authentication");
+    expect(buildCloudRepoSettingsHref("owner", "name")).toBe(
+      "/settings?section=environments&cloudRepoOwner=owner&cloudRepoName=name",
+    );
+  });
+
+  it("builds environment and agent-authentication focus links", () => {
+    expect(buildSettingsHref({
+      section: "environments",
+      repo: "/repo-a",
+    })).toBe("/settings?section=environments&repo=%2Frepo-a");
+
+    expect(buildSettingsHref({
+      section: "repo",
+      repo: "/repo-a",
+    })).toBe("/settings?section=repo&repo=%2Frepo-a");
+
+    expect(buildSettingsHref({
+      section: "agent-authentication",
+      target: "target-1",
+      kind: "claude",
+    })).toBe("/settings?section=agent-authentication&target=target-1&kind=claude");
   });
 });

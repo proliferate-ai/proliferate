@@ -23,6 +23,10 @@ export function useSettingsNavigation({
   const rawRepo = searchParams.get("repo");
   const rawCloudRepoOwner = searchParams.get("cloudRepoOwner");
   const rawCloudRepoName = searchParams.get("cloudRepoName");
+  const rawFocus = searchParams.get("focus");
+  const rawTarget = searchParams.get("target");
+  const rawCredential = searchParams.get("credential");
+  const rawKind = searchParams.get("kind");
   const rawInviteHandoff = searchParams.get("inviteHandoff");
 
   const selection = useMemo(() => resolveSettingsSelection({
@@ -30,14 +34,22 @@ export function useSettingsNavigation({
     rawRepo,
     rawCloudRepoOwner,
     rawCloudRepoName,
+    rawFocus,
+    rawTarget,
+    rawCredential,
+    rawKind,
     rawInviteHandoff,
     repositories,
   }), [
     rawCloudRepoName,
     rawCloudRepoOwner,
+    rawCredential,
+    rawFocus,
     rawInviteHandoff,
+    rawKind,
     rawRepo,
     rawSection,
+    rawTarget,
     repositories,
   ]);
 
@@ -45,6 +57,7 @@ export function useSettingsNavigation({
     const expectedHref = buildSettingsHref({
       section: selection.activeSection,
       repo: selection.activeRepoSourceRoot,
+      focus: selection.focus,
       inviteHandoff: selection.inviteHandoff,
     });
     const currentHref = `/settings?${searchParams.toString()}`;
@@ -57,6 +70,7 @@ export function useSettingsNavigation({
     searchParams,
     selection.activeRepoSourceRoot,
     selection.activeSection,
+    selection.focus,
     selection.inviteHandoff,
   ]);
 
@@ -73,7 +87,7 @@ export function useSettingsNavigation({
 
   const selectRepo = useCallback((sourceRoot: string) => {
     navigateTo({
-      section: "repo",
+      section: "environments",
       repo: sourceRoot,
     });
   }, [navigateTo]);

@@ -6,12 +6,15 @@ import {
   EnvironmentPanelRow,
   EnvironmentSection,
 } from "@/components/ui/EnvironmentLayout";
+import type { SettingsFocus } from "@/lib/domain/settings/navigation";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { LocalRepoSection } from "./repo/LocalRepoSection";
 import { CloudRepoSection } from "./repo/CloudRepoSection";
+import { WorktreesPane } from "./WorktreesPane";
 
 interface EnvironmentsPaneProps {
+  focus: SettingsFocus;
   repositories: SettingsRepositoryEntry[];
   selectedRepository: SettingsRepositoryEntry | null;
   cloudEnabled: boolean;
@@ -48,6 +51,7 @@ function RepositoryIdentityRow({
 }
 
 export function EnvironmentsPane({
+  focus,
   repositories,
   selectedRepository,
   cloudEnabled,
@@ -57,15 +61,22 @@ export function EnvironmentsPane({
   onSelectRepository,
   onBackToList,
 }: EnvironmentsPaneProps) {
+  if (!selectedRepository && focus.focus === "worktrees") {
+    return <WorktreesPane />;
+  }
+
   if (!selectedRepository) {
     return (
       <section className="space-y-6">
         <SettingsPageHeader
           title="Environments"
-          description="Configure how local worktrees and cloud workspaces are prepared for each project."
+          description="Per-repo configuration for local worktrees and personal cloud workspaces."
         />
 
-        <EnvironmentSection title="Select a project">
+        <EnvironmentSection
+          title="Your repositories"
+          description="Click a repository to configure its environment."
+        >
           <EnvironmentPanel>
             {repositories.length === 0 ? (
               <EnvironmentPanelRow>
