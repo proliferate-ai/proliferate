@@ -6,6 +6,7 @@ import {
   subscribeTarget,
   subscribeWorkspace,
   type CloudCommandResponse,
+  type CloudCommandStatus,
   type CloudSessionSnapshot,
   type CloudTargetDetail,
   type CloudWorkspaceSnapshot,
@@ -428,9 +429,18 @@ export function useCommandStatus(commandId: string | null, options: CloudLiveHoo
     enabled: (options.enabled ?? true) && commandId !== null,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return status && !["queued", "leased", "delivered"].includes(status) ? false : 2_000;
+      return status && isTerminalCommandStatus(status) ? false : 1_000;
     },
   });
+}
+
+function isTerminalCommandStatus(status: CloudCommandStatus): boolean {
+  return status === "accepted"
+    || status === "accepted_but_queued"
+    || status === "rejected"
+    || status === "expired"
+    || status === "superseded"
+    || status === "failed_delivery";
 }
 
 function emptyLiveState<TSnapshot>(

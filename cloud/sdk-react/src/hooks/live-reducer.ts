@@ -116,7 +116,7 @@ function updatePendingInteractions<
   if (nextItem === null) {
     return [...items];
   }
-  if (nextItem.status !== "pending") {
+  if (nextItem.status !== "pending" && nextItem.status !== "failed") {
     return items.filter((item) => item.requestId !== nextItem.requestId);
   }
   return upsertByKey(items, nextItem, (item) => item.requestId);

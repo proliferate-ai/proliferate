@@ -216,6 +216,411 @@ async def test_ensure_environment_runtime_ready_rotates_url_without_generation_i
 
 
 @pytest.mark.asyncio
+async def test_ensure_environment_runtime_ready_refreshes_worker_before_forced_relaunch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_id = uuid4()
+    environment = SimpleNamespace(
+        id=uuid4(),
+        user_id=uuid4(),
+        active_sandbox_id=uuid4(),
+        target_id=target_id,
+        git_owner="BerriAI",
+        git_repo_name="litellm",
+        runtime_url="https://runtime.invalid",
+    )
+    sandbox_record = SimpleNamespace(
+        id=uuid4(),
+        provider="e2b",
+        external_sandbox_id="sandbox-123",
+        sandbox_profile_id=uuid4(),
+        target_id=target_id,
+        slot_generation=4,
+    )
+    runtime_context = SimpleNamespace(
+        home_dir="/root",
+        runtime_workdir="/root/workspace",
+        runtime_binary_path="/root/anyharness",
+        base_env={"HOME": "/root"},
+    )
+    events: list[str] = []
+    expected_previous_worker_id = uuid4()
+
+    class _Provider:
+        async def connect_running_sandbox(
+            self,
+            sandbox_id: str,
+            *,
+            timeout_seconds: int | None = None,
+        ) -> object:
+            assert sandbox_id == "sandbox-123"
+            assert timeout_seconds is None
+            events.append("connect")
+            return object()
+
+        async def get_sandbox_state(self, sandbox_id: str) -> ProviderSandboxState:
+            return ProviderSandboxState(
+                external_sandbox_id=sandbox_id,
+                state="running",
+                started_at=None,
+                end_at=None,
+                observed_at=datetime.now(UTC),
+                metadata={},
+            )
+
+        async def resolve_runtime_endpoint(self, _sandbox: object) -> SimpleNamespace:
+            events.append("endpoint")
+            return SimpleNamespace(runtime_url="https://fresh.invalid")
+
+        async def resolve_runtime_context(self, _sandbox: object) -> SimpleNamespace:
+            events.append("context")
+            return runtime_context
+
+    async def _wait(_runtime_url: str, **_kwargs: object) -> None:
+        events.append("wait")
+
+    async def _verify(_runtime_url: str, access_token: str, **_kwargs: object) -> None:
+        assert access_token == "runtime-token"
+        events.append("verify")
+
+    async def _load_cloud_sandbox_by_id(_sandbox_id: object) -> object:
+        return sandbox_record
+
+    async def _refresh(
+        _provider: object,
+        _sandbox: object,
+        _runtime_context: object,
+        *,
+        environment: object,
+        sandbox_record: object,
+        workspace_id: object,
+        access_token: str,
+    ) -> None:
+        assert environment is expected_environment
+        assert sandbox_record is expected_sandbox_record
+        assert str(workspace_id)
+        assert access_token == "runtime-token"
+        events.append("refresh")
+
+    async def _relaunch(
+        _provider: object,
+        _sandbox: object,
+        _runtime_context: object,
+        _workspace: object,
+    ) -> None:
+        events.append("relaunch")
+
+    async def _current_target_worker_id(_target_id: object) -> object:
+        events.append("previous-worker")
+        return expected_previous_worker_id
+
+    async def _wait_for_worker_target_fresh_heartbeat(
+        target_id: object,
+        *,
+        previous_worker_id: object | None = None,
+        **_kwargs: object,
+    ) -> object:
+        assert target_id == expected_environment.target_id
+        assert previous_worker_id == expected_previous_worker_id
+        events.append("wait-worker")
+        return object()
+
+    async def _save_runtime_environment_state(_environment_id: object, **_kwargs: object) -> None:
+        events.append("save")
+
+    monkeypatch.setattr(ensure_running, "wait_for_runtime_health", _wait)
+    monkeypatch.setattr(ensure_running, "verify_runtime_auth_enforced", _verify)
+    monkeypatch.setattr(ensure_running, "load_cloud_sandbox_by_id", _load_cloud_sandbox_by_id)
+    monkeypatch.setattr(ensure_running, "get_sandbox_provider", lambda _kind: _Provider())
+    expected_environment = environment
+    expected_sandbox_record = sandbox_record
+    monkeypatch.setattr(
+        ensure_running,
+        "_refresh_worker_enrollment_for_runtime",
+        _refresh,
+    )
+    monkeypatch.setattr(ensure_running, "_relaunch_runtime", _relaunch)
+    monkeypatch.setattr(ensure_running, "_current_target_worker_id", _current_target_worker_id)
+    monkeypatch.setattr(
+        ensure_running,
+        "wait_for_worker_target_fresh_heartbeat",
+        _wait_for_worker_target_fresh_heartbeat,
+    )
+    monkeypatch.setattr(
+        ensure_running,
+        "save_runtime_environment_state",
+        _save_runtime_environment_state,
+    )
+
+    runtime_url = await ensure_running.ensure_environment_runtime_ready(
+        environment,
+        workspace_id=uuid4(),
+        allow_launcher_restart=True,
+        access_token="runtime-token",
+        force_launcher_restart=True,
+        refresh_worker_enrollment_on_restart=True,
+    )
+
+    assert runtime_url == "https://fresh.invalid"
+    assert events.index("refresh") < events.index("relaunch")
+    assert events.index("relaunch") < events.index("wait-worker")
+    assert events[-1] == "save"
+
+
+@pytest.mark.asyncio
+async def test_worker_relaunch_cloud_base_url_falls_back_to_existing_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime_context = SimpleNamespace(
+        home_dir="/root",
+        runtime_workdir="/root/workspace",
+        runtime_binary_path="/root/anyharness",
+        base_env={"HOME": "/root"},
+    )
+    commands: list[str] = []
+
+    def _raise_config_error() -> str:
+        raise CloudRuntimeReconnectError("local-only")
+
+    async def _run_command(
+        _provider: object,
+        _sandbox: object,
+        *,
+        command: str,
+        **_kwargs: object,
+    ) -> SimpleNamespace:
+        commands.append(command)
+        return SimpleNamespace(exit_code=0, stdout="https://public-worker.example\n")
+
+    monkeypatch.setattr(ensure_running, "_cloud_base_url_for_worker_config", _raise_config_error)
+    monkeypatch.setattr(ensure_running, "run_sandbox_command_logged", _run_command)
+
+    url = await ensure_running._cloud_base_url_for_worker_relaunch(
+        object(),
+        object(),
+        runtime_context,
+        uuid4(),
+    )
+
+    assert url == "https://public-worker.example"
+    assert commands
+
+
+@pytest.mark.asyncio
+async def test_refresh_worker_enrollment_stops_and_resets_sidecars_before_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_id = uuid4()
+    environment = SimpleNamespace(
+        id=uuid4(),
+        user_id=uuid4(),
+        target_id=target_id,
+        git_owner="BerriAI",
+        git_repo_name="litellm",
+    )
+    sandbox_record = SimpleNamespace(
+        id=uuid4(),
+        sandbox_profile_id=uuid4(),
+        target_id=target_id,
+        slot_generation=7,
+    )
+    runtime_context = SimpleNamespace(
+        home_dir="/root",
+        runtime_workdir="/root/workspace",
+        runtime_binary_path="/root/anyharness",
+        base_env={"HOME": "/root"},
+    )
+    events: list[tuple[str, str, str | None]] = []
+
+    class _Provider:
+        runtime_port = 8457
+
+        async def write_file(self, _sandbox: object, path: str, contents: str | bytes) -> None:
+            assert path == "/root/.proliferate/worker/config.toml"
+            assert "enrollment-token" in str(contents)
+            events.append(("write", path, None))
+
+    async def _cloud_base_url(*_args: object, **_kwargs: object) -> str:
+        events.append(("cloud-url", "resolved", None))
+        return "https://public-worker.example"
+
+    async def _ensure_enrollment(**_kwargs: object) -> SimpleNamespace:
+        events.append(("enrollment", "created", None))
+        return SimpleNamespace(enrollment_token="enrollment-token")
+
+    async def _run_command(
+        _provider: object,
+        _sandbox: object,
+        *,
+        label: str,
+        command: str,
+        **_kwargs: object,
+    ) -> SimpleNamespace:
+        events.append(("command", label, command))
+        return SimpleNamespace(exit_code=0, stdout="", stderr="")
+
+    monkeypatch.setattr(ensure_running, "_cloud_base_url_for_worker_relaunch", _cloud_base_url)
+    monkeypatch.setattr(ensure_running, "ensure_runtime_target_enrollment", _ensure_enrollment)
+    monkeypatch.setattr(ensure_running, "run_sandbox_command_logged", _run_command)
+
+    await ensure_running._refresh_worker_enrollment_for_runtime(
+        _Provider(),
+        object(),
+        runtime_context,
+        environment=environment,
+        sandbox_record=sandbox_record,
+        workspace_id=uuid4(),
+        access_token="runtime-token",
+    )
+
+    labels = [event[1] for event in events]
+    assert labels[:4] == [
+        "resolved",
+        "check_runtime_supervisor_config_for_worker_refresh",
+        "created",
+        "stop_existing_supervised_runtime_for_worker_refresh",
+    ]
+    assert labels.index("refresh_worker_enrollment_state") < labels.index(
+        "/root/.proliferate/worker/config.toml"
+    )
+    assert labels.index("/root/.proliferate/worker/config.toml") < labels.index(
+        "chmod_refreshed_worker_config"
+    )
+    reset_command = next(
+        command
+        for kind, label, command in events
+        if kind == "command" and label == "refresh_worker_enrollment_state"
+    )
+    assert reset_command is not None
+    assert "/root/.proliferate/worker/worker.sqlite3" in reset_command
+    assert "/root/.proliferate/worker/worker.sqlite3-wal" in reset_command
+    assert "/root/.proliferate/worker/worker.sqlite3-shm" in reset_command
+    assert "/root/.proliferate/worker/worker.sqlite3-journal" in reset_command
+
+
+@pytest.mark.asyncio
+async def test_refresh_worker_enrollment_reset_failure_stops_before_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_id = uuid4()
+    environment = SimpleNamespace(
+        id=uuid4(),
+        user_id=uuid4(),
+        target_id=target_id,
+        git_owner="BerriAI",
+        git_repo_name="litellm",
+    )
+    sandbox_record = SimpleNamespace(
+        id=uuid4(),
+        sandbox_profile_id=uuid4(),
+        target_id=target_id,
+        slot_generation=7,
+    )
+    runtime_context = SimpleNamespace(
+        home_dir="/root",
+        runtime_workdir="/root/workspace",
+        runtime_binary_path="/root/anyharness",
+        base_env={"HOME": "/root"},
+    )
+
+    class _Provider:
+        async def write_file(self, *_args: object, **_kwargs: object) -> None:
+            raise AssertionError("worker config should not be written after reset failure")
+
+    async def _ensure_enrollment(**_kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(enrollment_token="enrollment-token")
+
+    async def _run_command(
+        _provider: object,
+        _sandbox: object,
+        *,
+        label: str,
+        **_kwargs: object,
+    ) -> SimpleNamespace:
+        if label == "refresh_worker_enrollment_state":
+            return SimpleNamespace(exit_code=1, stdout="", stderr="reset failed")
+        return SimpleNamespace(exit_code=0, stdout="", stderr="")
+
+    async def _cloud_base_url(*_args: object, **_kwargs: object) -> str:
+        return "https://public-worker.example"
+
+    monkeypatch.setattr(
+        ensure_running,
+        "_cloud_base_url_for_worker_relaunch",
+        _cloud_base_url,
+    )
+    monkeypatch.setattr(ensure_running, "ensure_runtime_target_enrollment", _ensure_enrollment)
+    monkeypatch.setattr(ensure_running, "run_sandbox_command_logged", _run_command)
+
+    with pytest.raises(CloudRuntimeReconnectError, match="reset worker enrollment state"):
+        await ensure_running._refresh_worker_enrollment_for_runtime(
+            _Provider(),
+            object(),
+            runtime_context,
+            environment=environment,
+            sandbox_record=sandbox_record,
+            workspace_id=uuid4(),
+            access_token="runtime-token",
+        )
+
+
+@pytest.mark.asyncio
+async def test_refresh_worker_enrollment_url_failure_does_not_touch_sandbox(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_id = uuid4()
+    environment = SimpleNamespace(
+        id=uuid4(),
+        user_id=uuid4(),
+        target_id=target_id,
+        git_owner="BerriAI",
+        git_repo_name="litellm",
+    )
+    sandbox_record = SimpleNamespace(
+        id=uuid4(),
+        sandbox_profile_id=uuid4(),
+        target_id=target_id,
+        slot_generation=7,
+    )
+    runtime_context = SimpleNamespace(
+        home_dir="/root",
+        runtime_workdir="/root/workspace",
+        runtime_binary_path="/root/anyharness",
+        base_env={"HOME": "/root"},
+    )
+    commands: list[str] = []
+
+    async def _cloud_base_url(*_args: object, **_kwargs: object) -> str:
+        raise CloudRuntimeReconnectError("missing public URL")
+
+    async def _run_command(
+        _provider: object,
+        _sandbox: object,
+        *,
+        label: str,
+        **_kwargs: object,
+    ) -> SimpleNamespace:
+        commands.append(label)
+        return SimpleNamespace(exit_code=0, stdout="", stderr="")
+
+    monkeypatch.setattr(ensure_running, "_cloud_base_url_for_worker_relaunch", _cloud_base_url)
+    monkeypatch.setattr(ensure_running, "run_sandbox_command_logged", _run_command)
+
+    with pytest.raises(CloudRuntimeReconnectError, match="missing public URL"):
+        await ensure_running._refresh_worker_enrollment_for_runtime(
+            object(),
+            object(),
+            runtime_context,
+            environment=environment,
+            sandbox_record=sandbox_record,
+            workspace_id=uuid4(),
+            access_token="runtime-token",
+        )
+
+    assert commands == []
+
+
+@pytest.mark.asyncio
 async def test_ensure_workspace_runtime_ready_resumes_paused_sandbox(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

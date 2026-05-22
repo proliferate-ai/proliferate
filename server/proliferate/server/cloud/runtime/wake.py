@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.cloud import CLOUD_TARGET_HEARTBEAT_STALE_SECONDS
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
@@ -155,12 +158,15 @@ async def _resume_target_runtime_environment(
             return False
         access_token = decrypt_text(environment.runtime_token_ciphertext)
         wake_workspace_id = workspace_id or environment.id
+        force_launcher_restart = await _target_worker_heartbeat_is_stale(db, target_id)
 
     runtime_url = await ensure_environment_runtime_ready(
         environment,
         workspace_id=wake_workspace_id,
         allow_launcher_restart=True,
         access_token=access_token,
+        force_launcher_restart=force_launcher_restart,
+        refresh_worker_enrollment_on_restart=force_launcher_restart,
     )
     logger.info(
         "Managed slot wake resumed target runtime",
@@ -170,9 +176,21 @@ async def _resume_target_runtime_environment(
             "runtime_environment_id": str(environment.id),
             "workspace_id": str(wake_workspace_id),
             "runtime_url": runtime_url,
+            "force_launcher_restart": force_launcher_restart,
         },
     )
     return True
+
+
+async def _target_worker_heartbeat_is_stale(db: AsyncSession, target_id: UUID) -> bool:
+    target = await targets_store.get_target_by_id(db, target_id)
+    if target is None or target.status_record is None:
+        return True
+    heartbeat_at = target.status_record.last_heartbeat_at
+    if target.status_record.worker_id is None or heartbeat_at is None:
+        return True
+    stale_before = utcnow() - timedelta(seconds=CLOUD_TARGET_HEARTBEAT_STALE_SECONDS)
+    return heartbeat_at <= stale_before
 
 
 async def perform_proliferate_owned_e2b_resume(slot: object) -> None:

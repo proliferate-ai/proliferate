@@ -30,6 +30,11 @@ import {
 
 const MAX_BODY_PREVIEW_LENGTH = 2_000;
 
+type CloudChatTranscriptRowWithSource = CloudChatTranscriptRowView & {
+  sourceRequestId?: string | null;
+  sourceCommandId?: string | null;
+};
+
 export interface CloudTranscriptViewResult {
   rows: CloudChatTranscriptRowView[];
   source: "empty" | "events" | "projection";
@@ -62,6 +67,7 @@ export function buildCloudTranscriptView(input: {
       const rowsWithPending = appendPendingPromptRows(
         rows,
         input.pendingInteractions ?? [],
+        input.fallbackItems,
       );
       return {
         rows: rowsWithPending,
@@ -77,6 +83,7 @@ export function buildCloudTranscriptView(input: {
       rows: appendPendingPromptRows(
         buildRowsFromProjectedItems(input.fallbackItems),
         input.pendingInteractions ?? [],
+        input.fallbackItems,
       ),
       source: "projection",
       envelopeCount: envelopes.length,
@@ -317,36 +324,83 @@ function buildRowsFromProjectedItems(
 function appendPendingPromptRows(
   rows: readonly CloudChatTranscriptRowView[],
   pendingInteractions: readonly CloudPendingInteraction[],
+  projectedItems: readonly CloudTranscriptItem[] = [],
 ): CloudChatTranscriptRowView[] {
-  const pendingRows = buildRowsFromPendingPromptInteractions(rows, pendingInteractions);
+  const pendingRows = buildRowsFromPendingPromptInteractions(
+    rows,
+    pendingInteractions,
+    projectedItems,
+  );
   return pendingRows.length === 0 ? [...rows] : [...rows, ...pendingRows];
 }
 
 function buildRowsFromPendingPromptInteractions(
   existingRows: readonly CloudChatTranscriptRowView[],
   pendingInteractions: readonly CloudPendingInteraction[],
+  projectedItems: readonly CloudTranscriptItem[],
 ): CloudChatTranscriptRowView[] {
-  const rows: CloudChatTranscriptRowView[] = [];
+  const existingRowsWithSource = existingRows as readonly CloudChatTranscriptRowWithSource[];
+  const rows: CloudChatTranscriptRowWithSource[] = [];
   for (const interaction of pendingInteractions) {
-    if (interaction.status !== "pending" || interaction.kind !== "send_prompt") {
+    if (
+      (interaction.status !== "pending" && interaction.status !== "failed")
+      || interaction.kind !== "send_prompt"
+    ) {
       continue;
     }
     const text = pendingPromptText(interaction);
-    if (!text || existingRows.some((row) => row.kind === "user" && textMatches(row.body, text))) {
+    const commandId = pendingPromptCommandId(interaction);
+    if (
+      !text
+      || existingRowsWithSource.some((row) =>
+        row.sourceRequestId === interaction.requestId
+        || (
+          row.sourceCommandId !== null
+          && row.sourceCommandId !== undefined
+          && row.sourceCommandId === commandId
+        )
+      )
+    ) {
+      continue;
+    }
+    const promptItem = projectedPromptItemForPendingInteraction(
+      projectedItems,
+      interaction,
+      text,
+    );
+    const promptRowIndex = findLastMatchingUserRowIndex(existingRows, text);
+    const promptVisible = promptItem !== null
+      || promptRowIndex !== -1;
+    const agentProgressVisible = promptItem
+      ? projectedAgentProgressAfterPrompt(projectedItems, promptItem)
+      : promptRowIndex !== -1
+        && existingRows.slice(promptRowIndex + 1).some((row) =>
+          row.kind !== "user" && row.kind !== "system"
+        );
+    const failed = interaction.status === "failed";
+    if (!promptVisible) {
+      rows.push({
+        id: `pending-prompt:${interaction.requestId}:user`,
+        kind: "user",
+        body: text,
+        status: failed ? "Failed" : "Queued",
+        streaming: !failed,
+        sourceRequestId: interaction.requestId,
+        sourceCommandId: commandId,
+      });
+    }
+    if (!failed && agentProgressVisible) {
       continue;
     }
     rows.push({
-      id: `pending-prompt:${interaction.requestId}:user`,
-      kind: "user",
-      body: text,
-      status: "Queued",
-      streaming: true,
-    });
-    rows.push({
       id: `pending-prompt:${interaction.requestId}:assistant-waiting`,
-      kind: "assistant",
-      body: interaction.description ?? "Waiting for response.",
-      streaming: true,
+      kind: failed ? "error" : "assistant",
+      body: interaction.description ?? (failed
+        ? "Prompt could not be delivered."
+        : "Waiting for response."),
+      streaming: !failed,
+      sourceRequestId: interaction.requestId,
+      sourceCommandId: commandId,
     });
   }
   return rows;
@@ -363,6 +417,55 @@ function pendingPromptText(interaction: CloudPendingInteraction): string | null 
     ?? readString(payload.content);
   const trimmed = text?.trim();
   return trimmed ? trimmed : null;
+}
+
+function pendingPromptCommandId(interaction: CloudPendingInteraction): string | null {
+  const payload = interaction.payload;
+  if (!payload) {
+    return null;
+  }
+  const commandId = payload.commandId;
+  return typeof commandId === "string" && commandId.trim() ? commandId.trim() : null;
+}
+
+function projectedPromptItemForPendingInteraction(
+  items: readonly CloudTranscriptItem[],
+  interaction: CloudPendingInteraction,
+  text: string,
+): CloudTranscriptItem | null {
+  return [...items]
+    .filter((item) =>
+      item.firstSeq > interaction.requestedSeq
+      && isPromptTranscriptKind(item.kind)
+      && textMatches(item.text, text)
+    )
+    .sort((left, right) => right.lastSeq - left.lastSeq)[0] ?? null;
+}
+
+function projectedAgentProgressAfterPrompt(
+  items: readonly CloudTranscriptItem[],
+  promptItem: CloudTranscriptItem,
+): boolean {
+  return items.some((item) =>
+    item.firstSeq > promptItem.lastSeq && !isPromptTranscriptKind(item.kind)
+  );
+}
+
+function findLastMatchingUserRowIndex(
+  rows: readonly CloudChatTranscriptRowView[],
+  text: string,
+): number {
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index];
+    if (row.kind === "user" && textMatches(row.body, text)) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function isPromptTranscriptKind(kind: string | null | undefined): boolean {
+  return kind === "user_message" || kind === "prompt";
 }
 
 function projectedItemKind(item: CloudTranscriptItem): CloudChatTranscriptRowView["kind"] {

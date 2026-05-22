@@ -61,16 +61,16 @@ Web
 
 ### 2. Chat Transcript
 
-- [ ] User messages use Desktop bubble formatting, spacing, masking, copy affordance, and long-text behavior.
-- [ ] Assistant prose uses Desktop markdown rendering, spacing, streaming reveal behavior, and copy affordance.
+- [x] User messages use Desktop bubble formatting, spacing, masking, copy affordance, and long-text behavior.
+- [x] Assistant prose uses Desktop markdown rendering, spacing, streaming reveal behavior, and copy affordance.
 - [ ] Reasoning/thought rows use Desktop reasoning block presentation.
 - [ ] Tool calls use Desktop action row/group presentation where payload data is available.
 - [ ] Grouped tool/action summaries match Desktop collapsed action treatment.
 - [ ] Proposed plans and plan references render with Desktop cards where events exist.
 - [ ] Error/system rows match Desktop transcript treatment.
 - [ ] Transcript virtualization or long-history handling does not regress Web performance.
-- [ ] Web can reload a chat and render the existing transcript without sending a new message.
-- [ ] Web updates live from cloud session events/snapshots without requiring another user action.
+- [x] Web can reload a chat and render the existing transcript without sending a new message.
+- [x] Web updates live from cloud session events/snapshots without requiring another user action.
 
 ### 3. Optimistic Prompt And Runtime Reconciliation
 
@@ -79,9 +79,9 @@ Web
 - [x] First prompt with no session appears immediately before the session id exists.
 - [x] First prompt remaps to the materialized session without losing visible state.
 - [x] Queued prompt status transitions from sending to queued to reconciled.
-- [ ] Transcript echo removes duplicate optimistic prompt rows.
-- [ ] Agent progress removes the waiting row at the right time.
-- [ ] Rejected/expired/failed prompt delivery leaves an inspectable failed row.
+- [x] Transcript echo removes duplicate optimistic prompt rows.
+- [x] Agent progress removes the waiting row at the right time.
+- [x] Rejected/expired/failed prompt delivery leaves an inspectable failed row.
 - [x] Reload during pending work does not erase user-visible intent when persistence exists.
 
 ### 4. Composer And Config Controls
@@ -94,7 +94,7 @@ Web
 - [x] Popovers use shared Desktop-like menu surfaces and item rows.
 - [x] Config changes are optimistic immediately.
 - [x] Config pending state shows sending/queued indicators.
-- [ ] Live config confirmation clears pending state.
+- [x] Live config confirmation clears pending state.
 - [ ] Rejected/expired/failed config commands clear pending state and show a useful error.
 - [ ] Controls remain inert when the composer is disabled or workspace is unclaimed.
 
@@ -122,9 +122,9 @@ Web
 ### 7. New Session In Existing Workspace
 
 - [x] Web exposes a clear "new chat/session" action from a cloud workspace.
-- [ ] New session uses the same composer/config presentation.
-- [ ] Session creation uses cloud commands and navigates to the created session.
-- [ ] Pending session appears immediately in sidebar/chat shell.
+- [x] New session uses the same composer/config presentation.
+- [x] Session creation uses cloud commands and navigates to the created session.
+- [x] Pending session appears immediately in sidebar/chat shell.
 - [ ] Failed session creation remains visible and retryable.
 
 ### 8. Automations
@@ -150,16 +150,17 @@ Web
 - [x] Typecheck shared packages and Web.
 - [x] Build Web production bundle.
 - [x] Run server tests for touched cloud command paths.
-- [ ] Browser-test workspace list reload.
-- [ ] Browser-test opening an existing workspace.
-- [ ] Browser-test no-session first prompt.
+- [x] Browser-test workspace list reload.
+- [x] Browser-test opening an existing workspace.
+- [x] Browser-test no-session first prompt.
 - [x] Browser-test existing-session follow-up prompt.
-- [ ] Browser-test live transcript updates without sending another message.
-- [ ] Browser-test config update success and failure.
+- [x] Browser-test live transcript updates without sending another message.
+- [x] Browser-test config update success.
+- [ ] Browser-test config update failure.
 - [ ] Browser-test shared-unclaimed claim flow.
-- [ ] Browser-test new session in existing workspace.
-- [ ] Browser-test automations list/create if API support exists.
-- [ ] Browser-test settings modal/page navigation.
+- [x] Browser-test new session in existing workspace.
+- [x] Browser-test automations list/create if API support exists.
+- [x] Browser-test settings modal/page navigation.
 
 ## Current Slice Tracker
 
@@ -180,6 +181,10 @@ Use this section to mark incremental progress during implementation.
 - [x] Automations create/manage started.
 - [x] Settings shell parity started.
 - [x] Web persisted pending prompt rows through chat reload.
+- [x] Browser-verified real Web prompt delivery in an existing session.
+- [x] Browser-verified real Web prompt delivery for a new session in an existing workspace.
+- [x] Browser-verified workspace list reload, settings routes, composer config update, and automation create validation.
+- [ ] Browser-test shared-unclaimed claim flow when a shared-unclaimed fixture is available.
 
 ## Subagent Orchestration Plan
 

@@ -31,6 +31,11 @@ type EnqueueCloudCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,
 ) => Promise<CloudCommandResponse>;
 
+export type PendingHomePromptDispatchResult = {
+  sessionId: string;
+  sendCommandId: string;
+};
+
 export async function dispatchPendingHomePrompt(args: {
   client: ProliferateCloudClient;
   workspace: CloudWorkspaceDetail;
@@ -41,7 +46,7 @@ export async function dispatchPendingHomePrompt(args: {
   setLatestCommandId: (commandId: string) => void;
   onStatus: (status: string) => void;
   shouldContinue: () => boolean;
-}): Promise<string> {
+}): Promise<PendingHomePromptDispatchResult> {
   const session = await startSessionForPrompt(args);
   assertStillCurrent(args.shouldContinue);
   args.onStatus("Sending queued prompt.");
@@ -63,7 +68,10 @@ export async function dispatchPendingHomePrompt(args: {
     assertCommandAccepted(command);
   }
   args.onStatus("Queued prompt; waiting for transcript.");
-  return session.sessionId;
+  return {
+    sessionId: session.sessionId,
+    sendCommandId: command.commandId,
+  };
 }
 
 async function startSessionForPrompt(args: {
@@ -115,6 +123,7 @@ async function startSessionForPrompt(args: {
     command.commandId,
     args.client,
     args.shouldContinue,
+    args.onStatus,
   );
   assertCommandAccepted(completed);
   assertStillCurrent(args.shouldContinue);
@@ -169,7 +178,12 @@ export async function ensureManagedWorkspaceTargetConfigReady(
   args.setLatestCommandId(response.command.commandId);
   args.onStatus("Applying managed target configuration.");
   assertCommandAccepted(
-    await waitForCommandTerminal(response.command.commandId, args.client, args.shouldContinue),
+    await waitForCommandTerminal(
+      response.command.commandId,
+      args.client,
+      args.shouldContinue,
+      args.onStatus,
+    ),
   );
 }
 
@@ -198,14 +212,21 @@ async function waitForCommandTerminal(
   commandId: string,
   client: ProliferateCloudClient,
   shouldContinue: () => boolean,
+  onStatus?: (status: string) => void,
 ): Promise<CloudCommandResponse> {
   const deadline = Date.now() + 240_000;
   assertStillCurrent(shouldContinue);
   let latest = await getCommandStatus(commandId, client);
+  let lastStatusMessage: string | null = null;
   while (!isTerminalStatus(latest.status)) {
     assertStillCurrent(shouldContinue);
     if (Date.now() >= deadline) {
       throw new Error("Timed out waiting for the cloud command to finish.");
+    }
+    const nextStatusMessage = commandPendingMessage(latest.status);
+    if (nextStatusMessage && nextStatusMessage !== lastStatusMessage) {
+      onStatus?.(nextStatusMessage);
+      lastStatusMessage = nextStatusMessage;
     }
     await sleep(500);
     assertStillCurrent(shouldContinue);
@@ -213,6 +234,19 @@ async function waitForCommandTerminal(
   }
   assertStillCurrent(shouldContinue);
   return latest;
+}
+
+function commandPendingMessage(status: CloudCommandResponse["status"]): string | null {
+  switch (status) {
+    case "queued":
+      return "Command queued; waiting for the cloud runtime.";
+    case "leased":
+      return "Cloud runtime is picking up the command.";
+    case "delivered":
+      return "Command delivered; waiting for runtime acknowledgement.";
+    default:
+      return null;
+  }
 }
 
 function assertStillCurrent(shouldContinue: () => boolean): void {

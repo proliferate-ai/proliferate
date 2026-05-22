@@ -144,7 +144,8 @@ export function WebSidebarController() {
   }
 
   function handleWorkspaceSelect(workspaceId: string) {
-    navigate(routes.workspace(workspaceId));
+    const sessionId = latestSessionByWorkspaceId.get(workspaceId);
+    navigate(sessionId ? routes.chat(workspaceId, sessionId) : routes.workspace(workspaceId));
   }
 
   function handleChatSelect(sessionId: string) {

@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   desktopWorkspaceDeepLink,
+  getCommandStatus,
   type CloudCommandStatus,
   type CloudPendingInteraction,
   type CloudSessionEvent,
   type CloudSessionProjection,
   type CloudTranscriptItem,
+  type CloudWorkspaceSnapshot,
 } from "@proliferate/cloud-sdk";
 import {
   useClaimCloudWorkspace,
@@ -40,6 +42,7 @@ import {
 import {
   clearPendingHomePrompt,
   loadPendingHomePrompt,
+  savePendingHomePrompt,
   type PendingHomePrompt,
 } from "../../../lib/access/cloud/pending-home-prompt-store";
 import {
@@ -66,12 +69,15 @@ type OptimisticPrompt = {
   text: string;
   baseTranscriptSeq: number;
   status: OptimisticPromptStatus;
+  commandId?: string | null;
 };
 
 type UpdateSessionConfigPayload = {
   configId: string;
   value: string;
 };
+
+type ClipboardWriteStatus = "copied" | "selected" | "failed";
 
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
@@ -98,7 +104,10 @@ export function ChatScreen() {
   const pendingConfigMutationIdRef = useRef(0);
   const workspaceQuery = useCloudWorkspaceSnapshot(workspaceId ?? null, Boolean(workspaceId));
   const workspaceLive = useWorkspaceLive(workspaceId ?? null, { enabled: Boolean(workspaceId) });
-  const snapshot = workspaceLive.snapshot ?? workspaceQuery.data;
+  const snapshot = useMemo(
+    () => mergeWorkspaceSnapshot(workspaceQuery.data, workspaceLive.snapshot),
+    [workspaceLive.snapshot, workspaceQuery.data],
+  );
   const workspace = snapshot?.workspace;
   const workspaceStatus = workspace ? effectiveWorkspaceStatus(workspace) : null;
   const sessions = useMemo(
@@ -128,6 +137,15 @@ export function ChatScreen() {
   const pendingInteractions = sessionLive.snapshot?.pendingInteractions
     ?? transcriptQuery.data?.pendingInteractions
     ?? EMPTY_PENDING_INTERACTIONS;
+  const pendingPromptCommandId = useMemo(
+    () => latestPendingPromptCommandId(pendingInteractions),
+    [pendingInteractions],
+  );
+  const pendingPromptCommandIds = useMemo(
+    () => pendingPromptCommandIdsFromInteractions(pendingInteractions),
+    [pendingInteractions],
+  );
+  const pendingPromptCommandIdsKey = pendingPromptCommandIds.join("\0");
   const sessionEvents = sessionEventsQuery.data?.events ?? EMPTY_SESSION_EVENTS;
   const transcriptView = useMemo(
     () => buildCloudTranscriptView({
@@ -147,6 +165,7 @@ export function ChatScreen() {
         sessionId: session?.sessionId ?? null,
         transcriptItems,
         transcriptRows: transcriptView.rows,
+        pendingInteractions,
       }),
       ...buildPendingHomePromptRows({
         pendingPrompt: pendingHomePrompt,
@@ -160,6 +179,7 @@ export function ChatScreen() {
       optimisticPrompts,
       pendingHomePrompt,
       pendingHomePromptStatus,
+      pendingInteractions,
       session?.sessionId,
       transcriptItems,
       transcriptView.rows,
@@ -170,7 +190,8 @@ export function ChatScreen() {
   const enqueueStartSession = useEnqueueCloudCommand<StartSessionPayload>();
   const enqueueConfig = useEnqueueCloudCommand<UpdateSessionConfigPayload>();
   const claimWorkspace = useClaimCloudWorkspace();
-  const commandStatus = useCommandStatus(latestCommandId);
+  const observedPromptCommandId = pendingPromptCommandId ?? latestCommandId;
+  const commandStatus = useCommandStatus(observedPromptCommandId);
   const configCommandStatus = useCommandStatus(latestConfigCommandId);
   const isUnclaimed = workspace?.visibility === "shared_unclaimed";
   const workspaceReadyAgentKindsKey = workspace?.readyAgentKinds?.join("\0") ?? "";
@@ -255,22 +276,23 @@ export function ChatScreen() {
         onStatus: setCurrentStatus,
         shouldContinue: isCurrentRun,
       })
-        .then((sessionId) => {
-          if (!isCurrentRun()) {
-            return;
-          }
-          setOptimisticPrompts((current) =>
-            current.some((prompt) => prompt.id === pendingHomePrompt.id)
+          .then((result) => {
+            if (!isCurrentRun()) {
+              return;
+            }
+            setOptimisticPrompts((current) =>
+              current.some((prompt) => prompt.id === pendingHomePrompt.id)
               ? current
               : [
                 ...current,
                 {
                   id: pendingHomePrompt.id,
                   workspaceId: workspace.id,
-                  sessionId,
+                  sessionId: result.sessionId,
                   text: pendingHomePrompt.text,
                   baseTranscriptSeq: 0,
                   status: "queued",
+                  commandId: result.sendCommandId,
                 },
               ]
           );
@@ -278,12 +300,14 @@ export function ChatScreen() {
           setPendingHomePrompt(null);
           setPendingHomePromptStatus(null);
           void workspaceQuery.refetch();
-          navigate(routes.chat(workspace.id, sessionId), { replace: true });
+          navigate(routes.chat(workspace.id, result.sessionId), { replace: true });
         })
         .catch((error: unknown) => {
           if (!isCurrentRun()) {
             return;
           }
+          clearPendingHomePrompt(workspace.id);
+          setPendingHomePrompt(null);
           setPendingHomePromptStatus(
             error instanceof Error ? error.message : "Queued prompt could not be sent.",
           );
@@ -366,6 +390,105 @@ export function ChatScreen() {
   }, [liveConfig, session?.sessionId]);
 
   useEffect(() => {
+    const command = commandStatus.data;
+    if (!command || !isRejectedCommandStatus(command.status)) {
+      return;
+    }
+    const hasMatchingOptimisticPrompt = optimisticPrompts.some((prompt) =>
+      prompt.commandId === command.commandId && prompt.status !== "failed"
+    );
+    const isPersistedPendingPromptCommand = pendingPromptCommandId === command.commandId;
+    if (!hasMatchingOptimisticPrompt && !isPersistedPendingPromptCommand) {
+      return;
+    }
+    if (hasMatchingOptimisticPrompt) {
+      setOptimisticPrompts((current) =>
+        current.map((prompt) =>
+          prompt.commandId === command.commandId ? { ...prompt, status: "failed" } : prompt
+        )
+      );
+    }
+    if (hasMatchingOptimisticPrompt) {
+      setPendingHomePromptStatus(
+        command.errorMessage || promptCommandFailureMessage(command.status),
+      );
+    }
+    if (isPersistedPendingPromptCommand) {
+      void transcriptQuery.refetch();
+      void sessionEventsQuery.refetch();
+    }
+  }, [
+    commandStatus.data?.commandId,
+    commandStatus.data?.errorMessage,
+    commandStatus.data?.status,
+    pendingPromptCommandId,
+    optimisticPrompts,
+    sessionEventsQuery.refetch,
+    transcriptQuery.refetch,
+  ]);
+
+  useEffect(() => {
+    if (pendingPromptCommandIds.length === 0) {
+      return;
+    }
+    let active = true;
+    let timeoutId: number | undefined;
+
+    const pollPendingCommands = async () => {
+      let sawTerminalCommand = false;
+      for (const commandId of pendingPromptCommandIds) {
+        try {
+          const command = await getCommandStatus(commandId, client);
+          if (isTerminalCommandStatus(command.status)) {
+            sawTerminalCommand = true;
+          }
+        } catch {
+          // Keep polling other pending commands; transient status reads should not stop transcript updates.
+        }
+      }
+      if (!active) {
+        return;
+      }
+      if (sawTerminalCommand) {
+        void transcriptQuery.refetch();
+        void sessionEventsQuery.refetch();
+      }
+      timeoutId = window.setTimeout(pollPendingCommands, 3000);
+    };
+
+    timeoutId = window.setTimeout(pollPendingCommands, 0);
+    return () => {
+      active = false;
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [
+    client,
+    pendingPromptCommandIdsKey,
+    sessionEventsQuery.refetch,
+    transcriptQuery.refetch,
+  ]);
+
+  useEffect(() => {
+    const command = commandStatus.data;
+    if (!command || command.commandId !== pendingPromptCommandId) {
+      return;
+    }
+    if (!isTerminalCommandStatus(command.status)) {
+      return;
+    }
+    void transcriptQuery.refetch();
+    void sessionEventsQuery.refetch();
+  }, [
+    commandStatus.data?.commandId,
+    commandStatus.data?.status,
+    pendingPromptCommandId,
+    sessionEventsQuery.refetch,
+    transcriptQuery.refetch,
+  ]);
+
+  useEffect(() => {
     const command = configCommandStatus.data;
     if (!command || !isRejectedCommandStatus(command.status)) {
       return;
@@ -428,8 +551,9 @@ export function ChatScreen() {
         modeId: null,
         createdAt: Date.now(),
       };
+      savePendingHomePrompt(workspace.id, pendingPrompt);
       try {
-        const sessionId = await dispatchPendingHomePrompt({
+        const result = await dispatchPendingHomePrompt({
           client,
           workspace,
           pendingPrompt,
@@ -443,19 +567,28 @@ export function ChatScreen() {
         setOptimisticPrompts((current) =>
           current.map((prompt) =>
             prompt.id === optimisticPrompt.id
-              ? { ...prompt, sessionId, status: "queued" }
+              ? {
+                ...prompt,
+                sessionId: result.sessionId,
+                status: "queued",
+                commandId: result.sendCommandId,
+              }
               : prompt
           )
         );
+        clearPendingHomePrompt(workspace.id);
+        setPendingHomePrompt(null);
         setPendingHomePromptStatus(null);
         await workspaceQuery.refetch();
-        navigate(routes.chat(workspace.id, sessionId));
+        navigate(routes.chat(workspace.id, result.sessionId));
       } catch (error) {
         setOptimisticPrompts((current) =>
           current.map((prompt) =>
             prompt.id === optimisticPrompt.id ? { ...prompt, status: "failed" } : prompt
           )
         );
+        clearPendingHomePrompt(workspace.id);
+        setPendingHomePrompt(null);
         setPendingHomePromptStatus(
           error instanceof Error ? error.message : "Prompt could not be sent.",
         );
@@ -495,9 +628,14 @@ export function ChatScreen() {
         payload: { text, promptId: optimisticPrompt.id },
       });
       setLatestCommandId(command.commandId);
+      if (isRejectedCommandStatus(command.status)) {
+        throw new Error(command.errorMessage || promptCommandFailureMessage(command.status));
+      }
       setOptimisticPrompts((current) =>
         current.map((prompt) =>
-          prompt.id === optimisticPrompt.id ? { ...prompt, status: "queued" } : prompt
+          prompt.id === optimisticPrompt.id
+            ? { ...prompt, status: "queued", commandId: command.commandId }
+            : prompt
         )
       );
       setPendingHomePromptStatus(null);
@@ -594,10 +732,13 @@ export function ChatScreen() {
       && (session ? true : workspaceCommandReady),
   );
   const sessionTitle = session?.title ?? workspace.displayName ?? workspace.repo.name;
+  const commandStatusMessage = commandStatus.data?.commandId === pendingPromptCommandId
+    ? null
+    : commandStatus.data?.errorMessage
+      ?? (commandStatus.data?.status ? `Command ${commandStatus.data.status}` : null);
   const commandMessage =
     pendingHomePromptStatus ??
-    commandStatus.data?.errorMessage ??
-    (commandStatus.data?.status ? `Command ${commandStatus.data.status}` : null);
+    commandStatusMessage;
   const transcriptSourceLabel = transcriptView.source === "events"
     ? "Event transcript"
     : transcriptView.source === "projection"
@@ -748,12 +889,44 @@ function effectiveWorkspaceStatus(
   return workspace.workspaceStatus ?? workspace.status ?? null;
 }
 
+function mergeWorkspaceSnapshot(
+  querySnapshot: CloudWorkspaceSnapshot | undefined,
+  liveSnapshot: CloudWorkspaceSnapshot | undefined,
+): CloudWorkspaceSnapshot | undefined {
+  if (!querySnapshot) {
+    return liveSnapshot;
+  }
+  if (!liveSnapshot) {
+    return querySnapshot;
+  }
+  return {
+    ...liveSnapshot,
+    workspace: querySnapshot.workspace,
+    sessions: mergeSessionProjections(querySnapshot.sessions, liveSnapshot.sessions),
+  };
+}
+
+function mergeSessionProjections(
+  querySessions: readonly CloudSessionProjection[],
+  liveSessions: readonly CloudSessionProjection[],
+): CloudSessionProjection[] {
+  const merged = new Map<string, CloudSessionProjection>();
+  for (const session of querySessions) {
+    merged.set(session.sessionId, session);
+  }
+  for (const session of liveSessions) {
+    merged.set(session.sessionId, session);
+  }
+  return [...merged.values()];
+}
+
 function buildOptimisticPromptRows(input: {
   prompts: readonly OptimisticPrompt[];
   workspaceId: string | null;
   sessionId: string | null;
   transcriptItems: readonly CloudTranscriptItem[];
   transcriptRows: readonly CloudChatTranscriptRowView[];
+  pendingInteractions: readonly CloudPendingInteraction[];
 }): CloudChatTranscriptRowView[] {
   if (!input.workspaceId) {
     return [];
@@ -770,11 +943,14 @@ function buildOptimisticPromptRows(input: {
     } else if (prompt.sessionId !== null) {
       continue;
     }
+    if (pendingInteractionMatchesOptimisticPrompt(prompt, input.pendingInteractions)) {
+      continue;
+    }
     const promptVisible = input.sessionId
       ? transcriptHasUserPrompt(prompt, input.transcriptItems, input.transcriptRows)
       : false;
     const agentStarted = input.sessionId
-      ? transcriptHasAgentProgressAfterPrompt(prompt, input.transcriptItems, input.transcriptRows)
+      ? transcriptHasAgentProgressAfterPrompt(prompt, input.transcriptItems)
       : false;
     if (!promptVisible) {
       rows.push({
@@ -815,7 +991,7 @@ function buildPendingHomePromptRows(input: {
   if (duplicateOptimisticPrompt) {
     return [];
   }
-  const failed = input.status?.toLowerCase().includes("failed") ?? false;
+  const failed = isFailureStatusText(input.status);
   return [
     {
       id: `${input.pendingPrompt.id}:user`,
@@ -835,6 +1011,58 @@ function buildPendingHomePromptRows(input: {
   ];
 }
 
+function latestPendingPromptCommandId(
+  pendingInteractions: readonly CloudPendingInteraction[],
+): string | null {
+  return pendingPromptCommandIdsFromInteractions(pendingInteractions)[0] ?? null;
+}
+
+function pendingPromptCommandIdsFromInteractions(
+  pendingInteractions: readonly CloudPendingInteraction[],
+): string[] {
+  return pendingInteractions
+    .filter((interaction) =>
+      interaction.kind === "send_prompt"
+      && interaction.status === "pending"
+    )
+    .map((interaction) => ({
+      commandId: pendingInteractionCommandId(interaction),
+      requestedSeq: interaction.requestedSeq,
+    }))
+    .filter((candidate): candidate is { commandId: string; requestedSeq: number } =>
+      candidate.commandId !== null
+    )
+    .sort((left, right) => right.requestedSeq - left.requestedSeq)
+    .map((candidate) => candidate.commandId);
+}
+
+function pendingInteractionCommandId(interaction: CloudPendingInteraction): string | null {
+  const payload = interaction.payload;
+  if (!payload) {
+    return null;
+  }
+  const commandId = payload.commandId;
+  return typeof commandId === "string" && commandId.trim() ? commandId.trim() : null;
+}
+
+function pendingInteractionMatchesOptimisticPrompt(
+  prompt: OptimisticPrompt,
+  pendingInteractions: readonly CloudPendingInteraction[],
+): boolean {
+  return pendingInteractions.some((interaction) =>
+    interaction.kind === "send_prompt"
+    && (interaction.status === "pending" || interaction.status === "failed")
+    && (
+      interaction.requestId === prompt.id
+      || (
+        prompt.commandId !== null
+        && prompt.commandId !== undefined
+        && pendingInteractionCommandId(interaction) === prompt.commandId
+      )
+    )
+  );
+}
+
 function optimisticPromptStatusLabel(status: OptimisticPromptStatus): string {
   switch (status) {
     case "failed":
@@ -847,44 +1075,55 @@ function optimisticPromptStatusLabel(status: OptimisticPromptStatus): string {
   }
 }
 
+function isFailureStatusText(status: string | null): boolean {
+  return /\b(failed|rejected|expired|superseded|timed out|could not)\b/i.test(status ?? "");
+}
+
 function transcriptHasUserPrompt(
   prompt: OptimisticPrompt,
   transcriptItems: readonly CloudTranscriptItem[],
-  transcriptRows: readonly CloudChatTranscriptRowView[],
+  transcriptRows: readonly CloudChatTranscriptRowView[] = [],
 ): boolean {
   return transcriptItems.some((item) => isPromptItemForOptimisticPrompt(item, prompt))
-    || (
-      transcriptItems.length === 0
-      && transcriptRows.some((row) => row.kind === "user" && textMatches(row.body, prompt.text))
-    );
+    || transcriptRows.some((row) => row.kind === "user" && textMatches(row.body, prompt.text));
 }
 
 function transcriptHasAgentProgressAfterPrompt(
   prompt: OptimisticPrompt,
   transcriptItems: readonly CloudTranscriptItem[],
-  transcriptRows: readonly CloudChatTranscriptRowView[],
+  transcriptRows: readonly CloudChatTranscriptRowView[] = [],
 ): boolean {
   const promptItem = [...transcriptItems]
     .filter((item) => isPromptItemForOptimisticPrompt(item, prompt))
     .sort((left, right) => right.lastSeq - left.lastSeq)[0];
   if (promptItem) {
-    return transcriptItems.some((item) =>
+    const transcriptProgress = transcriptItems.some((item) =>
       item.firstSeq > promptItem.lastSeq && !isPromptTranscriptKind(item.kind)
     );
+    if (transcriptProgress) {
+      return true;
+    }
   }
-  if (transcriptItems.length > 0) {
-    return false;
+  const promptRowIndex = findLastMatchingPromptRowIndex(transcriptRows, prompt.text);
+  if (promptRowIndex !== -1) {
+    return transcriptRows.slice(promptRowIndex + 1).some((row) =>
+      row.kind !== "user" && row.kind !== "system"
+    );
   }
+  return false;
+}
 
-  const promptRowIndex = transcriptRows.findIndex((row) =>
-    row.kind === "user" && textMatches(row.body, prompt.text)
-  );
-  if (promptRowIndex === -1) {
-    return false;
+function findLastMatchingPromptRowIndex(
+  transcriptRows: readonly CloudChatTranscriptRowView[],
+  text: string,
+): number {
+  for (let index = transcriptRows.length - 1; index >= 0; index -= 1) {
+    const row = transcriptRows[index];
+    if (row.kind === "user" && textMatches(row.body, text)) {
+      return index;
+    }
   }
-  return transcriptRows
-    .slice(promptRowIndex + 1)
-    .some((row) => row.kind !== "user");
+  return -1;
 }
 
 function isPromptItemForOptimisticPrompt(
@@ -919,6 +1158,12 @@ function isRejectedCommandStatus(status: CloudCommandStatus): boolean {
     || status === "failed_delivery";
 }
 
+function isTerminalCommandStatus(status: CloudCommandStatus): boolean {
+  return status === "accepted"
+    || status === "accepted_but_queued"
+    || isRejectedCommandStatus(status);
+}
+
 function sessionConfigCommandFailureMessage(status: CloudCommandStatus): string {
   switch (status) {
     case "expired":
@@ -930,6 +1175,20 @@ function sessionConfigCommandFailureMessage(status: CloudCommandStatus): string 
     case "rejected":
     default:
       return "Session configuration update was rejected.";
+  }
+}
+
+function promptCommandFailureMessage(status: CloudCommandStatus): string {
+  switch (status) {
+    case "expired":
+      return "Prompt expired before it was delivered.";
+    case "superseded":
+      return "Prompt was superseded before it was delivered.";
+    case "failed_delivery":
+      return "Prompt could not be delivered to the cloud runtime.";
+    case "rejected":
+    default:
+      return "Prompt was rejected by the cloud runtime.";
   }
 }
 
@@ -954,12 +1213,69 @@ function copyComposerValue(
   value: string,
   setStatus: (status: string | null) => void,
 ): void {
-  const clipboard = window.navigator.clipboard;
-  if (!clipboard) {
-    setStatus(`${label} copy is not available in this browser.`);
-    return;
+  void writeClipboardText(value)
+    .then((status) => {
+      switch (status) {
+        case "copied":
+          setStatus(`${label} copied.`);
+          break;
+        case "selected":
+          setStatus(`${label} selected for copy.`);
+          break;
+        case "failed":
+        default:
+          setStatus(`${label} could not be copied.`);
+          break;
+      }
+    });
+}
+
+async function writeClipboardText(value: string): Promise<ClipboardWriteStatus> {
+  const fallback = selectClipboardTextFallback(value);
+  if (fallback.copied) {
+    fallback.cleanup();
+    return "copied";
   }
-  void clipboard.writeText(value)
-    .then(() => setStatus(`${label} copied.`))
-    .catch(() => setStatus(`${label} could not be copied.`));
+  const clipboard = window.navigator.clipboard;
+  if (clipboard?.writeText) {
+    try {
+      await clipboard.writeText(value);
+      fallback.cleanup();
+      return "copied";
+    } catch {
+      return fallback.selected ? "selected" : "failed";
+    }
+  }
+  return fallback.selected ? "selected" : "failed";
+}
+
+function selectClipboardTextFallback(value: string): {
+  copied: boolean;
+  selected: boolean;
+  cleanup: () => void;
+} {
+  const input = document.createElement("textarea");
+  input.value = value;
+  input.setAttribute("readonly", "true");
+  input.style.position = "fixed";
+  input.style.left = "-9999px";
+  input.style.top = "0";
+  document.body.appendChild(input);
+  input.focus();
+  input.select();
+  const cleanup = () => {
+    if (document.body.contains(input)) {
+      document.body.removeChild(input);
+    }
+  };
+  try {
+    const copied = document.execCommand("copy");
+    if (!copied) {
+      window.setTimeout(cleanup, 5000);
+    }
+    return { copied, selected: true, cleanup };
+  } catch {
+    cleanup();
+    return { copied: false, selected: false, cleanup };
+  }
 }

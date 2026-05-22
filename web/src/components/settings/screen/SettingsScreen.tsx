@@ -1,6 +1,6 @@
 import { Apple, CircleUserRound, CreditCard, Github, LifeBuoy, UsersRound } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import type { AuthProviderName, BillingPlanInfo, CloudOwnerSelection } from "@proliferate/cloud-sdk";
 import type {
@@ -33,7 +33,8 @@ export function SettingsScreen() {
   const viewer = useAuthViewer();
   const { token, clearToken } = useAuthToken();
   const navigate = useNavigate();
-  const [activeSection, setActiveSection] = useState<SettingsSectionId>("account");
+  const { sectionId } = useParams();
+  const activeSection = isSettingsSectionId(sectionId) ? sectionId : "account";
   const [loadingProvider, setLoadingProvider] = useState<AuthProviderName | "sign-out" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,7 +95,11 @@ export function SettingsScreen() {
             ],
           },
         ]}
-        onSelectSection={(id) => setActiveSection(id as SettingsSectionId)}
+        onSelectSection={(id) => {
+          if (isSettingsSectionId(id)) {
+            navigate(routes.settingsSection(id));
+          }
+        }}
       >
         {activeSection === "account" ? (
           <AccountSection
@@ -118,6 +123,10 @@ export function SettingsScreen() {
       </SettingsShell>
     </div>
   );
+}
+
+function isSettingsSectionId(value: string | undefined): value is SettingsSectionId {
+  return value === "account" || value === "teams" || value === "billing" || value === "support";
 }
 
 function AccountSection({ props }: { props: AccountSettingsPaneProps }) {

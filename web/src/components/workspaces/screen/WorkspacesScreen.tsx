@@ -9,7 +9,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { routes } from "../../../config/routes";
 
 export function WorkspacesScreen() {
-  const workspaces = useCloudWorkspaces({ scope: "my" });
+  const workspaces = useCloudWorkspaces({ scope: "exposed" });
 
   return (
     <ProductPageShell
@@ -37,7 +37,9 @@ export function WorkspacesScreen() {
           {workspaces.data.map((workspace) => (
             <Link
               key={workspace.id}
-              to={routes.workspace(workspace.id)}
+              to={workspace.lastSessionSummary?.sessionId
+                ? routes.chat(workspace.id, workspace.lastSessionSummary.sessionId)
+                : routes.workspace(workspace.id)}
               className="rounded-lg border border-border bg-card p-4 text-left transition hover:border-ring/50 hover:bg-accent/30"
             >
               <div className="flex flex-wrap items-start justify-between gap-4">

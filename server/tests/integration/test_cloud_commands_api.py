@@ -1253,6 +1253,224 @@ class TestCloudCommandsApi:
         )
 
     @pytest.mark.asyncio
+    async def test_web_queued_command_status_expires_stale_command(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-web-expire",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="web-expire",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="web-expire",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-web-expire",
+        )
+        await db_session.commit()
+
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "web-stale-command",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-web-expire",
+                "kind": "send_prompt",
+                "source": "web",
+                "payload": {
+                    "text": "stale web prompt",
+                    "promptId": "web:stale-prompt",
+                },
+            },
+        )
+        assert created.status_code == 200
+        command_id = UUID(created.json()["commandId"])
+        command = await db_session.get(CloudCommand, command_id)
+        assert command is not None
+        command.created_at = datetime.now(UTC) - timedelta(minutes=5)
+        command.updated_at = command.created_at
+        await db_session.commit()
+
+        status = await client.get(f"/v1/cloud/commands/{command_id}", headers=auth.headers)
+
+        assert status.status_code == 200
+        payload = status.json()
+        assert payload["status"] == "expired"
+        assert payload["errorCode"] == "web_command_queue_timeout"
+        assert "timed out" in payload["errorMessage"]
+        pending_interaction = (
+            await db_session.execute(
+                select(CloudPendingInteraction)
+                .where(CloudPendingInteraction.request_id == "web:stale-prompt")
+            )
+        ).scalar_one()
+        assert pending_interaction.status == "failed"
+        assert pending_interaction.payload_json is not None
+        interaction_payload = json.loads(pending_interaction.payload_json)
+        assert interaction_payload["commandId"] == str(command_id)
+        assert interaction_payload["status"] == "expired"
+        assert interaction_payload["errorCode"] == "web_command_queue_timeout"
+
+    @pytest.mark.asyncio
+    async def test_worker_lease_expires_stale_web_command(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-web-expire-lease",
+        )
+        target_id, worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="web-expire-lease",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="web-expire-lease",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-web-expire-lease",
+        )
+        await db_session.commit()
+
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "web-stale-command-lease",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-web-expire-lease",
+                "kind": "send_prompt",
+                "source": "web",
+                "payload": {
+                    "text": "stale web prompt from lease",
+                    "promptId": "web:stale-prompt-lease",
+                },
+            },
+        )
+        assert created.status_code == 200
+        command_id = UUID(created.json()["commandId"])
+        command = await db_session.get(CloudCommand, command_id)
+        assert command is not None
+        command.created_at = datetime.now(UTC) - timedelta(minutes=5)
+        command.updated_at = command.created_at
+        await db_session.commit()
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["send_prompt", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+
+        assert lease.status_code == 200
+        assert lease.json()["command"] is None
+        await db_session.refresh(command)
+        assert command.status == "expired"
+        assert command.error_code == "web_command_queue_timeout"
+        pending_interaction = (
+            await db_session.execute(
+                select(CloudPendingInteraction)
+                .where(CloudPendingInteraction.request_id == "web:stale-prompt-lease")
+            )
+        ).scalar_one()
+        assert pending_interaction.status == "failed"
+
+        leased_created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "web-stale-leased-command",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-web-expire-lease",
+                "kind": "send_prompt",
+                "source": "web",
+                "payload": {
+                    "text": "stale leased web prompt",
+                    "promptId": "web:stale-leased-prompt",
+                },
+            },
+        )
+        assert leased_created.status_code == 200
+        leased_command_id = UUID(leased_created.json()["commandId"])
+        leased_command = await db_session.get(CloudCommand, leased_command_id)
+        assert leased_command is not None
+        leased_command.status = "leased"
+        leased_command.lease_id = "stale-lease"
+        leased_command.lease_expires_at = datetime.now(UTC) - timedelta(minutes=1)
+        leased_command.created_at = datetime.now(UTC) - timedelta(minutes=5)
+        leased_command.updated_at = leased_command.created_at
+        await db_session.commit()
+
+        leased_retry = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["send_prompt", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+
+        assert leased_retry.status_code == 200
+        assert leased_retry.json()["command"] is None
+        await db_session.refresh(leased_command)
+        assert leased_command.status == "expired"
+        assert leased_command.error_code == "web_command_queue_timeout"
+
+    @pytest.mark.asyncio
     async def test_managed_slot_wake_resumes_command_runtime_environment(
         self,
         client: AsyncClient,
@@ -1346,6 +1564,8 @@ class TestCloudCommandsApi:
             workspace_id: UUID,
             allow_launcher_restart: bool,
             access_token: str,
+            force_launcher_restart: bool,
+            refresh_worker_enrollment_on_restart: bool,
         ) -> str:
             wake_calls.append(
                 {
@@ -1353,6 +1573,8 @@ class TestCloudCommandsApi:
                     "workspace_id": workspace_id,
                     "allow_launcher_restart": allow_launcher_restart,
                     "access_token": access_token,
+                    "force_launcher_restart": force_launcher_restart,
+                    "refresh_worker_enrollment_on_restart": refresh_worker_enrollment_on_restart,
                 }
             )
             return "https://runtime.example.test"
@@ -1376,6 +1598,8 @@ class TestCloudCommandsApi:
                 "workspace_id": UUID(cloud_workspace_id),
                 "allow_launcher_restart": True,
                 "access_token": "runtime-token",
+                "force_launcher_restart": True,
+                "refresh_worker_enrollment_on_restart": True,
             }
         ]
 

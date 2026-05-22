@@ -242,6 +242,60 @@ async def expire_command_if_not_terminal(
     return _snapshot(row)
 
 
+async def expire_stale_queued_commands(
+    db: AsyncSession,
+    *,
+    target_id: UUID | None = None,
+    source: str | None = None,
+    command_kinds: frozenset[str] | tuple[str, ...] | None = None,
+    older_than: datetime,
+    error_code: str,
+    error_message: str,
+    now: datetime,
+) -> tuple[CloudCommandSnapshot, ...]:
+    query = (
+        select(CloudCommand)
+        .where(
+            or_(
+                and_(
+                    CloudCommand.status == CloudCommandStatus.queued.value,
+                    CloudCommand.created_at <= older_than,
+                ),
+                and_(
+                    CloudCommand.status == CloudCommandStatus.leased.value,
+                    CloudCommand.created_at <= older_than,
+                    CloudCommand.lease_expires_at.is_not(None),
+                    CloudCommand.lease_expires_at <= now,
+                ),
+            )
+        )
+    )
+    if target_id is not None:
+        query = query.where(CloudCommand.target_id == target_id)
+    if source is not None:
+        query = query.where(CloudCommand.source == source)
+    if command_kinds is not None:
+        query = query.where(CloudCommand.kind.in_(tuple(command_kinds)))
+    rows = list(
+        (
+            await db.execute(
+                query.with_for_update()
+                .order_by(CloudCommand.created_at.asc(), CloudCommand.id.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for row in rows:
+        row.status = CloudCommandStatus.expired.value
+        row.expired_at = now
+        row.error_code = error_code
+        row.error_message = error_message
+        row.updated_at = now
+    await db.flush()
+    return tuple(_snapshot(row) for row in rows)
+
+
 async def lease_next_command(
     db: AsyncSession,
     *,

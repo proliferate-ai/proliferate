@@ -195,8 +195,11 @@ function CloudChatUserMessage({
     if (!content) {
       return;
     }
-    void navigator.clipboard.writeText(content)
-      .then(() => {
+    void writeClipboardText(content)
+      .then((copiedSuccessfully) => {
+        if (!copiedSuccessfully) {
+          return;
+        }
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1600);
       });
@@ -560,8 +563,11 @@ function CloudCodeBlock({
   const [copied, setCopied] = useState(false);
 
   function copyCode() {
-    void navigator.clipboard.writeText(code)
-      .then(() => {
+    void writeClipboardText(code)
+      .then((copiedSuccessfully) => {
+        if (!copiedSuccessfully) {
+          return;
+        }
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1600);
       });
@@ -591,6 +597,41 @@ function CloudCodeBlock({
       </div>
     </div>
   );
+}
+
+async function writeClipboardText(value: string): Promise<boolean> {
+  if (writeClipboardTextFallback(value)) {
+    return true;
+  }
+  const clipboard = navigator.clipboard;
+  if (clipboard?.writeText) {
+    try {
+      await clipboard.writeText(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+function writeClipboardTextFallback(value: string): boolean {
+  const input = document.createElement("textarea");
+  input.value = value;
+  input.setAttribute("readonly", "true");
+  input.style.position = "fixed";
+  input.style.left = "-9999px";
+  input.style.top = "0";
+  document.body.appendChild(input);
+  input.focus();
+  input.select();
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    document.body.removeChild(input);
+  }
 }
 
 function mdHtmlElement(tag: MdTag, baseClassName: string, props: MdElementProps) {
