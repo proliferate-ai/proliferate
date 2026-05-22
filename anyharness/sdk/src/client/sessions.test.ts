@@ -88,13 +88,25 @@ describe("SessionsClient.resume", () => {
 
     await client.resume(
       "session-1",
-      { mcpServers: [], mcpBindingSummaries: [] },
+      {
+        expectedRuntimeConfigRevision: {
+          revisionId: "rev_1",
+          sequence: 1,
+          contentHash: "sha256:test",
+        },
+      },
       { headers: { "x-trace": "trace-2" } },
     );
 
     expect(calls).toEqual([{
       path: "/v1/sessions/session-1/resume",
-      body: { mcpServers: [], mcpBindingSummaries: [] },
+      body: {
+        expectedRuntimeConfigRevision: {
+          revisionId: "rev_1",
+          sequence: 1,
+          contentHash: "sha256:test",
+        },
+      },
       options: { headers: { "x-trace": "trace-2" } },
     }]);
   });

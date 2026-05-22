@@ -10,25 +10,22 @@ from proliferate.server.cloud.mcp_connections.access import McpConnectionManageD
 from proliferate.server.cloud.mcp_connections.models import (
     CloudMcpConnectionResponse,
     CloudMcpConnectionsResponse,
-    CloudMcpConnectionSyncStatus,
     CreateCloudMcpConnectionRequest,
     OkResponse,
     PatchCloudMcpConnectionRequest,
+    PublicizeCloudMcpConnectionRequest,
     PutCloudMcpSecretAuthRequest,
-    SyncCloudMcpConnectionRequest,
     cloud_mcp_connection_payload,
-    cloud_mcp_connection_status_payload,
 )
 from proliferate.server.cloud.mcp_connections.service import (
     CloudMcpConnectionPayload,
     create_cloud_mcp_connection,
     delete_cloud_mcp_connection_for_user,
-    delete_legacy_cloud_mcp_connection_for_user,
-    list_cloud_mcp_connection_statuses,
     list_cloud_mcp_connections,
     patch_cloud_mcp_connection,
+    publicize_cloud_mcp_connection,
     put_cloud_mcp_connection_secret_auth,
-    sync_cloud_mcp_connection_for_user,
+    unpublicize_cloud_mcp_connection,
 )
 
 router = APIRouter()
@@ -71,9 +68,55 @@ async def create_cloud_mcp_connection_endpoint(
 async def patch_cloud_mcp_connection_endpoint(
     body: PatchCloudMcpConnectionRequest,
     connection: McpConnectionManageDependency,
+    user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionResponse:
-    return _connection_response(await patch_cloud_mcp_connection(db, connection, body))
+    return _connection_response(
+        await patch_cloud_mcp_connection(
+            db,
+            actor_user_id=user.id,
+            existing=connection,
+            body=body,
+        )
+    )
+
+
+@router.post(
+    "/mcp/connections/{connection_id}/publicize",
+    response_model=CloudMcpConnectionResponse,
+)
+async def publicize_cloud_mcp_connection_endpoint(
+    body: PublicizeCloudMcpConnectionRequest,
+    connection: McpConnectionManageDependency,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> CloudMcpConnectionResponse:
+    return _connection_response(
+        await publicize_cloud_mcp_connection(
+            db,
+            actor_user_id=user.id,
+            existing=connection,
+            body=body,
+        )
+    )
+
+
+@router.post(
+    "/mcp/connections/{connection_id}/unpublicize",
+    response_model=CloudMcpConnectionResponse,
+)
+async def unpublicize_cloud_mcp_connection_endpoint(
+    connection: McpConnectionManageDependency,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> CloudMcpConnectionResponse:
+    return _connection_response(
+        await unpublicize_cloud_mcp_connection(
+            db,
+            actor_user_id=user.id,
+            existing=connection,
+        )
+    )
 
 
 @router.delete("/mcp/connections/{connection_id}", response_model=OkResponse)
@@ -95,35 +138,3 @@ async def put_cloud_mcp_connection_secret_auth_endpoint(
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionResponse:
     return _connection_response(await put_cloud_mcp_connection_secret_auth(db, connection, body))
-
-
-@router.get("/mcp-connections/statuses", response_model=list[CloudMcpConnectionSyncStatus])
-async def list_cloud_mcp_connection_statuses_endpoint(
-    user: User = Depends(current_active_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> list[CloudMcpConnectionSyncStatus]:
-    return [
-        cloud_mcp_connection_status_payload(record)
-        for record in await list_cloud_mcp_connection_statuses(db, user.id)
-    ]
-
-
-@router.put("/mcp-connections/{connection_id}", response_model=OkResponse)
-async def sync_cloud_mcp_connection_endpoint(
-    connection_id: str,
-    body: SyncCloudMcpConnectionRequest,
-    user: User = Depends(current_active_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> OkResponse:
-    await sync_cloud_mcp_connection_for_user(db, user.id, connection_id, body)
-    return OkResponse()
-
-
-@router.delete("/mcp-connections/{connection_id}", response_model=OkResponse)
-async def delete_legacy_cloud_mcp_connection_endpoint(
-    connection_id: str,
-    user: User = Depends(current_active_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> OkResponse:
-    await delete_legacy_cloud_mcp_connection_for_user(db, user.id, connection_id)
-    return OkResponse()

@@ -3,11 +3,11 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::{AgentAuthExternalScope, OriginContext};
+use super::{AgentAuthExternalScope, OriginContext, RuntimeConfigRevisionExpectation};
 use super::{
     ContentPart, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
     PermissionInteractionOption, PromptProvenance, SessionLiveConfigSnapshot,
-    SessionMcpBindingSummary, SessionMcpServer, SessionPluginBundle, UserInputQuestion,
+    SessionMcpBindingSummary, UserInputQuestion,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -151,7 +151,7 @@ pub struct PendingPromptSummary {
 }
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateSessionRequest {
     pub workspace_id: String,
     pub agent_kind: String,
@@ -160,17 +160,13 @@ pub struct CreateSessionRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub required_agent_auth_revision: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_runtime_config_revision: Option<RuntimeConfigRevisionExpectation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_prompt_append: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mcp_servers: Option<Vec<SessionMcpServer>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub plugin_bundle: Option<SessionPluginBundle>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subagents_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -251,22 +247,18 @@ impl fmt::Debug for CreateSessionRequest {
             .field("model_id", &self.model_id)
             .field("mode_id", &self.mode_id)
             .field(
+                "expected_runtime_config_revision",
+                &self
+                    .expected_runtime_config_revision
+                    .as_ref()
+                    .map(|revision| &revision.revision_id),
+            )
+            .field(
                 "system_prompt_append_count",
                 &self
                     .system_prompt_append
                     .as_ref()
                     .map(|entries| entries.len()),
-            )
-            .field(
-                "mcp_server_count",
-                &self.mcp_servers.as_ref().map(|servers| servers.len()),
-            )
-            .field(
-                "mcp_binding_summary_count",
-                &self
-                    .mcp_binding_summaries
-                    .as_ref()
-                    .map(|summaries| summaries.len()),
             )
             .field("subagents_enabled", &self.subagents_enabled)
             .field("origin", &self.origin)
@@ -358,36 +350,21 @@ pub struct SubagentCompletionSummary {
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ResumeSessionRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub mcp_servers: Option<Vec<SessionMcpServer>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub plugin_bundle: Option<SessionPluginBundle>,
+    pub expected_runtime_config_revision: Option<RuntimeConfigRevisionExpectation>,
 }
 
 impl fmt::Debug for ResumeSessionRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ResumeSessionRequest")
             .field(
-                "mcp_server_count",
-                &self.mcp_servers.as_ref().map(|servers| servers.len()),
-            )
-            .field(
-                "mcp_binding_summary_count",
+                "expected_runtime_config_revision",
                 &self
-                    .mcp_binding_summaries
+                    .expected_runtime_config_revision
                     .as_ref()
-                    .map(|summaries| summaries.len()),
-            )
-            .field(
-                "plugin_count",
-                &self
-                    .plugin_bundle
-                    .as_ref()
-                    .map(|bundle| bundle.plugins.len()),
+                    .map(|revision| &revision.revision_id),
             )
             .finish()
     }
@@ -660,9 +637,6 @@ pub enum InteractionDecision {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::v1::{
-        SessionMcpEnvVar, SessionMcpHeader, SessionMcpHttpServer, SessionMcpStdioServer,
-    };
 
     #[test]
     fn create_session_request_serializes_model_mode_and_prompt() {
@@ -671,34 +645,10 @@ mod tests {
             agent_kind: "claude".to_string(),
             agent_auth_scope: None,
             required_agent_auth_revision: None,
+            expected_runtime_config_revision: None,
             model_id: Some("default".to_string()),
             mode_id: Some("bypassPermissions".to_string()),
             system_prompt_append: Some(vec!["Rename the branch".to_string()]),
-            mcp_servers: Some(vec![
-                SessionMcpServer::Http(SessionMcpHttpServer {
-                    connection_id: "connection-1".to_string(),
-                    catalog_entry_id: Some("github".to_string()),
-                    server_name: "github".to_string(),
-                    url: "https://api.github.com/mcp".to_string(),
-                    headers: vec![SessionMcpHeader {
-                        name: "Authorization".to_string(),
-                        value: "Bearer secret".to_string(),
-                    }],
-                }),
-                SessionMcpServer::Stdio(SessionMcpStdioServer {
-                    connection_id: "connection-2".to_string(),
-                    catalog_entry_id: Some("filesystem".to_string()),
-                    server_name: "filesystem".to_string(),
-                    command: "mcp-server-filesystem".to_string(),
-                    args: vec!["/workspace".to_string()],
-                    env: vec![SessionMcpEnvVar {
-                        name: "LOG_LEVEL".to_string(),
-                        value: "warn".to_string(),
-                    }],
-                }),
-            ]),
-            mcp_binding_summaries: None,
-            plugin_bundle: None,
             subagents_enabled: None,
             origin: None,
         };
@@ -711,36 +661,7 @@ mod tests {
                 "agentKind": "claude",
                 "modelId": "default",
                 "modeId": "bypassPermissions",
-                "systemPromptAppend": ["Rename the branch"],
-                "mcpServers": [
-                    {
-                        "transport": "http",
-                        "connectionId": "connection-1",
-                        "catalogEntryId": "github",
-                        "serverName": "github",
-                        "url": "https://api.github.com/mcp",
-                        "headers": [
-                            {
-                                "name": "Authorization",
-                                "value": "Bearer secret"
-                            }
-                        ]
-                    },
-                    {
-                        "transport": "stdio",
-                        "connectionId": "connection-2",
-                        "catalogEntryId": "filesystem",
-                        "serverName": "filesystem",
-                        "command": "mcp-server-filesystem",
-                        "args": ["/workspace"],
-                        "env": [
-                            {
-                                "name": "LOG_LEVEL",
-                                "value": "warn"
-                            }
-                        ]
-                    }
-                ]
+                "systemPromptAppend": ["Rename the branch"]
             })
         );
 
@@ -752,10 +673,23 @@ mod tests {
             round_tripped.system_prompt_append,
             Some(vec!["Rename the branch".to_string()])
         );
-        let Some(mcp_servers) = round_tripped.mcp_servers else {
-            panic!("expected mcp servers");
-        };
-        assert_eq!(mcp_servers.len(), 2);
+    }
+
+    #[test]
+    fn create_session_request_rejects_legacy_mcp_fields() {
+        let error = serde_json::from_str::<CreateSessionRequest>(
+            r#"{"workspaceId":"workspace-1","agentKind":"claude","mcpServers":[]}"#,
+        )
+        .expect_err("legacy MCP fields should be rejected");
+        assert!(error.to_string().contains("unknown field"));
+    }
+
+    #[test]
+    fn resume_session_request_rejects_legacy_plugin_fields() {
+        let error =
+            serde_json::from_str::<ResumeSessionRequest>(r#"{"pluginBundle":{"plugins":[]}}"#)
+                .expect_err("legacy plugin bundle should be rejected");
+        assert!(error.to_string().contains("unknown field"));
     }
 
     #[test]

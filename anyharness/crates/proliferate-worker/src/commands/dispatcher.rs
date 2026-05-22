@@ -1,5 +1,9 @@
 use std::path::Path;
 
+use anyharness_contract::v1::{
+    ApplyRuntimeConfigRequest, RuntimeArtifactPayload, RuntimeConfigExternalScope,
+    RuntimeConfigRevision, RuntimeConfigSource, RuntimeCredentialValue,
+};
 use serde_json::{json, Value};
 use tokio::time::{sleep, Duration};
 use tracing::{debug, info, warn};
@@ -27,6 +31,7 @@ use crate::{
         git_identity::{parse_configure_git_identity_payload, write_target_git_identity},
         materialize_plan, parse_materialize_environment_payload,
         repo_checkout::{ensure_repo_checkout, parse_ensure_repo_checkout_payload},
+        runtime_config::{manifest_credential_refs, RuntimeConfigMaterializationFragment},
     },
     store::{PendingCommandResult, WorkerStore},
     sync,
@@ -158,6 +163,7 @@ async fn process_command(
         return process_materialize_environment_command(
             cloud,
             identity,
+            anyharness,
             store,
             materialization_root,
             command,
@@ -531,6 +537,7 @@ async fn process_ensure_repo_checkout_command(
 async fn process_materialize_environment_command(
     cloud: &CloudClient,
     identity: &WorkerIdentity,
+    anyharness: Option<&AnyHarnessClient>,
     store: &WorkerStore,
     materialization_root: Option<&Path>,
     command: CloudCommandEnvelope,
@@ -573,7 +580,49 @@ async fn process_materialize_environment_command(
                 &command.lease_id,
             )
             .await?;
-        materialize_plan(materialization_root, payload.config_version, &plan)
+        let outcome = materialize_plan(materialization_root, payload.config_version, &plan)?;
+        if let Some(runtime_config) = plan.runtime_config.as_ref() {
+            let Some(anyharness) = anyharness else {
+                return Err(WorkerError::Materialization(
+                    "AnyHarness is required to apply runtime config.".to_string(),
+                ));
+            };
+            if let Err(error) = apply_runtime_config_to_anyharness(
+                cloud,
+                anyharness,
+                &identity.worker_token,
+                runtime_config,
+            )
+            .await
+            {
+                let missing_credentials = match &error {
+                    WorkerError::MissingRuntimeConfigCredentials(refs) => refs.clone(),
+                    _ => Vec::new(),
+                };
+                let error_code = match &error {
+                    WorkerError::MissingRuntimeConfigCredentials(_) => {
+                        "runtime_config_credentials_missing"
+                    }
+                    _ => "anyharness_runtime_config_apply_failed",
+                };
+                cloud
+                    .report_runtime_config_status(
+                        &identity.worker_token,
+                        &runtime_config.revision_id,
+                        &crate::cloud_client::target_config::RuntimeConfigStatusRequest {
+                            status: "failed".to_string(),
+                            missing_artifacts: Vec::new(),
+                            missing_credentials,
+                            error_code: Some(error_code.to_string()),
+                            error_message: Some(error.to_string()),
+                        },
+                    )
+                    .await
+                    .ok();
+                return Err(error);
+            }
+        }
+        Ok(outcome)
     }
     .await;
     let result = match response {
@@ -593,6 +642,22 @@ async fn process_materialize_environment_command(
                 )
                 .await
                 .ok();
+            if let Some(runtime_config) = outcome.runtime_config.as_ref() {
+                cloud
+                    .report_runtime_config_status(
+                        &identity.worker_token,
+                        &runtime_config.revision_id,
+                        &crate::cloud_client::target_config::RuntimeConfigStatusRequest {
+                            status: "applied".to_string(),
+                            missing_artifacts: Vec::new(),
+                            missing_credentials: Vec::new(),
+                            error_code: None,
+                            error_message: None,
+                        },
+                    )
+                    .await
+                    .ok();
+            }
             command_result_request(
                 &command,
                 "accepted",
@@ -627,6 +692,89 @@ async fn process_materialize_environment_command(
         }
     };
     report_command_result(cloud, identity, store, &command.command_id, &result).await
+}
+
+async fn apply_runtime_config_to_anyharness(
+    cloud: &CloudClient,
+    anyharness: &AnyHarnessClient,
+    worker_token: &str,
+    runtime_config: &RuntimeConfigMaterializationFragment,
+) -> Result<(), WorkerError> {
+    let credential_refs = manifest_credential_refs(&runtime_config.manifest);
+    let credential_values = if credential_refs.is_empty() {
+        Vec::new()
+    } else {
+        let response = cloud
+            .fetch_runtime_config_credentials(
+                worker_token,
+                &runtime_config.revision_id,
+                credential_refs,
+            )
+            .await?;
+        if !response.missing_credential_refs.is_empty() {
+            return Err(WorkerError::MissingRuntimeConfigCredentials(
+                response.missing_credential_refs,
+            ));
+        }
+        response
+            .credentials
+            .into_iter()
+            .map(|credential| RuntimeCredentialValue {
+                credential_ref: credential.credential_ref,
+                value: credential.value,
+            })
+            .collect::<Vec<_>>()
+    };
+    let mut artifact_payloads = Vec::with_capacity(runtime_config.artifact_refs.len());
+    for artifact in &runtime_config.artifact_refs {
+        let payload = cloud
+            .fetch_runtime_config_artifact(
+                worker_token,
+                &runtime_config.revision_id,
+                &artifact.hash,
+            )
+            .await?;
+        artifact_payloads.push(RuntimeArtifactPayload {
+            hash: payload.hash,
+            content_type: payload.content_type,
+            byte_size: payload.byte_size,
+            source_ref: payload.source_ref,
+            resource_id: payload.resource_id,
+            display_name: payload.display_name,
+            content: payload.content,
+        });
+    }
+    let request = ApplyRuntimeConfigRequest {
+        revision: RuntimeConfigRevision {
+            id: runtime_config.revision_id.clone(),
+            sequence: runtime_config.sequence,
+            content_hash: runtime_config.content_hash.clone(),
+            external_scope: Some(RuntimeConfigExternalScope {
+                provider: "proliferate-cloud".to_string(),
+                id: runtime_config.sandbox_profile_id.clone(),
+                target_id: runtime_config.target_id.clone(),
+            }),
+        },
+        manifest: runtime_config.manifest.clone(),
+        artifact_payloads,
+        credential_values,
+        source: RuntimeConfigSource::Worker,
+    };
+    let response = anyharness.apply_runtime_config(&request).await?;
+    if response.status.is_success()
+        && response
+            .body
+            .get("applied")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    {
+        Ok(())
+    } else {
+        Err(WorkerError::AnyHarness {
+            status: response.status,
+            body: response.body.to_string(),
+        })
+    }
 }
 
 async fn process_sync_existing_workspace_command(

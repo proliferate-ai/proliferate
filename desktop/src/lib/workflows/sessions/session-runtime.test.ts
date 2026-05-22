@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  assertDirectSessionCreateRuntimeConfigStamped,
   collectInactiveSessionStreamIds,
   detachAndCloseSessionStreams,
   fetchSessionHistory,
@@ -57,8 +58,6 @@ const mocks = vi.hoisted(() => ({
   listEvents: vi.fn(),
   resume: vi.fn(),
   resolveRuntimeTargetForWorkspace: vi.fn(),
-  resolveSessionMcpServersForLaunch: vi.fn(),
-  workspacesGet: vi.fn(),
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
@@ -67,9 +66,6 @@ vi.mock("@anyharness/sdk-react", () => ({
       listEvents: mocks.listEvents,
       resume: mocks.resume,
     },
-    workspaces: {
-      get: mocks.workspacesGet,
-    },
   }),
 }));
 
@@ -77,16 +73,10 @@ vi.mock("@/lib/access/anyharness/runtime-target", () => ({
   resolveRuntimeTargetForWorkspace: mocks.resolveRuntimeTargetForWorkspace,
 }));
 
-vi.mock("@/lib/workflows/sessions/session-mcp-launch", () => ({
-  resolveSessionMcpServersForLaunch: mocks.resolveSessionMcpServersForLaunch,
-}));
-
 beforeEach(() => {
   mocks.listEvents.mockReset();
   mocks.resume.mockReset();
   mocks.resolveRuntimeTargetForWorkspace.mockReset();
-  mocks.resolveSessionMcpServersForLaunch.mockReset();
-  mocks.workspacesGet.mockReset();
   resetSessionStreamHandlesForTest();
   useHarnessConnectionStore.setState({
     runtimeUrl: "http://localhost:5173",
@@ -153,6 +143,27 @@ describe("fetchSessionHistory", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("assertDirectSessionCreateRuntimeConfigStamped", () => {
+  it("allows local direct session creation", () => {
+    expect(() => assertDirectSessionCreateRuntimeConfigStamped({
+      anyharnessWorkspaceId: "workspace-1",
+      baseUrl: "http://localhost:6174",
+      location: "local",
+      runtimeGeneration: 0,
+    })).not.toThrow();
+  });
+
+  it("fails closed for direct remote session creation", () => {
+    expect(() => assertDirectSessionCreateRuntimeConfigStamped({
+      anyharnessWorkspaceId: "workspace-1",
+      baseUrl: "https://runtime.example.test",
+      location: "cloud",
+      runtimeGeneration: 1,
+      authToken: "token",
+    })).toThrow(/runtime config stamping/i);
   });
 });
 
@@ -267,109 +278,25 @@ describe("pruneInactiveSessionStreams", () => {
 });
 
 describe("resumeSession", () => {
-  it("sends explicit empty MCP bindings without empty summaries when none are launchable", async () => {
+  it("resumes without per-session MCP or plugin payloads", async () => {
     mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
       anyharnessWorkspaceId: "runtime-workspace-1",
       baseUrl: "http://runtime.local",
       location: "local",
       runtimeGeneration: 0,
     });
-    mocks.workspacesGet.mockResolvedValue({
-      path: "/repo",
-      surface: "coding",
-    });
-    mocks.resolveSessionMcpServersForLaunch.mockResolvedValue({
-      mcpBindingSummaries: [],
-      mcpServers: [],
-      warnings: [],
-    });
     mocks.resume.mockResolvedValue({ id: "session-1" });
 
-    await resumeSession("session-1", {
-      pluginsInCodingSessionsEnabled: false,
-    });
+    await resumeSession("session-1");
 
-    expect(mocks.resolveSessionMcpServersForLaunch).not.toHaveBeenCalled();
     expect(mocks.resume).toHaveBeenCalledTimes(1);
     const [sessionId, resumeOptions, requestOptions] = mocks.resume.mock.calls[0]!;
     expect(sessionId).toBe("session-1");
-    expect(resumeOptions).toEqual({
-      mcpBindingSummaries: undefined,
-      mcpServers: [],
-      pluginBundle: { plugins: [] },
-    });
+    expect(resumeOptions).toBeUndefined();
     if (requestOptions !== undefined) {
       expect(requestOptions).toMatchObject({
         timingCategory: "session.resume",
       });
     }
-  });
-
-  it("does not force user Plugins on when resuming cowork sessions", async () => {
-    mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
-      anyharnessWorkspaceId: "runtime-workspace-1",
-      baseUrl: "http://runtime.local",
-      location: "local",
-      runtimeGeneration: 0,
-    });
-    mocks.workspacesGet.mockResolvedValue({
-      path: "/cowork/thread-1",
-      surface: "cowork",
-    });
-    mocks.resolveSessionMcpServersForLaunch.mockResolvedValue({
-      mcpBindingSummaries: [],
-      mcpServers: [],
-      warnings: [],
-    });
-    mocks.resume.mockResolvedValue({ id: "session-1" });
-
-    await resumeSession("session-1", {
-      pluginsInCodingSessionsEnabled: false,
-    });
-
-    expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith({
-      targetLocation: "local",
-      workspacePath: "/cowork/thread-1",
-      launchId: expect.stringMatching(/^session-1:/),
-      policy: {
-        workspaceSurface: "cowork",
-        lifecycle: "resume",
-        enabled: true,
-      },
-    });
-  });
-
-  it("resolves launch MCP when Plugins are enabled for resume", async () => {
-    mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
-      anyharnessWorkspaceId: "runtime-workspace-1",
-      baseUrl: "http://runtime.local",
-      location: "local",
-      runtimeGeneration: 0,
-    });
-    mocks.workspacesGet.mockResolvedValue({
-      path: "/repo",
-      surface: "coding",
-    });
-    mocks.resolveSessionMcpServersForLaunch.mockResolvedValue({
-      mcpBindingSummaries: [{ id: "conn", serverName: "server", outcome: "applied" }],
-      mcpServers: [{ transport: "http", serverName: "server", url: "https://example.com/mcp" }],
-      warnings: [],
-    });
-    mocks.resume.mockResolvedValue({ id: "session-1" });
-
-    await resumeSession("session-1", {
-      pluginsInCodingSessionsEnabled: true,
-    });
-
-    expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith({
-      targetLocation: "local",
-      workspacePath: "/repo",
-      launchId: expect.stringMatching(/^session-1:/),
-      policy: {
-        workspaceSurface: "coding",
-        lifecycle: "resume",
-        enabled: true,
-      },
-    });
   });
 });
