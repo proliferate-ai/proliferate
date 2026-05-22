@@ -66,10 +66,9 @@ export function reduceSessionSnapshot(
       patch.transcriptItem ?? null,
       (item) => item.itemId,
     ),
-    pendingInteractions: upsertByKey(
+    pendingInteractions: updatePendingInteractions(
       snapshot.pendingInteractions,
       patch.pendingInteraction ?? null,
-      (interaction) => interaction.requestId,
     ),
   };
 }
@@ -106,6 +105,21 @@ function upsertByKey<T>(
     return nextItem;
   });
   return replaced ? nextItems : [...nextItems, nextItem];
+}
+
+function updatePendingInteractions<
+  T extends { requestId: string; status?: string | null },
+>(
+  items: readonly T[],
+  nextItem: T | null,
+): T[] {
+  if (nextItem === null) {
+    return [...items];
+  }
+  if (nextItem.status !== "pending") {
+    return items.filter((item) => item.requestId !== nextItem.requestId);
+  }
+  return upsertByKey(items, nextItem, (item) => item.requestId);
 }
 
 function eventKind(event: unknown): string | undefined {

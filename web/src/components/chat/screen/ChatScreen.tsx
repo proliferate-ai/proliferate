@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   desktopWorkspaceDeepLink,
   type CloudCommandStatus,
+  type CloudPendingInteraction,
   type CloudSessionEvent,
   type CloudSessionProjection,
   type CloudTranscriptItem,
@@ -74,6 +75,7 @@ type UpdateSessionConfigPayload = {
 
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
+const EMPTY_PENDING_INTERACTIONS: CloudPendingInteraction[] = [];
 
 export function ChatScreen() {
   const { workspaceId, chatId } = useParams();
@@ -123,14 +125,18 @@ export function ChatScreen() {
   const transcriptItems = sessionLive.snapshot?.transcriptItems
     ?? transcriptQuery.data?.transcriptItems
     ?? EMPTY_TRANSCRIPT_ITEMS;
+  const pendingInteractions = sessionLive.snapshot?.pendingInteractions
+    ?? transcriptQuery.data?.pendingInteractions
+    ?? EMPTY_PENDING_INTERACTIONS;
   const sessionEvents = sessionEventsQuery.data?.events ?? EMPTY_SESSION_EVENTS;
   const transcriptView = useMemo(
     () => buildCloudTranscriptView({
       sessionId: session?.sessionId ?? null,
       events: sessionEvents,
       fallbackItems: transcriptItems,
+      pendingInteractions,
     }),
-    [session?.sessionId, sessionEvents, transcriptItems],
+    [pendingInteractions, session?.sessionId, sessionEvents, transcriptItems],
   );
   const visibleTranscriptRows = useMemo(
     () => [

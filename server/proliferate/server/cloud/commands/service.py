@@ -62,6 +62,10 @@ def _idempotency_scope_for_command(
     )
 
 
+def _str_or_none(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
 _PROJECTED_SESSION_COMMAND_KINDS = {
     CloudCommandKind.send_prompt.value,
     CloudCommandKind.resolve_interaction.value,
@@ -750,6 +754,7 @@ async def enqueue_command(
         idempotency_key=body.idempotency_key,
     )
     if existing is not None:
+        await _record_pending_prompt_interaction_for_command(db, existing)
         await publish_command_status_after_commit(db, existing)
         await kick_off_command_wake_after_commit_if_required(
             db,
@@ -787,6 +792,7 @@ async def enqueue_command(
                 preconditions_json=compact_command_json(body.preconditions),
                 authorization_context_json=authorization_context_json,
             )
+            await _record_pending_prompt_interaction_for_command(db, command)
         await publish_command_status_after_commit(db, command)
         await kick_off_command_wake_after_commit_if_required(
             db,
@@ -803,6 +809,49 @@ async def enqueue_command(
         if duplicate is not None:
             return duplicate
         raise
+
+
+async def _record_pending_prompt_interaction_for_command(
+    db: AsyncSession,
+    command: commands_store.CloudCommandSnapshot,
+) -> None:
+    if (
+        command.kind != CloudCommandKind.send_prompt.value
+        or command.session_id is None
+        or command.cloud_workspace_id is None
+    ):
+        return
+    try:
+        payload = json.loads(command.payload_json or "{}")
+    except ValueError:
+        return
+    if not isinstance(payload, dict):
+        return
+    prompt_id = _str_or_none(payload.get("promptId"))
+    text = _str_or_none(payload.get("text"))
+    if not prompt_id or not text or not text.strip():
+        return
+    await events_store.upsert_pending_interaction(
+        db,
+        target_id=command.target_id,
+        cloud_workspace_id=command.cloud_workspace_id,
+        workspace_id=command.workspace_id,
+        session_id=command.session_id,
+        request_id=prompt_id,
+        seq=command.observed_event_seq or 0,
+        occurred_at=command.created_at.isoformat(),
+        kind="send_prompt",
+        title="Queued prompt",
+        description="Waiting for response.",
+        payload_json=compact_command_json(
+            {
+                "text": text,
+                "promptId": prompt_id,
+                "commandId": str(command.id),
+                "source": command.source,
+            }
+        ),
+    )
 
 
 async def _validate_agent_auth_preflight(

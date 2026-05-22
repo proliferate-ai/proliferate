@@ -6,6 +6,7 @@ import type {
 } from "@anyharness/sdk";
 import type {
   CloudSessionEvent,
+  CloudPendingInteraction,
   CloudTranscriptItem,
 } from "@proliferate/cloud-sdk";
 import type { CloudChatTranscriptRowView } from "@proliferate/product-ui/chat/CloudChatTranscript";
@@ -40,6 +41,7 @@ export function buildCloudTranscriptView(input: {
   sessionId: string | null;
   events: readonly CloudSessionEvent[];
   fallbackItems: readonly CloudTranscriptItem[];
+  pendingInteractions?: readonly CloudPendingInteraction[];
 }): CloudTranscriptViewResult {
   if (!input.sessionId) {
     return emptyCloudTranscriptView();
@@ -57,8 +59,12 @@ export function buildCloudTranscriptView(input: {
     );
     const rows = buildRowsFromTranscriptState(transcript);
     if (rows.length > 0 && !projectionIsAhead(input.fallbackItems, input.events)) {
-      return {
+      const rowsWithPending = appendPendingPromptRows(
         rows,
+        input.pendingInteractions ?? [],
+      );
+      return {
+        rows: rowsWithPending,
         source: "events",
         envelopeCount: envelopes.length,
         missingEnvelopeCount,
@@ -68,7 +74,10 @@ export function buildCloudTranscriptView(input: {
 
   if (input.fallbackItems.length > 0) {
     return {
-      rows: buildRowsFromProjectedItems(input.fallbackItems),
+      rows: appendPendingPromptRows(
+        buildRowsFromProjectedItems(input.fallbackItems),
+        input.pendingInteractions ?? [],
+      ),
       source: "projection",
       envelopeCount: envelopes.length,
       missingEnvelopeCount,
@@ -76,7 +85,7 @@ export function buildCloudTranscriptView(input: {
   }
 
   return {
-    rows: [],
+    rows: appendPendingPromptRows([], input.pendingInteractions ?? []),
     source: "empty",
     envelopeCount: envelopes.length,
     missingEnvelopeCount,
@@ -305,6 +314,57 @@ function buildRowsFromProjectedItems(
     }));
 }
 
+function appendPendingPromptRows(
+  rows: readonly CloudChatTranscriptRowView[],
+  pendingInteractions: readonly CloudPendingInteraction[],
+): CloudChatTranscriptRowView[] {
+  const pendingRows = buildRowsFromPendingPromptInteractions(rows, pendingInteractions);
+  return pendingRows.length === 0 ? [...rows] : [...rows, ...pendingRows];
+}
+
+function buildRowsFromPendingPromptInteractions(
+  existingRows: readonly CloudChatTranscriptRowView[],
+  pendingInteractions: readonly CloudPendingInteraction[],
+): CloudChatTranscriptRowView[] {
+  const rows: CloudChatTranscriptRowView[] = [];
+  for (const interaction of pendingInteractions) {
+    if (interaction.status !== "pending" || interaction.kind !== "send_prompt") {
+      continue;
+    }
+    const text = pendingPromptText(interaction);
+    if (!text || existingRows.some((row) => row.kind === "user" && textMatches(row.body, text))) {
+      continue;
+    }
+    rows.push({
+      id: `pending-prompt:${interaction.requestId}:user`,
+      kind: "user",
+      body: text,
+      status: "Queued",
+      streaming: true,
+    });
+    rows.push({
+      id: `pending-prompt:${interaction.requestId}:assistant-waiting`,
+      kind: "assistant",
+      body: interaction.description ?? "Waiting for response.",
+      streaming: true,
+    });
+  }
+  return rows;
+}
+
+function pendingPromptText(interaction: CloudPendingInteraction): string | null {
+  const payload = interaction.payload;
+  if (!payload) {
+    return null;
+  }
+  const text = readString(payload.text)
+    ?? readString(payload.prompt)
+    ?? readString(payload.message)
+    ?? readString(payload.content);
+  const trimmed = text?.trim();
+  return trimmed ? trimmed : null;
+}
+
 function projectedItemKind(item: CloudTranscriptItem): CloudChatTranscriptRowView["kind"] {
   switch (item.kind) {
     case "user_message":
@@ -413,4 +473,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
+}
+
+function textMatches(value: string | null | undefined, expected: string): boolean {
+  return normalizePromptText(value) === normalizePromptText(expected);
+}
+
+function normalizePromptText(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/\s+/g, " ");
 }

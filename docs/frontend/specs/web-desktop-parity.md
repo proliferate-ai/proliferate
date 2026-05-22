@@ -82,7 +82,7 @@ Web
 - [ ] Transcript echo removes duplicate optimistic prompt rows.
 - [ ] Agent progress removes the waiting row at the right time.
 - [ ] Rejected/expired/failed prompt delivery leaves an inspectable failed row.
-- [ ] Reload during pending work does not erase user-visible intent when persistence exists.
+- [x] Reload during pending work does not erase user-visible intent when persistence exists.
 
 ### 4. Composer And Config Controls
 
@@ -149,11 +149,11 @@ Web
 
 - [x] Typecheck shared packages and Web.
 - [x] Build Web production bundle.
-- [ ] Run server tests for touched cloud command paths.
+- [x] Run server tests for touched cloud command paths.
 - [ ] Browser-test workspace list reload.
 - [ ] Browser-test opening an existing workspace.
 - [ ] Browser-test no-session first prompt.
-- [ ] Browser-test existing-session follow-up prompt.
+- [x] Browser-test existing-session follow-up prompt.
 - [ ] Browser-test live transcript updates without sending another message.
 - [ ] Browser-test config update success and failure.
 - [ ] Browser-test shared-unclaimed claim flow.
@@ -179,6 +179,7 @@ Use this section to mark incremental progress during implementation.
 - [x] New-session flow started.
 - [x] Automations create/manage started.
 - [x] Settings shell parity started.
+- [x] Web persisted pending prompt rows through chat reload.
 
 ## Subagent Orchestration Plan
 

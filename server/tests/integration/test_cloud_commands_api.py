@@ -16,6 +16,7 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db.models.cloud.agent_auth import SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
+from proliferate.db.models.cloud.sync import CloudPendingInteraction
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
@@ -1171,6 +1172,85 @@ class TestCloudCommandsApi:
         assert command_payload["requiredRuntimeConfigSequence"] == 1
         assert command_payload["requiredRuntimeConfigRevisionId"]
         assert command_payload["requiredRuntimeConfigContentHash"]
+
+    @pytest.mark.asyncio
+    async def test_web_send_prompt_records_pending_prompt_interaction(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-pending-prompt",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="pending-prompt",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="pending-prompt",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-pending-prompt",
+        )
+        await db_session.commit()
+
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "web-pending-prompt",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-pending-prompt",
+                "kind": "send_prompt",
+                "source": "web",
+                "payload": {
+                    "text": "persist this prompt through reload",
+                    "promptId": "web:pending-prompt-1",
+                },
+            },
+        )
+
+        assert created.status_code == 200
+        pending = (
+            await db_session.execute(
+                select(CloudPendingInteraction).where(
+                    CloudPendingInteraction.target_id == target_uuid,
+                    CloudPendingInteraction.session_id == "session-pending-prompt",
+                    CloudPendingInteraction.request_id == "web:pending-prompt-1",
+                )
+            )
+        ).scalar_one()
+        assert pending.cloud_workspace_id == UUID(cloud_workspace_id)
+        assert pending.workspace_id == "anyharness-managed-pending-prompt"
+        assert pending.kind == "send_prompt"
+        assert pending.status == "pending"
+        assert pending.description == "Waiting for response."
+        assert json.loads(pending.payload_json or "{}")["text"] == (
+            "persist this prompt through reload"
+        )
 
     @pytest.mark.asyncio
     async def test_managed_slot_wake_resumes_command_runtime_environment(

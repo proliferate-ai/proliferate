@@ -358,6 +358,86 @@ class TestCloudEventSyncApi:
         assert snapshot.json()["pendingInteractions"] == []
 
     @pytest.mark.asyncio
+    async def test_user_prompt_echo_resolves_pending_prompt_interaction(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-event-pending-prompt",
+        )
+        target_id, worker_headers = await create_enrolled_target(
+            client,
+            db_session,
+            auth,
+            suffix="pending-prompt",
+        )
+        await seed_exposed_session_projection(
+            db_session,
+            target_id=target_id,
+            auth=auth,
+            workspace_id="workspace-pending-prompt",
+            session_id="session-pending-prompt",
+        )
+        await events_store.upsert_pending_interaction(
+            db_session,
+            target_id=UUID(target_id),
+            cloud_workspace_id=None,
+            workspace_id="workspace-pending-prompt",
+            session_id="session-pending-prompt",
+            request_id="web:pending-prompt-1",
+            seq=0,
+            occurred_at="2026-05-13T00:00:00Z",
+            kind="send_prompt",
+            title="Queued prompt",
+            description="Waiting for response.",
+            payload_json='{"text":"persist this prompt through reload"}',
+        )
+        await db_session.commit()
+
+        uploaded = await client.post(
+            "/v1/cloud/worker/events/batches",
+            headers=worker_headers,
+            json={
+                "events": [
+                    {
+                        "workspaceId": "workspace-pending-prompt",
+                        "sessionId": "session-pending-prompt",
+                        "seq": 1,
+                        "timestamp": "2026-05-13T00:00:01Z",
+                        "turnId": "turn-pending-prompt",
+                        "event": {
+                            "type": "item_completed",
+                            "item": {
+                                "kind": "user_message",
+                                "status": "completed",
+                                "promptId": "web:pending-prompt-1",
+                                "contentParts": [
+                                    {
+                                        "type": "text",
+                                        "text": "persist this prompt through reload",
+                                    }
+                                ],
+                            },
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert uploaded.status_code == 200
+        snapshot = await client.get(
+            f"/v1/cloud/sessions/session-pending-prompt/snapshot?targetId={target_id}",
+            headers=auth.headers,
+        )
+        assert snapshot.status_code == 200
+        body = snapshot.json()
+        assert body["transcriptItems"][0]["text"] == "persist this prompt through reload"
+        assert body["pendingInteractions"] == []
+
+    @pytest.mark.asyncio
     async def test_worker_event_batch_discards_workspace_mismatch(
         self,
         client: AsyncClient,
