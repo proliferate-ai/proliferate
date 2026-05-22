@@ -148,14 +148,6 @@ export function ProductSidebar({
         />
 
         <ProductSidebarScrollableContent>
-          {chatRows.length > 0 ? (
-            <ProductSidebarThreadSection
-              rows={chatRows}
-              onChatSelect={onChatSelect}
-              onAction={onAction}
-            />
-          ) : null}
-
           <ProductSidebarRepositoriesSection
             groups={workspaceGroups}
             onGroupToggle={onGroupToggle}
@@ -163,6 +155,14 @@ export function ProductSidebar({
             onAction={onAction}
             shortcutRevealVisible={shortcutRevealVisible}
           />
+
+          {chatRows.length > 0 ? (
+            <ProductSidebarThreadSection
+              rows={chatRows}
+              onChatSelect={onChatSelect}
+              onAction={onAction}
+            />
+          ) : null}
         </ProductSidebarScrollableContent>
       </ProductSidebarBody>
     </ProductSidebarFrame>

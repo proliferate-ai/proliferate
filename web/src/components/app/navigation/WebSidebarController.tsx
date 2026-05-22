@@ -1,10 +1,10 @@
 import {
-  Calendar,
-  CircleHelp,
+  Blocks,
+  CalendarClock,
   Cloud,
   CloudOff,
-  Grid2X2,
-  Home,
+  House,
+  LifeBuoy,
   MessageSquare,
   Settings,
   Users,
@@ -136,7 +136,7 @@ function buildNavItems(pathname: string): SidebarNavItemView[] {
     {
       id: "home",
       label: "Home",
-      icon: <Home className="size-4" />,
+      icon: <House className="size-4" />,
       active: pathname === routes.home,
     },
     {
@@ -148,19 +148,19 @@ function buildNavItems(pathname: string): SidebarNavItemView[] {
     {
       id: "plugins",
       label: "Plugins",
-      icon: <Grid2X2 className="size-4" />,
+      icon: <Blocks className="size-4" />,
       active: pathname.startsWith(routes.plugins),
     },
     {
       id: "automations",
       label: "Automations",
-      icon: <Calendar className="size-4" />,
+      icon: <CalendarClock className="size-4" />,
       active: pathname.startsWith(routes.automations),
     },
     {
       id: "support",
       label: "Support",
-      icon: <CircleHelp className="size-4" />,
+      icon: <LifeBuoy className="size-4" />,
       active: pathname.startsWith(routes.support),
     },
   ];

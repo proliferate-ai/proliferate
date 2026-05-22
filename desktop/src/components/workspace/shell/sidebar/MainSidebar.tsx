@@ -201,54 +201,54 @@ export const MainSidebar = memo(function MainSidebar() {
         </DebugProfiler>
 
         <ProductSidebarScrollableContent>
-            <CoworkThreadsSection />
-            <WorkspaceCleanupAttentionSection
-              workspaces={cleanupAttentionWorkspaces}
-              onRetryCleanup={actions.handleRetryWorkspaceCleanup}
-            />
+          <WorkspaceCleanupAttentionSection
+            workspaces={cleanupAttentionWorkspaces}
+            onRetryCleanup={actions.handleRetryWorkspaceCleanup}
+          />
 
-            <SidebarRepositoriesHeader
-              hasRepoGroups={allRepoKeys.length > 0}
-              allRepoGroupsCollapsed={allRepoGroupsCollapsed}
-              filtersActive={filtersActive}
-              showArchived={showArchived}
-              workspaceTypes={workspaceTypes}
-              onToggleAllRepoGroups={handleToggleAllRepoGroups}
-              onToggleShowArchived={() => setShowArchived(!showArchived)}
-              onToggleWorkspaceType={toggleSidebarWorkspaceType}
-              onAddRepo={actions.handleAddRepo}
-            />
+          <SidebarRepositoriesHeader
+            hasRepoGroups={allRepoKeys.length > 0}
+            allRepoGroupsCollapsed={allRepoGroupsCollapsed}
+            filtersActive={filtersActive}
+            showArchived={showArchived}
+            workspaceTypes={workspaceTypes}
+            onToggleAllRepoGroups={handleToggleAllRepoGroups}
+            onToggleShowArchived={() => setShowArchived(!showArchived)}
+            onToggleWorkspaceType={toggleSidebarWorkspaceType}
+            onAddRepo={actions.handleAddRepo}
+          />
 
-            <DebugProfiler id="workspace-sidebar-content">
-              <SidebarWorkspaceContent
-                emptyState={emptyState}
-                isLoading={isLoading}
-                groups={groups}
-                collapsedRepoGroupKeys={collapsedRepoGroupKeys}
-                repoGroupsShownMore={repoGroupsShownMoreKeys}
-                onToggleRepoCollapsed={handleToggleRepoCollapsed}
-                onToggleRepoShowMore={handleToggleRepoShowMore}
-                configuredCloudRepoKeys={configuredCloudRepoKeys}
-                cloudRepoConfigsInitialLoading={cloudRepoConfigsInitialLoading}
-                cloudWorkspaceEnabled={cloudActive && !cloudWorkspaceBlocked}
-                cloudWorkspaceTooltip={cloudWorkspaceTooltip}
-                onCreateWorktreeWorkspace={actions.handleCreateWorktreeWorkspace}
-                onCreateLocalWorkspace={actions.handleCreateLocalWorkspace}
-                onCreateCloudWorkspace={actions.handleCreateCloudWorkspace}
-                onOpenCloudRepoSettings={handleOpenCloudRepoSettings}
-                onSelectWorkspace={actions.handleSelectWorkspace}
-                onIndicatorAction={actions.handleSidebarIndicatorAction}
-                onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
-                onWorkspaceHover={handleWorkspaceHover}
-                shortcutRevealVisible={shortcutRevealVisible}
-                shortcutLabelByWorkspaceId={sidebarShortcutLabelById}
-                onArchiveWorkspace={archiveWorkspace}
-                onUnarchiveWorkspace={unarchiveWorkspace}
-                onRenameWorkspace={handleRenameWorkspace}
-                onRemoveRepo={handleRemoveRepo}
-                onOpenRepoSettings={handleOpenRepoSettings}
-              />
-            </DebugProfiler>
+          <DebugProfiler id="workspace-sidebar-content">
+            <SidebarWorkspaceContent
+              emptyState={emptyState}
+              isLoading={isLoading}
+              groups={groups}
+              collapsedRepoGroupKeys={collapsedRepoGroupKeys}
+              repoGroupsShownMore={repoGroupsShownMoreKeys}
+              onToggleRepoCollapsed={handleToggleRepoCollapsed}
+              onToggleRepoShowMore={handleToggleRepoShowMore}
+              configuredCloudRepoKeys={configuredCloudRepoKeys}
+              cloudRepoConfigsInitialLoading={cloudRepoConfigsInitialLoading}
+              cloudWorkspaceEnabled={cloudActive && !cloudWorkspaceBlocked}
+              cloudWorkspaceTooltip={cloudWorkspaceTooltip}
+              onCreateWorktreeWorkspace={actions.handleCreateWorktreeWorkspace}
+              onCreateLocalWorkspace={actions.handleCreateLocalWorkspace}
+              onCreateCloudWorkspace={actions.handleCreateCloudWorkspace}
+              onOpenCloudRepoSettings={handleOpenCloudRepoSettings}
+              onSelectWorkspace={actions.handleSelectWorkspace}
+              onIndicatorAction={actions.handleSidebarIndicatorAction}
+              onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
+              onWorkspaceHover={handleWorkspaceHover}
+              shortcutRevealVisible={shortcutRevealVisible}
+              shortcutLabelByWorkspaceId={sidebarShortcutLabelById}
+              onArchiveWorkspace={archiveWorkspace}
+              onUnarchiveWorkspace={unarchiveWorkspace}
+              onRenameWorkspace={handleRenameWorkspace}
+              onRemoveRepo={handleRemoveRepo}
+              onOpenRepoSettings={handleOpenRepoSettings}
+            />
+          </DebugProfiler>
+          <CoworkThreadsSection />
         </ProductSidebarScrollableContent>
       </ProductSidebarBody>
       </ProductSidebarFrame>
