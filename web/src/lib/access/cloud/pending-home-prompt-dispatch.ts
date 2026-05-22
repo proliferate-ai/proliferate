@@ -58,9 +58,10 @@ export async function dispatchPendingHomePrompt(args: {
     },
   });
   args.setLatestCommandId(command.commandId);
-  assertCommandAccepted(
-    await waitForCommandTerminal(command.commandId, args.client, args.shouldContinue),
-  );
+  if (isRejectedCommandStatus(command.status)) {
+    assertCommandAccepted(command);
+  }
+  args.onStatus("Queued prompt; waiting for transcript.");
   return session.sessionId;
 }
 
@@ -161,6 +162,13 @@ function isTerminalStatus(status: CloudCommandResponse["status"]): boolean {
   return status === "accepted"
     || status === "accepted_but_queued"
     || status === "rejected"
+    || status === "expired"
+    || status === "superseded"
+    || status === "failed_delivery";
+}
+
+function isRejectedCommandStatus(status: CloudCommandResponse["status"]): boolean {
+  return status === "rejected"
     || status === "expired"
     || status === "superseded"
     || status === "failed_delivery";

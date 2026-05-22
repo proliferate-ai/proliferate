@@ -102,8 +102,9 @@ export function ChatScreen() {
     () => [...(snapshot?.sessions ?? [])].sort(compareSessions),
     [snapshot?.sessions],
   );
-  const session =
-    sessions.find((candidate) => candidate.sessionId === chatId) ?? sessions[0] ?? null;
+  const session = chatId
+    ? sessions.find((candidate) => candidate.sessionId === chatId) ?? null
+    : null;
   const sessionLive = useSessionLive(session?.sessionId ?? null, {
     targetId: session?.targetId ?? null,
     enabled: Boolean(session),
@@ -251,6 +252,21 @@ export function ChatScreen() {
           if (!isCurrentRun()) {
             return;
           }
+          setOptimisticPrompts((current) =>
+            current.some((prompt) => prompt.id === pendingHomePrompt.id)
+              ? current
+              : [
+                ...current,
+                {
+                  id: pendingHomePrompt.id,
+                  workspaceId: workspace.id,
+                  sessionId,
+                  text: pendingHomePrompt.text,
+                  baseTranscriptSeq: 0,
+                  status: "queued",
+                },
+              ]
+          );
           clearPendingHomePrompt(workspace.id);
           setPendingHomePrompt(null);
           setPendingHomePromptStatus(null);
@@ -385,8 +401,9 @@ export function ChatScreen() {
       if (directPromptDispatching) {
         return;
       }
+      const promptId = `web-chat:${workspace.id}:${Date.now().toString(36)}`;
       const optimisticPrompt: OptimisticPrompt = {
-        id: `web:${workspace.id}:start:${Date.now()}`,
+        id: promptId,
         workspaceId: workspace.id,
         sessionId: null,
         text,
@@ -398,7 +415,7 @@ export function ChatScreen() {
       setDirectPromptDispatching(true);
       setPendingHomePromptStatus("Starting a session for this prompt.");
       const pendingPrompt: PendingHomePrompt = {
-        id: `web-chat:${workspace.id}:${Date.now().toString(36)}`,
+        id: promptId,
         text,
         modelId: draftModelId,
         modeId: null,
@@ -460,7 +477,7 @@ export function ChatScreen() {
         sessionId: session.sessionId,
         kind: "send_prompt",
         source: "web",
-        payload: { text },
+        payload: { text, promptId: optimisticPrompt.id },
       });
       setLatestCommandId(command.commandId);
       setOptimisticPrompts((current) =>
@@ -660,6 +677,14 @@ export function ChatScreen() {
           onClick: () => claimWorkspace.mutate({ workspaceId: workspace.id }),
         }
         : null}
+      headerActions={session
+        ? [{
+          id: "new-session",
+          label: "New chat",
+          kind: "new-session",
+          onClick: () => navigate(routes.workspace(workspace.id)),
+        }]
+        : []}
       desktopHref={desktopWorkspaceDeepLink(workspace.id)}
       composer={{
         value: draft,

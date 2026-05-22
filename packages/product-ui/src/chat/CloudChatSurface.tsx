@@ -3,6 +3,7 @@ import {
   ExternalLink,
   GitBranch,
   MoreHorizontal,
+  Plus,
 } from "lucide-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
@@ -28,6 +29,14 @@ export interface CloudChatPrimaryActionView {
   onClick?: () => void;
 }
 
+export interface CloudChatHeaderActionView {
+  id: string;
+  label: string;
+  kind?: "new-session" | "default";
+  loading?: boolean;
+  onClick?: () => void;
+}
+
 export interface CloudChatSurfaceProps {
   title: string;
   eyebrowItems: readonly string[];
@@ -38,6 +47,7 @@ export interface CloudChatSurfaceProps {
   composer: CloudChatComposerView;
   commandMessage?: string | null;
   primaryAction?: CloudChatPrimaryActionView | null;
+  headerActions?: readonly CloudChatHeaderActionView[];
   desktopHref?: string | null;
   telemetryBlocked?: boolean;
   onBack: () => void;
@@ -53,6 +63,7 @@ export function CloudChatSurface({
   composer,
   commandMessage = null,
   primaryAction = null,
+  headerActions = [],
   desktopHref = null,
   telemetryBlocked = false,
   onBack,
@@ -85,6 +96,18 @@ export function CloudChatSurface({
             {primaryAction.label}
           </Button>
         ) : null}
+        {headerActions.map((action) => (
+          <Button
+            key={action.id}
+            variant="outline"
+            size="sm"
+            loading={action.loading}
+            onClick={action.onClick}
+          >
+            {action.kind === "new-session" ? <Plus size={14} /> : null}
+            {action.label}
+          </Button>
+        ))}
         {desktopHref ? (
           <a
             href={desktopHref}

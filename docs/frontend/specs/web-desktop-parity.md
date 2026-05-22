@@ -74,11 +74,11 @@ Web
 
 ### 3. Optimistic Prompt And Runtime Reconciliation
 
-- [ ] Existing-session prompt appears immediately as a user row.
-- [ ] Existing-session prompt shows assistant waiting/streaming state immediately.
-- [ ] First prompt with no session appears immediately before the session id exists.
-- [ ] First prompt remaps to the materialized session without losing visible state.
-- [ ] Queued prompt status transitions from sending to queued to reconciled.
+- [x] Existing-session prompt appears immediately as a user row.
+- [x] Existing-session prompt shows assistant waiting/streaming state immediately.
+- [x] First prompt with no session appears immediately before the session id exists.
+- [x] First prompt remaps to the materialized session without losing visible state.
+- [x] Queued prompt status transitions from sending to queued to reconciled.
 - [ ] Transcript echo removes duplicate optimistic prompt rows.
 - [ ] Agent progress removes the waiting row at the right time.
 - [ ] Rejected/expired/failed prompt delivery leaves an inspectable failed row.
@@ -121,7 +121,7 @@ Web
 
 ### 7. New Session In Existing Workspace
 
-- [ ] Web exposes a clear "new chat/session" action from a cloud workspace.
+- [x] Web exposes a clear "new chat/session" action from a cloud workspace.
 - [ ] New session uses the same composer/config presentation.
 - [ ] Session creation uses cloud commands and navigates to the created session.
 - [ ] Pending session appears immediately in sidebar/chat shell.
@@ -170,11 +170,12 @@ Use this section to mark incremental progress during implementation.
 - [x] Web chat surface consumes shared composer.
 - [x] Web first-prompt optimistic row behavior implemented.
 - [x] Web existing-session optimistic row behavior implemented.
+- [x] Web prompt handoff keeps optimistic rows visible after session materialization.
 - [x] Composer controls grouped like Desktop.
 - [x] Composer footer added.
 - [x] Transcript presentation extraction started.
 - [ ] Sidebar/workspace parity started.
-- [ ] New-session flow started.
+- [x] New-session flow started.
 - [ ] Automations create/manage started.
 - [ ] Settings shell parity started.
 
