@@ -98,14 +98,19 @@ async def _create_workspace_record(
     if user is None:
         await fail_claim(current, code="user_not_found")
         return None
+    branch_name = automation_branch_name(current, config=config)
+    _repo_root_path, worktree_path = _workspace_paths(ctx, branch_name=branch_name)
     try:
         workspace = await create_cloud_workspace_for_automation_run(
             user,
             run_id=current.id,
             claim_id=current.claim_id,
+            target_id=ctx.target.target_id,
+            sandbox_profile_id=ctx.target.sandbox_profile_id,
             git_owner=current.git_owner,
             git_repo_name=current.git_repo_name,
-            branch_name=automation_branch_name(current, config=config),
+            branch_name=branch_name,
+            worktree_path=worktree_path,
             display_name=current.title,
             required_agent_kind=current.agent_kind or "",
         )

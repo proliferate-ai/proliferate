@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -67,6 +68,7 @@ class CloudSessionEventSnapshot:
 class CloudSessionProjectionSnapshot:
     id: UUID
     target_id: UUID
+    exposure_id: UUID | None
     cloud_workspace_id: UUID | None
     workspace_id: str | None
     session_id: str
@@ -76,6 +78,11 @@ class CloudSessionProjectionSnapshot:
     status: str
     phase: str | None
     live_config_json: str | None
+    projection_level: str
+    commandable: bool
+    gap_state_json: str | None
+    last_uploaded_seq: int | None
+    agent_run_config_snapshot_json: dict[str, object] | None
     last_event_seq: int
     last_event_at: str | None
     started_at: str | None
@@ -150,6 +157,7 @@ def _session_snapshot(row: CloudSessionProjection) -> CloudSessionProjectionSnap
     return CloudSessionProjectionSnapshot(
         id=row.id,
         target_id=row.target_id,
+        exposure_id=row.exposure_id,
         cloud_workspace_id=row.cloud_workspace_id,
         workspace_id=row.workspace_id,
         session_id=row.session_id,
@@ -159,6 +167,11 @@ def _session_snapshot(row: CloudSessionProjection) -> CloudSessionProjectionSnap
         status=row.status,
         phase=row.phase,
         live_config_json=row.live_config_json,
+        projection_level=row.projection_level,
+        commandable=row.commandable,
+        gap_state_json=row.gap_state_json,
+        last_uploaded_seq=row.last_uploaded_seq,
+        agent_run_config_snapshot_json=row.agent_run_config_snapshot_json,
         last_event_seq=row.last_event_seq,
         last_event_at=row.last_event_at,
         started_at=row.started_at,
@@ -228,6 +241,18 @@ async def resolve_cloud_workspace_id(
     ).scalar_one_or_none()
     if synced_row is not None:
         return synced_row
+    direct_row = (
+        await db.execute(
+            select(CloudWorkspace.id)
+            .where(CloudWorkspace.target_id == target_id)
+            .where(CloudWorkspace.anyharness_workspace_id == workspace_id)
+            .where(CloudWorkspace.archived_at.is_(None))
+            .order_by(CloudWorkspace.updated_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if direct_row is not None:
+        return direct_row
     row = (
         await db.execute(
             select(CloudWorkspace.id)
@@ -284,8 +309,39 @@ async def upsert_ingest_cursor(
         row.workspace_id = workspace_id or row.workspace_id
         row.last_contiguous_seq = max(row.last_contiguous_seq, last_contiguous_seq)
         row.updated_at = now
+    projection = (
+        await db.execute(
+            select(CloudSessionProjection)
+            .where(CloudSessionProjection.target_id == target_id)
+            .where(CloudSessionProjection.session_id == session_id)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if projection is not None:
+        projection.last_uploaded_seq = max(
+            projection.last_uploaded_seq or 0,
+            row.last_contiguous_seq,
+        )
+        if _gap_state_repaired(projection.gap_state_json, row.last_contiguous_seq):
+            projection.gap_state_json = None
+        projection.updated_at = now
     await db.flush()
     return int(row.last_contiguous_seq)
+
+
+def _gap_state_repaired(gap_state_json: str | None, last_contiguous_seq: int) -> bool:
+    if gap_state_json is None:
+        return False
+    try:
+        parsed = json.loads(gap_state_json)
+    except ValueError:
+        return last_contiguous_seq > 0
+    if not isinstance(parsed, dict):
+        return last_contiguous_seq > 0
+    expected_seq = parsed.get("expectedSeq")
+    if not isinstance(expected_seq, int) or isinstance(expected_seq, bool):
+        return last_contiguous_seq > 0
+    return last_contiguous_seq >= expected_seq
 
 
 async def get_session_event_usage(
@@ -412,6 +468,8 @@ async def upsert_session_projection(
             status=status or "running",
             phase=phase,
             live_config_json=live_config_json,
+            projection_level="live",
+            commandable=True,
             last_event_seq=seq,
             last_event_at=occurred_at,
             started_at=started_at,

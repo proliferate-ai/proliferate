@@ -22,6 +22,7 @@ async def assert_current_schema(
         "cloud_mcp_oauth_client",
         "cloud_mcp_oauth_flow",
         "cloud_plugin_configured_item",
+        "cloud_workspace_exposure",
         "cloud_skill_configured_item",
         "cloud_workspace_mobility_event",
         "cloud_workspace_handoff_op",
@@ -64,6 +65,7 @@ async def assert_current_schema(
     )
     assert "git_base_branch" in columns
     assert "anyharness_data_key_ciphertext" in columns
+    assert "origin" in columns
     assert "origin_json" in columns
     assert {
         "owner_scope",
@@ -98,7 +100,75 @@ async def assert_current_schema(
         "ck_cloud_workspace_personal_owner",
         "ck_cloud_workspace_organization_owner",
         "ck_cloud_workspace_created_by_user_id",
+        "ck_cloud_workspace_origin",
     } <= workspace_checks
+
+    exposure_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("cloud_workspace_exposure")
+        }
+    )
+    assert {
+        "id",
+        "target_id",
+        "cloud_workspace_id",
+        "anyharness_workspace_id",
+        "owner_scope",
+        "owner_user_id",
+        "organization_id",
+        "visibility",
+        "claimed_by_user_id",
+        "default_projection_level",
+        "commandable",
+        "status",
+        "revision",
+        "last_projected_at",
+        "origin",
+        "created_at",
+        "updated_at",
+        "archived_at",
+    } <= exposure_columns
+    exposure_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints("cloud_workspace_exposure")
+        }
+    )
+    assert {
+        "ck_cloud_workspace_exposure_owner_fields",
+        "ck_cloud_workspace_exposure_visibility",
+        "ck_cloud_workspace_exposure_projection_level",
+        "ck_cloud_workspace_exposure_claimed_user",
+        "ck_cloud_workspace_exposure_status",
+        "ck_cloud_workspace_exposure_origin",
+    } <= exposure_checks
+    exposure_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("cloud_workspace_exposure")
+        }
+    )
+    assert "ux_cloud_workspace_exposure_active" in exposure_indexes
+
+    session_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("cloud_sessions")
+        }
+    )
+    assert {
+        "exposure_id",
+        "projection_level",
+        "commandable",
+        "gap_state_json",
+        "last_uploaded_seq",
+        "agent_run_config_snapshot_json",
+    } <= session_columns
+    session_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints("cloud_sessions")
+        }
+    )
+    assert "ck_cloud_sessions_projection_level" in session_checks
 
     organization_membership_checks = await conn.run_sync(
         lambda sync_conn: {

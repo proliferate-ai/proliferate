@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store.billing import ensure_personal_billing_subject
+from proliferate.db.store.cloud_sync import exposures as exposures_store
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 from tests.e2e.cloud.helpers.shared import AuthSession
@@ -73,6 +78,65 @@ async def _accept_initial_git_identity_command(
     assert result.status_code == 200
 
 
+async def _seed_exposed_workspace(
+    db_session: AsyncSession,
+    *,
+    auth: AuthSession,
+    target_id: str,
+    anyharness_workspace_id: str,
+    display_name: str = "Local Workspace",
+    commandable: bool = True,
+) -> str:
+    user_id = UUID(auth.user_id)
+    target_uuid = UUID(target_id)
+    billing_subject = await ensure_personal_billing_subject(db_session, user_id)
+    workspace = CloudWorkspace(
+        user_id=user_id,
+        owner_scope="personal",
+        owner_user_id=user_id,
+        organization_id=None,
+        created_by_user_id=user_id,
+        billing_subject_id=billing_subject.id,
+        target_id=target_uuid,
+        display_name=display_name,
+        git_provider="github",
+        git_owner="proliferate-ai",
+        git_repo_name="proliferate",
+        normalized_repo_key="github/proliferate-ai/proliferate",
+        git_branch="initial",
+        git_base_branch="main",
+        worktree_path=f"/workspace/{anyharness_workspace_id}",
+        origin="manual_web",
+        origin_json='{"kind":"human","entrypoint":"cloud"}',
+        status="ready",
+        status_detail="Ready",
+        template_version="test",
+        runtime_generation=0,
+        anyharness_workspace_id=anyharness_workspace_id,
+        repo_post_ready_phase="idle",
+        repo_post_ready_files_total=0,
+        repo_post_ready_files_applied=0,
+        cleanup_state="none",
+    )
+    db_session.add(workspace)
+    await db_session.flush()
+    await exposures_store.upsert_workspace_exposure(
+        db_session,
+        target_id=target_uuid,
+        cloud_workspace_id=workspace.id,
+        anyharness_workspace_id=anyharness_workspace_id,
+        owner_scope="personal",
+        owner_user_id=user_id,
+        organization_id=None,
+        visibility="private",
+        default_projection_level="live",
+        commandable=commandable,
+        origin="manual_web",
+    )
+    await db_session.commit()
+    return str(workspace.id)
+
+
 class TestCloudBackfillApi:
     @pytest.mark.asyncio
     async def test_worker_backfill_maps_workspace_and_session_read_models(
@@ -86,6 +150,12 @@ class TestCloudBackfillApi:
             email_prefix="cloud-backfill",
         )
         target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
+        seeded_cloud_workspace_id = await _seed_exposed_workspace(
+            db_session,
+            auth=auth,
+            target_id=target_id,
+            anyharness_workspace_id="local-workspace-1",
+        )
 
         backfill = await client.post(
             "/v1/cloud/worker/backfill",
@@ -136,6 +206,7 @@ class TestCloudBackfillApi:
         body = backfill.json()
         assert body["mappedWorkspaces"][0]["workspaceId"] == "local-workspace-1"
         cloud_workspace_id = body["mappedWorkspaces"][0]["cloudWorkspaceId"]
+        assert cloud_workspace_id == seeded_cloud_workspace_id
         assert body["mappedSessions"][0]["cloudWorkspaceId"] == cloud_workspace_id
 
         workspaces = await client.get("/v1/cloud/workspaces", headers=auth.headers)
@@ -154,6 +225,13 @@ class TestCloudBackfillApi:
         assert session["sessionId"] == "local-session-1"
         assert session["cloudWorkspaceId"] == cloud_workspace_id
         assert session["liveConfig"] == {"model": "gpt-5.4"}
+
+        exposures = await client.get(
+            "/v1/cloud/worker/exposures",
+            headers=worker_headers,
+        )
+        assert exposures.status_code == 200
+        assert exposures.json()["exposures"][0]["anyharnessSessionId"] == "local-session-1"
 
         snapshot = await client.get(
             f"/v1/cloud/sessions/local-session-1/snapshot?targetId={target_id}",
@@ -210,6 +288,20 @@ class TestCloudBackfillApi:
             auth,
             suffix="target-scope-2",
         )
+        await _seed_exposed_workspace(
+            db_session,
+            auth=auth,
+            target_id=first_target_id,
+            anyharness_workspace_id="same-local-id",
+            display_name="First Workspace",
+        )
+        await _seed_exposed_workspace(
+            db_session,
+            auth=auth,
+            target_id=second_target_id,
+            anyharness_workspace_id="same-local-id",
+            display_name="Second Workspace",
+        )
 
         payload = {
             "workspaces": [
@@ -255,7 +347,7 @@ class TestCloudBackfillApi:
         assert second_sessions.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_sync_existing_workspace_command_can_be_queued(
+    async def test_backfill_exposed_workspace_command_can_be_queued(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -271,15 +363,48 @@ class TestCloudBackfillApi:
             auth,
             suffix="backfill-command",
         )
+        cloud_workspace_id = await _seed_exposed_workspace(
+            db_session,
+            auth=auth,
+            target_id=target_id,
+            anyharness_workspace_id="local-workspace-1",
+        )
+        read_only_cloud_workspace_id = await _seed_exposed_workspace(
+            db_session,
+            auth=auth,
+            target_id=target_id,
+            anyharness_workspace_id="read-only-workspace",
+            display_name="Read Only Workspace",
+            commandable=False,
+        )
+
+        missing_cloud_workspace = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "backfill-missing-cloud-workspace",
+                "targetId": target_id,
+                "workspaceId": "local-workspace-1",
+                "kind": "backfill_exposed_workspace",
+                "payload": {},
+                "source": "desktop_cloud_view",
+            },
+        )
+        assert missing_cloud_workspace.status_code == 400
+        assert (
+            missing_cloud_workspace.json()["detail"]["code"]
+            == "cloud_command_cloud_workspace_required"
+        )
 
         created = await client.post(
             "/v1/cloud/commands",
             headers=auth.headers,
             json={
-                "idempotencyKey": "sync-local-workspace",
+                "idempotencyKey": "backfill-local-workspace",
                 "targetId": target_id,
                 "workspaceId": "local-workspace-1",
-                "kind": "sync_existing_workspace",
+                "cloudWorkspaceId": cloud_workspace_id,
+                "kind": "backfill_exposed_workspace",
                 "payload": {},
                 "source": "desktop_cloud_view",
             },
@@ -299,7 +424,7 @@ class TestCloudBackfillApi:
             "/v1/cloud/worker/commands/lease",
             headers=worker_headers,
             json={
-                "supportedKinds": ["sync_existing_workspace"],
+                "supportedKinds": ["backfill_exposed_workspace"],
                 "leaseTimeoutSeconds": 30,
             },
         )
@@ -307,3 +432,30 @@ class TestCloudBackfillApi:
         command = lease.json()["command"]
         assert command["commandId"] == command_id
         assert command["workspaceId"] == "local-workspace-1"
+
+        read_only_created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "backfill-read-only-workspace",
+                "targetId": target_id,
+                "cloudWorkspaceId": read_only_cloud_workspace_id,
+                "kind": "backfill_exposed_workspace",
+                "payload": {},
+                "source": "desktop_cloud_view",
+            },
+        )
+        assert read_only_created.status_code == 200
+        read_only_lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["backfill_exposed_workspace"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert read_only_lease.status_code == 200
+        assert (
+            read_only_lease.json()["command"]["commandId"] == read_only_created.json()["commandId"]
+        )
+        assert read_only_lease.json()["command"]["workspaceId"] == "read-only-workspace"

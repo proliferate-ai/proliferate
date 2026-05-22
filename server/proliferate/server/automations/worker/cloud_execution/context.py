@@ -15,6 +15,7 @@ class TargetExecutionContext:
     default_workspace_root: str | None
     organization_id: UUID | None
     status: str
+    sandbox_profile_id: UUID | None = None
     ready_agent_kinds: tuple[str, ...] = ()
 
 

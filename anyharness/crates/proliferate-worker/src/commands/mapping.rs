@@ -135,6 +135,7 @@ fn start_session_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMa
     body.insert("workspaceId".to_string(), Value::String(workspace_id));
     body.insert("agentKind".to_string(), Value::String(agent_kind));
     if let Some(sandbox_profile_id) = string_field(object, "sandboxProfileId", "sandbox_profile_id")
+        .or_else(|| non_empty(command.sandbox_profile_id.as_deref()))
     {
         body.insert(
             "agentAuthScope".to_string(),
@@ -157,7 +158,11 @@ fn start_session_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMa
             Value::Number(revision.into()),
         );
     }
-    map_runtime_config_preflight(&mut body, &command.target_id)?;
+    map_runtime_config_preflight(
+        &mut body,
+        &command.target_id,
+        command.sandbox_profile_id.as_deref(),
+    )?;
     body.entry("origin".to_string())
         .or_insert_with(|| json!({ "kind": "system", "entrypoint": "cloud" }));
     Ok(Value::Object(body))
@@ -225,7 +230,11 @@ fn prompt_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMappingEr
     };
     let mut body = object.clone();
     strip_agent_auth_preflight_fields(&mut body);
-    map_runtime_config_preflight(&mut body, &command.target_id)?;
+    map_runtime_config_preflight(
+        &mut body,
+        &command.target_id,
+        command.sandbox_profile_id.as_deref(),
+    )?;
     if !body.contains_key("promptId") && !body.contains_key("prompt_id") {
         body.insert(
             "promptId".to_string(),
@@ -251,6 +260,7 @@ fn prompt_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMappingEr
 fn map_runtime_config_preflight(
     body: &mut Map<String, Value>,
     target_id: &str,
+    envelope_sandbox_profile_id: Option<&str>,
 ) -> Result<(), CommandMappingError> {
     let existing_expected = body.get("expectedRuntimeConfigRevision").cloned();
     let revision_id = body
@@ -264,7 +274,8 @@ fn map_runtime_config_preflight(
         .and_then(|value| value.as_str().map(str::to_string));
     let sandbox_profile_id = body
         .remove("sandboxProfileId")
-        .and_then(|value| value.as_str().map(str::to_string));
+        .and_then(|value| value.as_str().map(str::to_string))
+        .or_else(|| non_empty(envelope_sandbox_profile_id));
     if existing_expected.is_some() {
         return Ok(());
     }
@@ -370,6 +381,13 @@ fn string_field(object: &Map<String, Value>, primary: &str, fallback: &str) -> O
         .map(ToOwned::to_owned)
 }
 
+fn non_empty(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
 fn integer_field(object: &Map<String, Value>, primary: &str, fallback: &str) -> Option<i64> {
     object
         .get(primary)
@@ -467,6 +485,45 @@ mod tests {
     }
 
     #[test]
+    fn maps_start_session_agent_auth_scope_from_preflight_payload() {
+        let mut command = test_command(json!({
+            "workspaceId": "workspace-1",
+            "agentKind": "claude",
+            "sandboxProfileId": "profile-1",
+            "requiredAgentAuthRevision": 9
+        }));
+        command.kind = "start_session".to_string();
+
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::StartSession { body } = mapped else {
+            panic!("expected start session");
+        };
+        assert_eq!(body["agentAuthScope"]["provider"], "proliferate-cloud");
+        assert_eq!(body["agentAuthScope"]["id"], "profile-1");
+        assert_eq!(body["agentAuthScope"]["targetId"], "target-1");
+        assert_eq!(body["requiredAgentAuthRevision"], 9);
+    }
+
+    #[test]
+    fn maps_start_session_agent_auth_scope_from_envelope() {
+        let mut command = test_command(json!({
+            "workspaceId": "workspace-1",
+            "agentKind": "claude",
+            "requiredAgentAuthRevision": 9
+        }));
+        command.kind = "start_session".to_string();
+        command.sandbox_profile_id = Some("profile-from-envelope".to_string());
+
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::StartSession { body } = mapped else {
+            panic!("expected start session");
+        };
+        assert_eq!(body["agentAuthScope"]["provider"], "proliferate-cloud");
+        assert_eq!(body["agentAuthScope"]["id"], "profile-from-envelope");
+        assert_eq!(body["agentAuthScope"]["targetId"], "target-1");
+    }
+
+    #[test]
     fn maps_runtime_config_preflight_to_anyharness_expected_revision() {
         let mut command = test_command(json!({
             "workspaceId": "workspace-1",
@@ -501,23 +558,31 @@ mod tests {
     }
 
     #[test]
-    fn maps_start_session_agent_auth_scope_from_preflight_payload() {
+    fn maps_runtime_config_external_scope_from_envelope() {
         let mut command = test_command(json!({
             "workspaceId": "workspace-1",
             "agentKind": "claude",
-            "sandboxProfileId": "profile-1",
-            "requiredAgentAuthRevision": 9
+            "requiredRuntimeConfigRevisionId": "rev-1",
+            "requiredRuntimeConfigSequence": 7,
+            "requiredRuntimeConfigContentHash": "sha256:abc"
         }));
         command.kind = "start_session".to_string();
+        command.sandbox_profile_id = Some("profile-from-envelope".to_string());
 
         let mapped = map_cloud_command(&command).expect("mapped");
         let AnyHarnessCommand::StartSession { body } = mapped else {
             panic!("expected start session");
         };
-        assert_eq!(body["agentAuthScope"]["provider"], "proliferate-cloud");
-        assert_eq!(body["agentAuthScope"]["id"], "profile-1");
-        assert_eq!(body["agentAuthScope"]["targetId"], "target-1");
-        assert_eq!(body["requiredAgentAuthRevision"], 9);
+        assert_eq!(
+            body.pointer("/expectedRuntimeConfigRevision/externalScope/id")
+                .and_then(serde_json::Value::as_str),
+            Some("profile-from-envelope")
+        );
+        assert_eq!(
+            body.pointer("/expectedRuntimeConfigRevision/externalScope/targetId")
+                .and_then(serde_json::Value::as_str),
+            Some("target-1")
+        );
     }
 
     #[test]

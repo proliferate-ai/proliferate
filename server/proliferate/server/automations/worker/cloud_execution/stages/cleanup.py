@@ -30,6 +30,7 @@ async def close_orphan_session(
             stage=f"close-orphan-session:{session_id}",
             kind=CloudCommandKind.close_session.value,
             workspace_id=ctx.workspace.anyharness_workspace_id,
+            cloud_workspace_id=ctx.workspace.cloud_workspace_id,
             session_id=session_id,
             payload={},
         )

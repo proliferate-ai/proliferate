@@ -2108,6 +2108,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/worker/exposures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Worker Exposures Endpoint */
+        get: operations["worker_exposures_endpoint_v1_cloud_worker_exposures_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/worker/events/batches": {
         parameters: {
             query?: never;
@@ -2119,6 +2136,23 @@ export interface paths {
         put?: never;
         /** Worker Event Batch Endpoint */
         post: operations["worker_event_batch_endpoint_v1_cloud_worker_events_batches_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/events/gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Event Gap Endpoint */
+        post: operations["worker_event_gap_endpoint_v1_cloud_worker_events_gaps_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6571,6 +6605,17 @@ export interface components {
             /** Heartbeatintervalseconds */
             heartbeatIntervalSeconds: number;
         };
+        /** WorkerEventAck */
+        WorkerEventAck: {
+            /** Sessionid */
+            sessionId: string;
+            /** Seq */
+            seq: number;
+            /** Action */
+            action: string;
+            /** Reason */
+            reason?: string | null;
+        };
         /** WorkerEventBatchRequest */
         WorkerEventBatchRequest: {
             /** Events */
@@ -6586,6 +6631,8 @@ export interface components {
             liveOnlyEvents: number;
             /** Sessionacks */
             sessionAcks: components["schemas"]["WorkerEventSessionAck"][];
+            /** Eventacks */
+            eventAcks?: components["schemas"]["WorkerEventAck"][];
         };
         /** WorkerEventSessionAck */
         WorkerEventSessionAck: {
@@ -6593,6 +6640,36 @@ export interface components {
             sessionId: string;
             /** Lastcontiguousseq */
             lastContiguousSeq: number;
+        };
+        /** WorkerExposureListResponse */
+        WorkerExposureListResponse: {
+            /** Exposures */
+            exposures: components["schemas"]["WorkerExposureSnapshotResponse"][];
+        };
+        /** WorkerExposureSnapshotResponse */
+        WorkerExposureSnapshotResponse: {
+            /** Exposureid */
+            exposureId: string;
+            /** Targetid */
+            targetId: string;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId: string;
+            /** Sessionprojectionid */
+            sessionProjectionId?: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Anyharnesssessionid */
+            anyharnessSessionId?: string | null;
+            /** Projectionlevel */
+            projectionLevel: string;
+            /** Commandable */
+            commandable: boolean;
+            /** Status */
+            status: string;
+            /** Revision */
+            revision?: number | null;
+            /** Lastuploadedseq */
+            lastUploadedSeq: number;
         };
         /** WorkerHeartbeatRequest */
         WorkerHeartbeatRequest: {
@@ -6725,6 +6802,32 @@ export interface components {
             targetId: string;
             /** Workerid */
             workerId: string;
+            /** Updated */
+            updated: boolean;
+        };
+        /** WorkerProjectionGapRequest */
+        WorkerProjectionGapRequest: {
+            /**
+             * Exposureid
+             * Format: uuid
+             */
+            exposureId: string;
+            /**
+             * Sessionprojectionid
+             * Format: uuid
+             */
+            sessionProjectionId: string;
+            /** Sessionid */
+            sessionId: string;
+            /** Expectedseq */
+            expectedSeq: number;
+            /** Firstobservedseq */
+            firstObservedSeq: number;
+            /** Lastuploadedseq */
+            lastUploadedSeq: number;
+        };
+        /** WorkerProjectionGapResponse */
+        WorkerProjectionGapResponse: {
             /** Updated */
             updated: boolean;
         };
@@ -11472,6 +11575,37 @@ export interface operations {
             };
         };
     };
+    worker_exposures_endpoint_v1_cloud_worker_exposures_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerExposureListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     worker_event_batch_endpoint_v1_cloud_worker_events_batches_post: {
         parameters: {
             query?: never;
@@ -11494,6 +11628,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerEventBatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_event_gap_endpoint_v1_cloud_worker_events_gaps_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerProjectionGapRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerProjectionGapResponse"];
                 };
             };
             /** @description Validation Error */
