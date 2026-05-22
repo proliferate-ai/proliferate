@@ -20,6 +20,7 @@ async def _create_enrolled_target(
     auth: AuthSession,
     *,
     suffix: str = "backfill",
+    kind: str = "desktop_dispatch",
 ) -> tuple[str, dict[str, str]]:
     await seed_linked_github_account(
         db_session,
@@ -31,7 +32,7 @@ async def _create_enrolled_target(
         headers=auth.headers,
         json={
             "displayName": f"Backfill Target {suffix}",
-            "kind": "desktop_dispatch",
+            "kind": kind,
             "ownerScope": "personal",
         },
     )
@@ -287,6 +288,7 @@ class TestCloudBackfillApi:
             db_session,
             auth,
             suffix="target-scope-2",
+            kind="ssh",
         )
         await _seed_exposed_workspace(
             db_session,
