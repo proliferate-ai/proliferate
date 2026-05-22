@@ -59,6 +59,7 @@ export function MobileShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<MobileCloudChat | null>(null);
   const [linkedWorkspaceId, setLinkedWorkspaceId] = useState<string | null>(null);
+  const [linkedWorkspaceSessionId, setLinkedWorkspaceSessionId] = useState<string | null>(null);
   const [initialLinkChecked, setInitialLinkChecked] = useState(false);
   const [navigationRestored, setNavigationRestored] = useState(false);
   const initialLinkAppliedRef = useRef(false);
@@ -80,12 +81,13 @@ export function MobileShell() {
     viewingChat: authState === "active" && selectedChat !== null,
   });
   const applyWorkspaceLink = useCallback((url: string | null): boolean => {
-    const workspaceId = workspaceIdFromUrl(url);
-    if (!workspaceId) {
+    const link = workspaceLinkFromUrl(url);
+    if (!link) {
       return false;
     }
     initialLinkAppliedRef.current = true;
-    setLinkedWorkspaceId(workspaceId);
+    setLinkedWorkspaceId(link.workspaceId);
+    setLinkedWorkspaceSessionId(link.sessionId);
     setRoute("workspaces");
     setSelectedChat(null);
     setDrawerOpen(false);
@@ -154,14 +156,19 @@ export function MobileShell() {
     if (!linkedWorkspaceId || !linkedWorkspace.data) {
       return;
     }
-    const chat = linkedChatForWorkspace(linkedWorkspace.data.workspace, linkedWorkspace.data.sessions);
+    const chat = linkedChatForWorkspace(
+      linkedWorkspace.data.workspace,
+      linkedWorkspace.data.sessions,
+      linkedWorkspaceSessionId,
+    );
     if (chat) {
       setSelectedChat(chat);
     } else {
       setRoute("workspaces");
     }
     setLinkedWorkspaceId(null);
-  }, [linkedWorkspace.data, linkedWorkspaceId]);
+    setLinkedWorkspaceSessionId(null);
+  }, [linkedWorkspace.data, linkedWorkspaceId, linkedWorkspaceSessionId]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -198,6 +205,8 @@ export function MobileShell() {
     setRoute("home");
     setDrawerOpen(false);
     setSelectedChat(null);
+    setLinkedWorkspaceId(null);
+    setLinkedWorkspaceSessionId(null);
     setNavigationRestored(false);
     initialLinkAppliedRef.current = false;
     void clearShellNavigation();
@@ -347,14 +356,38 @@ function routeSubtitle(route: RouteId): string | undefined {
   }
 }
 
-function workspaceIdFromUrl(url: string | null): string | null {
+function workspaceLinkFromUrl(url: string | null): { workspaceId: string; sessionId: string | null } | null {
   if (!url) {
     return null;
   }
-  const match = url.match(
-    /^(?:proliferate:\/\/workspaces\/|https:\/\/app\.proliferate\.ai\/workspaces\/)([^/?#]+)/u,
-  );
-  return match?.[1] ? decodeURIComponent(match[1]) : null;
+  try {
+    const parsed = new URL(url);
+    const rawParts = parsed.pathname.split("/").filter(Boolean);
+    const parts = parsed.protocol === "proliferate:"
+      ? [parsed.hostname, ...rawParts]
+      : rawParts;
+    const workspaceIndex =
+      parts[0] === "cloud" && parts[1] === "workspaces"
+        ? 1
+        : parts[0] === "workspaces"
+          ? 0
+          : -1;
+    const workspaceId = workspaceIndex >= 0 ? parts[workspaceIndex + 1] : null;
+    if (!workspaceId) {
+      return null;
+    }
+    const sessionPathKind = parts[workspaceIndex + 2];
+    const sessionId =
+      sessionPathKind === "chats" || sessionPathKind === "sessions"
+        ? parts[workspaceIndex + 3] ?? null
+        : parsed.searchParams.get("sessionId");
+    return {
+      workspaceId: decodeURIComponent(workspaceId),
+      sessionId: sessionId ? decodeURIComponent(sessionId) : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function restoreShellNavigation(): Promise<{
@@ -440,10 +473,11 @@ function parseStoredChat(value: string | null): MobileCloudChat | null {
 function linkedChatForWorkspace(
   workspace: CloudWorkspaceDetail,
   sessions: readonly CloudSessionProjection[],
+  linkedSessionId: string | null,
 ): MobileCloudChat | null {
-  const session = [...sessions].sort((left, right) =>
-    (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0)
-  )[0];
+  const session = linkedSessionId
+    ? sessions.find((candidate) => candidate.sessionId === linkedSessionId) ?? null
+    : [...sessions].sort(compareSessions)[0] ?? null;
   return {
     workspaceId: workspace.id,
     workspaceName: workspace.displayName ?? workspace.repo.name,
@@ -451,11 +485,20 @@ function linkedChatForWorkspace(
     branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
     targetId: session?.targetId ?? workspace.targetId ?? null,
     workspaceRuntimeId: session?.workspaceId ?? workspace.anyharnessWorkspaceId ?? null,
-    sessionId: session?.sessionId ?? null,
+    sessionId: session?.sessionId ?? linkedSessionId,
     title: session?.title ?? workspace.displayName ?? workspace.repo.name,
     status: session?.status ?? workspace.workspaceStatus ?? workspace.status,
     visibility: workspace.visibility,
   };
+}
+
+function compareSessions(left: CloudSessionProjection, right: CloudSessionProjection): number {
+  return sessionRecencyMs(right) - sessionRecencyMs(left)
+    || (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
+}
+
+function sessionRecencyMs(session: Pick<CloudSessionProjection, "lastEventAt" | "startedAt">): number {
+  return Date.parse(session.lastEventAt ?? session.startedAt ?? "") || 0;
 }
 
 interface DrawerProps {

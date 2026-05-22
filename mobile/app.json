@@ -46,6 +46,11 @@
               "scheme": "https",
               "host": "app.proliferate.ai",
               "pathPrefix": "/workspaces/"
+            },
+            {
+              "scheme": "https",
+              "host": "app.proliferate.ai",
+              "pathPrefix": "/cloud/workspaces/"
             }
           ],
           "category": [

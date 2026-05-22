@@ -81,7 +81,11 @@ export function buildCloudTranscriptView(input: {
       envelopes as SessionEventEnvelope[],
     );
     const rows = buildRowsFromTranscriptState(transcript);
-    if (rows.length > 0 && !projectionIsAhead(input.fallbackItems, input.events)) {
+    if (
+      rows.length > 0
+      && missingEnvelopeCount === 0
+      && !projectionIsAhead(input.fallbackItems, input.events)
+    ) {
       const rowsWithPending = appendPendingPromptRows(
         rows,
         input.pendingInteractions ?? [],

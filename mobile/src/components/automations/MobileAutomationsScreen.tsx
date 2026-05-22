@@ -43,15 +43,32 @@ interface RepoOption {
 
 export function MobileAutomationsScreen() {
   const [showNew, setShowNew] = useState(false);
+  const [toggleError, setToggleError] = useState<string | null>(null);
+  const [togglingAutomationId, setTogglingAutomationId] = useState<string | null>(null);
   const automations = useAutomations({ ownerScope: "personal" });
   const pauseAutomation = usePauseAutomation({ ownerScope: "personal" });
   const resumeAutomation = useResumeAutomation({ ownerScope: "personal" });
 
   async function toggleAutomation(automation: AutomationResponse) {
-    if (automation.enabled) {
-      await pauseAutomation.mutateAsync(automation.id);
-    } else {
-      await resumeAutomation.mutateAsync(automation.id);
+    if (togglingAutomationId) {
+      return;
+    }
+    setToggleError(null);
+    setTogglingAutomationId(automation.id);
+    try {
+      if (automation.enabled) {
+        await pauseAutomation.mutateAsync(automation.id);
+      } else {
+        await resumeAutomation.mutateAsync(automation.id);
+      }
+    } catch (error) {
+      setToggleError(
+        error instanceof Error
+          ? error.message
+          : "Automation status could not be changed.",
+      );
+    } finally {
+      setTogglingAutomationId(null);
     }
   }
 
@@ -84,11 +101,12 @@ export function MobileAutomationsScreen() {
         />
       ) : (
         <View style={styles.list}>
+          {toggleError ? <Text style={styles.listErrorText}>{toggleError}</Text> : null}
           {(automations.data?.automations ?? []).map((automation) => (
             <AutomationRow
               key={automation.id}
               automation={automation}
-              busy={pauseAutomation.isPending || resumeAutomation.isPending}
+              busy={togglingAutomationId === automation.id}
               onToggle={() => void toggleAutomation(automation)}
             />
           ))}
@@ -428,6 +446,15 @@ const styles = StyleSheet.create({
   list: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderLight,
+  },
+  listErrorText: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    color: colors.destructive,
+    fontSize: 12.5,
+    lineHeight: 17,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
   },
   statusPill: {
     minHeight: 28,

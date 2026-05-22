@@ -74,6 +74,7 @@ type OptimisticPrompt = {
   text: string;
   baseTranscriptSeq: number;
   status: OptimisticPromptStatus;
+  commandId?: string;
 };
 
 type UpdateSessionConfigPayload = {
@@ -101,6 +102,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
   >({});
   const [activeControl, setActiveControl] = useState<CloudChatComposerControlView | null>(null);
   const [claimedLocally, setClaimedLocally] = useState(false);
+  const directPromptDispatchingRef = useRef(false);
   const pendingDispatchRunRef = useRef<{ key: string; active: boolean } | null>(null);
   const pendingConfigMutationIdRef = useRef(0);
 
@@ -112,11 +114,11 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
     () => [...(snapshot?.sessions ?? [])].sort(compareSessions),
     [snapshot?.sessions],
   );
-  const selectedSession =
-    sessions.find((candidate) => candidate.sessionId === selectedSessionId)
-    ?? sessions.find((candidate) => candidate.sessionId === chat.sessionId)
-    ?? sessions[0]
-    ?? null;
+  const selectedSession = selectedSessionId
+    ? sessions.find((candidate) => candidate.sessionId === selectedSessionId) ?? null
+    : chat.sessionId
+      ? sessions.find((candidate) => candidate.sessionId === chat.sessionId) ?? sessions[0] ?? null
+      : sessions[0] ?? null;
   const session = newSessionMode ? null : selectedSession;
   const activeSessionId = session?.sessionId ?? selectedSessionId;
   const targetId = session?.targetId ?? workspace?.targetId ?? chat.targetId;
@@ -321,6 +323,31 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
   ]);
 
   useEffect(() => {
+    const command = commandStatus.data;
+    if (!command || !isRejectedCommandStatus(command.status)) {
+      return;
+    }
+    if (!optimisticPrompts.some((prompt) =>
+      prompt.commandId === command.commandId && prompt.status !== "failed"
+    )) {
+      return;
+    }
+    setOptimisticPrompts((current) =>
+      current.map((prompt) =>
+        prompt.commandId === command.commandId && prompt.status !== "failed"
+          ? { ...prompt, status: "failed" }
+          : prompt
+      ),
+    );
+    setPendingPromptStatus(command.errorMessage || promptCommandFailureMessage(command.status));
+  }, [
+    commandStatus.data?.commandId,
+    commandStatus.data?.errorMessage,
+    commandStatus.data?.status,
+    optimisticPrompts,
+  ]);
+
+  useEffect(() => {
     if (!pendingPrompt || !workspace) {
       return;
     }
@@ -397,6 +424,8 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
         setPendingPromptStatus(
           error instanceof Error ? error.message : "Queued prompt could not be sent.",
         );
+        setPendingPrompt(null);
+        void clearPendingMobilePrompt(workspace.id);
       })
       .finally(() => {
         if (pendingDispatchRunRef.current === run) {
@@ -426,9 +455,10 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
       return;
     }
     if (!session) {
-      if (directPromptDispatching) {
+      if (directPromptDispatchingRef.current || pendingPrompt) {
         return;
       }
+      directPromptDispatchingRef.current = true;
       const prompt: MobilePendingPrompt = {
         id: `mobile-chat:${workspace.id}:${Date.now().toString(36)}`,
         text,
@@ -436,12 +466,21 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
         modeId: null,
         createdAt: Date.now(),
       };
-      setDirectPromptDispatching(true);
       setDraft("");
       setPendingPrompt(prompt);
       setPendingPromptStatus("Starting a session for this prompt.");
-      await savePendingMobilePrompt(workspace.id, prompt);
-      setDirectPromptDispatching(false);
+      setDirectPromptDispatching(true);
+      try {
+        await savePendingMobilePrompt(workspace.id, prompt);
+      } catch (error) {
+        setPendingPrompt(null);
+        setPendingPromptStatus(
+          error instanceof Error ? error.message : "Prompt could not be queued.",
+        );
+      } finally {
+        directPromptDispatchingRef.current = false;
+        setDirectPromptDispatching(false);
+      }
       return;
     }
 
@@ -469,7 +508,9 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
       setLatestCommandId(command.commandId);
       setOptimisticPrompts((current) =>
         current.map((prompt) =>
-          prompt.id === optimisticPrompt.id ? { ...prompt, status: "queued" } : prompt
+          prompt.id === optimisticPrompt.id
+            ? { ...prompt, commandId: command.commandId, status: "queued" }
+            : prompt
         )
       );
       void transcriptQuery.refetch();
@@ -555,7 +596,7 @@ export function MobileChatScreen({ chat, onBack }: MobileChatScreenProps) {
   const isUnclaimed = workspace?.visibility === "shared_unclaimed" && !claimedLocally;
   const workspaceCommandReady =
     workspaceStatus === "ready" && Boolean(workspace?.targetId) && Boolean(workspace?.anyharnessWorkspaceId);
-  const promptSubmitting = enqueuePrompt.isPending || directPromptDispatching;
+  const promptSubmitting = enqueuePrompt.isPending || directPromptDispatching || Boolean(pendingPrompt);
   const canSubmit = Boolean(
     draft.trim()
       && !isUnclaimed
@@ -990,7 +1031,12 @@ function latestTranscriptItemSeq(items: readonly CloudTranscriptItem[]): number 
 }
 
 function compareSessions(left: CloudSessionProjection, right: CloudSessionProjection): number {
-  return (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
+  return sessionRecencyMs(right) - sessionRecencyMs(left)
+    || (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
+}
+
+function sessionRecencyMs(session: Pick<CloudSessionProjection, "lastEventAt" | "startedAt">): number {
+  return Date.parse(session.lastEventAt ?? session.startedAt ?? "") || 0;
 }
 
 function effectiveWorkspaceStatus(
@@ -1033,6 +1079,20 @@ function sessionConfigCommandFailureMessage(status: CloudCommandStatus): string 
     case "rejected":
     default:
       return "Session configuration update was rejected.";
+  }
+}
+
+function promptCommandFailureMessage(status: CloudCommandStatus): string {
+  switch (status) {
+    case "expired":
+      return "Prompt expired before it was delivered.";
+    case "superseded":
+      return "Prompt was superseded before it was delivered.";
+    case "failed_delivery":
+      return "Prompt could not be delivered.";
+    case "rejected":
+    default:
+      return "Prompt was rejected.";
   }
 }
 

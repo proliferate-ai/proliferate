@@ -137,7 +137,7 @@ function sessionProjectionFromSummary(
 ): Pick<
   CloudSessionProjection,
   "sessionId" | "targetId" | "workspaceId" | "title" | "status" | "lastEventSeq"
-> {
+> & SessionRecencyFields {
   const session = workspace.lastSessionSummary;
   if (!session) {
     throw new Error("Cannot build a session row without a workspace session summary.");
@@ -149,14 +149,28 @@ function sessionProjectionFromSummary(
     title: session.title ?? null,
     status: session.status,
     lastEventSeq: 0,
+    lastEventAt: session.lastEventAt ?? null,
   };
 }
 
 function compareSessions(
-  left: Pick<CloudSessionProjection, "lastEventSeq">,
-  right: Pick<CloudSessionProjection, "lastEventSeq">,
+  left: SessionRecencyFields,
+  right: SessionRecencyFields,
 ): number {
-  return (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
+  return sessionRecencyMs(right) - sessionRecencyMs(left)
+    || (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
+}
+
+function sessionRecencyMs(
+  session: SessionRecencyFields,
+): number {
+  return Date.parse(session.lastEventAt ?? session.startedAt ?? "") || 0;
+}
+
+interface SessionRecencyFields {
+  lastEventAt?: string | null;
+  startedAt?: string | null;
+  lastEventSeq?: number | null;
 }
 
 function shortSessionLabel(sessionId: string | null): string {

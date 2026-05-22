@@ -136,6 +136,7 @@ async function waitForStartedSession(args: {
   const deadline = Date.now() + 240_000;
   let latestCommand = args.command;
   let expectedSessionId = parseStartedSessionId(latestCommand);
+  let delayMs = 500;
   assertStillCurrent(args.shouldContinue);
   while (true) {
     latestCommand = await refreshCommandStatus(
@@ -165,7 +166,8 @@ async function waitForStartedSession(args: {
     if (Date.now() >= deadline) {
       throw new Error("Timed out waiting for the cloud session to start.");
     }
-    await sleep(500);
+    await sleep(delayMs);
+    delayMs = nextPollDelay(delayMs);
   }
 }
 
@@ -176,6 +178,7 @@ async function waitForCommandAccepted(
 ): Promise<CloudCommandResponse> {
   const deadline = Date.now() + 240_000;
   let latestCommand = initialCommand;
+  let delayMs = 500;
   assertStillCurrent(shouldContinue);
   while (true) {
     latestCommand = await refreshCommandStatus(latestCommand, client, shouldContinue);
@@ -187,7 +190,8 @@ async function waitForCommandAccepted(
     if (Date.now() >= deadline) {
       throw new Error("Timed out waiting for the cloud command to be accepted.");
     }
-    await sleep(500);
+    await sleep(delayMs);
+    delayMs = nextPollDelay(delayMs);
   }
 }
 
@@ -315,4 +319,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function nextPollDelay(currentMs: number): number {
+  return Math.min(Math.round(currentMs * 1.5), 2_500);
 }

@@ -36,6 +36,11 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
     || account.name;
   const email = viewer.data?.user.email ?? account.handle;
   const githubConnected = Boolean(viewer.data?.githubConnected);
+  const githubStateLabel = viewer.isError
+    ? "Unknown"
+    : githubConnected
+      ? "Linked"
+      : "Required";
   const configuredRepos = (repoConfigs.data?.configs ?? []).filter((repo) => repo.configured);
   const organizationRows = organizations.data?.organizations ?? [];
 
@@ -63,12 +68,12 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
           trailing={
             <View style={[styles.connected, !githubConnected && styles.warningChip]}>
               <MobileIcon
-                name={githubConnected ? "check" : "external"}
+                name={githubConnected && !viewer.isError ? "check" : "external"}
                 size={12}
-                color={githubConnected ? colors.success : colors.warning}
+                color={githubConnected && !viewer.isError ? colors.success : colors.warning}
               />
               <Text style={[styles.connectedText, !githubConnected && styles.warningText]}>
-                {githubConnected ? "Linked" : "Required"}
+                {githubStateLabel}
               </Text>
             </View>
           }
@@ -77,7 +82,9 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
           leading={<RowIcon name="shield" tint={colors.info} />}
           title="Auth state"
           subtitle={
-            viewer.isLoading
+            viewer.isError
+              ? "Could not load account readiness"
+              : viewer.isLoading
               ? "Checking account readiness..."
               : viewer.data?.onboardingState === "active"
                 ? "Ready for cloud workspaces and automations"
@@ -96,7 +103,9 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
           leading={<RowIcon name="git-branch" tint={colors.faint} />}
           title="Configured repositories"
           subtitle={
-            repoConfigs.isLoading
+            repoConfigs.isError
+              ? "Could not load repository readiness"
+              : repoConfigs.isLoading
               ? "Loading repo access..."
               : configuredRepos.length === 0
                 ? "No personal cloud repos configured"
@@ -106,7 +115,13 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
       </Section>
 
       <Section label="Teams">
-        {organizations.isLoading ? (
+        {organizations.isError ? (
+          <MobileListRow
+            leading={<RowIcon name="users" tint={colors.warning} />}
+            title="Could not load teams"
+            subtitle="Personal cloud workspaces are still available"
+          />
+        ) : organizations.isLoading ? (
           <MobileListRow
             leading={<RowIcon name="users" tint={colors.faint} />}
             title="Loading teams"

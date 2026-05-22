@@ -1,6 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AppState } from "react-native";
+import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
 import { CloudClientProvider } from "@proliferate/cloud-sdk-react";
-import { type ReactNode, useMemo, useRef } from "react";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
 
 import { mobileEnv } from "../config/env";
 import { createMobileCloudClient } from "../lib/access/cloud/client";
@@ -26,6 +27,17 @@ export function MobileCloudProvider({ children }: { children: ReactNode }) {
     () => createMobileCloudClient(mobileEnv.apiBaseUrl, accessToken),
     [accessToken],
   );
+
+  useEffect(() => {
+    focusManager.setFocused(AppState.currentState === "active");
+    const subscription = AppState.addEventListener("change", (state) => {
+      focusManager.setFocused(state === "active");
+    });
+    return () => {
+      subscription.remove();
+      focusManager.setFocused(undefined);
+    };
+  }, []);
 
   return (
     <QueryClientProvider key={queryClientEpoch} client={queryClient}>

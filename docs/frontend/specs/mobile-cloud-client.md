@@ -500,8 +500,9 @@ Desktop settings tree.
   `packages/product-model`.
 - [x] Keep browser persistence, navigation, and window timers out of shared
   product logic.
-- [ ] Add product-model tests for transcript event/projection fallback,
-  optimistic prompt reconciliation, and config reconciliation.
+- [x] Add product-model tests for transcript event/projection fallback.
+- [ ] Add product-model tests for optimistic prompt reconciliation and config
+  reconciliation.
 
 ### Phase 2 - Mobile New Chat And Workspace Handoff
 
@@ -518,7 +519,7 @@ Desktop settings tree.
 - [x] Render the shared cloud transcript row view in React Native.
 - [x] Add optimistic prompt rows and assistant waiting rows.
 - [x] Add mobile-native composer config controls.
-- [x] Add branch copy/share, workspace details, claim, and command status UI.
+- [x] Add branch copy/share, claim, and command status UI.
 
 ### Phase 4 - Workspace, Session, And Sidebar Parity
 
