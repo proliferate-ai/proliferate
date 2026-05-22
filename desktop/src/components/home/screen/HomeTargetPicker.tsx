@@ -96,10 +96,6 @@ function targetRowSubtext(input: {
   return `${input.repository.name} · ${input.selectedBranchName ?? "default branch"}`;
 }
 
-function repositoryPathLabel(repository: SettingsRepositoryEntry): string {
-  return repository.sourceRoot.replace(/^\/Users\/[^/]+\//, "~/");
-}
-
 function runtimeOptionLabel(input: {
   launchKind: HomeNextRepoLaunchKind;
   cloudAction: CloudRepoActionState;
@@ -140,13 +136,13 @@ function ProjectSearchField({
 }) {
   return (
     <div className="p-2 pb-1.5">
-      <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-surface-control px-3">
-        <Search className="size-4 shrink-0 text-muted-foreground" />
+      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-control px-2.5">
+        <Search className="size-3.5 shrink-0 text-muted-foreground" />
         <Input
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="Search projects"
-          className="h-9 border-0 bg-transparent px-0 py-0 text-[15px] shadow-none focus:ring-0"
+          className="h-8 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
         />
       </div>
     </div>
@@ -255,10 +251,10 @@ export function HomeTargetPicker({
           />
         )}
         side="top"
-        className="w-[26rem] rounded-2xl border border-border bg-popover p-1.5 shadow-floating"
+        className="w-[23rem] rounded-xl border border-border bg-popover p-1 shadow-floating"
       >
         {(close) => (
-          <div className="flex max-h-[25rem] min-h-0 flex-col">
+          <div className="flex max-h-[20rem] min-h-0 flex-col">
             <ProjectSearchField
               value={projectSearchValue}
               onChange={setProjectSearchValue}
@@ -274,17 +270,13 @@ export function HomeTargetPicker({
                     icon={<Folder className="size-4" />}
                     label={repository.name}
                     trailing={isSelected ? <Check className="size-4" /> : null}
-                    className="rounded-xl px-3 py-2 text-[15px]"
+                    className="rounded-lg px-2.5 py-1.5 text-sm"
                     onClick={() => {
                       onSelectRepository(repository.sourceRoot);
                       clearSearch();
                       close();
                     }}
-                  >
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground/80">
-                      {repositoryPathLabel(repository)}
-                    </span>
-                  </PopoverMenuItem>
+                  />
                 );
               })}
               {filteredRepositories.length === 0 ? (
@@ -292,13 +284,13 @@ export function HomeTargetPicker({
               ) : null}
             </div>
 
-            <div className="mx-3 my-1.5 border-t border-border/70" />
+            <div className="mx-2.5 my-1 border-t border-border/70" />
             <div className="pb-1">
               <PopoverMenuItem
-                icon={<FolderPlus className="size-4" />}
+                icon={<FolderPlus className="size-3.5" />}
                 label="Add new project"
-                trailing={<ChevronRight className="size-4" />}
-                className="rounded-xl px-3 py-2 text-[15px]"
+                trailing={<ChevronRight className="size-3.5" />}
+                className="rounded-lg px-2.5 py-1.5 text-sm"
                 onClick={() => {
                   onAddRepository();
                   clearSearch();
@@ -306,10 +298,10 @@ export function HomeTargetPicker({
                 }}
               />
               <PopoverMenuItem
-                icon={<X className="size-4" />}
+                icon={<X className="size-3.5" />}
                 label="Don't work in a project"
-                trailing={destination === "cowork" ? <Check className="size-4" /> : null}
-                className="rounded-xl px-3 py-2 text-[15px]"
+                trailing={destination === "cowork" ? <Check className="size-3.5" /> : null}
+                className="rounded-lg px-2.5 py-1.5 text-sm"
                 onClick={() => {
                   onSelectCowork();
                   clearSearch();
