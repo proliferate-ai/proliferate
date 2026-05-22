@@ -9,7 +9,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { routes } from "../../../config/routes";
 
 export function WorkspacesScreen() {
-  const workspaces = useCloudWorkspaces({ scope: "exposed" });
+  const workspaces = useCloudWorkspaces({ scope: "my" });
 
   return (
     <ProductPageShell
@@ -93,7 +93,7 @@ export function WorkspacesScreen() {
       ) : (
         <EmptyState
           title="No cloud workspaces"
-          description="Create a workspace from Desktop or the cloud setup flow."
+          description="Create a workspace from Home, Desktop, or the cloud setup flow."
         />
       )}
     </ProductPageShell>

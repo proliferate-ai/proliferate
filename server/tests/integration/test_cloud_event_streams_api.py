@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
 from typing import cast
 from uuid import UUID
 
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.integrations.pubsub.models import PubSubMessage
 from proliferate.integrations.pubsub.redis import get_pubsub_bus
+from proliferate.server.cloud.live import service as live_service
 from proliferate.server.cloud.live.domain.channels import target_channel
 from proliferate.server.cloud.live.service import (
     stream_session_events,
@@ -348,3 +350,67 @@ class TestCloudEventStreamsApi:
             )
         finally:
             await workspace_stream.aclose()
+
+    @pytest.mark.asyncio
+    async def test_workspace_stream_exits_cleanly_when_subscriber_closes(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-workspace-stream-close",
+        )
+        target_id, _worker_headers = await create_enrolled_target(
+            client,
+            db_session,
+            auth,
+            suffix="workspace-stream-close",
+        )
+        cloud_workspace_uuid, _exposure_id = await seed_exposed_workspace(
+            db_session,
+            target_id=target_id,
+            auth=auth,
+            workspace_id="workspace-stream-close",
+        )
+        workspace = await get_cloud_workspace_detail(
+            db_session,
+            UUID(auth.user_id),
+            cloud_workspace_uuid,
+        )
+        monkeypatch.setattr(live_service, "_live_bus", _ClosingPubSubBus())
+
+        workspace_stream = cast(
+            "AsyncGenerator[str, None]",
+            stream_workspace_events(workspace=workspace, after_seq=0),
+        )
+        try:
+            workspace_snapshot_frame = await asyncio.wait_for(
+                anext(workspace_stream),
+                timeout=1,
+            )
+            assert sse_event(workspace_snapshot_frame) == "snapshot"
+
+            with pytest.raises(StopAsyncIteration):
+                await asyncio.wait_for(anext(workspace_stream), timeout=1)
+        finally:
+            await workspace_stream.aclose()
+
+
+class _ClosingPubSubBus:
+    @asynccontextmanager
+    async def subscribe(
+        self,
+        _channel: str,
+    ) -> AsyncIterator[AsyncIterator[PubSubMessage]]:
+        yield _closed_message_iterator()
+
+    async def publish(self, _channel: str, _message: PubSubMessage) -> None:
+        return None
+
+
+async def _closed_message_iterator() -> AsyncIterator[PubSubMessage]:
+    return
+    yield PubSubMessage(event="patch", event_id="1", data={})

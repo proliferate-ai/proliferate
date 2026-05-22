@@ -181,6 +181,8 @@ async def stream_session_events(
                     anext(messages),
                     timeout=STREAM_HEARTBEAT_SECONDS,
                 )
+            except StopAsyncIteration:
+                return
             except TimeoutError:
                 yield _sse_event(
                     event="heartbeat",
@@ -229,6 +231,8 @@ async def stream_workspace_events(
                     anext(messages),
                     timeout=STREAM_HEARTBEAT_SECONDS,
                 )
+            except StopAsyncIteration:
+                return
             except TimeoutError:
                 yield _sse_event(
                     event="heartbeat",
@@ -269,6 +273,8 @@ async def stream_target_events(
                     anext(messages),
                     timeout=STREAM_HEARTBEAT_SECONDS,
                 )
+            except StopAsyncIteration:
+                return
             except TimeoutError:
                 yield _sse_event(
                     event="heartbeat",

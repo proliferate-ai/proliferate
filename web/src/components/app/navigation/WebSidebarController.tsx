@@ -30,7 +30,7 @@ export function WebSidebarController() {
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const workspaces = useCloudWorkspaces({ scope: "exposed" });
+  const workspaces = useCloudWorkspaces({ scope: "my" });
   const cloudWorkspaces = workspaces.data ?? [];
 
   const navItems = useMemo(
