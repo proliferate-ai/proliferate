@@ -30,7 +30,7 @@ import type {
   SlackChannel,
   SlackRepoRoutingProfile,
   UpdateSlackBotConfigRequest,
-} from "@/lib/access/cloud/client";
+} from "@proliferate/cloud-sdk";
 
 const EMPTY_AGENT_OPTIONS: Array<{ kind: string; displayName: string }> = [];
 const EMPTY_AGENT_CONFIGS: CloudAgentRunConfig[] = [];

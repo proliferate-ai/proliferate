@@ -5,7 +5,7 @@ import type {
   CloudAgentRunConfig,
   SlackBotConfig,
   UpdateSlackBotConfigRequest,
-} from "@/lib/access/cloud/client";
+} from "@proliferate/cloud-sdk";
 
 interface AgentOption {
   kind: string;

@@ -6,7 +6,7 @@ import type {
   SlackBotConfig,
   SlackChannel,
   UpdateSlackBotConfigRequest,
-} from "@/lib/access/cloud/client";
+} from "@proliferate/cloud-sdk";
 
 interface ChannelsSectionProps {
   config: SlackBotConfig | null;

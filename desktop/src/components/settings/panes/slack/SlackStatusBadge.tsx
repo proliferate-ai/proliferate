@@ -1,5 +1,5 @@
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
-import type { SlackWorkspaceConnectionStatus } from "@/lib/access/cloud/client";
+import type { SlackWorkspaceConnectionStatus } from "@proliferate/cloud-sdk";
 
 const CONNECTION_STATUS_LABELS: Record<SlackWorkspaceConnectionStatus, string> = {
   active: "Connected",

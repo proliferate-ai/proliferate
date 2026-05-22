@@ -8,7 +8,7 @@ import type {
   SlackRepoRoutingProfile,
   UpdateSlackBotConfigRequest,
   UpsertSlackRepoRoutingProfileRequest,
-} from "@/lib/access/cloud/client";
+} from "@proliferate/cloud-sdk";
 
 interface RepoRoutingSectionProps {
   config: SlackBotConfig | null;
