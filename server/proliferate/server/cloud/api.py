@@ -25,6 +25,7 @@ from proliferate.server.cloud.runtime_config.api import (
 )
 from proliferate.server.cloud.sandbox_profiles.api import router as sandbox_profiles_router
 from proliferate.server.cloud.skills.api import router as skills_router
+from proliferate.server.cloud.slack.api import router as slack_router
 from proliferate.server.cloud.target_config.api import router as target_config_router
 from proliferate.server.cloud.target_config.api import worker_router as target_config_worker_router
 from proliferate.server.cloud.target_git_identity.api import (
@@ -52,6 +53,7 @@ router.include_router(mcp_connections_router)
 router.include_router(mcp_oauth_router)
 router.include_router(plugins_router)
 router.include_router(skills_router)
+router.include_router(slack_router)
 router.include_router(webhooks_router)
 router.include_router(targets_router)
 router.include_router(compute_router)

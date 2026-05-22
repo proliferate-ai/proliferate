@@ -23,6 +23,12 @@ export function desktopNavigationTarget(url: string): string | null {
     return `/settings?${params.toString()}`;
   }
 
+  if (parsed.hostname === "settings" && parsed.pathname === "/slack-bot") {
+    const params = new URLSearchParams(parsed.search);
+    params.set("section", "slack-bot");
+    return `/settings?${params.toString()}`;
+  }
+
   if (
     (parsed.hostname === "plugins" || parsed.hostname === "powers")
     && (parsed.pathname === "" || parsed.pathname === "/")

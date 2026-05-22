@@ -1,0 +1,1 @@
+"""Cloud Slack bot integration."""

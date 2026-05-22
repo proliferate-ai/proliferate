@@ -10,6 +10,7 @@ import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 import { KeyboardShortcutsPane } from "@/components/settings/panes/KeyboardShortcutsPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
 import { ReviewSettingsPane } from "@/components/settings/panes/ReviewSettingsPane";
+import { SlackBotPane } from "@/components/settings/panes/SlackBotPane";
 import { BillingPane } from "@/components/settings/panes/BillingPane";
 import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthUnavailablePane";
 import { CloudPane } from "@/components/settings/panes/CloudPane";
@@ -74,6 +75,21 @@ function renderSettingsSection(
   }
   if (activeSection === "organization") {
     return <OrganizationPane />;
+  }
+  if (activeSection === "slack-bot") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <SlackBotPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
   if (activeSection === "cloud") {
     if (!cloudEnabled) {
@@ -147,7 +163,7 @@ export function SettingsScreen({
         activeSection={activeSection}
         onNavigateHome={onNavigateHome}
         onSelectSection={onSelectSection}
-        disabledSections={{ cloud: !cloudEnabled, compute: !cloudEnabled }}
+        disabledSections={{ cloud: !cloudEnabled, compute: !cloudEnabled, "slack-bot": !cloudEnabled }}
         onCheckForUpdates={() => { void checkNow(); }}
         updateActionState={{
           availableVersion,
