@@ -27,6 +27,7 @@ export function useSettingsNavigation({
   const rawTarget = searchParams.get("target");
   const rawCredential = searchParams.get("credential");
   const rawKind = searchParams.get("kind");
+  const rawCheckout = searchParams.get("checkout");
   const rawInviteHandoff = searchParams.get("inviteHandoff");
 
   const selection = useMemo(() => resolveSettingsSelection({
@@ -38,12 +39,14 @@ export function useSettingsNavigation({
     rawTarget,
     rawCredential,
     rawKind,
+    rawCheckout,
     rawInviteHandoff,
     repositories,
   }), [
     rawCloudRepoName,
     rawCloudRepoOwner,
     rawCredential,
+    rawCheckout,
     rawFocus,
     rawInviteHandoff,
     rawKind,

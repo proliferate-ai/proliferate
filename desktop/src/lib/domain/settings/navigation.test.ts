@@ -82,6 +82,19 @@ describe("settings navigation", () => {
     });
   });
 
+  it("preserves checkout return focus on billing settings", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "billing",
+      rawCheckout: "success",
+      repositories: [],
+    })).toEqual({
+      activeSection: "billing",
+      activeRepoSourceRoot: null,
+      focus: { checkout: "success" },
+      inviteHandoff: null,
+    });
+  });
+
   it("resolves a valid repo settings link", () => {
     expect(resolveSettingsSelection({
       rawSection: "repo",

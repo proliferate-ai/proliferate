@@ -127,6 +127,7 @@ export function SettingsScreen() {
           },
         ]}
         onSelectSection={selectSection}
+        contentClassName={activeSection === "billing" ? "max-w-6xl" : undefined}
       >
         {activeSection === "account" ? (
           <AccountSection

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import type { CloudOwnerSelection } from "@proliferate/cloud-sdk";
 import {
@@ -6,6 +7,7 @@ import {
   BillingSettingsPane,
   type BillingActionView,
   type BillingOwnerCardView,
+  type BillingPlanView,
 } from "@proliferate/product-ui/billing/BillingSettingsPane";
 import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
 import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
@@ -18,10 +20,30 @@ import {
 
 export function BillingSettingsSection() {
   const organizations = useOrganizations();
+  const [searchParams] = useSearchParams();
   const adminOrganizations = (organizations.data?.organizations ?? []).filter((organization) => {
     const role = organization.membership?.role;
     return organization.membership?.status === "active" && (role === "owner" || role === "admin");
   });
+  const comparisonOwner = adminOrganizations[0]
+    ? { ownerScope: "organization" as const, organizationId: adminOrganizations[0].id }
+    : undefined;
+  const comparisonBilling = useCloudBilling(comparisonOwner);
+  const comparisonActions = useCloudBillingActions(comparisonOwner);
+  const [comparisonActionError, setComparisonActionError] = useState<string | null>(null);
+  const checkoutReturnState = checkoutReturnStateFromParams(searchParams);
+
+  async function openComparisonBillingAction() {
+    setComparisonActionError(null);
+    try {
+      const response = comparisonBilling.data?.isPaidCloud
+        ? await comparisonActions.createBillingPortal()
+        : await comparisonActions.createCloudCheckout();
+      window.location.assign(response.url);
+    } catch (error) {
+      setComparisonActionError(error instanceof Error ? error.message : "Billing action could not start.");
+    }
+  }
 
   return (
     <section className="space-y-6">
@@ -29,7 +51,26 @@ export function BillingSettingsSection() {
         title="Billing"
         description="Manage personal and organization cloud usage, included runtime, overage, and plan changes."
       />
-      <BillingSettingsPane>
+      <BillingSettingsPane
+        checkoutReturnState={checkoutReturnState}
+        currentPlanKey={planKeyForBilling(comparisonBilling.data)}
+        planComparisonAction={{
+          label: comparisonBilling.data?.isPaidCloud ? "Manage Team billing" : "Upgrade to Team",
+          loading: comparisonBilling.data?.isPaidCloud
+            ? comparisonActions.creatingBillingPortal
+            : comparisonActions.creatingCloudCheckout,
+          disabled: organizations.isLoading || comparisonBilling.isLoading,
+          onClick: () => {
+            void openComparisonBillingAction();
+          },
+        }}
+      >
+        {comparisonActionError ? (
+          <SettingsCard>
+            <SettingsCardRow label="Plan action failed" description={comparisonActionError} />
+          </SettingsCard>
+        ) : null}
+
         <BillingOwnerController
           title="Personal billing"
           description="Applies to your personal cloud sandbox, local-to-cloud work, and personal dispatch usage."
@@ -151,6 +192,23 @@ function BillingOwnerController({
   };
 
   return <BillingOwnerCard view={view} />;
+}
+
+function planKeyForBilling(plan: BillingPlanView | null | undefined) {
+  if (!plan) {
+    return null;
+  }
+  if (plan.isUnlimited && !plan.isPaidCloud) {
+    return "enterprise";
+  }
+  return plan.isPaidCloud ? "team" : "free";
+}
+
+function checkoutReturnStateFromParams(
+  searchParams: URLSearchParams,
+): "success" | "cancel" | null {
+  const checkout = searchParams.get("checkout");
+  return checkout === "success" || checkout === "cancel" ? checkout : null;
 }
 
 function overageActionForPlan({
