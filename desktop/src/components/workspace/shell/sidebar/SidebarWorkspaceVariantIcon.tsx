@@ -1,10 +1,16 @@
-import { CloudIcon, Monitor, Tree } from "@/components/ui/icons";
+import type { ComponentType } from "react";
+import {
+  CloudIcon,
+  Folder,
+  GitBranchIcon,
+  type IconProps,
+} from "@/components/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 
-const VARIANT_ICONS: Record<SidebarWorkspaceVariant, typeof Monitor> = {
-  local: Monitor,
-  worktree: Tree,
+const VARIANT_ICONS: Record<SidebarWorkspaceVariant, ComponentType<IconProps>> = {
+  local: Folder,
+  worktree: GitBranchIcon,
   cloud: CloudIcon,
 };
 

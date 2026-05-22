@@ -134,6 +134,10 @@ vi.mock("@/hooks/ui/use-debug-render-count", () => ({
   useDebugRenderCount: () => {},
 }));
 
+vi.mock("@/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => ({
+  useSidebarShortcutTargets: () => [],
+}));
+
 vi.mock("@/hooks/support/derived/use-sidebar-support-context", () => ({
   useSidebarSupportContext: () => ({
     source: "sidebar",

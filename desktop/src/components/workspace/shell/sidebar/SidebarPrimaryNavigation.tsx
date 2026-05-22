@@ -1,8 +1,8 @@
 import {
-  Calendar,
-  CircleQuestion,
-  Grid,
+  Blocks,
   Home,
+  MessageSquare,
+  Zap,
 } from "@/components/ui/icons";
 import {
   ProductSidebarPrimaryNavigation,
@@ -50,21 +50,21 @@ export function SidebarPrimaryNavigation({
     {
       id: "plugins",
       active: pluginsActive,
-      icon: <Grid className="size-4" />,
+      icon: <Blocks className="size-4" />,
       label: "Plugins",
       shortcutLabel: shortcutLabels.plugins,
     },
     {
       id: "automations",
       active: automationsActive,
-      icon: <Calendar className="size-4" />,
+      icon: <Zap className="size-4" />,
       label: "Automations",
       shortcutLabel: shortcutLabels.automations,
     },
     {
       id: "support",
       active: supportActive,
-      icon: <CircleQuestion className="size-4" />,
+      icon: <MessageSquare className="size-4" />,
       label: "Support",
       shortcutLabel: shortcutLabels.support,
     },

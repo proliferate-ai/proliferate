@@ -5,8 +5,8 @@ import {
 } from "@/config/cloud-sidebar";
 import {
   Archive,
-  GitMerge,
   Pencil,
+  Trash,
 } from "@/components/ui/icons";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
@@ -194,7 +194,7 @@ export function WorkspaceItem({
                 </div>
               </div>
               <PopoverMenuItem
-                icon={<GitMerge className="size-3.5 shrink-0 text-muted-foreground" />}
+                icon={<Trash className="size-3.5 shrink-0 text-muted-foreground" />}
                 label="Delete workspace"
                 variant="sidebar"
                 onClick={() => {
@@ -227,7 +227,7 @@ export function WorkspaceItem({
               )}
               {onMarkDone && (
                 <PopoverMenuItem
-                  icon={<GitMerge className="size-3.5 shrink-0 text-muted-foreground" />}
+                  icon={<Trash className="size-3.5 shrink-0 text-muted-foreground" />}
                   label="Delete workspace..."
                   variant="sidebar"
                   onClick={() => {
