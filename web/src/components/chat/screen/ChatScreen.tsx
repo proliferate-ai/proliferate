@@ -1,21 +1,15 @@
-import {
-  ArrowLeft,
-  ExternalLink,
-  GitBranch,
-  MoreHorizontal,
-  Send,
-  Users,
-} from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   desktopWorkspaceDeepLink,
+  type CloudSessionEvent,
   type CloudSessionProjection,
   type CloudTranscriptItem,
 } from "@proliferate/cloud-sdk";
 import {
   useClaimCloudWorkspace,
   useCloudClient,
+  useCloudSessionEvents,
   useCloudTranscriptSnapshot,
   useCloudWorkspaceSnapshot,
   useCommandStatus,
@@ -23,10 +17,8 @@ import {
   useSessionLive,
   useWorkspaceLive,
 } from "@proliferate/cloud-sdk-react";
-
+import { CloudChatSurface } from "@proliferate/product-ui/chat/CloudChatSurface";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
 import { routes } from "../../../config/routes";
 import {
@@ -39,11 +31,15 @@ import {
   loadPendingHomePrompt,
   type PendingHomePrompt,
 } from "../../../lib/access/cloud/pending-home-prompt-store";
+import { buildCloudTranscriptView } from "../../../lib/domain/chat/cloud-transcript-view";
 
 type PendingHomePromptDispatchRun = {
   key: string;
   active: boolean;
 };
+
+const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
+const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
 
 export function ChatScreen() {
   const { workspaceId, chatId } = useParams();
@@ -75,8 +71,23 @@ export function ChatScreen() {
     session?.sessionId ?? null,
     Boolean(session),
   );
-  const transcriptItems =
-    sessionLive.snapshot?.transcriptItems ?? transcriptQuery.data?.transcriptItems ?? [];
+  const sessionEventsQuery = useCloudSessionEvents(
+    session?.targetId ?? null,
+    session?.sessionId ?? null,
+    Boolean(session),
+  );
+  const transcriptItems = sessionLive.snapshot?.transcriptItems
+    ?? transcriptQuery.data?.transcriptItems
+    ?? EMPTY_TRANSCRIPT_ITEMS;
+  const sessionEvents = sessionEventsQuery.data?.events ?? EMPTY_SESSION_EVENTS;
+  const transcriptView = useMemo(
+    () => buildCloudTranscriptView({
+      sessionId: session?.sessionId ?? null,
+      events: sessionEvents,
+      fallbackItems: transcriptItems,
+    }),
+    [session?.sessionId, sessionEvents, transcriptItems],
+  );
   const enqueuePrompt = useEnqueueCloudCommand<SendPromptPayload>();
   const enqueueStartSession = useEnqueueCloudCommand<StartSessionPayload>();
   const claimWorkspace = useClaimCloudWorkspace();
@@ -193,8 +204,14 @@ export function ChatScreen() {
     workspaceQuery.refetch,
   ]);
 
-  async function submitPrompt(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  useEffect(() => {
+    if (!session || !sessionLive.lastPatchAt) {
+      return;
+    }
+    void sessionEventsQuery.refetch();
+  }, [session?.sessionId, sessionLive.lastPatchAt, sessionEventsQuery.refetch]);
+
+  async function submitPrompt() {
     const text = draft.trim();
     if (!text || !workspace || !session) {
       return;
@@ -231,128 +248,77 @@ export function ChatScreen() {
     pendingHomePromptStatus ??
     commandStatus.data?.errorMessage ??
     (commandStatus.data?.status ? `Command ${commandStatus.data.status}` : null);
+  const transcriptSourceLabel = transcriptView.source === "events"
+    ? "Event transcript"
+    : transcriptView.source === "projection"
+      ? "Projection fallback"
+      : "No transcript";
+  const emptyTitle = !session
+    ? "No projected sessions are available for this workspace yet."
+    : sessionEventsQuery.isLoading && transcriptView.source === "empty"
+      ? "Loading transcript"
+      : "Waiting for the first projected transcript event.";
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-        <IconButton title="Back" onClick={() => navigate(routes.workspaces)}>
-          <ArrowLeft size={16} />
-        </IconButton>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{workspace.sandboxType ?? "cloud"}</span>
-            <span>-</span>
-            <span>{workspace.exposureState ?? "tracked"}</span>
-            <span>-</span>
-            <span>{session?.status ?? workspace.status}</span>
-          </div>
-          <h1 className="truncate text-sm font-semibold">{sessionTitle}</h1>
-        </div>
-        {isUnclaimed && (
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={claimWorkspace.isPending}
-            onClick={() => claimWorkspace.mutate({ workspaceId: workspace.id })}
-          >
-            <Users size={14} />
-            Claim
-          </Button>
-        )}
-        <a
-          href={desktopWorkspaceDeepLink(workspace.id)}
-          className="inline-flex h-8 items-center gap-2 rounded-md border border-input px-3 text-xs text-muted-foreground hover:bg-accent"
-        >
-          <ExternalLink size={14} />
-          Desktop
-        </a>
-        <IconButton title="Session menu">
-          <MoreHorizontal size={16} />
-        </IconButton>
-      </header>
-
-      <div className="web-scrollbar min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl px-6 py-6">
-          <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1">
-              <GitBranch size={13} />
-              {workspace.repo.branch ?? workspace.repo.baseBranch ?? "main"}
-            </span>
-            <span className="rounded-md border border-border px-2 py-1">
-              {workspace.repo.owner}/{workspace.repo.name}
-            </span>
-            {workspace.visibility !== "private" && (
-              <span className="rounded-md border border-border px-2 py-1">
-                {workspace.visibility}
-              </span>
-            )}
-            <span className="rounded-md border border-border px-2 py-1">
-              {sessionLive.isConnected ? "Live" : "Snapshot"}
-            </span>
-          </div>
-
-          {!session ? (
-            <div className="rounded-lg border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
-              No projected sessions are available for this workspace yet.
-            </div>
-          ) : transcriptItems.length > 0 ? (
-            <div className="space-y-3">
-              {transcriptItems.map((item) => (
-                <TranscriptMessage key={item.itemId} item={item} />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-border bg-card p-5 text-sm text-muted-foreground">
-              Waiting for the first projected transcript event.
-            </div>
-          )}
-        </div>
-      </div>
-
-      <footer className="shrink-0 border-t border-border p-4">
-        <form
-          onSubmit={(event) => void submitPrompt(event)}
-          className="mx-auto flex max-w-3xl items-end gap-2 rounded-lg border border-input bg-card p-2"
-        >
-          <Textarea
-            rows={2}
-            value={draft}
-            onChange={(event) => setDraft(event.currentTarget.value)}
-            disabled={!session}
-            className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-            placeholder={
-              isUnclaimed
-                ? "Claim this workspace to reply"
-                : session
-                  ? "Message this session"
-                  : "No active projected session"
-            }
-          />
-          <Button size="icon" aria-label="Send message" disabled={!canSubmit}>
-            <Send size={15} />
-          </Button>
-        </form>
-        {commandMessage && (
-          <p className="mx-auto mt-2 max-w-3xl text-xs text-muted-foreground">{commandMessage}</p>
-        )}
-      </footer>
-    </div>
-  );
-}
-
-function TranscriptMessage({ item }: { item: CloudTranscriptItem }) {
-  const role = transcriptRole(item);
-  return (
-    <article
-      className={`rounded-lg border border-border p-4 ${
-        role === "assistant" ? "bg-card" : "bg-background"
-      }`}
-    >
-      <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">{role}</div>
-      <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
-        {item.text ?? item.title ?? item.kind ?? "Projected event"}
-      </p>
-    </article>
+    <CloudChatSurface
+      title={sessionTitle}
+      eyebrowItems={[
+        workspace.sandboxType ?? "cloud",
+        workspace.exposureState ?? "tracked",
+        session?.status ?? workspace.status,
+      ]}
+      chips={[
+        {
+          id: "branch",
+          label: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
+          icon: "branch",
+        },
+        {
+          id: "repo",
+          label: `${workspace.repo.owner}/${workspace.repo.name}`,
+        },
+        ...(workspace.visibility !== "private"
+          ? [{ id: "visibility", label: workspace.visibility }]
+          : []),
+        {
+          id: "live",
+          label: sessionLive.isConnected ? "Live" : "Snapshot",
+        },
+        {
+          id: "source",
+          label: transcriptSourceLabel,
+        },
+      ]}
+      transcriptRows={transcriptView.rows}
+      emptyTitle={emptyTitle}
+      emptyDescription={
+        !session ? "Create or send a prompt from Desktop or the cloud setup flow." : undefined
+      }
+      commandMessage={commandMessage}
+      primaryAction={isUnclaimed
+        ? {
+          label: "Claim",
+          kind: "claim",
+          loading: claimWorkspace.isPending,
+          onClick: () => claimWorkspace.mutate({ workspaceId: workspace.id }),
+        }
+        : null}
+      desktopHref={desktopWorkspaceDeepLink(workspace.id)}
+      composer={{
+        value: draft,
+        onChange: setDraft,
+        onSubmit: () => void submitPrompt(),
+        disabled: !session || isUnclaimed,
+        canSubmit,
+        isSubmitting: enqueuePrompt.isPending,
+        placeholder: isUnclaimed
+          ? "Claim this workspace to reply"
+          : session
+            ? "Message this session"
+            : "No active projected session",
+      }}
+      onBack={() => navigate(routes.workspaces)}
+    />
   );
 }
 
@@ -372,14 +338,4 @@ function MissingState({ title }: { title: string }) {
 
 function compareSessions(left: CloudSessionProjection, right: CloudSessionProjection): number {
   return (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
-}
-
-function transcriptRole(item: CloudTranscriptItem): "user" | "assistant" | "system" {
-  if (item.kind === "user_message" || item.kind === "prompt") {
-    return "user";
-  }
-  if (item.kind === "system" || item.kind === "tool") {
-    return "system";
-  }
-  return "assistant";
 }
