@@ -6,6 +6,7 @@ Scope:
 
 - `desktop/src/**`
 - `web/src/**`
+- `mobile/src/**`
 - shared frontend packages under `packages/design/**`, `packages/ui/**`, and
   `packages/product-ui/**`, and `packages/product-model/**` where explicitly
   noted by the focused guides
@@ -74,6 +75,9 @@ Specs:
   workspace/session materialization handoff.
 - [specs/web-desktop-parity.md](specs/web-desktop-parity.md) for Web matching
   Desktop chat/workspace UX through shared product-ui/product-model surfaces.
+- [specs/mobile-cloud-client.md](specs/mobile-cloud-client.md) for the mobile
+  cloud client, native chat parity, workspace/session flows, automations, and
+  settings.
 - [specs/workspace-files.md](specs/workspace-files.md) for workspace file
   browsing, file viewing, diff viewing, Changes, or all-changes review.
 
@@ -141,6 +145,24 @@ web/src/
   pages/
   providers/
   index.css
+
+mobile/src/
+  App.tsx
+  components/
+    <domain>/
+  config/
+  hooks/
+    <domain>/
+  lib/
+    access/
+      cloud/
+    domain/
+    infra/
+  navigation/
+  providers/
+  stores/
+    <domain>/
+  styles/
 
 packages/
   design/

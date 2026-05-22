@@ -13,12 +13,20 @@ export interface MobileCloudChat {
   workspaceName: string;
   repoLabel: string;
   branchLabel: string;
-  targetId: string;
+  targetId: string | null;
   workspaceRuntimeId: string | null;
-  sessionId: string;
+  sessionId: string | null;
   title: string;
   status: string;
   visibility: string;
+}
+
+export interface MobilePendingPrompt {
+  id: string;
+  text: string;
+  modelId: string | null;
+  modeId: string | null;
+  createdAt: number;
 }
 
 export const drawerRoutes: DrawerRoute[] = [

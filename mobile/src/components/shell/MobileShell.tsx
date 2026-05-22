@@ -207,9 +207,9 @@ export function MobileShell() {
 
           <View style={styles.body}>
             {route === "home" ? (
-              <MobileHomeScreen onOpenSessions={() => navigate("sessions")} />
+              <MobileHomeScreen onOpenChat={openChat} />
             ) : route === "workspaces" ? (
-              <MobileWorkspacesScreen />
+              <MobileWorkspacesScreen onOpenChat={openChat} />
             ) : route === "sessions" ? (
               <MobileSessionsScreen onOpenChat={openChat} />
             ) : route === "automations" ? (

@@ -31,6 +31,15 @@ import type {
   CloudChatTranscriptRowView,
 } from "@proliferate/product-ui/chat/CloudChatTranscript";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { buildCloudTranscriptView } from "@proliferate/product-model/chats/cloud/transcript-view";
+import {
+  buildCloudChatComposerControls,
+  DEFAULT_DIRECT_PROMPT_MODEL_ID,
+  getLiveConfigControlValue,
+  pendingConfigChangeKey,
+  readSessionLiveConfig,
+  type PendingConfigChange,
+} from "@proliferate/product-model/chats/cloud/composer-controls";
 
 import { routes } from "../../../config/routes";
 import {
@@ -45,15 +54,6 @@ import {
   savePendingHomePrompt,
   type PendingHomePrompt,
 } from "../../../lib/access/cloud/pending-home-prompt-store";
-import {
-  buildCloudChatComposerControls,
-  DEFAULT_DIRECT_PROMPT_MODEL_ID,
-  getLiveConfigControlValue,
-  pendingConfigChangeKey,
-  readSessionLiveConfig,
-  type PendingConfigChange,
-} from "../../../lib/domain/chat/cloud-composer-controls";
-import { buildCloudTranscriptView } from "../../../lib/domain/chat/cloud-transcript-view";
 
 type PendingHomePromptDispatchRun = {
   key: string;

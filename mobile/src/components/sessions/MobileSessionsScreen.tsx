@@ -15,7 +15,7 @@ interface MobileSessionsScreenProps {
 }
 
 export function MobileSessionsScreen({ onOpenChat }: MobileSessionsScreenProps) {
-  const workspaces = useCloudWorkspaces({ scope: "exposed" });
+  const workspaces = useCloudWorkspaces({ scope: "my" });
   const chats = (workspaces.data ?? []).flatMap(cloudChatsForWorkspace);
 
   return (

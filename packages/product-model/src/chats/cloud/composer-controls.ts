@@ -3,7 +3,34 @@ import type {
   SessionLiveConfigSnapshot,
 } from "@anyharness/sdk";
 import type { CloudSessionProjection } from "@proliferate/cloud-sdk";
-import type { CloudChatComposerControlView } from "@proliferate/product-ui/chat/CloudChatComposer";
+
+export interface CloudChatComposerControlOptionView {
+  id: string;
+  label: string;
+  description?: string | null;
+  selected?: boolean;
+  disabled?: boolean;
+}
+
+export interface CloudChatComposerControlGroupView {
+  id: string;
+  label?: string | null;
+  options: readonly CloudChatComposerControlOptionView[];
+}
+
+export interface CloudChatComposerControlView {
+  id: string;
+  key?: string | null;
+  label: string;
+  detail?: string | null;
+  icon?: "bot" | "brain" | "cloud" | "settings";
+  placement?: "leading" | "trailing";
+  disabled?: boolean;
+  active?: boolean;
+  pendingState?: "sending" | "queued" | null;
+  groups: readonly CloudChatComposerControlGroupView[];
+  onSelect?: (optionId: string) => void;
+}
 
 export type PendingConfigStatus = "sending" | "queued";
 

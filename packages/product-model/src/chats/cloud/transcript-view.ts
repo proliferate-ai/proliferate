@@ -9,26 +9,44 @@ import type {
   CloudPendingInteraction,
   CloudTranscriptItem,
 } from "@proliferate/cloud-sdk";
-import type { CloudChatTranscriptRowView } from "@proliferate/product-ui/chat/CloudChatTranscript";
 import {
   formatCollapsedActionsSummary,
   summarizeCollapsedActions,
-} from "@proliferate/product-model/chats/transcript/transcript-collapsed-actions";
-import { reconstructTranscriptState } from "@proliferate/product-model/chats/transcript/envelope-to-state";
+} from "../transcript/transcript-collapsed-actions";
+import { reconstructTranscriptState } from "../transcript/envelope-to-state";
 import {
   buildTranscriptVirtualRows,
   type TranscriptVirtualRow,
-} from "@proliferate/product-model/chats/transcript/transcript-virtual-rows";
-import { describeToolCallDisplay } from "@proliferate/product-model/chats/tools/tool-call-display";
-import { getToolCallShellCommand } from "@proliferate/product-model/chats/transcript/transcript-tool-commands";
+} from "../transcript/transcript-virtual-rows";
+import { describeToolCallDisplay } from "../tools/tool-call-display";
+import { getToolCallShellCommand } from "../transcript/transcript-tool-commands";
 import {
   blockBelongsToCompletedHistory,
-} from "@proliferate/product-model/chats/transcript/transcript-rendering";
+} from "../transcript/transcript-rendering";
 import {
   turnHasAssistantRenderableTranscriptContent,
-} from "@proliferate/product-model/chats/pending-prompts/pending-prompts";
+} from "../pending-prompts/pending-prompts";
 
 const MAX_BODY_PREVIEW_LENGTH = 2_000;
+
+export type CloudChatTranscriptRowKind =
+  | "assistant"
+  | "error"
+  | "system"
+  | "thought"
+  | "tool"
+  | "tool_group"
+  | "user";
+
+export interface CloudChatTranscriptRowView {
+  id: string;
+  kind: CloudChatTranscriptRowKind;
+  title?: string | null;
+  body?: string | null;
+  detail?: string | null;
+  status?: string | null;
+  streaming?: boolean;
+}
 
 type CloudChatTranscriptRowWithSource = CloudChatTranscriptRowView & {
   sourceRequestId?: string | null;

@@ -391,6 +391,9 @@ importers:
       '@anyharness/sdk':
         specifier: workspace:*
         version: link:../../anyharness/sdk
+      '@proliferate/cloud-sdk':
+        specifier: workspace:*
+        version: link:../../cloud/sdk
     devDependencies:
       typescript:
         specifier: ^5.7
