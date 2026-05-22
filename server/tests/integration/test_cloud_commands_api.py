@@ -374,10 +374,25 @@ class TestCloudCommandsApi:
             email_prefix="cloud-commands",
         )
         target_id, worker_headers = await _create_enrolled_target(client, db_session, auth)
+        cloud_workspace_id = await _create_ready_cloud_workspace(
+            db_session,
+            auth,
+            target_id=target_id,
+            anyharness_workspace_id="workspace-1",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=UUID(target_id),
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-1",
+        )
+        await db_session.commit()
 
         command_body = {
             "idempotencyKey": "prompt-1",
             "targetId": target_id,
+            "cloudWorkspaceId": cloud_workspace_id,
             "workspaceId": "workspace-1",
             "sessionId": "session-1",
             "kind": "send_prompt",
@@ -393,7 +408,7 @@ class TestCloudCommandsApi:
             headers=auth.headers,
             json=command_body,
         )
-        assert created.status_code == 200
+        assert created.status_code == 200, created.text
         command = created.json()
         assert command["status"] == "queued"
         assert command["targetId"] == target_id
