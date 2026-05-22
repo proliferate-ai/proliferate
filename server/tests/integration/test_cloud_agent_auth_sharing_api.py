@@ -60,9 +60,7 @@ def _claude_file_payload(api_key: str) -> dict[str, object]:
         "files": [
             {
                 "relativePath": ".claude.json",
-                "contentBase64": b64encode(
-                    f'{{"apiKey":"{api_key}"}}'.encode()
-                ).decode("ascii"),
+                "contentBase64": b64encode(f'{{"apiKey":"{api_key}"}}'.encode()).decode("ascii"),
             }
         ],
     }

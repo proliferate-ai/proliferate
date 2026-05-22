@@ -1,15 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudCommandActorKind, CloudCommandKind, CloudCommandSource
-from proliferate.db.models.cloud.agent_auth import SandboxProfileTargetState
-from proliferate.db.models.cloud.mcp import CloudMcpConnection
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
+from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_mcp import auth as mcp_auth_store
 from proliferate.db.store.cloud_mcp.connections import (
     list_enabled_connections_for_organization_profile,
@@ -69,7 +68,6 @@ from proliferate.server.cloud.target_config.models import (
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 from proliferate.server.cloud.worker.slot_guard import require_current_managed_worker_slot
 from proliferate.utils.crypto import decrypt_json, encrypt_json
-from proliferate.utils.time import utcnow
 
 
 async def refresh_profile_runtime_config(
@@ -285,7 +283,7 @@ async def worker_runtime_config_fragment(
     revision_id: UUID,
 ) -> RuntimeConfigMaterializationFragment:
     await require_current_managed_worker_slot(db, auth=auth)
-    await _require_worker_revision(db, auth=auth, revision_id=revision_id)
+    await _require_current_worker_revision(db, auth=auth, revision_id=revision_id)
     return await runtime_config_fragment_for_revision(db, revision_id=revision_id)
 
 
@@ -297,7 +295,7 @@ async def worker_runtime_config_artifact(
     artifact_hash: str,
 ) -> RuntimeConfigArtifactResponse:
     await require_current_managed_worker_slot(db, auth=auth)
-    revision = await _require_worker_revision(db, auth=auth, revision_id=revision_id)
+    revision = await _require_current_worker_revision(db, auth=auth, revision_id=revision_id)
     artifact = await artifact_store.get_artifact(
         db,
         revision_id=revision.id,
@@ -317,6 +315,7 @@ async def worker_runtime_config_artifact(
             "Runtime config artifact payload is invalid.",
             status_code=500,
         )
+    _raise_if_artifact_integrity_invalid(artifact, payload=payload, content=content)
     return RuntimeConfigArtifactResponse(
         hash=artifact.artifact_hash,
         content_type=artifact.content_type,
@@ -338,7 +337,7 @@ async def worker_runtime_config_credentials(
     body: WorkerRuntimeConfigCredentialMaterializationRequest,
 ) -> WorkerRuntimeConfigCredentialMaterializationResponse:
     await require_current_managed_worker_slot(db, auth=auth)
-    revision = await _require_worker_revision(db, auth=auth, revision_id=revision_id)
+    revision = await _require_current_worker_revision(db, auth=auth, revision_id=revision_id)
     manifest = parse_json_dict(revision.manifest_json) or {}
     allowed_refs = {
         str(ref["credentialRef"])
@@ -380,60 +379,39 @@ async def record_worker_runtime_config_status(
 ) -> WorkerRuntimeConfigStatusResponse:
     await require_current_managed_worker_slot(db, auth=auth)
     revision = await _require_worker_revision(db, auth=auth, revision_id=revision_id)
-    row = (
-        await db.execute(
-            select(SandboxProfileTargetState)
-            .where(
-                SandboxProfileTargetState.sandbox_profile_id == revision.sandbox_profile_id,
-                SandboxProfileTargetState.target_id == auth.target_id,
-            )
-            .with_for_update()
+    if not await _worker_revision_is_current(db, revision=revision):
+        return WorkerRuntimeConfigStatusResponse(
+            revision_id=str(revision.id),
+            status="stale",
+            updated=False,
         )
-    ).scalar_one_or_none()
-    now = utcnow()
-    if row is None:
-        row = SandboxProfileTargetState(
-            sandbox_profile_id=revision.sandbox_profile_id,
-            target_id=auth.target_id,
-            desired_agent_auth_revision=0,
-            applied_agent_auth_revision=None,
-            agent_auth_status="applied",
-            agent_auth_force_restart_required=False,
-            applied_runtime_config_sequence=0,
-            applied_runtime_config_revision_id=None,
-            runtime_config_status=body.status,
-            created_at=now,
-            updated_at=now,
-        )
-        db.add(row)
-    row.runtime_config_status = body.status
-    row.last_runtime_config_worker_id = auth.worker_id
-    row.last_runtime_config_attempted_at = now
-    row.last_runtime_config_error_code = body.error_code
-    row.last_runtime_config_error_message = body.error_message
-    if body.status == "applied":
-        row.applied_runtime_config_sequence = revision.sequence
-        row.applied_runtime_config_revision_id = str(revision.id)
-        row.last_runtime_config_applied_at = now
-        row.last_runtime_config_error_code = None
-        row.last_runtime_config_error_message = None
-    elif body.status == "failed":
+    error_message = body.error_message
+    if body.status == "failed":
         details = {
             "missingArtifacts": body.missing_artifacts,
             "missingCredentials": body.missing_credentials,
             "errorMessage": body.error_message,
         }
-        row.last_runtime_config_error_message = json.dumps(
+        error_message = json.dumps(
             details,
             ensure_ascii=True,
             separators=(",", ":"),
             sort_keys=True,
         )
-    row.updated_at = now
-    await db.flush()
+    state = await agent_auth_store.record_runtime_config_worker_status(
+        db,
+        sandbox_profile_id=revision.sandbox_profile_id,
+        target_id=auth.target_id,
+        sequence=revision.sequence,
+        revision_id=revision.id,
+        worker_id=auth.worker_id,
+        status=body.status,
+        error_code=body.error_code,
+        error_message=error_message,
+    )
     return WorkerRuntimeConfigStatusResponse(
         revision_id=str(revision.id),
-        status=row.runtime_config_status,
+        status=state.runtime_config_status,
         updated=True,
     )
 
@@ -530,42 +508,13 @@ async def _mark_primary_target_runtime_config_pending(
     target_id = await sandbox_profile_store.load_primary_target_id(db, profile_id)
     if target_id is None:
         return
-    row = (
-        await db.execute(
-            select(SandboxProfileTargetState)
-            .where(
-                SandboxProfileTargetState.sandbox_profile_id == profile_id,
-                SandboxProfileTargetState.target_id == target_id,
-            )
-            .with_for_update()
-        )
-    ).scalar_one_or_none()
-    now = utcnow()
-    if row is None:
-        row = SandboxProfileTargetState(
-            sandbox_profile_id=profile_id,
-            target_id=target_id,
-            desired_agent_auth_revision=0,
-            applied_agent_auth_revision=None,
-            agent_auth_status="applied",
-            agent_auth_force_restart_required=False,
-            applied_runtime_config_sequence=0,
-            applied_runtime_config_revision_id=None,
-            runtime_config_status="pending",
-            created_at=now,
-            updated_at=now,
-        )
-        db.add(row)
-        await db.flush()
-        return
-    if (
-        row.applied_runtime_config_revision_id == str(revision_id)
-        and row.applied_runtime_config_sequence >= sequence
-    ):
-        return
-    row.runtime_config_status = "pending"
-    row.updated_at = now
-    await db.flush()
+    await agent_auth_store.mark_runtime_config_pending(
+        db,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        sequence=sequence,
+        revision_id=revision_id,
+    )
 
 
 async def _mark_primary_target_runtime_config_failed(
@@ -579,49 +528,20 @@ async def _mark_primary_target_runtime_config_failed(
     target_id = await sandbox_profile_store.load_primary_target_id(db, profile_id)
     if target_id is None:
         return
-    row = (
-        await db.execute(
-            select(SandboxProfileTargetState)
-            .where(
-                SandboxProfileTargetState.sandbox_profile_id == profile_id,
-                SandboxProfileTargetState.target_id == target_id,
-            )
-            .with_for_update()
-        )
-    ).scalar_one_or_none()
-    now = utcnow()
-    if row is None:
-        row = SandboxProfileTargetState(
-            sandbox_profile_id=profile_id,
-            target_id=target_id,
-            desired_agent_auth_revision=0,
-            applied_agent_auth_revision=None,
-            agent_auth_status="applied",
-            agent_auth_force_restart_required=False,
-            applied_runtime_config_sequence=0,
-            applied_runtime_config_revision_id=None,
-            runtime_config_status="failed",
-            created_at=now,
-            updated_at=now,
-        )
-        db.add(row)
-    row.runtime_config_status = "failed"
-    row.last_runtime_config_attempted_at = now
-    row.last_runtime_config_error_code = _first_blocking_error_code(blocking_errors)
-    row.last_runtime_config_error_message = json.dumps(
-        {"blockingErrors": list(blocking_errors)},
-        ensure_ascii=True,
-        separators=(",", ":"),
-        sort_keys=True,
+    await agent_auth_store.mark_runtime_config_failed(
+        db,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        sequence=sequence,
+        revision_id=revision_id,
+        error_code=_first_blocking_error_code(blocking_errors),
+        error_message=json.dumps(
+            {"blockingErrors": list(blocking_errors)},
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
     )
-    if (
-        row.applied_runtime_config_revision_id == str(revision_id)
-        and row.applied_runtime_config_sequence >= sequence
-    ):
-        row.applied_runtime_config_sequence = 0
-        row.applied_runtime_config_revision_id = None
-    row.updated_at = now
-    await db.flush()
 
 
 def _first_blocking_error_code(blocking_errors: tuple[dict[str, object], ...]) -> str:
@@ -806,22 +726,12 @@ async def _record_runtime_config_command(
     target_id: UUID,
     command_id: UUID,
 ) -> None:
-    row = (
-        await db.execute(
-            select(SandboxProfileTargetState)
-            .where(
-                SandboxProfileTargetState.sandbox_profile_id == profile_id,
-                SandboxProfileTargetState.target_id == target_id,
-            )
-            .with_for_update()
-        )
-    ).scalar_one_or_none()
-    if row is None:
-        return
-    row.last_runtime_config_command_id = command_id
-    row.runtime_config_status = "pending"
-    row.updated_at = utcnow()
-    await db.flush()
+    await agent_auth_store.record_runtime_config_command(
+        db,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+        command_id=command_id,
+    )
 
 
 async def _require_worker_revision(
@@ -845,6 +755,61 @@ async def _require_worker_revision(
             status_code=404,
         )
     return revision
+
+
+async def _require_current_worker_revision(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    revision_id: UUID,
+) -> SandboxProfileRuntimeConfigRevisionSnapshot:
+    revision = await _require_worker_revision(db, auth=auth, revision_id=revision_id)
+    if not await _worker_revision_is_current(db, revision=revision):
+        raise CloudApiError(
+            "runtime_config_revision_stale",
+            "Runtime config revision is no longer current for this target.",
+            status_code=409,
+        )
+    return revision
+
+
+async def _worker_revision_is_current(
+    db: AsyncSession,
+    *,
+    revision: SandboxProfileRuntimeConfigRevisionSnapshot,
+) -> bool:
+    _current, current_revision = await revision_store.get_current(
+        db,
+        sandbox_profile_id=revision.sandbox_profile_id,
+    )
+    return current_revision is not None and current_revision.id == revision.id
+
+
+def _raise_if_artifact_integrity_invalid(
+    artifact: artifact_store.SandboxProfileRuntimeConfigArtifactSnapshot,
+    *,
+    payload: dict[str, object],
+    content: str,
+) -> None:
+    expected_hash = artifact.artifact_hash
+    byte_size = len(content.encode("utf-8"))
+    payload_hash = payload.get("hash")
+    payload_content_type = payload.get("contentType")
+    if (
+        byte_size != artifact.byte_size
+        or _artifact_content_hash(content) != expected_hash
+        or (payload_hash is not None and payload_hash != expected_hash)
+        or (payload_content_type is not None and payload_content_type != artifact.content_type)
+    ):
+        raise CloudApiError(
+            "runtime_config_artifact_integrity_mismatch",
+            "Runtime config artifact payload does not match its recorded hash.",
+            status_code=500,
+        )
+
+
+def _artifact_content_hash(content: str) -> str:
+    return f"sha256:{hashlib.sha256(content.encode('utf-8')).hexdigest()}"
 
 
 def _credential_refs_from_manifest(manifest: dict[str, object]) -> list[dict[str, object]]:
@@ -873,9 +838,6 @@ async def _resolve_runtime_credential_ref(
     except ValueError:
         return None
     field_name = parts[2]
-    connection = await db.get(CloudMcpConnection, connection_db_id)
-    if connection is None:
-        return None
     auth = await mcp_auth_store.load_connection_auth(
         db,
         connection_db_id=connection_db_id,

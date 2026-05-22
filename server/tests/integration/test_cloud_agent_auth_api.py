@@ -69,9 +69,7 @@ def _claude_file_payload(api_key: str) -> dict[str, object]:
         "files": [
             {
                 "relativePath": ".claude.json",
-                "contentBase64": b64encode(
-                    f'{{"apiKey":"{api_key}"}}'.encode()
-                ).decode("ascii"),
+                "contentBase64": b64encode(f'{{"apiKey":"{api_key}"}}'.encode()).decode("ascii"),
             }
         ],
     }
@@ -316,9 +314,7 @@ async def test_revoked_synced_selection_materializes_invalid_cleanup_plan(
             "files": [
                 {
                     "relativePath": ".claude.json",
-                    "contentBase64": b64encode(
-                        b'{"apiKey":"sk-ant-test"}'
-                    ).decode("ascii"),
+                    "contentBase64": b64encode(b'{"apiKey":"sk-ant-test"}').decode("ascii"),
                 }
             ],
         },
@@ -404,9 +400,9 @@ async def test_revoked_synced_selection_materializes_invalid_cleanup_plan(
     assert selection["agentKind"] == "claude"
     assert selection["status"] == "invalid"
     assert selection["syncedFiles"]["files"] == []
-    assert {
-        cleanup["relativePath"] for cleanup in selection["syncedFiles"]["cleanup"]
-    } == {".claude.json"}
+    assert {cleanup["relativePath"] for cleanup in selection["syncedFiles"]["cleanup"]} == {
+        ".claude.json"
+    }
 
 
 @pytest.mark.asyncio

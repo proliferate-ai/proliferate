@@ -80,7 +80,7 @@ async def test_provisioned_workspace_is_sane(
         assert connection["accessToken"]
         assert connection["anyharnessWorkspaceId"]
         assert connection["runtimeGeneration"] >= 1
-        assert connection["allowedAgentKinds"] == ["claude", "codex", "gemini"]
+        assert connection["allowedAgentKinds"] == ["claude", "codex", "opencode", "gemini"]
         assert connection["readyAgentKinds"] == ["claude"]
 
         await assert_workspace_sane(

@@ -248,8 +248,7 @@ async def lease_next_command(
             return None
         active_slot = (
             await db.execute(
-                select(CloudSandbox.id)
-                .where(
+                select(CloudSandbox.id).where(
                     CloudSandbox.id == worker.cloud_sandbox_id,
                     CloudSandbox.target_id == target_id,
                     CloudSandbox.slot_generation == worker.slot_generation,

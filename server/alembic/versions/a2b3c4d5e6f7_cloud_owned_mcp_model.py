@@ -47,9 +47,15 @@ def _has_check_constraint(table_name: str, constraint_name: str) -> bool:
 
 def upgrade() -> None:
     """Upgrade schema."""
-    if not _has_column("cloud_mcp_connection", "org_id"):
+    if not _has_column("cloud_mcp_connection", "org_id") and not _has_column(
+        "cloud_mcp_connection",
+        "organization_id",
+    ):
         op.add_column("cloud_mcp_connection", sa.Column("org_id", sa.Uuid(), nullable=True))
-    if not _has_index("cloud_mcp_connection", "ix_cloud_mcp_connection_org_id"):
+    if _has_column("cloud_mcp_connection", "org_id") and not _has_index(
+        "cloud_mcp_connection",
+        "ix_cloud_mcp_connection_org_id",
+    ):
         op.create_index(
             "ix_cloud_mcp_connection_org_id",
             "cloud_mcp_connection",
@@ -83,7 +89,7 @@ def upgrade() -> None:
         )
 
     op.alter_column("cloud_mcp_connection", "payload_ciphertext", nullable=True)
-    if not _has_check_constraint(
+    if _has_column("cloud_mcp_connection", "user_id") and not _has_check_constraint(
         "cloud_mcp_connection",
         "ck_cloud_mcp_connection_v1_user_id",
     ):
@@ -92,7 +98,7 @@ def upgrade() -> None:
             "cloud_mcp_connection",
             "user_id IS NOT NULL",
         )
-    if not _has_check_constraint(
+    if _has_column("cloud_mcp_connection", "org_id") and not _has_check_constraint(
         "cloud_mcp_connection",
         "ck_cloud_mcp_connection_v1_org_id_null",
     ):
