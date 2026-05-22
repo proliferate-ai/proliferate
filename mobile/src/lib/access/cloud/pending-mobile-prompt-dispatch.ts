@@ -39,8 +39,36 @@ const RETRYABLE_READINESS_ERROR_CODES = new Set([
   "cloud_command_agent_auth_not_ready",
 ]);
 
+const RETRYABLE_FAILURE_PATTERNS = [
+  "timed out waiting for the cloud session to start",
+  "timed out waiting for the cloud command to be accepted",
+  "could not load existing sessions before starting a new one",
+];
+
 export class RetryablePendingPromptDispatchError extends Error {
   readonly retryable = true;
+}
+
+export function shouldRetryPendingMobilePromptFailure(
+  prompt: Pick<MobilePendingPrompt, "failedAt" | "failureMessage">,
+): boolean {
+  if (!prompt.failedAt || !prompt.failureMessage) {
+    return false;
+  }
+  return isRetryablePendingPromptFailureMessage(prompt.failureMessage);
+}
+
+export function rearmRetryablePendingMobilePrompt(
+  prompt: MobilePendingPrompt,
+): MobilePendingPrompt {
+  if (!shouldRetryPendingMobilePromptFailure(prompt)) {
+    return prompt;
+  }
+  return {
+    ...prompt,
+    failedAt: null,
+    failureMessage: null,
+  };
 }
 
 export async function dispatchPendingMobilePrompt(args: {
@@ -168,7 +196,9 @@ async function waitForStartedSession(args: {
     }
     assertStillCurrent(args.shouldContinue);
     if (Date.now() >= deadline) {
-      throw new Error("Timed out waiting for the cloud session to start.");
+      throw new RetryablePendingPromptDispatchError(
+        "Still waiting for the cloud session to start. Retrying queued prompt handoff.",
+      );
     }
     await sleep(delayMs);
     delayMs = nextPollDelay(delayMs);
@@ -192,7 +222,9 @@ async function waitForCommandAccepted(
     }
     assertStillCurrent(shouldContinue);
     if (Date.now() >= deadline) {
-      throw new Error("Timed out waiting for the cloud command to be accepted.");
+      throw new RetryablePendingPromptDispatchError(
+        "Still waiting for the cloud command to be accepted. Retrying queued prompt handoff.",
+      );
     }
     await sleep(delayMs);
     delayMs = nextPollDelay(delayMs);
@@ -337,6 +369,12 @@ function assertCommandEnqueued(command: CloudCommandResponse): void {
 
 function retryableReadinessError(error: unknown): RetryablePendingPromptDispatchError | null {
   if (
+    error instanceof Error
+    && isRetryablePendingPromptFailureMessage(error.message)
+  ) {
+    return new RetryablePendingPromptDispatchError(error.message);
+  }
+  if (
     error instanceof ProliferateClientError
     && error.status === 409
     && error.code
@@ -347,6 +385,11 @@ function retryableReadinessError(error: unknown): RetryablePendingPromptDispatch
     );
   }
   return null;
+}
+
+function isRetryablePendingPromptFailureMessage(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  return RETRYABLE_FAILURE_PATTERNS.some((pattern) => normalized.includes(pattern));
 }
 
 function parseStartedSessionId(command: CloudCommandResponse): string | null {

@@ -6,6 +6,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -63,7 +64,9 @@ import {
 } from "../../lib/access/cloud/pending-mobile-prompt-store";
 import {
   dispatchPendingMobilePrompt,
+  rearmRetryablePendingMobilePrompt,
   RetryablePendingPromptDispatchError,
+  shouldRetryPendingMobilePromptFailure,
   type SendPromptPayload,
   type StartSessionPayload,
 } from "../../lib/access/cloud/pending-mobile-prompt-dispatch";
@@ -119,6 +122,7 @@ export function MobileChatScreen({
     Record<string, PendingConfigChange>
   >({});
   const [activeControl, setActiveControl] = useState<CloudChatComposerControlView | null>(null);
+  const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
   const [claimedLocally, setClaimedLocally] = useState(false);
   const directPromptDispatchingRef = useRef(false);
   const sessionPromptDispatchingRef = useRef(false);
@@ -291,11 +295,16 @@ export function MobileChatScreen({
     }
     let active = true;
     void loadPendingMobilePrompt(chat.workspaceId, ownerUserId).then((stored) => {
-      const restored = stored ?? chat.initialPendingPrompt ?? null;
+      const restoredRaw = stored ?? chat.initialPendingPrompt ?? null;
+      const restored = restoredRaw ? rearmRetryablePendingMobilePrompt(restoredRaw) : null;
       if (active) {
         setPendingPrompt(restored);
         setPendingPromptFailed(Boolean(restored?.failedAt));
-        setPendingPromptStatus(restored?.failureMessage ?? null);
+        setPendingPromptStatus(
+          restoredRaw && restoredRaw !== restored
+            ? "Retrying queued prompt handoff."
+            : restored?.failureMessage ?? null,
+        );
         if (restored?.dispatchedSessionId) {
           setSelectedSessionId(restored.dispatchedSessionId);
           setNewSessionMode(false);
@@ -303,6 +312,9 @@ export function MobileChatScreen({
         } else if (restored) {
           setSelectedSessionId(null);
           setNewSessionMode(true);
+        }
+        if (restoredRaw && restored && restoredRaw !== restored && ownerUserId) {
+          void savePendingMobilePrompt(chat.workspaceId, ownerUserId, restored);
         }
       }
     });
@@ -558,6 +570,14 @@ export function MobileChatScreen({
         const message = error instanceof Error ? error.message : "Queued prompt could not be sent.";
         if (error instanceof RetryablePendingPromptDispatchError) {
           setPendingPromptStatus(message);
+          if (shouldRetryPendingMobilePromptFailure(pendingPrompt)) {
+            const retryingPrompt = rearmRetryablePendingMobilePrompt(pendingPrompt);
+            setPendingPrompt(retryingPrompt);
+            setPendingPromptFailed(false);
+            if (ownerUserId) {
+              void savePendingMobilePrompt(workspace.id, ownerUserId, retryingPrompt);
+            }
+          }
           setTimeout(() => {
             if (!run.active) {
               return;
@@ -776,6 +796,17 @@ export function MobileChatScreen({
     setDraft("");
     setPendingPromptStatus(null);
     setPendingPromptFailed(false);
+    setSessionPickerOpen(false);
+  }
+
+  function selectSession(sessionId: string) {
+    setSelectedSessionId(sessionId);
+    setNewSessionMode(false);
+    setDraft("");
+    setPendingPromptStatus(null);
+    setPendingPromptFailed(false);
+    setSessionPickerOpen(false);
+    onSessionSelected?.(sessionId);
   }
 
   const isUnclaimed = workspace?.visibility === "shared_unclaimed" && !claimedLocally;
@@ -828,7 +859,11 @@ export function MobileChatScreen({
           trailing={
             <View style={styles.headerStatus}>
               <MobileStatusDot status={mobileStatus(session?.status ?? workspaceStatus)} />
-              <MobileTopBarIconButton name="more" accessibilityLabel="Chat menu" />
+              <MobileTopBarIconButton
+                name="more"
+                accessibilityLabel="Switch sessions"
+                onPress={() => setSessionPickerOpen(true)}
+              />
             </View>
           }
         />
@@ -948,6 +983,15 @@ export function MobileChatScreen({
         </View>
       </View>
 
+      <SessionPickerSheet
+        visible={sessionPickerOpen}
+        sessions={sessions}
+        activeSessionId={session?.sessionId ?? null}
+        newSessionMode={newSessionMode}
+        onSelectSession={selectSession}
+        onStartNewSession={startNewSession}
+        onClose={() => setSessionPickerOpen(false)}
+      />
       <ControlSheet control={activeControl} onClose={() => setActiveControl(null)} />
     </KeyboardAvoidingView>
   );
@@ -997,6 +1041,90 @@ function ControlSheet({
               ))}
             </View>
           ))}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function SessionPickerSheet({
+  visible,
+  sessions,
+  activeSessionId,
+  newSessionMode,
+  onSelectSession,
+  onStartNewSession,
+  onClose,
+}: {
+  visible: boolean;
+  sessions: readonly CloudSessionProjection[];
+  activeSessionId: string | null;
+  newSessionMode: boolean;
+  onSelectSession: (sessionId: string) => void;
+  onStartNewSession: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.sheetLayer}>
+        <Pressable style={styles.sheetScrim} onPress={onClose} />
+        <View style={styles.sheet}>
+          <Text style={styles.sheetTitle}>Workspace sessions</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: newSessionMode }}
+            onPress={onStartNewSession}
+            style={({ pressed }) => [
+              styles.sheetOption,
+              newSessionMode && styles.sheetOptionSelected,
+              pressed && styles.sheetOptionPressed,
+            ]}
+          >
+            <MobileIcon name="plus" size={16} color={colors.faint} />
+            <View style={styles.sheetOptionText}>
+              <Text style={styles.sheetOptionLabel}>New session</Text>
+              <Text style={styles.sheetOptionDescription}>
+                Start a separate chat in this workspace.
+              </Text>
+            </View>
+            {newSessionMode ? <MobileIcon name="check" size={16} color={colors.success} /> : null}
+          </Pressable>
+          <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetScrollContent}>
+            <View style={styles.sheetGroup}>
+              <Text style={styles.sheetGroupLabel}>Existing sessions</Text>
+              {sessions.length === 0 ? (
+                <Text style={styles.sheetEmptyText}>No projected sessions yet.</Text>
+              ) : (
+                sessions.map((candidate, index) => {
+                  const selected = candidate.sessionId === activeSessionId && !newSessionMode;
+                  return (
+                    <Pressable
+                      key={candidate.sessionId}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => onSelectSession(candidate.sessionId)}
+                      style={({ pressed }) => [
+                        styles.sheetOption,
+                        selected && styles.sheetOptionSelected,
+                        pressed && styles.sheetOptionPressed,
+                      ]}
+                    >
+                      <MobileStatusDot status={mobileStatus(candidate.status)} />
+                      <View style={styles.sheetOptionText}>
+                        <Text style={styles.sheetOptionLabel} numberOfLines={1}>
+                          {sessionDisplayTitle(candidate, index)}
+                        </Text>
+                        <Text style={styles.sheetOptionDescription} numberOfLines={1}>
+                          {sessionDisplaySubtitle(candidate)}
+                        </Text>
+                      </View>
+                      {selected ? <MobileIcon name="check" size={16} color={colors.success} /> : null}
+                    </Pressable>
+                  );
+                })
+              )}
+            </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -1312,6 +1440,22 @@ function compareSessions(left: CloudSessionProjection, right: CloudSessionProjec
 
 function sessionRecencyMs(session: Pick<CloudSessionProjection, "lastEventAt" | "startedAt">): number {
   return Date.parse(session.lastEventAt ?? session.startedAt ?? "") || 0;
+}
+
+function sessionDisplayTitle(session: CloudSessionProjection, index: number): string {
+  const title = session.title?.trim();
+  if (title) {
+    return title;
+  }
+  return `Session ${index + 1}`;
+}
+
+function sessionDisplaySubtitle(session: CloudSessionProjection): string {
+  return `${session.status} · ${shortSessionLabel(session.sessionId)}`;
+}
+
+function shortSessionLabel(sessionId: string): string {
+  return sessionId.slice(0, 8);
 }
 
 function effectiveWorkspaceStatus(
@@ -1655,6 +1799,12 @@ const styles = StyleSheet.create({
   sheetGroup: {
     gap: spacing[1],
   },
+  sheetScroll: {
+    minHeight: 0,
+  },
+  sheetScrollContent: {
+    paddingBottom: spacing[1],
+  },
   sheetGroupLabel: {
     color: colors.faint,
     fontSize: 11,
@@ -1693,5 +1843,12 @@ const styles = StyleSheet.create({
     color: colors.faint,
     fontSize: 12,
     lineHeight: 17,
+  },
+  sheetEmptyText: {
+    color: colors.faint,
+    fontSize: 13,
+    lineHeight: 18,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
   },
 });
