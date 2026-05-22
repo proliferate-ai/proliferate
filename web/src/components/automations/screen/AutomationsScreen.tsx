@@ -31,6 +31,7 @@ import {
   type AutomationCreateOption,
 } from "@proliferate/product-ui/automations/AutomationCreatePanel";
 import { AutomationsList } from "@proliferate/product-ui/automations/AutomationsList";
+import { ProductNotice } from "@proliferate/product-ui/layout/ProductNotice";
 import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
 
 const EMPTY_REPO_CONFIGS: CloudRepoConfigSummary[] = [];
@@ -54,6 +55,7 @@ export function AutomationsScreen() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createValues, setCreateValues] = useState(createInitialFormValues);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<{
     automationId: string;
     action: "pause" | "resume" | "run";
@@ -106,6 +108,7 @@ export function AutomationsScreen() {
 
   async function submitCreate() {
     setCreateError(null);
+    setActionError(null);
     const title = createValues.title.trim();
     const prompt = createValues.prompt.trim();
     if (!title || !prompt) {
@@ -174,6 +177,7 @@ export function AutomationsScreen() {
     automationId: string,
     action: "pause" | "resume" | "run",
   ) {
+    setActionError(null);
     setBusyAction({ automationId, action });
     try {
       if (action === "pause") {
@@ -183,10 +187,16 @@ export function AutomationsScreen() {
       } else {
         await actions.runAutomationNow(automationId);
       }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Automation action failed.");
     } finally {
       setBusyAction(null);
     }
   }
+
+  const optionLoadError = repoConfigs.error || agentRunConfigs.error
+    ? "Could not load repo or agent config options. Retry from the page or refresh."
+    : null;
 
   return (
     <ProductPageShell
@@ -205,7 +215,7 @@ export function AutomationsScreen() {
             runConfigOptions={runConfigOptions}
             loadingOptions={repoConfigs.isLoading || agentRunConfigs.isLoading}
             submitting={actions.creatingAutomation}
-            error={createError}
+            error={createError ?? optionLoadError}
             timeDisabled={!schedulePresetAcceptsTime(
               parseSchedulePreset(createValues.schedulePreset) ?? "custom",
             )}
@@ -218,9 +228,18 @@ export function AutomationsScreen() {
           />
         </div>
       ) : null}
+      {actionError ? (
+        <ProductNotice
+          tone="destructive"
+          title="Automation action failed"
+          description={actionError}
+          className="mb-4"
+        />
+      ) : null}
       <AutomationsList
         loading={automations.isLoading}
         error={Boolean(automations.error)}
+        onRetry={() => void automations.refetch()}
         onNew={() => {
           setCreateError(null);
           setCreateOpen(true);

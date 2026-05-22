@@ -184,7 +184,7 @@ function CloudChatComposerFooter({
 
   return (
     <div className="rounded-[var(--radius-composer)] px-2 pt-2">
-      <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+      <div className="flex min-w-0 flex-wrap items-center gap-1">
         {controls.map((control) => {
           const Icon = iconForComposerFooterControl(control.icon);
           return (
@@ -201,7 +201,7 @@ function CloudChatComposerFooter({
                 <Loader2 size={12} className="shrink-0 animate-spin text-muted-foreground/70" />
               ) : undefined}
               title={control.title ?? undefined}
-              className="max-w-[18rem] shrink-0"
+              className="max-w-full shrink-0 sm:max-w-[18rem]"
               data-telemetry-mask
               onClick={control.onClick}
             />

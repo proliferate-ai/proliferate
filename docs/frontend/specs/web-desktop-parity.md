@@ -63,11 +63,11 @@ Web
 
 - [x] User messages use Desktop bubble formatting, spacing, masking, copy affordance, and long-text behavior.
 - [x] Assistant prose uses Desktop markdown rendering, spacing, streaming reveal behavior, and copy affordance.
-- [ ] Reasoning/thought rows use Desktop reasoning block presentation.
-- [ ] Tool calls use Desktop action row/group presentation where payload data is available.
-- [ ] Grouped tool/action summaries match Desktop collapsed action treatment.
+- [x] Reasoning/thought rows use Desktop reasoning block presentation.
+- [x] Tool calls use Desktop action row/group presentation where payload data is available.
+- [x] Grouped tool/action summaries match Desktop collapsed action treatment.
 - [ ] Proposed plans and plan references render with Desktop cards where events exist.
-- [ ] Error/system rows match Desktop transcript treatment.
+- [x] Error/system rows match Desktop transcript treatment.
 - [ ] Transcript virtualization or long-history handling does not regress Web performance.
 - [x] Web can reload a chat and render the existing transcript without sending a new message.
 - [x] Web updates live from cloud session events/snapshots without requiring another user action.
@@ -87,7 +87,7 @@ Web
 ### 4. Composer And Config Controls
 
 - [x] Web composer uses shared `product-ui` presentation derived from Desktop composer components.
-- [ ] Desktop composer remains unchanged.
+- [x] Desktop composer remains unchanged.
 - [x] Textarea, surface radius, shadow, spacing, send button, and disabled/loading states match Desktop.
 - [x] Left-side mode control matches Desktop layout.
 - [x] Right-side model/config control groups model, reasoning, effort, fast mode, and extras like Desktop.
@@ -95,8 +95,8 @@ Web
 - [x] Config changes are optimistic immediately.
 - [x] Config pending state shows sending/queued indicators.
 - [x] Live config confirmation clears pending state.
-- [ ] Rejected/expired/failed config commands clear pending state and show a useful error.
-- [ ] Controls remain inert when the composer is disabled or workspace is unclaimed.
+- [x] Rejected/expired/failed config commands clear pending state and show a useful error.
+- [x] Controls remain inert when the composer is disabled or workspace is unclaimed.
 
 ### 5. Below-Composer Workspace Footer
 
@@ -105,8 +105,8 @@ Web
 - [x] Repo/workspace identity is visible and copyable where useful.
 - [x] Cloud/live/snapshot/runtime status is visible without noisy badges in the input.
 - [x] Shared-unclaimed workspaces show a clear claim control.
-- [ ] Claiming updates the workspace state and unlocks sending.
-- [ ] Footer works on narrow viewports without clipping controls.
+- [x] Claiming updates the workspace state and unlocks sending.
+- [x] Footer works on narrow viewports without clipping controls.
 
 ### 6. Sidebar And Workspace Bar
 
@@ -133,8 +133,8 @@ Web
 - [x] Web can create a cloud automation where supported by the API.
 - [x] Web can enable/disable or otherwise manage supported automation fields.
 - [x] Automation creation validates schedule, repo/workspace target, and prompt.
-- [ ] Empty/loading/error states are product-grade and actionable.
-- [ ] Unsupported Desktop-only automation capabilities are clearly absent or degraded, not broken.
+- [x] Empty/loading/error states are product-grade and actionable.
+- [x] Unsupported Desktop-only automation capabilities are clearly absent or degraded, not broken.
 
 ### 9. Settings
 

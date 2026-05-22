@@ -3,6 +3,7 @@ import {
   Bot,
   Brain,
   CheckCircle2,
+  ChevronRight,
   Clock3,
   Copy,
   Loader2,
@@ -17,7 +18,9 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent,
   type HTMLAttributes,
+  type ReactNode,
 } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -68,6 +71,8 @@ type MdTag =
   | "td"
   | "th"
   | "ul";
+
+type CloudTranscriptActionStatus = "completed" | "failed" | "running";
 
 export function CloudChatTranscript({
   rows,
@@ -127,43 +132,451 @@ function CloudChatTranscriptRow({ row }: { row: CloudChatTranscriptRowView }) {
     );
   }
 
-  const Icon = iconForRow(row);
+  if (row.kind === "thought") {
+    return <CloudChatThoughtRow row={row} />;
+  }
+
+  if (row.kind === "tool") {
+    return <CloudChatToolRow row={row} />;
+  }
+
+  if (row.kind === "tool_group") {
+    return <CloudChatToolGroupRow row={row} />;
+  }
+
+  if (row.kind === "system") {
+    return <CloudChatSystemRow row={row} />;
+  }
+
+  if (row.kind === "error") {
+    return <CloudChatErrorRow row={row} />;
+  }
+
+  return <CloudChatToolRow row={row} />;
+}
+
+function CloudChatThoughtRow({ row }: { row: CloudChatTranscriptRowView }) {
+  const body = row.body?.trim() ?? "";
+  const hint = row.detail ?? firstLine(body);
+
   return (
     <article className="flex justify-start">
-      <div className="flex min-w-0 max-w-full items-start gap-2 rounded-lg border border-border bg-card/70 px-3 py-2 text-sm">
-        <Icon size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate font-medium text-foreground">
-              {row.title ?? titleForRow(row)}
-            </span>
-            {row.status ? (
-              <span className="shrink-0 text-xs text-muted-foreground">{row.status}</span>
-            ) : null}
-          </div>
-          {row.detail ? (
-            <div className="mt-0.5 truncate text-xs text-muted-foreground" data-telemetry-mask>
-              {row.detail}
+      <CloudTranscriptActionRow
+        icon={<Brain size={12} />}
+        label={row.title ?? "Thinking"}
+        hint={hint}
+        status={resolveActionStatus(row)}
+        defaultExpanded={false}
+      >
+        {body ? (
+          <CloudTranscriptDetailsPanel>
+            <pre
+              className="max-h-72 whitespace-pre-wrap overflow-auto px-3 py-2.5 font-mono text-xs leading-5 text-muted-foreground"
+              data-telemetry-mask
+            >
+              {body}
+            </pre>
+          </CloudTranscriptDetailsPanel>
+        ) : null}
+      </CloudTranscriptActionRow>
+    </article>
+  );
+}
+
+function CloudChatToolRow({ row }: { row: CloudChatTranscriptRowView }) {
+  const Icon = iconForRow(row);
+  const body = row.body?.trim() ?? "";
+  const hint = row.detail ?? firstLine(body);
+  const status = resolveActionStatus(row);
+
+  return (
+    <article className="flex justify-start">
+      <CloudTranscriptActionRow
+        icon={<Icon size={12} />}
+        label={row.title ?? titleForRow(row)}
+        hint={hint}
+        status={status}
+        statusLabel={row.status}
+      >
+        {body ? (
+          <CloudTranscriptDetailsPanel>
+            <div className="max-h-72 overflow-auto px-3 py-2.5" data-telemetry-mask>
+              <CloudChatMarkdownRenderer
+                content={body}
+                className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-muted-foreground"
+              />
             </div>
-          ) : null}
-          {row.body ? (
-            <div className="mt-2 max-h-72 overflow-auto" data-telemetry-mask>
-              {row.kind === "thought" ? (
-                <pre className="whitespace-pre-wrap rounded-md bg-background px-2 py-1.5 text-xs leading-5 text-muted-foreground">
-                  {row.body}
-                </pre>
-              ) : (
-                <CloudChatMarkdownRenderer
-                  content={row.body}
-                  className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-muted-foreground"
-                />
-              )}
+          </CloudTranscriptDetailsPanel>
+        ) : null}
+      </CloudTranscriptActionRow>
+    </article>
+  );
+}
+
+function CloudChatToolGroupRow({ row }: { row: CloudChatTranscriptRowView }) {
+  const [expanded, setExpanded] = useState(false);
+  const body = row.body?.trim() ?? "";
+  const label = row.title ?? row.detail ?? "Work history";
+
+  return (
+    <article className="py-1">
+      <CloudTurnSeparator
+        label={label}
+        interactive={body.length > 0}
+        expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      />
+      {row.status ? (
+        <div className="mt-0.5 text-center text-xs text-muted-foreground">
+          {row.status}
+        </div>
+      ) : null}
+      {expanded && body ? (
+        <div className="mt-2">
+          <CloudTranscriptDetailsPanel>
+            <div className="max-h-72 overflow-auto px-3 py-2.5" data-telemetry-mask>
+              <CloudChatMarkdownRenderer
+                content={body}
+                className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-muted-foreground"
+              />
+            </div>
+          </CloudTranscriptDetailsPanel>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function CloudChatSystemRow({ row }: { row: CloudChatTranscriptRowView }) {
+  const [expanded, setExpanded] = useState(false);
+  const body = row.body ?? row.detail ?? "";
+
+  return (
+    <article className="py-1.5">
+      <Button
+        type="button"
+        variant="ghost"
+        data-chat-transcript-ignore
+        onClick={() => setExpanded((value) => !value)}
+        className="flex h-auto w-full justify-start gap-2 rounded-none bg-transparent px-3 py-1.5 text-left font-sans text-xs text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
+        aria-expanded={expanded}
+      >
+        <ChevronRight
+          aria-hidden="true"
+          className={`size-3 shrink-0 transition-transform duration-150 ${
+            expanded ? "rotate-90" : ""
+          }`}
+        />
+        <span>{row.title ?? "System message"}</span>
+      </Button>
+      {expanded && body ? (
+        <div
+          className="mt-1 whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 font-sans text-[12px] leading-[1.65] text-muted-foreground select-text"
+          data-telemetry-mask
+        >
+          {body}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function CloudChatErrorRow({ row }: { row: CloudChatTranscriptRowView }) {
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const body = row.body?.trim() ?? "";
+  const description = row.detail ?? firstLine(body);
+  const hasDetails = body.length > 0 && body !== description;
+
+  return (
+    <article className="rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2 text-sm">
+      <div className="flex min-w-0 items-start gap-2">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive/80" />
+        <div className="min-w-0 flex-1">
+          <div className="font-[520] text-destructive">{row.title ?? "Error"}</div>
+          {description ? (
+            <div className="mt-0.5 text-muted-foreground" data-telemetry-mask>
+              {description}
             </div>
           ) : null}
         </div>
       </div>
+      {row.status || hasDetails ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2 pl-6">
+          {row.status ? (
+            <span className="text-xs text-muted-foreground">{row.status}</span>
+          ) : null}
+          {hasDetails ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              data-chat-transcript-ignore
+              onClick={() => setDetailsExpanded((value) => !value)}
+              className="gap-1 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+              aria-expanded={detailsExpanded}
+            >
+              <ChevronRight
+                aria-hidden="true"
+                className={`size-3 transition-transform ${detailsExpanded ? "rotate-90" : ""}`}
+              />
+              Details
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {detailsExpanded && hasDetails ? (
+        <div
+          className="mt-2 whitespace-pre-wrap rounded-md border border-border/70 bg-background/70 px-2.5 py-2 font-mono text-xs leading-5 text-muted-foreground select-text"
+          data-telemetry-mask
+        >
+          {body}
+        </div>
+      ) : null}
     </article>
   );
+}
+
+function CloudTranscriptActionRow({
+  icon,
+  label,
+  hint,
+  status,
+  statusLabel,
+  children,
+  defaultExpanded = false,
+}: {
+  icon?: ReactNode;
+  label: ReactNode;
+  hint?: ReactNode;
+  status: CloudTranscriptActionStatus;
+  statusLabel?: string | null;
+  children?: ReactNode;
+  defaultExpanded?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const hasDetails = Boolean(children);
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (
+      event.target === event.currentTarget
+      && (event.key === "Enter" || event.key === " ")
+    ) {
+      event.preventDefault();
+      setExpanded((value) => !value);
+    }
+  }
+
+  return (
+    <div className="max-w-full py-0.5">
+      {hasDetails ? (
+        <div
+          role="button"
+          tabIndex={0}
+          data-chat-transcript-ignore
+          aria-expanded={expanded}
+          className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-none bg-transparent p-0 text-left text-chat font-normal leading-[var(--text-chat--line-height)] outline-none focus-visible:underline ${
+            status === "failed"
+              ? "text-destructive/80 hover:text-destructive"
+              : "text-muted-foreground/80 hover:text-foreground"
+          }`}
+          onClick={() => setExpanded((value) => !value)}
+          onKeyDown={handleKeyDown}
+        >
+          <CloudTranscriptActionRowContent
+            icon={icon}
+            label={label}
+            hint={hint}
+            statusLabel={statusLabel}
+            expandable
+            expanded={expanded}
+          />
+        </div>
+      ) : (
+        <div
+          className={`inline-flex min-w-0 max-w-full items-center gap-1 text-chat leading-[var(--text-chat--line-height)] ${
+            status === "failed" ? "text-destructive/80" : "text-muted-foreground/80"
+          }`}
+        >
+          <CloudTranscriptActionRowContent
+            icon={icon}
+            label={label}
+            hint={hint}
+            statusLabel={statusLabel}
+            expandable={false}
+            expanded={false}
+          />
+        </div>
+      )}
+      {expanded && children ? <div className="mt-1.5">{children}</div> : null}
+    </div>
+  );
+}
+
+function CloudTranscriptActionRowContent({
+  icon,
+  label,
+  hint,
+  statusLabel,
+  expandable,
+  expanded,
+}: {
+  icon?: ReactNode;
+  label: ReactNode;
+  hint?: ReactNode;
+  statusLabel?: string | null;
+  expandable: boolean;
+  expanded: boolean;
+}) {
+  return (
+    <>
+      <CloudTranscriptActionLeadingAffordance
+        icon={icon}
+        expandable={expandable}
+        expanded={expanded}
+      />
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <div className="min-w-0 shrink-0 text-inherit">{label}</div>
+        {renderInlineHint(hint)}
+        {statusLabel ? (
+          <span className="shrink-0 text-xs text-muted-foreground/80">
+            {statusLabel}
+          </span>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+function CloudTranscriptActionLeadingAffordance({
+  icon,
+  expandable,
+  expanded,
+}: {
+  icon?: ReactNode;
+  expandable: boolean;
+  expanded: boolean;
+}) {
+  return (
+    <span className="relative flex h-3 w-3 shrink-0 items-center justify-center">
+      <span
+        className={`absolute inset-0 flex items-center justify-center transition-all duration-150 ${
+          expandable
+            ? expanded
+              ? "scale-75 opacity-0"
+              : "scale-100 opacity-100 group-hover/tool-action-row:scale-75 group-hover/tool-action-row:opacity-0 group-focus-visible/tool-action-row:scale-75 group-focus-visible/tool-action-row:opacity-0"
+            : "scale-100 opacity-100"
+        }`}
+      >
+        <span className="flex h-3 w-3 items-center justify-center text-xs leading-none transition-colors [&_svg]:size-2.5 [&_svg]:text-muted-foreground group-hover/tool-action-row:[&_svg]:text-foreground/70">
+          {icon}
+        </span>
+      </span>
+      <span
+        className={`absolute inset-0 flex items-center justify-center transition-all duration-150 ${
+          expandable
+            ? expanded
+              ? "scale-100 opacity-100"
+              : "scale-75 opacity-0 group-hover/tool-action-row:scale-100 group-hover/tool-action-row:opacity-100 group-focus-visible/tool-action-row:scale-100 group-focus-visible/tool-action-row:opacity-100"
+            : "scale-75 opacity-0"
+        }`}
+      >
+        <ChevronRight
+          aria-hidden="true"
+          className={`size-2.5 shrink-0 text-muted-foreground/70 transition-transform ${
+            expanded ? "rotate-90" : ""
+          }`}
+        />
+      </span>
+    </span>
+  );
+}
+
+function CloudTranscriptDetailsPanel({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-md border border-border/60 bg-foreground/[0.04]">
+      {children}
+    </div>
+  );
+}
+
+function CloudTurnSeparator({
+  label,
+  interactive = false,
+  expanded = false,
+  onClick,
+}: {
+  label: string;
+  interactive?: boolean;
+  expanded?: boolean;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      <div className="flex-1 border-t border-current/20" />
+      <span className="flex min-w-0 items-center gap-1 whitespace-nowrap">
+        <span className="truncate text-foreground/60">{label}</span>
+        {interactive ? (
+          <ChevronRight
+            aria-hidden="true"
+            className={`size-3 text-foreground/40 transition-transform duration-200 ${
+              expanded ? "rotate-90" : ""
+            }`}
+          />
+        ) : null}
+      </span>
+      <div className="flex-1 border-t border-current/20" />
+    </>
+  );
+
+  if (interactive) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        data-chat-transcript-ignore
+        onClick={onClick}
+        className="h-auto w-full gap-2 whitespace-normal rounded-md border border-transparent bg-transparent px-0 py-1 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-muted-foreground hover:bg-transparent hover:text-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-expanded={expanded}
+      >
+        {content}
+      </Button>
+    );
+  }
+
+  return (
+    <div className="my-2 flex items-center gap-2 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
+      {content}
+    </div>
+  );
+}
+
+function renderInlineHint(hint?: ReactNode) {
+  if (hint === undefined || hint === null || hint === false) {
+    return null;
+  }
+
+  if (typeof hint === "string" || typeof hint === "number") {
+    const value = String(hint).trim();
+    if (!value) {
+      return null;
+    }
+    return (
+      <span
+        title={value}
+        className="max-w-[260px] min-w-0 shrink truncate rounded-sm border border-border/60 bg-muted/45 px-1.5 py-0.5 font-mono text-[0.6rem] leading-none text-muted-foreground"
+        data-telemetry-mask
+      >
+        {value}
+      </span>
+    );
+  }
+
+  return <div className="min-w-0 shrink">{hint}</div>;
 }
 
 function CloudChatUserMessage({
@@ -786,6 +1199,35 @@ function iconForRow(row: CloudChatTranscriptRowView) {
     default:
       return row.streaming ? Clock3 : Bot;
   }
+}
+
+function resolveActionStatus(row: CloudChatTranscriptRowView): CloudTranscriptActionStatus {
+  const status = row.status?.toLowerCase() ?? "";
+  if (
+    row.kind === "error"
+    || status.includes("fail")
+    || status.includes("error")
+    || status.includes("reject")
+    || status.includes("expired")
+  ) {
+    return "failed";
+  }
+  if (
+    row.streaming
+    || status.includes("running")
+    || status.includes("pending")
+    || status.includes("queued")
+    || status.includes("sending")
+    || status.includes("progress")
+  ) {
+    return "running";
+  }
+  return "completed";
+}
+
+function firstLine(value: string): string | null {
+  const line = value.trim().split(/\r?\n/, 1)[0]?.trim();
+  return line || null;
 }
 
 function titleForRow(row: CloudChatTranscriptRowView): string {

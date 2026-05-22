@@ -90,7 +90,6 @@ export function ChatScreen() {
   const [draft, setDraft] = useState("");
   const [draftModelId, setDraftModelId] = useState(DEFAULT_DIRECT_PROMPT_MODEL_ID);
   const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
-  const [latestConfigCommandId, setLatestConfigCommandId] = useState<string | null>(null);
   const [directPromptDispatching, setDirectPromptDispatching] = useState(false);
   const [optimisticPrompts, setOptimisticPrompts] = useState<OptimisticPrompt[]>([]);
   const [pendingConfigChanges, setPendingConfigChanges] = useState<
@@ -146,6 +145,11 @@ export function ChatScreen() {
     [pendingInteractions],
   );
   const pendingPromptCommandIdsKey = pendingPromptCommandIds.join("\0");
+  const pendingConfigCommandIds = useMemo(
+    () => pendingConfigCommandIdsFromChanges(pendingConfigChanges),
+    [pendingConfigChanges],
+  );
+  const pendingConfigCommandIdsKey = pendingConfigCommandIds.join("\0");
   const sessionEvents = sessionEventsQuery.data?.events ?? EMPTY_SESSION_EVENTS;
   const transcriptView = useMemo(
     () => buildCloudTranscriptView({
@@ -192,7 +196,6 @@ export function ChatScreen() {
   const claimWorkspace = useClaimCloudWorkspace();
   const observedPromptCommandId = pendingPromptCommandId ?? latestCommandId;
   const commandStatus = useCommandStatus(observedPromptCommandId);
-  const configCommandStatus = useCommandStatus(latestConfigCommandId);
   const isUnclaimed = workspace?.visibility === "shared_unclaimed";
   const workspaceReadyAgentKindsKey = workspace?.readyAgentKinds?.join("\0") ?? "";
   const workspaceAllowedAgentKindsKey = workspace?.allowedAgentKinds?.join("\0") ?? "";
@@ -213,7 +216,6 @@ export function ChatScreen() {
     setPendingHomePromptStatus(null);
     setOptimisticPrompts([]);
     setPendingConfigChanges({});
-    setLatestConfigCommandId(null);
   }, [workspaceId]);
 
   useEffect(() => {
@@ -501,33 +503,52 @@ export function ChatScreen() {
   ]);
 
   useEffect(() => {
-    const command = configCommandStatus.data;
-    if (!command || !isRejectedCommandStatus(command.status)) {
+    if (pendingConfigCommandIds.length === 0) {
       return;
     }
-    if (
-      !Object.values(pendingConfigChanges).some((change) =>
-        change.commandId === command.commandId
-      )
-    ) {
-      return;
-    }
-    setPendingConfigChanges((current) => {
-      const next = Object.fromEntries(
-        Object.entries(current).filter(([_key, change]) =>
-          change.commandId !== command.commandId
-        ),
-      );
-      return Object.keys(next).length === Object.keys(current).length ? current : next;
-    });
-    setPendingHomePromptStatus(
-      command.errorMessage || sessionConfigCommandFailureMessage(command.status),
-    );
+    let active = true;
+    let timeoutId: number | undefined;
+
+    const pollPendingConfigCommands = async () => {
+      let sawTerminalCommand = false;
+      for (const commandId of pendingConfigCommandIds) {
+        try {
+          const command = await getCommandStatus(commandId, client);
+          if (isTerminalCommandStatus(command.status)) {
+            sawTerminalCommand = true;
+          }
+          if (isRejectedCommandStatus(command.status)) {
+            setPendingConfigChanges((current) =>
+              removePendingConfigCommand(current, command.commandId)
+            );
+            setPendingHomePromptStatus(
+              command.errorMessage || sessionConfigCommandFailureMessage(command.status),
+            );
+          }
+        } catch {
+          // Keep polling other pending config commands; transient reads should not strand indicators.
+        }
+      }
+      if (!active) {
+        return;
+      }
+      if (sawTerminalCommand) {
+        void workspaceQuery.refetch();
+      }
+      timeoutId = window.setTimeout(pollPendingConfigCommands, 1000);
+    };
+
+    timeoutId = window.setTimeout(pollPendingConfigCommands, 0);
+    return () => {
+      active = false;
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
   }, [
-    configCommandStatus.data?.commandId,
-    configCommandStatus.data?.errorMessage,
-    configCommandStatus.data?.status,
-    pendingConfigChanges,
+    client,
+    pendingConfigCommandIdsKey,
+    workspaceQuery.refetch,
   ]);
 
   async function submitPrompt() {
@@ -707,7 +728,6 @@ export function ChatScreen() {
         payload: { configId: rawConfigId, value },
       });
       setLatestCommandId(command.commandId);
-      setLatestConfigCommandId(command.commandId);
       setPendingConfigChanges((current) => {
         const existing = current[changeKey];
         if (!existing || existing.mutationId !== mutationId) {
@@ -729,6 +749,22 @@ export function ChatScreen() {
       });
       setPendingHomePromptStatus(
         error instanceof Error ? error.message : "Session configuration could not be updated.",
+      );
+    }
+  }
+
+  async function claimCurrentWorkspace() {
+    if (!workspace || claimWorkspace.isPending) {
+      return;
+    }
+    setPendingHomePromptStatus("Claiming workspace.");
+    try {
+      await claimWorkspace.mutateAsync({ workspaceId: workspace.id });
+      await workspaceQuery.refetch();
+      setPendingHomePromptStatus("Workspace claimed.");
+    } catch (error) {
+      setPendingHomePromptStatus(
+        error instanceof Error ? error.message : "Workspace could not be claimed.",
       );
     }
   }
@@ -770,7 +806,20 @@ export function ChatScreen() {
       : "No transcript";
   const branchName = workspace.repo.branch ?? workspace.repo.baseBranch ?? "main";
   const repoLabel = `${workspace.repo.owner}/${workspace.repo.name}`;
+  const claimFooterControl: CloudChatComposerFooterControlView | null = isUnclaimed
+    ? {
+      id: "claim",
+      label: "Claim workspace",
+      detail: "Shared",
+      icon: "users",
+      active: true,
+      pending: claimWorkspace.isPending,
+      title: "Claim this shared workspace",
+      onClick: () => void claimCurrentWorkspace(),
+    }
+    : null;
   const composerFooterControls: CloudChatComposerFooterControlView[] = [
+    ...(claimFooterControl ? [claimFooterControl] : []),
     {
       id: "branch",
       label: branchName,
@@ -795,18 +844,6 @@ export function ChatScreen() {
       active: sessionLive.isConnected,
       title: sessionLive.isConnected ? "Cloud runtime stream is connected" : "Cloud workspace status",
     },
-    ...(isUnclaimed
-      ? [{
-        id: "claim",
-        label: "Claim workspace",
-        detail: "Shared",
-        icon: "users" as const,
-        active: true,
-        pending: claimWorkspace.isPending,
-        title: "Claim this shared workspace",
-        onClick: () => claimWorkspace.mutate({ workspaceId: workspace.id }),
-      }]
-      : []),
   ];
   const emptyTitle = !session
     ? "No active session yet."
@@ -855,7 +892,7 @@ export function ChatScreen() {
           label: "Claim",
           kind: "claim",
           loading: claimWorkspace.isPending,
-          onClick: () => claimWorkspace.mutate({ workspaceId: workspace.id }),
+          onClick: () => void claimCurrentWorkspace(),
         }
         : null}
       headerActions={session
@@ -1059,6 +1096,30 @@ function pendingPromptCommandIdsFromInteractions(
     )
     .sort((left, right) => right.requestedSeq - left.requestedSeq)
     .map((candidate) => candidate.commandId);
+}
+
+function pendingConfigCommandIdsFromChanges(
+  pendingConfigChanges: Record<string, PendingConfigChange>,
+): string[] {
+  return [...new Set(
+    Object.values(pendingConfigChanges)
+      .map((change) => change.commandId?.trim() ?? "")
+      .filter((commandId) => commandId.length > 0),
+  )];
+}
+
+function removePendingConfigCommand(
+  pendingConfigChanges: Record<string, PendingConfigChange>,
+  commandId: string,
+): Record<string, PendingConfigChange> {
+  const next = Object.fromEntries(
+    Object.entries(pendingConfigChanges).filter(([_key, change]) =>
+      change.commandId !== commandId
+    ),
+  );
+  return Object.keys(next).length === Object.keys(pendingConfigChanges).length
+    ? pendingConfigChanges
+    : next;
 }
 
 function pendingInteractionCommandId(interaction: CloudPendingInteraction): string | null {

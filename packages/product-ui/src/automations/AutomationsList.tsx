@@ -21,6 +21,7 @@ interface AutomationsListProps {
   loading?: boolean;
   error?: boolean;
   onNew?: () => void;
+  onRetry?: () => void;
   onPause?: (automationId: string) => void;
   onResume?: (automationId: string) => void;
   onRunNow?: (automationId: string) => void;
@@ -33,6 +34,7 @@ export function AutomationsList({
   loading = false,
   error = false,
   onNew,
+  onRetry,
   onPause,
   onResume,
   onRunNow,
@@ -57,6 +59,12 @@ export function AutomationsList({
         <EmptyState
           title="Could not load automations"
           description="Refresh the page or sign in again."
+          action={onRetry ? (
+            <Button type="button" size="sm" variant="secondary" onClick={onRetry}>
+              <RotateCcw size={13} />
+              Retry
+            </Button>
+          ) : null}
         />
       ) : items.length > 0 ? (
         <ListSurface>
@@ -103,6 +111,12 @@ export function AutomationsList({
         <EmptyState
           title="No automations yet"
           description="Create a scheduled cloud automation for a configured repo."
+          action={onNew ? (
+            <Button type="button" size="sm" variant="secondary" onClick={onNew}>
+              <Plus size={13} />
+              New automation
+            </Button>
+          ) : null}
         />
       )}
     </>
