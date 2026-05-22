@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import type { CloudAgentRunConfig } from "@/lib/access/cloud/client";
 import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
@@ -7,12 +6,20 @@ import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Brain, Check, Sparkles } from "@/components/ui/icons";
 import { matchesPickerSearch } from "@/lib/infra/search/search";
 
+interface AutomationAgentRunConfigOption {
+  id: string;
+  name?: string | null;
+  agentKind?: string | null;
+  modelId?: string | null;
+  ownerScope?: string | null;
+}
+
 interface AutomationAgentRunConfigPickerProps {
-  configs: CloudAgentRunConfig[];
+  configs: AutomationAgentRunConfigOption[];
   selectedConfigId: string | null;
   isLoading: boolean;
   disabledReason: string | null;
-  onSelect: (config: CloudAgentRunConfig | null) => void;
+  onSelect: (config: AutomationAgentRunConfigOption | null) => void;
 }
 
 const POPOVER_CLASS = "w-80 rounded-xl border border-border bg-popover p-1 shadow-floating";
@@ -30,8 +37,8 @@ export function AutomationAgentRunConfigPicker({
     () => configs.filter((config) =>
       matchesPickerSearch([
         agentRunConfigDisplayName(config),
-        config.agentKind,
-        config.modelId,
+        config.agentKind ?? "",
+        config.modelId ?? "",
       ], searchValue)
     ),
     [configs, searchValue],
@@ -111,11 +118,11 @@ export function AutomationAgentRunConfigPicker({
   );
 }
 
-function agentRunConfigDisplayName(config: CloudAgentRunConfig): string {
+function agentRunConfigDisplayName(config: AutomationAgentRunConfigOption): string {
   return config.name || config.id;
 }
 
-function agentRunConfigDescription(config: CloudAgentRunConfig): string {
+function agentRunConfigDescription(config: AutomationAgentRunConfigOption): string {
   const modelLabel = [config.agentKind, config.modelId].filter(Boolean).join(" / ");
   const parts = [modelLabel || null, config.ownerScope].filter(Boolean);
   return parts.join(" - ") || "Agent run configuration";

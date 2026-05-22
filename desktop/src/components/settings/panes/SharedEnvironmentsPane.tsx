@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAgentAuthMutations } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -30,6 +30,7 @@ import {
   type CloudSettingsRepositoryEntry,
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
+import { buildSettingsHref, type SettingsFocus } from "@/lib/domain/settings/navigation";
 
 interface SharedEnvironmentsPaneProps {
   isAdmin: boolean;
@@ -37,6 +38,7 @@ interface SharedEnvironmentsPaneProps {
   role: string | null;
   activeOrganizationId: string | null;
   repositories: SettingsRepositoryEntry[];
+  focus?: SettingsFocus;
   onOpenSettingsSection: (section: SettingsSection) => void;
 }
 
@@ -57,6 +59,7 @@ export function SharedEnvironmentsPane({
   role,
   activeOrganizationId,
   repositories,
+  focus,
   onOpenSettingsSection,
 }: SharedEnvironmentsPaneProps) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -72,6 +75,17 @@ export function SharedEnvironmentsPane({
     ),
     [organizationConfigs.data?.configs, repositories],
   );
+  const focusedKey = focus?.cloudRepoOwner && focus.cloudRepoName
+    ? cloudRepositoryKey(focus.cloudRepoOwner, focus.cloudRepoName)
+    : null;
+  useEffect(() => {
+    if (!focusedKey || selectedKey === focusedKey) {
+      return;
+    }
+    if (entries.some((entry) => entry.key === focusedKey)) {
+      setSelectedKey(focusedKey);
+    }
+  }, [entries, focusedKey, selectedKey]);
   const selectedEntry = entries.find((entry) => entry.key === selectedKey) ?? null;
 
   if (isCheckingAdmin) {
@@ -122,7 +136,10 @@ export function SharedEnvironmentsPane({
       <SharedEnvironmentDetail
         organizationId={activeOrganizationId}
         entry={selectedEntry}
-        onBack={() => setSelectedKey(null)}
+        onBack={() => {
+          setSelectedKey(null);
+          navigate(buildSettingsHref({ section: "shared-environments" }));
+        }}
       />
     );
   }

@@ -29,6 +29,7 @@ export function AutomationRow({
 }: AutomationRowProps) {
   const view = buildAutomationRowViewModel(automation);
   const enabled = automation.enabled;
+  const ownerLabel = automation.ownerScope === "organization" ? "Team" : "Personal";
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Enter" && event.key !== " ") {
@@ -58,12 +59,17 @@ export function AutomationRow({
               <span className="min-w-0 truncate text-base leading-6 text-foreground">
                 {view.title}
               </span>
+              <span className="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+                {ownerLabel}
+              </span>
               {!enabled && (
                 <span className="shrink-0 text-sm text-muted-foreground">Paused</span>
               )}
             </div>
             <div className="mt-0.5 flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
               <span className="truncate">{view.repoLabel}</span>
+              <span aria-hidden="true">-</span>
+              <span className="truncate">{view.executionLabel}</span>
               <span aria-hidden="true">-</span>
               <span className="truncate">Next {view.nextRunPlainLabel}</span>
             </div>

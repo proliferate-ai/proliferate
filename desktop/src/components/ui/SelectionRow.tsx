@@ -7,6 +7,8 @@ interface SelectionRowProps {
   icon?: ReactNode;
   label: string;
   subtitle?: string;
+  disabled?: boolean;
+  title?: string;
 }
 
 export function SelectionRow({
@@ -15,14 +17,20 @@ export function SelectionRow({
   icon,
   label,
   subtitle,
+  disabled = false,
+  title,
 }: SelectionRowProps) {
   return (
     <button
       type="button"
+      disabled={disabled}
+      title={title}
       onClick={onClick}
       className={[
         "flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors duration-150",
-        selected
+        disabled
+          ? "cursor-not-allowed border-border bg-transparent opacity-55"
+          : selected
           ? "border-foreground/25 bg-foreground/5"
           : "border-border bg-transparent hover:bg-foreground/[0.03]",
       ].join(" ")}

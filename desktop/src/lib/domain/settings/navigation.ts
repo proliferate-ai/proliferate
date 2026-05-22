@@ -101,6 +101,19 @@ export function buildCloudRepoSettingsHref(
   });
 }
 
+export function buildSharedCloudRepoSettingsHref(
+  gitOwner: string,
+  gitRepoName: string,
+): string {
+  return buildSettingsHref({
+    section: "shared-environments",
+    focus: {
+      cloudRepoOwner: gitOwner,
+      cloudRepoName: gitRepoName,
+    },
+  });
+}
+
 export interface SettingsSelectionInput {
   rawSection: string | null;
   rawRepo?: string | null;

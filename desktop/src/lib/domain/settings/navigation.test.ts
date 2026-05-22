@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCloudRepoSettingsHref,
   buildCloudSettingsHref,
+  buildSharedCloudRepoSettingsHref,
   buildSettingsHref,
   resolveSettingsSelection,
 } from "@/lib/domain/settings/navigation";
@@ -241,6 +242,9 @@ describe("settings navigation", () => {
     expect(buildCloudSettingsHref()).toBe("/settings?section=agent-authentication");
     expect(buildCloudRepoSettingsHref("owner", "name")).toBe(
       "/settings?section=environments&cloudRepoOwner=owner&cloudRepoName=name",
+    );
+    expect(buildSharedCloudRepoSettingsHref("owner", "name")).toBe(
+      "/settings?section=shared-environments&cloudRepoOwner=owner&cloudRepoName=name",
     );
   });
 

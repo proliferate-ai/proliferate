@@ -1,5 +1,8 @@
 import { useMemo } from "react";
-import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
+import {
+  useCloudRepoConfigs,
+  useOrganizationCloudRepoConfigs,
+} from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useSettingsRepositories } from "@/hooks/settings/derived/use-settings-repositories";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import {
@@ -9,6 +12,9 @@ import {
 import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
 
 const EMPTY_REPO_CONFIGS: CloudRepoConfigSummary[] = [];
+const EMPTY_CLOUD_WORKSPACES: ReturnType<typeof useStandardRepoProjection>["cloudWorkspaces"] = [];
+
+type AutomationTargetOwnerScope = "personal" | "organization";
 
 interface UseAutomationTargetSelectionInput {
   automation: {
@@ -18,23 +24,40 @@ interface UseAutomationTargetSelectionInput {
     gitRepoName: string;
   } | null;
   selectedTarget: AutomationTargetSelection | null;
+  ownerScope?: AutomationTargetOwnerScope;
+  organizationId?: string | null;
   enabled?: boolean;
 }
 
 export function useAutomationTargetSelection({
   automation,
   selectedTarget,
+  ownerScope = "personal",
+  organizationId = null,
   enabled = true,
 }: UseAutomationTargetSelectionInput) {
-  const { data: repoConfigsData, isLoading: repoConfigsLoading } =
-    useCloudRepoConfigs(enabled);
+  const isOrganization = ownerScope === "organization";
+  const { data: personalRepoConfigsData, isLoading: personalRepoConfigsLoading } =
+    useCloudRepoConfigs(enabled && !isOrganization);
+  const { data: organizationRepoConfigsData, isLoading: organizationRepoConfigsLoading } =
+    useOrganizationCloudRepoConfigs(
+      organizationId,
+      enabled && isOrganization && organizationId !== null,
+    );
   const { repositories } = useSettingsRepositories();
   const { cloudWorkspaces, isLoading: repoProjectionLoading } =
     useStandardRepoProjection();
+  const repoConfigs = isOrganization
+    ? organizationRepoConfigsData?.configs
+    : personalRepoConfigsData?.configs;
+  const scopedCloudWorkspaces = isOrganization ? EMPTY_CLOUD_WORKSPACES : cloudWorkspaces;
+  const repoConfigsLoading = isOrganization
+    ? organizationRepoConfigsLoading
+    : personalRepoConfigsLoading;
 
   const targetState = useMemo(() => buildAutomationTargetState({
-    repoConfigs: repoConfigsData?.configs ?? EMPTY_REPO_CONFIGS,
-    cloudWorkspaces,
+    repoConfigs: repoConfigs ?? EMPTY_REPO_CONFIGS,
+    cloudWorkspaces: scopedCloudWorkspaces,
     repositories,
     selectedTarget,
     savedTarget: automation
@@ -51,14 +74,17 @@ export function useAutomationTargetSelection({
         gitRepoName: automation.gitRepoName,
       }
       : null,
+    cloudAvailable: !isOrganization || organizationId !== null,
   }), [
     automation?.executionTarget,
     automation?.targetMode,
     automation?.gitOwner,
     automation?.gitRepoName,
-    cloudWorkspaces,
-    repoConfigsData?.configs,
+    isOrganization,
+    organizationId,
+    repoConfigs,
     repositories,
+    scopedCloudWorkspaces,
     selectedTarget,
   ]);
 
