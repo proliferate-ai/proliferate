@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -26,6 +27,8 @@ import {
   useEnqueueCloudCommand,
   useSessionLive,
   useWorkspaceLive,
+  cloudWorkspacesKey,
+  personalCloudOwnerKey,
 } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudChatComposerControls,
@@ -38,6 +41,9 @@ import {
 } from "@proliferate/product-model/chats/cloud/composer-controls";
 import {
   buildCloudTranscriptView,
+  cloudTranscriptHasAgentProgressAfterPrompt,
+  cloudTranscriptHasUserPrompt,
+  latestCloudTranscriptSeq,
   type CloudChatTranscriptRowView,
 } from "@proliferate/product-model/chats/cloud/transcript-view";
 
@@ -94,6 +100,7 @@ export function MobileChatScreen({
   onBack,
   onSessionSelected,
 }: MobileChatScreenProps) {
+  const queryClient = useQueryClient();
   const client = useCloudClient();
   const [draft, setDraft] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(chat.sessionId);
@@ -132,7 +139,6 @@ export function MobileChatScreen({
   const session = newSessionMode ? null : selectedSession;
   const activeSessionId = session?.sessionId ?? selectedSessionId;
   const targetId = session?.targetId ?? workspace?.targetId ?? chat.targetId;
-  const workspaceRuntimeId = session?.workspaceId ?? workspace?.anyharnessWorkspaceId ?? chat.workspaceRuntimeId;
   const workspaceStatus = workspace ? effectiveWorkspaceStatus(workspace) : chat.status;
   const sessionLive = useSessionLive(session?.sessionId ?? null, {
     targetId,
@@ -195,13 +201,16 @@ export function MobileChatScreen({
     }
     const prompt = optimisticPromptFromPending(pendingPrompt, pendingPrompt.dispatchedSessionId);
     return {
-      agentStarted: transcriptHasAgentProgressAfterPrompt(
+      agentStarted: cloudTranscriptHasAgentProgressAfterPrompt({
         prompt,
         transcriptItems,
-        transcriptView.rows,
-        false,
-      ),
-      promptVisible: transcriptHasUserPrompt(prompt, transcriptItems, transcriptView.rows, false),
+        transcriptRows: transcriptView.rows,
+      }),
+      promptVisible: cloudTranscriptHasUserPrompt({
+        prompt,
+        transcriptItems,
+        transcriptRows: transcriptView.rows,
+      }),
     };
   }, [
     activeSessionId,
@@ -262,15 +271,16 @@ export function MobileChatScreen({
     }
     let active = true;
     void loadPendingMobilePrompt(chat.workspaceId, ownerUserId).then((stored) => {
+      const restored = stored ?? chat.initialPendingPrompt ?? null;
       if (active) {
-        setPendingPrompt(stored);
-        setPendingPromptFailed(Boolean(stored?.failedAt));
-        setPendingPromptStatus(stored?.failureMessage ?? null);
-        if (stored?.dispatchedSessionId) {
-          setSelectedSessionId(stored.dispatchedSessionId);
+        setPendingPrompt(restored);
+        setPendingPromptFailed(Boolean(restored?.failedAt));
+        setPendingPromptStatus(restored?.failureMessage ?? null);
+        if (restored?.dispatchedSessionId) {
+          setSelectedSessionId(restored.dispatchedSessionId);
           setNewSessionMode(false);
-          onSessionSelected?.(stored.dispatchedSessionId);
-        } else if (stored) {
+          onSessionSelected?.(restored.dispatchedSessionId);
+        } else if (restored) {
           setSelectedSessionId(null);
           setNewSessionMode(true);
         }
@@ -279,7 +289,7 @@ export function MobileChatScreen({
     return () => {
       active = false;
     };
-  }, [chat.workspaceId, onSessionSelected, ownerUserId]);
+  }, [chat.initialPendingPrompt, chat.workspaceId, onSessionSelected, ownerUserId]);
 
   useEffect(() => {
     if (!workspace || workspaceStatus === "ready" || workspaceStatus === "error") {
@@ -338,12 +348,11 @@ export function MobileChatScreen({
       current.filter((prompt) =>
         prompt.sessionId !== session.sessionId
         || prompt.status === "failed"
-        || !transcriptHasAgentProgressAfterPrompt(
+        || !cloudTranscriptHasAgentProgressAfterPrompt({
           prompt,
           transcriptItems,
-          transcriptView.rows,
-          false,
-        )
+          transcriptRows: transcriptView.rows,
+        })
       )
     );
   }, [session?.sessionId, transcriptItems, transcriptView.rows]);
@@ -500,6 +509,9 @@ export function MobileChatScreen({
           void savePendingMobilePrompt(workspace.id, ownerUserId, dispatchedPrompt);
         }
         void workspaceQuery.refetch();
+        void queryClient.invalidateQueries({
+          queryKey: cloudWorkspacesKey(personalCloudOwnerKey(), "my"),
+        });
       })
       .catch((error: unknown) => {
         if (!isCurrentRun()) {
@@ -542,6 +554,7 @@ export function MobileChatScreen({
     ownerUserId,
     pendingPrompt,
     pendingPromptFailed,
+    queryClient,
     workspace?.actionBlockReason,
     workspace?.anyharnessWorkspaceId,
     workspace?.id,
@@ -599,9 +612,10 @@ export function MobileChatScreen({
       try {
         await savePendingMobilePrompt(workspace.id, ownerUserId, prompt);
       } catch (error) {
-        setPendingPrompt(null);
         setPendingPromptStatus(
-          error instanceof Error ? error.message : "Prompt could not be queued.",
+          error instanceof Error
+            ? `Prompt will send while this chat stays open. Storage failed: ${error.message}`
+            : "Prompt will send while this chat stays open, but could not be saved.",
         );
       } finally {
         directPromptDispatchingRef.current = false;
@@ -618,7 +632,7 @@ export function MobileChatScreen({
       id: `mobile:${workspace.id}:${session.sessionId}:${Date.now()}`,
       sessionId: session.sessionId,
       text,
-      baseTranscriptSeq: latestTranscriptSeq(transcriptItems, transcriptView.rows),
+      baseTranscriptSeq: latestCloudTranscriptSeq(transcriptItems, transcriptView.rows),
       status: "sending",
     };
     setOptimisticPrompts((current) => [...current, optimisticPrompt]);
@@ -1085,18 +1099,18 @@ function buildOptimisticPromptRows(input: {
     if (prompt.sessionId !== input.sessionId) {
       continue;
     }
-    const promptVisible = transcriptHasUserPrompt(
+    const promptVisible = cloudTranscriptHasUserPrompt({
       prompt,
-      input.transcriptItems,
-      input.transcriptRows,
-      input.allowTextOnlyRowFallback,
-    );
-    const agentStarted = transcriptHasAgentProgressAfterPrompt(
+      transcriptItems: input.transcriptItems,
+      transcriptRows: input.transcriptRows,
+      allowTextOnlyRowFallback: input.allowTextOnlyRowFallback,
+    });
+    const agentStarted = cloudTranscriptHasAgentProgressAfterPrompt({
       prompt,
-      input.transcriptItems,
-      input.transcriptRows,
-      input.allowTextOnlyRowFallback,
-    );
+      transcriptItems: input.transcriptItems,
+      transcriptRows: input.transcriptRows,
+      allowTextOnlyRowFallback: input.allowTextOnlyRowFallback,
+    });
     if (!promptVisible) {
       rows.push({
         id: `${prompt.id}:user`,
@@ -1130,30 +1144,6 @@ function optimisticPromptStatusLabel(status: OptimisticPromptStatus): string {
   }
 }
 
-function transcriptHasUserPrompt(
-  prompt: OptimisticPrompt,
-  transcriptItems: readonly CloudTranscriptItem[],
-  transcriptRows: readonly CloudChatTranscriptRowView[],
-  allowTextOnlyRowFallback: boolean,
-): boolean {
-  return transcriptItems.some((item) => isPromptItemForOptimisticPrompt(item, prompt))
-    || (
-      transcriptItems.length === 0
-      && transcriptRows.some((row) =>
-        row.kind === "user"
-        && rowIsAfterPromptBaseline(row, prompt)
-        && textMatches(row.body, prompt.text)
-      )
-    )
-    || (
-      allowTextOnlyRowFallback
-      && transcriptItems.length === 0
-      && transcriptRows.some((row) =>
-        row.kind === "user" && textMatches(row.body, prompt.text)
-      )
-    );
-}
-
 function optimisticPromptFromPending(
   prompt: MobilePendingPrompt,
   sessionId: string,
@@ -1176,84 +1166,6 @@ function markPendingPromptFailed(
     failedAt: Date.now(),
     failureMessage: message,
   };
-}
-
-function transcriptHasAgentProgressAfterPrompt(
-  prompt: OptimisticPrompt,
-  transcriptItems: readonly CloudTranscriptItem[],
-  transcriptRows: readonly CloudChatTranscriptRowView[],
-  allowTextOnlyRowFallback: boolean,
-): boolean {
-  const promptItem = [...transcriptItems]
-    .filter((item) => isPromptItemForOptimisticPrompt(item, prompt))
-    .sort((left, right) => right.lastSeq - left.lastSeq)[0];
-  if (promptItem) {
-    return transcriptItems.some((item) =>
-      item.firstSeq > promptItem.lastSeq && !isPromptTranscriptKind(item.kind)
-    );
-  }
-  if (transcriptItems.length > 0) {
-    return false;
-  }
-  const promptRowIndex = transcriptRows.findIndex((row) =>
-    row.kind === "user"
-    && rowIsAfterPromptBaseline(row, prompt)
-    && textMatches(row.body, prompt.text)
-  );
-  const fallbackPromptRowIndex = allowTextOnlyRowFallback
-    ? transcriptRows.findIndex((row) =>
-      row.kind === "user" && textMatches(row.body, prompt.text)
-    )
-    : -1;
-  const resolvedPromptRowIndex = promptRowIndex === -1 ? fallbackPromptRowIndex : promptRowIndex;
-  if (resolvedPromptRowIndex === -1) {
-    return false;
-  }
-  return transcriptRows
-    .slice(resolvedPromptRowIndex + 1)
-    .some((row) => row.kind !== "user" && rowIsAfterPromptBaseline(row, prompt));
-}
-
-function isPromptItemForOptimisticPrompt(
-  item: CloudTranscriptItem,
-  prompt: OptimisticPrompt,
-): boolean {
-  return item.firstSeq > prompt.baseTranscriptSeq
-    && isPromptTranscriptKind(item.kind)
-    && textMatches(item.text, prompt.text);
-}
-
-function rowIsAfterPromptBaseline(
-  row: CloudChatTranscriptRowView,
-  prompt: OptimisticPrompt,
-): boolean {
-  return typeof row.firstSeq === "number" && row.firstSeq > prompt.baseTranscriptSeq;
-}
-
-function isPromptTranscriptKind(kind: string | null | undefined): boolean {
-  return kind === "user_message" || kind === "prompt";
-}
-
-function textMatches(value: string | null | undefined, expected: string): boolean {
-  return normalizePromptText(value) === normalizePromptText(expected);
-}
-
-function normalizePromptText(value: string | null | undefined): string {
-  return (value ?? "").trim().replace(/\s+/g, " ");
-}
-
-function latestTranscriptItemSeq(items: readonly CloudTranscriptItem[]): number {
-  return items.reduce((maxSeq, item) => Math.max(maxSeq, item.lastSeq), 0);
-}
-
-function latestTranscriptSeq(
-  items: readonly CloudTranscriptItem[],
-  rows: readonly CloudChatTranscriptRowView[],
-): number {
-  return Math.max(
-    latestTranscriptItemSeq(items),
-    rows.reduce((maxSeq, row) => Math.max(maxSeq, row.lastSeq ?? row.firstSeq ?? 0), 0),
-  );
 }
 
 function compareSessions(left: CloudSessionProjection, right: CloudSessionProjection): number {

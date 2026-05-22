@@ -36,6 +36,7 @@ import {
   drawerRoutes,
   routeTitle,
   type MobileCloudChat,
+  type MobilePendingPrompt,
   type RouteId,
 } from "../../navigation/navigation-model";
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
@@ -139,10 +140,11 @@ export function MobileShell() {
         if (cancelled) {
           return;
         }
+        if (stored.route) {
+          setRoute(stored.route);
+        }
         if (stored.chat) {
           setSelectedChat(stored.chat);
-        } else if (stored.route) {
-          setRoute(stored.route);
         }
       })
       .catch(() => undefined)
@@ -437,10 +439,11 @@ async function restoreShellNavigation(ownerUserId: string): Promise<{
     deleteMobileStorageItem(SHELL_ROUTE_KEY),
   ]).catch(() => undefined);
   const chat = parseStoredShellChat(storedChat, ownerUserId);
+  const route = parseStoredShellRoute(storedRoute, ownerUserId);
   if (chat) {
-    return { chat, route: null };
+    return { chat, route };
   }
-  return { chat: null, route: parseStoredShellRoute(storedRoute, ownerUserId) };
+  return { chat: null, route };
 }
 
 async function persistShellNavigation(
@@ -558,9 +561,29 @@ function parseStoredChatValue(value: unknown): MobileCloudChat | null {
       title: parsed.title,
       status: parsed.status,
       visibility: parsed.visibility,
+      initialPendingPrompt: parseStoredPendingPrompt(parsed.initialPendingPrompt),
     };
   }
   return null;
+}
+
+function parseStoredPendingPrompt(value: unknown): MobilePendingPrompt | null {
+  const parsed = value as Partial<MobilePendingPrompt>;
+  if (!parsed || typeof parsed.id !== "string" || typeof parsed.text !== "string") {
+    return null;
+  }
+  return {
+    id: parsed.id,
+    text: parsed.text,
+    modelId: typeof parsed.modelId === "string" ? parsed.modelId : null,
+    modeId: typeof parsed.modeId === "string" ? parsed.modeId : null,
+    createdAt: typeof parsed.createdAt === "number" ? parsed.createdAt : Date.now(),
+    dispatchedSessionId:
+      typeof parsed.dispatchedSessionId === "string" ? parsed.dispatchedSessionId : null,
+    failedAt: typeof parsed.failedAt === "number" ? parsed.failedAt : null,
+    failureMessage:
+      typeof parsed.failureMessage === "string" ? parsed.failureMessage : null,
+  };
 }
 
 function shellRouteKey(ownerUserId: string): string {

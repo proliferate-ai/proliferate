@@ -21,9 +21,9 @@ import {
 } from "../lib/access/cloud/auth/mobile-auth-flow";
 import { createMobileCloudClient } from "../lib/access/cloud/client";
 import {
-  deleteMobileStorageItem,
-  getMobileStorageItem,
-  setMobileStorageItem,
+  deleteSecureMobileStorageItem,
+  getSecureMobileStorageItem,
+  setSecureMobileStorageItem,
 } from "../lib/access/mobile-storage";
 import { mobileEnv } from "../config/env";
 
@@ -134,7 +134,7 @@ export function MobileAuthProvider({ children }: { children: ReactNode }) {
         setError(null);
         let tombstoneWritten = false;
         try {
-          await setMobileStorageItem(SIGNED_OUT_KEY, new Date().toISOString());
+          await setSecureMobileStorageItem(SIGNED_OUT_KEY, new Date().toISOString());
           tombstoneWritten = true;
           await clearStoredSession();
         } catch (signOutError) {
@@ -167,12 +167,14 @@ export function useMobileAuth() {
 }
 
 async function bootstrapSession(): Promise<AuthSessionResponse | null> {
-  if (await getMobileStorageItem(SIGNED_OUT_KEY)) {
+  const devRefreshToken = readDevWebRefreshTokenFromLocation();
+  if (devRefreshToken) {
+    await deleteSecureMobileStorageItem(SIGNED_OUT_KEY).catch(() => undefined);
+  } else if (await getSecureMobileStorageItem(SIGNED_OUT_KEY)) {
     await clearStoredSession().catch(() => undefined);
     return null;
   }
-  const refreshToken =
-    readDevWebRefreshTokenFromLocation() ?? (await getMobileStorageItem(REFRESH_TOKEN_KEY));
+  const refreshToken = devRefreshToken ?? (await getSecureMobileStorageItem(REFRESH_TOKEN_KEY));
   if (!refreshToken) {
     return null;
   }
@@ -244,19 +246,19 @@ async function applySession(
   setAccessToken(session.accessToken);
   setUser(session.user);
   await Promise.all([
-    setMobileStorageItem(ACCESS_TOKEN_KEY, session.accessToken),
-    deleteMobileStorageItem(SIGNED_OUT_KEY),
+    setSecureMobileStorageItem(ACCESS_TOKEN_KEY, session.accessToken),
+    deleteSecureMobileStorageItem(SIGNED_OUT_KEY),
   ]);
   if (session.refreshToken) {
-    await setMobileStorageItem(REFRESH_TOKEN_KEY, session.refreshToken);
+    await setSecureMobileStorageItem(REFRESH_TOKEN_KEY, session.refreshToken);
   }
   setAuthState(session.readiness.productReady ? "active" : "needs_github");
 }
 
 async function clearStoredSession(): Promise<void> {
   await Promise.all([
-    deleteMobileStorageItem(ACCESS_TOKEN_KEY),
-    deleteMobileStorageItem(REFRESH_TOKEN_KEY),
+    deleteSecureMobileStorageItem(ACCESS_TOKEN_KEY),
+    deleteSecureMobileStorageItem(REFRESH_TOKEN_KEY),
   ]);
 }
 

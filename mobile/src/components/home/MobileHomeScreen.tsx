@@ -97,7 +97,7 @@ export function MobileHomeScreen({ ownerUserId, onOpenChat }: MobileHomeScreenPr
         displayName: buildWorkspaceDisplayName(text),
         ownerScope: "personal",
       });
-      await savePendingMobilePrompt(workspace.id, ownerUserId, pendingPrompt);
+      await savePendingMobilePrompt(workspace.id, ownerUserId, pendingPrompt).catch(() => undefined);
       setDraft("");
       onOpenChat({
         workspaceId: workspace.id,
@@ -110,6 +110,7 @@ export function MobileHomeScreen({ ownerUserId, onOpenChat }: MobileHomeScreenPr
         title: workspace.displayName ?? workspace.repo.name,
         status: workspace.workspaceStatus ?? workspace.status,
         visibility: workspace.visibility,
+        initialPendingPrompt: pendingPrompt,
       });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Could not create workspace.");

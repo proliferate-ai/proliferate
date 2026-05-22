@@ -5,6 +5,7 @@ import {
   type CloudCommandResponse,
   type CloudSessionProjection,
   type CloudWorkspaceDetail,
+  ProliferateClientError,
   type ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
 
@@ -30,6 +31,13 @@ export type StartSessionPayload = {
 type EnqueueCloudCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,
 ) => Promise<CloudCommandResponse>;
+
+const RETRYABLE_READINESS_ERROR_CODES = new Set([
+  "cloud_command_target_config_required",
+  "cloud_command_runtime_config_missing",
+  "cloud_command_runtime_config_not_ready",
+  "cloud_command_agent_auth_not_ready",
+]);
 
 export class RetryablePendingPromptDispatchError extends Error {
   readonly retryable = true;
@@ -91,21 +99,13 @@ async function startSessionForPrompt(args: {
     workspaceId: args.workspace.id,
     targetId,
   });
-  const command = await args.enqueueStartSession({
-    idempotencyKey: `${args.pendingPrompt.id}:start-session`,
+  const command = await enqueueStartSessionWithRetryableReadiness({
+    args,
     targetId,
-    workspaceId: anyharnessWorkspaceId,
-    cloudWorkspaceId: args.workspace.id,
-    kind: "start_session",
-    source: "mobile",
-    payload: {
-      workspaceId: anyharnessWorkspaceId,
-      agentKind,
-      ...(modelId ? { modelId } : {}),
-      ...(modeId ? { modeId } : {}),
-      subagentsEnabled: false,
-      origin: { kind: "system", entrypoint: "cloud" },
-    },
+    anyharnessWorkspaceId,
+    agentKind,
+    modelId,
+    modeId,
   });
   args.setLatestCommandId(command.commandId);
   assertCommandEnqueued(command);
@@ -285,6 +285,40 @@ function assertStillCurrent(shouldContinue: () => boolean): void {
   }
 }
 
+async function enqueueStartSessionWithRetryableReadiness(input: {
+  args: {
+    workspace: CloudWorkspaceDetail;
+    pendingPrompt: MobilePendingPrompt;
+    enqueueStartSession: EnqueueCloudCommand<StartSessionPayload>;
+  };
+  targetId: string;
+  anyharnessWorkspaceId: string;
+  agentKind: string;
+  modelId: string | null;
+  modeId: string | null;
+}): Promise<CloudCommandResponse> {
+  try {
+    return await input.args.enqueueStartSession({
+      idempotencyKey: `${input.args.pendingPrompt.id}:start-session`,
+      targetId: input.targetId,
+      workspaceId: input.anyharnessWorkspaceId,
+      cloudWorkspaceId: input.args.workspace.id,
+      kind: "start_session",
+      source: "mobile",
+      payload: {
+        workspaceId: input.anyharnessWorkspaceId,
+        agentKind: input.agentKind,
+        ...(input.modelId ? { modelId: input.modelId } : {}),
+        ...(input.modeId ? { modeId: input.modeId } : {}),
+        subagentsEnabled: false,
+        origin: { kind: "system", entrypoint: "cloud" },
+      },
+    });
+  } catch (error) {
+    throw retryableReadinessError(error) ?? error;
+  }
+}
+
 function assertCommandEnqueued(command: CloudCommandResponse): void {
   if (
     command.status === "rejected" ||
@@ -292,8 +326,27 @@ function assertCommandEnqueued(command: CloudCommandResponse): void {
     command.status === "superseded" ||
     command.status === "failed_delivery"
   ) {
+    if (command.errorCode && RETRYABLE_READINESS_ERROR_CODES.has(command.errorCode)) {
+      throw new RetryablePendingPromptDispatchError(
+        command.errorMessage || "Workspace runtime is still preparing for session start.",
+      );
+    }
     throw new Error(command.errorMessage || `Cloud command ${command.status}.`);
   }
+}
+
+function retryableReadinessError(error: unknown): RetryablePendingPromptDispatchError | null {
+  if (
+    error instanceof ProliferateClientError
+    && error.status === 409
+    && error.code
+    && RETRYABLE_READINESS_ERROR_CODES.has(error.code)
+  ) {
+    return new RetryablePendingPromptDispatchError(
+      error.message || "Workspace runtime is still preparing for session start.",
+    );
+  }
+  return null;
 }
 
 function parseStartedSessionId(command: CloudCommandResponse): string | null {

@@ -5,7 +5,11 @@ import type {
   CloudTranscriptItem,
 } from "@proliferate/cloud-sdk";
 
-import { buildCloudTranscriptView } from "./transcript-view";
+import {
+  buildCloudTranscriptView,
+  cloudTranscriptHasAgentProgressAfterPrompt,
+  cloudTranscriptHasUserPrompt,
+} from "./transcript-view";
 
 describe("buildCloudTranscriptView", () => {
   it("falls back to projected transcript items when retained events lack envelopes", () => {
@@ -146,6 +150,136 @@ describe("buildCloudTranscriptView", () => {
         lastSeq: 2,
       }),
     ]);
+  });
+
+  it("falls back to projection when a later missing envelope is newer than rendered event rows", () => {
+    const events: CloudSessionEvent[] = [
+      {
+        targetId: "target-1",
+        sessionId: "session-1",
+        seq: 1,
+        eventType: "item_completed",
+        sourceKind: "runtime",
+        envelope: userEnvelope(1, "rendered from event"),
+      },
+      {
+        targetId: "target-1",
+        sessionId: "session-1",
+        seq: 3,
+        eventType: "item_completed",
+        sourceKind: "runtime",
+        envelope: null,
+      },
+    ];
+    const fallbackItems: CloudTranscriptItem[] = [
+      {
+        itemId: "item-1",
+        turnId: "turn-1",
+        kind: "user_message",
+        status: "completed",
+        text: "rendered from event",
+        firstSeq: 1,
+        lastSeq: 1,
+      },
+      {
+        itemId: "item-2",
+        turnId: "turn-1",
+        kind: "assistant_message",
+        status: "completed",
+        text: "projection-only assistant",
+        firstSeq: 2,
+        lastSeq: 2,
+      },
+    ];
+
+    const view = buildCloudTranscriptView({
+      sessionId: "session-1",
+      events,
+      fallbackItems,
+    });
+
+    expect(view.source).toBe("projection");
+    expect(view.rows).toEqual([
+      expect.objectContaining({
+        body: "rendered from event",
+        kind: "user",
+      }),
+      expect.objectContaining({
+        body: "projection-only assistant",
+        kind: "assistant",
+      }),
+    ]);
+  });
+
+  it("reconciles optimistic prompts from event rows even when old projection items exist", () => {
+    const oldItems: CloudTranscriptItem[] = [
+      {
+        itemId: "old-user",
+        turnId: "old-turn",
+        kind: "user_message",
+        status: "completed",
+        text: "old prompt",
+        firstSeq: 1,
+        lastSeq: 1,
+      },
+    ];
+    const rows = [
+      {
+        id: "event-user",
+        kind: "user" as const,
+        body: "repeatable prompt",
+        firstSeq: 5,
+        lastSeq: 5,
+      },
+      {
+        id: "event-assistant",
+        kind: "assistant" as const,
+        body: "started",
+        firstSeq: 6,
+        lastSeq: 6,
+      },
+    ];
+    const prompt = { text: "repeatable prompt", baseTranscriptSeq: 4 };
+
+    expect(cloudTranscriptHasUserPrompt({
+      prompt,
+      transcriptItems: oldItems,
+      transcriptRows: rows,
+    })).toBe(true);
+    expect(cloudTranscriptHasAgentProgressAfterPrompt({
+      prompt,
+      transcriptItems: oldItems,
+      transcriptRows: rows,
+    })).toBe(true);
+  });
+
+  it("detects event-row assistant progress after a projected prompt item", () => {
+    const items: CloudTranscriptItem[] = [
+      {
+        itemId: "projected-user",
+        turnId: "turn-1",
+        kind: "user_message",
+        status: "completed",
+        text: "new prompt",
+        firstSeq: 5,
+        lastSeq: 5,
+      },
+    ];
+    const rows = [
+      {
+        id: "event-assistant",
+        kind: "assistant" as const,
+        body: "assistant from event",
+        firstSeq: 6,
+        lastSeq: 6,
+      },
+    ];
+
+    expect(cloudTranscriptHasAgentProgressAfterPrompt({
+      prompt: { text: "new prompt", baseTranscriptSeq: 4 },
+      transcriptItems: items,
+      transcriptRows: rows,
+    })).toBe(true);
   });
 });
 

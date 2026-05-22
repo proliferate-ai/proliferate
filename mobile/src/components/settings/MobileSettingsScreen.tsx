@@ -96,7 +96,7 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
               : viewer.isLoading
               ? "Checking account readiness..."
               : viewer.data?.onboardingState === "active"
-                ? "Ready for cloud workspaces and automations"
+                ? "Signed in and GitHub-linked"
                 : "GitHub link required"
           }
         />

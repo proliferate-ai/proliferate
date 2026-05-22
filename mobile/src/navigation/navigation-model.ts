@@ -19,6 +19,7 @@ export interface MobileCloudChat {
   title: string;
   status: string;
   visibility: string;
+  initialPendingPrompt?: MobilePendingPrompt | null;
 }
 
 export interface MobilePendingPrompt {

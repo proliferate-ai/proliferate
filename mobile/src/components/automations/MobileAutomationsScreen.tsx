@@ -195,6 +195,12 @@ function NewAutomationSheet({
   const selectedRepo = repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null;
   const selectedConfig = runConfigs.find((config) => config.id === configId) ?? runConfigs[0] ?? null;
 
+  function closeSheet() {
+    setError(null);
+    createAutomation.reset();
+    onClose();
+  }
+
   useEffect(() => {
     if (visible && !repoId && repoOptions[0]) {
       setRepoId(repoOptions[0].id);
@@ -206,6 +212,19 @@ function NewAutomationSheet({
       setConfigId(runConfigs[0].id);
     }
   }, [configId, runConfigs, visible]);
+
+  useEffect(() => {
+    if (visible) {
+      setError(null);
+      createAutomation.reset();
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (error) {
+      setError(null);
+    }
+  }, [cadence, configId, prompt, repoId, title]);
 
   async function submit() {
     const cleanTitle = title.trim() || prompt.trim().slice(0, 48) || "Mobile automation";
@@ -233,7 +252,7 @@ function NewAutomationSheet({
       setPrompt("");
       setCadence("daily");
       setError(null);
-      onClose();
+      closeSheet();
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "Automation could not be created.");
     }
@@ -249,16 +268,16 @@ function NewAutomationSheet({
   );
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={closeSheet}>
       <View style={styles.sheetLayer}>
-        <Pressable style={styles.sheetScrim} onPress={onClose} />
+        <Pressable style={styles.sheetScrim} onPress={closeSheet} />
         <View style={styles.sheet}>
           <View style={styles.sheetHeader}>
             <View>
               <Text style={styles.sheetTitle}>New automation</Text>
               <Text style={styles.sheetSubtitle}>Runs in a personal cloud workspace.</Text>
             </View>
-            <Pressable accessibilityRole="button" onPress={onClose} style={styles.closeButton}>
+            <Pressable accessibilityRole="button" onPress={closeSheet} style={styles.closeButton}>
               <MobileIcon name="close" size={16} color={colors.faint} />
             </Pressable>
           </View>
