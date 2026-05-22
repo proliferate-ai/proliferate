@@ -628,11 +628,13 @@ def _command_has_managed_cloud_workspace(
     kind: str,
     body: CreateCloudCommandRequest,
 ) -> bool:
-    return (
-        _target_requires_cloud_workspace(target)
-        and kind == CloudCommandKind.start_session.value
-        and (body.cloud_workspace_id is not None or body.workspace_id is not None)
-    )
+    if not _target_requires_cloud_workspace(target):
+        return False
+    if kind == CloudCommandKind.start_session.value:
+        return body.cloud_workspace_id is not None or body.workspace_id is not None
+    if kind == CloudCommandKind.send_prompt.value:
+        return body.cloud_workspace_id is not None
+    return False
 
 
 async def enqueue_command(
