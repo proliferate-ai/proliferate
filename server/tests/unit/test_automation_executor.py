@@ -6,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from proliferate.constants.automations import (
-    AUTOMATION_EXECUTION_TARGET_CLOUD,
     AUTOMATION_EXECUTION_TARGET_LOCAL,
     AUTOMATION_EXECUTOR_KIND_DESKTOP,
     AUTOMATION_LOCAL_CLAIM_MAX_LIMIT,
@@ -14,14 +13,11 @@ from proliferate.constants.automations import (
 )
 from proliferate.db import engine as engine_module
 from proliferate.db.models.automations import Automation, AutomationRun
-from proliferate.db.models.cloud.repo_config import CloudRepoConfig
+from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.server.automations.domain.claim_lifecycle import (
     AUTOMATION_ERROR_AGENT_NOT_CONFIGURED,
     AUTOMATION_ERROR_DISPATCH_UNCERTAIN,
     LocalAutomationRepoIdentity,
-)
-from proliferate.db.store.automations import (
-    create_manual_run_for_user,
 )
 from proliferate.server.automations.local_executor_service import (
     _normalize_local_error_code,
@@ -35,6 +31,11 @@ from tests.unit.automation_claim_store_helpers import (
     mark_run_creating_workspace,
     mark_run_provisioning_workspace,
     sweep_expired_dispatching_runs,
+)
+from tests.unit.automation_test_data import (
+    create_cloud_automation,
+    create_local_automation,
+    create_manual_run,
 )
 
 
@@ -56,105 +57,6 @@ def test_cloud_executor_cli_accepts_stable_executor_id() -> None:
     assert args.cloud_executor_id == "cloud:worker-a"
 
 
-async def _create_cloud_automation(user_id: uuid.UUID, now: datetime) -> uuid.UUID:
-    async with engine_module.async_session_factory() as session:
-        repo = CloudRepoConfig(
-            user_id=user_id,
-            git_owner="proliferate-ai",
-            git_repo_name="proliferate",
-            configured=True,
-            configured_at=now,
-            default_branch="main",
-            env_vars_ciphertext="",
-            env_vars_version=0,
-            setup_script="",
-            setup_script_version=0,
-            files_version=0,
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(repo)
-        await session.flush()
-        automation = Automation(
-            user_id=user_id,
-            cloud_repo_config_id=repo.id,
-            title="Daily check",
-            prompt="Original prompt",
-            schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
-            schedule_timezone="UTC",
-            schedule_summary="Daily at 09:00 in UTC",
-            execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
-            agent_kind="codex",
-            model_id="gpt-5.4",
-            mode_id="code",
-            reasoning_effort="medium",
-            enabled=True,
-            paused_at=None,
-            next_run_at=now,
-            last_scheduled_at=None,
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(automation)
-        await session.commit()
-        return automation.id
-
-
-async def _create_local_automation(user_id: uuid.UUID, now: datetime) -> uuid.UUID:
-    async with engine_module.async_session_factory() as session:
-        repo = CloudRepoConfig(
-            user_id=user_id,
-            git_owner="Proliferate-AI",
-            git_repo_name="Proliferate",
-            configured=False,
-            configured_at=None,
-            default_branch="main",
-            env_vars_ciphertext="",
-            env_vars_version=0,
-            setup_script="",
-            setup_script_version=0,
-            files_version=0,
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(repo)
-        await session.flush()
-        automation = Automation(
-            user_id=user_id,
-            cloud_repo_config_id=repo.id,
-            title="Local check",
-            prompt="Check locally",
-            schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
-            schedule_timezone="UTC",
-            schedule_summary="Daily at 09:00 in UTC",
-            execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
-            agent_kind="codex",
-            model_id=None,
-            mode_id=None,
-            reasoning_effort=None,
-            enabled=True,
-            paused_at=None,
-            next_run_at=now,
-            last_scheduled_at=None,
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(automation)
-        await session.commit()
-        return automation.id
-
-
-async def _create_manual_run(user_id: uuid.UUID, automation_id: uuid.UUID):
-    async with engine_module.async_session_factory() as session:
-        run = await create_manual_run_for_user(
-            session,
-            user_id=user_id,
-            automation_id=automation_id,
-        )
-        await session.commit()
-        return run
-
-
 @pytest.mark.asyncio
 async def test_manual_run_snapshots_inputs_and_claim_uses_snapshot(
     test_engine,  # type: ignore[no-untyped-def]
@@ -165,15 +67,20 @@ async def test_manual_run_snapshots_inputs_and_claim_uses_snapshot(
     user_id = uuid.uuid4()
 
     try:
-        automation_id = await _create_cloud_automation(user_id, now)
-        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
+        automation_id = await create_cloud_automation(user_id, now)
+        run = await create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
 
         async with engine_module.async_session_factory() as session:
             automation = await session.get(Automation, automation_id)
             assert automation is not None
             automation.prompt = "Edited prompt"
-            automation.agent_kind = "claude"
+            run_config = await session.get(
+                CloudAgentRunConfig,
+                automation.cloud_agent_run_config_id,
+            )
+            assert run_config is not None
+            run_config.agent_kind = "claude"
             await session.commit()
 
         claims = await claim_cloud_automation_runs(
@@ -206,14 +113,14 @@ async def test_claim_cloud_run_without_agent_snapshot_fails_at_claim_time(
     user_id = uuid.uuid4()
 
     try:
-        automation_id = await _create_cloud_automation(user_id, now)
-        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
+        automation_id = await create_cloud_automation(user_id, now)
+        run = await create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
 
         async with engine_module.async_session_factory() as session:
             record = await session.get(AutomationRun, run.id)
             assert record is not None
-            record.agent_kind_snapshot = None
+            record.agent_run_config_snapshot_json = None
             await session.commit()
 
         claims = await claim_cloud_automation_runs(
@@ -245,8 +152,8 @@ async def test_stale_claim_cannot_mutate_after_reclaim(
     user_id = uuid.uuid4()
 
     try:
-        automation_id = await _create_cloud_automation(user_id, now)
-        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
+        automation_id = await create_cloud_automation(user_id, now)
+        run = await create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
 
         first = (
@@ -295,8 +202,8 @@ async def test_local_claim_matches_user_and_canonical_repo_identity(
     user_id = uuid.uuid4()
 
     try:
-        automation_id = await _create_local_automation(user_id, now)
-        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
+        automation_id = await create_local_automation(user_id, now)
+        run = await create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
 
         wrong_user_claims = await claim_local_automation_runs(
@@ -347,8 +254,8 @@ async def test_local_claim_transition_requires_local_target_and_workspace_attach
     user_id = uuid.uuid4()
 
     try:
-        automation_id = await _create_local_automation(user_id, now)
-        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
+        automation_id = await create_local_automation(user_id, now)
+        run = await create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
         claim = (
             await claim_local_automation_runs(
@@ -426,8 +333,8 @@ async def test_local_reclaimed_attached_workspace_can_resume_provisioning(
     user_id = uuid.uuid4()
 
     try:
-        automation_id = await _create_local_automation(user_id, now)
-        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
+        automation_id = await create_local_automation(user_id, now)
+        run = await create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
         claim = (
             await claim_local_automation_runs(
@@ -480,8 +387,8 @@ async def test_expired_dispatching_run_is_swept_to_failed(
     user_id = uuid.uuid4()
 
     try:
-        automation_id = await _create_cloud_automation(user_id, now)
-        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
+        automation_id = await create_cloud_automation(user_id, now)
+        run = await create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
         claim = (
             await claim_cloud_automation_runs(
@@ -526,12 +433,12 @@ async def test_expired_dispatching_sweep_is_bounded_and_ordered(
     user_id = uuid.uuid4()
 
     try:
-        automation_id = await _create_cloud_automation(user_id, now)
-        first_run = await _create_manual_run(
+        automation_id = await create_cloud_automation(user_id, now)
+        first_run = await create_manual_run(
             user_id=user_id,
             automation_id=automation_id,
         )
-        second_run = await _create_manual_run(
+        second_run = await create_manual_run(
             user_id=user_id,
             automation_id=automation_id,
         )

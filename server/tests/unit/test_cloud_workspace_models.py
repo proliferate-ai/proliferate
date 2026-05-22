@@ -42,10 +42,11 @@ def test_workspace_summary_projects_origin_when_present() -> None:
     assert payload.origin.model_dump() == {"kind": "human", "entrypoint": "cloud"}
 
 
-def test_workspace_summary_keeps_null_origin_for_legacy_rows() -> None:
+def test_workspace_summary_uses_legacy_origin_when_origin_json_is_missing() -> None:
     payload = workspace_summary_payload(_workspace(origin_json=None))
 
-    assert payload.origin is None
+    assert payload.origin is not None
+    assert payload.origin.model_dump() == {"kind": "human", "entrypoint": "desktop"}
     assert payload.creator_context is None
 
 
@@ -84,7 +85,8 @@ def test_workspace_summary_drops_malformed_origin(monkeypatch: pytest.MonkeyPatc
     workspace = _workspace(origin_json='{"kind":"automation","entrypoint":"cloud"}')
     payload = workspace_summary_payload(workspace)
 
-    assert payload.origin is None
+    assert payload.origin is not None
+    assert payload.origin.model_dump() == {"kind": "human", "entrypoint": "desktop"}
     assert warnings[0][0] == "invalid cloud workspace origin JSON"
     assert warnings[0][1]["extra"]["table"] == "cloud_workspace"
     assert warnings[0][1]["extra"]["row_id"] == str(workspace.id)

@@ -5,12 +5,15 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from proliferate.constants.automations import (
-    AUTOMATION_EXECUTION_TARGET_CLOUD,
+    AUTOMATION_OWNER_SCOPE_PERSONAL,
     AUTOMATION_RUN_STATUS_DISPATCHING,
     AUTOMATION_RUN_TRIGGER_MANUAL,
+    AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
 )
 from proliferate.db import engine as engine_module
+from proliferate.db.models.auth import User
 from proliferate.db.models.automations import Automation, AutomationRun
+from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.server.automations.domain.claim_lifecycle import (
     AUTOMATION_ERROR_DISPATCH_UNCERTAIN,
@@ -36,7 +39,19 @@ async def test_scheduler_tick_commits_sweep_before_due_batch_failure(
 
     try:
         async with engine_module.async_session_factory() as session:
+            session.add(
+                User(
+                    id=user_id,
+                    email=f"automation-worker-scheduler-{user_id}@example.com",
+                    hashed_password="!",
+                    is_active=True,
+                    is_superuser=False,
+                    is_verified=True,
+                )
+            )
+            await session.flush()
             repo = CloudRepoConfig(
+                owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
                 user_id=user_id,
                 git_owner="proliferate-ai",
                 git_repo_name="proliferate",
@@ -53,19 +68,36 @@ async def test_scheduler_tick_commits_sweep_before_due_batch_failure(
             )
             session.add(repo)
             await session.flush()
+            run_config = CloudAgentRunConfig(
+                owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+                owner_user_id=user_id,
+                organization_id=None,
+                created_by_user_id=user_id,
+                name="Automation worker scheduler config",
+                agent_kind="codex",
+                model_id="gpt-5.4",
+                control_values_json={},
+                usable_in_personal_sandboxes=True,
+                usable_in_shared_sandboxes=False,
+                seed_key=None,
+                system_default_rank=None,
+                status="active",
+            )
+            session.add(run_config)
+            await session.flush()
             automation = Automation(
-                user_id=user_id,
+                owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+                owner_user_id=user_id,
+                organization_id=None,
+                created_by_user_id=user_id,
                 cloud_repo_config_id=repo.id,
                 title="Daily check",
                 prompt="Original prompt",
                 schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
                 schedule_timezone="UTC",
                 schedule_summary="Daily at 09:00 in UTC",
-                execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
-                agent_kind="codex",
-                model_id=None,
-                mode_id=None,
-                reasoning_effort=None,
+                target_mode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+                cloud_agent_run_config_id=run_config.id,
                 enabled=True,
                 paused_at=None,
                 next_run_at=now,
@@ -77,10 +109,13 @@ async def test_scheduler_tick_commits_sweep_before_due_batch_failure(
             await session.flush()
             run = AutomationRun(
                 automation_id=automation.id,
-                user_id=user_id,
+                owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+                owner_user_id=user_id,
+                organization_id=None,
+                created_by_user_id=user_id,
                 trigger_kind=AUTOMATION_RUN_TRIGGER_MANUAL,
                 scheduled_for=None,
-                execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+                target_mode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
                 status=AUTOMATION_RUN_STATUS_DISPATCHING,
                 title_snapshot=automation.title,
                 prompt_snapshot=automation.prompt,
@@ -88,10 +123,21 @@ async def test_scheduler_tick_commits_sweep_before_due_batch_failure(
                 git_owner_snapshot=repo.git_owner,
                 git_repo_name_snapshot=repo.git_repo_name,
                 cloud_repo_config_id_snapshot=repo.id,
-                agent_kind_snapshot=automation.agent_kind,
-                model_id_snapshot=automation.model_id,
-                mode_id_snapshot=automation.mode_id,
-                reasoning_effort_snapshot=automation.reasoning_effort,
+                cloud_target_id_snapshot=None,
+                cloud_target_kind_snapshot=None,
+                sandbox_profile_id=None,
+                cloud_workspace_exposure_id=None,
+                agent_run_config_snapshot_json={
+                    "config_id": str(run_config.id),
+                    "config_name": run_config.name,
+                    "agent_kind": run_config.agent_kind,
+                    "model_id": run_config.model_id,
+                    "control_values": {},
+                    "owner_scope_at_snapshot": run_config.owner_scope,
+                },
+                cascade_attempt=0,
+                last_cascade_command_id=None,
+                last_cascade_reason=None,
                 executor_kind="cloud",
                 executor_id="executor-1",
                 claim_id=uuid.uuid4(),

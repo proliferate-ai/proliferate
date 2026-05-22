@@ -5,22 +5,24 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from proliferate.constants.automations import AUTOMATION_EXECUTION_TARGET_CLOUD
-from proliferate.constants.automations import AUTOMATION_RUN_STATUS_QUEUED
-from proliferate.constants.automations import AUTOMATION_RUN_TRIGGER_SCHEDULED
-from proliferate.constants.cloud import CloudTargetKind
+from proliferate.constants.automations import (
+    AUTOMATION_OWNER_SCOPE_PERSONAL,
+    AUTOMATION_RUN_STATUS_QUEUED,
+    AUTOMATION_RUN_TRIGGER_SCHEDULED,
+    AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+)
 from proliferate.db import engine as engine_module
 from proliferate.db.models.auth import User
 from proliferate.db.models.automations import Automation, AutomationRun
+from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.store.automations import (
     AutomationScheduleAdvance,
     create_due_scheduled_runs_batch,
 )
-from proliferate.db.store.cloud_sync import targets as targets_store
 
 
-async def _create_managed_target(session, *, user_id: uuid.UUID):  # type: ignore[no-untyped-def]
+async def _create_user(session, *, user_id: uuid.UUID) -> None:  # type: ignore[no-untyped-def]
     session.add(
         User(
             id=user_id,
@@ -32,16 +34,99 @@ async def _create_managed_target(session, *, user_id: uuid.UUID):  # type: ignor
         )
     )
     await session.flush()
-    return await targets_store.create_target(
-        session,
-        display_name="Managed cloud",
-        kind=CloudTargetKind.managed_cloud.value,
-        owner_scope="personal",
+
+
+async def _create_run_config(  # type: ignore[no-untyped-def]
+    session,
+    *,
+    user_id: uuid.UUID,
+) -> CloudAgentRunConfig:
+    config = CloudAgentRunConfig(
+        owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
         owner_user_id=user_id,
         organization_id=None,
         created_by_user_id=user_id,
-        default_workspace_root=None,
+        name="Automation store config",
+        agent_kind="codex",
+        model_id="gpt-5.4",
+        control_values_json={},
+        usable_in_personal_sandboxes=True,
+        usable_in_shared_sandboxes=False,
+        seed_key=None,
+        system_default_rank=None,
+        status="active",
     )
+    session.add(config)
+    await session.flush()
+    return config
+
+
+def _automation_row(
+    *,
+    user_id: uuid.UUID,
+    repo_id: uuid.UUID,
+    run_config_id: uuid.UUID,
+    title: str,
+    prompt: str,
+    schedule_rrule: str,
+    next_run_at: datetime,
+) -> Automation:
+    return Automation(
+        owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+        owner_user_id=user_id,
+        organization_id=None,
+        created_by_user_id=user_id,
+        cloud_repo_config_id=repo_id,
+        title=title,
+        prompt=prompt,
+        schedule_rrule=schedule_rrule,
+        schedule_timezone="UTC",
+        schedule_summary="Hourly at :00 in UTC",
+        target_mode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+        cloud_agent_run_config_id=run_config_id,
+        enabled=True,
+        paused_at=None,
+        next_run_at=next_run_at,
+        last_scheduled_at=None,
+        created_at=next_run_at,
+        updated_at=next_run_at,
+    )
+
+
+def _repo_row(
+    *,
+    user_id: uuid.UUID,
+    git_repo_name: str,
+    now: datetime,
+    configured: bool = True,
+) -> CloudRepoConfig:
+    return CloudRepoConfig(
+        owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+        user_id=user_id,
+        git_owner="proliferate-ai",
+        git_repo_name=git_repo_name,
+        configured=configured,
+        configured_at=now if configured else None,
+        default_branch="main",
+        env_vars_ciphertext="",
+        env_vars_version=0,
+        setup_script="",
+        setup_script_version=0,
+        files_version=0,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _agent_snapshot(config: CloudAgentRunConfig) -> dict[str, object]:
+    return {
+        "config_id": str(config.id),
+        "config_name": config.name,
+        "agent_kind": config.agent_kind,
+        "model_id": config.model_id,
+        "control_values": dict(config.control_values_json or {}),
+        "owner_scope_at_snapshot": config.owner_scope,
+    }
 
 
 @pytest.mark.asyncio
@@ -55,83 +140,29 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
 
     try:
         async with engine_module.async_session_factory() as session:
-            target = await _create_managed_target(session, user_id=user_id)
-            target_id = target.id
-            good_repo = CloudRepoConfig(
-                user_id=user_id,
-                git_owner="proliferate-ai",
-                git_repo_name="good",
-                configured=True,
-                configured_at=now,
-                default_branch="main",
-                env_vars_ciphertext="",
-                env_vars_version=0,
-                setup_script="",
-                setup_script_version=0,
-                files_version=0,
-                created_at=now,
-                updated_at=now,
-            )
-            bad_repo = CloudRepoConfig(
-                user_id=user_id,
-                git_owner="proliferate-ai",
-                git_repo_name="bad",
-                configured=True,
-                configured_at=now,
-                default_branch="main",
-                env_vars_ciphertext="",
-                env_vars_version=0,
-                setup_script="",
-                setup_script_version=0,
-                files_version=0,
-                created_at=now,
-                updated_at=now,
-            )
+            await _create_user(session, user_id=user_id)
+            run_config = await _create_run_config(session, user_id=user_id)
+            good_repo = _repo_row(user_id=user_id, git_repo_name="good", now=now)
+            bad_repo = _repo_row(user_id=user_id, git_repo_name="bad", now=now)
             session.add_all([good_repo, bad_repo])
             await session.flush()
-            good_automation = Automation(
+            good_automation = _automation_row(
                 user_id=user_id,
-                cloud_repo_config_id=good_repo.id,
+                repo_id=good_repo.id,
+                run_config_id=run_config.id,
                 title="Good",
                 prompt="Run good",
                 schedule_rrule="RRULE:FREQ=HOURLY;INTERVAL=1;BYMINUTE=0",
-                schedule_timezone="UTC",
-                schedule_summary="Hourly at :00 in UTC",
-                execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
-                cloud_target_id=target_id,
-                cloud_target_kind_snapshot=CloudTargetKind.managed_cloud.value,
-                agent_kind="codex",
-                model_id=None,
-                mode_id=None,
-                reasoning_effort=None,
-                enabled=True,
-                paused_at=None,
                 next_run_at=now,
-                last_scheduled_at=None,
-                created_at=now,
-                updated_at=now,
             )
-            bad_automation = Automation(
+            bad_automation = _automation_row(
                 user_id=user_id,
-                cloud_repo_config_id=bad_repo.id,
+                repo_id=bad_repo.id,
+                run_config_id=run_config.id,
                 title="Bad",
                 prompt="Run bad",
                 schedule_rrule="bad",
-                schedule_timezone="UTC",
-                schedule_summary="Bad",
-                execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
-                cloud_target_id=target_id,
-                cloud_target_kind_snapshot=CloudTargetKind.managed_cloud.value,
-                agent_kind="codex",
-                model_id=None,
-                mode_id=None,
-                reasoning_effort=None,
-                enabled=True,
-                paused_at=None,
                 next_run_at=now,
-                last_scheduled_at=None,
-                created_at=now,
-                updated_at=now,
             )
             session.add_all([good_automation, bad_automation])
             await session.commit()
@@ -180,7 +211,8 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
         assert runs[0].prompt_snapshot == "Run good"
         assert runs[0].git_owner_snapshot == "proliferate-ai"
         assert runs[0].git_repo_name_snapshot == "good"
-        assert runs[0].agent_kind_snapshot == "codex"
+        assert runs[0].agent_run_config_snapshot_json is not None
+        assert runs[0].agent_run_config_snapshot_json["agent_kind"] == "codex"
     finally:
         engine_module.async_session_factory = original_factory
 
@@ -196,55 +228,31 @@ async def test_due_scheduler_advances_after_duplicate_scheduled_slot(
 
     try:
         async with engine_module.async_session_factory() as session:
-            target = await _create_managed_target(session, user_id=user_id)
-            target_id = target.id
-            repo = CloudRepoConfig(
-                user_id=user_id,
-                git_owner="proliferate-ai",
-                git_repo_name="duplicate-slot",
-                configured=True,
-                configured_at=now,
-                default_branch="main",
-                env_vars_ciphertext="",
-                env_vars_version=0,
-                setup_script="",
-                setup_script_version=0,
-                files_version=0,
-                created_at=now,
-                updated_at=now,
-            )
+            await _create_user(session, user_id=user_id)
+            run_config = await _create_run_config(session, user_id=user_id)
+            repo = _repo_row(user_id=user_id, git_repo_name="duplicate-slot", now=now)
             session.add(repo)
             await session.flush()
-            automation = Automation(
+            automation = _automation_row(
                 user_id=user_id,
-                cloud_repo_config_id=repo.id,
+                repo_id=repo.id,
+                run_config_id=run_config.id,
                 title="Duplicate slot",
                 prompt="Run once",
                 schedule_rrule="RRULE:FREQ=HOURLY;INTERVAL=1;BYMINUTE=0",
-                schedule_timezone="UTC",
-                schedule_summary="Hourly at :00 in UTC",
-                execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
-                cloud_target_id=target_id,
-                cloud_target_kind_snapshot=CloudTargetKind.managed_cloud.value,
-                agent_kind="codex",
-                model_id=None,
-                mode_id=None,
-                reasoning_effort=None,
-                enabled=True,
-                paused_at=None,
                 next_run_at=now,
-                last_scheduled_at=None,
-                created_at=now,
-                updated_at=now,
             )
             session.add(automation)
             await session.flush()
             duplicate_run = AutomationRun(
                 automation_id=automation.id,
-                user_id=user_id,
+                owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+                owner_user_id=user_id,
+                organization_id=None,
+                created_by_user_id=user_id,
                 trigger_kind=AUTOMATION_RUN_TRIGGER_SCHEDULED,
                 scheduled_for=now,
-                execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+                target_mode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
                 status=AUTOMATION_RUN_STATUS_QUEUED,
                 title_snapshot=automation.title,
                 prompt_snapshot=automation.prompt,
@@ -252,12 +260,14 @@ async def test_due_scheduler_advances_after_duplicate_scheduled_slot(
                 git_owner_snapshot=repo.git_owner,
                 git_repo_name_snapshot=repo.git_repo_name,
                 cloud_repo_config_id_snapshot=repo.id,
-                cloud_target_id_snapshot=target_id,
-                cloud_target_kind_snapshot=CloudTargetKind.managed_cloud.value,
-                agent_kind_snapshot=automation.agent_kind,
-                model_id_snapshot=automation.model_id,
-                mode_id_snapshot=automation.mode_id,
-                reasoning_effort_snapshot=automation.reasoning_effort,
+                cloud_target_id_snapshot=None,
+                cloud_target_kind_snapshot=None,
+                sandbox_profile_id=None,
+                cloud_workspace_exposure_id=None,
+                agent_run_config_snapshot_json=_agent_snapshot(run_config),
+                cascade_attempt=0,
+                last_cascade_command_id=None,
+                last_cascade_reason=None,
                 executor_kind=None,
                 executor_id=None,
                 claim_id=None,
@@ -317,7 +327,7 @@ async def test_due_scheduler_advances_after_duplicate_scheduled_slot(
 
 
 @pytest.mark.asyncio
-async def test_due_scheduler_skips_cloud_automation_without_target_snapshot(
+async def test_due_scheduler_skips_personal_cloud_automation_without_repo_config(
     test_engine,  # type: ignore[no-untyped-def]
 ) -> None:
     original_factory = engine_module.async_session_factory
@@ -327,44 +337,24 @@ async def test_due_scheduler_skips_cloud_automation_without_target_snapshot(
 
     try:
         async with engine_module.async_session_factory() as session:
-            repo = CloudRepoConfig(
+            await _create_user(session, user_id=user_id)
+            run_config = await _create_run_config(session, user_id=user_id)
+            repo = _repo_row(
                 user_id=user_id,
-                git_owner="proliferate-ai",
-                git_repo_name="missing-target",
-                configured=True,
-                configured_at=now,
-                default_branch="main",
-                env_vars_ciphertext="",
-                env_vars_version=0,
-                setup_script="",
-                setup_script_version=0,
-                files_version=0,
-                created_at=now,
-                updated_at=now,
+                git_repo_name="unconfigured",
+                now=now,
+                configured=False,
             )
             session.add(repo)
             await session.flush()
-            automation = Automation(
+            automation = _automation_row(
                 user_id=user_id,
-                cloud_repo_config_id=repo.id,
-                title="Missing target",
+                repo_id=repo.id,
+                run_config_id=run_config.id,
+                title="Unconfigured repo",
                 prompt="Run once",
                 schedule_rrule="RRULE:FREQ=HOURLY;INTERVAL=1;BYMINUTE=0",
-                schedule_timezone="UTC",
-                schedule_summary="Hourly at :00 in UTC",
-                execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
-                cloud_target_id=None,
-                cloud_target_kind_snapshot=None,
-                agent_kind="codex",
-                model_id=None,
-                mode_id=None,
-                reasoning_effort=None,
-                enabled=True,
-                paused_at=None,
                 next_run_at=now,
-                last_scheduled_at=None,
-                created_at=now,
-                updated_at=now,
             )
             session.add(automation)
             await session.commit()

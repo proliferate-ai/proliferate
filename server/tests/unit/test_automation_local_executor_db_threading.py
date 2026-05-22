@@ -5,12 +5,15 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from proliferate.constants.automations import (
-    AUTOMATION_EXECUTION_TARGET_LOCAL,
+    AUTOMATION_OWNER_SCOPE_PERSONAL,
     AUTOMATION_RUN_STATUS_CLAIMED,
     AUTOMATION_RUN_STATUS_QUEUED,
+    AUTOMATION_TARGET_MODE_LOCAL,
 )
 from proliferate.db import engine as engine_module
+from proliferate.db.models.auth import User
 from proliferate.db.models.automations import Automation, AutomationRun
+from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.store.automations import create_manual_run_for_user
 from proliferate.server.automations.local_executor_service import (
@@ -24,7 +27,19 @@ from proliferate.server.automations.models import (
 
 async def _create_local_automation(user_id: uuid.UUID, now: datetime) -> uuid.UUID:
     async with engine_module.async_session_factory() as session:
+        session.add(
+            User(
+                id=user_id,
+                email=f"automation-local-threading-{user_id}@example.com",
+                hashed_password="!",
+                is_active=True,
+                is_superuser=False,
+                is_verified=True,
+            )
+        )
+        await session.flush()
         repo = CloudRepoConfig(
+            owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
             user_id=user_id,
             git_owner="Proliferate-AI",
             git_repo_name="Proliferate",
@@ -41,19 +56,39 @@ async def _create_local_automation(user_id: uuid.UUID, now: datetime) -> uuid.UU
         )
         session.add(repo)
         await session.flush()
+        run_config = CloudAgentRunConfig(
+            owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+            owner_user_id=user_id,
+            organization_id=None,
+            created_by_user_id=user_id,
+            name="Local automation config",
+            agent_kind="codex",
+            model_id="auto",
+            control_values_json={},
+            usable_in_personal_sandboxes=True,
+            usable_in_shared_sandboxes=False,
+            seed_key=None,
+            system_default_rank=None,
+            status="active",
+            archived_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(run_config)
+        await session.flush()
         automation = Automation(
-            user_id=user_id,
+            owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+            owner_user_id=user_id,
+            organization_id=None,
+            created_by_user_id=user_id,
             cloud_repo_config_id=repo.id,
             title="Local check",
             prompt="Check locally",
             schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
             schedule_timezone="UTC",
             schedule_summary="Daily at 09:00 in UTC",
-            execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
-            agent_kind="codex",
-            model_id=None,
-            mode_id=None,
-            reasoning_effort=None,
+            target_mode=AUTOMATION_TARGET_MODE_LOCAL,
+            cloud_agent_run_config_id=run_config.id,
             enabled=True,
             paused_at=None,
             next_run_at=now,
