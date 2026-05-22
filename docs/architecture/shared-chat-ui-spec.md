@@ -58,8 +58,8 @@ cloud command.
 
 | | Desktop (AnyHarness) | Web (Cloud) |
 | --- | --- | --- |
-| Transcript model | `TranscriptState` (reducer-built) | `CloudTranscriptItem[]` (projection rows) |
-| Stream events | per-event SSE incl. turn + delta events | `snapshot` / `patch` / `command_status` / `heartbeat` |
+| Transcript model | `TranscriptState` (reducer-built) | retained Cloud `envelope` events → `TranscriptState` |
+| Stream events | per-event SSE incl. turn + delta events | paged events + `snapshot` / `patch` / `command_status` / `heartbeat` |
 | Streaming granularity | token-by-token deltas | one row per item, last-write-wins |
 | Send a prompt | direct runtime call | enqueue cloud command, poll status |
 | Resolve approval/input | direct runtime call | cloud command |
@@ -96,15 +96,17 @@ confirmed gap, not a Phase 0 question:
    be guaranteed, not assumed.
 3. **Pending prompts are not projected.** Reducer `pendingPrompts` come from
    `pending_prompt_*` events, which the projection never persists.
-4. **`payload` is not a ready envelope.** `CloudTranscriptItem.payload` is the
-   sanitized inner event content; `seq`/`turnId`/`itemId` live in row columns.
-   The Web adapter must reconstruct `SessionEventEnvelope{seq,turnId,itemId,event}`
-   from columns + `payload`, and sort by `firstSeq` (the live upsert preserves
-   arrival order, not seq order).
+4. **Projection rows are compatibility data, not reducer input.**
+   `CloudTranscriptItem.payload` remains a summarized row payload, but Phase
+   0.5 adds a retained `envelope` field to `/cloud/sessions/{id}/events`
+   responses and live projection patches. The Web adapter should prefer those
+   envelopes, sort by `seq`, and use the row projection only as fallback or
+   legacy display data.
 
 Gaps 1–3 require server changes — owned here as **Phase 0.5**
-([§10](#10-migration-phases)). Gap 4 is Web adapter work. After Phase 0.5 the
-convergence holds.
+([§10](#10-migration-phases)). The Phase 0.5 shape is decided: no
+`CloudTurnProjection` table; the durable `cloud_session_events` ledger exposes
+sanitized AnyHarness envelopes directly.
 
 ## 5. Architecture: presentational core + transport controllers
 
@@ -266,10 +268,11 @@ web/src/components/chat/                # Cloud controllers
 ```
 
 The Cloud→`TranscriptState` adapter is **transport-shaped** (it knows cloud
-`snapshot`/`patch`/`payload` semantics), so it lives in `web/src/lib/access/cloud/**`,
-not `product-model`. It reconstructs `SessionEventEnvelope[]` from row columns +
-`payload`, sorts by `firstSeq`, and calls the transport-neutral
-`product-model` `envelope-to-state` helper.
+event-page and live-patch semantics), so it lives in
+`web/src/lib/access/cloud/**`, not `product-model`. It collects retained
+`envelope` values from `/events` pages and live patches, sorts by `seq`, and
+calls the transport-neutral `product-model` `envelope-to-state` helper. It only
+reconstructs envelopes from projection rows for legacy/fallback data.
 
 `packages/product-ui` gains `@proliferate/product-model`, `@anyharness/sdk`, and
 `@tanstack/react-virtual` as dependencies. The package's concrete subpath
@@ -285,9 +288,10 @@ lands in Phase 5. Phase 0.5 is a parallel server track that gates Phase 5.
 - **Phase 0 — Spike & contract.** Prove a reconstructed `TranscriptState`
   renders through the existing Desktop `MessageList`. Output: finalized props
   contracts (§6) and a server sub-spec for Phase 0.5.
-- **Phase 0.5 — Server projection extension** (parallel; gates Phase 5). Relay
-  turn events into the projection, guarantee complete `contentParts` on
-  `item_completed`, project pending prompts. Server work under
+- **Phase 0.5 — Server projection extension** (parallel; gates Phase 5). Expose
+  retained sanitized AnyHarness envelopes through session event pages and live
+  projection patches, including turn events, complete `item_completed`
+  `contentParts`, and pending-prompt events. Server work under
   `server/proliferate/server/cloud/events/**`.
 - **Phase 1 — Shared foundations.** Move view models, the dock-slot arbiter,
   tool parsers, the transport-neutral `envelope-to-state` helper, and the
@@ -312,13 +316,11 @@ Phase 1 starts.
 
 ## 11. Cross-cutting concerns
 
-- **Theming tokens.** `--text-chat`, `--text-chat--line-height`, and
-  `--edge-fade-distance` are load-bearing values declared only in
-  `desktop/src/index.css` `@theme` — not in `packages/design` and not in
-  `web/src/index.css`. Shared components would render with wrong line-height on
-  Web (the scroll-bump `chat-transcript.md` warns about). Phase 1 promotes
-  these into `packages/design`; `chat-transcript.md`'s pinned-value table is
-  updated to point at the shared token source.
+- **Theming tokens.** `--text-chat` and `--text-chat--line-height` are
+  generated from `packages/design/src/tokens.ts`; `vertical-scroll-fade-mask`
+  and `--edge-fade-distance` live in `packages/design/src/dom.css`. Shared
+  components must use those shared sources, and `chat-transcript.md`'s
+  pinned-value table points there.
 - **Telemetry & privacy.** Masking attributes stay in shared JSX (§5).
   `trackProductEvent` analytics calls stay in controllers. Error boundaries are
   a controller responsibility (`telemetry.md` exempts them from the no-telemetry
@@ -359,6 +361,3 @@ Still open:
    for v1, or fan out `item_delta` later. Recommended: accept for v1.
 2. **Raw tool I/O on Web** — accept graceful degradation, or change the server
    retention policy to keep raw bodies. Recommended: degrade for v1.
-3. **Phase 0.5 projection shape** — whether turn data becomes a new
-   `CloudTurnProjection` table or folds into the session projection. Decided by
-   the Phase 0 server sub-spec.

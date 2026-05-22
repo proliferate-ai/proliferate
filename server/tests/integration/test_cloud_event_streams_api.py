@@ -130,6 +130,13 @@ class TestCloudEventStreamsApi:
             patch = mapping(patch_envelope["patch"])
             assert patch["eventType"] == "item_completed"
             assert mapping(patch["transcriptItem"])["text"] == "streamed response"
+            patch_event = mapping(patch["envelope"])
+            assert patch_event["sessionId"] == "session-stream"
+            assert patch_event["itemId"] == "item-stream"
+            assert mapping(patch_event["event"])["type"] == "item_completed"
+            assert mapping(mapping(patch_event["event"])["item"])["contentParts"] == [
+                {"type": "text", "text": "streamed response"}
+            ]
         finally:
             await stream.aclose()
 
@@ -333,6 +340,11 @@ class TestCloudEventStreamsApi:
             assert sse_event(workspace_patch_frame) == "patch"
             patch_envelope = sse_data(workspace_patch_frame)
             assert patch_envelope["kind"] == "workspace_projection_patch"
-            assert mapping(patch_envelope["patch"])["eventType"] == "turn_started"
+            workspace_patch = mapping(patch_envelope["patch"])
+            assert workspace_patch["eventType"] == "turn_started"
+            assert mapping(workspace_patch["envelope"])["sessionId"] == "session-live"
+            assert mapping(mapping(workspace_patch["envelope"])["event"])["type"] == (
+                "turn_started"
+            )
         finally:
             await workspace_stream.aclose()

@@ -7,7 +7,9 @@ chat transcript rendering performance.
 ## Stream And Transcript Rules
 
 - SSE events should be batched into at most one Zustand store write per
-  animation frame during normal streaming.
+  animation frame during normal streaming. The shared scheduler owner is
+  `packages/product-model/src/chats/transcript/stream-batcher.ts`; Desktop and
+  Web controllers inject their own timing/runtime hooks around it.
 - Do not reintroduce per-event store patches for the live stream path.
 - Any deliberate stream close, detach, prune, or reconnect path must flush
   pending batched stream events before discarding the current handle.
@@ -38,7 +40,7 @@ payloads, and tool results that have no durable product display contract.
 Product-specific result rendering must stay split by ownership:
 
 ```text
-desktop/src/lib/domain/chat/tools/<tool>-presentation.ts
+packages/product-model/src/chats/tools/<tool>-presentation.ts
   pure parser and display model for raw tool input/output
 
 desktop/src/components/workspace/chat/tool-calls/<Tool>Row.tsx
@@ -75,7 +77,7 @@ not as raw MCP mechanics.
 Creation grouping belongs in the transcript presentation layer:
 
 ```text
-desktop/src/lib/domain/chat/transcript/transcript-presentation.ts
+packages/product-model/src/chats/transcript/transcript-presentation.ts
   buildTranscriptDisplayBlocks
 ```
 
@@ -123,15 +125,14 @@ and no auto-scroll bump.
 
 | Piece | Location | Value |
 | --- | --- | --- |
-| `TRAILING_STATUS_MIN_HEIGHT` | `desktop/src/components/workspace/chat/transcript/MessageList.tsx` | `min-h-[2.625rem]` (42px) |
+| `TRAILING_STATUS_MIN_HEIGHT` | `desktop/src/components/workspace/chat/transcript/TranscriptTurnChrome.tsx` | `min-h-[calc(var(--text-chat--line-height)+1.5rem)]` |
 | Assistant copy-button slot | `desktop/src/components/workspace/chat/transcript/AssistantMessage.tsx` | `h-6` (24px) |
-| Chat text line-height | `desktop/src/index.css` | `1.125rem` (18px) |
+| Chat text line-height | `packages/design/src/tokens.ts` (`typography.lineHeight.chat`) | `20px` |
 
 The derivation is:
 
 ```text
 TRAILING_STATUS_MIN_HEIGHT = --text-chat--line-height + h-6
-42px = 18px + 24px
 ```
 
 Additional dependencies:

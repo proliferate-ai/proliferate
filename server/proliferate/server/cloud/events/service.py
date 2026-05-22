@@ -37,6 +37,7 @@ from proliferate.server.cloud.events.models import (
     WorkerEventBatchResponse,
     WorkerEventSessionAck,
     pending_interaction_response,
+    session_event_envelope,
     session_projection_response,
     transcript_item_response,
 )
@@ -623,6 +624,7 @@ async def _apply_projection(
         session=session_projection,
         transcript_item=transcript_item,
         pending_interaction=pending_interaction,
+        envelope=session_event_envelope(payload_json),
     )
 
 

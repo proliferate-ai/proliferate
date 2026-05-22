@@ -16,6 +16,8 @@ export type CloudPendingInteraction =
   components["schemas"]["CloudPendingInteractionResponse"];
 export type CloudSessionSnapshot =
   components["schemas"]["CloudSessionSnapshotResponse"];
+export type CloudSessionEventEnvelope =
+  components["schemas"]["WorkerSessionEventEnvelope"];
 export type CloudWorkspaceSnapshot = Omit<
   components["schemas"]["CloudWorkspaceSnapshotResponse"],
   "workspace"

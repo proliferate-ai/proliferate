@@ -60,6 +60,24 @@ a {
   background-clip: content-box;
 }
 
+.vertical-scroll-fade-mask {
+  --edge-fade-distance: 1.5rem;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--edge-fade-distance),
+    black calc(100% - var(--edge-fade-distance)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--edge-fade-distance),
+    black calc(100% - var(--edge-fade-distance)),
+    transparent 100%
+  );
+}
+
 [data-proliferate-client="web"] {
   min-height: 100%;
 }

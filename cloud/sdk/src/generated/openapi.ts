@@ -4622,6 +4622,7 @@ export interface components {
             payload?: {
                 [key: string]: unknown;
             } | null;
+            envelope?: components["schemas"]["WorkerSessionEventEnvelope"] | null;
         };
         /** CloudSessionEventsResponse */
         CloudSessionEventsResponse: {

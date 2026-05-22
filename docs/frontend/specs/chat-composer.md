@@ -10,6 +10,7 @@ Scope:
 - `desktop/src/components/workspace/chat/plans/**`
 - `desktop/src/components/workspace/reviews/**`
 - `desktop/src/hooks/chat/use-composer-dock-slots.tsx`
+- `packages/product-model/src/chats/composer/resolve-dock-slots.ts`
 - `desktop/src/hooks/chat/use-active-todo-tracker.ts`
 - `desktop/src/hooks/reviews/**`
 - `desktop/src/lib/domain/chat/active-todo-tracker.ts`
@@ -58,9 +59,12 @@ Non-negotiable:
 
 ## 2. Dock Regions
 
+`resolveComposerDockSlots`
+(`packages/product-model/src/chats/composer/resolve-dock-slots.ts`) owns the
+pure precedence rules for the named regions above the composer.
 `useComposerDockSlots` (`desktop/src/hooks/chat/use-composer-dock-slots.tsx`)
-derives the named regions above the composer. Classify each inhabitant by state
-role first, not by component family. They always render in this order:
+adapts that data resolution to Desktop React nodes. Classify each inhabitant by
+state role first, not by component family. They always render in this order:
 
 1. **`outboundSlot`** — queued outbound work: user prompts, queued wake prompts,
    review feedback prompts, and review-complete prompts.
@@ -93,7 +97,8 @@ chat input enabled.
 
 If you need to introduce another dock-region inhabitant, classify it by state
 role first: outbound work, active agent state, or attached context/parallel
-work. Add it to `use-composer-dock-slots.tsx` — do not compute it inline in
+work. Add the precedence decision to `resolve-dock-slots.ts` and the Desktop
+node adapter to `use-composer-dock-slots.tsx` — do not compute it inline in
 `ChatView` and do not introduce a parallel arbiter elsewhere.
 
 `attachedSlot` renders one shared `DelegatedWorkComposerPanel` containing one
@@ -238,6 +243,8 @@ All approval action buttons use `size="sm"` with `className="rounded-xl px-2.5 t
 
 - Header: tiny icon + muted status text (`text-muted-foreground`), no bold.
 - Body: `vertical-scroll-fade-mask max-h-40` (160px cap) with `[--edge-fade-distance:2rem]`.
+  The fade-mask utility lives in `packages/design/src/dom.css` so shared chat
+  components can use it on Desktop and Web.
 - Completed entries: `line-through` + `text-muted-foreground/60` on both the index and the content span.
 - Default: expanded. Collapse chevron in header.
 

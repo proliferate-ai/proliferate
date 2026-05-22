@@ -22,6 +22,7 @@ from proliferate.server.cloud.events.models import (
     CloudSessionEventResponse,
     CloudSessionPatchResponse,
     CloudSessionSnapshotResponse,
+    WorkerSessionEventEnvelope,
     pending_interaction_response,
     session_event_response,
     session_patch_response,
@@ -397,6 +398,7 @@ def projection_patch_from_event(
     session: events_store.CloudSessionProjectionSnapshot,
     transcript_item: events_store.CloudTranscriptItemSnapshot | None = None,
     pending_interaction: events_store.CloudPendingInteractionSnapshot | None = None,
+    envelope: WorkerSessionEventEnvelope | None = None,
 ) -> CloudSessionPatchResponse:
     return session_patch_response(
         target_id=target_id,
@@ -406,6 +408,7 @@ def projection_patch_from_event(
         session=session,
         transcript_item=transcript_item,
         pending_interaction=pending_interaction,
+        envelope=envelope,
     )
 
 
