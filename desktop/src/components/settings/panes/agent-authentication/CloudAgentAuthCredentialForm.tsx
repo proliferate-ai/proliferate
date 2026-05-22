@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import type {
-  AgentAuthAgentKind,
   AgentGatewayCapabilities,
-  CreateGatewayCredentialRequest,
 } from "@proliferate/cloud-sdk";
 import { useAgentAuthMutations } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -13,23 +11,16 @@ import { Badge } from "@/components/ui/Badge";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import {
-  agentAuthAgentLabel,
   agentAuthByokCapabilityLabel,
   isAgentAuthAdminRole,
 } from "@/lib/domain/agent-auth/agent-auth-presentation";
-
-type ProviderChoice =
-  | "anthropic_api_key"
-  | "openai_api_key"
-  | "bedrock_assume_role"
-  | "openai_compatible";
-
-type ProviderOption = { value: ProviderChoice; label: string };
-
-export interface AgentAuthCredentialFormFocusRequest {
-  agentKind: AgentAuthAgentKind;
-  requestId: number;
-}
+import {
+  agentAuthGatewayCreatePayloadReady,
+  agentAuthGatewayProviderOptionsForCapabilities,
+  buildAgentAuthGatewayCredentialRequest,
+  type AgentAuthGatewayOpenAiAgentKind,
+  type AgentAuthGatewayProviderChoice,
+} from "@/lib/domain/agent-auth/agent-auth-gateway-form";
 
 interface OrganizationOption {
   id: string;
@@ -41,36 +32,29 @@ interface OrganizationOption {
 
 export interface CloudAgentAuthCredentialFormProps {
   organizations: OrganizationOption[];
-  libraryOrganizationId: string | null;
-  onLibraryOrganizationChange: (organizationId: string | null) => void;
+  selectedOrganizationId: string | null;
+  onSelectedOrganizationChange: (organizationId: string | null) => void;
   agentGatewayCapabilities: AgentGatewayCapabilities | null;
-  focusRequest: AgentAuthCredentialFormFocusRequest | null;
 }
-
-const PROVIDER_OPTIONS: ProviderOption[] = [
-  { value: "anthropic_api_key", label: "Anthropic API key" },
-  { value: "openai_api_key", label: "OpenAI API key" },
-  { value: "bedrock_assume_role", label: "AWS Bedrock role" },
-  { value: "openai_compatible", label: "OpenAI-compatible provider" },
-];
 
 export function CloudAgentAuthCredentialForm({
   organizations,
-  libraryOrganizationId,
-  onLibraryOrganizationChange,
+  selectedOrganizationId,
+  onSelectedOrganizationChange,
   agentGatewayCapabilities,
-  focusRequest,
 }: CloudAgentAuthCredentialFormProps) {
   const adminOrganizations = organizations.filter(isAdminOrganization);
   const firstAdminOrganizationId = adminOrganizations[0]?.id ?? null;
   const mutations = useAgentAuthMutations();
   const providerOptions = useMemo(
-    () => providerOptionsForCapabilities(agentGatewayCapabilities),
+    () => agentAuthGatewayProviderOptionsForCapabilities(agentGatewayCapabilities),
     [agentGatewayCapabilities],
   );
   const gatewayByokEnabled = providerOptions.length > 0;
-  const [providerKind, setProviderKind] = useState<ProviderChoice>("anthropic_api_key");
-  const [agentKind, setAgentKind] = useState<Extract<AgentAuthAgentKind, "codex" | "opencode">>("codex");
+  const [providerKind, setProviderKind] = useState<AgentAuthGatewayProviderChoice>(
+    "anthropic_api_key",
+  );
+  const [agentKind, setAgentKind] = useState<AgentAuthGatewayOpenAiAgentKind>("codex");
   const [ownerScope, setOwnerScope] = useState<"personal" | "organization">("personal");
   const [displayName, setDisplayName] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -79,17 +63,20 @@ export function CloudAgentAuthCredentialForm({
   const [region, setRegion] = useState("us-east-1");
   const [externalId, setExternalId] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
-  const libraryOrganizationCanOwnCredential = adminOrganizations.some(
-    (organization) => organization.id === libraryOrganizationId,
+  const selectedOrganizationCanOwnCredential = adminOrganizations.some(
+    (organization) => organization.id === selectedOrganizationId,
   );
-  const selectedOrganizationId = ownerScope === "organization"
-    ? adminOrganizations.find((organization) => organization.id === libraryOrganizationId)?.id
+  const credentialOrganizationId = ownerScope === "organization"
+    ? adminOrganizations.find((organization) => organization.id === selectedOrganizationId)?.id
       ?? null
     : null;
   const canCreate =
     displayName.trim().length > 0
-    && (ownerScope === "personal" || Boolean(selectedOrganizationId))
-    && createPayloadReady(providerKind, { apiKey, baseUrl, roleArn, region, externalId });
+    && (ownerScope === "personal" || Boolean(credentialOrganizationId))
+    && agentAuthGatewayCreatePayloadReady(
+      providerKind,
+      { apiKey, baseUrl, roleArn, region, externalId },
+    );
 
   useEffect(() => {
     if (providerOptions.length > 0 && !providerOptions.some((option) => option.value === providerKind)) {
@@ -106,40 +93,14 @@ export function CloudAgentAuthCredentialForm({
     }
   }, [agentGatewayCapabilities?.opencodeGatewayEnabled, agentKind]);
 
-  useEffect(() => {
-    if (!focusRequest) {
-      return;
-    }
-    const preferredProvider = preferredProviderForAgent(
-      focusRequest.agentKind,
-      providerOptions,
-      agentGatewayCapabilities,
-    );
-    if (!preferredProvider) {
-      setFeedback(
-        `${agentAuthAgentLabel(focusRequest.agentKind)} does not have a supported gateway credential form in this deployment.`,
-      );
-      return;
-    }
-    setProviderKind(preferredProvider);
-    if (focusRequest.agentKind === "codex" || focusRequest.agentKind === "opencode") {
-      setAgentKind(focusRequest.agentKind);
-    }
-    setFeedback(`${agentAuthAgentLabel(focusRequest.agentKind)} credential form ready.`);
-  }, [agentGatewayCapabilities, focusRequest, providerOptions]);
-
   async function handleCreateCredential() {
-    const body = buildCreateCredentialRequest({
+    const body = buildAgentAuthGatewayCredentialRequest({
       providerKind,
       agentKind,
       ownerScope,
-      organizationId: selectedOrganizationId,
+      organizationId: credentialOrganizationId,
       displayName,
-      apiKey,
-      baseUrl,
-      roleArn,
-      region,
-      externalId,
+      values: { apiKey, baseUrl, roleArn, region, externalId },
     });
     setFeedback(null);
     try {
@@ -158,27 +119,7 @@ export function CloudAgentAuthCredentialForm({
   return (
     <SettingsCard>
       <SettingsCardRow
-        label="Library scope"
-        description="Choose which personal or organization credentials are shown below."
-      >
-        <Select
-          id="agent-auth-library-scope"
-          className="w-64"
-          value={libraryOrganizationId ?? ""}
-          aria-label="Agent auth library scope"
-          onChange={(event) => onLibraryOrganizationChange(event.target.value || null)}
-        >
-          <option value="">Personal</option>
-          {organizations.map((organization) => (
-            <option key={organization.id} value={organization.id}>
-              {organization.name}
-            </option>
-          ))}
-        </Select>
-      </SettingsCardRow>
-
-      <SettingsCardRow
-        label="Gateway BYOK"
+        label="Advanced gateway credentials"
         description={agentAuthByokCapabilityLabel(agentGatewayCapabilities)}
       >
         <Badge tone={gatewayByokEnabled ? "success" : "neutral"}>
@@ -199,10 +140,10 @@ export function CloudAgentAuthCredentialForm({
                   setOwnerScope(nextOwnerScope);
                   if (
                     nextOwnerScope === "organization"
-                    && !libraryOrganizationCanOwnCredential
+                    && !selectedOrganizationCanOwnCredential
                     && firstAdminOrganizationId
                   ) {
-                    onLibraryOrganizationChange(firstAdminOrganizationId);
+                    onSelectedOrganizationChange(firstAdminOrganizationId);
                   }
                 }}
               >
@@ -211,6 +152,12 @@ export function CloudAgentAuthCredentialForm({
                   Organization
                 </option>
               </Select>
+              {ownerScope === "organization" && (
+                <p className="mt-1 text-xs leading-4 text-muted-foreground">
+                  Saved to {selectedOrganizationName(organizations, selectedOrganizationId)
+                    ?? "the selected team"}.
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="agent-auth-provider-kind">Provider</Label>
@@ -218,7 +165,7 @@ export function CloudAgentAuthCredentialForm({
                 id="agent-auth-provider-kind"
                 value={providerKind}
                 onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                  setProviderKind(event.target.value as ProviderChoice)}
+                  setProviderKind(event.target.value as AgentAuthGatewayProviderChoice)}
               >
                 {providerOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -236,9 +183,7 @@ export function CloudAgentAuthCredentialForm({
                 id="agent-auth-agent-kind"
                 value={agentKind}
                 onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                  setAgentKind(
-                    event.target.value as Extract<AgentAuthAgentKind, "codex" | "opencode">,
-                  )}
+                  setAgentKind(event.target.value as AgentAuthGatewayOpenAiAgentKind)}
               >
                 <option value="codex">Codex</option>
                 <option
@@ -357,128 +302,13 @@ export function CloudAgentAuthCredentialForm({
   );
 }
 
-function providerOptionsForCapabilities(
-  capabilities: AgentGatewayCapabilities | null,
-): ProviderOption[] {
-  if (!capabilities?.enabled || !capabilities.byokEnabled) {
-    return [];
-  }
-  return PROVIDER_OPTIONS.filter((option) => {
-    if (option.value === "anthropic_api_key") {
-      return capabilities.byokProviders.anthropicApiKey;
-    }
-    if (option.value === "openai_api_key") {
-      return capabilities.byokProviders.openaiApiKey;
-    }
-    if (option.value === "bedrock_assume_role") {
-      return capabilities.byokProviders.bedrockAssumeRole;
-    }
-    if (option.value === "openai_compatible") {
-      return capabilities.byokProviders.openaiCompatible;
-    }
-    return false;
-  });
-}
-
-function preferredProviderForAgent(
-  agentKind: AgentAuthAgentKind,
-  providerOptions: ProviderOption[],
-  capabilities: AgentGatewayCapabilities | null,
-): ProviderChoice | null {
-  const available = new Set(providerOptions.map((option) => option.value));
-  if (agentKind === "claude") {
-    if (available.has("anthropic_api_key")) {
-      return "anthropic_api_key";
-    }
-    if (available.has("bedrock_assume_role")) {
-      return "bedrock_assume_role";
-    }
-    return null;
-  }
-  if (agentKind === "codex") {
-    if (available.has("openai_api_key")) {
-      return "openai_api_key";
-    }
-    if (available.has("openai_compatible")) {
-      return "openai_compatible";
-    }
-    return null;
-  }
-  if (agentKind === "opencode") {
-    if (capabilities?.opencodeGatewayEnabled !== true) {
-      return null;
-    }
-    if (available.has("openai_api_key")) {
-      return "openai_api_key";
-    }
-    if (available.has("openai_compatible")) {
-      return "openai_compatible";
-    }
-  }
-  return null;
-}
-
-function createPayloadReady(
-  providerKind: ProviderChoice,
-  values: {
-    apiKey: string;
-    baseUrl: string;
-    roleArn: string;
-    region: string;
-    externalId: string;
-  },
-) {
-  if (providerKind === "anthropic_api_key" || providerKind === "openai_api_key") {
-    return values.apiKey.trim().length > 0;
-  }
-  if (providerKind === "openai_compatible") {
-    return values.apiKey.trim().length > 0 && values.baseUrl.trim().length > 0;
-  }
-  return values.roleArn.trim().length > 0
-    && values.region.trim().length > 0
-    && values.externalId.trim().length > 0;
-}
-
 function isAdminOrganization(organization: OrganizationOption): boolean {
   return isAgentAuthAdminRole(organization.membership?.role);
 }
 
-function buildCreateCredentialRequest(input: {
-  providerKind: ProviderChoice;
-  agentKind: Extract<AgentAuthAgentKind, "codex" | "opencode">;
-  ownerScope: "personal" | "organization";
-  organizationId: string | null;
-  displayName: string;
-  apiKey: string;
-  baseUrl: string;
-  roleArn: string;
-  region: string;
-  externalId: string;
-}): CreateGatewayCredentialRequest {
-  const agentKind = input.providerKind === "openai_api_key"
-    || input.providerKind === "openai_compatible"
-    ? input.agentKind
-    : "claude";
-  const payload: Record<string, string> = input.providerKind === "bedrock_assume_role"
-    ? {
-        roleArn: input.roleArn.trim(),
-        region: input.region.trim(),
-        externalId: input.externalId.trim(),
-      }
-    : input.providerKind === "openai_compatible"
-      ? {
-          baseUrl: input.baseUrl.trim(),
-          apiKey: input.apiKey.trim(),
-        }
-      : { apiKey: input.apiKey.trim() };
-
-  return {
-    ownerScope: input.ownerScope,
-    organizationId: input.ownerScope === "organization" ? input.organizationId : null,
-    agentKind,
-    displayName: input.displayName.trim(),
-    policyKind: input.ownerScope === "organization" ? "org_byok" : "personal_byok",
-    providerKind: input.providerKind,
-    payload,
-  };
+function selectedOrganizationName(
+  organizations: OrganizationOption[],
+  organizationId: string | null,
+): string | null {
+  return organizations.find((organization) => organization.id === organizationId)?.name ?? null;
 }
