@@ -16,7 +16,13 @@ from proliferate.db.store.cloud_sync.sandbox_profile_target_state import (
 )
 from proliferate.utils.time import utcnow
 
-ACTIVE_SLOT_STATUSES: tuple[str, ...] = ("creating", "running", "paused", "blocked")
+ACTIVE_SLOT_STATUSES: tuple[str, ...] = (
+    "creating",
+    "provisioning",
+    "running",
+    "paused",
+    "blocked",
+)
 
 
 @dataclass(frozen=True)

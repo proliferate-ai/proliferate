@@ -24,11 +24,14 @@ from proliferate.server.cloud.repo_config.models import (
     workspace_repo_config_status_payload,
 )
 from proliferate.server.cloud.repo_config.service import (
+    get_organization_repo_config,
     get_repo_config,
     get_workspace_repo_config_status,
+    list_organization_repo_configs,
     list_repo_configs,
     resync_workspace_files,
     run_workspace_setup,
+    save_organization_repo_config,
     save_repo_config,
     save_repo_file,
 )
@@ -61,6 +64,24 @@ async def list_cloud_repo_configs_endpoint(
     )
 
 
+@router.get(
+    "/organizations/{organization_id}/repos/configs",
+    response_model=CloudRepoConfigsListResponse,
+)
+async def list_organization_cloud_repo_configs_endpoint(
+    organization_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> CloudRepoConfigsListResponse:
+    try:
+        values = await list_organization_repo_configs(db, user.id, organization_id)
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return CloudRepoConfigsListResponse(
+        configs=[repo_config_summary_payload(value) for value in values]
+    )
+
+
 @router.get("/repos/{git_owner}/{git_repo_name}/config", response_model=CloudRepoConfigResponse)
 async def get_cloud_repo_config_endpoint(
     git_owner: str,
@@ -77,6 +98,30 @@ async def get_cloud_repo_config_endpoint(
     return _default_repo_config_response() if value is None else repo_config_payload(value)
 
 
+@router.get(
+    "/organizations/{organization_id}/repos/{git_owner}/{git_repo_name}/config",
+    response_model=CloudRepoConfigResponse,
+)
+async def get_organization_cloud_repo_config_endpoint(
+    organization_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> CloudRepoConfigResponse:
+    try:
+        value = await get_organization_repo_config(
+            db,
+            user.id,
+            organization_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return _default_repo_config_response() if value is None else repo_config_payload(value)
+
+
 @router.put("/repos/{git_owner}/{git_repo_name}/config", response_model=CloudRepoConfigResponse)
 async def save_cloud_repo_config_endpoint(
     git_owner: str,
@@ -89,6 +134,32 @@ async def save_cloud_repo_config_endpoint(
         value = await save_repo_config(
             db,
             user.id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            body=body,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return repo_config_payload(value)
+
+
+@router.put(
+    "/organizations/{organization_id}/repos/{git_owner}/{git_repo_name}/config",
+    response_model=CloudRepoConfigResponse,
+)
+async def save_organization_cloud_repo_config_endpoint(
+    organization_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+    body: SaveCloudRepoConfigRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> CloudRepoConfigResponse:
+    try:
+        value = await save_organization_repo_config(
+            db,
+            user.id,
+            organization_id,
             git_owner=git_owner,
             git_repo_name=git_repo_name,
             body=body,

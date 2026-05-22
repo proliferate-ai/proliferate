@@ -37,6 +37,7 @@ from proliferate.db.store.billing import (
 )
 from proliferate.db.store.cloud_profile_target_guard import require_primary_managed_profile_target
 from proliferate.db.store.cloud_runtime_environments import ensure_runtime_environment_for_repo
+from proliferate.db.store.cloud_sandboxes import ACTIVE_SLOT_STATUSES
 from proliferate.utils.time import utcnow
 
 _UNSET: Final = object()
@@ -318,6 +319,31 @@ async def get_existing_cloud_workspace(
     ).scalar_one_or_none()
 
 
+async def get_existing_managed_cloud_workspace_for_profile(
+    db: AsyncSession,
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+    git_branch: str,
+) -> CloudWorkspace | None:
+    return (
+        await db.execute(
+            select(CloudWorkspace).where(
+                CloudWorkspace.sandbox_profile_id == sandbox_profile_id,
+                CloudWorkspace.target_id == target_id,
+                CloudWorkspace.git_provider == git_provider,
+                CloudWorkspace.git_owner == git_owner,
+                CloudWorkspace.git_repo_name == git_repo_name,
+                CloudWorkspace.git_branch == git_branch,
+                CloudWorkspace.archived_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+
+
 async def update_workspace_branch(
     db: AsyncSession,
     workspace: CloudWorkspace,
@@ -431,6 +457,7 @@ async def create_managed_cloud_workspace_for_profile(
     worktree_path: str | None,
     origin_json: str | None,
     template_version: str,
+    origin: str = "manual_desktop",
     repo_env_vars_ciphertext: str | None = None,
 ) -> CloudWorkspace:
     profile, _target = await require_primary_managed_profile_target(
@@ -473,6 +500,7 @@ async def create_managed_cloud_workspace_for_profile(
         git_branch=git_branch,
         git_base_branch=git_base_branch,
         worktree_path=worktree_path,
+        origin=origin,
         origin_json=origin_json,
         status=CloudWorkspaceStatus.pending.value,
         status_detail="Pending",
@@ -527,13 +555,41 @@ async def delete_cloud_workspace_records(
     db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> None:
-    workspace.archive_requested_at = workspace.archive_requested_at or utcnow()
-    workspace.archived_at = utcnow()
+    await archive_cloud_workspace_record(db, workspace=workspace)
+    await db.commit()
+
+
+async def archive_cloud_workspace_record(
+    db: AsyncSession,
+    *,
+    workspace: CloudWorkspace,
+) -> CloudWorkspace:
+    now = utcnow()
+    workspace.archive_requested_at = workspace.archive_requested_at or now
+    workspace.archived_at = workspace.archived_at or now
     workspace.status = CloudWorkspaceStatus.archived.value
     workspace.status_detail = "Archived"
     workspace.cleanup_state = CloudWorkspaceCleanupState.pending.value
-    workspace.updated_at = utcnow()
-    await db.commit()
+    workspace.updated_at = now
+    await db.flush()
+    return workspace
+
+
+async def archive_cloud_workspace_record_by_id(
+    db: AsyncSession,
+    *,
+    workspace_id: UUID,
+) -> CloudWorkspace | None:
+    workspace = (
+        await db.execute(
+            select(CloudWorkspace)
+            .where(CloudWorkspace.id == workspace_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if workspace is None:
+        return None
+    return await archive_cloud_workspace_record(db, workspace=workspace)
 
 
 async def get_active_sandbox(
@@ -541,11 +597,34 @@ async def get_active_sandbox(
     workspace: CloudWorkspace,
 ) -> CloudSandbox | None:
     """Load the active sandbox for *workspace*, if one exists."""
-    if not workspace.active_sandbox_id:
+    if workspace.active_sandbox_id:
+        sandbox = (
+            await db.execute(
+                select(CloudSandbox).where(CloudSandbox.id == workspace.active_sandbox_id)
+            )
+        ).scalar_one_or_none()
+        if sandbox is not None:
+            return sandbox
+    return await _get_active_profile_target_sandbox(db, workspace)
+
+
+async def _get_active_profile_target_sandbox(
+    db: AsyncSession,
+    workspace: CloudWorkspace,
+) -> CloudSandbox | None:
+    if workspace.sandbox_profile_id is None or workspace.target_id is None:
         return None
     return (
         await db.execute(
-            select(CloudSandbox).where(CloudSandbox.id == workspace.active_sandbox_id)
+            select(CloudSandbox)
+            .where(
+                CloudSandbox.sandbox_profile_id == workspace.sandbox_profile_id,
+                CloudSandbox.target_id == workspace.target_id,
+                CloudSandbox.superseded_at.is_(None),
+                CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
+            )
+            .order_by(CloudSandbox.updated_at.desc())
+            .limit(1)
         )
     ).scalar_one_or_none()
 
@@ -746,15 +825,101 @@ async def finalize_workspace_provision(
     workspace.runtime_token_ciphertext = runtime_token_ciphertext
     workspace.anyharness_workspace_id = anyharness_workspace_id
     workspace.template_version = template_version
+    workspace.materialized_slot_generation = sandbox.slot_generation
     workspace.runtime_generation = workspace.runtime_generation + 1
     workspace.status = WorkspaceStatus.ready
     workspace.status_detail = "Ready"
     workspace.ready_at = utcnow()
     workspace.updated_at = utcnow()
+    await _ensure_ready_workspace_exposure(
+        db,
+        workspace=workspace,
+        anyharness_workspace_id=anyharness_workspace_id,
+    )
     await db.commit()
     await db.refresh(workspace)
     await db.refresh(sandbox)
     return workspace
+
+
+async def _ensure_ready_workspace_exposure(
+    db: AsyncSession,
+    *,
+    workspace: CloudWorkspace,
+    anyharness_workspace_id: str,
+) -> None:
+    if workspace.target_id is None:
+        return
+    if workspace.owner_scope == "personal":
+        if workspace.owner_user_id is None:
+            raise RuntimeError("Personal cloud workspace is missing owner_user_id.")
+        owner_user_id = workspace.owner_user_id
+        organization_id = None
+        visibility = "private"
+    elif workspace.owner_scope == "organization":
+        if workspace.organization_id is None:
+            raise RuntimeError("Organization cloud workspace is missing organization_id.")
+        owner_user_id = None
+        organization_id = workspace.organization_id
+        visibility = "shared_unclaimed"
+    else:
+        raise RuntimeError(f"Unsupported cloud workspace owner_scope: {workspace.owner_scope}")
+
+    now = utcnow()
+    exposure = (
+        await db.execute(
+            select(CloudWorkspaceExposure)
+            .where(CloudWorkspaceExposure.target_id == workspace.target_id)
+            .where(CloudWorkspaceExposure.cloud_workspace_id == workspace.id)
+            .where(CloudWorkspaceExposure.archived_at.is_(None))
+            .with_for_update()
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if exposure is None:
+        db.add(
+            CloudWorkspaceExposure(
+                target_id=workspace.target_id,
+                cloud_workspace_id=workspace.id,
+                anyharness_workspace_id=anyharness_workspace_id,
+                owner_scope=workspace.owner_scope,
+                owner_user_id=owner_user_id,
+                organization_id=organization_id,
+                visibility=visibility,
+                claimed_by_user_id=None,
+                default_projection_level="live",
+                commandable=True,
+                status="active",
+                revision=1,
+                origin=workspace.origin,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        await db.flush()
+        return
+
+    changed = False
+    for attr, value in (
+        ("anyharness_workspace_id", anyharness_workspace_id),
+        ("owner_scope", workspace.owner_scope),
+        ("owner_user_id", owner_user_id),
+        ("organization_id", organization_id),
+        ("origin", workspace.origin),
+    ):
+        if getattr(exposure, attr) != value:
+            setattr(exposure, attr, value)
+            changed = True
+    if exposure.status != "active":
+        exposure.status = "active"
+        changed = True
+    if not exposure.commandable:
+        exposure.commandable = True
+        changed = True
+    if changed:
+        exposure.revision += 1
+        exposure.updated_at = now
+    await db.flush()
 
 
 async def persist_runtime_reconnect_state(
@@ -1053,10 +1218,8 @@ async def create_cloud_workspace_for_user(
 async def load_active_sandbox_for_workspace(
     workspace: CloudWorkspace,
 ) -> CloudSandbox | None:
-    if not workspace.active_sandbox_id:
-        return None
     async with db_engine.async_session_factory() as db:
-        return await db.get(CloudSandbox, workspace.active_sandbox_id)
+        return await get_active_sandbox(db, workspace)
 
 
 async def load_cloud_sandbox_by_id(

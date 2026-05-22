@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import json
 
+from proliferate.constants.automations import (
+    AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+    AUTOMATION_TARGET_MODE_SHARED_CLOUD,
+)
 from proliferate.constants.cloud import CloudTargetKind, CloudTargetStatus
 from proliferate.db import engine as db_engine
 from proliferate.db.store.automation_run_claim_transitions import (
@@ -48,22 +52,47 @@ def _providers_inventory_present(target: targets_store.CloudTargetSnapshot) -> b
     return isinstance(parsed, dict) and isinstance(parsed.get("readyAgentKinds"), list)
 
 
+def _target_matches_run_scope(
+    target: targets_store.CloudTargetSnapshot,
+    ctx: AutomationExecutionContext,
+) -> bool:
+    if ctx.claim.target_mode == AUTOMATION_TARGET_MODE_SHARED_CLOUD:
+        return (
+            target.owner_scope == "organization"
+            and target.organization_id is not None
+            and target.organization_id == ctx.claim.organization_id
+        )
+    if ctx.claim.target_mode == AUTOMATION_TARGET_MODE_PERSONAL_CLOUD:
+        return (
+            target.owner_scope == "personal"
+            and (
+                target.owner_user_id == ctx.claim.user_id
+                or target.created_by_user_id == ctx.claim.user_id
+            )
+        )
+    return True
+
+
 async def _load_or_select_target(
     ctx: AutomationExecutionContext,
 ) -> targets_store.CloudTargetSnapshot | None:
     async with db_engine.async_session_factory() as db:
         if ctx.claim.cloud_target_id_snapshot is not None:
-            return await targets_store.get_visible_target_by_id(
+            target = await targets_store.get_visible_target_by_id(
                 db,
                 target_id=ctx.claim.cloud_target_id_snapshot,
                 user_id=ctx.claim.user_id,
             )
+            if target is not None and _target_matches_run_scope(target, ctx):
+                return target
+            return None
         targets = await targets_store.list_visible_targets(db, user_id=ctx.claim.user_id)
         for target in targets:
             if (
                 target.kind == CloudTargetKind.managed_cloud.value
                 and target.status == CloudTargetStatus.online.value
                 and target.archived_at is None
+                and _target_matches_run_scope(target, ctx)
             ):
                 return target
     return None
@@ -97,14 +126,21 @@ async def resolve_target_stage(
     if target.status != CloudTargetStatus.online.value:
         await fail_claim(ctx.claim, code="target_offline")
         return None
+    if target.kind == CloudTargetKind.managed_cloud.value and target.sandbox_profile_id is None:
+        await fail_claim(ctx.claim, code="sandbox_profile_required")
+        return None
 
     claim = ctx.claim
-    if claim.cloud_target_id_snapshot is None:
+    if (
+        claim.cloud_target_id_snapshot is None
+        or claim.sandbox_profile_id != target.sandbox_profile_id
+    ):
         updated = await attach_cloud_target_snapshot_to_run(
             run_id=claim.id,
             claim_id=claim.claim_id,
             cloud_target_id=target.id,
             cloud_target_kind=target.kind,
+            sandbox_profile_id=target.sandbox_profile_id,
             now=utcnow(),
             transition=CLOUD_WORKSPACE_ATTACHMENT_TRANSITION,
             claim_is_active=claim_is_active,

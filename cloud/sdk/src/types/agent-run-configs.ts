@@ -3,7 +3,7 @@ import type { AutomationOwnerScope } from "./generated.js";
 export interface CloudAgentRunConfig {
   id: string;
   name: string;
-  ownerScope: AutomationOwnerScope;
+  ownerScope: AutomationOwnerScope | "system";
   ownerUserId?: string | null;
   organizationId?: string | null;
   createdByUserId?: string | null;
@@ -33,7 +33,7 @@ export interface CloudAgentRunConfigListResponse {
 }
 
 export interface CloudAgentRunConfigOwnerSelection {
-  ownerScope?: AutomationOwnerScope;
+  ownerScope?: AutomationOwnerScope | "system";
   organizationId?: string | null;
 }
 

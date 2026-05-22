@@ -1,6 +1,16 @@
 import type { ConnectorCatalogEntry } from "@/lib/domain/mcp/types";
-import type { PluginPackagePresentation } from "@/lib/domain/plugins/plugin-package-view-model";
+import type {
+  PluginComponentRowModel,
+  PluginPackagePresentation,
+} from "@/lib/domain/plugins/plugin-package-view-model";
 import { Blocks, FileText, Sparkles } from "@/components/ui/icons";
+
+const PUBLIC_TONE_CLASSES: Record<NonNullable<PluginComponentRowModel["publicTone"]>, string> = {
+  neutral: "border-border/50 text-muted-foreground",
+  success: "border-success/25 bg-success/10 text-success",
+  warning: "border-warning/30 bg-warning/10 text-warning",
+  muted: "border-border/50 bg-muted/30 text-muted-foreground",
+};
 
 export function ConnectorToolsTab({
   entry,
@@ -34,8 +44,17 @@ export function ConnectorToolsTab({
                 <span className="min-w-0 truncate text-sm text-foreground">
                   {component.label}
                 </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {component.stateLabel}
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {component.publicLabel && component.publicTone && (
+                    <span
+                      className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${PUBLIC_TONE_CLASSES[component.publicTone]}`}
+                    >
+                      {component.publicLabel}
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {component.stateLabel}
+                  </span>
                 </span>
               </div>
               <p className="line-clamp-2 pt-1 text-xs text-muted-foreground">

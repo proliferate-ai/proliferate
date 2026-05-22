@@ -27,6 +27,7 @@ const persistedKeys = [
   "PROLIFERATE_API_PORT",
   "PROLIFERATE_WEB_PORT",
   "PROLIFERATE_WEB_HMR_PORT",
+  "PROLIFERATE_HOSTED_WEB_PORT",
   "PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE",
   "ANYHARNESS_PORT",
   "ANYHARNESS_RUNTIME_HOME",
@@ -39,6 +40,7 @@ const portKeys = [
   ["PROLIFERATE_API_PORT", 8000],
   ["PROLIFERATE_WEB_PORT", 1420],
   ["PROLIFERATE_WEB_HMR_PORT", 1421],
+  ["PROLIFERATE_HOSTED_WEB_PORT", 5174],
   ["PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE", 49321],
   ["ANYHARNESS_PORT", 8457],
 ];
@@ -581,9 +583,12 @@ function writeLaunchEnv(paths, env) {
     ANYHARNESS_DEV_URL: `http://127.0.0.1:${env.ANYHARNESS_PORT}`,
     VITE_PROLIFERATE_API_BASE_URL: `http://127.0.0.1:${env.PROLIFERATE_API_PORT}`,
     API_BASE_URL: `http://127.0.0.1:${env.PROLIFERATE_API_PORT}`,
+    FRONTEND_BASE_URL: `http://localhost:${env.PROLIFERATE_HOSTED_WEB_PORT}`,
     CORS_ALLOW_ORIGINS: [
       `http://localhost:${env.PROLIFERATE_WEB_PORT}`,
       `http://127.0.0.1:${env.PROLIFERATE_WEB_PORT}`,
+      `http://localhost:${env.PROLIFERATE_HOSTED_WEB_PORT}`,
+      `http://127.0.0.1:${env.PROLIFERATE_HOSTED_WEB_PORT}`,
       "http://tauri.localhost",
       "tauri://localhost",
     ].join(","),
@@ -620,7 +625,8 @@ async function ensureProfile(options) {
     databaseName: env.PROLIFERATE_DEV_DB_NAME,
     ports: {
       api: Number(env.PROLIFERATE_API_PORT),
-      web: Number(env.PROLIFERATE_WEB_PORT),
+      desktopWeb: Number(env.PROLIFERATE_WEB_PORT),
+      hostedWeb: Number(env.PROLIFERATE_HOSTED_WEB_PORT),
       hmr: Number(env.PROLIFERATE_WEB_HMR_PORT),
       anyharness: Number(env.ANYHARNESS_PORT),
     },
@@ -750,15 +756,18 @@ async function listProfiles() {
     const env = readEnvFile(paths.profileEnv);
     const instance = readJsonFile(paths.instance) ?? {};
     const ports = {
-      web: Number(env.PROLIFERATE_WEB_PORT),
+      desktopWeb: Number(env.PROLIFERATE_WEB_PORT),
+      hostedWeb: Number(env.PROLIFERATE_HOSTED_WEB_PORT),
       api: Number(env.PROLIFERATE_API_PORT),
       anyharness: Number(env.ANYHARNESS_PORT),
     };
-    const checks = await Promise.all([
-      tcpPortIsOpen(ports.web),
-      tcpPortIsOpen(ports.api),
-      tcpPortIsOpen(ports.anyharness),
-    ]);
+    const checkedPorts = [
+      ports.desktopWeb,
+      ports.hostedWeb,
+      ports.api,
+      ports.anyharness,
+    ].filter(Number.isInteger);
+    const checks = await Promise.all(checkedPorts.map((port) => tcpPortIsOpen(port)));
     const status = checks.every(Boolean)
       ? "running"
       : checks.some(Boolean)
@@ -768,7 +777,8 @@ async function listProfiles() {
       profile,
       worktree: instance.worktreePath ?? "",
       branch: instance.branch ?? "",
-      web: ports.web || "",
+      desktopWeb: ports.desktopWeb || "",
+      hostedWeb: ports.hostedWeb || "",
       api: ports.api || "",
       anyharness: ports.anyharness || "",
       db: env.PROLIFERATE_DEV_DB_NAME ?? "",
@@ -788,6 +798,7 @@ async function listProfiles() {
   console.log([
     pad("PROFILE", widths.profile),
     pad("BRANCH", widths.branch),
+    pad("DESK", 6),
     pad("WEB", 6),
     pad("API", 6),
     pad("AH", 6),
@@ -799,7 +810,8 @@ async function listProfiles() {
     console.log([
       pad(row.profile, widths.profile),
       pad(row.branch, widths.branch),
-      pad(row.web, 6),
+      pad(row.desktopWeb, 6),
+      pad(row.hostedWeb, 6),
       pad(row.api, 6),
       pad(row.anyharness, 6),
       pad(row.status, 8),

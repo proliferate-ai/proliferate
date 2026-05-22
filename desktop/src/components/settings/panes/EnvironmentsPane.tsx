@@ -10,6 +10,8 @@ import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { LocalRepoSection } from "./repo/LocalRepoSection";
 import { CloudRepoSection } from "./repo/CloudRepoSection";
+import { AutomaticSyncSection } from "./environments/AutomaticSyncSection";
+import { WorktreeStorageSection } from "./environments/WorktreeStorageSection";
 
 interface EnvironmentsPaneProps {
   repositories: SettingsRepositoryEntry[];
@@ -62,10 +64,13 @@ export function EnvironmentsPane({
       <section className="space-y-6">
         <SettingsPageHeader
           title="Environments"
-          description="Configure how local worktrees and cloud workspaces are prepared for each project."
+          description="Per-repo configuration for local worktrees and personal cloud workspaces."
         />
 
-        <EnvironmentSection title="Select a project">
+        <EnvironmentSection
+          title="Your repositories"
+          description="Click a repository to configure its environment."
+        >
           <EnvironmentPanel>
             {repositories.length === 0 ? (
               <EnvironmentPanelRow>
@@ -94,10 +99,12 @@ export function EnvironmentsPane({
               ))
             )}
           </EnvironmentPanel>
-        </EnvironmentSection>
-      </section>
-    );
-  }
+      </EnvironmentSection>
+      <AutomaticSyncSection repositories={repositories} />
+      <WorktreeStorageSection />
+    </section>
+  );
+}
 
   return (
     <section className="space-y-6">

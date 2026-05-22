@@ -198,6 +198,26 @@ async def verify_runtime_auth_enforced(
     )
 
 
+async def apply_remote_runtime_config(
+    runtime_url: str,
+    access_token: str,
+    body: dict[str, object],
+    *,
+    workspace_id: UUID | None = None,
+) -> dict[str, object]:
+    apply_started = time.perf_counter()
+    response = await anyharness.apply_runtime_config(runtime_url, access_token, body)
+    log_cloud_event(
+        "cloud runtime config applied",
+        workspace_id=workspace_id,
+        runtime_url=runtime_url,
+        elapsed_ms=duration_ms(apply_started),
+        status=str(response.get("status") or ""),
+        applied=bool(response.get("applied")),
+    )
+    return response
+
+
 async def _list_remote_agents(
     runtime_url: str,
     access_token: str,

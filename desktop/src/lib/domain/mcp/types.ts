@@ -57,6 +57,29 @@ export type ConnectOAuthConnectorResult =
   | { kind: "completed" }
   | { kind: "canceled" };
 
+export type ConfiguredCapabilityKind = "mcp" | "plugin" | "skill";
+
+export interface ConfiguredCapabilityItemState {
+  kind: ConfiguredCapabilityKind;
+  id: string;
+  sourceId: string;
+  sourceKind?: string | null;
+  sourceVersion?: string | null;
+  sourcePluginId?: string | null;
+  sourcePluginVersion?: string | null;
+  label: string;
+  enabled: boolean;
+  ownerScope: string;
+  ownerUserId?: string | null;
+  organizationId?: string | null;
+  publicToOrg: boolean;
+  publicOrganizationId?: string | null;
+  publicStatus: string;
+  configVersion?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
 interface ConnectorCatalogEntryBase {
   id: ConnectorCatalogId;
   name: string;
@@ -116,8 +139,19 @@ export type ConnectorCatalogEntry =
 export interface SavedConnectorMetadata {
   connectionId: string;
   catalogEntryId: ConnectorCatalogId;
+  catalogEntryVersion: number;
+  ownerScope: string;
+  ownerUserId?: string | null;
+  organizationId?: string | null;
   enabled: boolean;
   serverName: string;
+  publicToOrg: boolean;
+  publicOrganizationId?: string | null;
+  publicStatus: string;
+  publicUpdatedAt?: string | null;
+  publicUpdatedByUserId?: string | null;
+  configuredPlugin?: ConfiguredCapabilityItemState | null;
+  configuredSkills: ConfiguredCapabilityItemState[];
   createdAt: string;
   updatedAt: string;
   lastSyncedAt: string | null;

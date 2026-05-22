@@ -2,6 +2,10 @@ import type { Workspace } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import { resolveWorkspaceExecutionSidebarActivityState } from "@/lib/domain/sessions/activity";
 import { isCloudWorkspacePending } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+import type {
+  CloudWorkspaceExposureState,
+  CloudWorkspaceVisibility,
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { automationWorkspaceDefaultDisplayNameFromBranch } from "@/lib/domain/workspaces/display/workspace-display";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
@@ -73,6 +77,20 @@ export type SidebarDetailIndicator =
   | {
     kind: "materialization";
     variant: SidebarWorkspaceVariant;
+    tooltip: string;
+  }
+  | {
+    kind: "cloud_access";
+    tone: "neutral" | "success" | "warning" | "muted";
+    tooltip: string;
+  }
+  | {
+    kind: "cloud_exposure";
+    tone: "neutral" | "success" | "warning" | "muted";
+    tooltip: string;
+  }
+  | {
+    kind: "origin";
     tooltip: string;
   }
   | {
@@ -217,8 +235,14 @@ export function detailIndicatorsForWorkspace(
   finishSuggestion?: { workspaceId: string; readinessFingerprint: string } | null,
 ): SidebarDetailIndicator[] {
   const creator = creatorDetailIndicator(workspace);
+  const cloudAccess = cloudAccessDetailIndicator(workspace);
+  const cloudExposure = cloudExposureDetailIndicator(workspace);
+  const origin = originDetailIndicator(workspace, creator);
   return [
     ...(creator ? [creator] : []),
+    ...(origin ? [origin] : []),
+    ...(cloudAccess ? [cloudAccess] : []),
+    ...(cloudExposure ? [cloudExposure] : []),
     ...(finishSuggestion
       ? [{
         kind: "finish_suggestion" as const,
@@ -368,6 +392,145 @@ function creatorDetailIndicator(workspace: LogicalWorkspace): SidebarDetailIndic
   }
 
   return null;
+}
+
+function activeCloudWorkspace(workspace: LogicalWorkspace): SidebarCloudWorkspaceSummary | null {
+  return workspace.effectiveOwner === "cloud"
+    ? workspace.cloudWorkspace ?? null
+    : null;
+}
+
+function cloudAccessDetailIndicator(workspace: LogicalWorkspace): SidebarDetailIndicator | null {
+  const cloudWorkspace = activeCloudWorkspace(workspace);
+  const visibility = cloudWorkspace?.visibility;
+  if (!visibility || visibility === "private") {
+    return null;
+  }
+
+  return {
+    kind: "cloud_access",
+    tone: cloudAccessTone(visibility),
+    tooltip: cloudAccessTooltip(cloudWorkspace),
+  };
+}
+
+function cloudExposureDetailIndicator(workspace: LogicalWorkspace): SidebarDetailIndicator | null {
+  const exposureState = activeCloudWorkspace(workspace)?.exposureState;
+  if (!exposureState) {
+    return null;
+  }
+
+  return {
+    kind: "cloud_exposure",
+    tone: cloudExposureTone(exposureState),
+    tooltip: cloudExposureTooltip(exposureState),
+  };
+}
+
+function originDetailIndicator(
+  workspace: LogicalWorkspace,
+  creator: SidebarDetailIndicator | null,
+): SidebarDetailIndicator | null {
+  if (creator?.kind === "automation" || creator?.kind === "agent") {
+    return null;
+  }
+
+  const tooltip = originTooltip(activeOrigin(workspace));
+  return tooltip
+    ? {
+      kind: "origin",
+      tooltip,
+    }
+    : null;
+}
+
+function cloudAccessTone(
+  visibility: CloudWorkspaceVisibility,
+): Extract<SidebarDetailIndicator, { kind: "cloud_access" }>["tone"] {
+  switch (visibility) {
+    case "shared_unclaimed":
+      return "warning";
+    case "claimed":
+      return "success";
+    case "archived":
+      return "muted";
+    case "private":
+    default:
+      return "neutral";
+  }
+}
+
+function cloudAccessTooltip(workspace: SidebarCloudWorkspaceSummary): string {
+  switch (workspace.visibility) {
+    case "shared_unclaimed":
+      return "Shared team work · unclaimed";
+    case "claimed":
+      return workspace.claimedByUserId
+        ? `Claimed shared work · ${workspace.claimedByUserId}`
+        : "Claimed shared work";
+    case "archived":
+      return "Archived cloud work";
+    case "private":
+    default:
+      return "Private cloud work";
+  }
+}
+
+function cloudExposureTone(
+  exposureState: CloudWorkspaceExposureState,
+): Extract<SidebarDetailIndicator, { kind: "cloud_exposure" }>["tone"] {
+  switch (exposureState) {
+    case "live":
+    case "tracked":
+      return "success";
+    case "paused":
+    case "stale":
+      return "warning";
+    case "revoked":
+    case "untracked":
+      return "muted";
+    default:
+      return "neutral";
+  }
+}
+
+function cloudExposureTooltip(exposureState: CloudWorkspaceExposureState): string {
+  switch (exposureState) {
+    case "live":
+      return "Cloud projection live";
+    case "tracked":
+      return "Tracked by Cloud";
+    case "paused":
+      return "Cloud projection paused";
+    case "stale":
+      return "Cloud projection stale";
+    case "revoked":
+      return "Cloud projection revoked";
+    case "untracked":
+    default:
+      return "Not tracked by Cloud";
+  }
+}
+
+function originTooltip(origin: SidebarOriginContext): string | null {
+  switch (origin?.entrypoint) {
+    case "web":
+      return "Started from Web";
+    case "mobile":
+      return "Started from Mobile";
+    case "slack":
+      return "Started from Slack";
+    case "api":
+      return "Started from API";
+    case "cowork":
+      return "Started by cowork";
+    case "local_runtime":
+      return "Started from local runtime";
+    case "desktop":
+    case "cloud":
+    default:
+      return null;
+  }
 }
 
 function isSystemOrigin(

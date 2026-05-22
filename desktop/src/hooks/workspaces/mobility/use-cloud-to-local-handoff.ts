@@ -3,6 +3,7 @@ import {
   useExportWorkspaceMobilityArchiveMutation,
   useInstallWorkspaceMobilityArchiveMutation,
   usePrepareRepoRootMobilityDestinationMutation,
+  usePurgeWorkspaceMutation,
   useUpdateWorkspaceMobilityRuntimeStateMutation,
   useWorkspaceMobilityPreflightQuery,
 } from "@anyharness/sdk-react";
@@ -80,6 +81,7 @@ export function useCloudToLocalHandoff(args: {
   const exportArchive = useExportWorkspaceMobilityArchiveMutation();
   const installArchive = useInstallWorkspaceMobilityArchiveMutation();
   const cleanupWorkspace = useDestroyWorkspaceMobilitySourceMutation();
+  const purgePreparedDestination = usePurgeWorkspaceMutation();
   const sourcePreflightQuery = useWorkspaceMobilityPreflightQuery({
     workspaceId: args.cloudMaterializationId,
     enabled: false,
@@ -97,7 +99,8 @@ export function useCloudToLocalHandoff(args: {
     || updateRuntimeState.isPending
     || exportArchive.isPending
     || installArchive.isPending
-    || cleanupWorkspace.isPending;
+    || cleanupWorkspace.isPending
+    || purgePreparedDestination.isPending;
 
   const canPrepare = useMemo(() => Boolean(
     args.logicalWorkspace
@@ -244,6 +247,7 @@ export function useCloudToLocalHandoff(args: {
     }
 
     let handoffOpId: string | null = null;
+    let destinationWorkspaceId: string | null = null;
     let finalized = false;
     let cleanupCompleted = false;
 
@@ -287,6 +291,7 @@ export function useCloudToLocalHandoff(args: {
           preferredWorkspaceName: args.logicalWorkspace?.displayName ?? undefined,
         },
       });
+      destinationWorkspaceId = destination.workspace.id;
 
       await updatePhase.mutateAsync({
         mobilityWorkspaceId: snapshot.mobilityWorkspaceId,
@@ -304,8 +309,9 @@ export function useCloudToLocalHandoff(args: {
         },
       });
       await installArchive.mutateAsync({
-        workspaceId: destination.workspace.id,
+        workspaceId: destinationWorkspaceId,
         archive,
+        operationId: handoffOpId,
       });
 
       await updatePhase.mutateAsync({
@@ -399,6 +405,10 @@ export function useCloudToLocalHandoff(args: {
         }).catch(() => undefined);
       }
 
+      if (!finalized && destinationWorkspaceId) {
+        await purgePreparedDestination.mutateAsync(destinationWorkspaceId).catch(() => undefined);
+      }
+
       if (failureRecovery.shouldRefreshWorkspaceSelection) {
         await invalidateWorkspaceCollections();
         await selectWorkspace(snapshot.logicalWorkspaceId, { force: true }).catch(() => undefined);
@@ -423,6 +433,7 @@ export function useCloudToLocalHandoff(args: {
     invalidateWorkspaceCollections,
     installArchive,
     prepareDestination,
+    purgePreparedDestination,
     selectWorkspace,
     showMcpNotice,
     showToast,

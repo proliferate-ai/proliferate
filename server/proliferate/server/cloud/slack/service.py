@@ -7,7 +7,7 @@ import re
 from datetime import timedelta
 from uuid import UUID
 
-from fastapi import BackgroundTasks
+from cryptography.fernet import InvalidToken
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
@@ -82,6 +82,7 @@ from proliferate.server.cloud.slack.domain.mention_parse import (
 from proliferate.server.cloud.slack.domain.message_format import (
     ack_blocks,
     clarification_blocks,
+    configuration_blocks,
     completion_blocks,
 )
 from proliferate.server.cloud.slack.domain.policy import require_active_slack_bot
@@ -105,6 +106,18 @@ SLACK_BOT_SCOPES = (
 )
 _SYSTEM_SLACK_USER_UUID = UUID("00000000-0000-0000-0000-000000000007")
 SLACK_COMMAND_WAIT_TIMEOUT = timedelta(seconds=240)
+_SLACK_CONFIGURATION_ERROR_CODES = {
+    "slack_agent_run_config_invalid",
+    "slack_agent_run_config_missing",
+    "slack_bot_config_not_found",
+    "slack_bot_disabled",
+    "slack_channel_not_allowed",
+    "slack_connection_reauth_required",
+    "slack_connection_requires_reauth",
+    "slack_fixed_repo_required",
+    "slack_not_connected",
+    "slack_repo_mode_invalid",
+}
 
 
 async def start_oauth_install(
@@ -279,8 +292,12 @@ async def validate_connection(
     if connection is None:
         raise CloudApiError("slack_not_connected", "Slack is not connected.", status_code=404)
     try:
+        bot_token = await _decrypt_bot_token_or_reauth(db, connection=connection)
+    except CloudApiError as exc:
+        return False, "reauth_required", None, exc.code
+    try:
         result = await slack_client.auth_test(
-            bot_token=decrypt_text(connection.bot_token_ciphertext),
+            bot_token=bot_token,
         )
     except SlackApiError as exc:
         await connection_store.mark_connection_reauth_required(db, connection_id=connection.id)
@@ -302,8 +319,9 @@ async def list_channels(
     )
     if connection is None:
         raise CloudApiError("slack_not_connected", "Slack is not connected.", status_code=404)
+    bot_token = await _decrypt_bot_token_or_reauth(db, connection=connection)
     return await slack_client.list_channels(
-        bot_token=decrypt_text(connection.bot_token_ciphertext),
+        bot_token=bot_token,
     )
 
 
@@ -314,6 +332,26 @@ async def list_repo_routing_profiles(
     organization_id: UUID,
 ) -> list[CloudRepoRoutingProfileRecord]:
     await _require_org_admin(db, user_id=user.id, organization_id=organization_id)
+    repos = await repo_store.list_organization_cloud_repo_configs(
+        db,
+        organization_id=organization_id,
+    )
+    for repo in repos:
+        if not repo.configured:
+            continue
+        existing = await routing_profile_store.get_profile_for_repo(
+            db,
+            cloud_repo_config_id=repo.id,
+        )
+        if existing is not None:
+            continue
+        await routing_profile_store.upsert_profile(
+            db,
+            cloud_repo_config_id=repo.id,
+            organization_id=organization_id,
+            display_name=f"{repo.git_owner}/{repo.git_repo_name}",
+            description=None,
+        )
     return await routing_profile_store.list_profiles_for_org(
         db,
         organization_id=organization_id,
@@ -344,7 +382,6 @@ async def ingest_slack_event(
     db: AsyncSession,
     *,
     payload: dict[str, object],
-    background_tasks: BackgroundTasks,
 ) -> dict[str, object]:
     if payload.get("type") == "url_verification":
         return {"challenge": str(payload.get("challenge") or "")}
@@ -375,8 +412,16 @@ async def ingest_slack_event(
         event_type=str(event_type or "unknown"),
         payload_json=payload,
     )
-    background_tasks.add_task(process_inbound_job_by_id, job.id)
+    db_engine.defer_after_commit(
+        db,
+        lambda job_id=job.id: _process_inbound_job_and_due_outbound(job_id),
+    )
     return {"ok": True}
+
+
+async def _process_inbound_job_and_due_outbound(job_id: UUID) -> None:
+    await process_inbound_job_by_id(job_id)
+    await process_due_outbound_messages()
 
 
 async def process_inbound_job_by_id(job_id: UUID) -> None:
@@ -523,11 +568,12 @@ async def _handle_app_mention(
         parsed=parsed,
     )
     if repo is None:
-        fallback, blocks = clarification_blocks(
+        fallback, blocks = configuration_blocks(
             message=(
                 "I could not tell which repository to use. Set a fixed Slack repo "
                 "or add `--repo owner/name`."
             ),
+            settings_url=_slack_settings_url(),
         )
         await _queue_message(
             db,
@@ -752,7 +798,11 @@ async def _create_and_materialize_workspace(
         created_by_user_id=created_by_user_id,
     )
     branch_name = _slack_branch_name(prompt=prompt, job_id=job_id)
-    repo_root_path, worktree_path = _workspace_paths(repo=repo, branch_name=branch_name)
+    repo_root_path, worktree_path = _workspace_paths(
+        repo=repo,
+        branch_name=branch_name,
+        workspace_root=target.default_workspace_root,
+    )
     workspace = await cloud_workspaces.create_managed_cloud_workspace_for_profile(
         db,
         sandbox_profile_id=profile.id,
@@ -827,8 +877,8 @@ async def _create_and_materialize_workspace(
             mode="existing_path",
             path=repo_root_path,
             display_name=f"{repo.git_owner}/{repo.git_repo_name}",
-            origin={"kind": "system", "entrypoint": "slack"},
-            creator_context={"kind": "agent", "label": "Slack"},
+            origin={"kind": "system", "entrypoint": "cloud"},
+            creator_context={"kind": "human", "label": "Slack"},
         ).to_json(),
         idempotency_scope=f"slack-workspace:{workspace.id}",
         idempotency_key="materialize-root",
@@ -851,8 +901,8 @@ async def _create_and_materialize_workspace(
             target_path=worktree_path,
             new_branch_name=branch_name,
             base_branch=repo.default_branch,
-            origin={"kind": "system", "entrypoint": "slack"},
-            creator_context={"kind": "agent", "label": "Slack"},
+            origin={"kind": "system", "entrypoint": "cloud"},
+            creator_context={"kind": "human", "label": "Slack"},
         ).to_json(),
         idempotency_scope=f"slack-workspace:{workspace.id}",
         idempotency_key="materialize-worktree",
@@ -901,7 +951,7 @@ async def _enqueue_start_session(
             agent_kind=agent_kind,
             model_id=model_id,
             mode_id=mode_id,
-            origin={"kind": "system", "entrypoint": "slack"},
+            origin={"kind": "system", "entrypoint": "cloud"},
         ).to_json(),
         idempotency_scope=f"slack-session:{session_id}",
         idempotency_key=idempotency_key,
@@ -1124,7 +1174,13 @@ async def _queue_job_error(
     thread_ts = _string_or_none(event.get("thread_ts")) or _string_or_none(event.get("ts"))
     if not channel_id or not thread_ts:
         return
-    fallback, blocks = clarification_blocks(message=f"{message} ({error_code})")
+    if error_code in _SLACK_CONFIGURATION_ERROR_CODES:
+        fallback, blocks = configuration_blocks(
+            message=f"{message} ({error_code})",
+            settings_url=_slack_settings_url(),
+        )
+    else:
+        fallback, blocks = clarification_blocks(message=f"{message} ({error_code})")
     await _queue_message(
         db,
         connection=connection,
@@ -1179,8 +1235,18 @@ async def _send_outbound_message(
         )
         return
     try:
+        bot_token = await _decrypt_bot_token_or_reauth(db, connection=connection)
+    except CloudApiError as exc:
+        await outbound_store.mark_outbound_failed(
+            db,
+            message_id=sending.id,
+            error_code=exc.code,
+            error_message=exc.message,
+        )
+        return
+    try:
         result = await slack_client.chat_post_message(
-            bot_token=decrypt_text(connection.bot_token_ciphertext),
+            bot_token=bot_token,
             channel_id=sending.slack_channel_id,
             text=sending.fallback_text,
             blocks=sending.blocks_json,
@@ -1206,6 +1272,22 @@ async def _send_outbound_message(
         message_id=sending.id,
         sent_message_ts=result.message_ts,
     )
+
+
+async def _decrypt_bot_token_or_reauth(
+    db: AsyncSession,
+    *,
+    connection: SlackWorkspaceConnectionRecord,
+) -> str:
+    try:
+        return decrypt_text(connection.bot_token_ciphertext)
+    except InvalidToken as exc:
+        await connection_store.mark_connection_reauth_required(db, connection_id=connection.id)
+        raise CloudApiError(
+            "slack_connection_reauth_required",
+            "Slack must be reconnected before the bot can be used.",
+            status_code=409,
+        ) from exc
 
 
 async def _require_org_member(
@@ -1299,6 +1381,12 @@ def _workspace_url(cloud_workspace_id: UUID | None) -> str | None:
     return f"{settings.frontend_base_url.rstrip('/')}/cloud/workspaces/{cloud_workspace_id}"
 
 
+def _slack_settings_url() -> str | None:
+    if not settings.frontend_base_url:
+        return None
+    return f"{settings.frontend_base_url.rstrip('/')}/settings?section=slack-bot"
+
+
 def _slack_branch_name(*, prompt: str, job_id: UUID) -> str:
     config = default_cloud_executor_config()
     slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", prompt.lower()).strip("-._")[
@@ -1312,11 +1400,13 @@ def _workspace_paths(
     *,
     repo: repo_store.CloudRepoConfigValue,
     branch_name: str,
+    workspace_root: str | None,
 ) -> tuple[str, str]:
     owner = repo.git_owner.strip().replace("/", "-")
     name = repo.git_repo_name.strip().replace("/", "-")
-    repo_root_path = f"/workspace/repos/{owner}/{name}"
-    worktree_path = f"/workspace/worktrees/{owner}/{name}/{branch_name.replace('/', '-')}"
+    root = (workspace_root or "/workspace").rstrip("/") or "/workspace"
+    repo_root_path = f"{root}/repos/{owner}/{name}"
+    worktree_path = f"{root}/worktrees/{owner}/{name}/{branch_name.replace('/', '-')}"
     return repo_root_path, worktree_path
 
 

@@ -102,11 +102,13 @@ export function SlackBotPane() {
   }
 
   function openOAuthStartUrl() {
-    if (!connectionQuery.oauthStartUrl) {
-      setFeedback({ tone: "error", message: "Slack install URL is not available yet." });
-      return;
-    }
-    void openExternal(connectionQuery.oauthStartUrl);
+    setFeedback(null);
+    mutations.oauthStartMutation.mutate(undefined, {
+      onSuccess: ({ authorizeUrl }) => {
+        void openExternal(authorizeUrl);
+      },
+      onError: (error) => setFeedback({ tone: "error", message: error.message }),
+    });
   }
 
   if (organizationsQuery.isLoading) {
@@ -187,7 +189,7 @@ export function SlackBotPane() {
         connection={connection}
         loading={connectionQuery.isLoading || configQuery.isLoading}
         canManage={canManage}
-        oauthStartUrl={connectionQuery.oauthStartUrl}
+        opening={mutations.oauthStartMutation.isPending}
         disconnecting={mutations.disconnectMutation.isPending}
         onOpenOAuth={openOAuthStartUrl}
         onDisconnect={disconnect}

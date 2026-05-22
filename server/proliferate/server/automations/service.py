@@ -26,7 +26,7 @@ from proliferate.db.store.automations import (
     create_manual_run_for_user,
     list_automations_for_user,
     list_runs_for_automation_for_user,
-    load_automation_for_user,
+    load_automation_by_id,
     update_automation_for_user,
 )
 from proliferate.db.store.cloud_agent_run_config import configs as run_config_store
@@ -34,6 +34,7 @@ from proliferate.db.store.cloud_agent_run_config.configs import CloudAgentRunCon
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
     bootstrap_cloud_repo_config,
+    ensure_organization_cloud_repo_config,
 )
 from proliferate.server.automations.domain.schedule import (
     next_future_occurrence,
@@ -105,6 +106,52 @@ async def _require_org_admin(
             code="organization_permission_denied",
             status_code=403,
         )
+
+
+async def _require_org_member(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    organization_id: UUID,
+) -> None:
+    membership = await organization_store.get_active_membership(
+        db,
+        organization_id=organization_id,
+        user_id=actor_user_id,
+    )
+    if membership is None:
+        raise AutomationNotFound()
+
+
+async def _load_actor_automation(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    automation_id: UUID,
+    require_admin: bool,
+) -> AutomationValue:
+    value = await load_automation_by_id(db, automation_id=automation_id)
+    if value is None:
+        raise AutomationNotFound()
+    if value.owner_scope == AUTOMATION_OWNER_SCOPE_PERSONAL:
+        if value.owner_user_id != actor_user_id:
+            raise AutomationNotFound()
+        return value
+    if value.organization_id is None:
+        raise AutomationNotFound()
+    if require_admin:
+        await _require_org_admin(
+            db,
+            actor_user_id=actor_user_id,
+            organization_id=value.organization_id,
+        )
+    else:
+        await _require_org_member(
+            db,
+            actor_user_id=actor_user_id,
+            organization_id=value.organization_id,
+        )
+    return value
 
 
 def _normalize_owner_scope(value: str) -> str:
@@ -205,9 +252,23 @@ async def _ensure_repo_config_id(
     db: AsyncSession,
     *,
     user_id: UUID,
+    owner_scope: str,
+    organization_id: UUID | None,
     git_owner: str,
     git_repo_name: str,
 ) -> UUID:
+    if owner_scope == AUTOMATION_OWNER_SCOPE_ORGANIZATION:
+        if organization_id is None:
+            raise AutomationInvalidField("organizationId is required for team automations.")
+        repo_config = await ensure_organization_cloud_repo_config(
+            db,
+            organization_id=organization_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            created_by_user_id=user_id,
+        )
+        return repo_config.id
+
     # Automations point at a repo identity. Runtime-input config for that repo can still
     # be empty; the executor decides when to apply env/files/setup.
     billing_snapshot = await get_billing_snapshot_for_request(db, user_id)
@@ -255,10 +316,12 @@ async def get_automation(
     user_id: UUID,
     automation_id: UUID,
 ) -> AutomationValue:
-    value = await load_automation_for_user(db, user_id=user_id, automation_id=automation_id)
-    if value is None:
-        raise AutomationNotFound()
-    return value
+    return await _load_actor_automation(
+        db,
+        actor_user_id=user_id,
+        automation_id=automation_id,
+        require_admin=False,
+    )
 
 
 async def create_automation(
@@ -289,6 +352,8 @@ async def create_automation(
     repo_config_id = await _ensure_repo_config_id(
         db,
         user_id=user_id,
+        owner_scope=owner_scope,
+        organization_id=body.organization_id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
     )
@@ -320,9 +385,12 @@ async def update_automation(
     automation_id: UUID,
     body: UpdateAutomationRequest,
 ) -> AutomationValue:
-    existing = await load_automation_for_user(db, user_id=user_id, automation_id=automation_id)
-    if existing is None:
-        raise AutomationNotFound()
+    existing = await _load_actor_automation(
+        db,
+        actor_user_id=user_id,
+        automation_id=automation_id,
+        require_admin=True,
+    )
     if "git_owner" in body.model_fields_set or "git_repo_name" in body.model_fields_set:
         raise AutomationRepoImmutable()
 
@@ -380,6 +448,8 @@ async def update_automation(
         db,
         user_id=user_id,
         automation_id=automation_id,
+        owner_scope=existing.owner_scope,
+        organization_id=existing.organization_id,
         **updates,
     )
     if value is None:
@@ -392,10 +462,18 @@ async def pause_automation(
     user_id: UUID,
     automation_id: UUID,
 ) -> AutomationValue:
+    existing = await _load_actor_automation(
+        db,
+        actor_user_id=user_id,
+        automation_id=automation_id,
+        require_admin=True,
+    )
     value = await update_automation_for_user(
         db,
         user_id=user_id,
         automation_id=automation_id,
+        owner_scope=existing.owner_scope,
+        organization_id=existing.organization_id,
         enabled=False,
         paused_at=utcnow(),
         next_run_at=None,
@@ -410,9 +488,12 @@ async def resume_automation(
     user_id: UUID,
     automation_id: UUID,
 ) -> AutomationValue:
-    existing = await load_automation_for_user(db, user_id=user_id, automation_id=automation_id)
-    if existing is None:
-        raise AutomationNotFound()
+    existing = await _load_actor_automation(
+        db,
+        actor_user_id=user_id,
+        automation_id=automation_id,
+        require_admin=True,
+    )
     next_run_at = next_future_occurrence(
         rrule_text=existing.schedule_rrule,
         timezone=existing.schedule_timezone,
@@ -422,6 +503,8 @@ async def resume_automation(
         db,
         user_id=user_id,
         automation_id=automation_id,
+        owner_scope=existing.owner_scope,
+        organization_id=existing.organization_id,
         enabled=True,
         paused_at=None,
         next_run_at=next_run_at,
@@ -436,18 +519,29 @@ async def run_automation_now(
     user_id: UUID,
     automation_id: UUID,
 ) -> AutomationRunValue:
-    existing = await load_automation_for_user(db, user_id=user_id, automation_id=automation_id)
-    if existing is None:
-        raise AutomationNotFound()
+    existing = await _load_actor_automation(
+        db,
+        actor_user_id=user_id,
+        automation_id=automation_id,
+        require_admin=True,
+    )
     if not existing.enabled:
         raise AutomationPaused()
     await _ensure_repo_config_id(
         db,
         user_id=user_id,
+        owner_scope=existing.owner_scope,
+        organization_id=existing.organization_id,
         git_owner=existing.git_owner,
         git_repo_name=existing.git_repo_name,
     )
-    value = await create_manual_run_for_user(db, user_id=user_id, automation_id=automation_id)
+    value = await create_manual_run_for_user(
+        db,
+        user_id=user_id,
+        automation_id=automation_id,
+        owner_scope=existing.owner_scope,
+        organization_id=existing.organization_id,
+    )
     if value is None:
         raise AutomationNotFound()
     return value
@@ -460,12 +554,20 @@ async def list_automation_runs(
     *,
     limit: int = AUTOMATION_RUN_LIST_DEFAULT_LIMIT,
 ) -> list[AutomationRunValue]:
+    existing = await _load_actor_automation(
+        db,
+        actor_user_id=user_id,
+        automation_id=automation_id,
+        require_admin=False,
+    )
     bounded_limit = bounded_run_list_limit(limit)
     values = await list_runs_for_automation_for_user(
         db,
         user_id=user_id,
         automation_id=automation_id,
         limit=bounded_limit,
+        owner_scope=existing.owner_scope,
+        organization_id=existing.organization_id,
     )
     if values is None:
         raise AutomationNotFound()

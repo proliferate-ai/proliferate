@@ -72,6 +72,7 @@ import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspac
 import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
 import {
   createSession,
+  getSession,
   listWorkspaceSessions,
 } from "@/lib/access/anyharness/sessions";
 import type { WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
@@ -90,6 +91,7 @@ import {
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { buildDesktopLaunchModelRegistries } from "@/lib/domain/agents/cloud-launch-catalog";
+import { startCloudSessionCommand } from "@/lib/access/cloud/session-commands";
 
 interface CreateSessionWithResolvedConfigOptions {
   text: string;
@@ -367,7 +369,6 @@ export function useSessionCreationActions() {
 
       const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
       const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId);
-      assertDirectSessionCreateRuntimeConfigStamped(target);
       const targetConnection = {
         runtimeUrl: target.baseUrl,
         authToken: target.authToken,
@@ -423,14 +424,33 @@ export function useSessionCreationActions() {
         }
       }
       const subagentsEnabled = useUserPreferencesStore.getState().subagentsEnabled;
-      const session = await createSession(targetConnection, {
-        workspaceId: target.anyharnessWorkspaceId,
-        agentKind: options.agentKind,
-        modelId: options.modelId,
-        ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
-        subagentsEnabled,
-        origin: DESKTOP_ORIGIN,
-      }, requestOptions);
+      let session: Session;
+      if (target.location === "cloud") {
+        if (!target.cloudWorkspaceId || !target.targetId) {
+          throw new Error("Cloud workspace is missing command routing metadata.");
+        }
+        const materializedSessionId = await startCloudSessionCommand({
+          idempotencyKey: `desktop:start-session:${target.cloudWorkspaceId}:${pendingSessionId}`,
+          targetId: target.targetId,
+          cloudWorkspaceId: target.cloudWorkspaceId,
+          anyharnessWorkspaceId: target.anyharnessWorkspaceId,
+          agentKind: options.agentKind,
+          modelId: options.modelId,
+          modeId: resolvedModeId ?? null,
+          subagentsEnabled,
+        });
+        session = await getSession(targetConnection, materializedSessionId, requestOptions);
+      } else {
+        assertDirectSessionCreateRuntimeConfigStamped(target);
+        session = await createSession(targetConnection, {
+          workspaceId: target.anyharnessWorkspaceId,
+          agentKind: options.agentKind,
+          modelId: options.modelId,
+          ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
+          subagentsEnabled,
+          origin: DESKTOP_ORIGIN,
+        }, requestOptions);
+      }
 
       annotateLatencyFlow(options.latencyFlowId, {
         targetSessionId: session.id,

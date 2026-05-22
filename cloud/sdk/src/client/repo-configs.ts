@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core.js";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   CloudRepoConfigResponse,
   CloudRepoConfigsListResponse,
@@ -13,6 +13,17 @@ export async function listCloudRepoConfigs(): Promise<CloudRepoConfigsListRespon
   return (await getProliferateClient().GET("/v1/cloud/repos/configs")).data!;
 }
 
+export async function listOrganizationCloudRepoConfigs(
+  organizationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudRepoConfigsListResponse> {
+  return client.requestJson<CloudRepoConfigsListResponse>({
+    method: "GET",
+    path: "/v1/cloud/organizations/{organization_id}/repos/configs",
+    pathParams: { organization_id: organizationId },
+  });
+}
+
 export async function getCloudRepoConfig(
   gitOwner: string,
   gitRepoName: string,
@@ -22,6 +33,23 @@ export async function getCloudRepoConfig(
       params: { path: { git_owner: gitOwner, git_repo_name: gitRepoName } },
     })
   ).data!;
+}
+
+export async function getOrganizationCloudRepoConfig(
+  organizationId: string,
+  gitOwner: string,
+  gitRepoName: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudRepoConfigResponse> {
+  return client.requestJson<CloudRepoConfigResponse>({
+    method: "GET",
+    path: "/v1/cloud/organizations/{organization_id}/repos/{git_owner}/{git_repo_name}/config",
+    pathParams: {
+      organization_id: organizationId,
+      git_owner: gitOwner,
+      git_repo_name: gitRepoName,
+    },
+  });
 }
 
 export async function saveCloudRepoConfig(
@@ -35,6 +63,27 @@ export async function saveCloudRepoConfig(
       body,
     })
   ).data!;
+}
+
+export async function saveOrganizationCloudRepoConfig(
+  organizationId: string,
+  gitOwner: string,
+  gitRepoName: string,
+  body: Omit<SaveCloudRepoConfigRequest, "files"> & {
+    files?: SaveCloudRepoConfigRequest["files"];
+  },
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudRepoConfigResponse> {
+  return client.requestJson<CloudRepoConfigResponse>({
+    method: "PUT",
+    path: "/v1/cloud/organizations/{organization_id}/repos/{git_owner}/{git_repo_name}/config",
+    pathParams: {
+      organization_id: organizationId,
+      git_owner: gitOwner,
+      git_repo_name: gitRepoName,
+    },
+    body,
+  });
 }
 
 export async function resyncCloudRepoFileFromLocal(

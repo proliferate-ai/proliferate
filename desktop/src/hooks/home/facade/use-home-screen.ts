@@ -15,6 +15,7 @@ import {
 } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import { compareLogicalWorkspaceRecency } from "@/lib/domain/workspaces/sidebar/recency";
 import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
+import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 // Owns the Home screen facade consumed by the component. Does not own Home Next launch flow.
@@ -87,7 +88,10 @@ export function useHomeScreen() {
       case "repository-settings": {
         const firstRepository = repositories[0];
         if (firstRepository) {
-          navigate(`/settings?section=repo&repo=${encodeURIComponent(firstRepository.sourceRoot)}`);
+          navigate(buildSettingsHref({
+            section: "environments",
+            repo: firstRepository.sourceRoot,
+          }));
           return;
         }
         navigate("/settings?section=general");

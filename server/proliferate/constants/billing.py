@@ -45,7 +45,9 @@ BILLING_PERIOD_ROLLOVER_GRACE_SECONDS = 24 * 60 * 60
 STRIPE_METER_EVENT_MAX_PAST_SECONDS = 35 * 24 * 60 * 60
 STRIPE_METER_EVENT_MAX_FUTURE_SECONDS = 5 * 60
 
-ACTIVE_SANDBOX_STATUSES: frozenset[str] = frozenset({"allocating", "provisioning", "running"})
+ACTIVE_SANDBOX_STATUSES: frozenset[str] = frozenset(
+    {"allocating", "creating", "provisioning", "running"}
+)
 
 USAGE_SEGMENT_OPENED_BY_PROVISION = "provision"
 USAGE_SEGMENT_OPENED_BY_RESUME = "resume"

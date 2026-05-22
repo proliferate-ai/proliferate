@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Tabs, type TabItem } from "@proliferate/ui/primitives/Tabs";
 import { PageContentFrame } from "@/components/ui/PageContentFrame";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ArrowLeft, Pause, Pencil, Play, Plus, Zap } from "@/components/ui/icons";
@@ -30,6 +31,8 @@ import type {
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
+import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import type { AutomationOwnerScope } from "@/lib/access/cloud/client";
 
 const EMPTY_AUTOMATIONS: AutomationRecord[] = [];
 const EMPTY_AUTOMATION_RUNS: AutomationRunRecord[] = [];
@@ -48,8 +51,21 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const [editingAutomation, setEditingAutomation] = useState<AutomationRecord | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [pendingCloudWorkspaceId, setPendingCloudWorkspaceId] = useState<string | null>(null);
+  const [selectedOwnerScope, setSelectedOwnerScope] =
+    useState<AutomationOwnerScope>("personal");
+  const { activeOrganization, activeOrganizationId } = useActiveOrganization();
+  const canManageTeamAutomations = activeOrganizationId !== null;
+  const listOwnerScope: AutomationOwnerScope =
+    selectedOwnerScope === "organization" && canManageTeamAutomations
+      ? "organization"
+      : "personal";
 
-  const { data: automationsData, isLoading } = useAutomations(true);
+  const automationListOptions = useMemo(() => ({
+    ownerScope: listOwnerScope,
+    organizationId: listOwnerScope === "organization" ? activeOrganizationId : null,
+    enabled: true,
+  }), [activeOrganizationId, listOwnerScope]);
+  const { data: automationsData, isLoading } = useAutomations(automationListOptions);
   const automations = automationsData?.automations ?? EMPTY_AUTOMATIONS;
   const isDetailView = selectedAutomationId !== null;
   const selectedId = isDetailView ? selectedAutomationId : null;
@@ -249,6 +265,13 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
         action={renderCreateButton()}
       />
     );
+  const ownerTabs = useMemo<readonly TabItem[]>(() => [
+    { id: "personal", label: "Personal" },
+    { id: "organization", label: "Team", disabled: !canManageTeamAutomations },
+  ], [canManageTeamAutomations]);
+  const ownerScopeDescription = listOwnerScope === "organization"
+    ? "Team automations run in the shared cloud sandbox."
+    : "Personal automations run on your local or personal cloud targets.";
 
   return (
     <>
@@ -275,16 +298,28 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
               }}
             />
           ) : (
-            <AutomationListContent
-              automations={automations}
-              loading={isLoading}
-              busy={busy}
-              onSelect={(automationId) => navigate(`/automations/${automationId}`)}
-              onEdit={openEdit}
-              onPause={(automationId) => actions.pauseAutomation(automationId)}
-              onResume={(automationId) => actions.resumeAutomation(automationId)}
-              onRunNow={(automationId) => actions.runAutomationNow(automationId)}
-            />
+            <div className="space-y-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Tabs
+                  items={ownerTabs}
+                  activeId={listOwnerScope}
+                  onChange={(id) => setSelectedOwnerScope(id as AutomationOwnerScope)}
+                />
+                <p className="text-sm text-muted-foreground">
+                  {ownerScopeDescription}
+                </p>
+              </div>
+              <AutomationListContent
+                automations={automations}
+                loading={isLoading}
+                busy={busy}
+                onSelect={(automationId) => navigate(`/automations/${automationId}`)}
+                onEdit={openEdit}
+                onPause={(automationId) => actions.pauseAutomation(automationId)}
+                onResume={(automationId) => actions.resumeAutomation(automationId)}
+                onRunNow={(automationId) => actions.runAutomationNow(automationId)}
+              />
+            </div>
           )}
         </PageContentFrame>
       </MainSidebarPageShell>
@@ -295,6 +330,10 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
           open={editorOpen}
           automation={editingAutomation}
           busy={busy}
+          initialOwnerScope={listOwnerScope}
+          organizationId={activeOrganizationId}
+          organizationName={activeOrganization?.name ?? null}
+          canManageTeamAutomations={canManageTeamAutomations}
           onClose={closeEditor}
           onConfigureCloudTarget={handleConfigureCloudTarget}
           onCreate={handleCreate}

@@ -72,6 +72,10 @@ class SlackBotConfigUpdateRequest(SlackBaseModel):
     ack_message_template: str | None = Field(default=None, alias="ackMessageTemplate")
 
 
+class SlackOAuthStartResponse(SlackBaseModel):
+    authorize_url: str = Field(alias="authorizeUrl")
+
+
 class SlackValidateConnectionResponse(SlackBaseModel):
     ok: bool
     status: str
@@ -94,6 +98,8 @@ class SlackRepoRoutingProfileResponse(SlackBaseModel):
     id: str
     cloud_repo_config_id: str = Field(alias="cloudRepoConfigId")
     organization_id: str = Field(alias="organizationId")
+    git_owner: str | None = Field(default=None, alias="gitOwner")
+    git_repo_name: str | None = Field(default=None, alias="gitRepoName")
     display_name: str | None = Field(alias="displayName")
     description: str | None = None
     readme_summary: str | None = Field(alias="readmeSummary")
@@ -166,11 +172,16 @@ def bot_config_payload(value: SlackBotConfigRecord | None) -> SlackBotConfigResp
 
 def repo_routing_profile_payload(
     value: CloudRepoRoutingProfileRecord,
+    *,
+    git_owner: str | None = None,
+    git_repo_name: str | None = None,
 ) -> SlackRepoRoutingProfileResponse:
     return SlackRepoRoutingProfileResponse(
         id=str(value.id),
         cloud_repo_config_id=str(value.cloud_repo_config_id),
         organization_id=str(value.organization_id),
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
         display_name=value.display_name,
         description=value.description,
         readme_summary=value.readme_summary,

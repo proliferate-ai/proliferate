@@ -1,9 +1,15 @@
-import type { ComputeTargetInventory } from "@/lib/domain/compute/target-types";
+import type {
+  ComputeTargetInventory,
+  ComputeRuntimeConfigStatus,
+  ComputeSandboxProfileTargetState,
+  ComputeTargetStatus,
+  ComputeTargetSummary,
+} from "@/lib/domain/compute/target-types";
 
 export interface ComputeReadinessItem {
-  key: "git" | "node" | "python";
+  key: "target" | "worker" | "git" | "node" | "python" | "runtime-config" | "sandbox-slot";
   label: string;
-  ready: boolean;
+  status: "ready" | "pending" | "missing" | "unavailable";
   detail: string;
 }
 
@@ -23,26 +29,185 @@ function hasAvailableFlag(value: Record<string, unknown> | null | undefined): bo
 }
 
 export function computeTargetReadiness(
-  inventory: ComputeTargetInventory | null | undefined,
+  targetOrInventory: ComputeTargetSummary | ComputeTargetInventory | null | undefined,
+  options: {
+    sandboxProfileTargetState?: ComputeSandboxProfileTargetState | null;
+    runtimeConfigStatus?: ComputeRuntimeConfigStatus | null;
+    loadingTargetState?: boolean;
+    loadingRuntimeConfig?: boolean;
+  } = {},
 ): ComputeReadinessItem[] {
+  const target = isComputeTargetSummary(targetOrInventory) ? targetOrInventory : null;
+  const inventory: ComputeTargetInventory | null | undefined = target
+    ? target.inventory
+    : targetOrInventory as ComputeTargetInventory | null | undefined;
+  const targetStatus = target?.status ?? null;
+  const currentVersions = target?.update?.currentVersions ?? null;
+  const sandboxState = options.sandboxProfileTargetState ?? null;
+  const runtimeConfig = options.runtimeConfigStatus ?? null;
   return [
+    {
+      key: "target",
+      label: "Target",
+      status: readinessStatusFromTargetStatus(targetStatus),
+      detail: target?.statusDetail?.lastHeartbeatAt
+        ? `Last heartbeat ${target.statusDetail.lastHeartbeatAt}.`
+        : "Worker heartbeat determines whether Cloud can dispatch commands here.",
+    },
+    {
+      key: "worker",
+      label: "Worker / AnyHarness",
+      status: currentVersions?.workerVersion || currentVersions?.anyharnessVersion
+        ? "ready"
+        : "unavailable",
+      detail: formatWorkerVersions(currentVersions),
+    },
     {
       key: "git",
       label: "Git",
-      ready: hasAvailableFlag(inventory?.git),
+      status: hasAvailableFlag(inventory?.git) ? "ready" : "missing",
       detail: "Required for repository checkout and worktree operations.",
     },
     {
       key: "node",
       label: "Node / npm",
-      ready: hasAvailableFlag(inventory?.node),
+      status: hasAvailableFlag(inventory?.node) ? "ready" : "missing",
       detail: "Required for most product MCP servers and plugin materialization.",
     },
     {
       key: "python",
       label: "Python / uv",
-      ready: hasAvailableFlag(inventory?.python),
+      status: hasAvailableFlag(inventory?.python) ? "ready" : "missing",
       detail: "Used by Python-based setup scripts and some future MCP bundles.",
     },
+    {
+      key: "runtime-config",
+      label: "Runtime config",
+      status: runtimeConfigReadiness(target, runtimeConfig, options.loadingRuntimeConfig ?? false),
+      detail: runtimeConfigDetail(target, runtimeConfig, options.loadingRuntimeConfig ?? false),
+    },
+    {
+      key: "sandbox-slot",
+      label: "Sandbox slot",
+      status: sandboxSlotReadiness(
+        target,
+        sandboxState,
+        options.loadingTargetState ?? false,
+      ),
+      detail: sandboxSlotDetail(target, sandboxState, options.loadingTargetState ?? false),
+    },
   ];
+}
+
+function isComputeTargetSummary(
+  value: ComputeTargetSummary | ComputeTargetInventory | null | undefined,
+): value is ComputeTargetSummary {
+  return Boolean(value && "kind" in value && "status" in value);
+}
+
+function readinessStatusFromTargetStatus(
+  status: ComputeTargetStatus | null,
+): ComputeReadinessItem["status"] {
+  if (status === "online") {
+    return "ready";
+  }
+  if (status === "enrolling") {
+    return "pending";
+  }
+  if (status === "offline" || status === "degraded") {
+    return "missing";
+  }
+  return "unavailable";
+}
+
+function formatWorkerVersions(
+  versions: NonNullable<NonNullable<ComputeTargetSummary["update"]>["currentVersions"]> | null,
+): string {
+  if (!versions) {
+    return "Worker version has not been reported by this target.";
+  }
+  const parts = [
+    versions.workerVersion ? `Worker ${versions.workerVersion}` : null,
+    versions.anyharnessVersion ? `AnyHarness ${versions.anyharnessVersion}` : null,
+    versions.supervisorVersion ? `Supervisor ${versions.supervisorVersion}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : "Worker version has not been reported.";
+}
+
+function runtimeConfigReadiness(
+  target: ComputeTargetSummary | null,
+  runtimeConfig: ComputeRuntimeConfigStatus | null,
+  loading: boolean,
+): ComputeReadinessItem["status"] {
+  if (!target?.sandboxProfileId) {
+    return "unavailable";
+  }
+  if (loading) {
+    return "pending";
+  }
+  return runtimeConfig?.currentRevision ? "ready" : "missing";
+}
+
+function runtimeConfigDetail(
+  target: ComputeTargetSummary | null,
+  runtimeConfig: ComputeRuntimeConfigStatus | null,
+  loading: boolean,
+): string {
+  if (!target?.sandboxProfileId) {
+    return "This target does not have a sandbox profile runtime config.";
+  }
+  if (loading) {
+    return "Loading current sandbox runtime config revision.";
+  }
+  const revision = runtimeConfig?.currentRevision;
+  if (!revision) {
+    return "No runtime config revision has been generated for this sandbox profile.";
+  }
+  return `Revision ${revision.sequence} generated ${revision.createdAt}.`;
+}
+
+function sandboxSlotReadiness(
+  target: ComputeTargetSummary | null,
+  sandboxState: ComputeSandboxProfileTargetState | null,
+  loading: boolean,
+): ComputeReadinessItem["status"] {
+  if (target?.kind !== "managed_cloud") {
+    return "ready";
+  }
+  if (loading) {
+    return "pending";
+  }
+  if (!sandboxState?.slot) {
+    return "missing";
+  }
+  if (sandboxState.ready) {
+    return "ready";
+  }
+  if (sandboxState.slot.status === "creating" || sandboxState.slot.status === "provisioning") {
+    return "pending";
+  }
+  return "missing";
+}
+
+function sandboxSlotDetail(
+  target: ComputeTargetSummary | null,
+  sandboxState: ComputeSandboxProfileTargetState | null,
+  loading: boolean,
+): string {
+  if (target?.kind !== "managed_cloud") {
+    return "Direct SSH and local targets do not use a managed cloud slot.";
+  }
+  if (loading) {
+    return "Loading managed cloud sandbox slot state.";
+  }
+  if (!sandboxState?.slot) {
+    return "No active managed sandbox slot is assigned to this target.";
+  }
+  if (sandboxState.slot.blockedReason) {
+    return `Slot ${sandboxState.slot.slotGeneration ?? "-"} blocked: ${sandboxState.slot.blockedReason}.`;
+  }
+  if (!sandboxState.runtimeAccess?.anyharnessBaseUrl) {
+    return `Slot ${sandboxState.slot.slotGeneration ?? "-"} is ${sandboxState.slot.status}; runtime access is not ready.`;
+  }
+  return `Slot ${sandboxState.slot.slotGeneration ?? "-"} is ${sandboxState.slot.status}; runtime access is ready.`;
 }

@@ -78,7 +78,7 @@ pub async fn stream_session(
     let backlog_query_started = Instant::now();
     let backlog_records = state
         .session_service
-        .list_session_event_records(&session_id, Some(after_seq), None, None, None)
+        .list_session_event_records(&session_id, Some(after_seq), None, None, None, false)
         .map_err(|e| ApiError::internal(e.to_string()))?
         .ok_or_else(|| {
             ApiError::not_found(
@@ -159,6 +159,7 @@ pub async fn stream_session(
                     None,
                     None,
                     None,
+                    false,
                 ) {
                     Ok(Some(records)) => records
                         .into_iter()

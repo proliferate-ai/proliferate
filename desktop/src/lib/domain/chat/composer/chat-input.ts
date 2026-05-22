@@ -4,7 +4,7 @@ interface ChatInputAvailabilityArgs {
   connectionState: string;
   selectedCloudWorkspaceStatus: string | null;
   selectedCloudWorkspaceActionBlockReason: string | null;
-  selectedCloudRuntimePhase: "ready" | "resuming" | "failed" | null;
+  selectedCloudRuntimePhase: "ready" | "resuming" | "failed" | "claim_required" | null;
   selectedCloudRuntimeActionBlockReason: string | null;
   activeSessionId: string | null;
   isConfiguredLaunchLoading: boolean;

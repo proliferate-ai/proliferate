@@ -31,8 +31,18 @@ def _has_index(table_name: str, index_name: str) -> bool:
     return index_name in {index["name"] for index in inspector.get_indexes(table_name)}
 
 
+def _columns(table_name: str) -> set[str]:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return {column["name"] for column in inspector.get_columns(table_name)}
+
+
 def upgrade() -> None:
     if not _has_table("automation_run"):
+        return
+
+    existing_columns = _columns("automation_run")
+    if "execution_target" not in existing_columns:
         return
 
     if not _has_index("automation_run", "ix_automation_run_local_claimable"):

@@ -43,7 +43,7 @@ import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/select
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
+import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   CLOSED_PUBLISH_DIALOG_STATE,
   type PublishDialogState,

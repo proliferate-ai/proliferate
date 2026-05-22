@@ -46,6 +46,14 @@ def _has_unique_constraint(table_name: str, constraint_name: str) -> bool:
     }
 
 
+def _has_check_constraint(table_name: str, constraint_name: str) -> bool:
+    if not _has_table(table_name):
+        return False
+    return constraint_name in {
+        constraint["name"] for constraint in _inspector().get_check_constraints(table_name)
+    }
+
+
 def _add_column_once(table_name: str, column: sa.Column) -> None:
     if _has_table(table_name) and not _has_column(table_name, column.name):
         op.add_column(table_name, column)
@@ -120,12 +128,17 @@ def _upgrade_cloud_repo_config() -> None:
         unique=True,
         postgresql_where=sa.text("owner_scope = 'organization'"),
     )
-    if _has_table("cloud_repo_config"):
+    if _has_table("cloud_repo_config") and not _has_check_constraint(
+        "cloud_repo_config", "ck_cloud_repo_config_owner_scope"
+    ):
         op.create_check_constraint(
             "ck_cloud_repo_config_owner_scope",
             "cloud_repo_config",
             "owner_scope IN ('personal', 'organization')",
         )
+    if _has_table("cloud_repo_config") and not _has_check_constraint(
+        "cloud_repo_config", "ck_cloud_repo_config_owner_fields"
+    ):
         op.create_check_constraint(
             "ck_cloud_repo_config_owner_fields",
             "cloud_repo_config",

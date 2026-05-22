@@ -194,6 +194,28 @@ async def get_cloud_repo_config(
     return _repo_config_value(record, files)
 
 
+async def get_organization_cloud_repo_config(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+) -> CloudRepoConfigValue | None:
+    record = (
+        await db.execute(
+            select(CloudRepoConfig).where(
+                CloudRepoConfig.owner_scope == "organization",
+                CloudRepoConfig.organization_id == organization_id,
+                CloudRepoConfig.git_owner == git_owner,
+                CloudRepoConfig.git_repo_name == git_repo_name,
+            )
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        return None
+    return _repo_config_value(record, await _load_repo_file_rows(db, record.id))
+
+
 async def get_cloud_repo_config_by_id(
     db: AsyncSession,
     *,
@@ -331,6 +353,55 @@ async def _get_or_create_repo_config_record(
     ).scalar_one()
 
 
+async def _get_or_create_organization_repo_config_record(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+) -> CloudRepoConfig:
+    now = utcnow()
+    await db.execute(
+        pg_insert(CloudRepoConfig)
+        .values(
+            owner_scope="organization",
+            user_id=None,
+            organization_id=organization_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            configured=False,
+            configured_at=None,
+            default_branch=None,
+            env_vars_ciphertext=encrypt_json({}),
+            env_vars_version=0,
+            setup_script="",
+            setup_script_version=0,
+            run_command="",
+            files_version=0,
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(
+            index_elements=[
+                CloudRepoConfig.organization_id,
+                CloudRepoConfig.git_owner,
+                CloudRepoConfig.git_repo_name,
+            ],
+            index_where=CloudRepoConfig.owner_scope == "organization",
+        )
+    )
+    return (
+        await db.execute(
+            select(CloudRepoConfig).where(
+                CloudRepoConfig.owner_scope == "organization",
+                CloudRepoConfig.organization_id == organization_id,
+                CloudRepoConfig.git_owner == git_owner,
+                CloudRepoConfig.git_repo_name == git_repo_name,
+            )
+        )
+    ).scalar_one()
+
+
 async def _enforce_cloud_repo_config_limit(
     db: AsyncSession,
     *,
@@ -378,45 +449,19 @@ async def _load_repo_file_rows(
     )
 
 
-async def save_cloud_repo_config(
+async def _save_repo_config_record(
     db: AsyncSession,
     *,
-    user_id: UUID,
-    git_owner: str,
-    git_repo_name: str,
+    record: CloudRepoConfig,
     configured: bool,
-    cloud_repo_limit: int | None,
     default_branch: str | None,
     env_vars: dict[str, str],
     setup_script: str,
     run_command: str,
-    files: list[CloudRepoFileInput],
+    files: list[CloudRepoFileInput] | None,
 ) -> CloudRepoConfigValue:
-    record = await _get_or_create_repo_config_record(
-        db,
-        user_id=user_id,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-    )
-    if configured:
-        await _enforce_cloud_repo_config_limit(
-            db,
-            user_id=user_id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            cloud_repo_limit=cloud_repo_limit,
-        )
-
     now = utcnow()
     existing_files = await _load_repo_file_rows(db, record.id)
-    existing_by_path = {item.relative_path: item for item in existing_files}
-
-    incoming_by_path = {item.relative_path: item for item in files}
-    incoming_hashes = {path: _sha256_text(item.content) for path, item in incoming_by_path.items()}
-    existing_hashes = {item.relative_path: item.content_sha256 for item in existing_files}
-    files_changed = set(existing_by_path) != set(incoming_by_path) or any(
-        existing_hashes.get(path) != incoming_hashes[path] for path in incoming_by_path
-    )
 
     existing_env_vars = (
         decrypt_json(record.env_vars_ciphertext) if record.env_vars_ciphertext else {}
@@ -434,9 +479,21 @@ async def save_cloud_repo_config(
     record.default_branch = (
         default_branch.strip() if default_branch and default_branch.strip() else None
     )
+    record.updated_at = now
+
+    if files is None:
+        await db.flush()
+        return _repo_config_value(record, await _load_repo_file_rows(db, record.id))
+
+    existing_by_path = {item.relative_path: item for item in existing_files}
+    incoming_by_path = {item.relative_path: item for item in files}
+    incoming_hashes = {path: _sha256_text(item.content) for path, item in incoming_by_path.items()}
+    existing_hashes = {item.relative_path: item.content_sha256 for item in existing_files}
+    files_changed = set(existing_by_path) != set(incoming_by_path) or any(
+        existing_hashes.get(path) != incoming_hashes[path] for path in incoming_by_path
+    )
     if files_changed:
         record.files_version += 1
-    record.updated_at = now
 
     for item in existing_files:
         if item.relative_path not in incoming_by_path:
@@ -468,12 +525,79 @@ async def save_cloud_repo_config(
         existing.last_synced_at = now
 
     await db.flush()
-    return await get_cloud_repo_config(
+    return _repo_config_value(record, await _load_repo_file_rows(db, record.id))
+
+
+async def save_cloud_repo_config(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+    configured: bool,
+    cloud_repo_limit: int | None,
+    default_branch: str | None,
+    env_vars: dict[str, str],
+    setup_script: str,
+    run_command: str,
+    files: list[CloudRepoFileInput],
+) -> CloudRepoConfigValue:
+    record = await _get_or_create_repo_config_record(
         db,
         user_id=user_id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
-    )  # type: ignore[return-value]
+    )
+    if configured:
+        await _enforce_cloud_repo_config_limit(
+            db,
+            user_id=user_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            cloud_repo_limit=cloud_repo_limit,
+        )
+
+    return await _save_repo_config_record(
+        db,
+        record=record,
+        configured=configured,
+        default_branch=default_branch,
+        env_vars=env_vars,
+        setup_script=setup_script,
+        run_command=run_command,
+        files=files,
+    )
+
+
+async def save_organization_cloud_repo_config(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+    configured: bool,
+    default_branch: str | None,
+    env_vars: dict[str, str],
+    setup_script: str,
+    run_command: str,
+    files: list[CloudRepoFileInput] | None,
+) -> CloudRepoConfigValue:
+    record = await _get_or_create_organization_repo_config_record(
+        db,
+        organization_id=organization_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
+    return await _save_repo_config_record(
+        db,
+        record=record,
+        configured=configured,
+        default_branch=default_branch,
+        env_vars=env_vars,
+        setup_script=setup_script,
+        run_command=run_command,
+        files=files,
+    )
 
 
 async def save_cloud_repo_file(

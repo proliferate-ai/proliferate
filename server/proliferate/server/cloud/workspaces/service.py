@@ -20,14 +20,19 @@ from proliferate.constants.billing import (
     WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
 )
 from proliferate.constants.cloud import (
+    CloudCommandKind,
+    CloudCommandSource,
+    CloudTargetKind,
+    CloudTargetStatus,
     SUPPORTED_GIT_PROVIDER,
     CloudWorkspaceStatus,
 )
 from proliferate.db import engine as db_engine
 from proliferate.db.models.auth import User
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.automation_cloud_workspace_claims import (
-    create_cloud_workspace_for_claimed_run,
     create_managed_cloud_workspace_for_claimed_run,
 )
 from proliferate.db.store.automations import (
@@ -36,26 +41,35 @@ from proliferate.db.store.automations import (
 )
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
+    ensure_personal_billing_subject,
 )
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_claims import claims as claims_store
 from proliferate.db.store.cloud_claims import tokens as claim_tokens_store
+from proliferate.db.store.cloud_repo_config import (
+    get_cloud_repo_config,
+    get_organization_cloud_repo_config,
+)
 from proliferate.db.store.cloud_runtime_environments import (
     get_runtime_environment_for_workspace,
     load_runtime_environment_for_workspace,
 )
+from proliferate.db.store.cloud_sync import backfill as backfill_store
 from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
     create_cloud_workspace_for_user,
     delete_cloud_workspace_records_for_workspace,
+    get_existing_managed_cloud_workspace_for_profile,
+    get_cloud_workspace_by_id,
     list_claimed_organization_workspaces_for_user,
     list_exposed_cloud_workspaces_for_user,
     list_organization_workspaces_for_admin_audit,
     list_unclaimed_organization_workspaces,
-    load_active_sandbox_for_workspace,
     load_any_cloud_workspace_for_repo,
+    load_cloud_sandbox_by_id,
     load_cloud_workspace_by_id,
     load_existing_cloud_workspace,
     mark_workspace_error_by_id,
@@ -78,6 +92,7 @@ from proliferate.server.automations.domain.claim_lifecycle import (
 from proliferate.server.billing.models import BillingSnapshot, SandboxStartAuthorization
 from proliferate.server.billing.service import (
     authorize_sandbox_start,
+    authorize_sandbox_start_for_billing_subject,
     get_billing_snapshot_for_subject,
     repo_limit_for_billing_snapshot,
 )
@@ -85,6 +100,8 @@ from proliferate.server.cloud._logging import format_exception_message, log_clou
 from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
 from proliferate.server.cloud.claims.access import load_workspace_exposure_and_claim
 from proliferate.server.cloud.claims.domain.policy import is_org_admin_role
+from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
+from proliferate.server.cloud.commands.service import enqueue_command
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config.service import (
     bootstrap_repo_config,
@@ -107,6 +124,7 @@ from proliferate.server.cloud.runtime.service import (
 )
 from proliferate.server.cloud.workspaces.access import (
     cloud_workspace_user_can_archive,
+    cloud_workspace_user_can_archive_with_db,
     cloud_workspace_user_can_interact,
     cloud_workspace_user_can_interact_with_db,
     cloud_workspace_user_can_read,
@@ -119,6 +137,7 @@ from proliferate.server.cloud.workspaces.domain.lifecycle import (
     start_request_should_return_existing,
 )
 from proliferate.server.cloud.workspaces.models import (
+    BootstrapWorkspaceRemoteAccessRequest,
     WorkspaceConnection,
     WorkspaceCreatorContext,
     WorkspaceDetail,
@@ -136,7 +155,9 @@ from proliferate.utils.time import duration_ms, utcnow
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'
+CLOUD_DESKTOP_REMOTE_ACCESS_ORIGIN_JSON = '{"kind":"human","entrypoint":"desktop"}'
 CLOUD_SYSTEM_ORIGIN_JSON = '{"kind":"system","entrypoint":"cloud"}'
+CLOUD_REMOTE_ACCESS_TEMPLATE_VERSION = "desktop-remote-access-v1"
 
 
 def _raise_org_cloud_not_ready() -> NoReturn:
@@ -492,6 +513,235 @@ async def get_cloud_workspace_detail(
     return await _build_workspace_detail_for_request(db, workspace)
 
 
+def _exposure_owner_fields(workspace: CloudWorkspace) -> tuple[UUID | None, UUID | None, str]:
+    if workspace.owner_scope == "personal":
+        if workspace.owner_user_id is None:
+            raise CloudApiError(
+                "workspace_owner_invalid",
+                "Personal workspace is missing its owner.",
+                status_code=409,
+            )
+        return workspace.owner_user_id, None, "private"
+    if workspace.owner_scope == "organization":
+        if workspace.organization_id is None:
+            raise CloudApiError(
+                "workspace_owner_invalid",
+                "Organization workspace is missing its organization.",
+                status_code=409,
+            )
+        return None, workspace.organization_id, "shared_unclaimed"
+    raise CloudApiError(
+        "workspace_owner_invalid",
+        "Workspace owner scope is not supported for remote access.",
+        status_code=409,
+    )
+
+
+def _remote_access_repo_fields(
+    body: BootstrapWorkspaceRemoteAccessRequest,
+) -> tuple[str, str, str, str, str]:
+    repo = body.repo
+    fallback_name = (
+        (body.display_name or "").strip()
+        or body.anyharness_workspace_id.strip()
+        or "workspace"
+    )
+    if repo is None:
+        return "local", "local", fallback_name, "default", "default"
+
+    provider = repo.provider.strip() or "local"
+    owner = repo.owner.strip() or "local"
+    name = repo.name.strip() or fallback_name
+    branch = repo.branch.strip() or "default"
+    base_branch = (repo.base_branch or "").strip() or branch
+    return provider, owner, name, branch, base_branch
+
+
+async def bootstrap_workspace_remote_access(
+    db: AsyncSession,
+    user: User,
+    body: BootstrapWorkspaceRemoteAccessRequest,
+) -> WorkspaceDetail:
+    target = await targets_store.get_visible_target_by_id(
+        db,
+        target_id=body.target_id,
+        user_id=user.id,
+    )
+    if target is None:
+        raise CloudApiError(
+            "remote_access_target_not_found",
+            "Target not found.",
+            status_code=404,
+        )
+    if target.owner_scope != "personal" or target.owner_user_id != user.id:
+        raise CloudApiError(
+            "remote_access_target_not_personal",
+            "Enabling remote access for an existing workspace requires a personal target.",
+            status_code=409,
+        )
+    if target.kind not in {
+        CloudTargetKind.desktop_dispatch.value,
+        CloudTargetKind.ssh.value,
+        CloudTargetKind.self_hosted_cloud.value,
+    }:
+        raise CloudApiError(
+            "remote_access_target_kind_unsupported",
+            "This target cannot backfill an existing workspace for remote access.",
+            status_code=409,
+        )
+    if target.status != CloudTargetStatus.online.value:
+        raise CloudApiError(
+            "remote_access_target_offline",
+            "Remote access requires the target worker to be online.",
+            status_code=409,
+        )
+
+    billing_subject = await ensure_personal_billing_subject(db, user.id)
+    git_provider, git_owner, git_repo_name, git_branch, git_base_branch = (
+        _remote_access_repo_fields(body)
+    )
+    mapped = await backfill_store.upsert_synced_workspace(
+        db,
+        target_id=target.id,
+        anyharness_workspace_id=body.anyharness_workspace_id,
+        billing_subject_id=billing_subject.id,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        created_by_user_id=user.id,
+        display_name=body.display_name,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        git_branch=git_branch,
+        git_base_branch=git_base_branch,
+        origin_json=CLOUD_DESKTOP_REMOTE_ACCESS_ORIGIN_JSON,
+        template_version=CLOUD_REMOTE_ACCESS_TEMPLATE_VERSION,
+    )
+    workspace = await get_cloud_workspace_by_id(db, mapped.id)
+    if workspace is None:
+        raise CloudApiError(
+            "remote_access_workspace_missing",
+            "Remote access workspace could not be created.",
+            status_code=500,
+        )
+
+    exposure = await exposures_store.upsert_workspace_exposure(
+        db,
+        target_id=target.id,
+        cloud_workspace_id=workspace.id,
+        anyharness_workspace_id=body.anyharness_workspace_id,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        visibility="private",
+        claimed_by_user_id=None,
+        default_projection_level="live",
+        commandable=True,
+        status="active",
+        origin="manual_desktop",
+    )
+    await enqueue_command(
+        db,
+        user=user,
+        body=CreateCloudCommandRequest.model_validate(
+            {
+                "idempotencyKey": (
+                    "remote-access-bootstrap:"
+                    f"{target.id}:{workspace.id}:{exposure.id}:{exposure.revision}"
+                ),
+                "targetId": target.id,
+                "workspaceId": body.anyharness_workspace_id,
+                "cloudWorkspaceId": workspace.id,
+                "kind": CloudCommandKind.backfill_exposed_workspace.value,
+                "payload": {"workspaceId": body.anyharness_workspace_id},
+                "source": CloudCommandSource.api.value,
+            }
+        ),
+    )
+    return await _build_workspace_detail_for_request(db, workspace)
+
+
+async def enable_cloud_workspace_remote_access(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+) -> WorkspaceDetail:
+    workspace = await cloud_workspace_user_can_interact_with_db(db, user.id, workspace_id)
+    if workspace.target_id is None or not workspace.anyharness_workspace_id:
+        raise CloudApiError(
+            "remote_access_workspace_not_materialized",
+            "Remote access requires a materialized target workspace.",
+            status_code=409,
+        )
+    target = await targets_store.get_target_by_id(db, workspace.target_id)
+    if target is None:
+        raise CloudApiError(
+            "remote_access_target_not_found",
+            "Target not found.",
+            status_code=404,
+        )
+    if target.status != CloudTargetStatus.online.value:
+        raise CloudApiError(
+            "remote_access_target_offline",
+            "Remote access requires the target worker to be online.",
+            status_code=409,
+        )
+
+    owner_user_id, organization_id, visibility = _exposure_owner_fields(workspace)
+    exposure = await exposures_store.upsert_workspace_exposure(
+        db,
+        target_id=workspace.target_id,
+        cloud_workspace_id=workspace.id,
+        anyharness_workspace_id=workspace.anyharness_workspace_id,
+        owner_scope=workspace.owner_scope,
+        owner_user_id=owner_user_id,
+        organization_id=organization_id,
+        visibility=visibility,
+        claimed_by_user_id=None,
+        default_projection_level="live",
+        commandable=True,
+        status="active",
+        origin=workspace.origin,
+    )
+    await enqueue_command(
+        db,
+        user=user,
+        body=CreateCloudCommandRequest.model_validate(
+            {
+                "idempotencyKey": (
+                    f"remote-access-backfill:{workspace.id}:{exposure.id}:{exposure.revision}"
+                ),
+                "targetId": workspace.target_id,
+                "workspaceId": workspace.anyharness_workspace_id,
+                "cloudWorkspaceId": workspace.id,
+                "kind": CloudCommandKind.backfill_exposed_workspace.value,
+                "payload": {"workspaceId": workspace.anyharness_workspace_id},
+                "source": CloudCommandSource.api.value,
+            }
+        ),
+    )
+    return await _build_workspace_detail_for_request(db, workspace)
+
+
+async def disable_cloud_workspace_remote_access(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+) -> WorkspaceDetail:
+    workspace = await cloud_workspace_user_can_archive_with_db(db, user.id, workspace_id)
+    if workspace.target_id is None:
+        return await _build_workspace_detail_for_request(db, workspace)
+    exposure = await exposures_store.get_active_workspace_exposure(
+        db,
+        target_id=workspace.target_id,
+        cloud_workspace_id=workspace.id,
+    )
+    if exposure is not None:
+        await exposures_store.archive_workspace_exposure(db, exposure_id=exposure.id)
+    return await _build_workspace_detail_for_request(db, workspace)
+
+
 async def _build_workspace_detail_for_request(
     db: AsyncSession,
     workspace: CloudWorkspace,
@@ -780,6 +1030,201 @@ async def _resolve_new_cloud_workspace_create(
     )
 
 
+async def _resolve_new_managed_cloud_workspace_create(
+    user: User,
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+    base_branch: str | None,
+    branch_name: str,
+    display_name: str | None,
+    required_agent_kind: str | None = None,
+) -> ResolvedCloudWorkspaceCreate:
+    if git_provider != SUPPORTED_GIT_PROVIDER:
+        raise CloudApiError(
+            "unsupported_repo_provider",
+            "Only GitHub repositories are supported for cloud workspaces.",
+            status_code=400,
+        )
+
+    if get_linked_github_account(user) is None:
+        raise CloudApiError(
+            "github_link_required",
+            "Connect a GitHub account before creating a cloud workspace.",
+            status_code=400,
+        )
+
+    cleaned_base_branch = base_branch.strip() if base_branch else ""
+    cleaned_branch_name = branch_name.strip()
+    if not cleaned_branch_name:
+        raise CloudApiError(
+            "invalid_branch_request",
+            "Choose a new cloud branch before creating a cloud workspace.",
+            status_code=400,
+        )
+
+    async with db_engine.async_session_factory() as db:
+        profile = await sandbox_profile_store.load_sandbox_profile_by_id(db, sandbox_profile_id)
+        if profile is None or profile.primary_target_id != target_id:
+            raise CloudApiError(
+                "cloud_target_not_found",
+                "Cloud target not found.",
+                status_code=404,
+            )
+        if profile.owner_scope == "organization":
+            if profile.organization_id is None:
+                raise CloudApiError(
+                    "invalid_sandbox_profile",
+                    "Organization sandbox profile is invalid.",
+                    status_code=409,
+                )
+            repo_config = await get_organization_cloud_repo_config(
+                db,
+                organization_id=profile.organization_id,
+                git_owner=git_owner,
+                git_repo_name=git_repo_name,
+            )
+        else:
+            if profile.owner_user_id is None:
+                raise CloudApiError(
+                    "invalid_sandbox_profile",
+                    "Personal sandbox profile is invalid.",
+                    status_code=409,
+                )
+            repo_config = await get_cloud_repo_config(
+                db,
+                user_id=profile.owner_user_id,
+                git_owner=git_owner,
+                git_repo_name=git_repo_name,
+            )
+        if repo_config is None or not repo_config.configured:
+            raise CloudApiError(
+                "cloud_repo_not_configured",
+                "Configure cloud settings for this repo before creating a cloud workspace.",
+                status_code=409,
+            )
+        existing_cloud_workspace = await get_existing_managed_cloud_workspace_for_profile(
+            db,
+            sandbox_profile_id=profile.id,
+            target_id=target_id,
+            git_provider=git_provider,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            git_branch=cleaned_branch_name,
+        )
+        if existing_cloud_workspace is not None:
+            raise CloudApiError(
+                "cloud_branch_already_exists",
+                (
+                    f"A cloud workspace already exists for branch '{cleaned_branch_name}'. "
+                    "Open the existing cloud workspace or choose a different cloud branch."
+                ),
+                status_code=400,
+            )
+        selected_agent_kinds = await selected_agent_auth_agent_kinds(
+            db,
+            sandbox_profile_id=profile.id,
+        )
+        billing_subject_id = profile.billing_subject_id
+        saved_default_branch = (repo_config.default_branch or "").strip() or None
+        profile_owner_scope = profile.owner_scope
+
+    repo_branches = await get_github_repo_branches(
+        user,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        missing_access_message="Connect a GitHub account before creating a cloud workspace.",
+        repo_access_required_message=(
+            "Reconnect GitHub and grant repository access before creating a cloud workspace."
+        ),
+    )
+
+    resolved_base_branch = cleaned_base_branch or None
+    if resolved_base_branch is None and saved_default_branch:
+        if saved_default_branch in repo_branches.branches:
+            resolved_base_branch = saved_default_branch
+        else:
+            log_cloud_event(
+                "managed cloud repo default branch missing on github; falling back",
+                user_id=user.id,
+                repo=f"{git_owner}/{git_repo_name}",
+                saved_default_branch=saved_default_branch,
+                github_default_branch=repo_branches.default_branch,
+            )
+    if resolved_base_branch is None:
+        resolved_base_branch = repo_branches.default_branch.strip()
+
+    if resolved_base_branch not in repo_branches.branches:
+        raise CloudApiError(
+            "github_branch_not_found",
+            f"The base branch '{resolved_base_branch}' was not found on GitHub.",
+            status_code=400,
+        )
+    if cleaned_branch_name in repo_branches.branches:
+        raise CloudApiError(
+            "github_branch_already_exists",
+            f"The branch '{cleaned_branch_name}' already exists on GitHub.",
+            status_code=400,
+        )
+
+    authorization = await authorize_sandbox_start_for_billing_subject(
+        actor_user_id=user.id,
+        billing_subject_id=billing_subject_id,
+    )
+    _raise_if_cloud_workspace_start_denied(authorization)
+    billing_snapshot = await get_billing_snapshot_for_subject(authorization.billing_subject_id)
+    cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
+
+    if required_agent_kind is not None and required_agent_kind not in allowed_agent_kinds():
+        raise CloudApiError(
+            "unsupported_agent_kind",
+            "The selected agent is not supported for cloud workspaces.",
+            status_code=400,
+        )
+    if profile_owner_scope == "personal":
+        if required_agent_kind is not None and required_agent_kind not in selected_agent_kinds:
+            raise CloudApiError(
+                "missing_agent_credentials",
+                (
+                    f"Select {required_agent_kind} agent authentication before running "
+                    "this cloud automation."
+                ),
+                status_code=400,
+            )
+        if not selected_agent_kinds:
+            raise CloudApiError(
+                "missing_supported_credentials",
+                "Select an agent authentication credential before creating a cloud workspace.",
+                status_code=400,
+            )
+
+    log_cloud_event(
+        "managed cloud workspace create validated",
+        repo=f"{git_owner}/{git_repo_name}",
+        base_branch=resolved_base_branch,
+        branch_name=cleaned_branch_name,
+        selected_agent_kinds=",".join(selected_agent_kinds),
+        active_sandbox_count=authorization.active_sandbox_count,
+        owner_scope=profile_owner_scope,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=target_id,
+    )
+    return ResolvedCloudWorkspaceCreate(
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        git_branch=cleaned_branch_name,
+        git_base_branch=resolved_base_branch,
+        display_name=(display_name.strip() if display_name and display_name.strip() else None),
+        active_sandbox_count=authorization.active_sandbox_count,
+        selected_agent_kinds=selected_agent_kinds,
+        cloud_repo_limit=cloud_repo_limit,
+    )
+
+
 async def create_cloud_workspace(
     user: User,
     *,
@@ -854,8 +1299,16 @@ async def create_cloud_workspace_for_automation_run(
     display_name: str | None,
     required_agent_kind: str,
 ) -> CloudWorkspace | None:
-    resolved = await _resolve_new_cloud_workspace_create(
+    if target_id is None or sandbox_profile_id is None:
+        raise CloudApiError(
+            "target_required",
+            "Cloud automations require a managed cloud target and sandbox profile.",
+            status_code=409,
+        )
+    resolved = await _resolve_new_managed_cloud_workspace_create(
         user,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=target_id,
         git_provider=SUPPORTED_GIT_PROVIDER,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
@@ -865,44 +1318,25 @@ async def create_cloud_workspace_for_automation_run(
         required_agent_kind=required_agent_kind,
     )
     try:
-        if target_id is not None and sandbox_profile_id is not None:
-            workspace = await create_managed_cloud_workspace_for_claimed_run(
-                run_id=run_id,
-                claim_id=claim_id,
-                sandbox_profile_id=sandbox_profile_id,
-                target_id=target_id,
-                user_id=user.id,
-                display_name=resolved.display_name,
-                git_provider=resolved.git_provider,
-                git_owner=resolved.git_owner,
-                git_repo_name=resolved.git_repo_name,
-                git_branch=resolved.git_branch,
-                git_base_branch=resolved.git_base_branch,
-                worktree_path=worktree_path,
-                origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
-                template_version=get_configured_sandbox_provider().template_version,
-                now=utcnow(),
-                transition=CLOUD_WORKSPACE_CREATION_TRANSITION,
-                claim_is_active=claim_is_active,
-            )
-        else:
-            workspace = await create_cloud_workspace_for_claimed_run(
-                run_id=run_id,
-                claim_id=claim_id,
-                user_id=user.id,
-                display_name=resolved.display_name,
-                git_provider=resolved.git_provider,
-                git_owner=resolved.git_owner,
-                git_repo_name=resolved.git_repo_name,
-                git_branch=resolved.git_branch,
-                git_base_branch=resolved.git_base_branch,
-                origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
-                template_version=get_configured_sandbox_provider().template_version,
-                now=utcnow(),
-                transition=CLOUD_WORKSPACE_CREATION_TRANSITION,
-                claim_is_active=claim_is_active,
-                cloud_repo_limit=resolved.cloud_repo_limit,
-            )
+        workspace = await create_managed_cloud_workspace_for_claimed_run(
+            run_id=run_id,
+            claim_id=claim_id,
+            sandbox_profile_id=sandbox_profile_id,
+            target_id=target_id,
+            user_id=user.id,
+            display_name=resolved.display_name,
+            git_provider=resolved.git_provider,
+            git_owner=resolved.git_owner,
+            git_repo_name=resolved.git_repo_name,
+            git_branch=resolved.git_branch,
+            git_base_branch=resolved.git_base_branch,
+            worktree_path=worktree_path,
+            origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
+            template_version=get_configured_sandbox_provider().template_version,
+            now=utcnow(),
+            transition=CLOUD_WORKSPACE_CREATION_TRANSITION,
+            claim_is_active=claim_is_active,
+        )
     except CloudRepoLimitExceededError as error:
         _raise_repo_limit_exceeded(error)
     if workspace is not None:
@@ -1213,6 +1647,7 @@ async def delete_cloud_workspace(
 ) -> None:
     workspace = await cloud_workspace_user_can_archive(user_id, workspace_id)
     await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_deleted")
+    await _destroy_workspace_runtime(workspace)
     await delete_cloud_workspace_records_for_workspace(workspace)
 
 
@@ -1250,34 +1685,37 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
         sandbox_id=workspace.active_sandbox_id,
         status=workspace.status,
     )
-    sandbox = await load_active_sandbox_for_workspace(workspace)
-    if sandbox is not None and sandbox.external_sandbox_id:
-        provider = get_sandbox_provider(sandbox.provider)
-        try:
-            await provider.pause_sandbox(sandbox.external_sandbox_id)
-        except Exception:
-            failure_state = provider_failure_debug_state("stop")
-            await update_sandbox_status(sandbox, failure_state.sandbox_status)
-            log_cloud_event(
-                "cloud sandbox pause failed",
-                level=logging.WARNING,
-                workspace_id=workspace.id,
-                sandbox_id=sandbox.id,
-                external_sandbox_id=sandbox.external_sandbox_id,
-            )
+    sandbox = await _load_workspace_owned_runtime_sandbox(workspace)
+    if sandbox is not None:
+        if sandbox.external_sandbox_id:
+            provider = get_sandbox_provider(sandbox.provider)
+            try:
+                await provider.pause_sandbox(sandbox.external_sandbox_id)
+            except Exception:
+                failure_state = provider_failure_debug_state("stop")
+                await update_sandbox_status(sandbox, failure_state.sandbox_status)
+                log_cloud_event(
+                    "cloud sandbox pause failed",
+                    level=logging.WARNING,
+                    workspace_id=workspace.id,
+                    sandbox_id=sandbox.id,
+                    external_sandbox_id=sandbox.external_sandbox_id,
+                )
+            else:
+                await close_usage_segment_for_sandbox(
+                    sandbox_id=sandbox.id,
+                    ended_at=utcnow(),
+                    closed_by=USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
+                )
+                await update_sandbox_status(sandbox, "paused", stopped_at_now=True)
+                log_cloud_event(
+                    "cloud sandbox paused",
+                    workspace_id=workspace.id,
+                    sandbox_id=sandbox.id,
+                    external_sandbox_id=sandbox.external_sandbox_id,
+                )
         else:
-            await close_usage_segment_for_sandbox(
-                sandbox_id=sandbox.id,
-                ended_at=utcnow(),
-                closed_by=USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
-            )
             await update_sandbox_status(sandbox, "paused", stopped_at_now=True)
-            log_cloud_event(
-                "cloud sandbox paused",
-                workspace_id=workspace.id,
-                sandbox_id=sandbox.id,
-                external_sandbox_id=sandbox.external_sandbox_id,
-            )
 
     if workspace.status != CloudWorkspaceStatus.archived.value:
         transition_workspace_status(
@@ -1298,34 +1736,37 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
 async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
     """Destroy the active sandbox and mark the workspace as stopped."""
     destroy_started = time.perf_counter()
-    sandbox = await load_active_sandbox_for_workspace(workspace)
-    if sandbox is not None and sandbox.external_sandbox_id:
-        provider = get_sandbox_provider(sandbox.provider)
-        try:
-            await provider.destroy_sandbox(sandbox.external_sandbox_id)
-        except Exception:
-            failure_state = provider_failure_debug_state("destroy")
-            await update_sandbox_status(sandbox, failure_state.sandbox_status)
-            log_cloud_event(
-                "cloud sandbox destroy failed",
-                level=logging.WARNING,
-                workspace_id=workspace.id,
-                sandbox_id=sandbox.id,
-                external_sandbox_id=sandbox.external_sandbox_id,
-            )
+    sandbox = await _load_workspace_owned_runtime_sandbox(workspace)
+    if sandbox is not None:
+        if sandbox.external_sandbox_id:
+            provider = get_sandbox_provider(sandbox.provider)
+            try:
+                await provider.destroy_sandbox(sandbox.external_sandbox_id)
+            except Exception:
+                failure_state = provider_failure_debug_state("destroy")
+                await update_sandbox_status(sandbox, failure_state.sandbox_status)
+                log_cloud_event(
+                    "cloud sandbox destroy failed",
+                    level=logging.WARNING,
+                    workspace_id=workspace.id,
+                    sandbox_id=sandbox.id,
+                    external_sandbox_id=sandbox.external_sandbox_id,
+                )
+            else:
+                await close_usage_segment_for_sandbox(
+                    sandbox_id=sandbox.id,
+                    ended_at=utcnow(),
+                    closed_by=USAGE_SEGMENT_CLOSED_BY_DESTROY,
+                )
+                await update_sandbox_status(sandbox, "destroyed", stopped_at_now=True)
+                log_cloud_event(
+                    "cloud sandbox destroyed",
+                    workspace_id=workspace.id,
+                    sandbox_id=sandbox.id,
+                    external_sandbox_id=sandbox.external_sandbox_id,
+                )
         else:
-            await close_usage_segment_for_sandbox(
-                sandbox_id=sandbox.id,
-                ended_at=utcnow(),
-                closed_by=USAGE_SEGMENT_CLOSED_BY_DESTROY,
-            )
             await update_sandbox_status(sandbox, "destroyed", stopped_at_now=True)
-            log_cloud_event(
-                "cloud sandbox destroyed",
-                workspace_id=workspace.id,
-                sandbox_id=sandbox.id,
-                external_sandbox_id=sandbox.external_sandbox_id,
-            )
 
     transition_workspace_status(workspace, CloudWorkspaceStatus.archived, status_detail="Archived")
     await persist_workspace_destroy_state(workspace)
@@ -1334,6 +1775,33 @@ async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
         workspace_id=workspace.id,
         elapsed_ms=duration_ms(destroy_started),
     )
+
+
+async def _load_workspace_owned_runtime_sandbox(
+    workspace: CloudWorkspace,
+) -> CloudSandbox | None:
+    """Load only the legacy workspace-owned runtime sandbox.
+
+    Managed cloud slots are shared by all workspaces on a sandbox profile and
+    target. Workspace stop/delete must not pause or destroy that shared slot.
+    """
+
+    sandbox_id = getattr(workspace, "active_sandbox_id", None)
+    if sandbox_id is None:
+        return None
+    sandbox = await load_cloud_sandbox_by_id(sandbox_id)
+    if sandbox is None:
+        return None
+    if sandbox.cloud_workspace_id != workspace.id:
+        log_cloud_event(
+            "cloud workspace runtime action skipped non-workspace sandbox",
+            workspace_id=workspace.id,
+            sandbox_id=sandbox.id,
+            sandbox_profile_id=sandbox.sandbox_profile_id,
+            target_id=sandbox.target_id,
+        )
+        return None
+    return sandbox
 
 
 async def get_cloud_connection(

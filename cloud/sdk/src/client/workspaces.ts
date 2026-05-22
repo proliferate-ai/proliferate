@@ -22,6 +22,20 @@ export type CloudWorkspaceListSelection = CloudOwnerSelection & {
   scope?: CloudWorkspaceListScope;
 };
 
+export interface BootstrapCloudWorkspaceRemoteAccessRequest {
+  targetId: string;
+  anyharnessWorkspaceId: string;
+  anyharnessSessionId?: string | null;
+  displayName?: string | null;
+  repo?: {
+    provider: string;
+    owner: string;
+    name: string;
+    branch: string;
+    baseBranch?: string | null;
+  } | null;
+}
+
 type CloudWorkspaceTransport = Record<string, unknown> & {
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
@@ -119,12 +133,46 @@ export async function createCloudWorkspace(
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
 }
 
+export async function bootstrapCloudWorkspaceRemoteAccess(
+  input: BootstrapCloudWorkspaceRemoteAccessRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudWorkspaceDetail> {
+  const data = await client.requestJson<CloudWorkspaceTransport>({
+    method: "POST",
+    path: "/v1/cloud/workspaces/remote-access",
+    body: input,
+  });
+  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
+}
+
 export async function startCloudWorkspace(workspaceId: string): Promise<CloudWorkspaceDetail> {
   const data = (
     await getProliferateClient().POST("/v1/cloud/workspaces/{workspace_id}/start", {
       params: { path: { workspace_id: workspaceId } },
     })
   ).data!;
+  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
+}
+
+export async function enableCloudWorkspaceRemoteAccess(
+  workspaceId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudWorkspaceDetail> {
+  const data = await client.requestJson<CloudWorkspaceTransport>({
+    method: "POST",
+    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/remote-access/enable`,
+  });
+  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
+}
+
+export async function disableCloudWorkspaceRemoteAccess(
+  workspaceId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudWorkspaceDetail> {
+  const data = await client.requestJson<CloudWorkspaceTransport>({
+    method: "POST",
+    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/remote-access/disable`,
+  });
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
 }
 

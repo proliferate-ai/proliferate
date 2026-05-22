@@ -39,10 +39,13 @@ async def materialize_environment_stage(
                     user=user,
                     body=MaterializeTargetConfigRequest.model_validate(
                         {
+                            "ownerScope": ctx.claim.owner_scope,
+                            "organizationId": ctx.claim.organization_id,
                             "gitProvider": SUPPORTED_GIT_PROVIDER,
                             "gitOwner": ctx.claim.git_owner,
                             "gitRepoName": ctx.claim.git_repo_name,
                             "workspaceRoot": ctx.workspace.path,
+                            "includeGitCredentials": ctx.claim.owner_scope != "organization",
                             "source": "automation",
                             "idempotencyKey": f"automation-run:{ctx.claim.id}",
                         }

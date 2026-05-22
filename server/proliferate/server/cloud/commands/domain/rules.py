@@ -287,30 +287,52 @@ def _validate_optional_agent_auth_preflight_payload(
 ) -> None:
     has_profile = "sandboxProfileId" in payload
     has_revision = "requiredAgentAuthRevision" in payload
-    if not has_profile and not has_revision:
+    has_scope = "agentAuthScope" in payload
+    if not has_profile and not has_revision and not has_scope:
         return
-    _required_string(
-        payload,
-        "sandboxProfileId",
-        code="cloud_command_agent_auth_profile_required",
-        message=f"{kind} payload must contain sandboxProfileId with auth preflight.",
-    )
-    revision = _required_int(
-        payload,
-        "requiredAgentAuthRevision",
-        code="cloud_command_agent_auth_revision_required",
-        message=f"{kind} payload must contain requiredAgentAuthRevision with auth preflight.",
-    )
-    if revision < 0:
+    sandbox_profile_id = _agent_auth_sandbox_profile_id(payload)
+    if not sandbox_profile_id:
         raise CloudApiError(
-            "cloud_command_agent_auth_revision_invalid",
-            f"{kind} requiredAgentAuthRevision must be non-negative.",
+            "cloud_command_agent_auth_profile_required",
+            f"{kind} payload must contain sandboxProfileId with auth preflight.",
             status_code=400,
         )
-    _validate_agent_auth_scope(payload, kind)
+    if has_profile or has_revision:
+        revision = _required_int(
+            payload,
+            "requiredAgentAuthRevision",
+            code="cloud_command_agent_auth_revision_required",
+            message=f"{kind} payload must contain requiredAgentAuthRevision with auth preflight.",
+        )
+        if revision < 0:
+            raise CloudApiError(
+                "cloud_command_agent_auth_revision_invalid",
+                f"{kind} requiredAgentAuthRevision must be non-negative.",
+                status_code=400,
+            )
+    _validate_agent_auth_scope(payload, kind, sandbox_profile_id=sandbox_profile_id)
 
 
-def _validate_agent_auth_scope(payload: dict[str, object], kind: str) -> None:
+def _agent_auth_sandbox_profile_id(payload: dict[str, object]) -> str:
+    sandbox_profile_id = str(payload.get("sandboxProfileId") or "")
+    if sandbox_profile_id:
+        return sandbox_profile_id
+    expected_revision = payload.get("expectedRuntimeConfigRevision")
+    if isinstance(expected_revision, dict):
+        external_scope = expected_revision.get("externalScope")
+        if isinstance(external_scope, dict):
+            expected_provider = str(external_scope.get("provider") or "")
+            if expected_provider == "proliferate-cloud":
+                return str(external_scope.get("id") or "")
+    return ""
+
+
+def _validate_agent_auth_scope(
+    payload: dict[str, object],
+    kind: str,
+    *,
+    sandbox_profile_id: str,
+) -> None:
     raw_scope = payload.get("agentAuthScope")
     if raw_scope is None:
         return
@@ -339,13 +361,12 @@ def _validate_agent_auth_scope(payload: dict[str, object], kind: str) -> None:
         code="cloud_command_agent_auth_scope_invalid",
         message=f"{kind} agentAuthScope must contain id.",
     )
-    _required_string(
+    target_id = _required_string(
         scope,
         "targetId",
         code="cloud_command_agent_auth_scope_invalid",
         message=f"{kind} agentAuthScope must contain targetId.",
     )
-    sandbox_profile_id = str(payload.get("sandboxProfileId") or "")
     if provider != "proliferate-cloud" or scope_id != sandbox_profile_id:
         raise CloudApiError(
             "cloud_command_agent_auth_scope_invalid",

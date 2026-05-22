@@ -57,9 +57,13 @@ export function RepoRoutingSection({
             className="min-w-44"
             onChange={(event) => {
               const nextMode = event.currentTarget.value === "fixed" ? "fixed" : "auto";
+              const nextFixedRepoId = fixedRepoId || profiles[0]?.cloudRepoConfigId || null;
+              if (nextMode === "fixed" && !nextFixedRepoId) {
+                return;
+              }
               onUpdateConfig({
                 repoMode: nextMode,
-                fixedCloudRepoConfigId: nextMode === "fixed" ? fixedRepoId || null : null,
+                fixedCloudRepoConfigId: nextMode === "fixed" ? nextFixedRepoId : null,
               });
             }}
           >

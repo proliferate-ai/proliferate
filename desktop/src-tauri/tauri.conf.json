@@ -63,6 +63,7 @@
     ],
     "externalBin": [
       "binaries/anyharness",
+      "binaries/proliferate-worker",
       "binaries/proliferate-debug"
     ],
     "resources": [

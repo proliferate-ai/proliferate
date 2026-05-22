@@ -1326,7 +1326,9 @@ async def upsert_target_state(
                     CloudSandbox.sandbox_profile_id == sandbox_profile_id,
                     CloudSandbox.target_id == target_id,
                     CloudSandbox.superseded_at.is_(None),
-                    CloudSandbox.status.in_(("creating", "running", "paused", "blocked")),
+                    CloudSandbox.status.in_(
+                        ("creating", "provisioning", "running", "paused", "blocked")
+                    ),
                 )
             )
         ).scalar_one_or_none()

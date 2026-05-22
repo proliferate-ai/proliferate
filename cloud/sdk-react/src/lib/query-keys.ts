@@ -41,6 +41,14 @@ export function sandboxAgentAuthTargetStatesKey(sandboxProfileId: string | null)
   return [...sandboxProfileKey(sandboxProfileId), "target-states"] as const;
 }
 
+export function sandboxProfileTargetStateKey(sandboxProfileId: string | null) {
+  return [...sandboxProfileKey(sandboxProfileId), "target-state"] as const;
+}
+
+export function sandboxProfileRuntimeConfigKey(sandboxProfileId: string | null) {
+  return [...sandboxProfileKey(sandboxProfileId), "runtime-config"] as const;
+}
+
 export function agentAuthManagedCreditsKey(organizationId: string | null) {
   return [...agentAuthRootKey(), "managed-credits", organizationId] as const;
 }
@@ -70,6 +78,10 @@ export function cloudRepoConfigsKey() {
   return [...cloudRootKey(), "repo-configs"] as const;
 }
 
+export function organizationCloudRepoConfigsKey(organizationId: string | null) {
+  return [...cloudRootKey(), "organizations", organizationId, "repo-configs"] as const;
+}
+
 export function cloudWorktreeRetentionPolicyKey(userId: string | null) {
   return [...cloudRootKey(), "worktree-retention-policy", userId] as const;
 }
@@ -88,6 +100,14 @@ export function cloudMobilityWorkspaceKey(mobilityWorkspaceId: string) {
 
 export function cloudRepoConfigKey(gitOwner: string, gitRepoName: string) {
   return [...cloudRepoConfigsKey(), gitOwner, gitRepoName] as const;
+}
+
+export function organizationCloudRepoConfigKey(
+  organizationId: string | null,
+  gitOwner: string,
+  gitRepoName: string,
+) {
+  return [...organizationCloudRepoConfigsKey(organizationId), gitOwner, gitRepoName] as const;
 }
 
 export function cloudWorkspaceRepoConfigStatusKey(
@@ -154,8 +174,18 @@ export function automationsRootKey() {
   return ["automations"] as const;
 }
 
-export function automationsListKey() {
-  return [...automationsRootKey(), "list"] as const;
+export interface AutomationsListKeyOptions {
+  ownerScope?: CloudOwnerScope | null;
+  organizationId?: string | null;
+}
+
+export function automationsListKey(options: AutomationsListKeyOptions = {}) {
+  return [
+    ...automationsRootKey(),
+    "list",
+    options.ownerScope ?? "personal",
+    options.organizationId ?? null,
+  ] as const;
 }
 
 export function automationDetailKey(automationId: string | null) {

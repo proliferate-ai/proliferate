@@ -50,6 +50,7 @@ pub struct ListSessionEventsQuery {
     pub before_seq: Option<i64>,
     pub limit: Option<i64>,
     pub turn_limit: Option<i64>,
+    pub oldest_first: Option<bool>,
 }
 
 // ---------------------------------------------------------------------------
@@ -931,6 +932,7 @@ pub async fn get_session(
         ("before_seq" = Option<i64>, Query, description = "Return only events with seq less than this value"),
         ("limit" = Option<i64>, Query, description = "Return at most this many newest matching events, or use as the event budget when turn_limit is set"),
         ("turn_limit" = Option<i64>, Query, description = "Return complete newest turns, bounded by the limit event budget"),
+        ("oldest_first" = Option<bool>, Query, description = "When after_seq and limit are set, page from the oldest matching event instead of the newest matching window"),
     ),
     responses(
         (status = 200, description = "Session event history", body = Vec<SessionEventEnvelope>),
@@ -954,6 +956,7 @@ pub async fn list_session_events(
     let before_seq = query.before_seq.map(|seq| seq.max(0));
     let limit = query.limit.map(|limit| limit.clamp(1, 5_000));
     let turn_limit = query.turn_limit.map(|turn_limit| turn_limit.clamp(1, 200));
+    let oldest_first = query.oldest_first.unwrap_or(false);
     if is_unsupported_event_history_window(after_seq, before_seq, turn_limit) {
         return Err(ApiError::bad_request(
             "after_seq cannot be combined with before_seq or turn_limit",
@@ -966,6 +969,7 @@ pub async fn list_session_events(
         before_seq,
         limit,
         turn_limit,
+        oldest_first,
         flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
@@ -974,7 +978,14 @@ pub async fn list_session_events(
     );
     let event_records = state
         .session_service
-        .list_session_event_records(&session_id, after_seq, before_seq, limit, turn_limit)
+        .list_session_event_records(
+            &session_id,
+            after_seq,
+            before_seq,
+            limit,
+            turn_limit,
+            oldest_first,
+        )
         .map_err(|e| ApiError::internal(e.to_string()))?
         .ok_or_else(|| {
             ApiError::not_found(

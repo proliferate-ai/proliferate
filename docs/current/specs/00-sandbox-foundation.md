@@ -532,7 +532,7 @@ Active-slot uniqueness:
 UNIQUE PARTIAL ux_cloud_sandbox_active_slot_per_profile_target:
   (sandbox_profile_id, target_id)
   WHERE superseded_at IS NULL
-    AND status IN ('creating','running','paused','blocked')
+    AND status IN ('creating','provisioning','running','paused','blocked')
 ```
 
 Slot replacement rule:
@@ -1389,7 +1389,7 @@ Single-PR acceptance:
    `sandbox_profile.managed_target_id` does not exist.
 5. Exactly one active managed slot exists per `(sandbox_profile_id,
    target_id)` (active = `superseded_at IS NULL` AND status IN
-   `('creating','running','paused','blocked')`).
+   `('creating','provisioning','running','paused','blocked')`).
 6. Worker enrollment, heartbeat, command leasing, delivery, result ingest,
    event ingest, runtime-access writes, and readiness updates are fenced by
    active slot id and `slot_generation`. Stale slot reports do not mutate

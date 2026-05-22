@@ -297,6 +297,7 @@ impl SessionService {
         before_seq: Option<i64>,
         limit: Option<i64>,
         turn_limit: Option<i64>,
+        oldest_first: bool,
     ) -> anyhow::Result<Option<Vec<SessionEventRecord>>> {
         if self.session_store.find_by_id(session_id)?.is_none() {
             return Ok(None);
@@ -306,10 +307,15 @@ impl SessionService {
             (Some(_), Some(_), _, _) | (Some(_), _, _, Some(_)) => {
                 anyhow::bail!("after_seq cannot be combined with before_seq or turn_limit")
             }
-            (Some(seq), None, Some(limit), None) => self
+            (Some(seq), None, Some(limit), None) if oldest_first => self
                 .session_store
-                .list_events_after_limited(session_id, seq, limit)
+                .list_events_after_oldest_limited(session_id, seq, limit)
                 .map(Some),
+            (Some(seq), None, Some(limit), None) => {
+                self.session_store
+                    .list_events_after_limited(session_id, seq, limit)
+                    .map(Some)
+            }
             (Some(seq), None, None, None) => self
                 .session_store
                 .list_events_after(session_id, seq)

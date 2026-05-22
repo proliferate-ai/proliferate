@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildConnectedPluginPresentation } from "@/lib/domain/plugins/plugin-package-view-model";
+import {
+  buildConnectedPluginPresentation,
+  buildPluginSharedExposurePresentation,
+} from "@/lib/domain/plugins/plugin-package-view-model";
 import type { ConnectorCatalogEntry, InstalledConnectorRecord } from "@/lib/domain/mcp/types";
 
 describe("buildConnectedPluginPresentation", () => {
@@ -36,16 +39,47 @@ describe("buildConnectedPluginPresentation", () => {
   });
 });
 
+describe("buildPluginSharedExposurePresentation", () => {
+  it("treats org-owned configured items as shared by ownership", () => {
+    const exposure = buildPluginSharedExposurePresentation(
+      installedRecord({
+        enabled: true,
+        broken: false,
+        ownerScope: "organization",
+        publicToOrg: false,
+        publicStatus: "private",
+      }),
+    );
+
+    expect(exposure.isFullyPublic).toBe(true);
+    expect(exposure.sharedCloudLabel).toBe("Shared public");
+  });
+});
+
 function installedRecord(input: {
   enabled: boolean;
   broken: boolean;
+  ownerScope?: "personal" | "organization";
+  publicToOrg?: boolean;
+  publicStatus?: "private" | "public";
 }): InstalledConnectorRecord {
   return {
     metadata: {
       connectionId: "conn_context7",
       catalogEntryId: "context7",
+      catalogEntryVersion: 1,
+      ownerScope: input.ownerScope ?? "personal",
+      ownerUserId: input.ownerScope === "organization" ? null : "user_1",
+      organizationId: input.ownerScope === "organization" ? "org_1" : null,
       enabled: input.enabled,
       serverName: "context7",
+      publicToOrg: input.publicToOrg ?? false,
+      publicOrganizationId: input.publicToOrg ? "org_1" : null,
+      publicStatus: input.publicStatus ?? "private",
+      publicUpdatedAt: null,
+      publicUpdatedByUserId: null,
+      configuredPlugin: null,
+      configuredSkills: [],
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
       lastSyncedAt: null,

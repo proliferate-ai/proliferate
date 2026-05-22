@@ -78,7 +78,7 @@ def compile_runtime_config_manifest(
             for source in plan.source_row_refs
         ],
     }
-    hash_value = _content_hash(runtime_manifest_payload)
+    hash_value = _content_hash(manifest_without_hash)
     manifest = {
         **manifest_without_hash,
         "contentHash": hash_value,

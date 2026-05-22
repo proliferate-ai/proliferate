@@ -12,6 +12,7 @@ from proliferate.db.models.cloud.mobility import (
     CloudWorkspaceHandoffOp,
     CloudWorkspaceMobility,
 )
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_mobility import (
     complete_cloud_workspace_handoff_cleanup,
     create_cloud_workspace_handoff_op,
@@ -26,6 +27,7 @@ from proliferate.db.store.cloud_mobility import (
 )
 from proliferate.server.cloud.mobility.domain.lifecycle import (
     FINAL_HANDOFF_PHASES,
+    LIFECYCLE_CLEANUP_FAILED,
     HANDOFF_PHASE_HANDOFF_FAILED,
     LIFECYCLE_HANDOFF_FAILED,
     OWNER_CLOUD,
@@ -140,7 +142,7 @@ async def test_create_handoff_sets_active_pointer_and_moving_state(
     assert refreshed.active_handoff_op_id == handoff.id
     assert refreshed.last_handoff_op_id == handoff.id
     assert refreshed.owner == "local"
-    assert refreshed.lifecycle_state == "moving_to_cloud"
+    assert refreshed.lifecycle_state == "moving"
     assert refreshed.status_detail == "Handoff started"
     assert refreshed.active_handoff is not None
     assert refreshed.active_handoff.exclude_paths == ("node_modules",)
@@ -248,11 +250,25 @@ async def test_finalize_flips_owner_before_cleanup_clears_active_handoff(
     mobility_record = await db_session.get(CloudWorkspaceMobility, mobility.id)
     assert handoff_record is not None
     assert mobility_record is not None
+    destination_workspace = CloudWorkspace(
+        user_id=user_id,
+        billing_subject_id=uuid4(),
+        display_name="Rocket",
+        git_provider=mobility.git_provider,
+        git_owner=mobility.git_owner,
+        git_repo_name=mobility.git_repo_name,
+        git_branch=mobility.git_branch,
+        status="ready",
+        template_version="test",
+    )
+    db_session.add(destination_workspace)
+    await db_session.flush()
+    handoff_record.phase = "install_succeeded"
     finalized = await finalize_cloud_workspace_handoff_op(
         db_session,
         handoff_op=handoff_record,
         mobility_workspace=mobility_record,
-        cloud_workspace_id=None,
+        cloud_workspace_id=destination_workspace.id,
     )
     await db_session.commit()
 
@@ -260,13 +276,14 @@ async def test_finalize_flips_owner_before_cleanup_clears_active_handoff(
         user_id=user_id,
         mobility_workspace_id=mobility.id,
     )
-    assert finalized.phase == "cleanup_pending"
+    assert finalized.phase == "cutover_committed"
+    assert finalized.canonical_side == "destination"
     assert finalized.finalized_at is not None
     assert visible is not None
-    assert visible.owner == "cloud"
+    assert visible.owner == "personal_cloud"
     assert visible.lifecycle_state == "cloud_active"
     assert visible.active_handoff_op_id == handoff.id
-    assert visible.status_detail == "Awaiting source cleanup"
+    assert visible.status_detail == "Cutover committed"
 
 
 @pytest.mark.asyncio
@@ -307,6 +324,58 @@ async def test_cleanup_completion_clears_active_handoff_and_marks_completed(
     assert visible is not None
     assert visible.active_handoff_op_id is None
     assert visible.status_detail == "Ready"
+
+
+@pytest.mark.asyncio
+async def test_cleanup_completion_restores_active_lifecycle_after_cleanup_failure(
+    db_session: AsyncSession,
+) -> None:
+    user_id = uuid4()
+    mobility = await _create_mobility(db_session, user_id=user_id)
+    handoff = await create_cloud_workspace_handoff_op(
+        db_session,
+        mobility_workspace=mobility,
+        direction="cloud_to_local",
+        source_owner="personal_cloud",
+        target_owner="local",
+        moving_lifecycle_state=moving_lifecycle_state(OWNER_CLOUD),
+        requested_branch="feature/cloud",
+        requested_base_sha="abc123",
+        exclude_paths=[],
+    )
+    handoff_record = await db_session.get(CloudWorkspaceHandoffOp, handoff.id)
+    mobility_record = await db_session.get(CloudWorkspaceMobility, mobility.id)
+    assert handoff_record is not None
+    assert mobility_record is not None
+    handoff_record.phase = "cleanup_failed"
+    handoff_record.failure_code = "cleanup_failed"
+    handoff_record.failure_detail = "Cleanup failed"
+    mobility_record.owner = "local"
+    mobility_record.lifecycle_state = LIFECYCLE_CLEANUP_FAILED
+    mobility_record.active_handoff_op_id = handoff.id
+    mobility_record.status_detail = "Cleanup failed"
+    mobility_record.last_error = "Cleanup failed"
+
+    await complete_cloud_workspace_handoff_cleanup(
+        db_session,
+        handoff_op=handoff_record,
+        mobility_workspace=mobility_record,
+    )
+    await db_session.commit()
+
+    visible = await load_cloud_workspace_mobility_for_user(
+        user_id=user_id,
+        mobility_workspace_id=mobility.id,
+    )
+    assert visible is not None
+    assert visible.lifecycle_state == "local_active"
+    assert visible.active_handoff_op_id is None
+    assert visible.cloud_workspace_id is None
+    assert visible.last_error is None
+    completed_record = await db_session.get(CloudWorkspaceHandoffOp, handoff.id)
+    assert completed_record is not None
+    assert completed_record.failure_code is None
+    assert completed_record.failure_detail is None
 
 
 @pytest.mark.asyncio

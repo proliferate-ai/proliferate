@@ -35,14 +35,20 @@ export function CloudRuntimeAttachedPanel() {
     <CloudRuntimeAttachedPanelView
       state={state}
       retry={selectedCloudRuntime.retry}
+      claim={selectedCloudRuntime.claim}
+      claimPending={selectedCloudRuntime.claimPending}
     />
   );
 }
 
 export function CloudRuntimeAttachedPanelView({
+  claim,
+  claimPending = false,
   retry,
   state,
 }: {
+  claim?: (() => void) | null;
+  claimPending?: boolean;
   retry: (() => void) | null;
   state: SelectedCloudRuntimeViewModel;
 }) {
@@ -58,7 +64,10 @@ export function CloudRuntimeAttachedPanelView({
   }, [state.phase]);
 
   const tone = state.tone === "error" ? "destructive" : "info";
-  const primaryAction = state.showRetry && retry
+  const claimAction = selectedActionForClaim(state, claim ?? null, claimPending);
+  const primaryAction = claimAction
+    ? claimAction
+    : state.showRetry && retry
     ? {
       label: "Retry",
       onClick: retry,
@@ -101,7 +110,34 @@ export function CloudRuntimeAttachedPanelView({
             </Button>
           </SectionRow>
         )}
+        {state.showClaim && claimAction && (
+          <SectionRow label="Actions">
+            <Button
+              size="sm"
+              loading={claimAction.loading}
+              onClick={() => {
+                claimAction.onClick();
+              }}
+            >
+              {claimAction.label}
+            </Button>
+          </SectionRow>
+        )}
       </div>
     </ComposerAttachedPanel>
   );
+}
+
+function selectedActionForClaim(
+  state: SelectedCloudRuntimeViewModel,
+  claim: (() => void) | null,
+  loading: boolean,
+) {
+  return state.showClaim && claim
+    ? {
+      label: "Claim",
+      loading,
+      onClick: claim,
+    }
+    : null;
 }

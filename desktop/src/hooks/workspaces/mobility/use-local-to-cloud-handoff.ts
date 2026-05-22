@@ -309,6 +309,7 @@ export function useLocalToCloudHandoff(args: {
       await installArchive.mutateAsync({
         workspaceId: targetWorkspaceId,
         archive,
+        operationId: handoffOpId,
       });
 
       await updatePhase.mutateAsync({

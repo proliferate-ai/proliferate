@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   DestroyWorkspaceMobilitySourceRequest,
   ExportWorkspaceMobilityArchiveRequest,
+  InstallWorkspaceMobilityArchiveRequest,
   UpdateWorkspaceMobilityRuntimeStateRequest,
   WorkspaceMobilityArchive,
 } from "@anyharness/sdk";
@@ -126,18 +127,23 @@ export function useInstallWorkspaceMobilityArchiveMutation(
     mutationFn: async ({
       workspaceId: targetWorkspaceId,
       archive,
+      operationId,
     }: {
       workspaceId?: string | null;
       archive: WorkspaceMobilityArchive;
+      operationId?: string | null;
     }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(
         workspace,
         targetWorkspaceId ?? workspaceId,
       );
       const client = getAnyHarnessClient(resolved.connection);
+      const request: InstallWorkspaceMobilityArchiveRequest = operationId
+        ? { archive, operationId }
+        : { archive };
       return client.mobility.installArchive(
         resolved.connection.anyharnessWorkspaceId,
-        archive,
+        request,
       );
     },
     onSuccess: async (_, variables) => {

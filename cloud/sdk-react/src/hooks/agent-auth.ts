@@ -4,12 +4,14 @@ import {
   createGatewayCredential,
   deleteAgentAuthCredential,
   deleteAgentAuthCredentialShare,
+  enableSandboxProfileCloud,
   ensureManagedCreditsForOrganization,
   ensureOrganizationSandboxProfile,
   ensurePersonalSandboxProfile,
   getCloudCapabilities,
   getSandboxAgentAuthSelections,
   getSandboxAgentAuthTargetStates,
+  getSandboxProfileTargetState,
   listAgentAuthCredentials,
   putSandboxAgentAuthSelection,
   syncSyncedAgentAuthCredential,
@@ -22,6 +24,7 @@ import {
   type SandboxAgentAuthSelection,
   type SandboxAgentAuthTargetState,
   type SandboxProfile,
+  type SandboxProfileTargetState,
   type SelectAgentAuthCredentialInput,
   type SyncSyncedCredentialRequest,
 } from "@proliferate/cloud-sdk";
@@ -30,8 +33,10 @@ import {
   agentAuthCredentialsKey,
   agentAuthRootKey,
   cloudCapabilitiesKey,
+  cloudTargetsKey,
   sandboxAgentAuthSelectionsKey,
   sandboxAgentAuthTargetStatesKey,
+  sandboxProfileTargetStateKey,
 } from "../lib/query-keys.js";
 
 const EMPTY_CREDENTIALS: AgentAuthCredential[] = [];
@@ -84,6 +89,18 @@ export function useSandboxAgentAuthTargetStates(
     queryFn: () => getSandboxAgentAuthTargetStates(sandboxProfileId!, client),
     enabled: enabled && sandboxProfileId !== null,
     placeholderData: EMPTY_TARGET_STATES,
+  });
+}
+
+export function useSandboxProfileTargetState(
+  sandboxProfileId: string | null,
+  enabled = true,
+) {
+  const client = useCloudClient();
+  return useQuery<SandboxProfileTargetState>({
+    queryKey: sandboxProfileTargetStateKey(sandboxProfileId),
+    queryFn: () => getSandboxProfileTargetState(sandboxProfileId!, client),
+    enabled: enabled && sandboxProfileId !== null,
   });
 }
 
@@ -140,6 +157,18 @@ export function useAgentAuthMutations() {
     onSuccess: invalidateAgentAuth,
   });
 
+  const enableProfileCloud = useMutation({
+    mutationFn: (input: { sandboxProfileId: string }) =>
+      enableSandboxProfileCloud(input.sandboxProfileId, client),
+    onSuccess: async (_state, input) => {
+      await invalidateAgentAuth();
+      await queryClient.invalidateQueries({ queryKey: cloudTargetsKey() });
+      await queryClient.invalidateQueries({
+        queryKey: sandboxProfileTargetStateKey(input.sandboxProfileId),
+      });
+    },
+  });
+
   const selectCredential = useMutation({
     mutationFn: (input: {
       sandboxProfileId: string;
@@ -179,7 +208,9 @@ export function useAgentAuthMutations() {
     isDeletingShare: deleteShare.isPending,
     ensurePersonalProfile: ensurePersonalProfile.mutateAsync as () => Promise<SandboxProfile>,
     ensureOrganizationProfile: ensureOrganizationProfile.mutateAsync,
+    enableProfileCloud: enableProfileCloud.mutateAsync,
     isEnsuringProfile: ensurePersonalProfile.isPending || ensureOrganizationProfile.isPending,
+    isEnablingProfileCloud: enableProfileCloud.isPending,
     selectCredential: selectCredential.mutateAsync,
     isSelectingCredential: selectCredential.isPending,
     ensureManagedCredits: ensureManagedCredits.mutateAsync,

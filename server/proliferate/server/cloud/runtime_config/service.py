@@ -31,6 +31,7 @@ from proliferate.db.store.cloud_skills.configured_items import (
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.server.cloud.claims.domain.pem import normalize_pem_setting
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
@@ -289,6 +290,79 @@ async def worker_runtime_config_fragment(
     return await runtime_config_fragment_for_revision(db, revision_id=revision_id)
 
 
+async def runtime_config_apply_request_for_revision(
+    db: AsyncSession,
+    *,
+    revision_id: UUID,
+    target_id: UUID,
+) -> dict[str, object]:
+    fragment = await runtime_config_fragment_for_revision(db, revision_id=revision_id)
+    fragment = fragment.model_copy(update={"target_id": str(target_id)})
+    artifact_payloads: list[dict[str, object]] = []
+    for artifact in await artifact_store.list_artifacts_for_revision(db, revision_id=revision_id):
+        payload = decrypt_json(artifact.payload_ciphertext)
+        content = payload.get("content")
+        if not isinstance(content, str):
+            raise CloudApiError(
+                "runtime_config_artifact_invalid",
+                "Runtime config artifact payload is invalid.",
+                status_code=500,
+            )
+        _raise_if_artifact_integrity_invalid(artifact, payload=payload, content=content)
+        artifact_payloads.append(
+            {
+                "hash": artifact.artifact_hash,
+                "contentType": artifact.content_type,
+                "byteSize": artifact.byte_size,
+                "sourceRef": (
+                    str(payload["sourceRef"]) if payload.get("sourceRef") is not None else None
+                ),
+                "resourceId": (
+                    str(payload["resourceId"]) if payload.get("resourceId") is not None else None
+                ),
+                "displayName": (
+                    str(payload["displayName"]) if payload.get("displayName") is not None else None
+                ),
+                "content": content,
+            }
+        )
+
+    credential_values: list[dict[str, object]] = []
+    missing_credentials: list[str] = []
+    for ref in fragment.credential_refs:
+        credential_ref = ref.get("credentialRef")
+        if not isinstance(credential_ref, str) or not credential_ref:
+            continue
+        value = await _resolve_runtime_credential_ref(db, credential_ref)
+        if value is None:
+            missing_credentials.append(credential_ref)
+            continue
+        credential_values.append({"credentialRef": credential_ref, "value": value})
+    if missing_credentials:
+        raise CloudApiError(
+            "runtime_config_credentials_missing",
+            "Runtime config credentials are missing.",
+            status_code=409,
+        )
+
+    return {
+        "revision": {
+            "id": fragment.revision_id,
+            "sequence": fragment.sequence,
+            "contentHash": fragment.content_hash,
+            "externalScope": {
+                "provider": "proliferate-cloud",
+                "id": fragment.sandbox_profile_id,
+                "targetId": fragment.target_id,
+            },
+        },
+        "manifest": fragment.manifest,
+        "artifactPayloads": artifact_payloads,
+        "credentialValues": credential_values,
+        "source": "worker",
+    }
+
+
 async def worker_runtime_config_artifact(
     db: AsyncSession,
     *,
@@ -508,14 +582,14 @@ def _direct_attach_auth_payload() -> dict[str, object]:
             isinstance(kid, str)
             and kid.strip()
             and isinstance(public_key_pem, str)
-            and public_key_pem.strip()
+            and normalize_pem_setting(public_key_pem)
             and algorithm == "RS256"
         ):
             verification_keys.append(
                 {
                     "kid": kid.strip(),
                     "algorithm": "RS256",
-                    "publicKeyPem": public_key_pem,
+                    "publicKeyPem": normalize_pem_setting(public_key_pem),
                 }
             )
     return {

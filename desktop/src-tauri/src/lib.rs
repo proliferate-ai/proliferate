@@ -11,8 +11,9 @@ mod telemetry;
 mod telemetry_file_logging;
 
 use commands::{
-    anonymous_telemetry, config, diagnostics as diagnostics_commands, google_workspace_mcp,
-    keychain, process, runtime, shell, ssh_tunnel, window_chrome, workspace_scratch,
+    anonymous_telemetry, cloud_worker, config, diagnostics as diagnostics_commands,
+    google_workspace_mcp, keychain, process, runtime, shell, ssh_tunnel, window_chrome,
+    workspace_scratch,
 };
 use quit_flow::QuitFlowState;
 use tauri::Manager;
@@ -187,6 +188,7 @@ fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu
 pub fn run() {
     let _telemetry = telemetry::init();
     let sc = sidecar::create_sidecar_with_auto_port();
+    let cloud_worker_state = cloud_worker::create_cloud_worker_state();
 
     let builder = tauri::Builder::default()
         .plugin(
@@ -208,6 +210,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(sc.clone())
+        .manage(cloud_worker_state)
         .manage(QuitFlowState::default())
         .manage(ssh_tunnel::SshTunnelState::default())
         .invoke_handler(tauri::generate_handler![
@@ -221,6 +224,7 @@ pub fn run() {
             diagnostics_commands::save_diagnostic_json_to_absolute_path,
             runtime::get_runtime_info,
             runtime::restart_runtime,
+            cloud_worker::ensure_desktop_dispatch_worker,
             workspace_scratch::read_workspace_scratch_pad,
             workspace_scratch::write_workspace_scratch_pad,
             quit_flow::set_running_agent_count,

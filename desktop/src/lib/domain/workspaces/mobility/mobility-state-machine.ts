@@ -90,6 +90,7 @@ function summarizeActivePhase(
         isFailure: false,
         canRetryCleanup: false,
       };
+    case "cutover_committed":
     case "cleanup_pending":
       return {
         phase: "cleanup_pending",
@@ -99,6 +100,16 @@ function summarizeActivePhase(
         canRetryCleanup: false,
       };
     case "cleanup_failed":
+      return {
+        phase: "cleanup_failed",
+        title: mobilityStatusCopy("cleanup_failed", direction).title,
+        description: handoff.failureDetail
+          ?? mobilityStatusCopy("cleanup_failed", direction).description,
+        isBlocking: false,
+        isFailure: true,
+        canRetryCleanup: true,
+      };
+    case "repair_required":
       return {
         phase: "cleanup_failed",
         title: mobilityStatusCopy("cleanup_failed", direction).title,
@@ -178,6 +189,23 @@ export function resolveWorkspaceMobilityStatusModel(
   }
 
   if (logicalWorkspace?.lifecycle === "cleanup_failed") {
+    const direction = logicalWorkspace.effectiveOwner === "cloud"
+      ? "local_to_cloud"
+      : "cloud_to_local";
+    return {
+      direction,
+      phase: "cleanup_failed",
+      activeHandoff: null,
+      title: mobilityStatusCopy("cleanup_failed", direction).title,
+      description: logicalWorkspace.mobilityWorkspace?.lastError
+        ?? mobilityStatusCopy("cleanup_failed", direction).description,
+      isBlocking: false,
+      isFailure: true,
+      canRetryCleanup: true,
+    };
+  }
+
+  if (logicalWorkspace?.lifecycle === "repair_required") {
     const direction = logicalWorkspace.effectiveOwner === "cloud"
       ? "local_to_cloud"
       : "cloud_to_local";

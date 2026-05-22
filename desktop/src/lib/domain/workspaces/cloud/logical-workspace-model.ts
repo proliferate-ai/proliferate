@@ -23,9 +23,12 @@ export interface LogicalWorkspace {
     | "local_active"
     | "moving_to_cloud"
     | "cloud_active"
+    | "shared_cloud_active"
+    | "ssh_active"
     | "moving_to_local"
     | "handoff_failed"
     | "cleanup_failed"
+    | "repair_required"
     | "cloud_lost";
   updatedAt: string;
 }

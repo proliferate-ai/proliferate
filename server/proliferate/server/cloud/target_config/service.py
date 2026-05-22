@@ -15,7 +15,10 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db.models.auth import User
 from proliferate.db.store import organizations as organizations_store
-from proliferate.db.store.cloud_repo_config import get_cloud_repo_config
+from proliferate.db.store.cloud_repo_config import (
+    get_cloud_repo_config,
+    get_organization_cloud_repo_config,
+)
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -223,12 +226,38 @@ async def materialize_target_config(
         target_root=target_workspace_root,
     )
 
-    repo_config = await get_cloud_repo_config(
-        db,
-        user_id=user.id,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-    )
+    if body.owner_scope == "organization":
+        if body.organization_id is None:
+            raise CloudApiError(
+                "organization_required",
+                "organizationId is required for organization target config.",
+                status_code=400,
+            )
+        if target.organization_id != body.organization_id:
+            raise CloudApiError(
+                "target_organization_mismatch",
+                "Target does not belong to the requested organization.",
+                status_code=403,
+            )
+        repo_config = await get_organization_cloud_repo_config(
+            db,
+            organization_id=body.organization_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        )
+    elif body.organization_id is not None:
+        raise CloudApiError(
+            "invalid_owner_scope",
+            "organizationId is only valid for organization target config.",
+            status_code=400,
+        )
+    else:
+        repo_config = await get_cloud_repo_config(
+            db,
+            user_id=user.id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        )
     env_vars = repo_config.env_vars if repo_config is not None and repo_config.configured else {}
     tracked_files = [
         TargetConfigTrackedFileModel(

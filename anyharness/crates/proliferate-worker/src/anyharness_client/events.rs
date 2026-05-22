@@ -33,6 +33,9 @@ impl AnyHarnessClient {
         if let Some(limit) = limit {
             request = request.query(&[("limit", limit.to_string())]);
         }
+        if limit.is_some() {
+            request = request.query(&[("oldest_first", "true")]);
+        }
         let response = request.send().await?;
         let status = response.status();
         if !status.is_success() {

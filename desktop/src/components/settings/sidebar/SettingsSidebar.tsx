@@ -23,6 +23,10 @@ import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
 interface SettingsSidebarProps {
   activeSection: SettingsSection;
+  adminAccess?: {
+    isAdmin: boolean;
+    isLoading?: boolean;
+  };
   disabledSections?: Partial<Record<SettingsSection, boolean>>;
   onNavigateHome: () => void;
   onSelectSection: (section: SettingsSection) => void;
@@ -71,9 +75,11 @@ function isSettingsItemDisabled(
   item: SettingsNavItem,
   disabledSections: Partial<Record<SettingsSection, boolean>> | undefined,
   updateActionState: SettingsSidebarProps["updateActionState"],
+  adminAccess: SettingsSidebarProps["adminAccess"],
 ) {
   return (
     (item.kind === "section" && !!disabledSections?.[item.id])
+    || (item.kind === "section" && item.adminOnly === true && adminAccess?.isAdmin !== true)
     || (item.kind === "action"
       && item.id === "checkForUpdates"
       && !updateActionState.updatesSupported)
@@ -84,6 +90,9 @@ function settingsItemStatus(
   item: SettingsNavItem,
   updateActionState: SettingsSidebarProps["updateActionState"],
 ) {
+  if (item.kind === "section" && item.adminOnly === true) {
+    return <AdminPill />;
+  }
   if (item.kind !== "action" || item.id !== "checkForUpdates") {
     return null;
   }
@@ -100,8 +109,35 @@ function settingsItemStatus(
   return null;
 }
 
+function settingsItemDisabledReason(
+  item: SettingsNavItem,
+  disabled: boolean,
+  updateActionState: SettingsSidebarProps["updateActionState"],
+  adminAccess: SettingsSidebarProps["adminAccess"],
+) {
+  if (!disabled) {
+    return undefined;
+  }
+  if (item.kind === "section" && item.adminOnly === true && adminAccess?.isAdmin !== true) {
+    return adminAccess?.isLoading ? "Checking admin access" : "Admin access required";
+  }
+  if (item.kind === "action" && item.id === "checkForUpdates" && !updateActionState.updatesSupported) {
+    return "Desktop updates are available in packaged builds.";
+  }
+  return undefined;
+}
+
+function AdminPill() {
+  return (
+    <span className="rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-normal text-sidebar-muted-foreground">
+      Admin
+    </span>
+  );
+}
+
 export function SettingsSidebar({
   activeSection,
+  adminAccess,
   disabledSections,
   onNavigateHome,
   onSelectSection,
@@ -114,12 +150,23 @@ export function SettingsSidebar({
   const [supportOpen, setSupportOpen] = useState(false);
   const appVersion = useAppVersion().data?.trim();
   const shortcutRevealVisible = useShortcutRevealVisible();
+  const effectiveDisabledSections = useMemo(() => {
+    const next: Partial<Record<SettingsSection, boolean>> = { ...disabledSections };
+    for (const group of SETTINGS_NAV_GROUPS) {
+      for (const item of group.items) {
+        if (item.kind === "section" && item.adminOnly === true && adminAccess?.isAdmin !== true) {
+          next[item.id] = true;
+        }
+      }
+    }
+    return next;
+  }, [adminAccess?.isAdmin, disabledSections]);
   const shortcutTargets = useMemo(
     () => buildSettingsShortcutSectionTargets(
       SETTINGS_SHORTCUT_SECTION_ORDER,
-      disabledSections,
+      effectiveDisabledSections,
     ),
-    [disabledSections],
+    [effectiveDisabledSections],
   );
   const shortcutLabelBySection = useMemo(
     () => buildShortcutRangeLabelById(
@@ -135,6 +182,10 @@ export function SettingsSidebar({
   useEffect(() => subscribeSupportDialogRequest(() => setSupportOpen(true)), []);
 
   function handleItemClick(item: SettingsNavItem) {
+    if (isSettingsItemDisabled(item, effectiveDisabledSections, updateActionState, adminAccess)) {
+      return;
+    }
+
     if (item.kind === "action") {
       if (item.id === "support") {
         setSupportOpen(true);
@@ -228,15 +279,18 @@ export function SettingsSidebar({
               key={group.id}
               className={`${SETTINGS_GROUP_CLASS} ${index > 0 ? SETTINGS_GROUP_SPACING_CLASS : ""}`}
             >
-              <div className={SETTINGS_GROUP_HEADING_CLASS}>
-                {group.heading}
-              </div>
+              {group.heading ? (
+                <div className={SETTINGS_GROUP_HEADING_CLASS}>
+                  {group.heading}
+                </div>
+              ) : null}
               {group.items.map((item) => {
                 const active = isSettingsItemActive(item, activeSection);
                 const disabled = isSettingsItemDisabled(
                   item,
-                  disabledSections,
+                  effectiveDisabledSections,
                   updateActionState,
+                  adminAccess,
                 );
                 const Icon = item.icon;
                 return (
@@ -250,6 +304,12 @@ export function SettingsSidebar({
                           ? shortcutLabelBySection.get(item.id)
                           : undefined
                       }
+                      title={settingsItemDisabledReason(
+                        item,
+                        disabled,
+                        updateActionState,
+                        adminAccess,
+                      )}
                       onPress={() => handleItemClick(item)}
                       active={active}
                       disabled={disabled}

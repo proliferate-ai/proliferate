@@ -330,6 +330,24 @@ async def _load_automation_value(
     return _automation_value(record, repo_config)
 
 
+async def load_automation_by_id(
+    db: AsyncSession,
+    *,
+    automation_id: UUID,
+) -> AutomationValue | None:
+    row = (
+        await db.execute(
+            select(Automation, CloudRepoConfig)
+            .join(CloudRepoConfig, Automation.cloud_repo_config_id == CloudRepoConfig.id)
+            .where(Automation.id == automation_id)
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    record, repo_config = row
+    return _automation_value(record, repo_config)
+
+
 async def create_automation_for_user(
     db: AsyncSession,
     *,

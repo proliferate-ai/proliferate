@@ -101,7 +101,19 @@ def _allowed_web_redirect_origins() -> set[str]:
     }
     if settings.frontend_base_url:
         parsed = urlparse(settings.frontend_base_url.strip())
-        origins.add(f"{parsed.scheme}://{parsed.netloc}")
+        origins.update(_loopback_origin_aliases(parsed.scheme, parsed.hostname, parsed.port))
+    return origins
+
+
+def _loopback_origin_aliases(scheme: str, hostname: str | None, port: int | None) -> set[str]:
+    if not hostname:
+        return set()
+    netloc = hostname if port is None else f"{hostname}:{port}"
+    origins = {f"{scheme}://{netloc}"}
+    if hostname in {"localhost", "127.0.0.1"}:
+        for alias in ("localhost", "127.0.0.1"):
+            alias_netloc = alias if port is None else f"{alias}:{port}"
+            origins.add(f"{scheme}://{alias_netloc}")
     return origins
 
 

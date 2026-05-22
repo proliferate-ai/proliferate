@@ -22,6 +22,7 @@ from proliferate.integrations.anyharness.models import (
     RuntimeHealthProbe,
 )
 from proliferate.integrations.anyharness.runtime import (
+    apply_runtime_config,
     check_runtime_auth_enforcement,
     install_runtime_agent,
     list_runtime_agents,
@@ -64,6 +65,7 @@ __all__ = [
     "ResolvedRemoteWorkspace",
     "RuntimeAuthProbe",
     "RuntimeHealthProbe",
+    "apply_runtime_config",
     "apply_runtime_reasoning_effort",
     "auth_headers",
     "check_runtime_auth_enforcement",

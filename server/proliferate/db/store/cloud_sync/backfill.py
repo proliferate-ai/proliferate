@@ -88,6 +88,7 @@ async def upsert_synced_workspace(
             created_by_user_id=created_by_user_id,
             billing_subject_id=billing_subject_id,
             runtime_environment_id=None,
+            target_id=target_id,
             display_name=display_name,
             git_provider=git_provider,
             git_owner=git_owner,
@@ -127,15 +128,17 @@ async def upsert_synced_workspace(
         db.add(mapping)
     else:
         workspace.billing_subject_id = billing_subject_id
-        workspace.display_name = (
-            display_name if display_name is not None else workspace.display_name
-        )
+        incoming_display_name = display_name.strip() if display_name else None
+        if workspace.display_name is None and incoming_display_name is not None:
+            workspace.display_name = incoming_display_name
         workspace.git_provider = git_provider
         workspace.git_owner = git_owner
         workspace.git_repo_name = git_repo_name
         workspace.git_branch = git_branch
         workspace.git_base_branch = git_base_branch or workspace.git_base_branch
-        workspace.origin_json = origin_json if origin_json is not None else workspace.origin_json
+        workspace.target_id = target_id
+        if workspace.origin_json is None and origin_json is not None:
+            workspace.origin_json = origin_json
         workspace.status = CloudWorkspaceStatus.ready.value
         workspace.status_detail = "Synced from target."
         workspace.last_error = None

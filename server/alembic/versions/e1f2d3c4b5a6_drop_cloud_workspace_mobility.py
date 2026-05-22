@@ -33,6 +33,9 @@ def _has_index(table_name: str, index_name: str) -> bool:
 
 def upgrade() -> None:
     """Upgrade schema."""
+    if _has_table("cloud_workspace_move_cleanup_item"):
+        op.drop_table("cloud_workspace_move_cleanup_item")
+
     if _has_table("cloud_workspace_handoff_op"):
         if _has_index(
             "cloud_workspace_handoff_op",
