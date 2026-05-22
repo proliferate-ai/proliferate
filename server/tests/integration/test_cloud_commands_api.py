@@ -492,6 +492,20 @@ class TestCloudCommandsApi:
             target_id=target_id,
             anyharness_workspace_id="workspace-1",
         )
+        await exposures_store.upsert_workspace_exposure(
+            db_session,
+            target_id=UUID(target_id),
+            cloud_workspace_id=UUID(cloud_workspace_id),
+            anyharness_workspace_id="workspace-1",
+            owner_scope="personal",
+            owner_user_id=UUID(auth.user_id),
+            organization_id=None,
+            visibility="private",
+            default_projection_level="live",
+            commandable=True,
+            origin="manual_web",
+        )
+        await db_session.commit()
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -505,7 +519,7 @@ class TestCloudCommandsApi:
                 "source": "automation",
             },
         )
-        assert created.status_code == 200
+        assert created.status_code == 200, created.text
         command_id = created.json()["commandId"]
 
         lease = await client.post(
@@ -561,10 +575,10 @@ class TestCloudCommandsApi:
                 "idempotencyKey": "start-session-materialized-workspace",
                 "targetId": target_id,
                 "kind": "start_session",
-                "payload": {"workspaceId": "anyharness-workspace-1", "agentKind": "codex"},
+                "payload": {"workspaceId": "workspace-1", "agentKind": "codex"},
             },
         )
-        assert direct_materialized_workspace.status_code == 200
+        assert direct_materialized_workspace.status_code == 200, direct_materialized_workspace.text
         direct_command_id = direct_materialized_workspace.json()["commandId"]
 
         direct_lease = await client.post(
@@ -575,8 +589,8 @@ class TestCloudCommandsApi:
         assert direct_lease.status_code == 200
         direct_command = direct_lease.json()["command"]
         assert direct_command["commandId"] == direct_command_id
-        assert direct_command["workspaceId"] == "anyharness-workspace-1"
-        assert direct_command["payload"]["workspaceId"] == "anyharness-workspace-1"
+        assert direct_command["workspaceId"] == "workspace-1"
+        assert direct_command["payload"]["workspaceId"] == "workspace-1"
 
     @pytest.mark.asyncio
     async def test_materialize_workspace_command_is_target_scoped(
