@@ -132,6 +132,14 @@ export function useAppShortcuts(actions: AppCommandActions): void {
   useShortcutHandler("workspace.add-repository", () => {
     actions.addRepository.execute("shortcut");
   });
+
+  useShortcutHandler("workspace.copy-path", () => {
+    actions.copyWorkspacePath.execute("shortcut");
+  });
+
+  useShortcutHandler("workspace.copy-branch", () => {
+    actions.copyBranchName.execute("shortcut");
+  });
 }
 
 function stepTextSizePreference(delta: -1 | 1): void {

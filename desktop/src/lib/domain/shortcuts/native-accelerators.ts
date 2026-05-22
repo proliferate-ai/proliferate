@@ -25,11 +25,7 @@ export function getShortcutNativeAccelerator(
 }
 
 function shortcutMatchToNativeAccelerator(match: ShortcutMatch): string | null {
-  if (match.kind !== "fixed") {
-    return null;
-  }
-
-  const key = toNativeKeyName(match.key);
+  const key = nativeKeyForShortcutMatch(match);
   if (!key) {
     return null;
   }
@@ -41,6 +37,32 @@ function shortcutMatchToNativeAccelerator(match: ShortcutMatch): string | null {
     ...(match.shift ? ["Shift"] : []),
     key,
   ].join("+");
+}
+
+function nativeKeyForShortcutMatch(match: ShortcutMatch): string | null {
+  if (match.kind === "fixed") {
+    return toNativeKeyName(match.key);
+  }
+
+  if (match.kind === "fixed-code") {
+    return fixedCodeToNativeKeyName(match.code);
+  }
+
+  return null;
+}
+
+function fixedCodeToNativeKeyName(code: string): string | null {
+  const keyMatch = /^Key([A-Z])$/u.exec(code);
+  if (keyMatch) {
+    return keyMatch[1]!;
+  }
+
+  const digitMatch = /^Digit([0-9])$/u.exec(code);
+  if (digitMatch) {
+    return digitMatch[1]!;
+  }
+
+  return null;
 }
 
 function toNativeKeyName(key: string): string | null {
@@ -68,5 +90,11 @@ function areShortcutMatchesEquivalent(
 }
 
 function fixedShortcutKey(match: ShortcutMatch): string | null {
-  return match.kind === "fixed" ? match.key : null;
+  if (match.kind === "fixed") {
+    return match.key;
+  }
+  if (match.kind === "fixed-code") {
+    return match.code;
+  }
+  return null;
 }

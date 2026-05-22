@@ -5,9 +5,11 @@ import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-avail
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
+import { useSelectedLogicalWorkspace } from "@/hooks/workspaces/derived/use-selected-logical-workspace";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
+import { useWorkspaceCopyActions } from "@/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import { APP_ROUTES } from "@/config/app-routes";
 import { requestSupportDialog } from "@/lib/infra/support/support-dialog-request";
@@ -21,6 +23,7 @@ import {
   sidebarRepoGroupKeyForCloudTarget,
   sidebarRepoGroupKeyForWorkspace,
 } from "@/lib/domain/workspaces/sidebar/sidebar-group-key";
+import { workspaceCopyMetadataForLogicalWorkspace } from "@/lib/domain/workspaces/workspace-copy-metadata";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
@@ -48,6 +51,8 @@ export interface AppCommandActions {
   newLocalWorkspace: AppCommandAction;
   newWorktreeWorkspace: AppCommandAction;
   newCloudWorkspace: AppCommandAction;
+  copyWorkspacePath: AppCommandAction;
+  copyBranchName: AppCommandAction;
 }
 
 // Owns global app command callbacks for shortcuts and the command palette.
@@ -57,6 +62,8 @@ export function useAppCommandActions(): AppCommandActions {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const showToast = useToastStore((state) => state.show);
   const { goToTopLevelRoute } = useWorkspaceNavigationWorkflow();
+  const { selectedLogicalWorkspace } = useSelectedLogicalWorkspace();
+  const { copyWorkspaceLocation, copyBranchName } = useWorkspaceCopyActions();
   const { cloudActive } = useCloudAvailabilityState();
   const { data: billingPlan } = useCloudBilling();
   const {
@@ -113,6 +120,10 @@ export function useAppCommandActions(): AppCommandActions {
       isInitialConfigLoad: cloudRepoConfigsInitialLoading,
     }),
     [cloudRepoConfigsInitialLoading, configuredCloudRepoKeys, selectedCloudTarget],
+  );
+  const selectedWorkspaceCopyMetadata = useMemo(
+    () => workspaceCopyMetadataForLogicalWorkspace(selectedLogicalWorkspace),
+    [selectedLogicalWorkspace],
   );
 
   const openSettings = useCallback(() => {
@@ -252,6 +263,12 @@ export function useAppCommandActions(): AppCommandActions {
     repoRoots,
     selectedCloudTarget,
   ]);
+  const copyWorkspacePathAction = useCallback(() => {
+    void copyWorkspaceLocation(selectedWorkspaceCopyMetadata.workspaceLocation);
+  }, [copyWorkspaceLocation, selectedWorkspaceCopyMetadata.workspaceLocation]);
+  const copyBranchNameAction = useCallback(() => {
+    void copyBranchName(selectedWorkspaceCopyMetadata.branchName);
+  }, [copyBranchName, selectedWorkspaceCopyMetadata.branchName]);
 
   return useMemo<AppCommandActions>(() => ({
     openSettings: {
@@ -294,9 +311,23 @@ export function useAppCommandActions(): AppCommandActions {
       execute: newCloudWorkspace,
       disabledReason: newCloudDisabledReason,
     },
+    copyWorkspacePath: {
+      execute: copyWorkspacePathAction,
+      disabledReason: selectedWorkspaceCopyMetadata.workspaceLocation
+        ? null
+        : "Selected workspace has no path or repository.",
+    },
+    copyBranchName: {
+      execute: copyBranchNameAction,
+      disabledReason: selectedWorkspaceCopyMetadata.branchName
+        ? null
+        : "Selected workspace has no branch.",
+    },
   }), [
     addRepository,
     addRepositoryDisabledReason,
+    copyBranchNameAction,
+    copyWorkspacePathAction,
     newCloudDisabledReason,
     newCloudWorkspace,
     newLocalDisabledReason,
@@ -308,6 +339,8 @@ export function useAppCommandActions(): AppCommandActions {
     goAutomations,
     openSupport,
     openSettings,
+    selectedWorkspaceCopyMetadata.branchName,
+    selectedWorkspaceCopyMetadata.workspaceLocation,
     showKeyboardShortcuts,
   ]);
 }

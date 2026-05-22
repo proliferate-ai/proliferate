@@ -138,6 +138,17 @@ describe("useAppShortcuts", () => {
       "shortcut",
     );
   });
+
+  it("routes workspace copy shortcuts through app command actions", () => {
+    const actions = commandActions();
+    renderHook(() => useAppShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.copy-path", { source: "keyboard" })).toBe(true);
+    expect(actions.copyWorkspacePath.execute).toHaveBeenCalledWith("shortcut");
+
+    expect(runShortcutHandler("workspace.copy-branch", { source: "keyboard" })).toBe(true);
+    expect(actions.copyBranchName.execute).toHaveBeenCalledWith("shortcut");
+  });
 });
 
 function commandActions(): AppCommandActions {
@@ -156,5 +167,7 @@ function commandActions(): AppCommandActions {
     newLocalWorkspace: action(),
     newWorktreeWorkspace: action(),
     newCloudWorkspace: action(),
+    copyWorkspacePath: action(),
+    copyBranchName: action(),
   };
 }

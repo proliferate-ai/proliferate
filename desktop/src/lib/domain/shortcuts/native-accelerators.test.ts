@@ -11,6 +11,11 @@ describe("getShortcutNativeAccelerator", () => {
     expect(getShortcutNativeAccelerator(SHORTCUTS.closeOtherTabs)).toBe("CmdOrCtrl+Alt+O");
   });
 
+  it("converts simple physical letter shortcuts to native accelerators", () => {
+    expect(getShortcutNativeAccelerator(SHORTCUTS.copyWorkspacePath)).toBe("CmdOrCtrl+Shift+C");
+    expect(getShortcutNativeAccelerator(SHORTCUTS.copyBranchName)).toBe("CmdOrCtrl+Alt+C");
+  });
+
   it("does not invent native accelerators for physical-key shortcuts", () => {
     expect(getShortcutNativeAccelerator(SHORTCUTS.previousTab)).toBeNull();
   });

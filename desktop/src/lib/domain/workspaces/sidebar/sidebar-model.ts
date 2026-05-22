@@ -80,6 +80,10 @@ export interface SidebarWorkspaceItemState {
   cloudStatus: SidebarCloudWorkspaceStatus | null;
   lastInteracted: string | null;
   needsReview: boolean;
+  workspaceLocationCopyLabel: string | null;
+  workspaceLocationCopyValue: string | null;
+  workspaceLocationCopyToastLabel: string | null;
+  branchName: string | null;
 }
 
 export interface SidebarGroupState {

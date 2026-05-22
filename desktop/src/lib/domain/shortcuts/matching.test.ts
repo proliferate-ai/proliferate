@@ -80,6 +80,25 @@ describe("shortcut matching", () => {
     )).toEqual({});
   });
 
+  it("matches option-letter copy shortcuts by physical key on macOS", () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    expect(matchShortcutDef(
+      SHORTCUTS.copyBranchName,
+      {
+        key: "ç",
+        code: "KeyC",
+        metaKey: true,
+        ctrlKey: false,
+        shiftKey: false,
+        altKey: true,
+      } as KeyboardEvent,
+    )).toEqual({});
+  });
+
   it("requires exact shift and alt modifiers", () => {
     expect(matchShortcut(
       { kind: "fixed", key: "p", meta: true, shift: false, alt: false },

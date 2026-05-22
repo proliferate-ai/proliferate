@@ -1,27 +1,17 @@
-import { AnimatedSwapText } from "@/components/ui/AnimatedSwapText";
 import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/use-mobility-footer-context";
 import { useWorkspaceMobilityFooterFlow } from "@/hooks/workspaces/mobility/use-workspace-mobility-footer-flow";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import {
   ChevronDown,
   CloudIcon,
-  Copy,
   Folder,
   FolderOpen,
-  GitBranch,
   Spinner,
 } from "@/components/ui/icons";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { WorkspaceMobilityLocationPopover } from "./WorkspaceMobilityLocationPopover";
+import { WorkspaceOpenInWebFooterControl } from "./WorkspaceOpenInWebFooterControl";
 import { WorkspaceRemoteAccessFooterControl } from "./WorkspaceRemoteAccessFooterControl";
-
-function FooterDetailLabel({ value }: { value: string }) {
-  return (
-    <span title={value} className="[direction:ltr] [unicode-bidi:plaintext]">
-      {value}
-    </span>
-  );
-}
 
 function locationIcon(kind: "local_workspace" | "local_worktree" | "cloud_workspace") {
   switch (kind) {
@@ -75,10 +65,12 @@ export function WorkspaceMobilityFooterRow() {
   const locationButton = (
     <ComposerControlButton
       icon={locationIcon(footerContext.locationKind)}
-      label={<AnimatedSwapText value={footerContext.locationLabel} />}
+      label="Move session"
       trailing={prompt ? <ChevronDown className="size-3.5 text-muted-foreground/70" /> : undefined}
       active={flow.popoverOpen || footerContext.isActive}
       disabled={!prompt || !footerContext.isInteractive}
+      title="Move this session between available locations."
+      className="shrink-0"
       data-telemetry-mask
     />
   );
@@ -114,34 +106,7 @@ export function WorkspaceMobilityFooterRow() {
 
         <WorkspaceRemoteAccessFooterControl />
 
-        {footerContext.detailValue && (
-          <ComposerControlButton
-            icon={footerContext.detailKind === "repository"
-              ? <CloudIcon className="size-3.5" />
-              : <Folder className="size-3.5" />}
-            label={<FooterDetailLabel value={footerContext.detailValue} />}
-            labelClassName={footerContext.detailKind === "path" ? "[direction:rtl]" : undefined}
-            trailing={<Copy className="size-3 text-muted-foreground/70" />}
-            onClick={() => {
-              void flow.handleCopy(footerContext.detailValue, footerContext.detailCopyLabel);
-            }}
-            title={footerContext.detailValue ?? undefined}
-            data-telemetry-mask
-          />
-        )}
-
-        {footerContext.branchLabel && (
-          <ComposerControlButton
-            icon={<GitBranch className="size-3.5" />}
-            label={footerContext.branchLabel}
-            trailing={<Copy className="size-3 text-muted-foreground/70" />}
-            onClick={() => {
-              void flow.handleCopy(footerContext.branchValue, "Branch");
-            }}
-            title={footerContext.branchValue ?? undefined}
-            data-telemetry-mask
-          />
-        )}
+        <WorkspaceOpenInWebFooterControl />
       </div>
     </div>
   );

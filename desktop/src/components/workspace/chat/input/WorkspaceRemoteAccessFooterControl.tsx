@@ -209,6 +209,7 @@ export function WorkspaceRemoteAccessFooterControl() {
       disabled={disabled}
       onClick={handleClick}
       title={title}
+      className="shrink-0"
     />
   );
 }

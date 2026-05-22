@@ -3,14 +3,19 @@ import {
   CLOUD_SIDEBAR_STATUS_DEFINITIONS,
   type CloudSidebarStatus,
 } from "@/config/cloud-sidebar";
+import { SHORTCUTS } from "@/config/shortcuts";
 import {
   Archive,
+  Folder,
+  GitBranch,
   GitMerge,
   Pencil,
 } from "@/components/ui/icons";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
 import { useWorkspaceSidebarNativeContextMenu } from "@/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
+import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import type {
   SidebarDetailIndicator,
   SidebarIndicatorAction,
@@ -48,6 +53,9 @@ interface WorkspaceItemProps {
   shortcutLabel?: string | null;
   shortcutRevealVisible?: boolean;
   onSelect?: () => void;
+  workspaceLocationCopyLabel?: string | null;
+  onCopyWorkspaceLocation?: () => void;
+  onCopyBranchName?: () => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
   onMarkDone?: () => void;
@@ -81,6 +89,9 @@ export function WorkspaceItem({
   onMarkDone,
   onIndicatorAction,
   onHover,
+  workspaceLocationCopyLabel,
+  onCopyWorkspaceLocation,
+  onCopyBranchName,
   onRename,
 }: WorkspaceItemProps) {
   const hasArchiveAction = !!(onArchive || onUnarchive);
@@ -95,6 +106,8 @@ export function WorkspaceItem({
   const [renameOpen, setRenameOpen] = useState(false);
   const [doneConfirmOpen, setDoneConfirmOpen] = useState(false);
   const handleRenameCommand = () => setRenameOpen(true);
+  const handleCopyWorkspaceLocationCommand = () => onCopyWorkspaceLocation?.();
+  const handleCopyBranchNameCommand = () => onCopyBranchName?.();
   const handleArchiveCommand = () => onArchive?.();
   const handleUnarchiveCommand = () => onUnarchive?.();
   const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
@@ -103,11 +116,16 @@ export function WorkspaceItem({
     : null;
   const { onContextMenuCapture } = useWorkspaceSidebarNativeContextMenu({
     canRename: !!onRename,
+    canCopyWorkspaceLocation: !!onCopyWorkspaceLocation,
+    copyWorkspaceLocationLabel: workspaceLocationCopyLabel ?? "Copy workspace location",
+    canCopyBranchName: !!onCopyBranchName,
     archived,
     canArchive: !!onArchive,
     canUnarchive: !!onUnarchive,
     canMarkDone: !!onMarkDone,
     onRename: handleRenameCommand,
+    onCopyWorkspaceLocation: handleCopyWorkspaceLocationCommand,
+    onCopyBranchName: handleCopyBranchNameCommand,
     onArchive: handleArchiveCommand,
     onUnarchive: handleUnarchiveCommand,
     onMarkDone: handleMarkDoneCommand,
@@ -222,6 +240,40 @@ export function WorkspaceItem({
                   onClick={() => {
                     close();
                     handleRenameCommand();
+                  }}
+                />
+              )}
+              {onCopyWorkspaceLocation && (
+                <PopoverMenuItem
+                  icon={<Folder className="size-3.5 shrink-0 text-muted-foreground" />}
+                  label={workspaceLocationCopyLabel ?? "Copy workspace location"}
+                  trailing={(
+                    <ShortcutBadge
+                      label={getShortcutDisplayLabel(SHORTCUTS.copyWorkspacePath)}
+                      className="text-muted-foreground"
+                    />
+                  )}
+                  variant="sidebar"
+                  onClick={() => {
+                    close();
+                    handleCopyWorkspaceLocationCommand();
+                  }}
+                />
+              )}
+              {onCopyBranchName && (
+                <PopoverMenuItem
+                  icon={<GitBranch className="size-3.5 shrink-0 text-muted-foreground" />}
+                  label="Copy branch name"
+                  trailing={(
+                    <ShortcutBadge
+                      label={getShortcutDisplayLabel(SHORTCUTS.copyBranchName)}
+                      className="text-muted-foreground"
+                    />
+                  )}
+                  variant="sidebar"
+                  onClick={() => {
+                    close();
+                    handleCopyBranchNameCommand();
                   }}
                 />
               )}
