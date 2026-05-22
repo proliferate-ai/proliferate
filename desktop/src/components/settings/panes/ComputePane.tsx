@@ -10,6 +10,7 @@ import {
   useCloudTarget,
   useCloudTargets,
 } from "@/hooks/access/cloud/targets/use-cloud-targets";
+import { useComputeTargetAppearancePreferences } from "@/hooks/settings/workflows/use-ssh-direct-target-profile";
 import type { ComputeTargetSummary } from "@/lib/domain/compute/target-types";
 
 const EMPTY_TARGETS: ComputeTargetSummary[] = [];
@@ -30,6 +31,7 @@ export function ComputePane() {
     Boolean(effectiveTargetId),
   );
   const { archiveTarget, isArchivingTarget } = useCloudTargetMutations();
+  const appearancePreferences = useComputeTargetAppearancePreferences();
 
   return (
     <section className="space-y-6">
@@ -43,17 +45,22 @@ export function ComputePane() {
         )}
       />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="space-y-5">
         <ComputeTargetList
           targets={targets}
-          loading={isLoading}
+          appearancePreferences={appearancePreferences.preferences}
+          loading={isLoading || appearancePreferences.loading}
           selectedTargetId={effectiveTargetId}
           onSelectTarget={setSelectedTargetId}
           onAddSshTarget={() => setDialogOpen(true)}
         />
         <ComputeTargetDetails
           target={selectedDetail ?? selectedSummary}
+          appearancePreference={effectiveTargetId
+            ? appearancePreferences.preferences[effectiveTargetId] ?? null
+            : null}
           loading={detailLoading && Boolean(effectiveTargetId)}
+          onSaveAppearance={appearancePreferences.savePreference}
           archiving={isArchivingTarget}
           onArchive={(targetId) => {
             setArchiveError(null);
@@ -70,7 +77,11 @@ export function ComputePane() {
         <p className="text-sm text-destructive">{archiveError}</p>
       )}
 
-      <AddSshTargetDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+      <AddSshTargetDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        onTargetAppearanceSaved={appearancePreferences.reload}
+      />
     </section>
   );
 }

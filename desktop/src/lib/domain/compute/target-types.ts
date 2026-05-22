@@ -36,16 +36,29 @@ export interface ComputeTargetSummary {
   kind: ComputeTargetKind;
   status: ComputeTargetStatus;
   ownerScope: "personal" | "organization";
+  sandboxProfileId?: string | null;
+  profileTargetRole?: "primary" | "none" | string;
   organizationId?: string | null;
   defaultWorkspaceRoot?: string | null;
   inventory?: ComputeTargetInventory | null;
   statusDetail?: ComputeTargetStatusDetail | null;
+  update?: {
+    channel?: string | null;
+    status?: string | null;
+    currentVersions?: {
+      workerId?: string | null;
+      anyharnessVersion?: string | null;
+      workerVersion?: string | null;
+      supervisorVersion?: string | null;
+      reportedAt?: string | null;
+    } | null;
+  } | null;
   archivedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface ComputeTargetDetail extends ComputeTargetSummary {
-  ownerUserId: string;
+  ownerUserId?: string | null;
   createdByUserId: string;
 }
