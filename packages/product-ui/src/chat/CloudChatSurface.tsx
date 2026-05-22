@@ -1,17 +1,8 @@
 import {
-  AlertTriangle,
   ArrowLeft,
-  Bot,
-  Brain,
-  CheckCircle2,
-  Clock3,
   ExternalLink,
   GitBranch,
-  Loader2,
   MoreHorizontal,
-  Terminal,
-  User,
-  Wrench,
 } from "lucide-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
@@ -19,6 +10,10 @@ import {
   CloudChatComposer,
   type CloudChatComposerView,
 } from "./CloudChatComposer";
+import {
+  CloudChatTranscript,
+  type CloudChatTranscriptRowView,
+} from "./CloudChatTranscript";
 
 export interface CloudChatChipView {
   id: string;
@@ -31,25 +26,6 @@ export interface CloudChatPrimaryActionView {
   kind?: "claim" | "continue" | "default";
   loading?: boolean;
   onClick?: () => void;
-}
-
-export type CloudChatTranscriptRowKind =
-  | "assistant"
-  | "error"
-  | "system"
-  | "thought"
-  | "tool"
-  | "tool_group"
-  | "user";
-
-export interface CloudChatTranscriptRowView {
-  id: string;
-  kind: CloudChatTranscriptRowKind;
-  title?: string | null;
-  body?: string | null;
-  detail?: string | null;
-  status?: string | null;
-  streaming?: boolean;
 }
 
 export interface CloudChatSurfaceProps {
@@ -139,20 +115,11 @@ export function CloudChatSurface({
             </div>
           ) : null}
 
-          {transcriptRows.length > 0 ? (
-            <div className="space-y-3">
-              {transcriptRows.map((row) => (
-                <CloudChatTranscriptRow key={row.id} row={row} />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-border bg-card p-5 text-sm">
-              <div className="font-medium text-foreground">{emptyTitle}</div>
-              {emptyDescription ? (
-                <p className="mt-1 text-muted-foreground">{emptyDescription}</p>
-              ) : null}
-            </div>
-          )}
+          <CloudChatTranscript
+            rows={transcriptRows}
+            emptyTitle={emptyTitle}
+            emptyDescription={emptyDescription}
+          />
         </div>
       </div>
 
@@ -166,118 +133,4 @@ export function CloudChatSurface({
       </footer>
     </div>
   );
-}
-
-function CloudChatTranscriptRow({ row }: { row: CloudChatTranscriptRowView }) {
-  if (row.kind === "user") {
-    return (
-      <article className="flex justify-end">
-        <div className="flex max-w-[77%] flex-col items-end gap-1">
-          <div
-            className="whitespace-pre-wrap break-words rounded-2xl bg-foreground/5 px-3 py-2 text-sm leading-6 text-foreground"
-            data-telemetry-mask
-          >
-            {row.body}
-          </div>
-          {row.status || row.streaming ? (
-            <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              {row.streaming ? <Loader2 size={12} className="animate-spin" /> : null}
-              {row.status ?? "Sending"}
-            </div>
-          ) : null}
-        </div>
-      </article>
-    );
-  }
-
-  if (row.kind === "assistant") {
-    return (
-      <article className="flex justify-start">
-        <div className="min-w-0 max-w-full text-sm leading-6 text-foreground" data-telemetry-mask>
-          {row.title ? (
-            <div className="mb-1 text-xs font-medium text-muted-foreground">{row.title}</div>
-          ) : null}
-          <div className="whitespace-pre-wrap break-words">{row.body}</div>
-          {row.streaming ? (
-            <div className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Loader2 size={12} className="animate-spin" />
-              Streaming
-            </div>
-          ) : null}
-        </div>
-      </article>
-    );
-  }
-
-  const Icon = iconForRow(row);
-  return (
-    <article className="flex justify-start">
-      <div className="flex min-w-0 max-w-full items-start gap-2 rounded-lg border border-border bg-card/70 px-3 py-2 text-sm">
-        <Icon size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate font-medium text-foreground">
-              {row.title ?? titleForRow(row)}
-            </span>
-            {row.status ? (
-              <span className="shrink-0 text-xs text-muted-foreground">{row.status}</span>
-            ) : null}
-          </div>
-          {row.detail ? (
-            <div className="mt-0.5 truncate text-xs text-muted-foreground" data-telemetry-mask>
-              {row.detail}
-            </div>
-          ) : null}
-          {row.body ? (
-            <pre
-              className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap rounded-md bg-background px-2 py-1.5 text-xs leading-5 text-muted-foreground"
-              data-telemetry-mask
-            >
-              {row.body}
-            </pre>
-          ) : null}
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function iconForRow(row: CloudChatTranscriptRowView) {
-  switch (row.kind) {
-    case "error":
-      return AlertTriangle;
-    case "system":
-      return Bot;
-    case "thought":
-      return Brain;
-    case "tool":
-      return row.status === "completed" ? CheckCircle2 : Terminal;
-    case "tool_group":
-      return Wrench;
-    case "user":
-      return User;
-    case "assistant":
-    default:
-      return row.streaming ? Clock3 : Bot;
-  }
-}
-
-function titleForRow(row: CloudChatTranscriptRowView): string {
-  switch (row.kind) {
-    case "error":
-      return "Error";
-    case "system":
-      return "System";
-    case "thought":
-      return "Reasoning";
-    case "tool_group":
-      return "Actions";
-    case "tool":
-      return "Tool call";
-    case "user":
-      return "User";
-    case "assistant":
-    default:
-      return "Assistant";
-  }
 }

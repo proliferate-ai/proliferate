@@ -83,6 +83,10 @@
       "types": "./dist/chat/CloudChatSurface.d.ts",
       "import": "./dist/chat/CloudChatSurface.js"
     },
+    "./chat/CloudChatTranscript": {
+      "types": "./dist/chat/CloudChatTranscript.d.ts",
+      "import": "./dist/chat/CloudChatTranscript.js"
+    },
     "./feedback/LoadingState": {
       "types": "./dist/feedback/LoadingState.d.ts",
       "import": "./dist/feedback/LoadingState.js"
@@ -144,6 +148,8 @@
   "dependencies": {
     "@proliferate/ui": "workspace:*",
     "lucide-react": "^0.468.0",
+    "react-markdown": "^9",
+    "remark-gfm": "^4",
     "tailwind-merge": "^3.5.0"
   },
   "peerDependencies": {

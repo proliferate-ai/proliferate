@@ -172,7 +172,7 @@ Use this section to mark incremental progress during implementation.
 - [x] Web existing-session optimistic row behavior implemented.
 - [x] Composer controls grouped like Desktop.
 - [x] Composer footer added.
-- [ ] Transcript presentation extraction started.
+- [x] Transcript presentation extraction started.
 - [ ] Sidebar/workspace parity started.
 - [ ] New-session flow started.
 - [ ] Automations create/manage started.

@@ -407,6 +407,12 @@ importers:
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.1.0)
+      react-markdown:
+        specifier: ^9
+        version: 9.1.0(@types/react@19.1.17)(react@19.1.0)
+      remark-gfm:
+        specifier: ^4
+        version: 4.0.1
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0

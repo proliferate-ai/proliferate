@@ -20,11 +20,13 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import {
   CloudChatSurface,
-  type CloudChatTranscriptRowView,
 } from "@proliferate/product-ui/chat/CloudChatSurface";
 import type {
   CloudChatComposerFooterControlView,
 } from "@proliferate/product-ui/chat/CloudChatComposer";
+import type {
+  CloudChatTranscriptRowView,
+} from "@proliferate/product-ui/chat/CloudChatTranscript";
 import { Button } from "@proliferate/ui/primitives/Button";
 
 import { routes } from "../../../config/routes";

@@ -8,7 +8,7 @@ import type {
   CloudSessionEvent,
   CloudTranscriptItem,
 } from "@proliferate/cloud-sdk";
-import type { CloudChatTranscriptRowView } from "@proliferate/product-ui/chat/CloudChatSurface";
+import type { CloudChatTranscriptRowView } from "@proliferate/product-ui/chat/CloudChatTranscript";
 import {
   formatCollapsedActionsSummary,
   summarizeCollapsedActions,
