@@ -63,12 +63,9 @@ def _target_matches_run_scope(
             and target.organization_id == ctx.claim.organization_id
         )
     if ctx.claim.target_mode == AUTOMATION_TARGET_MODE_PERSONAL_CLOUD:
-        return (
-            target.owner_scope == "personal"
-            and (
-                target.owner_user_id == ctx.claim.user_id
-                or target.created_by_user_id == ctx.claim.user_id
-            )
+        return target.owner_scope == "personal" and (
+            target.owner_user_id == ctx.claim.user_id
+            or target.created_by_user_id == ctx.claim.user_id
         )
     return True
 

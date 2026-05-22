@@ -20,11 +20,11 @@ from proliferate.constants.billing import (
     WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
 )
 from proliferate.constants.cloud import (
+    SUPPORTED_GIT_PROVIDER,
     CloudCommandKind,
     CloudCommandSource,
     CloudTargetKind,
     CloudTargetStatus,
-    SUPPORTED_GIT_PROVIDER,
     CloudWorkspaceStatus,
 )
 from proliferate.db import engine as db_engine
@@ -62,8 +62,8 @@ from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
     create_cloud_workspace_for_user,
     delete_cloud_workspace_records_for_workspace,
-    get_existing_managed_cloud_workspace_for_profile,
     get_cloud_workspace_by_id,
+    get_existing_managed_cloud_workspace_for_profile,
     list_claimed_organization_workspaces_for_user,
     list_exposed_cloud_workspaces_for_user,
     list_organization_workspaces_for_admin_audit,
@@ -542,9 +542,7 @@ def _remote_access_repo_fields(
 ) -> tuple[str, str, str, str, str]:
     repo = body.repo
     fallback_name = (
-        (body.display_name or "").strip()
-        or body.anyharness_workspace_id.strip()
-        or "workspace"
+        (body.display_name or "").strip() or body.anyharness_workspace_id.strip() or "workspace"
     )
     if repo is None:
         return "local", "local", fallback_name, "default", "default"

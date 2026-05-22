@@ -82,8 +82,8 @@ from proliferate.server.cloud.slack.domain.mention_parse import (
 from proliferate.server.cloud.slack.domain.message_format import (
     ack_blocks,
     clarification_blocks,
-    configuration_blocks,
     completion_blocks,
+    configuration_blocks,
 )
 from proliferate.server.cloud.slack.domain.policy import require_active_slack_bot
 from proliferate.server.cloud.slack.domain.repo_router import (
@@ -101,8 +101,7 @@ from proliferate.utils.crypto import decrypt_text, encrypt_json
 from proliferate.utils.time import utcnow
 
 SLACK_BOT_SCOPES = (
-    "app_mentions:read,chat:write,chat:write.public,"
-    "channels:history,channels:read,groups:read"
+    "app_mentions:read,chat:write,chat:write.public,channels:history,channels:read,groups:read"
 )
 _SYSTEM_SLACK_USER_UUID = UUID("00000000-0000-0000-0000-000000000007")
 SLACK_COMMAND_WAIT_TIMEOUT = timedelta(seconds=240)
@@ -1080,24 +1079,16 @@ async def _resolve_repo(
             cloud_repo_config_id=repo.id,
             git_owner=repo.git_owner,
             git_repo_name=repo.git_repo_name,
-            display_name=(
-                profiles.get(repo.id).display_name if profiles.get(repo.id) else None
-            ),
-            description=(
-                profiles.get(repo.id).description if profiles.get(repo.id) else None
-            ),
+            display_name=(profiles.get(repo.id).display_name if profiles.get(repo.id) else None),
+            description=(profiles.get(repo.id).description if profiles.get(repo.id) else None),
             readme_summary=(
                 profiles.get(repo.id).readme_summary if profiles.get(repo.id) else None
             ),
             languages=(
-                tuple(profiles.get(repo.id).languages_json or ())
-                if profiles.get(repo.id)
-                else ()
+                tuple(profiles.get(repo.id).languages_json or ()) if profiles.get(repo.id) else ()
             ),
             topics=(
-                tuple(profiles.get(repo.id).topics_json or ())
-                if profiles.get(repo.id)
-                else ()
+                tuple(profiles.get(repo.id).topics_json or ()) if profiles.get(repo.id) else ()
             ),
         )
         for repo in repos

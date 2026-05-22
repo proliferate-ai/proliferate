@@ -26,7 +26,10 @@ def _json_dict(value: str) -> dict[str, object]:
 class MaterializeTargetConfigRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    owner_scope: Literal["personal", "organization"] = Field(default="personal", alias="ownerScope")
+    owner_scope: Literal["personal", "organization"] = Field(
+        default="personal",
+        alias="ownerScope",
+    )
     organization_id: UUID | None = Field(default=None, alias="organizationId")
     git_provider: Literal["github"] = Field(default="github", alias="gitProvider")
     git_owner: str = Field(alias="gitOwner", min_length=1)

@@ -375,9 +375,7 @@ async def get_cloud_workspace_handoff_op(
     )
     if lock:
         query = query.with_for_update()
-    return (
-        await db.execute(query)
-    ).scalar_one_or_none()
+    return (await db.execute(query)).scalar_one_or_none()
 
 
 async def get_active_user_handoff_op(

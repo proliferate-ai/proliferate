@@ -22,8 +22,8 @@ from proliferate.constants.cloud import (
     CloudTargetUpdateStatus,
     CloudWorkerStatus,
 )
-from proliferate.db.store.cloud_claims import tokens as claim_tokens_store
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
+from proliferate.db.store.cloud_claims import tokens as claim_tokens_store
 from proliferate.db.store.cloud_sandboxes import load_active_slot_for_profile_target
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
