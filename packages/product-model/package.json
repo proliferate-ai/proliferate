@@ -27,6 +27,10 @@
       "types": "./dist/automations/presentation.d.ts",
       "import": "./dist/automations/presentation.js"
     },
+    "./automations/schedule": {
+      "types": "./dist/automations/schedule.d.ts",
+      "import": "./dist/automations/schedule.js"
+    },
     "./chats/model": {
       "types": "./dist/chats/model.d.ts",
       "import": "./dist/chats/model.js"

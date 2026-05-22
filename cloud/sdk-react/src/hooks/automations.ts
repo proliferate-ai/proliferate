@@ -1,17 +1,26 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createAutomation,
   getAutomation,
   listAutomationRuns,
   listAutomations,
+  pauseAutomationWithClient,
+  resumeAutomationWithClient,
+  runAutomationNowWithClient,
+  updateAutomation,
   type AutomationListResponse,
   type AutomationResponse,
   type AutomationRunListResponse,
+  type AutomationRunResponse,
+  type CreateAutomationRequest,
   type ListAutomationsOptions,
+  type UpdateAutomationRequest,
 } from "@proliferate/cloud-sdk";
 import {
   automationDetailKey,
   automationRunsKey,
   automationsListKey,
+  automationsRootKey,
 } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 
@@ -57,4 +66,63 @@ export function useAutomationRuns(automationId: string | null, enabled = true) {
     refetchInterval: enabled && automationId !== null ? 3000 : false,
     refetchIntervalInBackground: false,
   });
+}
+
+export function useAutomationActions() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+
+  const invalidateAutomation = async (automationId?: string) => {
+    await queryClient.invalidateQueries({ queryKey: automationsRootKey() });
+    if (!automationId) {
+      return;
+    }
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: automationDetailKey(automationId) }),
+      queryClient.invalidateQueries({ queryKey: automationRunsKey(automationId) }),
+    ]);
+  };
+
+  const createMutation = useMutation<AutomationResponse, Error, CreateAutomationRequest>({
+    mutationFn: (body) => createAutomation(body, client),
+    onSuccess: (automation) => invalidateAutomation(automation.id),
+  });
+
+  const updateMutation = useMutation<
+    AutomationResponse,
+    Error,
+    { automationId: string; body: UpdateAutomationRequest }
+  >({
+    mutationFn: ({ automationId, body }) => updateAutomation(automationId, body, client),
+    onSuccess: (automation) => invalidateAutomation(automation.id),
+  });
+
+  const pauseMutation = useMutation<AutomationResponse, Error, string>({
+    mutationFn: (automationId) => pauseAutomationWithClient(automationId, client),
+    onSuccess: (automation) => invalidateAutomation(automation.id),
+  });
+
+  const resumeMutation = useMutation<AutomationResponse, Error, string>({
+    mutationFn: (automationId) => resumeAutomationWithClient(automationId, client),
+    onSuccess: (automation) => invalidateAutomation(automation.id),
+  });
+
+  const runNowMutation = useMutation<AutomationRunResponse, Error, string>({
+    mutationFn: (automationId) => runAutomationNowWithClient(automationId, client),
+    onSuccess: (_, automationId) => invalidateAutomation(automationId),
+  });
+
+  return {
+    createAutomation: createMutation.mutateAsync,
+    creatingAutomation: createMutation.isPending,
+    updateAutomation: updateMutation.mutateAsync,
+    updatingAutomation: updateMutation.isPending,
+    pauseAutomation: pauseMutation.mutateAsync,
+    pausingAutomation: pauseMutation.isPending,
+    resumeAutomation: resumeMutation.mutateAsync,
+    resumingAutomation: resumeMutation.isPending,
+    runAutomationNow: runNowMutation.mutateAsync,
+    runningAutomationNow: runNowMutation.isPending,
+    invalidateAutomation,
+  };
 }

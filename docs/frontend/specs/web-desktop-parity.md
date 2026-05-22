@@ -129,21 +129,21 @@ Web
 
 ### 8. Automations
 
-- [ ] Web lists automations with Desktop/product UI density and status treatment.
-- [ ] Web can create a cloud automation where supported by the API.
-- [ ] Web can enable/disable or otherwise manage supported automation fields.
-- [ ] Automation creation validates schedule, repo/workspace target, and prompt.
+- [x] Web lists automations with Desktop/product UI density and status treatment.
+- [x] Web can create a cloud automation where supported by the API.
+- [x] Web can enable/disable or otherwise manage supported automation fields.
+- [x] Automation creation validates schedule, repo/workspace target, and prompt.
 - [ ] Empty/loading/error states are product-grade and actionable.
 - [ ] Unsupported Desktop-only automation capabilities are clearly absent or degraded, not broken.
 
 ### 9. Settings
 
-- [ ] Web settings uses a Desktop-like settings modal/page shell.
-- [ ] Scope is high-level Web/cloud concerns only: account, teams/orgs, billing/plan, connected providers, support.
-- [ ] Teams/org list is visible and useful.
-- [ ] Provider linking/sign-out remain available.
-- [ ] Billing/plan state remains available.
-- [ ] Desktop-only local settings are not copied into Web unless they have cloud meaning.
+- [x] Web settings uses a Desktop-like settings modal/page shell.
+- [x] Scope is high-level Web/cloud concerns only: account, teams/orgs, billing/plan, connected providers, support.
+- [x] Teams/org list is visible and useful.
+- [x] Provider linking/sign-out remain available.
+- [x] Billing/plan state remains available.
+- [x] Desktop-only local settings are not copied into Web unless they have cloud meaning.
 
 ### 10. End-To-End Verification
 
@@ -177,8 +177,8 @@ Use this section to mark incremental progress during implementation.
 - [x] Transcript presentation extraction started.
 - [x] Sidebar/workspace parity started.
 - [x] New-session flow started.
-- [ ] Automations create/manage started.
-- [ ] Settings shell parity started.
+- [x] Automations create/manage started.
+- [x] Settings shell parity started.
 
 ## Subagent Orchestration Plan
 

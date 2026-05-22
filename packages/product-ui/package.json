@@ -59,6 +59,10 @@
       "types": "./dist/automations/AutomationStatusBadge.d.ts",
       "import": "./dist/automations/AutomationStatusBadge.js"
     },
+    "./automations/AutomationCreatePanel": {
+      "types": "./dist/automations/AutomationCreatePanel.d.ts",
+      "import": "./dist/automations/AutomationCreatePanel.js"
+    },
     "./automations/AutomationsList": {
       "types": "./dist/automations/AutomationsList.d.ts",
       "import": "./dist/automations/AutomationsList.js"

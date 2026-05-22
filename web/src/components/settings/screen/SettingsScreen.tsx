@@ -1,5 +1,6 @@
-import { Apple, CircleUserRound, Cloud, CreditCard, Github, LifeBuoy, Palette } from "lucide-react";
+import { Apple, CircleUserRound, CreditCard, Github, LifeBuoy, UsersRound } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import type { AuthProviderName, BillingPlanInfo, CloudOwnerSelection } from "@proliferate/cloud-sdk";
 import type {
@@ -12,6 +13,8 @@ import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
 import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsShell } from "@proliferate/product-ui/settings/SettingsShell";
+import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Button } from "@proliferate/ui/primitives/Button";
 import {
   useAuthViewer,
   useCloudBilling,
@@ -19,15 +22,17 @@ import {
   useOrganizations,
 } from "@proliferate/cloud-sdk-react";
 
+import { routes } from "../../../config/routes";
 import { startWebAuthFlow } from "../../../lib/access/cloud/auth/web-auth-flow";
 import { useAuthToken } from "../../../providers/WebCloudProvider";
 
-type SettingsSectionId = "account" | "appearance" | "cloud" | "billing" | "support";
+type SettingsSectionId = "account" | "teams" | "billing" | "support";
 const SETTINGS_ICON_SIZE = 14;
 
 export function SettingsScreen() {
   const viewer = useAuthViewer();
   const { token, clearToken } = useAuthToken();
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<SettingsSectionId>("account");
   const [loadingProvider, setLoadingProvider] = useState<AuthProviderName | "sign-out" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,14 +77,9 @@ export function SettingsScreen() {
                 icon: <CircleUserRound size={SETTINGS_ICON_SIZE} />,
               },
               {
-                id: "appearance",
-                label: "Appearance",
-                icon: <Palette size={SETTINGS_ICON_SIZE} />,
-              },
-              {
-                id: "cloud",
-                label: "Cloud",
-                icon: <Cloud size={SETTINGS_ICON_SIZE} />,
+                id: "teams",
+                label: "Teams",
+                icon: <UsersRound size={SETTINGS_ICON_SIZE} />,
               },
               {
                 id: "billing",
@@ -108,10 +108,12 @@ export function SettingsScreen() {
               signOut: () => void signOut(),
             })}
           />
+        ) : activeSection === "teams" ? (
+          <TeamsSection />
         ) : activeSection === "billing" ? (
           <BillingSection />
         ) : (
-          <PlaceholderSection id={activeSection} />
+          <SupportSection onOpenSupport={() => navigate(routes.support)} />
         )}
       </SettingsShell>
     </div>
@@ -122,10 +124,58 @@ function AccountSection({ props }: { props: AccountSettingsPaneProps }) {
   return (
     <section className="space-y-6">
       <SettingsPageHeader
-        title="Account"
+        title="Account & providers"
         description="Manage the product identity Web uses for cloud sessions, automations, and provider linking."
       />
       <AccountSettingsPane {...props} />
+    </section>
+  );
+}
+
+function TeamsSection() {
+  const organizations = useOrganizations();
+  const organizationList = organizations.data?.organizations ?? [];
+
+  return (
+    <section className="space-y-6">
+      <SettingsPageHeader
+        title="Teams"
+        description="Review organizations available to Web cloud sessions, shared environments, billing, and team automation scopes."
+      />
+      <SettingsCard>
+        {organizations.isLoading ? (
+          <SettingsCardRow label="Organizations" description="Loading teams..." />
+        ) : organizations.isError ? (
+          <SettingsCardRow
+            label="Organizations"
+            description="Teams could not be loaded."
+          >
+            <ActionButton onClick={() => void organizations.refetch()}>Retry</ActionButton>
+          </SettingsCardRow>
+        ) : organizationList.length === 0 ? (
+          <SettingsCardRow
+            label="No teams"
+            description="You are not a member of any Proliferate organization yet."
+          />
+        ) : (
+          organizationList.map((organization) => {
+            const membership = organization.membership;
+            return (
+              <SettingsCardRow
+                key={organization.id}
+                label={organization.name}
+                description={membership
+                  ? `${membershipRoleLabel(membership.role)} - ${membershipStatusLabel(membership.status)}`
+                  : "No active membership"}
+              >
+                <Badge tone={membership?.status === "active" ? "success" : "neutral"}>
+                  {membership?.role ?? "viewer"}
+                </Badge>
+              </SettingsCardRow>
+            );
+          })
+        )}
+      </SettingsCard>
     </section>
   );
 }
@@ -251,14 +301,15 @@ function ActionButton({
   onClick: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      size="sm"
+      variant="secondary"
       disabled={disabled}
       onClick={onClick}
-      className="rounded-md border border-border-light bg-surface px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-border-heavy disabled:cursor-not-allowed disabled:opacity-50"
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -314,37 +365,51 @@ function startBlockLabel(reason: string | null | undefined): string {
   }
 }
 
-function PlaceholderSection({
-  id,
-}: {
-  id: Exclude<SettingsSectionId, "account" | "billing">;
-}) {
-  const copy = {
-    appearance: {
-      title: "Appearance",
-      description: "Theme controls will live here once Web has the same theme picker as Desktop.",
-      row: "Web is currently using the shared Desktop theme tokens.",
-    },
-    cloud: {
-      title: "Cloud",
-      description: "Cloud sandbox settings will move here as the shared sandbox model lands.",
-      row: "Workspace, automation, and MCP configuration will use shared UI once the cloud APIs are wired.",
-    },
-    support: {
-      title: "Support",
-      description: "Support links and diagnostics will be exposed here.",
-      row: "This placeholder keeps the settings shell structure stable while the support surface is connected.",
-    },
-  }[id];
-
+function SupportSection({ onOpenSupport }: { onOpenSupport: () => void }) {
   return (
     <section className="space-y-6">
-      <SettingsPageHeader title={copy.title} description={copy.description} />
+      <SettingsPageHeader
+        title="Support"
+        description="Open support and product help for cloud sessions, automations, and Desktop handoff."
+      />
       <SettingsCard>
-        <SettingsCardRow label={copy.title} description={copy.row} />
+        <SettingsCardRow
+          label="Product support"
+          description="Send a support message from the dedicated support surface."
+        >
+          <ActionButton onClick={onOpenSupport}>Open support</ActionButton>
+        </SettingsCardRow>
+        <SettingsCardRow
+          label="Diagnostics"
+          description="Telemetry-sensitive support surfaces stay blocked from session replay."
+        />
       </SettingsCard>
     </section>
   );
+}
+
+function membershipRoleLabel(role: string): string {
+  switch (role) {
+    case "owner":
+      return "Owner";
+    case "admin":
+      return "Admin";
+    case "member":
+      return "Member";
+    default:
+      return role;
+  }
+}
+
+function membershipStatusLabel(status: string): string {
+  switch (status) {
+    case "active":
+      return "Active";
+    case "removed":
+      return "Removed";
+    default:
+      return status;
+  }
 }
 
 function buildAccountSettingsProps({
