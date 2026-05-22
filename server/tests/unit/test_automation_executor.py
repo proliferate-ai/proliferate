@@ -6,14 +6,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from proliferate.constants.automations import (
-    AUTOMATION_EXECUTION_TARGET_CLOUD,
     AUTOMATION_EXECUTION_TARGET_LOCAL,
     AUTOMATION_EXECUTOR_KIND_DESKTOP,
     AUTOMATION_LOCAL_CLAIM_MAX_LIMIT,
+    AUTOMATION_OWNER_SCOPE_PERSONAL,
     AUTOMATION_RUN_STATUS_DISPATCHING,
+    AUTOMATION_TARGET_MODE_LOCAL,
+    AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
 )
 from proliferate.db import engine as engine_module
+from proliferate.db.models.auth import User
 from proliferate.db.models.automations import Automation, AutomationRun
+from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.server.automations.domain.claim_lifecycle import (
     AUTOMATION_ERROR_AGENT_NOT_CONFIGURED,
@@ -58,7 +62,20 @@ def test_cloud_executor_cli_accepts_stable_executor_id() -> None:
 
 async def _create_cloud_automation(user_id: uuid.UUID, now: datetime) -> uuid.UUID:
     async with engine_module.async_session_factory() as session:
+        if await session.get(User, user_id) is None:
+            session.add(
+                User(
+                    id=user_id,
+                    email=f"automation-executor-{user_id}@example.com",
+                    hashed_password="!",
+                    is_active=True,
+                    is_superuser=False,
+                    is_verified=True,
+                )
+            )
+            await session.flush()
         repo = CloudRepoConfig(
+            owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
             user_id=user_id,
             git_owner="proliferate-ai",
             git_repo_name="proliferate",
@@ -75,19 +92,39 @@ async def _create_cloud_automation(user_id: uuid.UUID, now: datetime) -> uuid.UU
         )
         session.add(repo)
         await session.flush()
+        run_config = CloudAgentRunConfig(
+            owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+            owner_user_id=user_id,
+            organization_id=None,
+            created_by_user_id=user_id,
+            name="Cloud automation config",
+            agent_kind="codex",
+            model_id="gpt-5.4",
+            control_values_json={"mode": "code", "effort": "medium"},
+            usable_in_personal_sandboxes=True,
+            usable_in_shared_sandboxes=False,
+            seed_key=None,
+            system_default_rank=None,
+            status="active",
+            archived_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(run_config)
+        await session.flush()
         automation = Automation(
-            user_id=user_id,
+            owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+            owner_user_id=user_id,
+            organization_id=None,
+            created_by_user_id=user_id,
             cloud_repo_config_id=repo.id,
             title="Daily check",
             prompt="Original prompt",
             schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
             schedule_timezone="UTC",
             schedule_summary="Daily at 09:00 in UTC",
-            execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
-            agent_kind="codex",
-            model_id="gpt-5.4",
-            mode_id="code",
-            reasoning_effort="medium",
+            target_mode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+            cloud_agent_run_config_id=run_config.id,
             enabled=True,
             paused_at=None,
             next_run_at=now,
@@ -102,7 +139,20 @@ async def _create_cloud_automation(user_id: uuid.UUID, now: datetime) -> uuid.UU
 
 async def _create_local_automation(user_id: uuid.UUID, now: datetime) -> uuid.UUID:
     async with engine_module.async_session_factory() as session:
+        if await session.get(User, user_id) is None:
+            session.add(
+                User(
+                    id=user_id,
+                    email=f"automation-executor-{user_id}@example.com",
+                    hashed_password="!",
+                    is_active=True,
+                    is_superuser=False,
+                    is_verified=True,
+                )
+            )
+            await session.flush()
         repo = CloudRepoConfig(
+            owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
             user_id=user_id,
             git_owner="Proliferate-AI",
             git_repo_name="Proliferate",
@@ -119,19 +169,39 @@ async def _create_local_automation(user_id: uuid.UUID, now: datetime) -> uuid.UU
         )
         session.add(repo)
         await session.flush()
+        run_config = CloudAgentRunConfig(
+            owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+            owner_user_id=user_id,
+            organization_id=None,
+            created_by_user_id=user_id,
+            name="Local automation config",
+            agent_kind="codex",
+            model_id="auto",
+            control_values_json={},
+            usable_in_personal_sandboxes=True,
+            usable_in_shared_sandboxes=False,
+            seed_key=None,
+            system_default_rank=None,
+            status="active",
+            archived_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(run_config)
+        await session.flush()
         automation = Automation(
-            user_id=user_id,
+            owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+            owner_user_id=user_id,
+            organization_id=None,
+            created_by_user_id=user_id,
             cloud_repo_config_id=repo.id,
             title="Local check",
             prompt="Check locally",
             schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
             schedule_timezone="UTC",
             schedule_summary="Daily at 09:00 in UTC",
-            execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
-            agent_kind="codex",
-            model_id=None,
-            mode_id=None,
-            reasoning_effort=None,
+            target_mode=AUTOMATION_TARGET_MODE_LOCAL,
+            cloud_agent_run_config_id=run_config.id,
             enabled=True,
             paused_at=None,
             next_run_at=now,
@@ -173,7 +243,12 @@ async def test_manual_run_snapshots_inputs_and_claim_uses_snapshot(
             automation = await session.get(Automation, automation_id)
             assert automation is not None
             automation.prompt = "Edited prompt"
-            automation.agent_kind = "claude"
+            run_config = await session.get(
+                CloudAgentRunConfig,
+                automation.cloud_agent_run_config_id,
+            )
+            assert run_config is not None
+            run_config.agent_kind = "claude"
             await session.commit()
 
         claims = await claim_cloud_automation_runs(
@@ -213,7 +288,7 @@ async def test_claim_cloud_run_without_agent_snapshot_fails_at_claim_time(
         async with engine_module.async_session_factory() as session:
             record = await session.get(AutomationRun, run.id)
             assert record is not None
-            record.agent_kind_snapshot = None
+            record.agent_run_config_snapshot_json = None
             await session.commit()
 
         claims = await claim_cloud_automation_runs(

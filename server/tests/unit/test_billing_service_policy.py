@@ -29,6 +29,7 @@ def _billing_snapshot(*, billing_mode: str, is_paid_cloud: bool) -> BillingSnaps
         is_paid_cloud=is_paid_cloud,
         payment_healthy=is_paid_cloud,
         overage_enabled=False,
+        overage_cap_cents_per_seat=None,
         included_hours=None if is_paid_cloud else 10.0,
         used_hours=0.0,
         remaining_hours=None if is_paid_cloud else 10.0,
