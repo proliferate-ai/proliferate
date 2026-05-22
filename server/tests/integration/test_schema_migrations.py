@@ -1,3 +1,5 @@
+import asyncio
+from datetime import UTC, datetime
 import uuid
 
 import pytest
@@ -6,14 +8,16 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from alembic import command
 from proliferate.db import engine as engine_module
-from proliferate.db.migrations import get_head_revision
+from proliferate.db.migrations import build_alembic_config, get_head_revision
 from proliferate.db.models.base import Base
 from proliferate.main import create_app
 from tests.integration.schema_migration_assertions import assert_current_schema
 from tests.postgres import run_migrations_async, temporary_database
 
 HEAD_REVISION = get_head_revision()
+PRE_AUTOMATION_RUN_CONFIG_REVISION = "b2c3d4e5f6a7"
 
 
 def _set_alembic_revision(sync_conn, revision: str) -> None:  # type: ignore[no-untyped-def]
@@ -26,6 +30,10 @@ def _set_alembic_revision(sync_conn, revision: str) -> None:  # type: ignore[no-
         text("INSERT INTO alembic_version (version_num) VALUES (:version_num)"),
         {"version_num": revision},
     )
+
+
+async def _upgrade_database_to_revision(database_url: str, revision: str) -> None:
+    await asyncio.to_thread(command.upgrade, build_alembic_config(database_url), revision)
 
 
 def _bootstrap_legacy_initial_schema(sync_conn) -> None:  # type: ignore[no-untyped-def]
@@ -188,6 +196,269 @@ async def test_alembic_upgrade_creates_current_schema() -> None:
         try:
             async with inspection_engine.begin() as conn:
                 await assert_current_schema(conn, HEAD_REVISION)
+        finally:
+            await inspection_engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_automation_run_config_migration_backfills_existing_rows() -> None:
+    async with temporary_database("automation_run_config_backfill") as (
+        _database_name,
+        database_url,
+    ):
+        await _upgrade_database_to_revision(database_url, PRE_AUTOMATION_RUN_CONFIG_REVISION)
+        user_id = uuid.uuid4()
+        repo_config_id = uuid.uuid4()
+        automation_id = uuid.uuid4()
+        run_id = uuid.uuid4()
+        now = datetime(2026, 5, 20, 12, 0, tzinfo=UTC)
+
+        setup_engine = create_async_engine(database_url, echo=False)
+        try:
+            async with setup_engine.begin() as conn:
+                await conn.execute(
+                    text(
+                        """
+                        INSERT INTO "user" (
+                          id,
+                          email,
+                          hashed_password,
+                          is_active,
+                          is_superuser,
+                          is_verified,
+                          created_at
+                        )
+                        VALUES (
+                          :user_id,
+                          'legacy-automation@example.com',
+                          '!',
+                          true,
+                          false,
+                          true,
+                          :now
+                        )
+                        """
+                    ),
+                    {"user_id": user_id, "now": now},
+                )
+                await conn.execute(
+                    text(
+                        """
+                        INSERT INTO cloud_repo_config (
+                          id,
+                          user_id,
+                          git_owner,
+                          git_repo_name,
+                          configured,
+                          configured_at,
+                          run_command,
+                          created_at,
+                          updated_at
+                        )
+                        VALUES (
+                          :repo_config_id,
+                          :user_id,
+                          'proliferate-ai',
+                          'proliferate',
+                          true,
+                          :now,
+                          '',
+                          :now,
+                          :now
+                        )
+                        """
+                    ),
+                    {"repo_config_id": repo_config_id, "user_id": user_id, "now": now},
+                )
+                await conn.execute(
+                    text(
+                        """
+                        INSERT INTO automation (
+                          id,
+                          user_id,
+                          cloud_repo_config_id,
+                          title,
+                          prompt,
+                          schedule_rrule,
+                          schedule_timezone,
+                          schedule_summary,
+                          execution_target,
+                          agent_kind,
+                          model_id,
+                          mode_id,
+                          reasoning_effort,
+                          enabled,
+                          paused_at,
+                          next_run_at,
+                          last_scheduled_at,
+                          created_at,
+                          updated_at
+                        )
+                        VALUES (
+                          :automation_id,
+                          :user_id,
+                          :repo_config_id,
+                          'Legacy config',
+                          'Check the repo.',
+                          'RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+                          'UTC',
+                          'Daily at 09:00 UTC',
+                          'cloud',
+                          'codex',
+                          'gpt-5.5',
+                          'code',
+                          'high',
+                          true,
+                          NULL,
+                          NULL,
+                          NULL,
+                          :now,
+                          :now
+                        )
+                        """
+                    ),
+                    {
+                        "automation_id": automation_id,
+                        "user_id": user_id,
+                        "repo_config_id": repo_config_id,
+                        "now": now,
+                    },
+                )
+                await conn.execute(
+                    text(
+                        """
+                        INSERT INTO automation_run (
+                          id,
+                          automation_id,
+                          user_id,
+                          trigger_kind,
+                          scheduled_for,
+                          execution_target,
+                          status,
+                          title_snapshot,
+                          prompt_snapshot,
+                          git_provider_snapshot,
+                          git_owner_snapshot,
+                          git_repo_name_snapshot,
+                          cloud_repo_config_id_snapshot,
+                          agent_kind_snapshot,
+                          model_id_snapshot,
+                          mode_id_snapshot,
+                          reasoning_effort_snapshot,
+                          cancelled_at,
+                          created_at,
+                          updated_at
+                        )
+                        VALUES (
+                          :run_id,
+                          :automation_id,
+                          :user_id,
+                          'manual',
+                          NULL,
+                          'cloud',
+                          'queued',
+                          'Legacy config',
+                          'Check the repo.',
+                          'github',
+                          'proliferate-ai',
+                          'proliferate',
+                          :repo_config_id,
+                          'codex',
+                          'gpt-5.4',
+                          'review',
+                          'medium',
+                          NULL,
+                          :now,
+                          :now
+                        )
+                        """
+                    ),
+                    {
+                        "run_id": run_id,
+                        "automation_id": automation_id,
+                        "user_id": user_id,
+                        "repo_config_id": repo_config_id,
+                        "now": now,
+                    },
+                )
+        finally:
+            await setup_engine.dispose()
+
+        await run_migrations_async(database_url)
+
+        inspection_engine = create_async_engine(database_url, echo=False)
+        try:
+            async with inspection_engine.begin() as conn:
+                automation_row = (
+                    await conn.execute(
+                        text(
+                            """
+                            SELECT cloud_agent_run_config_id
+                            FROM automation
+                            WHERE id = :automation_id
+                            """
+                        ),
+                        {"automation_id": automation_id},
+                    )
+                ).one()
+                config_id = automation_row.cloud_agent_run_config_id
+                assert config_id is not None
+
+                config_row = (
+                    await conn.execute(
+                        text(
+                            """
+                            SELECT
+                              owner_scope,
+                              owner_user_id,
+                              created_by_user_id,
+                              name,
+                              agent_kind,
+                              model_id,
+                              control_values_json
+                            FROM cloud_agent_run_config
+                            WHERE id = :config_id
+                            """
+                        ),
+                        {"config_id": config_id},
+                    )
+                ).one()
+                assert config_row.owner_scope == "personal"
+                assert config_row.owner_user_id == user_id
+                assert config_row.created_by_user_id == user_id
+                assert config_row.name == "Legacy automation config: Legacy config"
+                assert config_row.agent_kind == "codex"
+                assert config_row.model_id == "gpt-5.5"
+                assert config_row.control_values_json == {"mode": "code", "effort": "high"}
+
+                run_snapshot = await conn.scalar(
+                    text(
+                        """
+                        SELECT agent_run_config_snapshot_json
+                        FROM automation_run
+                        WHERE id = :run_id
+                        """
+                    ),
+                    {"run_id": run_id},
+                )
+                assert run_snapshot == {
+                    "config_id": str(config_id),
+                    "config_name": "Legacy automation config: Legacy config",
+                    "agent_kind": "codex",
+                    "model_id": "gpt-5.4",
+                    "control_values": {"mode": "review", "effort": "medium"},
+                    "owner_scope_at_snapshot": "personal",
+                }
+
+                automation_columns = await conn.run_sync(
+                    lambda sync_conn: {
+                        column["name"] for column in inspect(sync_conn).get_columns("automation")
+                    }
+                )
+                assert "agent_kind" not in automation_columns
+                assert "model_id" not in automation_columns
+                assert "mode_id" not in automation_columns
+                assert "reasoning_effort" not in automation_columns
         finally:
             await inspection_engine.dispose()
 

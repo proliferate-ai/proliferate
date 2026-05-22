@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from proliferate.server.cloud.agent_auth.api import router as agent_auth_router
 from proliferate.server.cloud.agent_auth.api import worker_router as agent_auth_worker_router
+from proliferate.server.cloud.agent_run_config.api import router as agent_run_config_router
 from proliferate.server.cloud.backfill.api import router as backfill_router
 from proliferate.server.cloud.capabilities.api import router as capabilities_router
 from proliferate.server.cloud.claims.api import router as claims_router
@@ -45,6 +46,7 @@ router.include_router(claims_router)
 router.include_router(mobility_router)
 router.include_router(sandbox_profiles_router)
 router.include_router(agent_auth_router)
+router.include_router(agent_run_config_router)
 router.include_router(mcp_catalog_router)
 router.include_router(mcp_connections_router)
 router.include_router(mcp_oauth_router)

@@ -4,23 +4,15 @@ import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Textarea } from "@/components/ui/Textarea";
-import {
-  AUTOMATION_REASONING_EFFORT_OPTIONS,
-} from "@/lib/domain/automations/model/presentation";
-import { useAutomationModelSelection } from "@/hooks/automations/derived/use-automation-model-selection";
-import { useAutomationModeSelection } from "@/hooks/automations/derived/use-automation-mode-selection";
 import { useAutomationTargetSelection } from "@/hooks/automations/derived/use-automation-target-selection";
-import type {
-  AutomationModelOverride,
-  AutomationModelSelection,
-} from "@/lib/domain/automations/model/selection";
-import type { AutomationModeOverride } from "@/lib/domain/automations/mode/selection";
 import type { AutomationTargetSelection } from "@/lib/domain/automations/target/selection";
 import type {
   AutomationRecord,
   CreateAutomationInput,
   UpdateAutomationInput,
 } from "@/lib/domain/automations/run/ui-records";
+import type { AutomationTargetMode } from "@/lib/access/cloud/client";
+import { useAgentRunConfigs } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
 import {
   defaultAutomationTimezone,
   presetForRrule,
@@ -31,12 +23,9 @@ import {
 } from "@/lib/domain/automations/schedule/schedule";
 import {
   AutomationSchedulePopover,
-  AutomationSelectPopover,
   AutomationTemplatePopover,
-  reasoningIcon,
 } from "./AutomationEditorControls";
-import { AutomationModePicker } from "@/components/automations/controls/AutomationModePicker";
-import { AutomationModelPicker } from "@/components/automations/controls/AutomationModelPicker";
+import { AutomationAgentRunConfigPicker } from "@/components/automations/controls/AutomationAgentRunConfigPicker";
 import { AutomationTargetPicker } from "@/components/automations/controls/AutomationTargetPicker";
 
 type SchedulePresetValue = AutomationSchedulePresetOrCustom;
@@ -72,10 +61,8 @@ export function AutomationEditorModal({
   const [timezone, setTimezone] = useState(
     automation?.schedule.timezone ?? defaultAutomationTimezone(),
   );
-  const [modelOverride, setModelOverride] = useState<AutomationModelOverride | null>(null);
-  const [modeOverride, setModeOverride] = useState<AutomationModeOverride | null>(null);
-  const [reasoningEffort, setReasoningEffort] = useState(
-    automation?.reasoningEffort ?? "",
+  const [cloudAgentRunConfigId, setCloudAgentRunConfigId] = useState<string | null>(
+    automation?.cloudAgentRunConfigId ?? null,
   );
   const [error, setError] = useState<string | null>(null);
   const [pendingConfigureTarget, setPendingConfigureTarget] = useState<{
@@ -83,27 +70,21 @@ export function AutomationEditorModal({
     gitRepoName: string;
   } | null>(null);
 
-  const modelSelection = useAutomationModelSelection({
-    savedAgentKind: automation?.agentKind ?? null,
-    savedModelId: automation?.modelId ?? null,
-    override: modelOverride,
-    isEditing: !!automation,
-  });
-  const modeSelection = useAutomationModeSelection({
-    agentKind: modelSelection.resolution.submission.agentKind,
-    savedModeId: automation?.modeId ?? null,
-    override: modeOverride,
-    useSavedMode: !!automation && !modelOverride && !modeOverride,
-  });
-  const modelSubmission = modelSelection.resolution.submission;
-  const modeSubmission = modeSelection.resolution.submission;
-  const saveDisabledReason = modelSelection.disabledReason;
   const targetSelection = useAutomationTargetSelection({
     automation,
     selectedTarget: targetOverride,
     enabled: open,
   });
   const selectedTarget = targetSelection.selectedTarget;
+  const targetMode: AutomationTargetMode = selectedTarget?.executionTarget === "local"
+    ? "local"
+    : "personal_cloud";
+  const runConfigsQuery = useAgentRunConfigs({
+    ownerScope: "personal",
+    usableIn: targetMode === "local" ? "personal_sandboxes" : "personal_sandboxes",
+    status: "active",
+  }, open);
+  const runConfigs = runConfigsQuery.data?.configs ?? [];
 
   const submit = async () => {
     setError(null);
@@ -115,8 +96,8 @@ export function AutomationEditorModal({
       setError(targetSelection.disabledReason ?? "Select a target before saving.");
       return;
     }
-    if (!modelSubmission.canSubmit) {
-      setError(saveDisabledReason ?? "Choose a supported model before saving.");
+    if (!cloudAgentRunConfigId) {
+      setError("Choose an agent run config before saving.");
       return;
     }
     const timezoneError = validateAutomationTimezone(timezone);
@@ -130,20 +111,14 @@ export function AutomationEditorModal({
       return;
     }
     const schedule = { rrule: rrule.trim(), timezone: timezone.trim() };
-    const optionalFields = {
-      agentKind: modelSubmission.agentKind,
-      modelId: modelSubmission.modelId,
-      modeId: modeSubmission.modeId,
-      reasoningEffort: reasoningEffort.trim() || null,
-    };
     try {
       if (automation) {
         await onUpdate(automation.id, {
           title: title.trim(),
           prompt: prompt.trim(),
           schedule,
-          executionTarget: selectedTarget.executionTarget,
-          ...optionalFields,
+          targetMode,
+          cloudAgentRunConfigId,
         });
       } else {
         await onCreate({
@@ -152,8 +127,8 @@ export function AutomationEditorModal({
           gitOwner: selectedTarget.gitOwner,
           gitRepoName: selectedTarget.gitRepoName,
           schedule,
-          executionTarget: selectedTarget.executionTarget,
-          ...optionalFields,
+          targetMode,
+          cloudAgentRunConfigId,
         });
       }
       onClose();
@@ -172,25 +147,6 @@ export function AutomationEditorModal({
     setSchedulePreset(presetForRrule(nextRrule));
   };
 
-  const handleModelSelect = (selection: AutomationModelSelection) => {
-    const currentAgentKind = modelSelection.resolution.submission.agentKind;
-    if (currentAgentKind === selection.kind) {
-      setModeOverride({ modeId: modeSelection.resolution.submission.modeId });
-    } else {
-      setModeOverride(null);
-    }
-    setModelOverride(selection);
-  };
-
-  const handleDefaultModelSelect = () => {
-    const currentAgentKind = modelSelection.resolution.submission.agentKind;
-    if (!currentAgentKind || !modelSelection.resolution.submission.canSubmit) {
-      return;
-    }
-    setModelOverride({ kind: currentAgentKind, modelId: null });
-    setModeOverride({ modeId: modeSelection.resolution.submission.modeId });
-  };
-
   const hasDraftChanges = () => {
     const initialRrule = automation?.schedule.rrule ?? rruleForPresetAtTime("daily");
     const initialTimezone = automation?.schedule.timezone ?? defaultAutomationTimezone();
@@ -198,10 +154,8 @@ export function AutomationEditorModal({
       || prompt.trim() !== (automation?.prompt ?? "").trim()
       || rrule.trim() !== initialRrule.trim()
       || timezone.trim() !== initialTimezone.trim()
-      || reasoningEffort.trim() !== (automation?.reasoningEffort ?? "").trim()
       || targetOverride !== null
-      || modelOverride !== null
-      || modeOverride !== null;
+      || cloudAgentRunConfigId !== (automation?.cloudAgentRunConfigId ?? null);
   };
 
   const handleConfigureCloudTarget = (target: { gitOwner: string; gitRepoName: string }) => {
@@ -220,14 +174,6 @@ export function AutomationEditorModal({
     setPendingConfigureTarget(null);
     onConfigureCloudTarget(target);
   };
-
-  const reasoningOptions = [
-    { value: "", label: "Default" },
-    ...AUTOMATION_REASONING_EFFORT_OPTIONS.map((option) => ({
-      value: option.value,
-      label: option.label,
-    })),
-  ];
 
   return (
     <>
@@ -308,28 +254,12 @@ export function AutomationEditorModal({
                   onTimezoneChange={setTimezone}
                   onRruleBlur={() => setError(validateAutomationRrule(rrule))}
                 />
-                <AutomationModelPicker
-                  groups={modelSelection.groups}
-                  resolution={modelSelection.resolution}
-                  isLoading={modelSelection.isLoading}
-                  disabledReason={modelSelection.disabledReason}
-                  onSelect={handleModelSelect}
-                  onDefaultSelect={handleDefaultModelSelect}
-                />
-                <AutomationModePicker
-                  options={modeSelection.options}
-                  resolution={modeSelection.resolution}
-                  disabled={!modelSubmission.agentKind}
-                  onSelect={(modeId) => setModeOverride({ modeId })}
-                  onDefaultSelect={() => setModeOverride({ modeId: null })}
-                />
-                <AutomationSelectPopover
-                  label="Reasoning"
-                  value={reasoningEffort}
-                  options={reasoningOptions}
-                  onChange={setReasoningEffort}
-                  icon={reasoningIcon()}
-                  className="max-w-[11rem]"
+                <AutomationAgentRunConfigPicker
+                  configs={runConfigs}
+                  selectedConfigId={cloudAgentRunConfigId}
+                  isLoading={runConfigsQuery.isLoading}
+                  disabledReason="No agent run configs"
+                  onSelect={(config) => setCloudAgentRunConfigId(config?.id ?? null)}
                 />
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -340,8 +270,8 @@ export function AutomationEditorModal({
                   type="submit"
                   loading={busy}
                   disabled={
-                    (!automation && (modelSelection.isLoading || targetSelection.isLoading))
-                    || !modelSubmission.canSubmit
+                    (!automation && (runConfigsQuery.isLoading || targetSelection.isLoading))
+                    || !cloudAgentRunConfigId
                     || !targetSelection.canSubmit
                   }
                 >

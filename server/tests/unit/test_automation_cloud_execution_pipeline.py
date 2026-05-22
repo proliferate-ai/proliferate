@@ -10,6 +10,7 @@ import pytest
 from proliferate.constants.automations import (
     AUTOMATION_EXECUTION_TARGET_CLOUD,
     AUTOMATION_EXECUTOR_KIND_CLOUD,
+    AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
 )
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
 from proliferate.db.store.cloud_sync.commands import CloudCommandSnapshot
@@ -26,12 +27,14 @@ from proliferate.server.automations.worker.cloud_executor_config import build_cl
 
 
 def _claim() -> AutomationRunClaimValue:
+    config_id = uuid.uuid4()
     return AutomationRunClaimValue(
         id=uuid.uuid4(),
         automation_id=uuid.uuid4(),
         user_id=uuid.uuid4(),
         status="claimed",
         execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+        target_mode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
         title="Daily check",
         prompt="Check the repo",
         git_provider="github",
@@ -39,6 +42,18 @@ def _claim() -> AutomationRunClaimValue:
         git_repo_name="proliferate",
         cloud_target_id_snapshot=None,
         cloud_target_kind_snapshot=None,
+        cloud_agent_run_config_id_snapshot=config_id,
+        sandbox_profile_id=None,
+        cloud_workspace_exposure_id=None,
+        agent_run_config_snapshot_json={
+            "config_id": str(config_id),
+            "agent_kind": "codex",
+            "model_id": "gpt-5.4",
+            "control_values": {"mode": "code", "effort": "medium"},
+        },
+        cascade_attempt=0,
+        last_cascade_command_id=None,
+        last_cascade_reason=None,
         agent_kind="codex",
         model_id="gpt-5.4",
         mode_id="code",
