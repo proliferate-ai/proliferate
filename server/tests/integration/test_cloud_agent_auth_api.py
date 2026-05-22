@@ -702,7 +702,7 @@ async def test_managed_credits_route_uses_server_entitlement_budget(
 ) -> None:
     monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings."
-        "agent_gateway_default_managed_budget_usd",
+        "agent_gateway_managed_budget_free_usd",
         "12.50",
     )
     tokens = await _create_user_and_get_tokens(
@@ -745,7 +745,7 @@ async def test_managed_credits_use_global_litellm_model_deployment(
     )
     monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings."
-        "agent_gateway_default_managed_budget_usd",
+        "agent_gateway_managed_budget_free_usd",
         "12.50",
     )
 

@@ -13,7 +13,9 @@ def test_cloud_capabilities_gate_gateway_byok(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(service.settings, "agent_gateway_bedrock_byok_enabled", True)
     monkeypatch.setattr(service.settings, "agent_gateway_openai_compatible_byok_enabled", True)
     monkeypatch.setattr(service.settings, "agent_gateway_opencode_enabled", False)
-    monkeypatch.setattr(service.settings, "agent_gateway_default_managed_budget_usd", "12.50")
+    monkeypatch.setattr(service.settings, "agent_gateway_managed_budget_free_usd", "12.50")
+    monkeypatch.setattr(service.settings, "agent_gateway_managed_budget_pro_usd", "0")
+    monkeypatch.setattr(service.settings, "agent_gateway_managed_budget_unlimited_usd", "0")
 
     capabilities = service.cloud_capabilities()
 

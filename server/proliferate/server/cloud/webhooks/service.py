@@ -8,9 +8,11 @@ from proliferate.constants.billing import (
     PROVIDER_EVENT_KIND_KILLED,
     PROVIDER_EVENT_KIND_PAUSED,
     PROVIDER_EVENT_KIND_RESUMED,
+    PROVIDER_EVENT_KIND_TIMEOUT,
     USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
     USAGE_SEGMENT_CLOSED_BY_WEBHOOK_KILLED,
     USAGE_SEGMENT_CLOSED_BY_WEBHOOK_PAUSED,
+    USAGE_SEGMENT_CLOSED_BY_WEBHOOK_TIMEOUT,
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_WEBHOOK_RESUMED,
 )
@@ -203,11 +205,15 @@ async def handle_e2b_webhook(
             )
         return E2BWebhookReceipt()
 
-    if event_kind == PROVIDER_EVENT_KIND_PAUSED:
+    if event_kind in {PROVIDER_EVENT_KIND_PAUSED, PROVIDER_EVENT_KIND_TIMEOUT}:
         await close_usage_segment_for_sandbox(
             sandbox_id=sandbox.id,
             ended_at=event.timestamp,
-            closed_by=USAGE_SEGMENT_CLOSED_BY_WEBHOOK_PAUSED,
+            closed_by=(
+                USAGE_SEGMENT_CLOSED_BY_WEBHOOK_TIMEOUT
+                if event_kind == PROVIDER_EVENT_KIND_TIMEOUT
+                else USAGE_SEGMENT_CLOSED_BY_WEBHOOK_PAUSED
+            ),
             event_id=event.id,
         )
         await save_sandbox_provider_state(

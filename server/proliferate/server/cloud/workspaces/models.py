@@ -79,6 +79,22 @@ class RuntimeEnvironmentRecord(Protocol):
     runtime_generation: int
 
 
+class WorkspaceBillingRecord(Protocol):
+    plan: str
+    billing_mode: str
+    included_hours: float | None
+    start_blocked: bool
+    start_block_reason: str | None
+    active_spend_hold: bool
+    hold_reason: str | None
+    remaining_seconds: float | None
+    overage_enabled: bool
+    overage_cap_cents_per_seat: int | None
+    managed_cloud_overage_used_cents: int
+    active_sandbox_count: int
+    active_environment_limit: int | None
+
+
 class CreateCloudWorkspaceRequest(BaseModel):
     git_provider: Literal["github"] = Field(alias="gitProvider")
     git_owner: str = Field(alias="gitOwner")
@@ -182,6 +198,38 @@ class LastSessionSummary(BaseModel):
     preview: str | None = None
 
 
+class WorkspaceBillingSummary(BaseModel):
+    plan: str
+    billing_mode: str = Field(serialization_alias="billingMode")
+    block_status: Literal["allowed", "blocked", "warn"] = Field(
+        serialization_alias="blockStatus",
+    )
+    block_reason: str | None = Field(default=None, serialization_alias="blockReason")
+    hold_kind: str | None = Field(default=None, serialization_alias="holdKind")
+    remaining_seconds_in_period: float | None = Field(
+        default=None,
+        serialization_alias="remainingSecondsInPeriod",
+    )
+    overage_enabled: bool = Field(serialization_alias="overageEnabled")
+    overage_cap_cents_per_seat: int | None = Field(
+        default=None,
+        serialization_alias="overageCapCentsPerSeat",
+    )
+    overage_used_cents_this_period: int = Field(
+        serialization_alias="overageUsedCentsThisPeriod",
+    )
+    start_blocked: bool = Field(serialization_alias="startBlocked")
+    start_block_reason: str | None = Field(default=None, serialization_alias="startBlockReason")
+    active_spend_hold: bool = Field(serialization_alias="activeSpendHold")
+    hold_reason: str | None = Field(default=None, serialization_alias="holdReason")
+    remaining_seconds: float | None = Field(default=None, serialization_alias="remainingSeconds")
+    active_sandbox_count: int = Field(serialization_alias="activeSandboxCount")
+    active_environment_limit: int | None = Field(
+        default=None,
+        serialization_alias="activeEnvironmentLimit",
+    )
+
+
 class WorkspaceSummary(BaseModel):
     id: str
     display_name: str | None = Field(serialization_alias="displayName")
@@ -237,6 +285,7 @@ class WorkspaceSummary(BaseModel):
     claim_id: str | None = Field(default=None, serialization_alias="claimId")
     claimed_at: str | None = Field(default=None, serialization_alias="claimedAt")
     claim_source_kind: str | None = Field(default=None, serialization_alias="claimSourceKind")
+    billing: WorkspaceBillingSummary | None = None
 
 
 class WorkspaceDetail(WorkspaceSummary):
@@ -421,11 +470,47 @@ def last_session_summary_payload(
     )
 
 
+def billing_summary_payload(
+    billing: WorkspaceBillingRecord | None,
+) -> WorkspaceBillingSummary | None:
+    if billing is None:
+        return None
+    block_status: Literal["allowed", "blocked", "warn"] = "allowed"
+    if billing.start_blocked:
+        block_status = "blocked"
+    elif (
+        billing.included_hours is not None
+        and billing.remaining_seconds is not None
+        and billing.included_hours > 0
+        and 0 < billing.remaining_seconds <= (billing.included_hours * 3600.0 * 0.1)
+    ):
+        block_status = "warn"
+    return WorkspaceBillingSummary(
+        plan=billing.plan,
+        billing_mode=billing.billing_mode,
+        block_status=block_status,
+        block_reason=billing.start_block_reason,
+        hold_kind=billing.hold_reason,
+        remaining_seconds_in_period=billing.remaining_seconds,
+        overage_enabled=billing.overage_enabled,
+        overage_cap_cents_per_seat=billing.overage_cap_cents_per_seat,
+        overage_used_cents_this_period=billing.managed_cloud_overage_used_cents,
+        start_blocked=billing.start_blocked,
+        start_block_reason=billing.start_block_reason,
+        active_spend_hold=billing.active_spend_hold,
+        hold_reason=billing.hold_reason,
+        remaining_seconds=billing.remaining_seconds,
+        active_sandbox_count=billing.active_sandbox_count,
+        active_environment_limit=billing.active_environment_limit,
+    )
+
+
 def workspace_summary_payload(
     workspace: WorkspaceRecord,
     *,
     runtime_environment: RuntimeEnvironmentRecord | None = None,
     runtime_auth: RuntimeAuthStateSnapshot | None = None,
+    billing: WorkspaceBillingRecord | None = None,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
     creator_context: WorkspaceCreatorContext | None = None,
@@ -499,6 +584,7 @@ def workspace_summary_payload(
         claim_id=str(claim.id) if claim is not None else None,
         claimed_at=_to_iso(claim.claimed_at) if claim is not None else None,
         claim_source_kind=claim.source_kind if claim is not None else None,
+        billing=billing_summary_payload(billing),
     )
 
 
@@ -508,6 +594,7 @@ def workspace_detail_payload(
     *,
     runtime_environment: RuntimeEnvironmentRecord | None = None,
     runtime_auth: RuntimeAuthStateSnapshot | None = None,
+    billing: WorkspaceBillingRecord | None = None,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
     creator_context: WorkspaceCreatorContext | None = None,
@@ -521,6 +608,7 @@ def workspace_detail_payload(
         workspace,
         runtime_environment=runtime_environment,
         runtime_auth=runtime_auth,
+        billing=billing,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
         creator_context=creator_context,

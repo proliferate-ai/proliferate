@@ -71,7 +71,7 @@ from proliferate.server.automations.worker.cloud_executor_config import (
 from proliferate.server.cloud.agent_run_config import service as run_config_service
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
 from proliferate.server.cloud.commands.service import (
-    kick_off_command_wake_if_required,
+    kick_off_command_wake_after_commit_if_required,
     stamp_and_validate_command_preflight,
 )
 from proliferate.server.cloud.errors import CloudApiError
@@ -968,7 +968,7 @@ async def _enqueue_command(
         idempotency_key=idempotency_key,
     )
     if existing is not None:
-        kick_off_command_wake_if_required(target=target, command=existing)
+        await kick_off_command_wake_after_commit_if_required(db, target=target, command=existing)
         return existing
     command = await commands_store.create_command(
         db,
@@ -994,7 +994,7 @@ async def _enqueue_command(
             }
         ),
     )
-    kick_off_command_wake_if_required(target=target, command=command)
+    await kick_off_command_wake_after_commit_if_required(db, target=target, command=command)
     return command
 
 

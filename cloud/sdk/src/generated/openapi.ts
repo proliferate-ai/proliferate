@@ -7705,6 +7705,44 @@ export interface components {
             /** Updated */
             updated: boolean;
         };
+        /** WorkspaceBillingSummary */
+        WorkspaceBillingSummary: {
+            /** Plan */
+            plan: string;
+            /** Billingmode */
+            billingMode: string;
+            /**
+             * Blockstatus
+             * @enum {string}
+             */
+            blockStatus: "allowed" | "blocked" | "warn";
+            /** Blockreason */
+            blockReason?: string | null;
+            /** Holdkind */
+            holdKind?: string | null;
+            /** Remainingsecondsinperiod */
+            remainingSecondsInPeriod?: number | null;
+            /** Overageenabled */
+            overageEnabled: boolean;
+            /** Overagecapcentsperseat */
+            overageCapCentsPerSeat?: number | null;
+            /** Overageusedcentsthisperiod */
+            overageUsedCentsThisPeriod: number;
+            /** Startblocked */
+            startBlocked: boolean;
+            /** Startblockreason */
+            startBlockReason?: string | null;
+            /** Activespendhold */
+            activeSpendHold: boolean;
+            /** Holdreason */
+            holdReason?: string | null;
+            /** Remainingseconds */
+            remainingSeconds?: number | null;
+            /** Activesandboxcount */
+            activeSandboxCount: number;
+            /** Activeenvironmentlimit */
+            activeEnvironmentLimit?: number | null;
+        };
         /** WorkspaceConnection */
         WorkspaceConnection: {
             /** Runtimeurl */
@@ -7818,6 +7856,7 @@ export interface components {
             claimedAt?: string | null;
             /** Claimsourcekind */
             claimSourceKind?: string | null;
+            billing?: components["schemas"]["WorkspaceBillingSummary"] | null;
             /** Allowedagentkinds */
             allowedAgentKinds: string[];
             /** Readyagentkinds */
@@ -7992,6 +8031,7 @@ export interface components {
             claimedAt?: string | null;
             /** Claimsourcekind */
             claimSourceKind?: string | null;
+            billing?: components["schemas"]["WorkspaceBillingSummary"] | null;
         };
     };
     responses: never;

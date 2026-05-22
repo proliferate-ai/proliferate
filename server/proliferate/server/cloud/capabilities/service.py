@@ -14,14 +14,22 @@ from proliferate.server.cloud.capabilities.models import (
 
 def cloud_capabilities() -> CloudCapabilitiesResponse:
     gateway_enabled = bool(settings.agent_gateway_enabled)
-    default_managed_budget = settings.agent_gateway_default_managed_budget_usd.strip()
-    managed_credits_enabled = gateway_enabled and _positive_decimal_string(default_managed_budget)
+    managed_budgets = (
+        settings.agent_gateway_managed_budget_free_usd.strip(),
+        settings.agent_gateway_managed_budget_pro_usd.strip(),
+        settings.agent_gateway_managed_budget_unlimited_usd.strip(),
+    )
+    default_managed_budget = next(
+        (budget for budget in managed_budgets if _positive_decimal_string(budget)),
+        None,
+    )
+    managed_credits_enabled = gateway_enabled and default_managed_budget is not None
     return CloudCapabilitiesResponse(
         agentGateway=AgentGatewayCapabilities(
             enabled=gateway_enabled,
             managedCreditsPersonalEnabled=managed_credits_enabled,
             managedCreditsOrganizationEnabled=managed_credits_enabled,
-            defaultManagedBudgetUsd=(default_managed_budget if managed_credits_enabled else None),
+            defaultManagedBudgetUsd=default_managed_budget,
             byokEnabled=gateway_enabled and settings.agent_gateway_byok_enabled,
             byokProviders=AgentGatewayByokProviderCapabilities(
                 anthropicApiKey=(
