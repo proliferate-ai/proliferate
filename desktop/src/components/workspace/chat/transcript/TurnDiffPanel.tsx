@@ -83,11 +83,11 @@ export function TurnDiffPanel({
           />
         )}
         <div className="pointer-events-none relative z-10 flex min-w-0 items-center px-[var(--turn-diff-row-padding-x)] py-3 text-left">
-          <span className="flex min-w-0 flex-1 flex-col">
+          <span className="flex min-w-0 items-end gap-x-2 ">
             <span className="truncate text-chat font-medium leading-[var(--text-chat--line-height)] text-foreground">
               {title}
             </span>
-            <span className="truncate text-xs text-muted-foreground">
+            <span className="truncate pb-[2px] text-xs text-muted-foreground">
               <FileChangeStats
                 additions={totalAdditions}
                 deletions={totalDeletions}

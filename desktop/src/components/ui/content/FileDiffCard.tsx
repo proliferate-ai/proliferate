@@ -42,7 +42,7 @@ function FileChangeStat({
   className: string;
 }) {
   return (
-    <span className={`shrink-0 leading-none ${className}`}>
+    <span className={`shrink-0 text-sm leading-none ${className}`}>
       {sign}
       {value}
     </span>

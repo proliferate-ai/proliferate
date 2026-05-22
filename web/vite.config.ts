@@ -14,6 +14,19 @@ const sentryUploadEnabled =
   && Boolean(sentryOrg)
   && Boolean(sentryProject)
   && Boolean(sentryRelease);
+const serverPort = readPortEnv("PROLIFERATE_HOSTED_WEB_PORT", 5174);
+
+function readPortEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) {
+    return fallback;
+  }
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new Error(`${name} must be a TCP port number.`);
+  }
+  return parsed;
+}
 
 export default defineConfig({
   plugins: [
@@ -44,7 +57,7 @@ export default defineConfig({
   },
   server: {
     host: "127.0.0.1",
-    port: 5174,
-    strictPort: false,
+    port: serverPort,
+    strictPort: true,
   },
 });

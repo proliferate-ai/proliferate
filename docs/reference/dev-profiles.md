@@ -2,7 +2,7 @@
 
 Use dev profiles when running the full local stack from multiple worktrees.
 The profile is the unit of local dev state: ports, database, AnyHarness runtime
-home, desktop file-backed home, and the macOS dev app label.
+home, hosted web app, desktop file-backed home, and the macOS dev app label.
 
 ## Commands
 
@@ -84,14 +84,17 @@ local LiteLLM stack, and `make server-litellm-down` stops it.
 - `PROLIFERATE_API_PORT`
 - `PROLIFERATE_WEB_PORT`
 - `PROLIFERATE_WEB_HMR_PORT`
+- `PROLIFERATE_HOSTED_WEB_PORT`
 - `PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE`
 - `ANYHARNESS_PORT`
 
 The Google Workspace MCP value is the base of a 64-port loopback pool used for
-local Gmail OAuth callbacks. The generated Tauri config points the desktop at
-the profile ports. On macOS, profile dev also uses a generated Tauri runner so
-the unbundled debug app appears as `Proliferate (<profile>)` in the app bar
-instead of every profile appearing as `proliferate`.
+local Gmail OAuth callbacks. `PROLIFERATE_WEB_PORT` is the desktop renderer
+Vite server that Tauri loads. `PROLIFERATE_HOSTED_WEB_PORT` is the browser web
+app under `web/`. The generated Tauri config points the desktop at the profile
+ports. On macOS, profile dev also uses a generated Tauri runner so the unbundled
+debug app appears as `Proliferate (<profile>)` in the app bar instead of every
+profile appearing as `proliferate`.
 
 ## Scope Notes
 

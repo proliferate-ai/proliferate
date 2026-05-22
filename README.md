@@ -40,7 +40,7 @@ Local requirements: Python 3.12+, `uv`, and Docker for full stack.
 make server-install
 make dev-init PROFILE=main  # Prepare profile state without launching
 make dev-list               # show known profiles and live port status
-make dev PROFILE=main       # runtime + server + desktop + local Postgres
+make dev PROFILE=main       # runtime + server + desktop + hosted web + local Postgres
 make dev PROFILE=main STRIPE=1  # also start Stripe webhook forwarding
 ```
 
@@ -59,7 +59,7 @@ E2B_TEMPLATE_NAME=...
 
 ```bash
 make dev-local        # Desktop app with bundled local runtime
-make dev PROFILE=main # Runtime + server + desktop + local Postgres
+make dev PROFILE=main # Runtime + server + desktop + hosted web + local Postgres
 make dev-list         # List prepared and running dev profiles
 make sdk-build        # Generate and build the TypeScript SDK
 make desktop-build    # Type-check and build the desktop frontend

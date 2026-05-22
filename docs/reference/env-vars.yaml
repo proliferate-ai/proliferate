@@ -86,14 +86,20 @@
 - name: PROLIFERATE_WEB_PORT
   secret: false
   default: "1420"
-  description: Profile-specific local Vite dev server port
+  description: Profile-specific desktop renderer Vite dev server port loaded by Tauri
   tags: [local-dev, desktop]
 
 - name: PROLIFERATE_WEB_HMR_PORT
   secret: false
   default: "1421"
-  description: Profile-specific local Vite hot-module-reload websocket port
+  description: Profile-specific desktop renderer Vite hot-module-reload websocket port
   tags: [local-dev, desktop]
+
+- name: PROLIFERATE_HOSTED_WEB_PORT
+  secret: false
+  default: "5174"
+  description: Profile-specific hosted web app Vite dev server port for web/
+  tags: [local-dev, web]
 
 - name: PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE
   secret: false

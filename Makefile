@@ -85,6 +85,7 @@ dev: sdk-build server-db-ready
 		PROLIFERATE_API_PORT="$(PROLIFERATE_API_PORT)" \
 		PROLIFERATE_WEB_PORT="$(PROLIFERATE_WEB_PORT)" \
 		PROLIFERATE_WEB_HMR_PORT="$(PROLIFERATE_WEB_HMR_PORT)" \
+		PROLIFERATE_HOSTED_WEB_PORT="$(PROLIFERATE_HOSTED_WEB_PORT)" \
 		PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE="$(PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE)" \
 		ANYHARNESS_PORT="$(ANYHARNESS_PORT)" \
 		ANYHARNESS_RUNTIME_HOME="$(ANYHARNESS_RUNTIME_HOME)" \
@@ -122,10 +123,11 @@ dev: sdk-build server-db-ready
 		use_profile_db=1; \
 	fi; \
 	export API_BASE_URL="http://127.0.0.1:$$PROLIFERATE_API_PORT"; \
-	export CORS_ALLOW_ORIGINS="http://localhost:$$PROLIFERATE_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_WEB_PORT,http://tauri.localhost,tauri://localhost"; \
-	export STRIPE_CHECKOUT_SUCCESS_URL="http://localhost:$$PROLIFERATE_WEB_PORT/settings/cloud?checkout=success"; \
-	export STRIPE_CHECKOUT_CANCEL_URL="http://localhost:$$PROLIFERATE_WEB_PORT/settings/cloud?checkout=cancel"; \
-	export STRIPE_CUSTOMER_PORTAL_RETURN_URL="http://localhost:$$PROLIFERATE_WEB_PORT/settings/cloud"; \
+	export FRONTEND_BASE_URL="http://localhost:$$PROLIFERATE_HOSTED_WEB_PORT"; \
+	export CORS_ALLOW_ORIGINS="http://localhost:$$PROLIFERATE_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_WEB_PORT,http://localhost:$$PROLIFERATE_HOSTED_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_HOSTED_WEB_PORT,http://tauri.localhost,tauri://localhost"; \
+	export STRIPE_CHECKOUT_SUCCESS_URL="http://localhost:$$PROLIFERATE_HOSTED_WEB_PORT/settings/cloud?checkout=success"; \
+	export STRIPE_CHECKOUT_CANCEL_URL="http://localhost:$$PROLIFERATE_HOSTED_WEB_PORT/settings/cloud?checkout=cancel"; \
+	export STRIPE_CUSTOMER_PORTAL_RETURN_URL="http://localhost:$$PROLIFERATE_HOSTED_WEB_PORT/settings/cloud"; \
 	export STRIPE_FORWARD_TO="http://127.0.0.1:$$PROLIFERATE_API_PORT/v1/billing/webhooks/stripe"; \
 	if [ "$$use_profile_db" = "1" ]; then \
 		LOCAL_PGHOST="$(LOCAL_PGHOST)" \
@@ -160,11 +162,13 @@ dev: sdk-build server-db-ready
 		fi; \
 		stripe listen --events "$(STRIPE_SNAPSHOT_EVENTS)" --forward-to "$$STRIPE_FORWARD_TO" & \
 	fi; \
-	echo "Starting profile $$PROLIFERATE_DEV_PROFILE: runtime :$$ANYHARNESS_PORT, backend :$$PROLIFERATE_API_PORT, web :$$PROLIFERATE_WEB_PORT"; \
+	echo "Starting profile $$PROLIFERATE_DEV_PROFILE: runtime :$$ANYHARNESS_PORT, backend :$$PROLIFERATE_API_PORT, desktop :$$PROLIFERATE_WEB_PORT, web :$$PROLIFERATE_HOSTED_WEB_PORT"; \
 	RUST_LOG=info ANYHARNESS_DEV_CORS=1 $(CARGO) run --bin anyharness -- serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
 	(cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
 	echo "Starting automation worker..."; \
 	(cd server && uv run python -m proliferate.server.automations.worker --role all) & \
+	echo "Starting hosted web app..."; \
+	(cd web && VITE_PROLIFERATE_API_BASE_URL="http://127.0.0.1:$$PROLIFERATE_API_PORT" pnpm dev -- --host 127.0.0.1 --port "$$PROLIFERATE_HOSTED_WEB_PORT") & \
 	sleep 2; \
 	(cd desktop && pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json")
 
@@ -176,6 +180,7 @@ dev-init:
 	@PROLIFERATE_API_PORT="$(PROLIFERATE_API_PORT)" \
 	PROLIFERATE_WEB_PORT="$(PROLIFERATE_WEB_PORT)" \
 	PROLIFERATE_WEB_HMR_PORT="$(PROLIFERATE_WEB_HMR_PORT)" \
+	PROLIFERATE_HOSTED_WEB_PORT="$(PROLIFERATE_HOSTED_WEB_PORT)" \
 	PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE="$(PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE)" \
 	ANYHARNESS_PORT="$(ANYHARNESS_PORT)" \
 	ANYHARNESS_RUNTIME_HOME="$(ANYHARNESS_RUNTIME_HOME)" \
