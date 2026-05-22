@@ -387,6 +387,10 @@ importers:
         version: 5.9.3
 
   packages/product-model:
+    dependencies:
+      '@anyharness/sdk':
+        specifier: workspace:*
+        version: link:../../anyharness/sdk
     devDependencies:
       typescript:
         specifier: ^5.7

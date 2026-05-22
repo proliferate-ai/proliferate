@@ -43,6 +43,10 @@
       "types": "./dist/chats/fixtures.d.ts",
       "import": "./dist/chats/fixtures.js"
     },
+    "./chats/transcript/envelope-to-state": {
+      "types": "./dist/chats/transcript/envelope-to-state.d.ts",
+      "import": "./dist/chats/transcript/envelope-to-state.js"
+    },
     "./telemetry/scrub": {
       "types": "./dist/telemetry/scrub.d.ts",
       "import": "./dist/telemetry/scrub.js"
@@ -60,6 +64,9 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@anyharness/sdk": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7",
