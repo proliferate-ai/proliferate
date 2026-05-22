@@ -32,6 +32,10 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
 AsyncSessionDep = Annotated[AsyncSession, Depends(get_async_session)]
 
 
+async def commit_session(db: AsyncSession) -> None:
+    await db.commit()
+
+
 async def run_after_commit(db: AsyncSession, callback: AfterCommitCallback) -> None:
     if not db.in_transaction():
         await callback()

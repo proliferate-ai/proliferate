@@ -826,6 +826,17 @@ async def enqueue_command(
         raise
 
 
+async def enqueue_command_and_commit(
+    db: AsyncSession,
+    *,
+    user: User,
+    body: CreateCloudCommandRequest,
+) -> commands_store.CloudCommandSnapshot:
+    command = await enqueue_command(db, user=user, body=body)
+    await db_engine.commit_session(db)
+    return command
+
+
 async def _record_pending_prompt_interaction_for_command(
     db: AsyncSession,
     command: commands_store.CloudCommandSnapshot,
