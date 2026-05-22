@@ -7,13 +7,22 @@ import type { PluginPackagePresentation } from "@/lib/domain/plugins/plugin-pack
 import {
   buildAvailablePluginPresentation,
   buildConnectedPluginPresentation,
+  buildPluginSharedExposurePresentation,
+  type PluginSharedExposurePresentation,
 } from "@/lib/domain/plugins/plugin-package-view-model";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Switch } from "@/components/ui/Switch";
 import { ConnectorIcon } from "@/components/plugins/status/ConnectorIcon";
 import { ConnectorOverflowMenu } from "@/components/plugins/status/ConnectorOverflowMenu";
 import { ConnectorStatusChip } from "@/components/plugins/status/ConnectorStatusChip";
-import { Plus } from "@/components/ui/icons";
+import { Globe, Plus } from "@/components/ui/icons";
+
+const SHARED_EXPOSURE_TONE_CLASSES: Record<PluginSharedExposurePresentation["sharedCloudTone"], string> = {
+  neutral: "border-border/50 bg-muted/20 text-muted-foreground",
+  success: "border-success/25 bg-success/10 text-success",
+  warning: "border-warning/30 bg-warning/10 text-warning",
+  muted: "border-border/50 bg-muted/30 text-muted-foreground",
+};
 
 export function AvailablePluginPackageRow({
   model,
@@ -50,29 +59,56 @@ export function ConnectedPluginPackageRow({
   onDelete,
   onManage,
   onReconnect,
+  onSetSharedExposure,
   onStatusClick,
   onToggle,
   pending,
+  canManageSharedExposure,
+  organizationId,
 }: {
   model: ConnectedCardModel;
   onDelete: () => void;
   onManage: () => void;
   onReconnect?: () => void;
+  onSetSharedExposure: (publicToOrg: boolean) => void;
   onStatusClick: () => void;
   onToggle: (enabled: boolean) => void;
   pending: boolean;
+  canManageSharedExposure: boolean;
+  organizationId: string | null;
 }) {
   const presentation = buildConnectedPluginPresentation(model.record, model.status);
+  const exposure = buildPluginSharedExposurePresentation(model.record);
   const enabled = model.record.metadata.enabled;
+  const nextPublicToOrg = !exposure.isFullyPublic;
+  const canShowSharedAction =
+    canManageSharedExposure && Boolean(organizationId) && exposure.configuredItemCount > 0;
 
   return (
     <PluginPackageCard
       icon={<ConnectorIcon entry={model.record.catalogEntry} size="md" />}
       presentation={presentation}
+      sharedExposure={exposure}
       onOpen={model.status.actionable ? onStatusClick : onManage}
       status={<ConnectorStatusChip status={model.status} onClick={onStatusClick} />}
       controls={(
         <div className="flex shrink-0 items-center gap-1">
+          {canShowSharedAction && (
+            <Button
+              type="button"
+              variant={exposure.isFullyPublic ? "ghost" : "outline"}
+              size="sm"
+              loading={pending}
+              onClick={() => onSetSharedExposure(nextPublicToOrg)}
+              title={nextPublicToOrg
+                ? "Make configured MCP, plugin, and skill items public to shared cloud."
+                : "Make configured MCP, plugin, and skill items private to personal cloud."}
+              className="h-7 px-2"
+            >
+              <Globe className="size-3.5" />
+              {nextPublicToOrg ? "Make public" : "Make private"}
+            </Button>
+          )}
           <div className="pointer-events-none opacity-0 transition-opacity group-hover/plugin-package:pointer-events-auto group-hover/plugin-package:opacity-100 group-focus-within/plugin-package:pointer-events-auto group-focus-within/plugin-package:opacity-100">
             <ConnectorOverflowMenu
               disabled={pending}
@@ -101,12 +137,14 @@ function PluginPackageCard({
   icon,
   onOpen,
   presentation,
+  sharedExposure,
   status,
 }: {
   controls: ReactNode;
   icon: ReactNode;
   onOpen: () => void;
   presentation: PluginPackagePresentation;
+  sharedExposure?: PluginSharedExposurePresentation;
   status?: ReactNode;
 }) {
   return (
@@ -132,6 +170,22 @@ function PluginPackageCard({
             <div className="line-clamp-1 text-xs text-muted-foreground/80">
               {presentation.includesLabel}
             </div>
+            {sharedExposure && (
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                <span className="rounded-full border border-border/50 bg-muted/20 px-2 py-0.5 text-[11px] text-muted-foreground">
+                  {sharedExposure.personalCloudLabel}
+                </span>
+                <span className="rounded-full border border-border/50 bg-muted/20 px-2 py-0.5 text-[11px] text-muted-foreground">
+                  {sharedExposure.sourceLabel}
+                </span>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${SHARED_EXPOSURE_TONE_CLASSES[sharedExposure.sharedCloudTone]}`}
+                  title={sharedExposure.sharedCloudDescription}
+                >
+                  {sharedExposure.sharedCloudLabel}
+                </span>
+              </div>
+            )}
           </div>
         </Button>
         {status && (

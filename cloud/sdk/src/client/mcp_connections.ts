@@ -4,6 +4,7 @@ import type {
   CloudMcpConnectionsResponse,
   CreateCloudMcpConnectionRequest,
   PatchCloudMcpConnectionRequest,
+  PublicizeCloudMcpConnectionRequest,
   PutCloudMcpSecretAuthRequest,
 } from "../types/index.js";
 
@@ -25,6 +26,30 @@ export async function patchCloudMcpConnection(
     params: { path: { connection_id: connectionId } },
     body,
   })).data!;
+}
+
+export async function publicizeCloudMcpConnection(
+  connectionId: string,
+  body: PublicizeCloudMcpConnectionRequest,
+): Promise<CloudMcpConnection> {
+  return (await getProliferateClient().POST(
+    "/v1/cloud/mcp/connections/{connection_id}/publicize",
+    {
+      params: { path: { connection_id: connectionId } },
+      body,
+    },
+  )).data!;
+}
+
+export async function unpublicizeCloudMcpConnection(
+  connectionId: string,
+): Promise<CloudMcpConnection> {
+  return (await getProliferateClient().POST(
+    "/v1/cloud/mcp/connections/{connection_id}/unpublicize",
+    {
+      params: { path: { connection_id: connectionId } },
+    },
+  )).data!;
 }
 
 export async function putCloudMcpSecretAuth(

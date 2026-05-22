@@ -5,8 +5,15 @@ const mocks = vi.hoisted(() => ({
   listCloudMcpConnectionsMock: vi.fn(),
   createCloudMcpConnectionMock: vi.fn(),
   patchCloudMcpConnectionMock: vi.fn(),
+  publicizeCloudMcpConnectionMock: vi.fn(),
+  unpublicizeCloudMcpConnectionMock: vi.fn(),
   putCloudMcpSecretAuthMock: vi.fn(),
   deleteCloudMcpConnectionV2Mock: vi.fn(),
+  listConfiguredPluginsMock: vi.fn(),
+  installConfiguredPluginMock: vi.fn(),
+  patchConfiguredPluginMock: vi.fn(),
+  listConfiguredSkillsMock: vi.fn(),
+  patchConfiguredSkillMock: vi.fn(),
   startGoogleWorkspaceMcpAuthMock: vi.fn(),
   cancelGoogleWorkspaceMcpAuthMock: vi.fn(),
   deleteGoogleWorkspaceMcpLocalDataMock: vi.fn(),
@@ -22,8 +29,21 @@ vi.mock("@proliferate/cloud-sdk/client/mcp_connections", () => ({
   listCloudMcpConnections: mocks.listCloudMcpConnectionsMock,
   createCloudMcpConnection: mocks.createCloudMcpConnectionMock,
   patchCloudMcpConnection: mocks.patchCloudMcpConnectionMock,
+  publicizeCloudMcpConnection: mocks.publicizeCloudMcpConnectionMock,
+  unpublicizeCloudMcpConnection: mocks.unpublicizeCloudMcpConnectionMock,
   putCloudMcpSecretAuth: mocks.putCloudMcpSecretAuthMock,
   deleteCloudMcpConnectionV2: mocks.deleteCloudMcpConnectionV2Mock,
+}));
+
+vi.mock("@proliferate/cloud-sdk/client/plugins", () => ({
+  listConfiguredPlugins: mocks.listConfiguredPluginsMock,
+  installConfiguredPlugin: mocks.installConfiguredPluginMock,
+  patchConfiguredPlugin: mocks.patchConfiguredPluginMock,
+}));
+
+vi.mock("@proliferate/cloud-sdk/client/skills", () => ({
+  listConfiguredSkills: mocks.listConfiguredSkillsMock,
+  patchConfiguredSkill: mocks.patchConfiguredSkillMock,
 }));
 
 vi.mock("@proliferate/cloud-sdk/client/mcp_oauth", () => ({
@@ -53,6 +73,7 @@ import {
   deleteConnector,
   installConnector,
   loadConnectorPaneData,
+  setConnectorPublicExposure,
   setConnectorEnabled,
   updateConnectorSecret,
 } from "@/lib/workflows/mcp/connector-persistence";
@@ -228,10 +249,18 @@ function gmailCatalogEntry() {
 function cloudConnection() {
   return {
     connectionId: "conn_1",
+    ownerScope: "personal",
+    ownerUserId: "user_1",
+    organizationId: null,
     catalogEntryId: "context7",
     catalogEntryVersion: 1,
     serverName: "context7",
     enabled: true,
+    publicToOrg: false,
+    publicOrganizationId: null,
+    publicStatus: "private",
+    publicUpdatedAt: null,
+    publicUpdatedByUserId: null,
     settings: {},
     authKind: "secret",
     authStatus: "ready",
@@ -242,14 +271,95 @@ function cloudConnection() {
   };
 }
 
+function configuredPluginItem() {
+  return {
+    id: "plugin_item_1",
+    ownerScope: "personal",
+    ownerUserId: "user_1",
+    organizationId: null,
+    pluginId: "github",
+    pluginVersion: "1",
+    enabled: true,
+    publicToOrg: false,
+    publicOrganizationId: null,
+    publicStatus: "private",
+    configVersion: 1,
+    createdAt: "2026-04-20T00:00:00.000Z",
+    updatedAt: "2026-04-20T00:00:00.000Z",
+  };
+}
+
+function configuredSkillItem() {
+  return {
+    id: "skill_item_1",
+    ownerScope: "personal",
+    ownerUserId: "user_1",
+    organizationId: null,
+    skillSourceKind: "plugin",
+    skillId: "triage",
+    skillVersion: null,
+    pluginId: "github",
+    pluginVersion: "1",
+    enabled: true,
+    publicToOrg: false,
+    publicOrganizationId: null,
+    publicStatus: "private",
+    configVersion: 1,
+    createdAt: "2026-04-20T00:00:00.000Z",
+    updatedAt: "2026-04-20T00:00:00.000Z",
+  };
+}
+
+function githubPluginPackage() {
+  return {
+    id: "github",
+    catalogEntryId: "github",
+    version: "1",
+    displayName: "GitHub",
+    description: "GitHub package",
+    skills: [
+      {
+        id: "triage",
+        displayName: "GitHub triage",
+        description: "Inspect GitHub.",
+        instructions: "# GitHub triage",
+        requiredMcpServerRefs: ["github"],
+        requiresCredentialBinding: true,
+        resources: [],
+        defaultEnabled: true,
+        provenance: {
+          sourceRepoUrl: "https://example.com",
+          sourcePath: "skills/github/SKILL.md",
+          sourceRef: "test",
+          sourceSha256: "source",
+          adaptedSha256: "adapted",
+          sourceLicense: "MIT",
+          importMode: "adapted",
+          reviewStatus: "reviewed",
+          reviewer: "test",
+          reviewedAt: "2026-05-13",
+          notes: "",
+        },
+      },
+    ],
+  };
+}
+
 describe("cloud MCP connector persistence", () => {
   beforeEach(() => {
     mocks.getCloudMcpCatalogMock.mockReset();
     mocks.listCloudMcpConnectionsMock.mockReset();
     mocks.createCloudMcpConnectionMock.mockReset();
     mocks.patchCloudMcpConnectionMock.mockReset();
+    mocks.publicizeCloudMcpConnectionMock.mockReset();
+    mocks.unpublicizeCloudMcpConnectionMock.mockReset();
     mocks.putCloudMcpSecretAuthMock.mockReset();
     mocks.deleteCloudMcpConnectionV2Mock.mockReset();
+    mocks.listConfiguredPluginsMock.mockReset();
+    mocks.installConfiguredPluginMock.mockReset();
+    mocks.patchConfiguredPluginMock.mockReset();
+    mocks.listConfiguredSkillsMock.mockReset();
+    mocks.patchConfiguredSkillMock.mockReset();
     mocks.startGoogleWorkspaceMcpAuthMock.mockReset();
     mocks.cancelGoogleWorkspaceMcpAuthMock.mockReset();
     mocks.deleteGoogleWorkspaceMcpLocalDataMock.mockReset();
@@ -267,8 +377,20 @@ describe("cloud MCP connector persistence", () => {
     mocks.listCloudMcpConnectionsMock.mockResolvedValue({
       connections: [cloudConnection()],
     });
+    mocks.listConfiguredPluginsMock.mockResolvedValue({ plugins: [] });
+    mocks.listConfiguredSkillsMock.mockResolvedValue({ skills: [] });
     mocks.createCloudMcpConnectionMock.mockResolvedValue(cloudConnection());
     mocks.deleteCloudMcpConnectionV2Mock.mockResolvedValue(undefined);
+    mocks.installConfiguredPluginMock.mockResolvedValue(configuredPluginItem());
+    mocks.patchConfiguredPluginMock.mockResolvedValue(configuredPluginItem());
+    mocks.patchConfiguredSkillMock.mockResolvedValue(configuredSkillItem());
+    mocks.publicizeCloudMcpConnectionMock.mockResolvedValue({
+      ...cloudConnection(),
+      publicToOrg: true,
+      publicOrganizationId: "org_1",
+      publicStatus: "public",
+    });
+    mocks.unpublicizeCloudMcpConnectionMock.mockResolvedValue(cloudConnection());
     mocks.startGoogleWorkspaceMcpAuthMock.mockResolvedValue({
       status: "completed",
       userGoogleEmail: "user@example.com",
@@ -341,6 +463,109 @@ describe("cloud MCP connector persistence", () => {
     expect(paneData.available[0]?.pluginPackage?.skills[0]?.id).toBe("triage");
     expect(paneData.available[0]?.pluginPackage?.skills[0]?.provenance?.sourceSha256)
       .toBe("source");
+  });
+
+  it("maps configured MCP, plugin, and skill public state onto installed records", async () => {
+    mocks.getCloudMcpCatalogMock.mockResolvedValue({
+      catalogVersion: "test",
+      entries: [secretCatalogEntry("github")],
+      pluginPackages: [githubPluginPackage()],
+    });
+    mocks.listCloudMcpConnectionsMock.mockResolvedValue({
+      connections: [{
+        ...cloudConnection(),
+        connectionId: "conn_github",
+        catalogEntryId: "github",
+        serverName: "github",
+        publicToOrg: true,
+        publicOrganizationId: "org_1",
+        publicStatus: "public",
+      }],
+    });
+    mocks.listConfiguredPluginsMock.mockResolvedValue({
+      plugins: [{
+        ...configuredPluginItem(),
+        publicToOrg: true,
+        publicOrganizationId: "org_1",
+        publicStatus: "public",
+      }],
+    });
+    mocks.listConfiguredSkillsMock.mockResolvedValue({
+      skills: [{
+        ...configuredSkillItem(),
+        publicToOrg: true,
+        publicOrganizationId: "org_1",
+        publicStatus: "public",
+      }],
+    });
+
+    const paneData = await loadConnectorPaneData();
+
+    expect(paneData.installed[0]?.metadata.publicToOrg).toBe(true);
+    expect(paneData.installed[0]?.metadata.publicOrganizationId).toBe("org_1");
+    expect(paneData.installed[0]?.metadata.configuredPlugin).toMatchObject({
+      id: "plugin_item_1",
+      kind: "plugin",
+      sourceId: "github",
+      publicToOrg: true,
+      publicStatus: "public",
+    });
+    expect(paneData.installed[0]?.metadata.configuredSkills).toEqual([
+      expect.objectContaining({
+        id: "skill_item_1",
+        kind: "skill",
+        sourceId: "triage",
+        publicToOrg: true,
+        publicStatus: "public",
+      }),
+    ]);
+  });
+
+  it("publicizes and unpublicizes configured MCP, plugin, and skill items together", async () => {
+    mocks.getCloudMcpCatalogMock.mockResolvedValue({
+      catalogVersion: "test",
+      entries: [secretCatalogEntry("github")],
+      pluginPackages: [githubPluginPackage()],
+    });
+    mocks.listCloudMcpConnectionsMock.mockResolvedValue({
+      connections: [{
+        ...cloudConnection(),
+        connectionId: "conn_github",
+        catalogEntryId: "github",
+        serverName: "github",
+      }],
+    });
+    mocks.listConfiguredPluginsMock.mockResolvedValue({
+      plugins: [configuredPluginItem()],
+    });
+    mocks.listConfiguredSkillsMock.mockResolvedValue({
+      skills: [configuredSkillItem()],
+    });
+    const record = (await loadConnectorPaneData()).installed[0]!;
+
+    await setConnectorPublicExposure(record, "org_1", true);
+    await setConnectorPublicExposure(record, "org_1", false);
+
+    expect(mocks.publicizeCloudMcpConnectionMock).toHaveBeenCalledWith("conn_github", {
+      organizationId: "org_1",
+    });
+    expect(mocks.unpublicizeCloudMcpConnectionMock).toHaveBeenCalledWith("conn_github");
+    expect(mocks.patchConfiguredPluginMock).toHaveBeenCalledWith("plugin_item_1", {
+      publicToOrg: true,
+      publicOrganizationId: "org_1",
+    });
+    expect(mocks.patchConfiguredPluginMock).toHaveBeenCalledWith("plugin_item_1", {
+      publicToOrg: false,
+      publicOrganizationId: null,
+    });
+    expect(mocks.patchConfiguredSkillMock).toHaveBeenCalledWith("skill_item_1", {
+      publicToOrg: true,
+      publicOrganizationId: "org_1",
+    });
+    expect(mocks.patchConfiguredSkillMock).toHaveBeenCalledWith("skill_item_1", {
+      publicToOrg: false,
+      publicOrganizationId: null,
+    });
   });
 
   it("drops installed rows whose catalog entry was removed", async () => {

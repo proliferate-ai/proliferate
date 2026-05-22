@@ -21,6 +21,13 @@ const connectorsCatalogState = vi.hoisted(() => {
     searchQuery: "",
     setActiveTab: vi.fn(),
     setSearchQuery: vi.fn(),
+    sharedExposure: {
+      activeOrganizationId: "org_1",
+      activeOrganizationName: "Acme",
+      canManage: true,
+      hasOrganization: true,
+      isLoading: false,
+    },
   });
 
   return {
