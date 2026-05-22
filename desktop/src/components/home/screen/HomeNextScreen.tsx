@@ -219,40 +219,6 @@ export function HomeNextScreen() {
             </p>
           </div>
 
-          <div className="mb-2 flex min-w-0 flex-wrap items-center justify-start gap-[5px] px-2">
-            <HomeTargetPicker
-              destination={destination}
-              repoLaunchKind={repoLaunchKind}
-              repositories={homeNext.repositories}
-              selectedRepository={homeNext.selectedRepository}
-              selectedBranchName={homeNext.selectedBranchName}
-              branchOptions={homeNext.branchOptions}
-              branchLoading={homeNext.branchQuery.isLoading}
-              cloudActionBySourceRoot={homeNext.cloudRepoActionBySourceRoot}
-              onSelectCowork={() => {
-                setDestination("cowork");
-              }}
-              onSelectRepository={(sourceRoot) => {
-                const launchKind = resolveLaunchKindForRepository(sourceRoot);
-                setDestination("repository");
-                setRepositorySelection({ kind: "repository", sourceRoot });
-                setRepoLaunchKind(launchKind);
-                if (launchKind === "local") {
-                  setBaseBranchOverride(null);
-                }
-              }}
-              onSelectRuntime={(launchKind) => {
-                setRepoLaunchKind(launchKind);
-                if (launchKind === "local") {
-                  setBaseBranchOverride(null);
-                }
-              }}
-              onSelectBranch={setBaseBranchOverride}
-              onAddRepository={() => handleHomeAction("add-repository")}
-              onConfigureCloud={handleConfigureCloud}
-            />
-          </div>
-
           <ChatComposerSurface>
             <form
               className="relative flex flex-col"
@@ -317,6 +283,40 @@ export function HomeNextScreen() {
               </div>
             </form>
           </ChatComposerSurface>
+
+          <div className="mt-2 flex min-w-0 flex-wrap items-center justify-start gap-[5px] px-2">
+            <HomeTargetPicker
+              destination={destination}
+              repoLaunchKind={repoLaunchKind}
+              repositories={homeNext.repositories}
+              selectedRepository={homeNext.selectedRepository}
+              selectedBranchName={homeNext.selectedBranchName}
+              branchOptions={homeNext.branchOptions}
+              branchLoading={homeNext.branchQuery.isLoading}
+              cloudActionBySourceRoot={homeNext.cloudRepoActionBySourceRoot}
+              onSelectCowork={() => {
+                setDestination("cowork");
+              }}
+              onSelectRepository={(sourceRoot) => {
+                const launchKind = resolveLaunchKindForRepository(sourceRoot);
+                setDestination("repository");
+                setRepositorySelection({ kind: "repository", sourceRoot });
+                setRepoLaunchKind(launchKind);
+                if (launchKind === "local") {
+                  setBaseBranchOverride(null);
+                }
+              }}
+              onSelectRuntime={(launchKind) => {
+                setRepoLaunchKind(launchKind);
+                if (launchKind === "local") {
+                  setBaseBranchOverride(null);
+                }
+              }}
+              onSelectBranch={setBaseBranchOverride}
+              onAddRepository={() => handleHomeAction("add-repository")}
+              onConfigureCloud={handleConfigureCloud}
+            />
+          </div>
 
           {submittedPreview ? (
             <div
