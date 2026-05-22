@@ -44,9 +44,7 @@ class TestCloudWorkerBaseUrl:
 
         assert runtime_provision._cloud_base_url() == "https://worker.example.dev"
 
-    def test_rejects_local_only_worker_base_urls(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_rejects_local_only_worker_base_urls(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(runtime_provision.settings, "cloud_worker_base_url", "")
         monkeypatch.setattr(runtime_provision.settings, "api_base_url", "http://localhost:8076")
         monkeypatch.setattr(runtime_provision.settings, "cloud_mcp_oauth_callback_base_url", "")

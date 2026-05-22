@@ -44,7 +44,6 @@ from proliferate.server.cloud.runtime.wake import kick_off_managed_slot_wake
 from proliferate.server.cloud.workspaces.access import cloud_workspace_user_can_read_with_db
 from proliferate.utils.time import utcnow
 
-
 _WEB_COMMAND_QUEUE_EXPIRATION = timedelta(minutes=4)
 _WEB_EXPIRABLE_QUEUED_COMMAND_KINDS = {
     CloudCommandKind.start_session.value,
@@ -1166,10 +1165,7 @@ async def _mark_pending_prompt_interaction_failed_for_command(
     db: AsyncSession,
     command: commands_store.CloudCommandSnapshot,
 ) -> None:
-    if (
-        command.kind != CloudCommandKind.send_prompt.value
-        or command.session_id is None
-    ):
+    if command.kind != CloudCommandKind.send_prompt.value or command.session_id is None:
         return
     try:
         payload = json.loads(command.payload_json or "{}")

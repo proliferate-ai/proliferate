@@ -201,9 +201,7 @@ class TestCloudEventStreamsApi:
             assert sse_id(snapshot_frame) == "1"
 
             bus = get_pubsub_bus()
-            command_status_task: asyncio.Task[str] = asyncio.create_task(
-                next_stream_frame(stream)
-            )
+            command_status_task: asyncio.Task[str] = asyncio.create_task(next_stream_frame(stream))
             await bus.publish(
                 session_channel(
                     target_id=UUID(target_id),
@@ -238,9 +236,7 @@ class TestCloudEventStreamsApi:
                                     "kind": "assistant_message",
                                     "status": "completed",
                                     "sourceAgentKind": "codex",
-                                    "contentParts": [
-                                        {"type": "text", "text": "still visible"}
-                                    ],
+                                    "contentParts": [{"type": "text", "text": "still visible"}],
                                 },
                             },
                         }

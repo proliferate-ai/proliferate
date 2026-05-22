@@ -12,12 +12,12 @@ from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_runtime_environments import save_runtime_environment_state
+from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_workspaces import (
     load_active_sandbox_for_workspace,
     load_cloud_sandbox_by_id,
     persist_runtime_reconnect_state_for_workspace,
 )
-from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.integrations.sandbox import (
     SandboxProvider,
@@ -29,13 +29,13 @@ from proliferate.server.cloud.runtime.anyharness_api import (
     wait_for_runtime_health,
 )
 from proliferate.server.cloud.runtime.bootstrap import (
-    build_worker_config,
     build_detached_supervisor_launch_command,
     build_supervised_runtime_stop_command,
+    build_worker_config,
     local_anyharness_base_url,
     supervisor_config_path,
-    worker_db_sidecar_paths,
     worker_config_path,
+    worker_db_sidecar_paths,
 )
 from proliferate.server.cloud.runtime.domain.reconnect_policy import (
     SandboxReconnectAction,
@@ -137,7 +137,11 @@ async def _cloud_base_url_for_worker_relaunch(
             log_output_on_success=True,
         )
         existing = result_stdout(read_result).strip()
-        if result_exit_code(read_result) == 0 and existing and not _is_local_cloud_base_url(existing):
+        if (
+            result_exit_code(read_result) == 0
+            and existing
+            and not _is_local_cloud_base_url(existing)
+        ):
             return existing
         raise config_error from None
 
@@ -284,7 +288,8 @@ async def _refresh_worker_enrollment_for_runtime(
     )
     if result_exit_code(supervisor_config_check) != 0:
         raise CloudRuntimeReconnectError(
-            "Managed runtime relaunch cannot refresh worker enrollment for a legacy launcher sandbox."
+            "Managed runtime relaunch cannot refresh worker enrollment for a legacy "
+            "launcher sandbox."
         )
 
     enrollment = await ensure_runtime_target_enrollment(
@@ -544,11 +549,15 @@ async def ensure_environment_runtime_ready(
     if not environment.active_sandbox_id:
         raise CloudRuntimeReconnectError("Cloud runtime environment does not have a sandbox.")
 
-    if not force_launcher_restart and environment.runtime_url and await _runtime_is_ready(
-        environment.runtime_url,
-        workspace_id=workspace_id,
-        access_token=access_token,
-        total_attempts=2,
+    if (
+        not force_launcher_restart
+        and environment.runtime_url
+        and await _runtime_is_ready(
+            environment.runtime_url,
+            workspace_id=workspace_id,
+            access_token=access_token,
+            total_attempts=2,
+        )
     ):
         return environment.runtime_url
 
