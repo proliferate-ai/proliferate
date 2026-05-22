@@ -11,7 +11,7 @@ import type {
 import {
   parseSubagentLaunchResult,
   resolveSubagentLaunchDisplay,
-} from "@/lib/domain/chat/subagents/subagent-launch";
+} from "@proliferate/product-model/chats/subagents/subagent-launch";
 
 export interface ReconciledStreamConfigIntent {
   liveConfig: SessionLiveConfigSnapshot;

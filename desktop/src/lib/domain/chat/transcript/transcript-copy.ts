@@ -6,7 +6,7 @@ import type {
 import {
   buildTurnPresentation,
   type TurnDisplayBlock,
-} from "@/lib/domain/chat/transcript/transcript-presentation";
+} from "@proliferate/product-model/chats/transcript/transcript-presentation";
 import {
   joinTranscriptCopySections,
   serializeTranscriptItem,

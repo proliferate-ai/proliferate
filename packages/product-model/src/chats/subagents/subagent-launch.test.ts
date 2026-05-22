@@ -7,7 +7,7 @@ import {
   parseSubagentProvisioningStatus,
   resolveSubagentLaunchDisplay,
   resolveSubagentExecutionState,
-} from "@/lib/domain/chat/subagents/subagent-launch";
+} from "./subagent-launch";
 
 describe("parseAsyncSubagentLaunch", () => {
   it("parses completed async background launches", () => {

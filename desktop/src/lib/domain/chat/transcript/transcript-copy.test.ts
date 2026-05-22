@@ -18,7 +18,7 @@ import {
   toolItem,
   turnRecord,
   userItem,
-} from "@/lib/domain/chat/transcript/transcript-presentation-test-fixtures";
+} from "@proliferate/product-model/chats/transcript/transcript-presentation-test-fixtures";
 
 function makeTranscript(
   items: TranscriptItem[],

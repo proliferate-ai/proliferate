@@ -75,6 +75,30 @@
       "types": "./dist/chats/transcript/turn-file-patches.d.ts",
       "import": "./dist/chats/transcript/turn-file-patches.js"
     },
+    "./chats/transcript/transcript-collapsed-actions": {
+      "types": "./dist/chats/transcript/transcript-collapsed-actions.d.ts",
+      "import": "./dist/chats/transcript/transcript-collapsed-actions.js"
+    },
+    "./chats/transcript/transcript-presentation": {
+      "types": "./dist/chats/transcript/transcript-presentation.d.ts",
+      "import": "./dist/chats/transcript/transcript-presentation.js"
+    },
+    "./chats/transcript/transcript-presentation-test-fixtures": {
+      "types": "./dist/chats/transcript/transcript-presentation-test-fixtures.d.ts",
+      "import": "./dist/chats/transcript/transcript-presentation-test-fixtures.js"
+    },
+    "./chats/transcript/transcript-tool-commands": {
+      "types": "./dist/chats/transcript/transcript-tool-commands.d.ts",
+      "import": "./dist/chats/transcript/transcript-tool-commands.js"
+    },
+    "./chats/subagents/subagent-launch": {
+      "types": "./dist/chats/subagents/subagent-launch.d.ts",
+      "import": "./dist/chats/subagents/subagent-launch.js"
+    },
+    "./chats/subagents/subagent-tool-presentation": {
+      "types": "./dist/chats/subagents/subagent-tool-presentation.d.ts",
+      "import": "./dist/chats/subagents/subagent-tool-presentation.js"
+    },
     "./telemetry/scrub": {
       "types": "./dist/telemetry/scrub.d.ts",
       "import": "./dist/telemetry/scrub.js"

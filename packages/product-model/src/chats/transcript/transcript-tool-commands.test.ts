@@ -4,18 +4,18 @@ import {
   classifyCollapsedAction,
   formatCollapsedActionsSummary,
   summarizeCollapsedActions,
-} from "@/lib/domain/chat/transcript/transcript-collapsed-actions";
+} from "./transcript-collapsed-actions";
 import {
   getToolCallParsedCommands,
   getToolCallShellCommand,
   getToolCallShellCommandName,
-} from "@/lib/domain/chat/transcript/transcript-tool-commands";
+} from "./transcript-tool-commands";
 import {
   bareNativeToolItem,
   parsedCommandItem,
   terminalItem,
   toolItem,
-} from "@/lib/domain/chat/transcript/transcript-presentation-test-fixtures";
+} from "./transcript-presentation-test-fixtures";
 
 describe("transcript actions", () => {
   it("classifies representative tool calls for collapsed action grouping", () => {

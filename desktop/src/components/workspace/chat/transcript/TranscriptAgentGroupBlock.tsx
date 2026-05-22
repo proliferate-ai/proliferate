@@ -29,14 +29,14 @@ import {
   resolveSubagentLaunchDisplay,
   isSubagentExecutionStateRunning,
   isSubagentWorkComplete,
-} from "@/lib/domain/chat/subagents/subagent-launch";
+} from "@proliferate/product-model/chats/subagents/subagent-launch";
 import {
   formatSubagentHeaderVerb,
   isSubagentProvisioningAction,
-} from "@/lib/domain/chat/subagents/subagent-tool-presentation";
+} from "@proliferate/product-model/chats/subagents/subagent-tool-presentation";
 import {
   buildTranscriptDisplayBlocks,
-} from "@/lib/domain/chat/transcript/transcript-presentation";
+} from "@proliferate/product-model/chats/transcript/transcript-presentation";
 import {
   findTrailingLiveExplorationBlock,
 } from "@/lib/domain/chat/transcript/transcript-rendering";

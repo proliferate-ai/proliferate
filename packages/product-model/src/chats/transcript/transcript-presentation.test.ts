@@ -4,11 +4,11 @@ import type { ToolCallItem } from "@anyharness/sdk";
 import {
   formatCollapsedActionsSummary,
   summarizeCollapsedActions,
-} from "@/lib/domain/chat/transcript/transcript-collapsed-actions";
+} from "./transcript-collapsed-actions";
 import {
   buildTranscriptDisplayBlocks,
   buildTurnPresentation,
-} from "@/lib/domain/chat/transcript/transcript-presentation";
+} from "./transcript-presentation";
 import {
   assistantItem,
   bareNativeToolItem,
@@ -20,7 +20,7 @@ import {
   toolItem,
   turnRecord,
   userItem,
-} from "@/lib/domain/chat/transcript/transcript-presentation-test-fixtures";
+} from "./transcript-presentation-test-fixtures";
 
 describe("buildTurnPresentation", () => {
   it("orders items by startedSeq before insertion order", () => {

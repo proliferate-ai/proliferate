@@ -8,7 +8,7 @@ import {
   buildTurnPresentation,
   type TurnDisplayBlock,
   type TurnPresentation,
-} from "@/lib/domain/chat/transcript/transcript-presentation";
+} from "@proliferate/product-model/chats/transcript/transcript-presentation";
 import { turnHasRenderableTranscriptContent } from "@/lib/domain/chat/pending-prompts/pending-prompts";
 import type { PromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
 

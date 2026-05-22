@@ -25,7 +25,7 @@ import {
   resolveAssistantTurnActionTime,
 } from "@proliferate/product-model/chats/transcript/transcript-action-time";
 import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
-import type { TurnDisplayBlock } from "@/lib/domain/chat/transcript/transcript-presentation";
+import type { TurnDisplayBlock } from "@proliferate/product-model/chats/transcript/transcript-presentation";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
 

@@ -8,7 +8,7 @@ import { useState } from "react";
 import type {
   SubagentExecutionState,
   SubagentProvisioningStatus,
-} from "@/lib/domain/chat/subagents/subagent-launch";
+} from "@proliferate/product-model/chats/subagents/subagent-launch";
 
 interface SubagentLaunchLedgerProps {
   prompt: string | null;

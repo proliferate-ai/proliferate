@@ -18,11 +18,11 @@ import {
   isSubagentWakeProvenance,
   resolveReviewFeedbackPromptReference,
 } from "@/lib/domain/chat/subagents/provenance";
-import { resolveSubagentLaunchDisplay } from "@/lib/domain/chat/subagents/subagent-launch";
+import { resolveSubagentLaunchDisplay } from "@proliferate/product-model/chats/subagents/subagent-launch";
 import {
   getToolCallParsedCommands,
   getToolCallShellCommand,
-} from "@/lib/domain/chat/transcript/transcript-tool-commands";
+} from "@proliferate/product-model/chats/transcript/transcript-tool-commands";
 import { hasProposedPlanForToolCallItem } from "@/lib/domain/chat/transcript/transcript-rendering";
 
 export function serializeTranscriptItem(

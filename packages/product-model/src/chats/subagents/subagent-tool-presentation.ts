@@ -1,5 +1,5 @@
 import type { ToolCallItem, ToolResultTextContentPart } from "@anyharness/sdk";
-import type { SubagentExecutionState } from "@/lib/domain/chat/subagents/subagent-launch";
+import type { SubagentExecutionState } from "./subagent-launch";
 
 type ToolNameOwner = Pick<ToolCallItem, "nativeToolName">;
 

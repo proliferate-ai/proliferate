@@ -3,13 +3,13 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
-import { classifyCollapsedAction } from "@/lib/domain/chat/transcript/transcript-collapsed-actions";
+import { classifyCollapsedAction } from "./transcript-collapsed-actions";
 import {
   getToolCallParsedCommands,
   getToolCallShellCommand,
   isExplorationParsedCommand,
-} from "@/lib/domain/chat/transcript/transcript-tool-commands";
-import { isSubagentCreationAction } from "@/lib/domain/chat/subagents/subagent-tool-presentation";
+} from "./transcript-tool-commands";
+import { isSubagentCreationAction } from "../subagents/subagent-tool-presentation";
 
 export type TurnDisplayBlock =
   | { kind: "item"; itemId: string }

@@ -7,7 +7,7 @@ import { DelegatedAgentHoverCard } from "@/components/workspace/shell/tabs/Deleg
 import { useTranscriptOpenSession } from "@/components/workspace/chat/transcript/TranscriptContexts";
 import type {
   SubagentMcpReceiptPresentation,
-} from "@/lib/domain/chat/subagents/subagent-tool-presentation";
+} from "@proliferate/product-model/chats/subagents/subagent-tool-presentation";
 import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
 import {
   delegatedWorkStatusCategoryFromLabel,

@@ -6,7 +6,7 @@ import {
   getToolCallParsedCommands,
   getToolCallShellCommand,
   isExplorationParsedCommand,
-} from "@/lib/domain/chat/transcript/transcript-tool-commands";
+} from "./transcript-tool-commands";
 
 export interface CollapsedActionSummary {
   reads: number;

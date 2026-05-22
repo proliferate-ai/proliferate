@@ -15,7 +15,7 @@ import {
   blockBelongsToCompletedHistory,
   collectToolCallIdsWithProposedPlanForBlocks,
 } from "@/lib/domain/chat/transcript/transcript-rendering";
-import type { TurnPresentation } from "@/lib/domain/chat/transcript/transcript-presentation";
+import type { TurnPresentation } from "@proliferate/product-model/chats/transcript/transcript-presentation";
 import {
   getTurnDisplayBlockKey,
   TurnDisplayBlockNode,

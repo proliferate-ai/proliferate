@@ -7,7 +7,7 @@ import {
   parseSubagentLaunchResult,
   parseSubagentProvisioningStatus,
   resolveSubagentLaunchDisplay,
-} from "@/lib/domain/chat/subagents/subagent-launch";
+} from "@proliferate/product-model/chats/subagents/subagent-launch";
 import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
 import {
   delegatedWorkStatusCategoryFromLabel,
