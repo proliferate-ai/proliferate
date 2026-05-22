@@ -2003,7 +2003,7 @@ async def _reconcile_managed_budget_subject(
                         "organizationId": str(budget.organization_id),
                         "budgetKind": budget.budget_kind,
                     },
-            )
+                )
             sync_status = "synced"
             status = (
                 "exhausted"

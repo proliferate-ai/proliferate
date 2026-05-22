@@ -24,7 +24,9 @@ from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
-from proliferate.server.cloud.agent_auth.service import request_agent_auth_refresh_for_profile_target
+from proliferate.server.cloud.agent_auth.service import (
+    request_agent_auth_refresh_for_profile_target,
+)
 from proliferate.server.cloud.commands import service as command_service
 from proliferate.server.cloud.worker import service as worker_service
 from proliferate.utils.crypto import encrypt_json
@@ -932,9 +934,8 @@ class TestCloudCommandsApi:
             json={
                 "idempotencyKey": "stale-lease",
                 "targetId": target_id,
-                "sessionId": "session-1",
-                "kind": "cancel_turn",
-                "payload": {},
+                "kind": "materialize_workspace",
+                "payload": {"mode": "existing_path", "path": "/tmp/stale-lease"},
             },
         )
         assert created.status_code == 200
@@ -943,7 +944,7 @@ class TestCloudCommandsApi:
         first = await client.post(
             "/v1/cloud/worker/commands/lease",
             headers=worker_headers,
-            json={"supportedKinds": ["cancel_turn"], "leaseTimeoutSeconds": 0},
+            json={"supportedKinds": ["materialize_workspace"], "leaseTimeoutSeconds": 0},
         )
         assert first.status_code == 200
         first_lease = first.json()["command"]["leaseId"]
@@ -951,7 +952,7 @@ class TestCloudCommandsApi:
         immediate_recovery = await client.post(
             "/v1/cloud/worker/commands/lease",
             headers=worker_headers,
-            json={"supportedKinds": ["cancel_turn"], "leaseTimeoutSeconds": 30},
+            json={"supportedKinds": ["materialize_workspace"], "leaseTimeoutSeconds": 30},
         )
         assert immediate_recovery.status_code == 200
         assert immediate_recovery.json()["command"] is None
@@ -964,7 +965,7 @@ class TestCloudCommandsApi:
         recovered = await client.post(
             "/v1/cloud/worker/commands/lease",
             headers=worker_headers,
-            json={"supportedKinds": ["cancel_turn"], "leaseTimeoutSeconds": 30},
+            json={"supportedKinds": ["materialize_workspace"], "leaseTimeoutSeconds": 30},
         )
         assert recovered.status_code == 200
         recovered_command = recovered.json()["command"]
@@ -997,9 +998,8 @@ class TestCloudCommandsApi:
             json={
                 "idempotencyKey": "delivered-lease",
                 "targetId": target_id,
-                "sessionId": "session-1",
-                "kind": "send_prompt",
-                "payload": {"text": "do not duplicate"},
+                "kind": "materialize_workspace",
+                "payload": {"mode": "existing_path", "path": "/tmp/delivered-lease"},
             },
         )
         assert created.status_code == 200
@@ -1008,7 +1008,7 @@ class TestCloudCommandsApi:
         first = await client.post(
             "/v1/cloud/worker/commands/lease",
             headers=worker_headers,
-            json={"supportedKinds": ["send_prompt"], "leaseTimeoutSeconds": 0},
+            json={"supportedKinds": ["materialize_workspace"], "leaseTimeoutSeconds": 0},
         )
         assert first.status_code == 200
         first_lease = first.json()["command"]["leaseId"]
@@ -1024,7 +1024,7 @@ class TestCloudCommandsApi:
         recovered = await client.post(
             "/v1/cloud/worker/commands/lease",
             headers=worker_headers,
-            json={"supportedKinds": ["send_prompt"], "leaseTimeoutSeconds": 30},
+            json={"supportedKinds": ["materialize_workspace"], "leaseTimeoutSeconds": 30},
         )
         assert recovered.status_code == 200
         assert recovered.json()["command"] is None
@@ -1032,7 +1032,17 @@ class TestCloudCommandsApi:
         result = await client.post(
             f"/v1/cloud/worker/commands/{command_id}/result",
             headers=worker_headers,
-            json={"leaseId": first_lease, "status": "accepted"},
+            json={
+                "leaseId": first_lease,
+                "status": "accepted",
+                "result": {
+                    "mode": "existing_path",
+                    "anyharnessWorkspaceId": "workspace-1",
+                    "repoRootId": "root-1",
+                    "path": "/tmp/delivered-lease",
+                    "kind": "existing_path",
+                },
+            },
         )
         assert result.status_code == 200
         assert result.json()["status"] == "accepted"
@@ -2309,7 +2319,7 @@ class TestCloudCommandsApi:
         assert created.json()["detail"]["code"] == "cloud_command_target_config_required"
 
     @pytest.mark.asyncio
-    async def test_managed_start_session_with_cloud_workspace_uses_runtime_state_without_target_config(
+    async def test_managed_start_session_with_cloud_workspace_uses_runtime_state(
         self,
         client: AsyncClient,
         db_session: AsyncSession,

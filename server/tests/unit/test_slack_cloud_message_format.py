@@ -15,8 +15,7 @@ def test_ack_blocks_use_single_section_and_button() -> None:
     )
 
     assert fallback == (
-        "Working on withkeystone/landing. "
-        "Open: http://localhost:5175/cloud/workspaces/ws_123"
+        "Working on withkeystone/landing. Open: http://localhost:5175/cloud/workspaces/ws_123"
     )
     assert blocks == [
         {
@@ -74,8 +73,7 @@ def test_configuration_blocks_include_settings_button() -> None:
     )
 
     assert fallback == (
-        "Reconnect Slack. Configure Slack: "
-        "http://localhost:5175/settings?section=slack-bot"
+        "Reconnect Slack. Configure Slack: http://localhost:5175/settings?section=slack-bot"
     )
     assert blocks == [
         {

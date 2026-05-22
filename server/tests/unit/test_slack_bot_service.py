@@ -81,7 +81,11 @@ async def test_validate_connection_returns_reauth_for_invalid_bot_token(
         raise AssertionError("Slack auth_test should not run with an undecryptable token")
 
     monkeypatch.setattr(service, "_require_org_admin", allow_admin)
-    monkeypatch.setattr(service.connection_store, "get_active_connection_for_org", active_connection)
+    monkeypatch.setattr(
+        service.connection_store,
+        "get_active_connection_for_org",
+        active_connection,
+    )
     monkeypatch.setattr(service.connection_store, "mark_connection_reauth_required", mark_reauth)
     monkeypatch.setattr(service.slack_client, "auth_test", fail_auth_test)
 
@@ -118,7 +122,11 @@ async def test_list_channels_raises_typed_reauth_for_invalid_bot_token(
         raise AssertionError("Slack channels should not be listed with an undecryptable token")
 
     monkeypatch.setattr(service, "_require_org_admin", allow_admin)
-    monkeypatch.setattr(service.connection_store, "get_active_connection_for_org", active_connection)
+    monkeypatch.setattr(
+        service.connection_store,
+        "get_active_connection_for_org",
+        active_connection,
+    )
     monkeypatch.setattr(service.connection_store, "mark_connection_reauth_required", mark_reauth)
     monkeypatch.setattr(service.slack_client, "list_channels", fail_list_channels)
 

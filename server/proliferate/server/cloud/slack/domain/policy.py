@@ -28,9 +28,7 @@ def require_active_slack_bot(
         raise CloudApiError("slack_bot_disabled", "Slack bot is disabled.", status_code=409)
     if slack_channel_id and config.allowed_slack_channel_ids:
         allowed = {
-            item.strip()
-            for item in config.allowed_slack_channel_ids.split(",")
-            if item.strip()
+            item.strip() for item in config.allowed_slack_channel_ids.split(",") if item.strip()
         }
         if slack_channel_id not in allowed:
             raise CloudApiError(

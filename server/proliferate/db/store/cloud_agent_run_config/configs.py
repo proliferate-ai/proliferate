@@ -165,8 +165,7 @@ async def list_configs(
         predicates[0] = or_(
             predicates[0],
             and_(
-                CloudAgentRunConfig.owner_scope
-                == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
+                CloudAgentRunConfig.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
                 CloudAgentRunConfig.organization_id == organization_id,
             ),
         )
@@ -339,8 +338,7 @@ async def get_default_config(
             or_(
                 CloudAgentRunConfig.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
                 and_(
-                    CloudAgentRunConfig.owner_scope
-                    == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL,
+                    CloudAgentRunConfig.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL,
                     CloudAgentRunConfig.owner_user_id == owner_user_id,
                 ),
             )

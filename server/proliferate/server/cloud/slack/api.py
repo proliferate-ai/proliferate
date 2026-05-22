@@ -14,6 +14,8 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.config import settings
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.db.store import cloud_repo_config as repo_store
+from proliferate.db.store.cloud_slack.records import CloudRepoRoutingProfileRecord
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.slack.models import (
     SlackBotConfigEnvelopeResponse,
@@ -28,7 +30,6 @@ from proliferate.server.cloud.slack.models import (
     connection_payload,
     repo_routing_profile_payload,
 )
-from proliferate.db.store import cloud_repo_config as repo_store
 from proliferate.server.cloud.slack.service import (
     complete_oauth_install,
     disconnect,
@@ -49,7 +50,7 @@ router = APIRouter(prefix="/slack", tags=["cloud-slack"])
 async def _repo_profile_response(
     db: AsyncSession,
     organization_id: UUID,
-    profiles,
+    profiles: list[CloudRepoRoutingProfileRecord],
 ) -> SlackRepoRoutingProfilesResponse:
     repo_by_id = {
         repo.id: repo

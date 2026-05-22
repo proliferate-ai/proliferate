@@ -196,7 +196,11 @@ async def test_direct_access_token_is_desktop_only_and_signed(
         with_runtime_access=True,
     )
     private_key_pem, public_key_pem = _rsa_key_pair()
-    monkeypatch.setattr(settings, "cloud_jwt_signing_key_pem", private_key_pem.replace("\n", "\\n"))
+    monkeypatch.setattr(
+        settings,
+        "cloud_jwt_signing_key_pem",
+        private_key_pem.replace("\n", "\\n"),
+    )
     monkeypatch.setattr(settings, "cloud_jwt_signing_key_id", "test-kid")
     monkeypatch.setattr(
         settings,

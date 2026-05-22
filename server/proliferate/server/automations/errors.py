@@ -35,6 +35,34 @@ class AutomationInvalidSchedule(InvalidRequest):
         super().__init__(message=message, code=self.code)
 
 
+class AutomationInvalidExecutionTarget(InvalidRequest):
+    code = "automation_invalid_execution_target"
+
+    def __init__(self) -> None:
+        super().__init__(message="Automation execution target is not supported.", code=self.code)
+
+
+class AutomationInvalidAgentKind(InvalidRequest):
+    code = "automation_invalid_agent_kind"
+
+    def __init__(self) -> None:
+        super().__init__(message="Automation agent kind is not supported.", code=self.code)
+
+
+class AutomationInvalidReasoningEffort(InvalidRequest):
+    code = "automation_invalid_reasoning_effort"
+
+    def __init__(self) -> None:
+        super().__init__(message="Automation reasoning effort is not supported.", code=self.code)
+
+
+class AutomationAgentRequired(InvalidRequest):
+    code = "automation_agent_required"
+
+    def __init__(self) -> None:
+        super().__init__(message="Automation agent kind is required.", code=self.code)
+
+
 class AutomationRepoImmutable(InvalidRequest):
     code = "automation_repo_immutable"
 

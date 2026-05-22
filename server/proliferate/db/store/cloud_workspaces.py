@@ -582,9 +582,7 @@ async def archive_cloud_workspace_record_by_id(
 ) -> CloudWorkspace | None:
     workspace = (
         await db.execute(
-            select(CloudWorkspace)
-            .where(CloudWorkspace.id == workspace_id)
-            .with_for_update()
+            select(CloudWorkspace).where(CloudWorkspace.id == workspace_id).with_for_update()
         )
     ).scalar_one_or_none()
     if workspace is None:

@@ -22,6 +22,7 @@ from proliferate.db.store.cloud_repo_config import (
     save_cloud_repo_file,
     save_organization_cloud_repo_config,
 )
+from proliferate.db.store.cloud_slack import repo_routing_profiles as slack_routing_profile_store
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.db.store.organizations import load_active_membership
 from proliferate.integrations.anyharness import CloudRuntimeOperationError
@@ -57,7 +58,6 @@ from proliferate.server.cloud.runtime.repo_config_apply import (
 )
 from proliferate.server.cloud.runtime.service import get_workspace_connection
 from proliferate.server.cloud.targets.domain.policy import require_target_admin_membership
-from proliferate.db.store.cloud_slack import repo_routing_profiles as slack_routing_profile_store
 
 
 class _WorkspaceRepoConfigRecord(Protocol):
