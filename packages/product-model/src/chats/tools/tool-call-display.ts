@@ -4,10 +4,10 @@ import {
   formatMcpServerHint,
   parseMcpToolName,
 } from "./mcp-tool-presentation";
-import { resolveSubagentLaunchDisplay } from "@proliferate/product-model/chats/subagents/subagent-launch";
+import { resolveSubagentLaunchDisplay } from "../subagents/subagent-launch";
 import {
   formatSubagentMcpActionLabel,
-} from "@proliferate/product-model/chats/subagents/subagent-tool-presentation";
+} from "../subagents/subagent-tool-presentation";
 
 export type ToolDisplayIconKey =
   | "terminal"
