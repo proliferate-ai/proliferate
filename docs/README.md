@@ -135,6 +135,9 @@ start of the task, not after implementation has already started.
   - legacy/current-state reference for plugin packages, skill bundles,
     plugin-owned MCP servers, the plugins UI, and the current session bundle
     boundary
+- `docs/architecture/shared-chat-ui-spec.md`
+  - migration spec for extracting the chat transcript and composer into shared
+    presentational components reused by Desktop (AnyHarness) and Web (Cloud)
 
 ## Deployment and environment reference
 
