@@ -13,7 +13,7 @@ import {
   isAgentSessionProvenance,
   isSubagentWakeProvenance,
   resolveReviewFeedbackPromptReference,
-} from "@/lib/domain/chat/subagents/provenance";
+} from "@proliferate/product-model/chats/subagents/provenance";
 import {
   hasProposedPlanForToolCallItem,
 } from "@/lib/domain/chat/transcript/transcript-rendering";

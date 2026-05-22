@@ -5,7 +5,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { FileText } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { DelegatedAgentReceiptName } from "@/components/workspace/chat/transcript/DelegatedAgentReceiptName";
-import type { ReviewFeedbackPromptReference } from "@/lib/domain/chat/subagents/provenance";
+import type { ReviewFeedbackPromptReference } from "@proliferate/product-model/chats/subagents/provenance";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 

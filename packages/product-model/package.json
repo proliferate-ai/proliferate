@@ -91,6 +91,22 @@
       "types": "./dist/chats/transcript/transcript-tool-commands.d.ts",
       "import": "./dist/chats/transcript/transcript-tool-commands.js"
     },
+    "./chats/subagents/delegated-work": {
+      "types": "./dist/chats/subagents/delegated-work.d.ts",
+      "import": "./dist/chats/subagents/delegated-work.js"
+    },
+    "./chats/subagents/provenance": {
+      "types": "./dist/chats/subagents/provenance.d.ts",
+      "import": "./dist/chats/subagents/provenance.js"
+    },
+    "./chats/subagents/session-relationship-hints": {
+      "types": "./dist/chats/subagents/session-relationship-hints.d.ts",
+      "import": "./dist/chats/subagents/session-relationship-hints.js"
+    },
+    "./chats/subagents/subagent-braille-color": {
+      "types": "./dist/chats/subagents/subagent-braille-color.d.ts",
+      "import": "./dist/chats/subagents/subagent-braille-color.js"
+    },
     "./chats/subagents/subagent-launch": {
       "types": "./dist/chats/subagents/subagent-launch.d.ts",
       "import": "./dist/chats/subagents/subagent-launch.js"

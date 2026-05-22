@@ -15,7 +15,7 @@ import {
 import {
   isSubagentWakeProvenance,
   resolveReviewFeedbackPromptReference,
-} from "@/lib/domain/chat/subagents/provenance";
+} from "@proliferate/product-model/chats/subagents/provenance";
 import {
   resolveOptimisticPromptActionTime,
 } from "@proliferate/product-model/chats/transcript/transcript-action-time";

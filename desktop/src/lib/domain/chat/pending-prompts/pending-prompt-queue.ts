@@ -5,7 +5,7 @@ import {
   formatReviewFeedbackQueueText,
   formatWakePromptQueueText,
   isSubagentWakeProvenance,
-} from "@/lib/domain/chat/subagents/provenance";
+} from "@proliferate/product-model/chats/subagents/provenance";
 
 export type PendingPromptQueueRowKind = "plain" | "wake" | "review_feedback";
 

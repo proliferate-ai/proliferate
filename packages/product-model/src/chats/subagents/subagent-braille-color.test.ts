@@ -3,7 +3,7 @@ import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
 import {
   buildSubagentBrailleColorMap,
   resolveSubagentBrailleColor,
-} from "@/lib/domain/chat/subagents/subagent-braille-color";
+} from "./subagent-braille-color";
 
 describe("buildSubagentBrailleColorMap", () => {
   it("assigns distinct colors to the first visible subagents in transcript order", () => {

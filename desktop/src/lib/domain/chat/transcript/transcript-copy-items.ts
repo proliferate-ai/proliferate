@@ -17,7 +17,7 @@ import {
   formatWakePromptTranscriptText,
   isSubagentWakeProvenance,
   resolveReviewFeedbackPromptReference,
-} from "@/lib/domain/chat/subagents/provenance";
+} from "@proliferate/product-model/chats/subagents/provenance";
 import { resolveSubagentLaunchDisplay } from "@proliferate/product-model/chats/subagents/subagent-launch";
 import {
   getToolCallParsedCommands,

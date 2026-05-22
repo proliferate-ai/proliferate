@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionSubagentsResponse } from "@anyharness/sdk";
-import { collectSubagentSessionRelationshipHints } from "@/lib/domain/chat/subagents/session-relationship-hints";
+import { collectSubagentSessionRelationshipHints } from "./session-relationship-hints";
 
 describe("collectSubagentSessionRelationshipHints", () => {
   it("records the queried session as a child when parent metadata exists", () => {
