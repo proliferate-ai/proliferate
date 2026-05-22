@@ -6,7 +6,7 @@ import type {
   SlackBotConfig,
   SlackWorkspaceConnection,
   UpdateSlackBotConfigRequest,
-} from "@/lib/access/cloud/client";
+} from "@proliferate/cloud-sdk";
 import {
   SlackConnectionStatusBadge,
   SlackEnabledBadge,

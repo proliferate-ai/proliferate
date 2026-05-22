@@ -11,7 +11,7 @@ import type {
   CreateAutomationInput,
   UpdateAutomationInput,
 } from "@/lib/domain/automations/run/ui-records";
-import type { AutomationOwnerScope, AutomationTargetMode } from "@/lib/access/cloud/client";
+import type { AutomationOwnerScope, AutomationTargetMode } from "@proliferate/cloud-sdk";
 import { useAgentRunConfigs } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
 import {
   defaultAutomationTimezone,

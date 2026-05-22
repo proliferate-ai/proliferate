@@ -32,7 +32,7 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import type { AutomationOwnerScope } from "@/lib/access/cloud/client";
+import type { AutomationOwnerScope } from "@proliferate/cloud-sdk";
 
 const EMPTY_AUTOMATIONS: AutomationRecord[] = [];
 const EMPTY_AUTOMATION_RUNS: AutomationRunRecord[] = [];

@@ -1,5 +1,5 @@
 import type { AutomationExecutionTarget } from "@/lib/domain/automations/target/records";
-import type { AutomationTargetMode } from "@/lib/access/cloud/client";
+import type { AutomationTargetMode } from "@proliferate/cloud-sdk";
 
 export interface AutomationScheduleSnapshot {
   rrule?: string;

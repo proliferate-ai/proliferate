@@ -1,5 +1,5 @@
 import type { AutomationExecutionTarget } from "@/lib/domain/automations/target/records";
-import type { AutomationOwnerScope, AutomationTargetMode } from "@/lib/access/cloud/client";
+import type { AutomationOwnerScope, AutomationTargetMode } from "@proliferate/cloud-sdk";
 
 export type { AutomationExecutionTarget };
 

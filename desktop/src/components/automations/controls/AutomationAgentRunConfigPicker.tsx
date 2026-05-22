@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { CloudAgentRunConfig } from "@/lib/access/cloud/client";
+import type { CloudAgentRunConfig } from "@proliferate/cloud-sdk";
 import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";

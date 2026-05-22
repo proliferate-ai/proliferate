@@ -1,4 +1,4 @@
-import type { AutomationTargetMode } from "@/lib/access/cloud/client";
+import type { AutomationTargetMode } from "@proliferate/cloud-sdk";
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
