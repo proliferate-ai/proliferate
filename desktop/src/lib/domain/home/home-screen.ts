@@ -1,72 +1,117 @@
-import type { Workspace } from "@anyharness/sdk";
+import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
 import { HOME_SCREEN_LABELS } from "@/copy/home/home-screen-copy";
-import {
-  workspaceBranchLabel,
-  workspaceRepoName,
-} from "@/lib/domain/workspaces/display/workspace-display";
+import { cloudRepositoryKey } from "@/lib/domain/settings/repositories";
 
 export type HomeActionId =
-  | "resume-last-workspace"
   | "add-repository"
+  | "agent-defaults"
   | "agent-settings"
   | "repository-settings";
 
-export type HomeActionIcon = "clock" | "folder" | "settings";
+export type HomeOnboardingActionId =
+  | "add-repository"
+  | "agent-defaults"
+  | "repository-settings";
 
-export interface HomeActionCardModel {
-  id: HomeActionId;
+export type HomeOnboardingIcon = "github" | "settings" | "sliders";
+
+export interface HomeOnboardingCardModel {
+  id: HomeOnboardingActionId;
   title: string;
-  description: string;
-  icon: HomeActionIcon;
-  emphasis: "primary" | "secondary";
+  icon: HomeOnboardingIcon;
 }
 
-export function buildHomeActionCards(args: {
-  latestWorkspace: Workspace | null;
+export interface HomeRepositoryIdentity {
+  sourceRoot?: string | null;
+  gitProvider: string | null;
+  gitOwner: string | null;
+  gitRepoName: string | null;
+}
+
+function isGitHubRepository(repository: HomeRepositoryIdentity): boolean {
+  return repository.gitProvider?.trim().toLowerCase() === "github"
+    && Boolean(repository.gitOwner?.trim())
+    && Boolean(repository.gitRepoName?.trim());
+}
+
+function configuredCloudRepositoryKeys(
+  configs: readonly CloudRepoConfigSummary[] | null | undefined,
+): Set<string> {
+  return new Set(
+    (configs ?? [])
+      .filter((config) => config.configured)
+      .map((config) => cloudRepositoryKey(config.gitOwner, config.gitRepoName)),
+  );
+}
+
+function homeRepositoryKey(repository: HomeRepositoryIdentity): string | null {
+  const gitOwner = repository.gitOwner?.trim();
+  const gitRepoName = repository.gitRepoName?.trim();
+  return gitOwner && gitRepoName
+    ? cloudRepositoryKey(gitOwner, gitRepoName)
+    : null;
+}
+
+export function findHomeUnconfiguredGitHubRepository(args: {
+  repositories: readonly HomeRepositoryIdentity[];
+  cloudRepoConfigs: readonly CloudRepoConfigSummary[] | null | undefined;
+}): HomeRepositoryIdentity | null {
+  const configuredKeys = configuredCloudRepositoryKeys(args.cloudRepoConfigs);
+  return args.repositories.find((repository) => {
+    if (!isGitHubRepository(repository)) {
+      return false;
+    }
+    const key = homeRepositoryKey(repository);
+    return key ? !configuredKeys.has(key) : false;
+  }) ?? null;
+}
+
+export function buildHomeOnboardingCards(args: {
+  repositories: readonly HomeRepositoryIdentity[];
+  repositoriesLoading: boolean;
   readyAgentCount: number;
   agentsLoading: boolean;
-}): HomeActionCardModel[] {
-  const { latestWorkspace, readyAgentCount, agentsLoading } = args;
+  defaultChatAgentKind: string;
+  cloudRepoConfigs: readonly CloudRepoConfigSummary[] | null | undefined;
+  cloudRepoConfigsLoading: boolean;
+}): HomeOnboardingCardModel[] {
+  const cards: HomeOnboardingCardModel[] = [];
+  const hasGitHubRepository =
+    !args.repositoriesLoading && args.repositories.some(isGitHubRepository);
+  const needsDefaultHarnesses =
+    !args.agentsLoading
+    && (args.readyAgentCount === 0 || args.defaultChatAgentKind.trim().length === 0);
+  const needsRepositoryConfiguration =
+    hasGitHubRepository
+    && !args.cloudRepoConfigsLoading
+    && findHomeUnconfiguredGitHubRepository({
+      repositories: args.repositories,
+      cloudRepoConfigs: args.cloudRepoConfigs,
+    }) !== null;
 
-  const leadingCard: HomeActionCardModel = latestWorkspace
-    ? {
-      id: "resume-last-workspace",
-      title: HOME_SCREEN_LABELS.resumeWorkspaceTitle,
-      description: `${HOME_SCREEN_LABELS.resumeWorkspaceDescriptionPrefix} ${workspaceRepoName(latestWorkspace)} / ${workspaceBranchLabel(latestWorkspace)}.`,
-      icon: "clock",
-      emphasis: "primary",
-    }
-    : {
+  if (!args.repositoriesLoading && !hasGitHubRepository) {
+    cards.push({
       id: "add-repository",
-      title: HOME_SCREEN_LABELS.addRepositoryTitle,
-      description: HOME_SCREEN_LABELS.addRepositoryDescription,
-      icon: "folder",
-      emphasis: "primary",
-    };
+      title: HOME_SCREEN_LABELS.addGitHubRepositoryTitle,
+      icon: "github",
+    });
+  }
 
-  const middleCard: HomeActionCardModel = {
-    id: latestWorkspace ? "add-repository" : "repository-settings",
-    title: latestWorkspace
-      ? HOME_SCREEN_LABELS.addAnotherTitle
-      : HOME_SCREEN_LABELS.repositorySettingsTitle,
-    description: latestWorkspace
-      ? HOME_SCREEN_LABELS.addAnotherDescription
-      : HOME_SCREEN_LABELS.repositorySettingsDescription,
-    icon: latestWorkspace ? "folder" : "settings",
-    emphasis: "secondary",
-  };
+  if (needsDefaultHarnesses) {
+    cards.push({
+      id: "agent-defaults",
+      title: HOME_SCREEN_LABELS.configureDefaultHarnessesTitle,
+      icon: "sliders",
+    });
+  }
 
-  const trailingCard: HomeActionCardModel = {
-    id: "agent-settings",
-    title: !agentsLoading && readyAgentCount === 0
-      ? HOME_SCREEN_LABELS.agentSettingsTitle
-      : HOME_SCREEN_LABELS.manageAgentsTitle,
-    description: !agentsLoading && readyAgentCount === 0
-      ? HOME_SCREEN_LABELS.agentSettingsDescription
-      : HOME_SCREEN_LABELS.manageAgentsDescription,
-    icon: "settings",
-    emphasis: "secondary",
-  };
+  if (needsRepositoryConfiguration) {
+    cards.push({
+      id: "repository-settings",
+      title: HOME_SCREEN_LABELS.configureRepositoryTitle,
+      icon: "settings",
+    });
+  }
 
-  return [leadingCard, middleCard, trailingCard];
+  return cards;
 }

@@ -10,6 +10,7 @@ const screenMocks = vi.hoisted(() => {
   const launch = vi.fn();
   const clearDraftText = vi.fn();
   const navigate = vi.fn();
+  const onboardingCards: any[] = [];
   const homeNext = {
     selectedRepository: null,
     repositories: [],
@@ -39,6 +40,7 @@ const screenMocks = vi.hoisted(() => {
     launch,
     clearDraftText,
     navigate,
+    onboardingCards,
     homeNext,
   };
 });
@@ -51,6 +53,13 @@ vi.mock("@/hooks/home/derived/use-home-next-state", () => ({
   useHomeNextState: () => screenMocks.homeNext,
 }));
 
+vi.mock("@/hooks/home/derived/use-home-next-launch-controls", () => ({
+  useHomeNextLaunchControls: () => ({
+    controls: [],
+    launchControlValues: {},
+  }),
+}));
+
 vi.mock("@/hooks/home/workflows/use-home-next-launch", () => ({
   useHomeNextLaunch: () => ({
     isLaunching: false,
@@ -60,7 +69,7 @@ vi.mock("@/hooks/home/workflows/use-home-next-launch", () => ({
 
 vi.mock("@/hooks/home/facade/use-home-screen", () => ({
   useHomeScreen: () => ({
-    actionCards: [],
+    onboardingCards: screenMocks.onboardingCards,
     isAddingRepo: false,
     handleHomeAction: screenMocks.handleHomeAction,
   }),
@@ -126,6 +135,7 @@ function resetHomeNext() {
   screenMocks.homeNext.canLaunchTarget = true;
   screenMocks.homeNext.effectiveModelSelection = { kind: "codex", modelId: "gpt-5.4" };
   screenMocks.homeNext.launchTarget = { kind: "cowork" };
+  screenMocks.onboardingCards.splice(0);
 }
 
 describe("HomeNextScreen model availability notices", () => {
@@ -220,5 +230,34 @@ describe("HomeNextScreen model availability notices", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
 
     expect(screen.getByText("start worktree")).toBeTruthy();
+  });
+
+  it("renders onboarding cards as the only home onboarding actions", () => {
+    screenMocks.onboardingCards.push(
+      {
+        id: "add-repository",
+        title: "Add a GitHub repo",
+        icon: "github",
+      },
+      {
+        id: "agent-defaults",
+        title: "Configure default harnesses",
+        icon: "sliders",
+      },
+    );
+
+    render(<HomeNextScreen />);
+
+    expect(screen.getByText("Add a GitHub repo")).toBeTruthy();
+    expect(screen.getByText("Configure default harnesses")).toBeTruthy();
+    expect(screen.queryByText("Manage agents")).toBeNull();
+    expect(screen.queryByText("Add another repository")).toBeNull();
+    expect(screen.queryByText(/Choose a local GitHub clone/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add a GitHub repo" }));
+    expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("add-repository");
+
+    fireEvent.click(screen.getByRole("button", { name: "Configure default harnesses" }));
+    expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("agent-defaults");
   });
 });

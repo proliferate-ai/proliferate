@@ -28,25 +28,65 @@ import {
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { Clock, Folder, Settings } from "@/components/ui/icons";
-import type { HomeActionId } from "@/lib/domain/home/home-screen";
-
-function resolveActionIcon(actionId: HomeActionId) {
-  switch (actionId) {
-    case "resume-last-workspace":
-      return <Clock className="size-3.5" />;
-    case "add-repository":
-      return <Folder className="size-3.5" />;
-    case "agent-settings":
-    case "repository-settings":
-      return <Settings className="size-3.5" />;
-  }
-}
+import { GitHub, Settings, SlidersHorizontal } from "@/components/ui/icons";
+import type {
+  HomeOnboardingCardModel,
+  HomeOnboardingIcon,
+} from "@/lib/domain/home/home-screen";
 
 function waitForNextPaint(): Promise<void> {
   return new Promise((resolve) => {
     scheduleAfterNextPaint(resolve);
   });
+}
+
+function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
+  switch (icon) {
+    case "github":
+      return <GitHub className="size-4" />;
+    case "settings":
+      return <Settings className="size-4" />;
+    case "sliders":
+      return <SlidersHorizontal className="size-4" />;
+  }
+}
+
+function HomeOnboardingCards({
+  cards,
+  isAddingRepo,
+  onSelect,
+}: {
+  cards: HomeOnboardingCardModel[];
+  isAddingRepo: boolean;
+  onSelect: (card: HomeOnboardingCardModel) => void;
+}) {
+  if (cards.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+      {cards.map((card) => (
+        <Button
+          key={card.id}
+          type="button"
+          variant="unstyled"
+          size="unstyled"
+          loading={card.id === "add-repository" && isAddingRepo}
+          aria-label={card.title}
+          onClick={() => onSelect(card)}
+          className="group flex h-24 w-full min-w-0 flex-col items-start whitespace-normal rounded-lg border border-border/60 bg-card/70 p-3 text-left transition-colors hover:border-border hover:bg-foreground/5 hover:text-foreground"
+        >
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground transition-colors group-hover:bg-foreground/10 group-hover:text-foreground">
+            {resolveOnboardingIcon(card.icon)}
+          </span>
+          <span className="mt-auto max-w-44 break-words text-base font-medium leading-5 text-foreground">
+            {card.title}
+          </span>
+        </Button>
+      ))}
+    </div>
+  );
 }
 
 export function HomeNextScreen() {
@@ -69,7 +109,7 @@ export function HomeNextScreen() {
   const restoredDraftText = useHomeDraftHandoffStore((state) => state.draftText);
   const clearRestoredDraftText = useHomeDraftHandoffStore((state) => state.clearDraftText);
   const {
-    actionCards,
+    onboardingCards,
     isAddingRepo,
     handleHomeAction,
   } = useHomeScreen();
@@ -384,23 +424,11 @@ export function HomeNextScreen() {
             </div>
           ) : null}
 
-          <div className="mx-auto mt-3 max-w-2xl">
-            <div className="flex flex-col gap-px">
-              {actionCards.map((action) => (
-                <Button
-                  key={action.id}
-                  variant="ghost"
-                  size="sm"
-                  loading={action.id === "add-repository" && isAddingRepo}
-                  onClick={() => handleHomeAction(action.id)}
-                  className="h-auto w-full justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-normal text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                >
-                  {resolveActionIcon(action.id)}
-                  <span className="min-w-0 flex-1 truncate">{action.title}</span>
-                </Button>
-              ))}
-            </div>
-          </div>
+          <HomeOnboardingCards
+            cards={onboardingCards}
+            isAddingRepo={isAddingRepo}
+            onSelect={(card) => handleHomeAction(card.id)}
+          />
         </div>
       </main>
     </div>
