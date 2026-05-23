@@ -50,6 +50,9 @@ function renderPicker(overrides: Partial<Parameters<typeof HomeTargetPicker>[0]>
         [keystoneRepository.sourceRoot]: { kind: "create", label: "New cloud workspace" },
         [productRepository.sourceRoot]: { kind: "create", label: "New cloud workspace" },
       }}
+      sshTargetOptions={[]}
+      selectedSshTargetId={null}
+      sshTargetsLoading={false}
       onSelectCowork={onSelectCowork}
       onSelectRepository={onSelectRepository}
       onSelectRuntime={onSelectRuntime}
@@ -111,7 +114,7 @@ describe("HomeTargetPicker", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: /New worktree/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Configure cloud workspace/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Set up cloud/i }));
 
     expect(callbacks.onConfigureCloud).toHaveBeenCalledWith(keystoneRepository);
     expect(callbacks.onSelectRuntime).not.toHaveBeenCalledWith("cloud");

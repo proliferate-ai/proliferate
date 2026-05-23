@@ -15,7 +15,7 @@ import {
 } from "@/lib/domain/compute/target-appearance";
 import type { SshTargetConnectPhase } from "@/lib/workflows/compute/ssh-target-connect-workflow";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
-import { ComputeTargetIconGlyph } from "./ComputeTargetSwatch";
+import { ComputeTargetIconGlyph } from "@/components/compute/ComputeTargetSwatch";
 import { EnrollmentCommandBlock } from "./EnrollmentCommandBlock";
 
 interface AddSshTargetDialogProps {

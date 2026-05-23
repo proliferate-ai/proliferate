@@ -105,7 +105,7 @@ export function defaultComputeTargetIconId(kind: ComputeTargetKind): ComputeTarg
     case "local_direct":
       return "monitor";
     case "ssh":
-      return "monitor";
+      return "terminal";
   }
 }
 

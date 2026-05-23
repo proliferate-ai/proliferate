@@ -1,10 +1,16 @@
-import { useState } from "react";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { SelectionRow } from "@/components/ui/SelectionRow";
+import type { MouseEvent, ReactNode } from "react";
+import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
+import { PillControlButton } from "@/components/ui/PillControlButton";
 import {
+  POPOVER_SURFACE_CLASS,
+  PopoverButton,
+} from "@/components/ui/PopoverButton";
+import {
+  Check,
   CloudIcon,
   FolderOpen,
   Plus,
+  Terminal,
 } from "@/components/ui/icons";
 import type {
   AutomationTargetGroup,
@@ -38,6 +44,11 @@ interface AutomationRunLocationSelectorProps {
   }) => void;
 }
 
+const RUN_LOCATION_SURFACE_CLASS = `w-72 min-w-[175px] ${POPOVER_SURFACE_CLASS}`;
+const RUN_LOCATION_SECTION_CLASS =
+  "flex min-h-6 items-center truncate px-2 py-1 text-sm leading-4 text-muted-foreground";
+const RUN_LOCATION_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-foreground/10";
+
 export function AutomationRunLocationSelector({
   ownerScope,
   canChangeOwner,
@@ -50,175 +61,182 @@ export function AutomationRunLocationSelector({
   onSelectTarget,
   onConfigureCloud,
 }: AutomationRunLocationSelectorProps) {
-  const [searchValue, setSearchValue] = useState("");
   const personalOption = ownerOptions.find((option) => option.value === "personal");
   const teamOption = ownerOptions.find((option) => option.value === "organization");
-  const sections = canChangeOwner
-    ? ([
-      {
-        option: personalOption,
-        groups: personalGroups,
-        ownerScope: "personal" as const,
-        emptyLabel: disabledReason ?? "No local or personal cloud targets found.",
-      },
-      {
-        option: teamOption,
-        groups: teamGroups,
-        ownerScope: "organization" as const,
-        emptyLabel: teamOption?.disabledReason ?? "No shared cloud workspace configured.",
-      },
-    ]).filter((section) => section.option)
-    : ([
-      {
-        option: ownerScope === "organization" ? teamOption : personalOption,
-        groups: ownerScope === "organization" ? teamGroups : personalGroups,
-        ownerScope,
-        emptyLabel: disabledReason ?? "No target available.",
-      },
-    ]).filter((section) => section.option);
-  const visibleSections = sections.map((section) => {
-    const groups = filterLocationGroups(section.groups, searchValue);
-    return {
-      ...section,
-      groups,
-      emptyLabel: searchValue.trim()
-        ? "No matching run locations."
-        : section.emptyLabel,
-    };
-  });
+  const selectedPersonalRow = findSelectedTargetRow(personalGroups);
+  const selectedTeamRow = findSelectedTargetRow(teamGroups);
+  const personalDefaultRow = selectedPersonalRow ?? findDefaultTargetRow(personalGroups);
+  const teamDefaultRow =
+    selectedTeamRow
+    ?? findDefaultTargetRow(teamGroups, "cloud")
+    ?? findDefaultTargetRow(teamGroups);
+  const selectedRow = ownerScope === "organization" ? selectedTeamRow : selectedPersonalRow;
+  const teamDisabledReason =
+    teamOption?.disabledReason
+    ?? teamDefaultRow?.disabledReason
+    ?? (teamDefaultRow ? null : "No shared team workspace configured.");
+  const personalDisabledReason =
+    personalOption?.disabledReason
+    ?? (personalDefaultRow ? null : "No personal workspace target.");
+  const triggerLabel = ownerScope === "organization"
+    ? "Team"
+    : selectedRow?.label ?? (isLoading ? "Loading targets" : "Personal");
+  const triggerDetail = ownerScope === "organization"
+    ? "Shared workspace"
+    : selectedRow?.repoLabel ?? null;
+  const triggerIcon = ownerScope === "organization"
+    ? <CloudIcon className="size-3.5" />
+    : selectedRow
+    ? targetRowIcon(selectedRow, "trigger")
+    : <FolderOpen className="size-3.5" />;
 
   return (
-    <section className="rounded-lg border border-border bg-foreground/[0.03] p-3">
-      <div className="mb-3 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="text-sm font-medium text-foreground">Run location</div>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Choose where this automation runs.
-          </p>
-        </div>
-        <div className="flex min-w-0 shrink-0 items-center gap-2">
-          <Input
-            value={searchValue}
-            onChange={(event) => setSearchValue(event.target.value)}
-            placeholder="Filter"
-            aria-label="Filter run locations"
-            className="h-8 w-full px-2.5 py-1.5 text-sm sm:w-44"
-          />
-          {!canChangeOwner ? (
-            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-              Scope locked
-            </span>
-          ) : null}
-        </div>
-      </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        {visibleSections.map((section) => (
-          <RunLocationSection
-            key={section.ownerScope}
-            title={section.option?.label ?? "Location"}
-            description={section.option?.description ?? ""}
-            ownerScope={section.ownerScope}
-            activeOwnerScope={ownerScope}
-            groups={section.groups}
-            isLoading={isLoading}
-            disabledReason={section.option?.disabledReason ?? null}
-            emptyLabel={section.emptyLabel}
-            onSelectOwner={onSelectOwner}
-            onSelectTarget={onSelectTarget}
-            onConfigureCloud={onConfigureCloud}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-interface RunLocationSectionProps {
-  title: string;
-  description: string;
-  ownerScope: AutomationRunOwnerScope;
-  activeOwnerScope: AutomationRunOwnerScope;
-  groups: AutomationTargetGroup[];
-  isLoading: boolean;
-  disabledReason: string | null;
-  emptyLabel: string;
-  onSelectOwner: (ownerScope: AutomationRunOwnerScope) => void;
-  onSelectTarget: (target: AutomationTargetSelection) => void;
-  onConfigureCloud: (target: {
-    gitOwner: string;
-    gitRepoName: string;
-    ownerScope: AutomationRunOwnerScope;
-  }) => void;
-}
-
-function RunLocationSection({
-  title,
-  description,
-  ownerScope,
-  activeOwnerScope,
-  groups,
-  isLoading,
-  disabledReason,
-  emptyLabel,
-  onSelectOwner,
-  onSelectTarget,
-  onConfigureCloud,
-}: RunLocationSectionProps) {
-  const sectionDisabled = Boolean(disabledReason);
-  const hasRows = groups.some((group) => group.rows.length > 0);
-
-  return (
-    <div className="min-w-0">
-      <div className="mb-2 flex min-w-0 items-start gap-2">
-        <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground">
-          {ownerScope === "organization"
-            ? <CloudIcon className="size-4" />
-            : <FolderOpen className="size-4" />}
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-medium text-foreground">
-            {title}
-          </span>
-          <span className="block text-xs text-muted-foreground">
-            {disabledReason ?? description}
-          </span>
-        </span>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {isLoading ? (
-          <LocationPlaceholder label="Loading targets..." />
-        ) : hasRows ? (
-          groups.map((group) => (
-            <div key={`${ownerScope}:${group.repoKey}`} className="flex flex-col gap-1.5">
-              {group.rows.map((row) => (
-                <RunLocationRow
-                  key={`${ownerScope}:${row.id}`}
-                  row={row}
-                  ownerScope={ownerScope}
-                  activeOwnerScope={activeOwnerScope}
-                  sectionDisabled={sectionDisabled}
-                  sectionDisabledReason={disabledReason}
-                  onSelectOwner={onSelectOwner}
-                  onSelectTarget={onSelectTarget}
-                  onConfigureCloud={onConfigureCloud}
-                />
-              ))}
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="shrink-0 text-sm text-muted-foreground">Run in</span>
+        <PopoverButton
+          trigger={(
+            <PillControlButton
+              icon={triggerIcon}
+              label={triggerLabel}
+              detail={triggerDetail}
+              disclosure
+              aria-label={`Run location: ${triggerLabel}${triggerDetail ? ` ${triggerDetail}` : ""}`}
+              className="max-w-[22rem]"
+              data-telemetry-mask
+            />
+          )}
+          align="start"
+          side="bottom"
+          className={RUN_LOCATION_SURFACE_CLASS}
+        >
+          {(close) => (
+            <div className="max-h-[min(22rem,calc(100vh-1rem))] min-h-0 overflow-y-auto">
+              {canChangeOwner ? (
+                <>
+                  <RunLocationSectionHeader label="Run as" />
+                  <RunLocationMenuItem
+                    disabled={Boolean(personalDisabledReason)}
+                    icon={<FolderOpen className="size-full" />}
+                    label="Personal"
+                    detail={personalDefaultRow?.label ?? "Your workspace"}
+                    selected={ownerScope === "personal"}
+                    title={personalDisabledReason ?? "Run with your local or personal cloud setup."}
+                    onClick={() => {
+                      if (personalDisabledReason) {
+                        return;
+                      }
+                      onSelectOwner("personal");
+                      if (personalDefaultRow) {
+                        onSelectTarget(personalDefaultRow.target);
+                      }
+                      close();
+                    }}
+                  />
+                  <RunLocationMenuItem
+                    disabled={Boolean(teamDisabledReason)}
+                    icon={<CloudIcon className="size-full" />}
+                    label="Team"
+                    detail="Shared workspace"
+                    selected={ownerScope === "organization"}
+                    title={teamDisabledReason ?? "Run in the shared team workspace."}
+                    onClick={() => {
+                      if (teamDisabledReason) {
+                        return;
+                      }
+                      onSelectOwner("organization");
+                      if (teamDefaultRow) {
+                        onSelectTarget(teamDefaultRow.target);
+                      }
+                      close();
+                    }}
+                  />
+                  {ownerScope === "personal" ? (
+                    <div className={RUN_LOCATION_DIVIDER_CLASS} />
+                  ) : null}
+                </>
+              ) : null}
+              {ownerScope === "personal" ? (
+                <>
+                  <RunLocationSectionHeader label={canChangeOwner ? "Personal workspace" : "Run in"} />
+                  <RunLocationRows
+                    activeOwnerScope={ownerScope}
+                    disabledReason={personalOption?.disabledReason ?? null}
+                    emptyLabel={disabledReason ?? "No personal workspace target."}
+                    groups={personalGroups}
+                    isLoading={isLoading}
+                    ownerScope="personal"
+                    onConfigureCloud={(target) => {
+                      onConfigureCloud(target);
+                      close();
+                    }}
+                    onSelectOwner={onSelectOwner}
+                    onSelectTarget={(target) => {
+                      onSelectTarget(target);
+                      close();
+                    }}
+                  />
+                </>
+              ) : !canChangeOwner ? (
+                <>
+                  <RunLocationSectionHeader label="Run as" />
+                  <RunLocationMenuItem
+                    disabled={Boolean(teamDisabledReason)}
+                    icon={<CloudIcon className="size-full" />}
+                    label="Team"
+                    detail="Shared workspace"
+                    selected
+                    title={teamDisabledReason ?? "Run in the shared team workspace."}
+                    onClick={() => {
+                      if (!teamDisabledReason && teamDefaultRow) {
+                        onSelectTarget(teamDefaultRow.target);
+                      }
+                      close();
+                    }}
+                  />
+                </>
+              ) : null}
             </div>
-          ))
-        ) : (
-          <LocationPlaceholder label={emptyLabel} />
-        )}
+          )}
+        </PopoverButton>
+        {!canChangeOwner ? (
+          <span className="shrink-0 text-xs text-muted-foreground">Scope locked</span>
+        ) : null}
       </div>
+      {disabledReason ? (
+        <p className="text-xs leading-5 text-muted-foreground">
+          {disabledReason}
+        </p>
+      ) : null}
     </div>
   );
 }
 
-interface RunLocationRowProps {
-  row: AutomationTargetRow;
-  ownerScope: AutomationRunOwnerScope;
+function RunLocationSectionHeader({ label }: { label: string }) {
+  return (
+    <div className={RUN_LOCATION_SECTION_CLASS}>
+      {label}
+    </div>
+  );
+}
+
+function RunLocationRows({
+  activeOwnerScope,
+  disabledReason,
+  emptyLabel,
+  groups,
+  isLoading,
+  ownerScope,
+  onSelectOwner,
+  onSelectTarget,
+  onConfigureCloud,
+}: {
   activeOwnerScope: AutomationRunOwnerScope;
-  sectionDisabled: boolean;
-  sectionDisabledReason: string | null;
+  disabledReason: string | null;
+  emptyLabel: string;
+  groups: AutomationTargetGroup[];
+  isLoading: boolean;
+  ownerScope: AutomationRunOwnerScope;
   onSelectOwner: (ownerScope: AutomationRunOwnerScope) => void;
   onSelectTarget: (target: AutomationTargetSelection) => void;
   onConfigureCloud: (target: {
@@ -226,32 +244,61 @@ interface RunLocationRowProps {
     gitRepoName: string;
     ownerScope: AutomationRunOwnerScope;
   }) => void;
+}) {
+  if (isLoading) {
+    return <RunLocationEmptyRow label="Loading targets" />;
+  }
+
+  const rows = groups.flatMap((group) => group.rows);
+  if (rows.length === 0) {
+    return <RunLocationEmptyRow label={emptyLabel} />;
+  }
+
+  return rows.map((row) => (
+    <RunLocationMenuRow
+      key={`${ownerScope}:${row.id}`}
+      activeOwnerScope={activeOwnerScope}
+      disabledReason={disabledReason}
+      ownerScope={ownerScope}
+      row={row}
+      onSelectOwner={onSelectOwner}
+      onSelectTarget={onSelectTarget}
+      onConfigureCloud={onConfigureCloud}
+    />
+  ));
 }
 
-function RunLocationRow({
-  row,
-  ownerScope,
+function RunLocationMenuRow({
   activeOwnerScope,
-  sectionDisabled,
-  sectionDisabledReason,
+  disabledReason,
+  ownerScope,
+  row,
   onSelectOwner,
   onSelectTarget,
   onConfigureCloud,
-}: RunLocationRowProps) {
+}: {
+  activeOwnerScope: AutomationRunOwnerScope;
+  disabledReason: string | null;
+  ownerScope: AutomationRunOwnerScope;
+  row: AutomationTargetRow;
+  onSelectOwner: (ownerScope: AutomationRunOwnerScope) => void;
+  onSelectTarget: (target: AutomationTargetSelection) => void;
+  onConfigureCloud: (target: {
+    gitOwner: string;
+    gitRepoName: string;
+    ownerScope: AutomationRunOwnerScope;
+  }) => void;
+}) {
   if (row.kind === "configureCloud") {
     return (
-      <SelectionRow
-        selected={false}
-        disabled={sectionDisabled}
-        title={sectionDisabledReason ?? undefined}
-        icon={<Plus className="size-4 text-muted-foreground" />}
-        label={row.label}
-        subtitle={[
-          row.repoLabel,
-          sectionDisabledReason ?? row.description,
-        ].filter(Boolean).join(" - ")}
+      <RunLocationMenuItem
+        disabled={Boolean(disabledReason)}
+        icon={<Plus className="size-full" />}
+        label="Set up cloud"
+        detail={row.repoLabel}
+        title={disabledReason ?? row.description ?? undefined}
         onClick={() => {
-          if (sectionDisabled) {
+          if (disabledReason) {
             return;
           }
           onConfigureCloud({
@@ -264,21 +311,18 @@ function RunLocationRow({
     );
   }
 
-  const disabledReason = sectionDisabledReason ?? row.disabledReason;
-  const disabled = Boolean(disabledReason);
+  const rowDisabledReason = disabledReason ?? row.disabledReason;
   const selected = activeOwnerScope === ownerScope && row.selected;
   return (
-    <SelectionRow
+    <RunLocationMenuItem
+      disabled={Boolean(rowDisabledReason)}
+      icon={targetRowIcon(row, "menu")}
+      label={row.label}
+      detail={row.repoLabel}
       selected={selected}
-      disabled={disabled}
-      title={disabledReason ?? undefined}
-      icon={row.target.executionTarget === "cloud"
-        ? <CloudIcon className="size-4 text-muted-foreground" />
-        : <FolderOpen className="size-4 text-muted-foreground" />}
-      label={row.repoLabel}
-      subtitle={[row.label, disabledReason ?? row.description].filter(Boolean).join(" - ")}
+      title={rowDisabledReason ?? row.description ?? undefined}
       onClick={() => {
-        if (disabled) {
+        if (rowDisabledReason) {
           return;
         }
         onSelectOwner(ownerScope);
@@ -288,31 +332,123 @@ function RunLocationRow({
   );
 }
 
-function LocationPlaceholder({ label }: { label: string }) {
+function RunLocationMenuItem({
+  detail,
+  disabled = false,
+  icon,
+  label,
+  onClick,
+  selected = false,
+  title,
+}: {
+  detail?: string | null;
+  disabled?: boolean;
+  icon?: ReactNode;
+  label: string;
+  onClick: () => void;
+  selected?: boolean;
+  title?: string;
+}) {
   return (
-    <div className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+    <button
+      type="button"
+      disabled={disabled}
+      title={title}
+      className="group/menu-item flex w-full cursor-default select-none flex-col rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground outline-none transition-colors hover:bg-popover-accent focus:bg-popover-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+      onClick={(event: MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        onClick();
+      }}
+    >
+      <span className="flex w-full items-center gap-1.5">
+        {icon ? (
+          <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100">
+            {icon}
+          </span>
+        ) : null}
+        <span className="flex min-w-0 flex-1 items-baseline gap-1.5 text-left">
+          <span className="min-w-0 truncate">{label}</span>
+          {detail ? (
+            <span className="min-w-0 truncate text-muted-foreground">
+              {detail}
+            </span>
+          ) : null}
+        </span>
+        {selected ? (
+          <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100">
+            <Check className="size-3.5" />
+          </span>
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
+function RunLocationEmptyRow({ label }: { label: string }) {
+  return (
+    <div className="px-2 py-1 text-sm leading-4 text-muted-foreground">
       {label}
     </div>
   );
 }
 
-function filterLocationGroups(
-  groups: AutomationTargetGroup[],
-  searchValue: string,
-): AutomationTargetGroup[] {
-  const query = searchValue.trim().toLowerCase();
-  if (!query) {
-    return groups;
+function targetRowIcon(
+  row: Extract<AutomationTargetRow, { kind: "target" }>,
+  variant: "menu" | "trigger",
+) {
+  if (row.computeTargetOption) {
+    if (variant === "menu") {
+      return <ComputeTargetSwatch appearance={row.computeTargetOption.appearance} size="inherit" />;
+    }
+    return (
+      <span className="size-3.5">
+        <ComputeTargetSwatch appearance={row.computeTargetOption.appearance} size="inherit" />
+      </span>
+    );
   }
-  return groups
-    .map((group) => ({
-      ...group,
-      rows: group.rows.filter((row) => {
-        const values = row.kind === "configureCloud"
-          ? [row.repoLabel, row.label, row.description]
-          : [row.repoLabel, row.label, row.description, row.target.executionTarget];
-        return values.some((value) => value?.toLowerCase().includes(query));
-      }),
-    }))
-    .filter((group) => group.rows.length > 0);
+
+  const iconClassName = variant === "menu" ? "size-full" : "size-3.5";
+  if (row.target.executionTarget === "cloud") {
+    return <CloudIcon className={iconClassName} />;
+  }
+  if (row.target.executionTarget === "ssh") {
+    return <Terminal className={iconClassName} />;
+  }
+  return <FolderOpen className={iconClassName} />;
+}
+
+function findSelectedTargetRow(groups: AutomationTargetGroup[]) {
+  for (const group of groups) {
+    for (const row of group.rows) {
+      if (row.kind === "target" && row.selected) {
+        return row;
+      }
+    }
+  }
+  return null;
+}
+
+function findDefaultTargetRow(
+  groups: AutomationTargetGroup[],
+  preferredExecutionTarget?: AutomationTargetSelection["executionTarget"],
+) {
+  let fallback: Extract<AutomationTargetRow, { kind: "target" }> | null = null;
+  for (const group of groups) {
+    for (const row of group.rows) {
+      if (row.kind !== "target") {
+        continue;
+      }
+      if (!fallback && !row.disabledReason) {
+        fallback = row;
+      }
+      if (
+        preferredExecutionTarget
+        && row.target.executionTarget === preferredExecutionTarget
+        && !row.disabledReason
+      ) {
+        return row;
+      }
+    }
+  }
+  return fallback;
 }

@@ -48,6 +48,7 @@ export const DEFAULT_SIDEBAR_WORKSPACE_TYPES: SidebarWorkspaceVariant[] = [
   "local",
   "worktree",
   "cloud",
+  "ssh",
 ];
 export const SIDEBAR_REPO_GROUP_ITEM_LIMIT = 6;
 

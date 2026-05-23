@@ -3,27 +3,13 @@ import { useWorkspaceMobilityFooterFlow } from "@/hooks/workspaces/mobility/use-
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import {
   ChevronDown,
-  CloudIcon,
-  Folder,
-  FolderOpen,
   Spinner,
 } from "@/components/ui/icons";
+import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 import { WorkspaceMobilityLocationPopover } from "./WorkspaceMobilityLocationPopover";
 import { WorkspaceOpenInWebFooterControl } from "./WorkspaceOpenInWebFooterControl";
 import { WorkspaceRemoteAccessFooterControl } from "./WorkspaceRemoteAccessFooterControl";
-
-function locationIcon(kind: "local_workspace" | "local_worktree" | "cloud_workspace") {
-  switch (kind) {
-    case "cloud_workspace":
-      return <CloudIcon className="size-3.5" />;
-    case "local_worktree":
-      return <FolderOpen className="size-3.5" />;
-    case "local_workspace":
-    default:
-      return <Folder className="size-3.5" />;
-  }
-}
 
 export function WorkspaceMobilityFooterProgressStatus({
   statusLabel,
@@ -62,20 +48,26 @@ export function WorkspaceMobilityFooterRow() {
   }
 
   const prompt = flow.prompt;
+  const hasDestinations = flow.destinationOptions.length > 0;
   const locationButton = (
     <ComposerControlButton
-      icon={locationIcon(footerContext.locationKind)}
-      label={footerContext.movementLabel}
-      detail={footerContext.locationLabel}
-      trailing={prompt ? <ChevronDown className="size-3.5 text-muted-foreground/70" /> : undefined}
+      icon={(
+        <SidebarWorkspaceVariantIcon
+          variant={footerContext.variant}
+          targetAppearance={footerContext.targetAppearance}
+          className="size-3.5 text-muted-foreground"
+        />
+      )}
+      label="Migrate workspace"
+      trailing={hasDestinations ? <ChevronDown className="size-3.5 text-muted-foreground/70" /> : undefined}
       active={flow.popoverOpen || footerContext.isActive}
-      disabled={!prompt || !footerContext.isInteractive}
-      title="Move this session between available locations."
+      disabled={!hasDestinations || !footerContext.isInteractive}
+      title="Move this workspace between available locations."
       className="shrink-0"
       data-telemetry-mask
     />
   );
-  const locationTrigger = prompt && footerContext.isInteractive ? (
+  const locationTrigger = hasDestinations && footerContext.isInteractive ? (
     <PopoverButton
       externalOpen={flow.popoverOpen}
       onOpenChange={flow.handlePopoverOpenChange}
@@ -87,6 +79,8 @@ export function WorkspaceMobilityFooterRow() {
     >
       {(close) => (
         <WorkspaceMobilityLocationPopover
+          destinationOptions={flow.destinationOptions}
+          selectedDestinationId={flow.selectedDestinationId}
           prompt={prompt}
           snapshot={flow.confirmSnapshot}
           isActionPending={flow.isPromptActionPending}
@@ -94,6 +88,8 @@ export function WorkspaceMobilityFooterRow() {
             close();
             flow.closePopover();
           }}
+          onSelectDestination={flow.handleDestinationSelect}
+          onBackToDestinations={flow.handleDestinationBack}
           onPrimaryAction={flow.handlePrimaryAction}
         />
       )}

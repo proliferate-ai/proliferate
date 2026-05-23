@@ -46,7 +46,7 @@ export type HomeNextLaunchTarget = HomeNextCoworkTarget | HomeNextRepositoryTarg
 
 export type HomeNextDestination = "cowork" | "repository";
 
-export type HomeNextRepoLaunchKind = "worktree" | "local" | "cloud";
+export type HomeNextRepoLaunchKind = "worktree" | "local" | "cloud" | "ssh";
 
 export type HomeNextModelSelection = AgentModelSelection;
 export type HomeNextModelOption = AgentModelOption;
@@ -287,6 +287,10 @@ export function resolveHomeLaunchTarget(input: {
       gitRepoName,
       baseBranch: input.baseBranch,
     };
+  }
+
+  if (input.repoLaunchKind === "ssh") {
+    return null;
   }
 
   return {

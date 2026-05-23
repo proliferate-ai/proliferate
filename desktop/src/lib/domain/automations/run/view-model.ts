@@ -4,6 +4,7 @@ import type {
   AutomationRunRecord,
 } from "./records";
 import { formatAutomationTimestamp } from "@/lib/domain/automations/schedule/schedule";
+import type { AutomationExecutionTarget } from "@/lib/domain/automations/target/records";
 
 export interface AutomationRowViewModel {
   id: string;
@@ -23,8 +24,8 @@ const DAY_MS = 24 * HOUR_MS;
 
 function executionTargetForTargetMode(
   value: AutomationRecord["targetMode"] | AutomationRunRecord["targetMode"],
-  fallback?: "cloud" | "local",
-): "cloud" | "local" {
+  fallback?: AutomationExecutionTarget,
+): AutomationExecutionTarget {
   if (value === "local") {
     return "local";
   }
@@ -32,6 +33,25 @@ function executionTargetForTargetMode(
     return "cloud";
   }
   return fallback ?? "cloud";
+}
+
+function executionTargetLabel(target: AutomationExecutionTarget): string {
+  switch (target) {
+    case "local":
+      return "Local";
+    case "ssh":
+      return "SSH target";
+    case "cloud":
+    default:
+      return "Cloud";
+  }
+}
+
+function isLocalExecutionTarget(
+  value: AutomationRecord["targetMode"] | AutomationRunRecord["targetMode"],
+  fallback?: AutomationExecutionTarget,
+): boolean {
+  return executionTargetForTargetMode(value, fallback) === "local";
 }
 
 function compactStatusMessage(message: string): string {
@@ -64,10 +84,10 @@ export function buildAutomationRowViewModel(
         automation.schedule.nextRunAt,
         automation.schedule.timezone,
       ),
-    executionLabel: executionTargetForTargetMode(
+    executionLabel: executionTargetLabel(executionTargetForTargetMode(
       automation.targetMode,
       automation.executionTarget,
-    ) === "cloud" ? "Cloud" : "Local",
+    )),
   };
 }
 
@@ -161,17 +181,17 @@ function formatMonthDay(date: Date, timezone?: string | null): string {
 export function automationRunStatusLabel(run: AutomationRunRecord): string {
   switch (run.status) {
     case "queued":
-      return executionTargetForTargetMode(run.targetMode, run.executionTarget) === "local"
+      return isLocalExecutionTarget(run.targetMode, run.executionTarget)
         ? AUTOMATION_RUN_COPY.localQueued
         : AUTOMATION_RUN_COPY.queued;
     case "claimed":
       return AUTOMATION_RUN_COPY.claimed;
     case "creating_workspace":
-      return executionTargetForTargetMode(run.targetMode, run.executionTarget) === "local"
+      return isLocalExecutionTarget(run.targetMode, run.executionTarget)
         ? AUTOMATION_RUN_COPY.creatingLocalWorkspace
         : AUTOMATION_RUN_COPY.creatingWorkspace;
     case "provisioning_workspace":
-      return executionTargetForTargetMode(run.targetMode, run.executionTarget) === "local"
+      return isLocalExecutionTarget(run.targetMode, run.executionTarget)
         ? AUTOMATION_RUN_COPY.provisioningLocalWorkspace
         : AUTOMATION_RUN_COPY.provisioningWorkspace;
     case "creating_session":

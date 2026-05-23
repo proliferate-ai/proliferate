@@ -3,6 +3,7 @@ import {
   useCloudRepoConfigs,
   useOrganizationCloudRepoConfigs,
 } from "@/hooks/access/cloud/use-cloud-repo-configs";
+import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-target-options";
 import { useSettingsRepositories } from "@/hooks/settings/derived/use-settings-repositories";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import {
@@ -47,6 +48,10 @@ export function useAutomationTargetSelection({
   const { repositories } = useSettingsRepositories();
   const { cloudWorkspaces, isLoading: repoProjectionLoading } =
     useStandardRepoProjection();
+  const computeTargets = useComputeTargetOptions({
+    enabled,
+    ownerScope,
+  });
   const repoConfigs = isOrganization
     ? organizationRepoConfigsData?.configs
     : personalRepoConfigsData?.configs;
@@ -58,6 +63,7 @@ export function useAutomationTargetSelection({
   const targetState = useMemo(() => buildAutomationTargetState({
     repoConfigs: repoConfigs ?? EMPTY_REPO_CONFIGS,
     cloudWorkspaces: scopedCloudWorkspaces,
+    sshTargets: computeTargets.sshTargetOptions,
     repositories,
     selectedTarget,
     savedTarget: automation
@@ -85,11 +91,12 @@ export function useAutomationTargetSelection({
     repoConfigs,
     repositories,
     scopedCloudWorkspaces,
+    computeTargets.sshTargetOptions,
     selectedTarget,
   ]);
 
   return {
     ...targetState,
-    isLoading: repoConfigsLoading || repoProjectionLoading,
+    isLoading: repoConfigsLoading || repoProjectionLoading || computeTargets.isLoading,
   };
 }

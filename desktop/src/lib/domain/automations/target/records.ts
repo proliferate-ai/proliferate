@@ -1,4 +1,4 @@
-export type AutomationExecutionTarget = "cloud" | "local";
+export type AutomationExecutionTarget = "cloud" | "local" | "ssh";
 
 export interface AutomationTargetRepoConfigRecord {
   gitOwner: string;

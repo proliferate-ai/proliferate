@@ -14,9 +14,11 @@ import { parseLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-w
 import {
   activeWorkspaceActivity,
   detailIndicatorsForWorkspace,
+  logicalWorkspaceSshTargetId,
   sidebarStatusIndicatorFromActivity,
   sidebarWorkspaceVariantForLogicalWorkspace,
 } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
 import type { SidebarCloudWorkspaceStatus } from "@/lib/domain/workspaces/sidebar/cloud-workspace";
 import { cloudSidebarEntryDefaultDisplayName } from "@/lib/domain/workspaces/sidebar/sidebar-entries";
 import type {
@@ -100,6 +102,7 @@ export function buildSidebarGroupStates(args: {
   lastViewedAt: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
   finishSuggestionsByWorkspaceId?: Record<string, { workspaceId: string; readinessFingerprint: string }>;
+  targetAppearanceById?: Record<string, ComputeTargetAppearance>;
 }): SidebarGroupState[] {
   const visibleWorkspaceTypes = new Set(resolveSidebarWorkspaceTypes(args.workspaceTypes));
   const repoRootsByKey = new Map(
@@ -184,6 +187,10 @@ export function buildSidebarGroupStates(args: {
         });
         const activity = activeWorkspaceActivity(entry, args.workspaceActivities);
         const copyMetadata = workspaceCopyMetadataForLogicalWorkspace(entry);
+        const sshTargetId = variant === "ssh" ? logicalWorkspaceSshTargetId(entry) : null;
+        const targetAppearance = sshTargetId
+          ? args.targetAppearanceById?.[sshTargetId] ?? null
+          : null;
 
         return {
           workspace: entry,
@@ -210,6 +217,7 @@ export function buildSidebarGroupStates(args: {
               preferredLocalWorkspace
                 ? args.finishSuggestionsByWorkspaceId?.[preferredLocalWorkspace.id] ?? null
                 : null,
+              targetAppearance,
             ),
             cloudStatus: preferredCloudWorkspace
               ? preferredCloudWorkspace.status as SidebarCloudWorkspaceStatus

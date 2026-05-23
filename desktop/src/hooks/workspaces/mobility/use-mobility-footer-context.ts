@@ -5,6 +5,7 @@ import {
   type WorkspaceMobilitySelectedMaterializationKind,
   type MobilityFooterContext,
 } from "@/lib/domain/workspaces/mobility/mobility-footer-context";
+import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-target-options";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -15,6 +16,9 @@ export function useMobilityFooterContext(): MobilityFooterContext | null {
   const selectedWorkspaceId = useSessionSelectionStore((s) => s.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((s) => s.selectedLogicalWorkspaceId);
   const pendingWorkspaceEntry = useSessionSelectionStore((s) => s.pendingWorkspaceEntry);
+  const computeTargets = useComputeTargetOptions({
+    enabled: Boolean(mobility.selectedLogicalWorkspace),
+  });
   const selectedMaterializationKind: WorkspaceMobilitySelectedMaterializationKind | null =
     selectedWorkspaceId
       ? parseCloudWorkspaceSyntheticId(selectedWorkspaceId) ? "cloud" : "local"
@@ -32,8 +36,10 @@ export function useMobilityFooterContext(): MobilityFooterContext | null {
       logicalWorkspace: mobility.selectedLogicalWorkspace,
       selectedMaterializationKind,
       status: mobility.status,
+      targetAppearanceById: computeTargets.targetAppearanceById,
     });
   }, [
+    computeTargets.targetAppearanceById,
     mobility.selectedLogicalWorkspace,
     mobility.status,
     pendingWorkspaceEntry,

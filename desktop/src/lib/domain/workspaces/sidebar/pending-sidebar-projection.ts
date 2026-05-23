@@ -156,6 +156,8 @@ function pendingMaterializationTooltip(variant: SidebarWorkspaceVariant): string
       return "Local worktree";
     case "cloud":
       return "Cloud workspace";
+    case "ssh":
+      return "SSH target";
     case "local":
       return "Local workspace";
   }

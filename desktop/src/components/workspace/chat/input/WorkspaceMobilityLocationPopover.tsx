@@ -1,106 +1,30 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
+import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
+import { POPOVER_SURFACE_CLASS } from "@/components/ui/PopoverButton";
 import {
+  Check,
   CircleAlert,
   CloudIcon,
   FolderOpen,
   GitBranch,
   GitCommit,
+  Spinner,
+  Terminal,
 } from "@/components/ui/icons";
 import { mobilityReconnectCopy } from "@/lib/domain/workspaces/mobility/presentation";
-import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import type { MobilityPromptState } from "@/lib/domain/workspaces/mobility/mobility-prompt";
+import type {
+  WorkspaceMobilityDestinationId,
+  WorkspaceMobilityDestinationOption,
+} from "@/lib/domain/workspaces/mobility/mobility-destinations";
 import type { WorkspaceMobilityConfirmSnapshot } from "@/lib/domain/workspaces/mobility/types";
-import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
 
-function MigrationTargetPreview({
-  direction,
-  stateLabel,
-}: {
-  direction: WorkspaceMobilityDirection | null;
-  stateLabel: string;
-}) {
-  const source = direction === "cloud_to_local"
-    ? {
-      label: "Cloud workspace",
-      detail: "Current runtime",
-      icon: <CloudIcon className="size-3.5" />,
-    }
-    : {
-      label: "Local workspace",
-      detail: "Current runtime",
-      icon: <FolderOpen className="size-3.5" />,
-    };
-  const destination = direction === "cloud_to_local"
-    ? {
-      label: "Local workspace",
-      detail: "Destination",
-      icon: <FolderOpen className="size-3.5" />,
-    }
-    : {
-      label: "Cloud workspace",
-      detail: "Destination",
-      icon: <CloudIcon className="size-3.5" />,
-    };
-
-  return (
-    <div className="rounded-lg border border-border/70 bg-[var(--color-composer-control-hover)]/45 p-2">
-      <div className="mb-1.5 flex items-center justify-between gap-3">
-        <span className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
-          Move target
-        </span>
-        <span className="truncate text-[11px] text-muted-foreground/80">
-          {stateLabel}
-        </span>
-      </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-1.5">
-        <TargetEndpoint
-          icon={source.icon}
-          label={source.label}
-          detail={source.detail}
-        />
-        <div className="flex items-center justify-center text-muted-foreground/55" aria-hidden="true">
-          <span className="h-px w-4 bg-border/80" />
-        </div>
-        <TargetEndpoint
-          icon={destination.icon}
-          label={destination.label}
-          detail={destination.detail}
-          emphasized
-        />
-      </div>
-    </div>
-  );
-}
-
-function TargetEndpoint({
-  detail,
-  emphasized = false,
-  icon,
-  label,
-}: {
-  detail: string;
-  emphasized?: boolean;
-  icon: ReactNode;
-  label: string;
-}) {
-  return (
-    <div className={`min-w-0 rounded-md border px-2 py-1.5 ${
-      emphasized
-        ? "border-border bg-background/55 text-foreground"
-        : "border-transparent bg-background/25 text-muted-foreground"
-    }`}
-    >
-      <div className="flex min-w-0 items-center gap-1.5">
-        <span className="shrink-0">{icon}</span>
-        <span className="min-w-0 truncate text-xs font-medium">{label}</span>
-      </div>
-      <div className="mt-0.5 truncate pl-5 text-[11px] text-muted-foreground/80">
-        {detail}
-      </div>
-    </div>
-  );
-}
+const MOBILITY_PICKER_SURFACE_CLASS = `w-60 min-w-[175px] ${POPOVER_SURFACE_CLASS}`;
+const MOBILITY_PROMPT_SURFACE_CLASS = `w-80 min-w-[175px] ${POPOVER_SURFACE_CLASS}`;
+const MOBILITY_SECTION_CLASS =
+  "flex min-h-6 items-center truncate px-2 py-1 text-sm leading-4 text-muted-foreground";
+const MOBILITY_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-foreground/10";
 
 function HandoffSnapshotDetails({
   snapshot,
@@ -132,19 +56,167 @@ function HandoffSnapshotDetails({
   );
 }
 
+function DestinationOptionIcon({
+  option,
+}: {
+  option: WorkspaceMobilityDestinationOption;
+}) {
+  if (option.targetOption) {
+    return <ComputeTargetSwatch appearance={option.targetOption.appearance} size="inherit" />;
+  }
+  switch (option.kind) {
+    case "cloud_workspace":
+      return <CloudIcon className="size-full" />;
+    case "ssh_target":
+      return <Terminal className="size-full" />;
+    case "local_worktree":
+    case "local_workspace":
+    default:
+      return <FolderOpen className="size-full" />;
+  }
+}
+
+function MobilitySection({ children }: { children: ReactNode }) {
+  return (
+    <div className={MOBILITY_SECTION_CLASS}>
+      {children}
+    </div>
+  );
+}
+
+function MobilityMenuItem({
+  disabled = false,
+  icon,
+  label,
+  onClick,
+  selected = false,
+  title,
+}: {
+  disabled?: boolean;
+  icon?: ReactNode;
+  label: string;
+  onClick: () => void;
+  selected?: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      title={title}
+      className="group/menu-item flex w-full cursor-default select-none flex-col rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground outline-none transition-colors hover:bg-popover-accent focus:bg-popover-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+      onClick={(event: MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        onClick();
+      }}
+    >
+      <span className="flex w-full items-center gap-1.5">
+        {icon ? (
+          <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100">
+            {icon}
+          </span>
+        ) : null}
+        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+        {selected ? (
+          <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100">
+            <Check className="size-3.5" />
+          </span>
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
+function MobilityEmptyRow({ label }: { label: string }) {
+  return (
+    <div className="px-2 py-1 text-sm leading-4 text-muted-foreground">
+      {label}
+    </div>
+  );
+}
+
+function DestinationPicker({
+  options,
+  onSelectDestination,
+}: {
+  options: WorkspaceMobilityDestinationOption[];
+  onSelectDestination: (destination: WorkspaceMobilityDestinationOption) => void;
+}) {
+  return (
+    <div className={MOBILITY_PICKER_SURFACE_CLASS}>
+      <MobilitySection>Move to</MobilitySection>
+      {options.length === 0 ? (
+        <MobilityEmptyRow label="No destinations" />
+      ) : (
+        options.map((option) => (
+          <MobilityMenuItem
+            key={option.id}
+            icon={<DestinationOptionIcon option={option} />}
+            label={option.label}
+            disabled={Boolean(option.disabledReason)}
+            title={option.disabledReason ?? option.detail}
+            onClick={() => onSelectDestination(option)}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+function SelectedDestinationRow({
+  destination,
+  onBackToDestinations,
+}: {
+  destination: WorkspaceMobilityDestinationOption;
+  onBackToDestinations?: () => void;
+}) {
+  return (
+    <MobilityMenuItem
+      icon={<DestinationOptionIcon option={destination} />}
+      label={destination.label}
+      selected
+      title={destination.detail}
+      onClick={() => {
+        onBackToDestinations?.();
+      }}
+    />
+  );
+}
+
 export function WorkspaceMobilityLocationPopover({
+  destinationOptions,
+  selectedDestinationId,
   prompt,
   snapshot,
   isActionPending = false,
   onClose,
+  onSelectDestination,
+  onBackToDestinations,
   onPrimaryAction,
 }: {
-  prompt: MobilityPromptState;
+  destinationOptions: WorkspaceMobilityDestinationOption[];
+  selectedDestinationId: WorkspaceMobilityDestinationId | null;
+  prompt: MobilityPromptState | null;
   snapshot: WorkspaceMobilityConfirmSnapshot | null;
   isActionPending?: boolean;
   onClose: () => void;
+  onSelectDestination: (destination: WorkspaceMobilityDestinationOption) => void;
+  onBackToDestinations?: () => void;
   onPrimaryAction: () => void | Promise<void>;
 }) {
+  const selectedDestination = selectedDestinationId
+    ? destinationOptions.find((option) => option.id === selectedDestinationId) ?? null
+    : null;
+
+  if (!selectedDestinationId || !prompt) {
+    return (
+      <DestinationPicker
+        options={destinationOptions}
+        onSelectDestination={onSelectDestination}
+      />
+    );
+  }
+
   const leading = prompt.variant === "blocked"
       ? <CircleAlert className="size-4 text-destructive" />
       : null;
@@ -154,21 +226,26 @@ export function WorkspaceMobilityLocationPopover({
     : prompt.variant === "actionable" || prompt.variant === "loading"
       ? "Cancel"
       : "Got it";
-  const targetStateLabel = prompt.variant === "loading"
-    ? "Preparing"
-    : prompt.variant === "blocked"
-      ? "Blocked"
-      : "Ready";
+  if (!selectedDestination) {
+    return null;
+  }
 
   return (
-    <ComposerPopoverSurface className="w-[min(26rem,calc(100vw-2rem))] p-0">
-      <div className="space-y-3 px-4 py-3.5">
-        <MigrationTargetPreview
-          direction={prompt.direction}
-          stateLabel={targetStateLabel}
-        />
+    <div className={MOBILITY_PROMPT_SURFACE_CLASS}>
+      <MobilitySection>Move to</MobilitySection>
+      <SelectedDestinationRow
+        destination={selectedDestination}
+        onBackToDestinations={onBackToDestinations}
+      />
+      <div className={MOBILITY_DIVIDER_CLASS} />
 
-        {prompt.variant !== "loading" && (
+      {prompt.variant === "loading" ? (
+        <div className="flex min-h-6 items-center gap-1.5 px-2 py-1 text-sm leading-4 text-muted-foreground">
+          <Spinner className="size-3" />
+          <span>Preparing</span>
+        </div>
+      ) : (
+        <div className="space-y-2 px-2 pb-2 pt-1">
           <div className="flex items-start gap-2.5">
             {leading ? <div className="pt-0.5">{leading}</div> : null}
             <div className="min-w-0 flex-1">
@@ -185,45 +262,45 @@ export function WorkspaceMobilityLocationPopover({
               )}
             </div>
           </div>
-        )}
 
-        {prompt.variant === "actionable" && snapshot && (
-          <HandoffSnapshotDetails snapshot={snapshot} />
-        )}
-
-        {prompt.warning && (
-          <p className="text-xs leading-5 text-muted-foreground">
-            {prompt.warning}
-          </p>
-        )}
-
-        {prompt.variant === "actionable" && (
-          <p className="text-xs leading-5 text-muted-foreground/80">
-            {mobilityReconnectCopy(prompt.direction)}
-          </p>
-        )}
-
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-          >
-            {secondaryLabel}
-          </Button>
-          {prompt.actionLabel && prompt.primaryActionKind && (
-            <Button
-              size="sm"
-              loading={isActionPending}
-              onClick={() => {
-                void onPrimaryAction();
-              }}
-            >
-              {prompt.actionLabel}
-            </Button>
+          {prompt.variant === "actionable" && snapshot && (
+            <HandoffSnapshotDetails snapshot={snapshot} />
           )}
+
+          {prompt.warning && (
+            <p className="text-xs leading-5 text-muted-foreground">
+              {prompt.warning}
+            </p>
+          )}
+
+          {prompt.variant === "actionable" && (
+            <p className="text-xs leading-5 text-muted-foreground/80">
+              {mobilityReconnectCopy(prompt.direction)}
+            </p>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+            >
+              {secondaryLabel}
+            </Button>
+            {prompt.actionLabel && prompt.primaryActionKind && (
+              <Button
+                size="sm"
+                loading={isActionPending}
+                onClick={() => {
+                  void onPrimaryAction();
+                }}
+              >
+                {prompt.actionLabel}
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
-    </ComposerPopoverSurface>
+      )}
+    </div>
   );
 }
