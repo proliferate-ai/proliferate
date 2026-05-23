@@ -13,5 +13,12 @@ packages:
   - "server/artifact-runtime"
   - "web"
 
+allowBuilds:
+  '@sentry/cli': false
+  core-js: false
+  esbuild: false
+  protobufjs: false
+  sharp: false
+
 onlyBuiltDependencies:
   - "@sentry/cli"
