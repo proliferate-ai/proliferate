@@ -20,11 +20,13 @@ import { MobileAutomationsScreen } from "../automations/MobileAutomationsScreen"
 import { MobileChatScreen } from "../chat/MobileChatScreen";
 import { MobileHomeScreen } from "../home/MobileHomeScreen";
 import { MobileIcon } from "../primitives/MobileIcon";
-import { MobileProliferateMark } from "../primitives/MobileProliferateMark";
-import { MobileSessionsScreen } from "../sessions/MobileSessionsScreen";
 import { MobileSettingsScreen } from "../settings/MobileSettingsScreen";
+import {
+  MobileDrawer,
+  type MobileDrawerAccountSummary,
+} from "./drawer/MobileDrawer";
 import { MobileTopBar, MobileTopBarIconButton } from "../primitives/MobileTopBar";
-import { MobileWorkspacesScreen } from "../workspaces/MobileWorkspacesScreen";
+import { MobileAllWorkScreen } from "../work/MobileAllWorkScreen";
 import { useMobileClientDailyActivity } from "../../hooks/telemetry/use-mobile-client-daily-activity";
 import { useMobileScreenTelemetry } from "../../hooks/telemetry/use-mobile-screen-telemetry";
 import {
@@ -33,14 +35,14 @@ import {
   setMobileStorageItem,
 } from "../../lib/access/mobile-storage";
 import {
+  allWorkRoute,
   drawerRoutes,
   routeTitle,
   type MobileCloudChat,
-  type MobilePendingPrompt,
   type RouteId,
 } from "../../navigation/navigation-model";
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
-import { colors, radius, shadow, spacing } from "../../styles/tokens";
+import { colors, shadow, spacing } from "../../styles/tokens";
 
 const SHELL_ROUTE_KEY = "proliferate.mobile.shell.route";
 const SHELL_CHAT_KEY = "proliferate.mobile.shell.chat";
@@ -91,7 +93,7 @@ export function MobileShell() {
     initialLinkAppliedRef.current = true;
     setLinkedWorkspaceId(link.workspaceId);
     setLinkedWorkspaceSessionId(link.sessionId);
-    setRoute("workspaces");
+    setRoute("work");
     setSelectedChat(null);
     setDrawerOpen(false);
     return true;
@@ -177,7 +179,7 @@ export function MobileShell() {
     if (chat) {
       setSelectedChat(chat);
     } else {
-      setRoute("workspaces");
+      setRoute("work");
     }
     setLinkedWorkspaceId(null);
     setLinkedWorkspaceSessionId(null);
@@ -216,6 +218,11 @@ export function MobileShell() {
 
   const markSelectedChatSession = useCallback((sessionId: string) => {
     setSelectedChat((current) => current ? { ...current, sessionId } : current);
+  }, []);
+  const clearSelectedChatInitialPendingPrompt = useCallback(() => {
+    setSelectedChat((current) =>
+      current?.initialPendingPrompt ? { ...current, initialPendingPrompt: null } : current
+    );
   }, []);
 
   async function handleSignOut() {
@@ -278,6 +285,7 @@ export function MobileShell() {
           chat={selectedChat}
           ownerUserId={ownerUserId}
           onBack={() => setSelectedChat(null)}
+          onInitialPendingPromptConsumed={clearSelectedChatInitialPendingPrompt}
           onSessionSelected={markSelectedChatSession}
         />
       ) : (
@@ -286,21 +294,20 @@ export function MobileShell() {
             title={routeTitle(route)}
             subtitle={subtitle}
             leading={{ kind: "menu", onPress: () => setDrawerOpen(true) }}
-            trailing={
+            trailing={route === "home" ? (
               <MobileTopBarIconButton
-                name={route === "home" ? "search" : "more"}
-                accessibilityLabel="More"
+                name="search"
+                accessibilityLabel="Open all work"
+                onPress={() => navigate("work")}
               />
-            }
+            ) : undefined}
           />
 
           <View style={styles.body}>
             {route === "home" ? (
               <MobileHomeScreen ownerUserId={ownerUserId} onOpenChat={openChat} />
-            ) : route === "workspaces" ? (
-              <MobileWorkspacesScreen onOpenChat={openChat} />
-            ) : route === "sessions" ? (
-              <MobileSessionsScreen onOpenChat={openChat} />
+            ) : route === "work" ? (
+              <MobileAllWorkScreen onOpenChat={openChat} />
             ) : route === "automations" ? (
               <MobileAutomationsScreen />
             ) : (
@@ -322,9 +329,10 @@ export function MobileShell() {
       )}
 
       {drawerOpen && (
-        <Drawer
+        <MobileDrawer
           activeRoute={route}
           onNavigate={navigate}
+          onOpenChat={openChat}
           onClose={() => setDrawerOpen(false)}
           onSignOut={() => void handleSignOut()}
           account={account}
@@ -334,13 +342,7 @@ export function MobileShell() {
   );
 }
 
-interface AccountSummary {
-  initials: string;
-  name: string;
-  handle: string;
-}
-
-function accountSummary(user: AuthUser | null): AccountSummary {
+function accountSummary(user: AuthUser | null): MobileDrawerAccountSummary {
   const displayName = user?.display_name?.trim();
   const email = user?.email?.trim();
   const fallbackName = email?.split("@")[0] || "Proliferate";
@@ -367,10 +369,8 @@ function routeSubtitle(route: RouteId): string | undefined {
   switch (route) {
     case "home":
       return "New chat";
-    case "workspaces":
-      return "Cloud sandboxes";
-    case "sessions":
-      return "Running and recent";
+    case "work":
+      return "Cloud work";
     case "automations":
       return "Scheduled runs";
     case "settings":
@@ -458,7 +458,7 @@ async function persistShellNavigation(
         JSON.stringify({
           version: SHELL_STORAGE_VERSION,
           ownerUserId,
-          chat: selectedChat,
+          chat: chatForShellPersistence(selectedChat),
           updatedAt: Date.now(),
         } satisfies StoredShellChat),
       ),
@@ -508,15 +508,23 @@ function parseStoredShellRoute(value: string | null, ownerUserId: string): Route
   }
   try {
     const parsed = JSON.parse(value) as Partial<StoredShellRoute>;
-    if (
-      parsed.version === SHELL_STORAGE_VERSION
-      && parsed.ownerUserId === ownerUserId
-      && drawerRoutes.some((route) => route.id === parsed.route)
-    ) {
-      return parsed.route as RouteId;
+    if (parsed.version === SHELL_STORAGE_VERSION && parsed.ownerUserId === ownerUserId) {
+      return parseStoredRouteId(parsed.route);
     }
   } catch {
     return null;
+  }
+  return null;
+}
+
+function parseStoredRouteId(value: unknown): RouteId | null {
+  if (value === "workspaces" || value === "sessions") {
+    return "work";
+  }
+  if (typeof value === "string") {
+    if (value === allWorkRoute.id || drawerRoutes.some((route) => route.id === value)) {
+      return value as RouteId;
+    }
   }
   return null;
 }
@@ -561,28 +569,19 @@ function parseStoredChatValue(value: unknown): MobileCloudChat | null {
       title: parsed.title,
       status: parsed.status,
       visibility: parsed.visibility,
-      initialPendingPrompt: parseStoredPendingPrompt(parsed.initialPendingPrompt),
+      initialPendingPrompt: null,
     };
   }
   return null;
 }
 
-function parseStoredPendingPrompt(value: unknown): MobilePendingPrompt | null {
-  const parsed = value as Partial<MobilePendingPrompt>;
-  if (!parsed || typeof parsed.id !== "string" || typeof parsed.text !== "string") {
-    return null;
+function chatForShellPersistence(chat: MobileCloudChat): MobileCloudChat {
+  if (!chat.initialPendingPrompt) {
+    return chat;
   }
   return {
-    id: parsed.id,
-    text: parsed.text,
-    modelId: typeof parsed.modelId === "string" ? parsed.modelId : null,
-    modeId: typeof parsed.modeId === "string" ? parsed.modeId : null,
-    createdAt: typeof parsed.createdAt === "number" ? parsed.createdAt : Date.now(),
-    dispatchedSessionId:
-      typeof parsed.dispatchedSessionId === "string" ? parsed.dispatchedSessionId : null,
-    failedAt: typeof parsed.failedAt === "number" ? parsed.failedAt : null,
-    failureMessage:
-      typeof parsed.failureMessage === "string" ? parsed.failureMessage : null,
+    ...chat,
+    initialPendingPrompt: null,
   };
 }
 
@@ -599,9 +598,10 @@ function linkedChatForWorkspace(
   sessions: readonly CloudSessionProjection[],
   linkedSessionId: string | null,
 ): MobileCloudChat | null {
+  const sortedSessions = [...sessions].sort(compareSessions);
   const session = linkedSessionId
-    ? sessions.find((candidate) => candidate.sessionId === linkedSessionId) ?? null
-    : [...sessions].sort(compareSessions)[0] ?? null;
+    ? sortedSessions.find((candidate) => candidate.sessionId === linkedSessionId) ?? sortedSessions[0] ?? null
+    : sortedSessions[0] ?? null;
   return {
     workspaceId: workspace.id,
     workspaceName: workspace.displayName ?? workspace.repo.name,
@@ -609,7 +609,7 @@ function linkedChatForWorkspace(
     branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
     targetId: session?.targetId ?? workspace.targetId ?? null,
     workspaceRuntimeId: session?.workspaceId ?? workspace.anyharnessWorkspaceId ?? null,
-    sessionId: session?.sessionId ?? linkedSessionId,
+    sessionId: session?.sessionId ?? null,
     title: session?.title ?? workspace.displayName ?? workspace.repo.name,
     status: session?.status ?? workspace.workspaceStatus ?? workspace.status,
     visibility: workspace.visibility,
@@ -623,88 +623,6 @@ function compareSessions(left: CloudSessionProjection, right: CloudSessionProjec
 
 function sessionRecencyMs(session: Pick<CloudSessionProjection, "lastEventAt" | "startedAt">): number {
   return Date.parse(session.lastEventAt ?? session.startedAt ?? "") || 0;
-}
-
-interface DrawerProps {
-  activeRoute: RouteId;
-  account: AccountSummary;
-  onNavigate: (route: RouteId) => void;
-  onClose: () => void;
-  onSignOut: () => void;
-}
-
-function Drawer({ activeRoute, account, onNavigate, onClose, onSignOut }: DrawerProps) {
-  return (
-    <View style={styles.drawerLayer}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Close navigation"
-        onPress={onClose}
-        style={styles.scrim}
-      />
-      <View style={styles.drawer}>
-        <View style={styles.brand}>
-          <MobileProliferateMark size={20} />
-          <Text style={styles.wordmark}>Proliferate</Text>
-        </View>
-
-        <View style={styles.drawerNav}>
-          {drawerRoutes.map((item) => {
-            const active = item.id === activeRoute;
-            return (
-              <Pressable
-                key={item.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                onPress={() => onNavigate(item.id)}
-                style={({ pressed }) => [
-                  styles.drawerRow,
-                  active && styles.drawerRowActive,
-                  pressed && styles.drawerRowPressed,
-                ]}
-              >
-                <MobileIcon
-                  name={item.icon}
-                  size={19}
-                  color={active ? colors.fg : colors.mutedForeground}
-                />
-                <Text
-                  style={[
-                    styles.drawerRowText,
-                    active && styles.drawerRowTextActive,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <View style={styles.account}>
-          <View style={styles.accountAvatar}>
-            <Text style={styles.accountAvatarText}>{account.initials}</Text>
-          </View>
-          <View style={styles.accountText}>
-            <Text style={styles.accountName} numberOfLines={1}>
-              {account.name}
-            </Text>
-            <Text style={styles.accountHandle} numberOfLines={1}>
-              {account.handle}
-            </Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Sign out"
-            onPress={onSignOut}
-            style={({ pressed }) => [styles.accountAction, pressed && styles.pressed]}
-          >
-            <MobileIcon name="log-out" size={17} color={colors.mutedForeground} />
-          </Pressable>
-        </View>
-      </View>
-    </View>
-  );
 }
 
 const styles = StyleSheet.create({
@@ -737,109 +655,6 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     backgroundColor: colors.fg,
     ...shadow.floating,
-  },
-  drawerLayer: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 20,
-    flexDirection: "row",
-  },
-  scrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlayStrong,
-  },
-  drawer: {
-    width: 296,
-    height: "100%",
-    paddingTop: 64,
-    paddingHorizontal: spacing[3],
-    paddingBottom: spacing[4],
-    backgroundColor: colors.sidebar,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: colors.sidebarBorder,
-  },
-  brand: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[2],
-    paddingHorizontal: spacing[2],
-    marginBottom: spacing[4],
-  },
-  wordmark: {
-    color: colors.fg,
-    fontSize: 17,
-    fontWeight: "600",
-    letterSpacing: -0.3,
-  },
-  drawerNav: {
-    flex: 1,
-    gap: 2,
-  },
-  drawerRow: {
-    minHeight: 44,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-    borderRadius: radius.md,
-    paddingHorizontal: spacing[3],
-  },
-  drawerRowActive: {
-    backgroundColor: colors.sidebarAccent,
-  },
-  drawerRowPressed: {
-    backgroundColor: colors.accent,
-    opacity: 0.85,
-  },
-  drawerRowText: {
-    color: colors.sidebarForeground,
-    fontSize: 15,
-    fontWeight: "500",
-  },
-  drawerRowTextActive: {
-    color: colors.fg,
-    fontWeight: "600",
-  },
-  account: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-    paddingTop: spacing[3],
-    paddingHorizontal: spacing[1],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.sidebarBorder,
-  },
-  accountAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.infoSubtle,
-  },
-  accountAvatarText: {
-    color: colors.info,
-    fontSize: 11.5,
-    fontWeight: "700",
-  },
-  accountText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  accountName: {
-    color: colors.fg,
-    fontSize: 13.5,
-    fontWeight: "600",
-  },
-  accountHandle: {
-    color: colors.faint,
-    fontSize: 11.5,
-    marginTop: 1,
-  },
-  accountAction: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.md,
   },
   pressed: {
     opacity: 0.72,
