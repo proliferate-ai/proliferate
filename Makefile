@@ -644,6 +644,7 @@ cloud-sdk-react-build: cloud-sdk-build
 
 shared-build:
 	pnpm --filter @proliferate/design build
+	pnpm --filter @proliferate/product-model build
 	pnpm --filter @proliferate/ui build
 	pnpm --filter @proliferate/product-ui build
 
