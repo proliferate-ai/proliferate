@@ -28,8 +28,11 @@ import {
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { Clock, Folder, Settings } from "@/components/ui/icons";
-import type { HomeActionId } from "@/lib/domain/home/home-screen";
+import { Clock, Folder, FolderPlus, GitHub, Settings } from "@/components/ui/icons";
+import type {
+  HomeActionId,
+  HomeGitHubRepositoryOnboardingModel,
+} from "@/lib/domain/home/home-screen";
 
 function resolveActionIcon(actionId: HomeActionId) {
   switch (actionId) {
@@ -47,6 +50,42 @@ function waitForNextPaint(): Promise<void> {
   return new Promise((resolve) => {
     scheduleAfterNextPaint(resolve);
   });
+}
+
+function GitHubRepositoryOnboardingCard({
+  model,
+  isAddingRepo,
+  onAddRepository,
+}: {
+  model: HomeGitHubRepositoryOnboardingModel;
+  isAddingRepo: boolean;
+  onAddRepository: () => void;
+}) {
+  return (
+    <div className="mx-auto mt-4 max-w-2xl rounded-lg border border-border bg-card/70 px-4 py-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <GitHub className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">{model.title}</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {model.description}
+            </p>
+          </div>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          loading={isAddingRepo}
+          onClick={onAddRepository}
+          className="w-full shrink-0 justify-center sm:w-auto"
+        >
+          <FolderPlus className="size-3.5" />
+          {model.actionLabel}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function HomeNextScreen() {
@@ -70,6 +109,7 @@ export function HomeNextScreen() {
   const clearRestoredDraftText = useHomeDraftHandoffStore((state) => state.clearDraftText);
   const {
     actionCards,
+    githubRepositoryOnboarding,
     isAddingRepo,
     handleHomeAction,
   } = useHomeScreen();
@@ -130,6 +170,9 @@ export function HomeNextScreen() {
     && !!homeNext.launchTarget
     && submittedPreview === null
     && !isLaunching;
+  const visibleActionCards = githubRepositoryOnboarding
+    ? actionCards.filter((action) => action.id !== "add-repository")
+    : actionCards;
   useLayoutEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -384,9 +427,17 @@ export function HomeNextScreen() {
             </div>
           ) : null}
 
+          {githubRepositoryOnboarding ? (
+            <GitHubRepositoryOnboardingCard
+              model={githubRepositoryOnboarding}
+              isAddingRepo={isAddingRepo}
+              onAddRepository={() => handleHomeAction("add-repository")}
+            />
+          ) : null}
+
           <div className="mx-auto mt-3 max-w-2xl">
             <div className="flex flex-col gap-px">
-              {actionCards.map((action) => (
+              {visibleActionCards.map((action) => (
                 <Button
                   key={action.id}
                   variant="ghost"

@@ -21,6 +21,24 @@ export interface HomeActionCardModel {
   emphasis: "primary" | "secondary";
 }
 
+export interface HomeRepositoryIdentity {
+  gitProvider: string | null;
+  gitOwner: string | null;
+  gitRepoName: string | null;
+}
+
+export interface HomeGitHubRepositoryOnboardingModel {
+  title: string;
+  description: string;
+  actionLabel: string;
+}
+
+function hasGitHubRepository(repository: HomeRepositoryIdentity): boolean {
+  return repository.gitProvider?.trim().toLowerCase() === "github"
+    && Boolean(repository.gitOwner?.trim())
+    && Boolean(repository.gitRepoName?.trim());
+}
+
 export function buildHomeActionCards(args: {
   latestWorkspace: Workspace | null;
   readyAgentCount: number;
@@ -69,4 +87,19 @@ export function buildHomeActionCards(args: {
   };
 
   return [leadingCard, middleCard, trailingCard];
+}
+
+export function buildHomeGitHubRepositoryOnboarding(args: {
+  repositories: HomeRepositoryIdentity[];
+  repositoriesLoading: boolean;
+}): HomeGitHubRepositoryOnboardingModel | null {
+  if (args.repositoriesLoading || args.repositories.some(hasGitHubRepository)) {
+    return null;
+  }
+
+  return {
+    title: HOME_SCREEN_LABELS.addGitHubRepositoryTitle,
+    description: HOME_SCREEN_LABELS.addGitHubRepositoryDescription,
+    actionLabel: HOME_SCREEN_LABELS.addGitHubRepositoryAction,
+  };
 }

@@ -11,6 +11,10 @@ export const HOME_SCREEN_LABELS = {
   agentsAction: "Agents",
   addRepositoryTitle: "Add repository",
   addRepositoryDescription: "Choose a Git repository from disk and configure it for future sessions.",
+  addGitHubRepositoryTitle: "Add a GitHub repository",
+  addGitHubRepositoryDescription:
+    "Choose a local clone from GitHub so Proliferate can start workspaces with repository context.",
+  addGitHubRepositoryAction: "Add repository",
   resumeWorkspaceTitle: "Resume last workspace",
   resumeWorkspaceDescriptionPrefix: "Return to",
   addAnotherTitle: "Add another repository",

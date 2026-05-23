@@ -1,4 +1,8 @@
-import { useAgentReconcileStatusQuery, useAgentsQuery } from "@anyharness/sdk-react";
+import {
+  useAgentReconcileStatusQuery,
+  useAgentsQuery,
+  useRuntimeHealthQuery,
+} from "@anyharness/sdk-react";
 import { useMemo } from "react";
 import type { AgentSummary } from "@anyharness/sdk";
 import {
@@ -14,7 +18,14 @@ const EMPTY_RECONCILE_RESULTS: NonNullable<
 >["results"] = [];
 
 export function useAgentCatalog() {
-  const agentsQuery = useAgentsQuery();
+  const runtimeHealthQuery = useRuntimeHealthQuery({
+    pollWhileAgentSeedHydrating: true,
+  });
+  const isAgentSeedHydrating =
+    runtimeHealthQuery.data?.agentSeed?.status === "hydrating";
+  const agentsQuery = useAgentsQuery({
+    refetchInterval: isAgentSeedHydrating ? 1_000 : false,
+  });
   const reconcileQuery = useAgentReconcileStatusQuery();
   const agents = agentsQuery.data ?? EMPTY_AGENTS;
   const reconcileResults = reconcileQuery.data?.results ?? EMPTY_RECONCILE_RESULTS;

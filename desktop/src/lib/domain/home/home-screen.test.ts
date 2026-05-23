@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace } from "@anyharness/sdk";
-import { buildHomeActionCards } from "./home-screen";
+import {
+  buildHomeActionCards,
+  buildHomeGitHubRepositoryOnboarding,
+} from "./home-screen";
 
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
@@ -56,5 +59,40 @@ describe("buildHomeActionCards", () => {
       title: "Add another repository",
       description: "Choose a different Git repository and configure it before starting a workspace.",
     });
+  });
+});
+
+describe("buildHomeGitHubRepositoryOnboarding", () => {
+  it("returns a card when no GitHub repository is configured", () => {
+    expect(buildHomeGitHubRepositoryOnboarding({
+      repositoriesLoading: false,
+      repositories: [
+        {
+          gitProvider: "gitlab",
+          gitOwner: "proliferate-ai",
+          gitRepoName: "proliferate",
+        },
+      ],
+    })).toMatchObject({
+      title: "Add a GitHub repository",
+      actionLabel: "Add repository",
+    });
+  });
+
+  it("stays hidden while repositories are loading or a GitHub repository exists", () => {
+    expect(buildHomeGitHubRepositoryOnboarding({
+      repositoriesLoading: true,
+      repositories: [],
+    })).toBeNull();
+    expect(buildHomeGitHubRepositoryOnboarding({
+      repositoriesLoading: false,
+      repositories: [
+        {
+          gitProvider: "github",
+          gitOwner: "proliferate-ai",
+          gitRepoName: "proliferate",
+        },
+      ],
+    })).toBeNull();
   });
 });

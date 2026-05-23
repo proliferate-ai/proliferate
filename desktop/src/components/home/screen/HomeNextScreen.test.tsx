@@ -10,6 +10,7 @@ const screenMocks = vi.hoisted(() => {
   const launch = vi.fn();
   const clearDraftText = vi.fn();
   const navigate = vi.fn();
+  const actionCards: any[] = [];
   const homeNext = {
     selectedRepository: null,
     repositories: [],
@@ -39,6 +40,8 @@ const screenMocks = vi.hoisted(() => {
     launch,
     clearDraftText,
     navigate,
+    actionCards,
+    githubRepositoryOnboarding: null as any,
     homeNext,
   };
 });
@@ -60,7 +63,8 @@ vi.mock("@/hooks/home/workflows/use-home-next-launch", () => ({
 
 vi.mock("@/hooks/home/facade/use-home-screen", () => ({
   useHomeScreen: () => ({
-    actionCards: [],
+    actionCards: screenMocks.actionCards,
+    githubRepositoryOnboarding: screenMocks.githubRepositoryOnboarding,
     isAddingRepo: false,
     handleHomeAction: screenMocks.handleHomeAction,
   }),
@@ -126,6 +130,8 @@ function resetHomeNext() {
   screenMocks.homeNext.canLaunchTarget = true;
   screenMocks.homeNext.effectiveModelSelection = { kind: "codex", modelId: "gpt-5.4" };
   screenMocks.homeNext.launchTarget = { kind: "cowork" };
+  screenMocks.actionCards.splice(0);
+  screenMocks.githubRepositoryOnboarding = null;
 }
 
 describe("HomeNextScreen model availability notices", () => {
@@ -220,5 +226,37 @@ describe("HomeNextScreen model availability notices", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
 
     expect(screen.getByText("start worktree")).toBeTruthy();
+  });
+
+  it("renders the GitHub repository onboarding card without duplicating add repository actions", () => {
+    screenMocks.githubRepositoryOnboarding = {
+      title: "Add a GitHub repository",
+      description: "Choose a local clone from GitHub so Proliferate can start workspaces with repository context.",
+      actionLabel: "Add repository",
+    };
+    screenMocks.actionCards.push(
+      {
+        id: "add-repository",
+        title: "Add repository",
+        description: "Choose a Git repository from disk and configure it for future sessions.",
+        icon: "folder",
+        emphasis: "primary",
+      },
+      {
+        id: "agent-settings",
+        title: "Manage agents",
+        description: "Review installed harnesses, credentials, and availability.",
+        icon: "settings",
+        emphasis: "secondary",
+      },
+    );
+
+    render(<HomeNextScreen />);
+
+    expect(screen.getByText("Add a GitHub repository")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Add repository" })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add repository" }));
+    expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("add-repository");
   });
 });

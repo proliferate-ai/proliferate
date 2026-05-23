@@ -8,6 +8,7 @@ import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspac
 import {
   type HomeActionId,
   buildHomeActionCards,
+  buildHomeGitHubRepositoryOnboarding,
 } from "@/lib/domain/home/home-screen";
 import {
   expandLogicalWorkspaceRelatedIdSet,
@@ -27,7 +28,11 @@ export function useHomeScreen() {
     isLoading: agentsLoading,
   } = useAgentCatalog();
   const { logicalWorkspaces } = useLogicalWorkspaces();
-  const { localWorkspaces, repoRoots } = useStandardRepoProjection();
+  const {
+    localWorkspaces,
+    repoRoots,
+    isLoading: repositoriesLoading,
+  } = useStandardRepoProjection();
   const workspaceLastInteracted = useWorkspaceUiStore((s) => s.workspaceLastInteracted);
   const archivedWorkspaceIds = useWorkspaceUiStore((s) => s.archivedWorkspaceIds);
   const hiddenRepoRootIds = useWorkspaceUiStore((s) => s.hiddenRepoRootIds);
@@ -70,6 +75,13 @@ export function useHomeScreen() {
     }),
     [agentsLoading, latestWorkspace, readyAgents.length],
   );
+  const githubRepositoryOnboarding = useMemo(
+    () => buildHomeGitHubRepositoryOnboarding({
+      repositories,
+      repositoriesLoading,
+    }),
+    [repositories, repositoriesLoading],
+  );
   function handleHomeAction(actionId: HomeActionId) {
     switch (actionId) {
       case "resume-last-workspace":
@@ -101,6 +113,7 @@ export function useHomeScreen() {
 
   return {
     actionCards,
+    githubRepositoryOnboarding,
     isAddingRepo,
     handleHomeAction,
   };
