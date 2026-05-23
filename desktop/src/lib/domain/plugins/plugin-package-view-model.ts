@@ -33,8 +33,12 @@ export interface PluginPackagePresentation {
   id: string;
   name: string;
   description: string;
+  capabilitySummary: string;
   includesLabel: string;
   enabledScopesLabel: string;
+  statusLabel: string;
+  statusTone: "neutral" | "muted" | "warning" | "error";
+  recoveryActionLabel: string | null;
   components: PluginComponentRowModel[];
 }
 
@@ -54,8 +58,12 @@ export function buildConnectedPluginPresentation(
     id: entry.id,
     name: entry.name,
     description: entry.oneLiner,
+    capabilitySummary: summarizeCapabilities(entry),
     includesLabel: summarizeComponents(components),
     enabledScopesLabel: record.metadata.enabled ? "New sessions" : "Disabled",
+    statusLabel: status.label,
+    statusTone: status.tone,
+    recoveryActionLabel: recoveryActionLabel(status),
     components,
   };
 }
@@ -151,8 +159,12 @@ export function buildAvailablePluginPresentation(
     id: entry.id,
     name: entry.name,
     description: entry.oneLiner,
+    capabilitySummary: summarizeCapabilities(entry),
     includesLabel: summarizeComponents(components),
     enabledScopesLabel: "Not installed",
+    statusLabel: "Not installed",
+    statusTone: "muted",
+    recoveryActionLabel: null,
     components,
   };
 }
@@ -169,9 +181,6 @@ function buildPluginComponents(
   const configuredSkillItemsBySourceId = new Map(
     state.record?.metadata.configuredSkills.map((item) => [item.sourceId, item]) ?? [],
   );
-  const mcpPublicLabel = state.record
-    ? configuredItemPublicLabel(buildConfiguredCapabilityItems(state.record)[0])
-    : undefined;
   const components: PluginComponentRowModel[] = [
     {
       kind: "app",
@@ -186,8 +195,6 @@ function buildPluginComponents(
       description: "MCP tools mounted into compatible sessions.",
       stateLabel: state.mcpState,
       stateTone: state.mcpState === "Enabled" ? "success" : "muted",
-      publicLabel: mcpPublicLabel,
-      publicTone: publicLabelTone(mcpPublicLabel),
     },
   ];
 
@@ -196,17 +203,12 @@ function buildPluginComponents(
     const skillStateLabel = configuredSkill
       ? configuredSkill.enabled ? state.skillState : "Off"
       : "Not configured";
-    const publicLabel = configuredSkill
-      ? configuredItemPublicLabel(configuredSkill)
-      : undefined;
     components.push({
       kind: "skill",
       label: skill.displayName,
       description: skill.description || "Reviewed markdown instructions agents can activate when relevant.",
       stateLabel: skillStateLabel,
       stateTone: skillStateLabel === "Enabled" ? "success" : "muted",
-      publicLabel,
-      publicTone: publicLabelTone(publicLabel),
     });
   }
 
@@ -221,39 +223,6 @@ function buildPluginComponents(
   );
 
   return components;
-}
-
-function configuredItemPublicLabel(
-  item: ConfiguredCapabilityItemState | undefined,
-): string | undefined {
-  if (!item) {
-    return undefined;
-  }
-  if (item.ownerScope === "organization") {
-    return "Organization";
-  }
-  if (!item.publicToOrg) {
-    return "Private";
-  }
-  if (item.publicStatus === "public") {
-    return "Public";
-  }
-  return item.publicStatus;
-}
-
-function publicLabelTone(
-  publicLabel: string | undefined,
-): PluginComponentRowModel["publicTone"] {
-  if (!publicLabel) {
-    return undefined;
-  }
-  if (publicLabel === "Public" || publicLabel === "Organization") {
-    return "success";
-  }
-  if (publicLabel === "Private") {
-    return "muted";
-  }
-  return "warning";
 }
 
 function configuredSourceLabel(
@@ -307,6 +276,44 @@ function summarizeComponents(components: readonly PluginComponentRowModel[]): st
     skillLabel ?? null,
   ].filter(Boolean);
   return parts.join(" + ");
+}
+
+function summarizeCapabilities(entry: ConnectorCatalogEntry): string {
+  const skillCount = entry.pluginPackage?.skills.length ?? 0;
+  const parts = [
+    "MCP",
+    skillCount > 0 ? `${skillCount} ${skillCount === 1 ? "skill" : "skills"}` : null,
+    authSummaryLabel(entry),
+  ].filter(Boolean);
+
+  return parts.join(" · ");
+}
+
+function authSummaryLabel(entry: ConnectorCatalogEntry): string {
+  if (entry.setupKind === "local_oauth") {
+    return "local auth";
+  }
+  if (entry.transport === "stdio") {
+    return "local";
+  }
+  if (entry.authKind === "oauth") {
+    return "OAuth";
+  }
+  if (entry.authKind === "secret" || entry.requiredFields.length > 0) {
+    return "API key";
+  }
+  return "no setup";
+}
+
+function recoveryActionLabel(status: ConnectorCardStatus): string | null {
+  switch (status.intent) {
+    case "needs_reconnect":
+      return "Reconnect";
+    case "needs_token":
+      return "Add token";
+    default:
+      return null;
+  }
 }
 
 function setupLabel(entry: ConnectorCatalogEntry): string {

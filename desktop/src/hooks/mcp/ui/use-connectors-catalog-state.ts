@@ -14,11 +14,8 @@ import type {
   InstalledConnectorRecord,
 } from "@/lib/domain/mcp/types";
 import { useConnectors } from "@/hooks/access/mcp/connectors/use-connectors";
-import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useConnectorsCatalogViewTelemetry } from "@/hooks/mcp/lifecycle/use-connectors-catalog-view-telemetry";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
-import { useAuthStore } from "@/stores/auth/auth-store";
 
 const EMPTY_INSTALLED: InstalledConnectorRecord[] = [];
 const EMPTY_AVAILABLE: readonly ConnectorCatalogEntry[] = [];
@@ -26,14 +23,6 @@ const EMPTY_AVAILABLE: readonly ConnectorCatalogEntry[] = [];
 // Owns connector catalog search/modal UI state. Does not own connector mutations.
 export function useConnectorsCatalogState() {
   const connectorsQuery = useConnectors();
-  const {
-    activeOrganization,
-    activeOrganizationId,
-    organizations,
-    organizationsQuery,
-  } = useActiveOrganization();
-  const currentUserId = useAuthStore((state) => state.user?.id ?? null);
-  const admin = useIsAdmin(activeOrganizationId);
   const [searchQuery, setSearchQuery] = useState("");
   const [modal, setModal] = useState<ConnectorCatalogModalState>(null);
 
@@ -126,13 +115,5 @@ export function useConnectorsCatalogState() {
     searchQuery,
     setActiveTab,
     setSearchQuery,
-    sharedExposure: {
-      activeOrganizationId,
-      activeOrganizationName: activeOrganization?.name ?? null,
-      canManage: admin.isAdmin,
-      currentUserId,
-      hasOrganization: organizations.length > 0,
-      isLoading: organizationsQuery.isLoading || admin.isLoading,
-    },
   };
 }

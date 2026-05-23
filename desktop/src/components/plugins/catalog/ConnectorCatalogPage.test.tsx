@@ -21,14 +21,6 @@ const connectorsCatalogState = vi.hoisted(() => {
     searchQuery: "",
     setActiveTab: vi.fn(),
     setSearchQuery: vi.fn(),
-    sharedExposure: {
-      activeOrganizationId: "org_1",
-      activeOrganizationName: "Acme",
-      canManage: true,
-      currentUserId: "user_1",
-      hasOrganization: true,
-      isLoading: false,
-    },
   });
 
   return {
@@ -81,16 +73,12 @@ vi.mock("./PluginPackageRow", () => ({
     { "data-testid": "available-plugin-row" },
     model.entry.id,
   ),
-  ConnectedPluginPackageRow: ({
-    canManageSharedExposure,
-    model,
-  }: {
-    canManageSharedExposure: boolean;
+  ConnectedPluginPackageRow: ({ model }: {
     model: { record: { metadata: { connectionId: string } } };
   }) => createElement(
     "div",
     { "data-testid": "connected-plugin-row" },
-    `${model.record.metadata.connectionId}:${canManageSharedExposure ? "can-share" : "cannot-share"}`,
+    model.record.metadata.connectionId,
   ),
 }));
 
@@ -146,23 +134,7 @@ describe("ConnectorCatalogPage", () => {
     expect(html).not.toContain("No plugins are available right now.");
   });
 
-  it("lets personal source owners publish their plugin package without being org admins", () => {
-    connectorsCatalogState.state.sharedExposure.canManage = false;
-    connectorsCatalogState.state.connected = [
-      {
-        record: {
-          metadata: { connectionId: "conn-1", ownerScope: "personal", ownerUserId: "user_1" },
-        },
-      },
-    ] as never[];
-
-    const html = renderToStaticMarkup(createElement(ConnectorCatalogPage));
-
-    expect(html).toContain("conn-1:can-share");
-  });
-
-  it("lets organization admins publish personal source plugin packages", () => {
-    connectorsCatalogState.state.sharedExposure.canManage = true;
+  it("renders connected and available plugin cards", () => {
     connectorsCatalogState.state.connected = [
       {
         record: {
@@ -170,24 +142,43 @@ describe("ConnectorCatalogPage", () => {
         },
       },
     ] as never[];
-
-    const html = renderToStaticMarkup(createElement(ConnectorCatalogPage));
-
-    expect(html).toContain("conn-1:can-share");
-  });
-
-  it("blocks shared exposure actions for non-admins who do not own the personal source", () => {
-    connectorsCatalogState.state.sharedExposure.canManage = false;
-    connectorsCatalogState.state.connected = [
+    connectorsCatalogState.state.availableCards = [
       {
-        record: {
-          metadata: { connectionId: "conn-1", ownerScope: "personal", ownerUserId: "user_2" },
+        entry: {
+          id: "context7",
         },
       },
     ] as never[];
 
     const html = renderToStaticMarkup(createElement(ConnectorCatalogPage));
 
-    expect(html).toContain("conn-1:cannot-share");
+    expect(html).toContain("Installed");
+    expect(html).toContain("Available");
+    expect(html).toContain("conn-1");
+    expect(html).toContain("context7");
+  });
+
+  it("does not render shared or team access controls on the plugins page", () => {
+    connectorsCatalogState.state.connected = [
+      {
+        record: {
+          metadata: {
+            connectionId: "conn-1",
+            ownerScope: "personal",
+            ownerUserId: "user_2",
+            publicToOrg: true,
+            publicStatus: "public",
+          },
+        },
+      },
+    ] as never[];
+
+    const html = renderToStaticMarkup(createElement(ConnectorCatalogPage));
+
+    expect(html).not.toContain("Shared cloud access");
+    expect(html).not.toContain("Make public");
+    expect(html).not.toContain("Make private");
+    expect(html).not.toContain("team automations");
+    expect(html).not.toContain("Slack");
   });
 });
