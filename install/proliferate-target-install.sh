@@ -13,7 +13,18 @@ if [ -z "${PROLIFERATE_ENROLLMENT_TOKEN:-}" ]; then
 fi
 
 PROLIFERATE_HOME="${PROLIFERATE_HOME:-$HOME/.proliferate}"
-PROLIFERATE_ANYHARNESS_BASE_URL="${PROLIFERATE_ANYHARNESS_BASE_URL:-http://127.0.0.1:8457}"
+PROLIFERATE_ANYHARNESS_PORT="${PROLIFERATE_ANYHARNESS_PORT:-8457}"
+case "$PROLIFERATE_ANYHARNESS_PORT" in
+  ""|*[!0123456789]*|0)
+    echo "PROLIFERATE_ANYHARNESS_PORT must be a positive port number" >&2
+    exit 1
+    ;;
+esac
+if [ "$PROLIFERATE_ANYHARNESS_PORT" -gt 65535 ]; then
+  echo "PROLIFERATE_ANYHARNESS_PORT must be between 1 and 65535" >&2
+  exit 1
+fi
+PROLIFERATE_ANYHARNESS_BASE_URL="${PROLIFERATE_ANYHARNESS_BASE_URL:-http://127.0.0.1:$PROLIFERATE_ANYHARNESS_PORT}"
 PROLIFERATE_SERVICE_NAME="${PROLIFERATE_SERVICE_NAME:-proliferate-target}"
 case "$PROLIFERATE_SERVICE_NAME" in
   ""|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.@-]*)
@@ -24,8 +35,31 @@ esac
 BIN_DIR="$PROLIFERATE_HOME/bin"
 WORKER_DIR="$PROLIFERATE_HOME/worker"
 SUPERVISOR_DIR="$PROLIFERATE_HOME/supervisor"
-mkdir -p "$BIN_DIR" "$WORKER_DIR" "$SUPERVISOR_DIR"
-chmod 700 "$PROLIFERATE_HOME" "$BIN_DIR" "$WORKER_DIR" "$SUPERVISOR_DIR"
+LOG_DIR="$PROLIFERATE_HOME/logs"
+mkdir -p "$BIN_DIR" "$WORKER_DIR" "$SUPERVISOR_DIR" "$LOG_DIR"
+chmod 700 "$PROLIFERATE_HOME" "$BIN_DIR" "$WORKER_DIR" "$SUPERVISOR_DIR" "$LOG_DIR"
+
+reject_newline() {
+  case "$2" in
+    *"
+"*)
+      echo "$1 must not contain newlines" >&2
+      exit 1
+      ;;
+  esac
+}
+
+toml_string() {
+  reject_newline "TOML string value" "$1"
+  escaped="$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+  printf '"%s"' "$escaped"
+}
+
+systemd_arg() {
+  reject_newline "systemd unit argument" "$1"
+  escaped="$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+  printf '"%s"' "$escaped"
+}
 
 uname_s="$(uname -s)"
 uname_m="$(uname -m)"
@@ -39,14 +73,22 @@ esac
 
 download_binary() {
   name="$1"
-  if command -v "$name" >/dev/null 2>&1; then
-    cp "$(command -v "$name")" "$BIN_DIR/$name"
-    chmod +x "$BIN_DIR/$name"
-    return
-  fi
   if [ -n "${PROLIFERATE_ARTIFACT_BASE_URL:-}" ]; then
     url="${PROLIFERATE_ARTIFACT_BASE_URL%/}/$target/$name"
-    curl -fsSL "$url" -o "$BIN_DIR/$name"
+    tmp="$BIN_DIR/.$name.tmp.$$"
+    rm -f "$tmp"
+    if curl -fsSL "$url" -o "$tmp"; then
+      chmod +x "$tmp"
+      mv "$tmp" "$BIN_DIR/$name"
+    else
+      rm -f "$tmp"
+      echo "Failed to download $name from $url" >&2
+      exit 1
+    fi
+    return
+  fi
+  if command -v "$name" >/dev/null 2>&1; then
+    cp "$(command -v "$name")" "$BIN_DIR/$name"
     chmod +x "$BIN_DIR/$name"
     return
   fi
@@ -59,24 +101,24 @@ download_binary proliferate-worker
 download_binary proliferate-supervisor
 
 cat > "$WORKER_DIR/config.toml" <<EOF
-cloud_base_url = "$PROLIFERATE_CLOUD_URL"
-enrollment_token = "$PROLIFERATE_ENROLLMENT_TOKEN"
-anyharness_base_url = "$PROLIFERATE_ANYHARNESS_BASE_URL"
-worker_db_path = "$WORKER_DIR/worker.sqlite3"
+cloud_base_url = $(toml_string "$PROLIFERATE_CLOUD_URL")
+enrollment_token = $(toml_string "$PROLIFERATE_ENROLLMENT_TOKEN")
+anyharness_base_url = $(toml_string "$PROLIFERATE_ANYHARNESS_BASE_URL")
+worker_db_path = $(toml_string "$WORKER_DIR/worker.sqlite3")
 heartbeat_interval_seconds = 60
 EOF
 if [ -n "${PROLIFERATE_ANYHARNESS_BEARER_TOKEN:-}" ]; then
   cat >> "$WORKER_DIR/config.toml" <<EOF
-anyharness_bearer_token = "$PROLIFERATE_ANYHARNESS_BEARER_TOKEN"
+anyharness_bearer_token = $(toml_string "$PROLIFERATE_ANYHARNESS_BEARER_TOKEN")
 EOF
 fi
 chmod 600 "$WORKER_DIR/config.toml"
 
 cat > "$SUPERVISOR_DIR/config.toml" <<EOF
-anyharness_binary = "$BIN_DIR/anyharness"
-worker_binary = "$BIN_DIR/proliferate-worker"
-worker_config = "$WORKER_DIR/config.toml"
-anyharness_args = ["serve", "--runtime-home", "$PROLIFERATE_HOME/anyharness"]
+anyharness_binary = $(toml_string "$BIN_DIR/anyharness")
+worker_binary = $(toml_string "$BIN_DIR/proliferate-worker")
+worker_config = $(toml_string "$WORKER_DIR/config.toml")
+anyharness_args = [$(toml_string "serve"), $(toml_string "--runtime-home"), $(toml_string "$PROLIFERATE_HOME/anyharness"), $(toml_string "--port"), $(toml_string "$PROLIFERATE_ANYHARNESS_PORT")]
 restart_delay_seconds = 5
 EOF
 chmod 600 "$SUPERVISOR_DIR/config.toml"
@@ -100,7 +142,7 @@ After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$BIN_DIR/proliferate-supervisor --config $SUPERVISOR_DIR/config.toml run
+ExecStart=$(systemd_arg "$BIN_DIR/proliferate-supervisor") --config $(systemd_arg "$SUPERVISOR_DIR/config.toml") run
 Restart=always
 RestartSec=5
 

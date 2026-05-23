@@ -9,9 +9,50 @@ export interface EnsureSshAnyHarnessTunnelInput {
   remoteAnyHarnessPort?: number | null;
 }
 
+export interface ProbeSshTargetConnectionInput {
+  sshHost: string;
+  sshUser: string;
+  sshPort?: number | null;
+  identityFile?: string | null;
+}
+
+export interface ProbeSshTargetConnectionResult {
+  ok: boolean;
+}
+
+export interface InstallSshTargetRuntimeInput extends ProbeSshTargetConnectionInput {
+  remoteAnyHarnessPort?: number | null;
+  cloudBaseUrl: string;
+  enrollmentToken: string;
+  artifactBaseUrl?: string | null;
+}
+
+export interface InstallSshTargetRuntimeResult {
+  stdout: string;
+  stderr: string;
+}
+
 export interface EnsureSshAnyHarnessTunnelResult {
   localUrl: string;
   localPort: number;
+}
+
+export async function probeSshTargetConnection(
+  input: ProbeSshTargetConnectionInput,
+): Promise<ProbeSshTargetConnectionResult> {
+  return await invoke<ProbeSshTargetConnectionResult>(
+    "probe_ssh_target_connection",
+    { input },
+  );
+}
+
+export async function installSshTargetRuntime(
+  input: InstallSshTargetRuntimeInput,
+): Promise<InstallSshTargetRuntimeResult> {
+  return await invoke<InstallSshTargetRuntimeResult>(
+    "install_ssh_target_runtime",
+    { input },
+  );
 }
 
 export async function ensureSshAnyHarnessTunnel(

@@ -12,11 +12,16 @@ import {
   MobileStack,
 } from "../primitives/MobileLayout";
 import { MobileIcon } from "../primitives/MobileIcon";
+import { MobileListRow } from "../primitives/MobileListRow";
 import { MobileTextInput } from "../primitives/MobileTextInput";
 import type {
   MobileCloudChat,
   MobilePendingPrompt,
 } from "../../navigation/navigation-model";
+import {
+  useMobileWorkInventory,
+  type MobileWorkItem,
+} from "../../hooks/work/derived/use-mobile-work-inventory";
 import { savePendingMobilePrompt } from "../../lib/access/cloud/pending-mobile-prompt-store";
 import { colors, radius, spacing } from "../../styles/tokens";
 
@@ -55,6 +60,7 @@ export function MobileHomeScreen({ ownerUserId, onOpenChat }: MobileHomeScreenPr
   const [submitError, setSubmitError] = useState<string | null>(null);
   const repoConfigs = useCloudRepoConfigs();
   const createWorkspace = useCreateCloudWorkspace();
+  const workInventory = useMobileWorkInventory();
   const repoOptions = useMemo(
     () => buildRepoOptions(repoConfigs.data?.configs ?? []),
     [repoConfigs.data?.configs],
@@ -126,10 +132,55 @@ export function MobileHomeScreen({ ownerUserId, onOpenChat }: MobileHomeScreenPr
     <MobileScreen>
       <MobileStack gap={spacing[5]}>
         <MobileScreenHeader
-          eyebrow="New chat"
+          eyebrow="Home"
           title="What should we run?"
-          description="Choose a repository, then send the first prompt into a cloud workspace."
+          description="Start cloud work, then come back to anything recent from the drawer."
         />
+
+        <View>
+          <MobileSectionLabel>Prompt</MobileSectionLabel>
+          <View style={styles.composer}>
+            <MobileTextInput
+              multiline
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Ask Proliferate to work in this repo..."
+              style={styles.composerInput}
+            />
+            <View style={styles.composerFooter}>
+              <View style={styles.context}>
+                <MobileIcon name="git-branch" size={13} color={colors.faint} />
+                <Text style={styles.contextText} numberOfLines={1}>
+                  {selectedRepo?.label ?? "Select a repository"}
+                </Text>
+              </View>
+              <View style={styles.context}>
+                <MobileIcon name="cloud" size={13} color={colors.faint} />
+                <Text style={styles.contextText} numberOfLines={1}>
+                  {selectedModel.label}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Start cloud chat"
+                disabled={!canSubmit}
+                onPress={() => void submitPrompt()}
+                style={({ pressed }) => [
+                  styles.send,
+                  !canSubmit && styles.sendDisabled,
+                  pressed && styles.sendPressed,
+                ]}
+              >
+                <MobileIcon
+                  name="send"
+                  size={16}
+                  color={canSubmit ? colors.background : colors.faint}
+                />
+              </Pressable>
+            </View>
+          </View>
+          {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
+        </View>
 
         <View>
           <MobileSectionLabel>Repository</MobileSectionLabel>
@@ -172,45 +223,38 @@ export function MobileHomeScreen({ ownerUserId, onOpenChat }: MobileHomeScreenPr
         </View>
 
         <View>
-          <MobileSectionLabel>Prompt</MobileSectionLabel>
-          <View style={styles.composer}>
-            <MobileTextInput
-              multiline
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Ask Proliferate to work in this repo..."
-              style={styles.composerInput}
-            />
-            <View style={styles.composerFooter}>
-              <View style={styles.context}>
-                <MobileIcon name="cloud" size={13} color={colors.faint} />
-                <Text style={styles.contextText} numberOfLines={1}>
-                  {selectedRepo?.label ?? "Select a repository"} - {selectedModel.label}
-                </Text>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Start cloud chat"
-                disabled={!canSubmit}
-                onPress={() => void submitPrompt()}
-                style={({ pressed }) => [
-                  styles.send,
-                  !canSubmit && styles.sendDisabled,
-                  pressed && styles.sendPressed,
-                ]}
-              >
-                <MobileIcon
-                  name="send"
-                  size={16}
-                  color={canSubmit ? colors.background : colors.faint}
+          <MobileSectionLabel>Recent work</MobileSectionLabel>
+          <View style={styles.recentList}>
+            {workInventory.isLoading ? (
+              <Text style={styles.loadingText}>Loading recent work...</Text>
+            ) : workInventory.recentItems.length === 0 ? (
+              <Text style={styles.loadingText}>No recent cloud work yet.</Text>
+            ) : (
+              workInventory.recentItems.map((item) => (
+                <RecentWorkRow
+                  key={item.view.id}
+                  item={item}
+                  onPress={() => onOpenChat(item.chat)}
                 />
-              </Pressable>
-            </View>
+              ))
+            )}
           </View>
-          {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
         </View>
       </MobileStack>
     </MobileScreen>
+  );
+}
+
+function RecentWorkRow({ item, onPress }: { item: MobileWorkItem; onPress: () => void }) {
+  return (
+    <MobileListRow
+      leading={<MobileIcon name={item.view.source === "slack" ? "slack" : "workspaces"} size={17} color={colors.faint} />}
+      title={item.view.title}
+      subtitle={`${item.view.sourceLabel} - ${item.view.repoLabel}`}
+      trailing={<Text style={styles.recentMeta}>{item.view.lastActivityLabel}</Text>}
+      showChevron
+      onPress={onPress}
+    />
   );
 }
 
@@ -363,6 +407,19 @@ const styles = StyleSheet.create({
     color: colors.faint,
     fontSize: 13,
     lineHeight: 18,
+  },
+  recentList: {
+    marginTop: spacing[2],
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    overflow: "hidden",
+  },
+  recentMeta: {
+    color: colors.faint,
+    fontSize: 11.5,
+    fontWeight: "600",
   },
   composer: {
     marginTop: spacing[2],

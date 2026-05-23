@@ -6,7 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 
 import {
   refreshMobileSession,
@@ -80,6 +80,40 @@ export function MobileAuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === "web" || !isDevRuntime()) {
+      return;
+    }
+
+    const applyDevRefreshToken = async (url: string | null) => {
+      const refreshToken = readDevRefreshTokenFromUrl(url);
+      if (!refreshToken) {
+        return;
+      }
+      setError(null);
+      try {
+        await deleteSecureMobileStorageItem(SIGNED_OUT_KEY).catch(() => undefined);
+        const client = createMobileCloudClient(mobileEnv.apiBaseUrl, null);
+        const session = await refreshMobileSession(
+          {
+            refreshToken,
+            grantType: "refresh_token",
+          },
+          client,
+        );
+        await applySession(session, setAccessToken, setUser, setAuthState);
+      } catch (authError) {
+        setError(errorMessage(authError));
+      }
+    };
+
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      void applyDevRefreshToken(url);
+    });
+    void Linking.getInitialURL().then((url) => void applyDevRefreshToken(url));
+    return () => subscription.remove();
   }, []);
 
   const value = useMemo<MobileAuthContextValue>(
@@ -167,10 +201,19 @@ export function useMobileAuth() {
 }
 
 async function bootstrapSession(): Promise<AuthSessionResponse | null> {
-  const devRefreshToken = readDevWebRefreshTokenFromLocation();
-  if (devRefreshToken) {
+  const devRefreshTokenFromLocation = readDevWebRefreshTokenFromLocation();
+  if (await getSecureMobileStorageItem(SIGNED_OUT_KEY)) {
+    if (devRefreshTokenFromLocation) {
+      await deleteSecureMobileStorageItem(SIGNED_OUT_KEY).catch(() => undefined);
+    } else {
+      await clearStoredSession().catch(() => undefined);
+      return null;
+    }
+  }
+  const devRefreshToken = devRefreshTokenFromLocation ?? mobileEnv.devRefreshToken;
+  if (devRefreshTokenFromLocation) {
     await deleteSecureMobileStorageItem(SIGNED_OUT_KEY).catch(() => undefined);
-  } else if (await getSecureMobileStorageItem(SIGNED_OUT_KEY)) {
+  } else if (devRefreshToken && !isDevRuntime()) {
     await clearStoredSession().catch(() => undefined);
     return null;
   }
@@ -186,6 +229,10 @@ async function bootstrapSession(): Promise<AuthSessionResponse | null> {
     },
     client,
   );
+}
+
+function isDevRuntime(): boolean {
+  return typeof __DEV__ !== "undefined" && __DEV__;
 }
 
 function readDevWebRefreshTokenFromLocation(): string | null {
@@ -235,6 +282,20 @@ function readDevWebRefreshTokenFromLocation(): string | null {
 
 function isLocalDevWebHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function readDevRefreshTokenFromUrl(url: string | null): string | null {
+  if (!url) {
+    return null;
+  }
+  try {
+    const parsed = new URL(url);
+    return parsed.searchParams.get(DEV_REFRESH_TOKEN_PARAM)
+      ?? new URLSearchParams(parsed.hash.startsWith("#") ? parsed.hash.slice(1) : parsed.hash)
+        .get(DEV_REFRESH_TOKEN_PARAM);
+  } catch {
+    return null;
+  }
 }
 
 async function applySession(

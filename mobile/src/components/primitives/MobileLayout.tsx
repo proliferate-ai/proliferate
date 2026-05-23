@@ -1,9 +1,10 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import {
   ScrollView,
   StyleSheet,
   Text,
   View,
+  type RefreshControlProps,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -13,6 +14,7 @@ import { colors, layout, radius, spacing, text } from "../../styles/tokens";
 interface MobileScreenProps {
   children: ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
+  refreshControl?: ReactElement<RefreshControlProps>;
   scroll?: boolean;
 }
 
@@ -32,7 +34,12 @@ interface MobileStatusPillProps {
   tone?: "success" | "info" | "muted" | "warning";
 }
 
-export function MobileScreen({ children, contentStyle, scroll = true }: MobileScreenProps) {
+export function MobileScreen({
+  children,
+  contentStyle,
+  refreshControl,
+  scroll = true,
+}: MobileScreenProps) {
   if (!scroll) {
     return <View style={[styles.screen, contentStyle]}>{children}</View>;
   }
@@ -41,6 +48,7 @@ export function MobileScreen({ children, contentStyle, scroll = true }: MobileSc
       style={styles.scroll}
       contentContainerStyle={[styles.screen, contentStyle]}
       keyboardShouldPersistTaps="handled"
+      refreshControl={refreshControl}
     >
       {children}
     </ScrollView>

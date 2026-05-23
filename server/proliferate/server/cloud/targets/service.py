@@ -11,9 +11,14 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.cloud import CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN, CloudTargetKind
+from proliferate.constants.cloud import (
+    CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
+    CloudTargetKind,
+    CloudTargetStatus,
+)
 from proliferate.db.models.auth import User
 from proliferate.db.store import organizations as organizations_store
+from proliferate.db.store.cloud_sync import inventory as inventory_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.errors import CloudApiError
@@ -29,6 +34,7 @@ from proliferate.server.cloud.targets.domain.rules import (
     validate_owner_scope,
 )
 from proliferate.server.cloud.targets.models import (
+    CloudTargetExistingEnrollmentRequest,
     CloudTargetEnrollmentRequest,
     CloudTargetEnrollmentResponse,
     target_detail_payload,
@@ -54,6 +60,45 @@ def _cloud_base_url() -> str:
         if normalized:
             return normalized
     return "http://localhost:8000"
+
+
+async def _create_enrollment_response_for_target(
+    db: AsyncSession,
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    user: User,
+    ttl_seconds: int | None,
+) -> CloudTargetEnrollmentResponse:
+    token = secrets.token_urlsafe(48)
+    ttl = clamp_enrollment_ttl_seconds(ttl_seconds)
+    expires_at = utcnow() + timedelta(seconds=ttl)
+    await worker_auth_store.create_enrollment(
+        db,
+        target_id=target.id,
+        token_hash=_hash_token(domain=CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN, token=token),
+        created_by_user_id=user.id,
+        expires_at=expires_at,
+    )
+    install_command = build_install_command(
+        installer_url=settings.proliferate_target_installer_url,
+        cloud_base_url=_cloud_base_url(),
+        enrollment_token=token,
+        artifact_base_url=settings.proliferate_target_artifact_base_url or None,
+    )
+    refreshed = await targets_store.get_target_by_id(db, target.id)
+    if refreshed is None:
+        raise CloudApiError(
+            "cloud_target_not_found",
+            "Target was not created.",
+            status_code=500,
+        )
+    return CloudTargetEnrollmentResponse(
+        target=target_detail_payload(refreshed),
+        enrollment_token=token,
+        install_command=install_command,
+        artifact_base_url=settings.proliferate_target_artifact_base_url or None,
+        expires_at=expires_at.isoformat(),
+    )
 
 
 async def create_target_enrollment(
@@ -99,34 +144,61 @@ async def create_target_enrollment(
                 body.default_workspace_root,
             ),
         )
-    token = secrets.token_urlsafe(48)
-    ttl_seconds = clamp_enrollment_ttl_seconds(body.ttl_seconds)
-    expires_at = utcnow() + timedelta(seconds=ttl_seconds)
-    await worker_auth_store.create_enrollment(
+    return await _create_enrollment_response_for_target(
+        db,
+        target=target,
+        user=user,
+        ttl_seconds=body.ttl_seconds,
+    )
+
+
+async def create_target_enrollment_for_existing_target(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    user: User,
+    body: CloudTargetExistingEnrollmentRequest,
+) -> CloudTargetEnrollmentResponse:
+    target = await get_target_detail(db, target_id=target_id, user_id=user.id)
+    validate_enrollable_kind(target.kind)
+    if target.archived_at is not None or target.status == "archived":
+        raise CloudApiError(
+            "cloud_target_archived",
+            "Target is archived.",
+            status_code=409,
+        )
+    if target.organization_id is not None:
+        membership = await organizations_store.get_active_membership(
+            db,
+            organization_id=target.organization_id,
+            user_id=user.id,
+        )
+        require_target_admin_membership(membership)
+    await require_user_github_auth(db, user_id=user.id)
+    now = utcnow()
+    await worker_auth_store.revoke_pending_enrollments_for_target(
         db,
         target_id=target.id,
-        token_hash=_hash_token(domain=CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN, token=token),
-        created_by_user_id=user.id,
-        expires_at=expires_at,
+        now=now,
     )
-    install_command = build_install_command(
-        installer_url=settings.proliferate_target_installer_url,
-        cloud_base_url=_cloud_base_url(),
-        enrollment_token=token,
-        artifact_base_url=settings.proliferate_target_artifact_base_url or None,
+    await worker_auth_store.archive_workers_for_target(db, target_id=target.id, now=now)
+    await inventory_store.upsert_target_status(
+        db,
+        target_id=target.id,
+        worker_id=None,
+        status_value=CloudTargetStatus.enrolling.value,
+        status_detail="Waiting for worker re-enrollment.",
     )
-    refreshed = await targets_store.get_target_by_id(db, target.id)
-    if refreshed is None:
-        raise CloudApiError(
-            "cloud_target_not_found",
-            "Target was not created.",
-            status_code=500,
-        )
-    return CloudTargetEnrollmentResponse(
-        target=target_detail_payload(refreshed),
-        enrollment_token=token,
-        install_command=install_command,
-        expires_at=expires_at.isoformat(),
+    await targets_store.set_target_status(
+        db,
+        target_id=target.id,
+        status_value=CloudTargetStatus.enrolling.value,
+    )
+    return await _create_enrollment_response_for_target(
+        db,
+        target=target,
+        user=user,
+        ttl_seconds=body.ttl_seconds,
     )
 
 

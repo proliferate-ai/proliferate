@@ -188,6 +188,165 @@ class TestCloudTargetsApi:
         assert stale_heartbeat.json()["detail"]["code"] == "cloud_worker_archived"
 
     @pytest.mark.asyncio
+    async def test_existing_target_enrollment_reuses_target_record(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-targets-reenroll",
+        )
+        await seed_linked_github_account(
+            db_session,
+            user_id=auth.user_id,
+            access_token="gh-cloud-targets-reenroll-token",
+        )
+
+        create = await client.post(
+            "/v1/cloud/targets/enrollments",
+            headers=auth.headers,
+            json={
+                "displayName": "Reconnectable SSH Box",
+                "kind": "ssh",
+                "ownerScope": "personal",
+            },
+        )
+        assert create.status_code == 200
+        first = create.json()
+        target_id = first["target"]["id"]
+
+        reconnect = await client.post(
+            f"/v1/cloud/targets/{target_id}/enrollments",
+            headers=auth.headers,
+            json={"ttlSeconds": 120},
+        )
+
+        assert reconnect.status_code == 200
+        second = reconnect.json()
+        assert second["target"]["id"] == target_id
+        assert second["target"]["status"] == "enrolling"
+        assert second["enrollmentToken"] != first["enrollmentToken"]
+        assert second["installCommand"] != first["installCommand"]
+
+        stale_enroll = await client.post(
+            "/v1/cloud/worker/enroll",
+            json={
+                "enrollmentToken": first["enrollmentToken"],
+                "machineFingerprint": "stale-machine",
+                "hostname": "stale-ssh",
+                "workerVersion": "0.1.0",
+            },
+        )
+        assert stale_enroll.status_code == 401
+        assert stale_enroll.json()["detail"]["code"] == "cloud_worker_enrollment_invalid"
+
+        worker_enroll = await client.post(
+            "/v1/cloud/worker/enroll",
+            json={
+                "enrollmentToken": second["enrollmentToken"],
+                "machineFingerprint": "fresh-machine",
+                "hostname": "fresh-ssh",
+                "workerVersion": "0.1.0",
+            },
+        )
+        assert worker_enroll.status_code == 200
+        worker_headers = {"Authorization": f"Bearer {worker_enroll.json()['workerToken']}"}
+
+        heartbeat = await client.post(
+            "/v1/cloud/worker/heartbeat",
+            headers=worker_headers,
+            json={"status": "online"},
+        )
+        assert heartbeat.status_code == 200
+
+        replace_worker = await client.post(
+            f"/v1/cloud/targets/{target_id}/enrollments",
+            headers=auth.headers,
+            json={"ttlSeconds": 120},
+        )
+        assert replace_worker.status_code == 200
+        assert replace_worker.json()["target"]["status"] == "enrolling"
+
+        stale_worker = await client.post(
+            "/v1/cloud/worker/heartbeat",
+            headers=worker_headers,
+            json={"status": "online"},
+        )
+        assert stale_worker.status_code == 401
+        assert stale_worker.json()["detail"]["code"] == "cloud_worker_archived"
+
+    @pytest.mark.asyncio
+    async def test_org_member_cannot_create_existing_target_enrollment(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        owner = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-target-reenroll-owner",
+        )
+        member = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-target-reenroll-member",
+        )
+        await seed_linked_github_account(
+            db_session,
+            user_id=owner.user_id,
+            access_token="gh-target-reenroll-owner-token",
+        )
+        await seed_linked_github_account(
+            db_session,
+            user_id=member.user_id,
+            access_token="gh-target-reenroll-member-token",
+        )
+        organization = Organization(name="Cloud Target Reenroll Org")
+        db_session.add(organization)
+        await db_session.flush()
+        db_session.add_all(
+            [
+                OrganizationMembership(
+                    organization_id=organization.id,
+                    user_id=uuid.UUID(owner.user_id),
+                    role=ORGANIZATION_ROLE_OWNER,
+                    status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+                ),
+                OrganizationMembership(
+                    organization_id=organization.id,
+                    user_id=uuid.UUID(member.user_id),
+                    role=ORGANIZATION_ROLE_MEMBER,
+                    status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+                ),
+            ]
+        )
+        await db_session.commit()
+
+        create = await client.post(
+            "/v1/cloud/targets/enrollments",
+            headers=owner.headers,
+            json={
+                "displayName": "Team Reconnect Box",
+                "kind": "ssh",
+                "ownerScope": "organization",
+                "organizationId": str(organization.id),
+            },
+        )
+        assert create.status_code == 200
+        target_id = create.json()["target"]["id"]
+
+        denied = await client.post(
+            f"/v1/cloud/targets/{target_id}/enrollments",
+            headers=member.headers,
+            json={},
+        )
+
+        assert denied.status_code == 403
+        assert denied.json()["detail"]["code"] == "cloud_target_organization_permission_denied"
+
+    @pytest.mark.asyncio
     async def test_org_member_can_view_but_not_archive_target(
         self,
         client: AsyncClient,

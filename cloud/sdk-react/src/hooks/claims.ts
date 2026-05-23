@@ -6,10 +6,9 @@ import {
 } from "@proliferate/cloud-sdk";
 import {
   cloudWorkspaceSnapshotKey,
-  cloudWorkspacesKey,
-  personalCloudOwnerKey,
 } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
+import { invalidateCloudWorkspaceLists } from "./workspaces.js";
 
 export function useClaimCloudWorkspace() {
   const client = useCloudClient();
@@ -20,9 +19,7 @@ export function useClaimCloudWorkspace() {
   }>({
     mutationFn: ({ workspaceId, body }) => claimCloudWorkspace(workspaceId, body, client),
     onSuccess(_result, variables) {
-      void queryClient.invalidateQueries({
-        queryKey: cloudWorkspacesKey(personalCloudOwnerKey(), "exposed"),
-      });
+      invalidateCloudWorkspaceLists(queryClient);
       void queryClient.invalidateQueries({
         queryKey: cloudWorkspaceSnapshotKey(variables.workspaceId),
       });

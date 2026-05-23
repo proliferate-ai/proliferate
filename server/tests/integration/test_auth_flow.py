@@ -159,6 +159,21 @@ class TestHealthEndpoint:
         assert resp.headers["access-control-allow-origin"] == "http://localhost:1420"
         assert resp.headers["access-control-allow-credentials"] == "true"
 
+    @pytest.mark.asyncio
+    async def test_cors_preflight_allows_mobile_web_dev_origin(self, client: AsyncClient) -> None:
+        for origin in ("http://localhost:5175", "http://127.0.0.1:8081"):
+            resp = await client.options(
+                "/health",
+                headers={
+                    "Origin": origin,
+                    "Access-Control-Request-Method": "GET",
+                    "Access-Control-Request-Headers": "authorization,content-type",
+                },
+            )
+            assert resp.status_code == 200
+            assert resp.headers["access-control-allow-origin"] == origin
+            assert resp.headers["access-control-allow-credentials"] == "true"
+
 
 class TestEmailPasswordRoutesRemoved:
     @pytest.mark.asyncio

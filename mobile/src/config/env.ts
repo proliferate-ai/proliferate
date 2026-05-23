@@ -9,6 +9,7 @@ declare const process: {
     EXPO_PUBLIC_PROLIFERATE_SENTRY_DSN?: string;
     EXPO_PUBLIC_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE?: string;
     EXPO_PUBLIC_PROLIFERATE_TELEMETRY_DISABLED?: string;
+    EXPO_PUBLIC_PROLIFERATE_DEV_REFRESH_TOKEN?: string;
   };
 };
 declare const __DEV__: boolean | undefined;
@@ -24,4 +25,7 @@ function resolveApiBaseUrl() {
 export const mobileEnv = {
   apiBaseUrl: resolveApiBaseUrl(),
   redirectUri: "proliferate://auth/callback",
+  devRefreshToken: typeof __DEV__ !== "undefined" && __DEV__
+    ? process.env.EXPO_PUBLIC_PROLIFERATE_DEV_REFRESH_TOKEN?.trim() || null
+    : null,
 } as const;
