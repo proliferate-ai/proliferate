@@ -10,6 +10,7 @@ import {
   getWorkspaceSessionRecords,
   putSessionRecord,
 } from "@/stores/sessions/session-records";
+import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 
 export function ensurePendingWorkspaceSessionShell(input: {
   entry: PendingWorkspaceEntry;
@@ -41,6 +42,18 @@ export function ensurePendingWorkspaceSessionShell(input: {
     status: "starting",
     transcriptHydrated: true,
   });
+  for (const [configId, value] of Object.entries(initialSession.launchControlValues ?? {})) {
+    if (value.trim().length === 0) {
+      continue;
+    }
+    useSessionIntentStore.getState().enqueueConfig({
+      clientSessionId,
+      workspaceId: pendingWorkspaceUiKey,
+      configId,
+      value,
+      persistDefaultPreference: false,
+    });
+  }
 
   logLatency("workspace.entry.projected_session_shell.created", {
     attemptId: entry.attemptId,
@@ -49,6 +62,7 @@ export function ensurePendingWorkspaceSessionShell(input: {
     clientSessionId,
     agentKind: initialSession.agentKind,
     modelId: initialSession.modelId,
+    launchControlCount: Object.keys(initialSession.launchControlValues ?? {}).length,
   });
 
   return clientSessionId;

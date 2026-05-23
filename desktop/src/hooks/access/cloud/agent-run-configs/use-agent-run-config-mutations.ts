@@ -3,11 +3,15 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createAgentRunConfig,
   deleteAgentRunConfig,
+  setAgentRunConfigDefault,
   updateAgentRunConfig,
 } from "@proliferate/cloud-sdk/client/agent-run-configs";
 import type {
   CloudAgentRunConfig,
+  CloudAgentRunConfigDefault,
+  CloudAgentRunConfigDefaultOwnerSelection,
   CreateCloudAgentRunConfigRequest,
+  SetCloudAgentRunConfigDefaultRequest,
   UpdateCloudAgentRunConfigRequest,
 } from "@/lib/access/cloud/client";
 import {
@@ -48,10 +52,25 @@ export function useAgentRunConfigMutations() {
     onSuccess: (_, configId) => invalidateAgentRunConfigs(configId),
   });
 
+  const setDefaultMutation = useMutation<
+    CloudAgentRunConfigDefault,
+    Error,
+    {
+      agentKind: string;
+      body: SetCloudAgentRunConfigDefaultRequest;
+      options?: CloudAgentRunConfigDefaultOwnerSelection;
+    }
+  >({
+    mutationFn: ({ agentKind, body, options }) =>
+      setAgentRunConfigDefault(agentKind, body, options),
+    onSuccess: () => invalidateAgentRunConfigs(),
+  });
+
   return {
     createMutation,
     updateMutation,
     deleteMutation,
+    setDefaultMutation,
     invalidateAgentRunConfigs,
   };
 }

@@ -1,16 +1,19 @@
 import {
   Blocks,
+  Bot,
   CalendarClock,
   CircleAlert,
   Cloud,
   CloudOff,
   House,
+  Hash,
   LifeBuoy,
   LoaderCircle,
   MessageSquare,
   Plus,
   Radio,
   Settings,
+  Terminal,
   Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -279,8 +282,8 @@ function buildWorkspaceGroups(input: {
     label: group.label,
     count: group.count,
     collapsed: group.collapsed,
-    icon: <Cloud className="size-4" />,
-    expandedIcon: <Cloud className="size-4" />,
+    icon: workspaceGroupIcon(group.sourceKind),
+    expandedIcon: workspaceGroupIcon(group.sourceKind),
     rows: group.workspaces.map((workspace) => ({
       id: workspace.id,
       label: workspace.label,
@@ -302,6 +305,22 @@ function buildWorkspaceGroups(input: {
     })),
     actions: [],
   }));
+}
+
+function workspaceGroupIcon(sourceKind: "chat" | "slack" | "automation" | "api" | "agent") {
+  switch (sourceKind) {
+    case "slack":
+      return <Hash className="size-4" />;
+    case "automation":
+      return <CalendarClock className="size-4" />;
+    case "api":
+      return <Terminal className="size-4" />;
+    case "agent":
+      return <Bot className="size-4" />;
+    case "chat":
+    default:
+      return <MessageSquare className="size-4" />;
+  }
 }
 
 function buildChatRows(

@@ -5,9 +5,14 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from proliferate.constants.automations import (
+    AUTOMATION_TARGET_MODE_SHARED_CLOUD,
+)
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
+from proliferate.db import engine as db_engine
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
 from proliferate.db.store.automation_run_claims import claim_cloud_automation_runs
+from proliferate.db.store.cloud_agent_run_config import configs as run_config_store
 from proliferate.server.automations.domain.claim_lifecycle import (
     RECLAIMABLE_STATUSES,
     unconfigured_agent_failure,
@@ -26,6 +31,9 @@ from proliferate.server.automations.worker.cloud_executor_config import (
     CloudExecutorConfig,
     build_cloud_executor_config,
     default_cloud_executor_config,
+)
+from proliferate.server.cloud.agent_run_config.domain.resolve import (
+    validate_config_execution_scope,
 )
 from proliferate.utils.time import utcnow
 
@@ -61,6 +69,8 @@ async def process_cloud_automation_run(
         if claim.agent_kind not in SUPPORTED_CLOUD_AGENTS:
             await fail_claim(claim, code="agent_not_ready")
             return
+        if not await _claim_run_config_is_current(claim):
+            return
 
         await run_automation_pipeline(
             AutomationExecutionContext(claim=claim),
@@ -81,6 +91,33 @@ async def process_cloud_automation_run(
                 "automation cloud executor heartbeat cleanup failed run_id=%s",
                 claim.id,
             )
+
+
+async def _claim_run_config_is_current(claim: AutomationRunClaimValue) -> bool:
+    config_id = claim.cloud_agent_run_config_id_snapshot
+    if config_id is None:
+        await fail_claim(claim, code="agent_run_config_not_found")
+        return False
+    async with db_engine.async_session_factory() as db:
+        config = await run_config_store.get_config(db, config_id)
+    if config is None:
+        await fail_claim(claim, code="agent_run_config_not_found")
+        return False
+    issue = validate_config_execution_scope(
+        config,
+        actor_user_id=claim.user_id,
+        owner_scope=claim.owner_scope,
+        organization_id=claim.organization_id,
+        usable_in=(
+            "shared_sandboxes"
+            if claim.target_mode == AUTOMATION_TARGET_MODE_SHARED_CLOUD
+            else "personal_sandboxes"
+        ),
+    )
+    if issue is not None:
+        await fail_claim(claim, code=issue.code)
+        return False
+    return True
 
 
 async def run_cloud_executor_loop(

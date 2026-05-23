@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Select } from "@/components/ui/Select";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
@@ -10,7 +10,8 @@ import { ConnectionSection } from "@/components/settings/panes/slack/ConnectionS
 import { RepoRoutingSection } from "@/components/settings/panes/slack/RepoRoutingSection";
 import { SessionDefaultsSection } from "@/components/settings/panes/slack/SessionDefaultsSection";
 import { SharedReadinessSection } from "@/components/settings/panes/slack/SharedReadinessSection";
-import { useAgentRunConfigs } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
+import { useAgentRunConfig } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
+import { useAgentRunConfigMutations } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-config-mutations";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useCloudTargets } from "@/hooks/access/cloud/targets/use-cloud-targets";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
@@ -24,18 +25,33 @@ import {
 } from "@/hooks/access/cloud/slack/use-slack-repo-routing-profiles";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import {
+  buildLaunchControlDescriptors,
+} from "@/lib/domain/chat/models/launch-control-descriptors";
+import type {
+  LiveSessionControlDescriptor,
+  SupportedLiveControlKey,
+} from "@/lib/domain/chat/session-controls/session-controls";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import type {
-  CloudAgentRunConfig,
+  DesktopAgentLaunchAgent,
+  DesktopAgentLaunchModel,
+} from "@/lib/domain/agents/cloud-launch-catalog";
+import type {
   SlackChannel,
   SlackRepoRoutingProfile,
   UpdateSlackBotConfigRequest,
 } from "@proliferate/cloud-sdk";
 
-const EMPTY_AGENT_OPTIONS: Array<{ kind: string; displayName: string }> = [];
-const EMPTY_AGENT_CONFIGS: CloudAgentRunConfig[] = [];
+const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
 const EMPTY_CHANNELS: SlackChannel[] = [];
 const EMPTY_PROFILES: SlackRepoRoutingProfile[] = [];
+
+interface SlackSessionDefaultsDraft {
+  agentKind: string | null;
+  modelId: string | null;
+  controlValues: Record<string, string>;
+}
 
 export function SlackBotPane() {
   const navigate = useNavigate();
@@ -63,19 +79,132 @@ export function SlackBotPane() {
   );
   const repoProfileMutation = useSlackRepoRoutingProfileMutation(activeOrganizationId);
   const agentCatalogQuery = useCloudAgentCatalog(canLoadSlack);
-  const agentOptions = agentCatalogQuery.data?.agents.map((agent) => ({
-    kind: agent.kind,
-    displayName: agent.displayName,
-  })) ?? EMPTY_AGENT_OPTIONS;
-  const selectedAgentKind = config?.defaultAgentKind ?? agentOptions[0]?.kind ?? "claude";
-  const agentRunConfigsQuery = useAgentRunConfigs({
-    ownerScope: "organization",
-    organizationId: activeOrganizationId,
-    agentKind: selectedAgentKind,
-    usableIn: "shared_sandboxes",
-    status: "active",
-  }, canLoadSlack && Boolean(config));
+  const launchAgents = agentCatalogQuery.data?.agents ?? EMPTY_AGENTS;
+  const selectedRunConfigQuery = useAgentRunConfig(
+    config?.defaultAgentRunConfigId ?? null,
+    canLoadSlack && Boolean(config?.defaultAgentRunConfigId),
+  );
+  const agentRunConfigMutations = useAgentRunConfigMutations();
   const targetsQuery = useCloudTargets(canLoadSlack);
+  const [sessionDraft, setSessionDraft] = useState<SlackSessionDefaultsDraft>({
+    agentKind: null,
+    modelId: null,
+    controlValues: {},
+  });
+  const selectedAgent = useMemo(
+    () => resolveSlackLaunchAgent(launchAgents, sessionDraft.agentKind),
+    [launchAgents, sessionDraft.agentKind],
+  );
+  const selectedModel = useMemo(
+    () => resolveSlackLaunchModel(selectedAgent, sessionDraft.modelId),
+    [selectedAgent, sessionDraft.modelId],
+  );
+  const sessionControls = useMemo(
+    () => selectedAgent && selectedModel
+      ? buildLaunchControlDescriptors({
+        selection: { kind: selectedAgent.kind, modelId: selectedModel.id },
+        launchAgents: [selectedAgent],
+        pendingConfigChanges: null,
+        preferences: {
+          defaultSessionModeByAgentKind: sessionDraft.controlValues.mode
+            ? { [selectedAgent.kind]: sessionDraft.controlValues.mode }
+            : {},
+          defaultLiveSessionControlValuesByAgentKind: {
+            [selectedAgent.kind]: sessionDraft.controlValues,
+          },
+        },
+        onSelect: (
+          _agentKind: string,
+          _controlKey: SupportedLiveControlKey,
+          rawConfigId: string,
+          value: string,
+        ) => {
+          setSessionDraft((current) => ({
+            ...current,
+            controlValues: {
+              ...current.controlValues,
+              [rawConfigId]: value,
+            },
+          }));
+        },
+      })
+      : [],
+    [selectedAgent, selectedModel, sessionDraft.controlValues],
+  );
+  const selectedSessionControlValues = useMemo(
+    () => selectedControlValues(sessionControls),
+    [sessionControls],
+  );
+  const savingSessionDefaults =
+    mutations.updateMutation.isPending
+    || agentRunConfigMutations.createMutation.isPending;
+
+  useEffect(() => {
+    if (
+      !canLoadSlack
+      || !config
+      || launchAgents.length === 0
+      || selectedRunConfigQuery.isLoading
+    ) {
+      return;
+    }
+
+    const selectedRunConfig = selectedRunConfigQuery.data ?? null;
+    const nextAgent = resolveSlackLaunchAgent(
+      launchAgents,
+      selectedRunConfig?.agentKind ?? config.defaultAgentKind ?? null,
+    );
+    const nextModel = resolveSlackLaunchModel(
+      nextAgent,
+      selectedRunConfig?.modelId ?? null,
+    );
+    const nextDraft: SlackSessionDefaultsDraft = {
+      agentKind: nextAgent?.kind ?? null,
+      modelId: nextModel?.id ?? null,
+      controlValues: stringControlValues(selectedRunConfig?.controlValues ?? {}),
+    };
+    setSessionDraft((current) =>
+      slackSessionDraftsEqual(current, nextDraft) ? current : nextDraft
+    );
+  }, [
+    canLoadSlack,
+    config,
+    launchAgents,
+    selectedRunConfigQuery.data,
+    selectedRunConfigQuery.isLoading,
+  ]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+    console.debug("[agent-harness-config][slackbot]", {
+      organizationId: activeOrganizationId,
+      configuredRunConfigId: config?.defaultAgentRunConfigId ?? null,
+      draft: sessionDraft,
+      selectedAgent: selectedAgent?.kind ?? null,
+      selectedModel: selectedModel?.id ?? null,
+      catalogAgents: launchAgents.map((agent) => ({
+        agentKind: agent.kind,
+        modelCount: agent.models.length,
+        launchControls: agent.launchControls.map((control) => control.key),
+      })),
+      renderedControls: sessionControls.map((control) => ({
+        key: control.key,
+        rawConfigId: control.rawConfigId,
+        detail: control.detail,
+        optionCount: control.options.length,
+      })),
+    });
+  }, [
+    activeOrganizationId,
+    config?.defaultAgentRunConfigId,
+    launchAgents,
+    selectedAgent?.kind,
+    selectedModel?.id,
+    sessionControls,
+    sessionDraft,
+  ]);
 
   function updateConfig(body: UpdateSlackBotConfigRequest) {
     setFeedback(null);
@@ -109,6 +238,36 @@ export function SlackBotPane() {
       },
       onError: (error) => setFeedback({ tone: "error", message: error.message }),
     });
+  }
+
+  async function saveSessionDefaults() {
+    setFeedback(null);
+    if (!activeOrganizationId || !config || !selectedAgent || !selectedModel) {
+      setFeedback({ tone: "error", message: "Choose an agent and model before saving Slack defaults." });
+      return;
+    }
+    try {
+      const runConfig = await agentRunConfigMutations.createMutation.mutateAsync({
+        name: slackRunConfigName(selectedAgent.displayName),
+        ownerScope: "organization",
+        organizationId: activeOrganizationId,
+        agentKind: selectedAgent.kind,
+        modelId: selectedModel.id,
+        controlValues: selectedSessionControlValues,
+        usableInPersonalSandboxes: false,
+        usableInSharedSandboxes: true,
+      });
+      await mutations.updateMutation.mutateAsync({
+        defaultAgentKind: selectedAgent.kind,
+        defaultAgentRunConfigId: runConfig.id,
+      });
+      setFeedback({ tone: "info", message: "Slack session defaults saved." });
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        message: error instanceof Error ? error.message : "Could not save Slack session defaults.",
+      });
+    }
   }
 
   if (organizationsQuery.isLoading) {
@@ -207,12 +366,21 @@ export function SlackBotPane() {
 
       <SessionDefaultsSection
         config={config}
-        agentOptions={agentOptions}
-        agentRunConfigs={agentRunConfigsQuery.data?.configs ?? EMPTY_AGENT_CONFIGS}
-        loadingConfigs={agentRunConfigsQuery.isLoading || agentCatalogQuery.isLoading}
+        agents={launchAgents}
+        selectedAgent={selectedAgent}
+        selectedModel={selectedModel}
+        controls={sessionControls}
+        loading={agentCatalogQuery.isLoading || selectedRunConfigQuery.isLoading}
         canManage={canManage}
-        saving={mutations.updateMutation.isPending}
-        onUpdateConfig={updateConfig}
+        saving={savingSessionDefaults}
+        onSelectModel={(agentKind, modelId) => {
+          setSessionDraft(() => ({
+            agentKind,
+            modelId,
+            controlValues: {},
+          }));
+        }}
+        onSave={saveSessionDefaults}
       />
 
       <RepoRoutingSection
@@ -255,6 +423,77 @@ export function SlackBotPane() {
       />
     </SlackBotShell>
   );
+}
+
+function resolveSlackLaunchAgent(
+  agents: DesktopAgentLaunchAgent[],
+  agentKind: string | null,
+): DesktopAgentLaunchAgent | null {
+  return agents.find((agent) => agent.kind === agentKind)
+    ?? agents.find((agent) => agent.models.length > 0)
+    ?? null;
+}
+
+function resolveSlackLaunchModel(
+  agent: DesktopAgentLaunchAgent | null,
+  modelId: string | null,
+): DesktopAgentLaunchModel | null {
+  if (!agent) {
+    return null;
+  }
+  return agent.models.find((model) => model.id === modelId)
+    ?? agent.models.find((model) => model.id === agent.defaultModelId)
+    ?? agent.models.find((model) => model.isDefault)
+    ?? agent.models[0]
+    ?? null;
+}
+
+function selectedControlValues(
+  controls: LiveSessionControlDescriptor[],
+): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const control of controls) {
+    const selected = control.options.find((option) => option.selected);
+    if (selected?.value) {
+      values[control.rawConfigId] = selected.value;
+    }
+  }
+  return values;
+}
+
+function stringControlValues(values: Record<string, unknown>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(values).flatMap(([key, value]) =>
+      typeof value === "string" && value.trim().length > 0
+        ? [[key, value]]
+        : []
+    ),
+  );
+}
+
+function slackSessionDraftsEqual(
+  left: SlackSessionDefaultsDraft,
+  right: SlackSessionDefaultsDraft,
+): boolean {
+  return left.agentKind === right.agentKind
+    && left.modelId === right.modelId
+    && controlValuesEqual(left.controlValues, right.controlValues);
+}
+
+function controlValuesEqual(
+  left: Record<string, string>,
+  right: Record<string, string>,
+): boolean {
+  const leftEntries = Object.entries(left).filter(([, value]) => value.trim().length > 0);
+  const rightEntries = Object.entries(right).filter(([, value]) => value.trim().length > 0);
+  if (leftEntries.length !== rightEntries.length) {
+    return false;
+  }
+  return leftEntries.every(([key, value]) => right[key] === value);
+}
+
+function slackRunConfigName(agentDisplayName: string): string {
+  return `Slack bot - ${agentDisplayName}`;
 }
 
 function SlackBotShell({ children }: { children: ReactNode }) {

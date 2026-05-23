@@ -2,15 +2,19 @@ import "@/lib/access/cloud/client";
 import { useQuery } from "@tanstack/react-query";
 import {
   getAgentRunConfig,
+  listAgentRunConfigDefaults,
   listAgentRunConfigs,
 } from "@proliferate/cloud-sdk/client/agent-run-configs";
 import type {
   CloudAgentRunConfig,
+  CloudAgentRunConfigDefaultOwnerSelection,
+  CloudAgentRunConfigDefaultsResponse,
   CloudAgentRunConfigListResponse,
   ListCloudAgentRunConfigsOptions,
 } from "@/lib/access/cloud/client";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import {
+  agentRunConfigDefaultsKey,
   agentRunConfigKey,
   agentRunConfigsListKey,
 } from "./query-keys";
@@ -36,3 +40,14 @@ export function useAgentRunConfig(configId: string | null, enabled = true) {
   });
 }
 
+export function useAgentRunConfigDefaults(
+  options: CloudAgentRunConfigDefaultOwnerSelection = {},
+  enabled = true,
+) {
+  const { cloudActive } = useCloudAvailabilityState();
+  return useQuery<CloudAgentRunConfigDefaultsResponse>({
+    queryKey: agentRunConfigDefaultsKey(options),
+    enabled: enabled && cloudActive,
+    queryFn: () => listAgentRunConfigDefaults(options),
+  });
+}

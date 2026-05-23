@@ -32,8 +32,29 @@ export interface CloudAgentRunConfigListResponse {
   configs: CloudAgentRunConfig[];
 }
 
+export interface CloudAgentRunConfigDefault {
+  id: string;
+  ownerScope: AutomationOwnerScope;
+  ownerUserId?: string | null;
+  organizationId?: string | null;
+  agentKind: string;
+  configId: string;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CloudAgentRunConfigDefaultsResponse {
+  defaults: CloudAgentRunConfigDefault[];
+}
+
 export interface CloudAgentRunConfigOwnerSelection {
   ownerScope?: AutomationOwnerScope | "system";
+  organizationId?: string | null;
+}
+
+export interface CloudAgentRunConfigDefaultOwnerSelection {
+  ownerScope?: AutomationOwnerScope;
   organizationId?: string | null;
 }
 
@@ -61,4 +82,8 @@ export interface UpdateCloudAgentRunConfigRequest {
   controlValues?: Record<string, unknown> | null;
   usableInPersonalSandboxes?: boolean | null;
   usableInSharedSandboxes?: boolean | null;
+}
+
+export interface SetCloudAgentRunConfigDefaultRequest {
+  configId: string;
 }

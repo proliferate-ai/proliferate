@@ -1,8 +1,15 @@
+export interface PendingHomePromptSessionConfigUpdate {
+  configId: string;
+  value: string;
+}
+
 export interface PendingHomePrompt {
   id: string;
   text: string;
+  agentKind?: string | null;
   modelId: string | null;
   modeId: string | null;
+  sessionConfigUpdates?: PendingHomePromptSessionConfigUpdate[];
   createdAt: number;
   status?: "pending" | "failed";
   errorMessage?: string | null;
@@ -48,8 +55,10 @@ export function loadPendingHomePrompt(workspaceId: string): PendingHomePrompt | 
     return {
       id: parsed.id,
       text: parsed.text,
+      agentKind: typeof parsed.agentKind === "string" ? parsed.agentKind : null,
       modelId: typeof parsed.modelId === "string" ? parsed.modelId : null,
       modeId: typeof parsed.modeId === "string" ? parsed.modeId : null,
+      sessionConfigUpdates: parseSessionConfigUpdates(parsed.sessionConfigUpdates),
       createdAt: typeof parsed.createdAt === "number" ? parsed.createdAt : Date.now(),
       status: parsed.status === "failed" ? "failed" : "pending",
       errorMessage: typeof parsed.errorMessage === "string" ? parsed.errorMessage : null,
@@ -70,4 +79,19 @@ export function clearPendingHomePrompt(workspaceId: string): void {
 
 function pendingHomePromptKey(workspaceId: string): string {
   return `${PENDING_HOME_PROMPT_KEY_PREFIX}${workspaceId}`;
+}
+
+function parseSessionConfigUpdates(value: unknown): PendingHomePromptSessionConfigUpdate[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return [];
+    }
+    const record = item as Record<string, unknown>;
+    const configId = typeof record.configId === "string" ? record.configId.trim() : "";
+    const updateValue = typeof record.value === "string" ? record.value.trim() : "";
+    return configId && updateValue ? [{ configId, value: updateValue }] : [];
+  });
 }

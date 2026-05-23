@@ -65,6 +65,7 @@ export interface NewChatSurfaceProps {
   mode: PickerView;
   notices: NoticeView[];
   actions: ActionRowView[];
+  extraComposerControls?: readonly CloudChatComposerControlView[];
   transcriptRows?: readonly CloudChatTranscriptRowView[];
   emptyTitle?: string;
   emptyDescription?: string;
@@ -87,6 +88,7 @@ export function NewChatSurface({
   mode,
   notices,
   actions,
+  extraComposerControls,
   transcriptRows = [],
   emptyTitle = "No transcript",
   emptyDescription,
@@ -99,8 +101,10 @@ export function NewChatSurface({
 }: NewChatSurfaceProps) {
   const composerControls = [
     pickerToComposerControl("target", target, "cloud", "leading", onPickerSelect),
-    pickerToComposerControl("model", model, "bot", "trailing", onPickerSelect),
-    pickerToComposerControl("mode", mode, "settings", "trailing", onPickerSelect),
+    ...(extraComposerControls ?? [
+      pickerToComposerControl("model", model, "bot", "trailing", onPickerSelect),
+      pickerToComposerControl("mode", mode, "settings", "trailing", onPickerSelect),
+    ]),
   ];
 
   return (

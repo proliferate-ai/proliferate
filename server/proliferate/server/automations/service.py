@@ -14,9 +14,7 @@ from proliferate.constants.automations import (
     AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
     AUTOMATION_TARGET_MODE_SHARED_CLOUD,
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
-    CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL,
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
-    CLOUD_AGENT_RUN_CONFIG_STATUS_ACTIVE,
 )
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.automations import (
@@ -61,6 +59,9 @@ from proliferate.server.automations.models import (
 from proliferate.server.billing.service import (
     get_billing_snapshot_for_request,
     repo_limit_for_billing_snapshot,
+)
+from proliferate.server.cloud.agent_run_config.domain.resolve import (
+    validate_config_execution_scope,
 )
 from proliferate.server.organizations.domain.policy import organization_admin_roles
 from proliferate.utils.time import utcnow
@@ -197,54 +198,34 @@ async def _load_run_config_for_owner(
     config_id: UUID,
 ) -> CloudAgentRunConfigRecord:
     config = await run_config_store.get_config(db, config_id)
-    if config is None or config.status != CLOUD_AGENT_RUN_CONFIG_STATUS_ACTIVE:
+    if config is None:
         raise _automation_invalid(
             "Agent run config not found.",
             code="agent_run_config_not_found",
             status_code=404,
         )
-    if target_mode == AUTOMATION_TARGET_MODE_SHARED_CLOUD:
-        if not config.usable_in_shared_sandboxes:
-            raise _automation_invalid(
-                "Agent run config is not usable in shared sandboxes.",
-                code="agent_run_config_not_usable",
-            )
-        if config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL:
-            raise _automation_invalid(
-                "Personal agent run configs cannot be used by team automations.",
-                code="agent_run_config_not_usable",
-            )
-    else:
-        if not config.usable_in_personal_sandboxes:
-            raise _automation_invalid(
-                "Agent run config is not usable in personal sandboxes.",
-                code="agent_run_config_not_usable",
-            )
-        if (
-            config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL
-            and config.owner_user_id != actor_user_id
-        ):
-            raise _automation_invalid(
-                "Agent run config not found.",
-                code="agent_run_config_not_found",
-                status_code=404,
-            )
+    issue = validate_config_execution_scope(
+        config,
+        actor_user_id=actor_user_id,
+        owner_scope=owner_scope,
+        organization_id=organization_id,
+        usable_in=(
+            "shared_sandboxes"
+            if target_mode == AUTOMATION_TARGET_MODE_SHARED_CLOUD
+            else "personal_sandboxes"
+        ),
+    )
+    if issue is not None:
+        raise _automation_invalid(
+            issue.message,
+            code=issue.code,
+            status_code=404 if issue.code == "agent_run_config_not_found" else 400,
+        )
     if config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION:
-        if config.organization_id != organization_id:
-            raise _automation_invalid(
-                "Agent run config not found.",
-                code="agent_run_config_not_found",
-                status_code=404,
-            )
         assert organization_id is not None
         await _require_org_admin(db, actor_user_id=actor_user_id, organization_id=organization_id)
     elif config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM:
         return config
-    elif owner_scope == AUTOMATION_OWNER_SCOPE_ORGANIZATION:
-        raise _automation_invalid(
-            "Team automations cannot use personal agent run configs.",
-            code="agent_run_config_not_usable",
-        )
     return config
 
 
@@ -534,6 +515,14 @@ async def run_automation_now(
         organization_id=existing.organization_id,
         git_owner=existing.git_owner,
         git_repo_name=existing.git_repo_name,
+    )
+    await _load_run_config_for_owner(
+        db,
+        actor_user_id=user_id,
+        owner_scope=existing.owner_scope,
+        organization_id=existing.organization_id,
+        target_mode=existing.target_mode,
+        config_id=existing.cloud_agent_run_config_id,
     )
     value = await create_manual_run_for_user(
         db,

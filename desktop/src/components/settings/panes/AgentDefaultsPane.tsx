@@ -1,15 +1,31 @@
-import { type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { ModelRegistryPane } from "@/components/settings/panes/ModelRegistryPane";
+import { AgentHarnessConfigComposer } from "@/components/settings/shared/AgentHarnessConfigComposer";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { ProviderIcon } from "@/components/ui/provider-icons";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
+import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useModelRegistrySettings } from "@/hooks/settings/workflows/use-model-registry-settings";
+import {
+  mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
+  type DesktopAgentLaunchAgent,
+} from "@/lib/domain/agents/cloud-launch-catalog";
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
 import { withUpdatedModelVisibilityOverride } from "@/lib/domain/chat/models/model-visibility";
+import {
+  buildLaunchControlDescriptors,
+} from "@/lib/domain/chat/models/launch-control-descriptors";
 import { withUpdatedDefaultSessionModeByAgentKind } from "@/lib/domain/chat/session-controls/session-mode-control";
+import type {
+  SupportedLiveControlKey,
+} from "@/lib/domain/chat/session-controls/session-controls";
+import type {
+  DefaultLiveSessionControlKey,
+} from "@/lib/domain/preferences/user/session-defaults";
+import type { SettingsAgentDefaultRow } from "@/lib/domain/settings/agent-defaults";
 import {
   withUpdatedDefaultLiveSessionControlValueByAgentKind,
 } from "@/lib/domain/settings/agent-defaults";
@@ -30,6 +46,32 @@ export function AgentDefaultsPane() {
     orderedAgentDefaultRows,
     primaryHarnessLabel,
   } = useModelRegistrySettings();
+  const cloudAgentCatalogQuery = useCloudAgentCatalog(connectionState !== "failed");
+  const launchAgents = useMemo(
+    () => mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      cloudAgentCatalogQuery.data?.agents ?? [],
+      runtimeLaunchOptions.data?.agents ?? null,
+      { includeCloudOnlyAgents: true },
+    ),
+    [cloudAgentCatalogQuery.data?.agents, runtimeLaunchOptions.data?.agents],
+  );
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+    console.debug("[agent-harness-config][agent-defaults]", {
+      rows: orderedAgentDefaultRows.map((row) => ({
+        agentKind: row.kind,
+        modelId: row.selectedModel.id,
+      })),
+      launchAgents: launchAgents.map((agent) => ({
+        agentKind: agent.kind,
+        modelCount: agent.models.length,
+        launchControls: agent.launchControls.map((control) => control.key),
+      })),
+    });
+  }, [launchAgents, orderedAgentDefaultRows]);
 
   return (
     <section className="space-y-5">
@@ -98,154 +140,176 @@ export function AgentDefaultsPane() {
 
       {connectionState !== "failed" && orderedAgentDefaultRows.map((row) => (
         <AgentDefaultsSection key={row.kind} title={`${row.displayName} defaults`}>
-          <SettingsCard>
-            <SettingsCardRow
-              label="Model"
-              description={row.isPrimary ? "Default model for the primary harness" : "Default model for this harness"}
-            >
-              <SettingsMenu
-                label={row.selectedModel.displayName}
-                className="w-60"
-                menuClassName="w-72"
-                groups={[{
-                  id: `${row.kind}-models`,
-                  options: row.models.map((model) => ({
-                    id: model.id,
-                    label: model.displayName,
-                    icon: <ProviderIcon kind={row.kind} className="size-3.5" />,
-                    selected: model.id === row.selectedModel.id,
-                    onSelect: () => {
-                      preferences.set(
-                        "defaultChatModelIdByAgentKind",
-                        withUpdatedDefaultModelIdByAgentKind(
-                          preferences.defaultChatModelIdByAgentKind,
-                          row.kind,
-                          model.id,
-                        ),
-                      );
-                    },
-                  })),
-                }]}
-              />
-            </SettingsCardRow>
-
-            {row.modeOptions.length > 0 && row.selectedMode ? (
-              <SettingsCardRow
-                label="Permissions"
-                description={row.isPrimary ? "Permission mode for the primary harness" : "Permission mode for this harness"}
-              >
-                <SettingsMenu
-                  label={row.selectedMode.shortLabel ?? row.selectedMode.label}
-                  className="w-48"
-                  menuClassName="w-64"
-                  groups={[{
-                    id: `${row.kind}-permissions`,
-                    options: row.modeOptions.map((option) => ({
-                      id: option.value,
-                      label: option.shortLabel ?? option.label,
-                      detail: option.description,
-                      selected: option.value === row.selectedMode?.value,
-                      onSelect: () => {
-                        preferences.set(
-                          "defaultSessionModeByAgentKind",
-                          withUpdatedDefaultSessionModeByAgentKind(
-                            preferences.defaultSessionModeByAgentKind,
-                            row.kind,
-                            option.value,
-                          ),
-                        );
-                      },
-                    })),
-                  }]}
-                />
-              </SettingsCardRow>
-            ) : null}
-
-            {row.liveDefaultControls.map((control) => (
-              <SettingsCardRow
-                key={control.key}
-                label={control.label}
-                description={control.staleStoredValue
-                  ? "Stored value is no longer available for this model"
-                  : "Applied to new sessions when the live control is available"}
-              >
-                <SettingsMenu
-                  label={control.selectedValue.label}
-                  className="w-44"
-                  menuClassName="w-56"
-                  groups={[{
-                    id: `${row.kind}-${control.key}`,
-                    options: control.values.map((option) => ({
-                      id: option.value,
-                      label: option.label,
-                      detail: option.description ?? undefined,
-                      selected: option.value === control.selectedValue.value,
-                      onSelect: () => {
-                        preferences.set(
-                          "defaultLiveSessionControlValuesByAgentKind",
-                          withUpdatedDefaultLiveSessionControlValueByAgentKind(
-                            preferences.defaultLiveSessionControlValuesByAgentKind,
-                            row.kind,
-                            control.key,
-                            option.value,
-                          ),
-                        );
-                      },
-                    })),
-                  }]}
-                />
-              </SettingsCardRow>
-            ))}
-
-            <ModelRegistryPane
-              agentKind={row.kind}
-              models={row.visibilityModels}
-              refreshable={row.kind === "cursor" || row.kind === "opencode"}
-              refreshing={refreshModelRegistry.isPending}
-              onRefresh={() => {
-                refreshModelRegistry.mutate({
-                  kind: row.kind,
-                  request: { forceProviderRefresh: false },
-                });
-              }}
-              onVisibilityChange={(modelId, visible, catalogDefaultOptIn) => {
-                if (!visible) {
-                  const visibleRows = row.visibilityModels.filter((model) => model.isVisible);
-                  if (visibleRows.length <= 1 && visibleRows.some((model) => model.id === modelId)) {
-                    return;
-                  }
-                }
-
-                const nextVisibilityOverrides = withUpdatedModelVisibilityOverride(
-                  preferences.chatModelVisibilityOverridesByAgentKind,
-                  row.kind,
-                  modelId,
-                  visible,
-                  catalogDefaultOptIn,
-                );
-                const nextVisibleModel = row.visibilityModels.find((model) =>
-                  model.id !== modelId && model.isVisible
-                ) ?? null;
-                const nextDefaultModelIds =
-                  !visible && row.selectedModel.id === modelId && nextVisibleModel
-                    ? withUpdatedDefaultModelIdByAgentKind(
-                      preferences.defaultChatModelIdByAgentKind,
-                      row.kind,
-                      nextVisibleModel.id,
-                    )
-                    : preferences.defaultChatModelIdByAgentKind;
-
-                preferences.setMultiple({
-                  chatModelVisibilityOverridesByAgentKind: nextVisibilityOverrides,
-                  defaultChatModelIdByAgentKind: nextDefaultModelIds,
-                });
-              }}
+          <div className="space-y-2">
+            <AgentDefaultComposer
+              row={row}
+              launchAgent={launchAgents.find((agent) => agent.kind === row.kind) ?? null}
+              preferences={preferences}
             />
-          </SettingsCard>
+
+            {row.visibilityModels.length > 0 ? (
+              <ModelRegistryPane
+                agentKind={row.kind}
+                models={row.visibilityModels}
+                refreshable={row.kind === "cursor" || row.kind === "opencode"}
+                refreshing={refreshModelRegistry.isPending}
+                onRefresh={() => {
+                  refreshModelRegistry.mutate({
+                    kind: row.kind,
+                    request: { forceProviderRefresh: false },
+                  });
+                }}
+                onVisibilityChange={(modelId, visible, catalogDefaultOptIn) => {
+                  if (!visible) {
+                    const visibleRows = row.visibilityModels.filter((model) => model.isVisible);
+                    if (visibleRows.length <= 1 && visibleRows.some((model) => model.id === modelId)) {
+                      return;
+                    }
+                  }
+
+                  const nextVisibilityOverrides = withUpdatedModelVisibilityOverride(
+                    preferences.chatModelVisibilityOverridesByAgentKind,
+                    row.kind,
+                    modelId,
+                    visible,
+                    catalogDefaultOptIn,
+                  );
+                  const nextVisibleModel = row.visibilityModels.find((model) =>
+                    model.id !== modelId && model.isVisible
+                  ) ?? null;
+                  const nextDefaultModelIds =
+                    !visible && row.selectedModel.id === modelId && nextVisibleModel
+                      ? withUpdatedDefaultModelIdByAgentKind(
+                        preferences.defaultChatModelIdByAgentKind,
+                        row.kind,
+                        nextVisibleModel.id,
+                      )
+                      : preferences.defaultChatModelIdByAgentKind;
+
+                  preferences.setMultiple({
+                    chatModelVisibilityOverridesByAgentKind: nextVisibilityOverrides,
+                    defaultChatModelIdByAgentKind: nextDefaultModelIds,
+                  });
+                }}
+              />
+            ) : null}
+          </div>
         </AgentDefaultsSection>
       ))}
     </section>
   );
+}
+
+function AgentDefaultComposer({
+  row,
+  launchAgent,
+  preferences,
+}: {
+  row: SettingsAgentDefaultRow;
+  launchAgent: DesktopAgentLaunchAgent | null;
+  preferences: ReturnType<typeof useModelRegistrySettings>["preferences"];
+}) {
+  const controls = useMemo(
+    () => launchAgent
+      ? buildLaunchControlDescriptors({
+        selection: { kind: row.kind, modelId: row.selectedModel.id },
+        launchAgents: [launchAgent],
+        pendingConfigChanges: null,
+        preferences,
+        onSelect: (
+          _agentKind: string,
+          controlKey: SupportedLiveControlKey,
+          _rawConfigId: string,
+          value: string,
+        ) => {
+          if (controlKey === "mode" || controlKey === "collaboration_mode") {
+            preferences.set(
+              "defaultSessionModeByAgentKind",
+              withUpdatedDefaultSessionModeByAgentKind(
+                preferences.defaultSessionModeByAgentKind,
+                row.kind,
+                value,
+              ),
+            );
+            return;
+          }
+          if (isDefaultLiveSessionControlKey(controlKey)) {
+            preferences.set(
+              "defaultLiveSessionControlValuesByAgentKind",
+              withUpdatedDefaultLiveSessionControlValueByAgentKind(
+                preferences.defaultLiveSessionControlValuesByAgentKind,
+                row.kind,
+                controlKey,
+                value,
+              ),
+            );
+          }
+        },
+      })
+      : [],
+    [launchAgent, preferences, row.kind, row.selectedModel.id],
+  );
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+    console.debug("[agent-harness-config][agent-default]", {
+      agentKind: row.kind,
+      modelId: row.selectedModel.id,
+      catalogControls: launchAgent?.launchControls.map((control) => ({
+        key: control.key,
+        createField: control.createField,
+        phase: control.phase,
+        surfaces: control.surfaces,
+      })) ?? [],
+      renderedControls: controls.map((control) => ({
+        key: control.key,
+        rawConfigId: control.rawConfigId,
+        detail: control.detail,
+        optionCount: control.options.length,
+      })),
+    });
+  }, [controls, launchAgent, row.kind, row.selectedModel.id]);
+
+  return (
+    <AgentHarnessConfigComposer
+      agentKind={row.kind}
+      agentDisplayName={row.displayName}
+      selectedModelId={row.selectedModel.id}
+      selectedModelLabel={row.selectedModel.displayName}
+      modelGroups={[{
+        agentKind: row.kind,
+        agentDisplayName: row.displayName,
+        models: row.models.map((model) => ({
+          id: model.id,
+          label: model.displayName,
+          detail: model.description ?? model.id,
+        })),
+      }]}
+      controls={controls}
+      placeholder="Describe a task"
+      onSelectModel={(_agentKind, modelId) => {
+        preferences.set(
+          "defaultChatModelIdByAgentKind",
+          withUpdatedDefaultModelIdByAgentKind(
+            preferences.defaultChatModelIdByAgentKind,
+            row.kind,
+            modelId,
+          ),
+        );
+      }}
+    />
+  );
+}
+
+function isDefaultLiveSessionControlKey(
+  key: SupportedLiveControlKey,
+): key is DefaultLiveSessionControlKey {
+  return key === "collaboration_mode"
+    || key === "reasoning"
+    || key === "effort"
+    || key === "fast_mode";
 }
 
 function AgentDefaultsSection({

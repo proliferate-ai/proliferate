@@ -53,6 +53,7 @@ export function buildPendingInitialSession(input: {
   agentKind: string | null | undefined;
   modelId: string | null | undefined;
   modeId?: string | null;
+  launchControlValues?: Record<string, string>;
   displayTitle?: string | null;
 }): PendingWorkspaceInitialSession | null {
   const agentKind = input.agentKind?.trim();
@@ -66,6 +67,7 @@ export function buildPendingInitialSession(input: {
     agentKind,
     modelId,
     modeId: input.modeId ?? null,
+    launchControlValues: input.launchControlValues,
     displayTitle: input.displayTitle ?? displayTitleForPendingSession(agentKind, modelId),
   };
 }

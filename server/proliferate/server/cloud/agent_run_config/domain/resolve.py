@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import UUID
 
+from proliferate.constants.automations import (
+    CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
+    CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL,
+    CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
+    CLOUD_AGENT_RUN_CONFIG_STATUS_ACTIVE,
+)
 from proliferate.db.store.cloud_agent_run_config.configs import CloudAgentRunConfigRecord
 from proliferate.server.catalogs.models import AgentCatalogAgent, AgentCatalogResponse
 
@@ -66,6 +73,84 @@ def validate_config_values(
                     f"Control '{key}' has an unsupported value.",
                 )
     return None
+
+
+def validate_config_execution_scope(
+    config: CloudAgentRunConfigRecord,
+    *,
+    actor_user_id: UUID | None,
+    owner_scope: str,
+    organization_id: UUID | None,
+    usable_in: str,
+) -> AgentRunConfigIssue | None:
+    if config.status != CLOUD_AGENT_RUN_CONFIG_STATUS_ACTIVE:
+        return AgentRunConfigIssue(
+            "agent_run_config_not_found",
+            "Agent run config not found.",
+        )
+    if usable_in == "shared_sandboxes":
+        if not config.usable_in_shared_sandboxes:
+            return AgentRunConfigIssue(
+                "agent_run_config_not_usable",
+                "Agent run config is not usable in shared sandboxes.",
+            )
+        if organization_id is None:
+            return AgentRunConfigIssue(
+                "agent_run_config_not_usable",
+                "Shared sandbox runs require an organization.",
+            )
+        if config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL:
+            return AgentRunConfigIssue(
+                "agent_run_config_not_usable",
+                "Personal agent run configs cannot be used in shared sandboxes.",
+            )
+        if (
+            config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION
+            and config.organization_id != organization_id
+        ):
+            return AgentRunConfigIssue(
+                "agent_run_config_not_found",
+                "Agent run config not found.",
+            )
+        return None
+
+    if usable_in == "personal_sandboxes":
+        if not config.usable_in_personal_sandboxes:
+            return AgentRunConfigIssue(
+                "agent_run_config_not_usable",
+                "Agent run config is not usable in personal sandboxes.",
+            )
+        if config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL:
+            if actor_user_id is None or config.owner_user_id != actor_user_id:
+                return AgentRunConfigIssue(
+                    "agent_run_config_not_found",
+                    "Agent run config not found.",
+                )
+        elif config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION:
+            if organization_id is None or config.organization_id != organization_id:
+                return AgentRunConfigIssue(
+                    "agent_run_config_not_found",
+                    "Agent run config not found.",
+                )
+        elif config.owner_scope != CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM:
+            return AgentRunConfigIssue(
+                "agent_run_config_not_found",
+                "Agent run config not found.",
+            )
+        if (
+            owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION
+            and config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL
+        ):
+            return AgentRunConfigIssue(
+                "agent_run_config_not_usable",
+                "Team runs cannot use personal agent run configs.",
+            )
+        return None
+
+    return AgentRunConfigIssue(
+        "agent_run_config_not_usable",
+        "Agent run config target scope is invalid.",
+    )
 
 
 def resolve_runtime_values(

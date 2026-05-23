@@ -34,6 +34,7 @@ interface HomeNextLaunchInput {
   text: string;
   modelSelection: HomeNextModelSelection;
   modeId: string | null;
+  launchControlValues?: Record<string, string>;
   target: HomeLaunchTarget;
 }
 
@@ -173,6 +174,7 @@ export function useHomeNextLaunch() {
     workspaceId: string;
     modelSelection: HomeNextModelSelection;
     modeId: string | null;
+    launchControlValues?: Record<string, string>;
     text: string;
     promptId: string;
     launchIntentId: string;
@@ -184,6 +186,7 @@ export function useHomeNextLaunch() {
       text: input.text,
       promptId: input.promptId,
       launchIntentId: input.launchIntentId,
+      launchControlValues: input.launchControlValues,
       ...modeOptions(input.modeId),
     });
   }, [createSessionWithResolvedConfig]);
@@ -193,6 +196,7 @@ export function useHomeNextLaunch() {
     projectedSessionId: string | null | undefined;
     modelSelection: HomeNextModelSelection;
     modeId: string | null;
+    launchControlValues?: Record<string, string>;
     text: string;
     promptId: string;
     launchIntentId: string;
@@ -223,6 +227,7 @@ export function useHomeNextLaunch() {
       workspaceId: input.workspaceId,
       modelSelection: input.modelSelection,
       modeId: input.modeId,
+      launchControlValues: input.launchControlValues,
       text: input.text,
       promptId: input.promptId,
       launchIntentId: input.launchIntentId,
@@ -270,6 +275,7 @@ export function useHomeNextLaunch() {
     text,
     modelSelection,
     modeId,
+    launchControlValues,
     target,
   }: HomeNextLaunchInput): Promise<boolean> => {
     const prompt = text.trim();
@@ -281,11 +287,16 @@ export function useHomeNextLaunch() {
     setIsLaunching(true);
     const launchIntentId = newLaunchId();
     const promptId = newLaunchId();
+    const resolvedLaunchControlValues = {
+      ...launchControlValues,
+      ...(modeId ? { mode: modeId } : {}),
+    };
     const initialSession: PendingWorkspaceInitialSession = {
       kind: "session",
       agentKind: modelSelection.kind,
       modelId: modelSelection.modelId,
       modeId,
+      launchControlValues: resolvedLaunchControlValues,
       displayTitle: modelSelection.modelId,
     };
     beginLaunchIntent({
@@ -294,7 +305,7 @@ export function useHomeNextLaunch() {
       agentKind: modelSelection.kind,
       modelId: modelSelection.modelId,
       modeId,
-      launchControlValues: modeId ? { mode: modeId } : {},
+      launchControlValues: resolvedLaunchControlValues,
       promptId,
       queuedPromptBlocks: [{ type: "text", text: prompt }],
       optimisticContentParts: [{ type: "text", text: prompt }],
@@ -305,6 +316,7 @@ export function useHomeNextLaunch() {
         text: prompt,
         modelSelection,
         modeId,
+        launchControlValues: resolvedLaunchControlValues,
         target,
       },
       materializedWorkspaceId: null,
@@ -320,6 +332,7 @@ export function useHomeNextLaunch() {
           agentKind: modelSelection.kind,
           modelId: modelSelection.modelId,
           modeId,
+          launchControlValues: resolvedLaunchControlValues,
           draftText: null,
           sourceWorkspaceId: null,
         });
@@ -406,6 +419,7 @@ export function useHomeNextLaunch() {
             projectedSessionId,
             modelSelection,
             modeId,
+            launchControlValues: resolvedLaunchControlValues,
             text: prompt,
             promptId,
             launchIntentId,
@@ -449,6 +463,7 @@ export function useHomeNextLaunch() {
             projectedSessionId,
             modelSelection,
             modeId,
+            launchControlValues: resolvedLaunchControlValues,
             text: prompt,
             promptId,
             launchIntentId,
@@ -503,6 +518,7 @@ export function useHomeNextLaunch() {
             projectedSessionId,
             modelSelection,
             modeId,
+            launchControlValues: resolvedLaunchControlValues,
             text: prompt,
             promptId,
             launchIntentId,
@@ -525,6 +541,7 @@ export function useHomeNextLaunch() {
             projectedSessionId,
             modelSelection,
             modeId,
+            launchControlValues: resolvedLaunchControlValues,
             text: prompt,
             promptId,
             launchIntentId,
@@ -548,6 +565,7 @@ export function useHomeNextLaunch() {
         agentKind: modelSelection.kind,
         modelId: modelSelection.modelId,
         modeId,
+        launchControlValues: resolvedLaunchControlValues,
         promptText: prompt,
         promptId,
         launchIntentId,
