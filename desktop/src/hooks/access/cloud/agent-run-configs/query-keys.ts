@@ -1,4 +1,7 @@
-import type { ListCloudAgentRunConfigsOptions } from "@/lib/access/cloud/client";
+import type {
+  CloudAgentRunConfigDefaultOwnerSelection,
+  ListCloudAgentRunConfigsOptions,
+} from "@/lib/access/cloud/client";
 
 export function agentRunConfigsRootKey() {
   return ["cloud", "agent-run-configs"] as const;
@@ -20,4 +23,15 @@ export function agentRunConfigsListKey(
 
 export function agentRunConfigKey(configId: string | null) {
   return [...agentRunConfigsRootKey(), "detail", configId] as const;
+}
+
+export function agentRunConfigDefaultsKey(
+  options: CloudAgentRunConfigDefaultOwnerSelection = {},
+) {
+  return [
+    ...agentRunConfigsRootKey(),
+    "defaults",
+    options.ownerScope ?? "personal",
+    options.organizationId ?? null,
+  ] as const;
 }

@@ -33,10 +33,18 @@ export interface CloudSidebarWorkspaceModel {
 export interface CloudSidebarWorkspaceGroupModel {
   id: string;
   label: string;
+  sourceKind: CloudSidebarWorkspaceSourceKind;
   count: number;
   collapsed: boolean;
   workspaces: CloudSidebarWorkspaceModel[];
 }
+
+export type CloudSidebarWorkspaceSourceKind =
+  | "chat"
+  | "slack"
+  | "automation"
+  | "api"
+  | "agent";
 
 export interface CloudSidebarSessionModel {
   id: string;
@@ -84,7 +92,7 @@ export function buildCloudSidebarWorkspaceGroups(input: {
 }): CloudSidebarWorkspaceGroupModel[] {
   const groups = new Map<string, CloudSidebarWorkspace[]>();
   for (const workspace of sortedWorkspaces(input.workspaces)) {
-    const groupId = repoLabel(workspace);
+    const groupId = workspaceSourceGroup(workspace);
     const group = groups.get(groupId);
     if (group) {
       group.push(workspace);
@@ -96,6 +104,7 @@ export function buildCloudSidebarWorkspaceGroups(input: {
   return Array.from(groups.entries()).map(([groupId, groupWorkspaces]) => ({
     id: groupId,
     label: groupId,
+    sourceKind: workspaceSourceKindFromLabel(groupId),
     count: groupWorkspaces.length,
     collapsed: input.collapsedGroupIds.has(groupId),
     workspaces: groupWorkspaces.map((workspace) =>
@@ -158,6 +167,40 @@ export function sortedWorkspaces(
 
 export function repoLabel(workspace: CloudSidebarWorkspace): string {
   return `${workspace.repo.owner}/${workspace.repo.name}`;
+}
+
+export function workspaceSourceGroup(workspace: CloudSidebarWorkspace): string {
+  const creatorKind = workspace.creatorContext?.kind ?? null;
+  if (creatorKind === "automation") {
+    return "Automations";
+  }
+  if (creatorKind === "agent") {
+    return "Agents";
+  }
+  const entrypoint = workspace.origin?.entrypoint ?? null;
+  if (entrypoint === "slack") {
+    return "Slack";
+  }
+  if (entrypoint === "api") {
+    return "API";
+  }
+  return "Chat";
+}
+
+function workspaceSourceKindFromLabel(label: string): CloudSidebarWorkspaceSourceKind {
+  switch (label) {
+    case "Automations":
+      return "automation";
+    case "Slack":
+      return "slack";
+    case "API":
+      return "api";
+    case "Agents":
+      return "agent";
+    case "Chat":
+    default:
+      return "chat";
+  }
 }
 
 export function workspaceBranchLabel(workspace: CloudSidebarWorkspace): string {

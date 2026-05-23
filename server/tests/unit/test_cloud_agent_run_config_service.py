@@ -6,8 +6,12 @@ from types import SimpleNamespace
 import pytest
 
 from proliferate.constants.automations import (
+    CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL,
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
+)
+from proliferate.server.cloud.agent_run_config.domain.resolve import (
+    validate_config_execution_scope,
 )
 from proliferate.server.cloud.agent_run_config import service
 from proliferate.server.cloud.errors import CloudApiError
@@ -101,3 +105,34 @@ async def test_org_default_allows_system_config(
     assert result.organization_id == default_org_id
     assert upserted["owner_user_id"] is None
     assert upserted["organization_id"] == default_org_id
+
+
+def test_execution_scope_rejects_archived_config() -> None:
+    issue = validate_config_execution_scope(
+        _config(status="archived"),
+        actor_user_id=uuid.uuid4(),
+        owner_scope=CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
+        organization_id=uuid.uuid4(),
+        usable_in="shared_sandboxes",
+    )
+
+    assert issue is not None
+    assert issue.code == "agent_run_config_not_found"
+
+
+def test_execution_scope_rejects_personal_config_for_shared_sandbox() -> None:
+    user_id = uuid.uuid4()
+    issue = validate_config_execution_scope(
+        _config(
+            owner_scope=CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL,
+            owner_user_id=user_id,
+            organization_id=None,
+        ),
+        actor_user_id=user_id,
+        owner_scope=CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
+        organization_id=uuid.uuid4(),
+        usable_in="shared_sandboxes",
+    )
+
+    assert issue is not None
+    assert issue.code == "agent_run_config_not_usable"

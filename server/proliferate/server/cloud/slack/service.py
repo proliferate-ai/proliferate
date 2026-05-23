@@ -69,6 +69,9 @@ from proliferate.server.automations.worker.cloud_executor_config import (
     default_cloud_executor_config,
 )
 from proliferate.server.cloud.agent_run_config import service as run_config_service
+from proliferate.server.cloud.agent_run_config.domain.resolve import (
+    validate_config_execution_scope,
+)
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
 from proliferate.server.cloud.commands.service import (
     kick_off_command_wake_after_commit_if_required,
@@ -238,16 +241,25 @@ async def update_bot_config(
         await _require_org_repo(db, organization_id=organization_id, repo_id=repo_id)
     if body.default_agent_run_config_id is not None:
         config = await run_config_store.get_config(db, body.default_agent_run_config_id)
-        if config is None or not config.usable_in_shared_sandboxes:
+        issue = (
+            None
+            if config is None
+            else validate_config_execution_scope(
+                config,
+                actor_user_id=None,
+                owner_scope="organization",
+                organization_id=organization_id,
+                usable_in="shared_sandboxes",
+            )
+        )
+        if config is None or issue is not None:
             raise CloudApiError(
                 "slack_agent_run_config_invalid",
-                "Default agent run config is not usable in shared sandboxes.",
-                status_code=400,
-            )
-        if config.owner_scope == "organization" and config.organization_id != organization_id:
-            raise CloudApiError(
-                "slack_agent_run_config_org_mismatch",
-                "Default agent run config belongs to another organization.",
+                (
+                    "Default agent run config is not usable in shared sandboxes."
+                    if issue is None
+                    else issue.message
+                ),
                 status_code=400,
             )
     updated = await bot_config_store.update_bot_config(
@@ -660,6 +672,17 @@ async def _handle_app_mention(
         thread_work_id=thread_work.id,
         cloud_session_id=session_id,
     )
+    await _apply_run_config_updates(
+        db,
+        organization_id=connection.organization_id,
+        target_id=workspace.target_id,
+        cloud_workspace_id=workspace.id,
+        anyharness_workspace_id=anyharness_workspace_id,
+        session_id=session_id,
+        run_snapshot=run_snapshot,
+        slack_user_id=_string_or_none(event.get("user")),
+        idempotency_key_prefix=job.slack_event_id,
+    )
     await _enqueue_send_prompt(
         db,
         organization_id=connection.organization_id,
@@ -987,6 +1010,69 @@ async def _enqueue_send_prompt(
     )
 
 
+async def _apply_run_config_updates(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    target_id: UUID,
+    cloud_workspace_id: UUID,
+    anyharness_workspace_id: str,
+    session_id: str,
+    run_snapshot: dict[str, object],
+    slack_user_id: str | None,
+    idempotency_key_prefix: str,
+) -> None:
+    for control_key, value in _snapshot_session_config_updates(run_snapshot):
+        command = await _enqueue_update_session_config(
+            db,
+            organization_id=organization_id,
+            target_id=target_id,
+            cloud_workspace_id=cloud_workspace_id,
+            anyharness_workspace_id=anyharness_workspace_id,
+            session_id=session_id,
+            control_key=control_key,
+            value=value,
+            slack_user_id=slack_user_id,
+            idempotency_key=f"{idempotency_key_prefix}:config:{control_key}",
+        )
+        await db.commit()
+        result = await wait_for_command_result(command, timeout=SLACK_COMMAND_WAIT_TIMEOUT)
+        if _config_apply_state(result.body) != "applied":
+            raise CloudApiError(
+                "slack_agent_config_apply_failed",
+                "Slack could not apply the selected agent configuration.",
+                status_code=502,
+            )
+
+
+async def _enqueue_update_session_config(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    target_id: UUID,
+    cloud_workspace_id: UUID,
+    anyharness_workspace_id: str,
+    session_id: str,
+    control_key: str,
+    value: str,
+    slack_user_id: str | None,
+    idempotency_key: str,
+) -> commands_store.CloudCommandSnapshot:
+    return await _enqueue_command(
+        db,
+        organization_id=organization_id,
+        target_id=target_id,
+        cloud_workspace_id=cloud_workspace_id,
+        session_id=session_id,
+        kind=CloudCommandKind.update_session_config.value,
+        payload={"normalizedControl": control_key, "value": value},
+        idempotency_scope=f"slack-session:{session_id}",
+        idempotency_key=idempotency_key,
+        workspace_id=anyharness_workspace_id,
+        slack_user_id=slack_user_id,
+    )
+
+
 async def _enqueue_command(
     db: AsyncSession,
     *,
@@ -1113,15 +1199,34 @@ async def _resolve_run_config(
     config: SlackBotConfigRecord,
 ) -> CloudAgentRunConfigRecord | None:
     if config.default_agent_run_config_id is not None:
-        return await run_config_store.get_config(db, config.default_agent_run_config_id)
+        explicit = await run_config_store.get_config(db, config.default_agent_run_config_id)
+        return _shared_slack_run_config_or_none(explicit, organization_id=organization_id)
     agent_kind = config.default_agent_kind or "claude"
-    return await run_config_store.get_default_config(
+    default = await run_config_store.get_default_config(
         db,
         owner_scope="organization",
         owner_user_id=None,
         organization_id=organization_id,
         agent_kind=agent_kind,
     )
+    return _shared_slack_run_config_or_none(default, organization_id=organization_id)
+
+
+def _shared_slack_run_config_or_none(
+    config: CloudAgentRunConfigRecord | None,
+    *,
+    organization_id: UUID,
+) -> CloudAgentRunConfigRecord | None:
+    if config is None:
+        return None
+    issue = validate_config_execution_scope(
+        config,
+        actor_user_id=None,
+        owner_scope="organization",
+        organization_id=organization_id,
+        usable_in="shared_sandboxes",
+    )
+    return None if issue is not None else config
 
 
 async def _connection_for_job(
@@ -1406,6 +1511,25 @@ def _snapshot_control(snapshot: dict[str, object], key: str) -> str | None:
     if not isinstance(controls, dict):
         return None
     return _string_or_none(controls.get(key))
+
+
+def _snapshot_session_config_updates(snapshot: dict[str, object]) -> list[tuple[str, str]]:
+    controls = snapshot.get("control_values")
+    if not isinstance(controls, dict):
+        return []
+    updates: list[tuple[str, str]] = []
+    for key in sorted(controls):
+        if key in {"mode", "model"}:
+            continue
+        value = controls.get(key)
+        if isinstance(value, str) and value.strip():
+            updates.append((key, value))
+    return updates
+
+
+def _config_apply_state(body: dict[str, object]) -> str | None:
+    value = body.get("applyState")
+    return value if isinstance(value, str) and value.strip() else None
 
 
 def _uuid_csv(value: str | None) -> set[UUID]:

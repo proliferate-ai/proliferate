@@ -2,9 +2,18 @@ import { Bot, Cloud, GitBranch } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  useCloudAgentCatalog,
   useCloudRepoConfigs,
   useCreateCloudWorkspace,
 } from "@proliferate/cloud-sdk-react";
+import {
+  buildCloudLaunchComposerControls,
+  buildLaunchSessionConfigUpdates,
+  DEFAULT_DIRECT_PROMPT_AGENT_KIND,
+  DEFAULT_DIRECT_PROMPT_MODEL_ID,
+  resolveCloudLaunchSelection,
+  type CloudLaunchComposerSelection,
+} from "@proliferate/product-model/chats/cloud/composer-controls";
 
 import type {
   NewChatPickerId,
@@ -42,10 +51,16 @@ export function HomeScreen() {
   const [repoId, setRepoId] = useState(() =>
     readLastRepoId() ?? normalizeRepoId(webEnv.defaultCloudRepo) ?? ""
   );
-  const [modelId, setModelId] = useState("gpt-5.4");
+  const [launchSelection, setLaunchSelection] = useState<CloudLaunchComposerSelection>({
+    agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
+    modelId: DEFAULT_DIRECT_PROMPT_MODEL_ID,
+    modeId: null,
+    controlValues: {},
+  });
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pendingPrompt, setPendingPrompt] = useState<HomePendingPrompt | null>(null);
   const repoConfigs = useCloudRepoConfigs();
+  const agentCatalog = useCloudAgentCatalog();
   const createWorkspace = useCreateCloudWorkspace();
   const repoOptions = useMemo(
     () => buildRepoOptions(repoConfigs.data?.configs ?? [], webEnv.defaultCloudRepo),
@@ -54,6 +69,42 @@ export function HomeScreen() {
   const selectedRepo = useMemo(
     () => repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null,
     [repoId, repoOptions],
+  );
+  const resolvedLaunchSelection = useMemo(
+    () => resolveCloudLaunchSelection({
+      catalog: agentCatalog.data,
+      selection: launchSelection,
+    }),
+    [agentCatalog.data, launchSelection],
+  );
+  const launchComposerControls = useMemo(
+    () => buildCloudLaunchComposerControls({
+      catalog: agentCatalog.data,
+      selection: resolvedLaunchSelection,
+      onAgentModelSelect: (agentKind, modelId) => {
+        setLaunchSelection((current) => ({
+          agentKind,
+          modelId,
+          modeId: current.agentKind === agentKind ? current.modeId : null,
+          controlValues: current.agentKind === agentKind ? current.controlValues : {},
+        }));
+      },
+      onControlSelect: ({ controlKey, value }) => {
+        setLaunchSelection((current) => {
+          if (controlKey === "mode") {
+            return { ...current, modeId: value };
+          }
+          return {
+            ...current,
+            controlValues: {
+              ...current.controlValues,
+              [controlKey]: value,
+            },
+          };
+        });
+      },
+    }),
+    [agentCatalog.data, resolvedLaunchSelection],
   );
 
   useEffect(() => {
@@ -66,10 +117,6 @@ export function HomeScreen() {
     if (picker === "target") {
       setRepoId(itemId);
       writeLastRepoId(itemId);
-      return;
-    }
-    if (picker === "model") {
-      setModelId(itemId);
       return;
     }
   }
@@ -92,8 +139,13 @@ export function HomeScreen() {
       const workspacePendingPrompt = {
         id: pendingPrompt.id,
         text,
-        modelId,
-        modeId: null,
+        agentKind: resolvedLaunchSelection.agentKind,
+        modelId: resolvedLaunchSelection.modelId,
+        modeId: resolvedLaunchSelection.modeId,
+        sessionConfigUpdates: buildLaunchSessionConfigUpdates({
+          catalog: agentCatalog.data,
+          selection: resolvedLaunchSelection,
+        }),
         createdAt: Date.now(),
       };
       const workspace = await createWorkspace.mutateAsync({
@@ -161,8 +213,9 @@ export function HomeScreen() {
         canSubmit={Boolean(draft.trim()) && Boolean(selectedRepo) && !submitting}
         submitting={submitting}
         target={buildTargetPicker(repoId, repoOptions, repoConfigs.isLoading)}
-        model={buildModelPicker(modelId)}
+        model={buildModelPicker(resolvedLaunchSelection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID)}
         mode={buildModePicker()}
+        extraComposerControls={launchComposerControls}
         notices={notices}
         transcriptRows={transcriptRows}
         commandMessage={

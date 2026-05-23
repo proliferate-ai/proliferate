@@ -64,6 +64,7 @@ export type PendingWorkspaceInitialSession =
     agentKind: string;
     modelId: string;
     modeId?: string | null;
+    launchControlValues?: Record<string, string>;
     displayTitle?: string | null;
   };
 

@@ -8,6 +8,10 @@ import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
 import { SettingsCard } from "../settings/SettingsCard";
 import { SettingsCardRow } from "../settings/SettingsCardRow";
+import {
+  CloudChatComposerControlStrip,
+  type CloudChatComposerControlView,
+} from "../chat/CloudChatComposer";
 
 export interface AutomationCreateOption {
   value: string;
@@ -24,7 +28,6 @@ export interface AutomationCreateFormValues {
   schedulePreset: string;
   scheduleTime: string;
   timezone: string;
-  cloudAgentRunConfigId: string;
 }
 
 interface AutomationCreatePanelProps {
@@ -33,7 +36,7 @@ interface AutomationCreatePanelProps {
   repoOptions: readonly AutomationCreateOption[];
   scheduleOptions: readonly AutomationCreateOption[];
   timezoneOptions: readonly AutomationCreateOption[];
-  runConfigOptions: readonly AutomationCreateOption[];
+  agentControls: readonly CloudChatComposerControlView[];
   loadingOptions?: boolean;
   submitting?: boolean;
   error?: ReactNode;
@@ -49,7 +52,7 @@ export function AutomationCreatePanel({
   repoOptions,
   scheduleOptions,
   timezoneOptions,
-  runConfigOptions,
+  agentControls,
   loadingOptions = false,
   submitting = false,
   error,
@@ -75,7 +78,7 @@ export function AutomationCreatePanel({
           <div className="min-w-0 space-y-1">
             <div className="text-sm font-medium text-foreground">New automation</div>
             <p className="max-w-2xl text-xs leading-4 text-muted-foreground">
-              Schedule a cloud automation against a configured repo and agent run config.
+              Schedule a cloud automation against a configured repo and agent harness.
             </p>
           </div>
           <Button
@@ -155,23 +158,17 @@ export function AutomationCreatePanel({
                 )}
               </Select>
             </Field>
-            <Field title="Agent config" icon={<Bot size={14} />}>
-              <Select
-                aria-label="Automation agent run config"
-                value={values.cloudAgentRunConfigId}
-                onChange={(event) => update("cloudAgentRunConfigId", event.currentTarget.value)}
-                disabled={submitting || loadingOptions || runConfigOptions.length === 0}
-              >
-                {runConfigOptions.length > 0 ? (
-                  runConfigOptions.map((option) => (
-                    <option key={option.value} value={option.value} disabled={option.disabled}>
-                      {option.label}
-                    </option>
-                  ))
-                ) : (
-                  <option value="">No active configs</option>
-                )}
-              </Select>
+            <Field
+              title="Agent"
+              icon={<Bot size={14} />}
+              description="Select the harness, model, mode, and launch defaults for scheduled runs."
+            >
+              <div className="rounded-lg border border-border bg-background/40 px-2 py-2">
+                <CloudChatComposerControlStrip
+                  controls={agentControls}
+                  disabled={submitting || loadingOptions || agentControls.length === 0}
+                />
+              </div>
             </Field>
           </div>
 

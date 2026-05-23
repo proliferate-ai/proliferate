@@ -81,6 +81,12 @@ export interface CloudChatComposerFooterControlView {
   onClick?: () => void;
 }
 
+export interface CloudChatComposerControlStripProps {
+  controls: readonly CloudChatComposerControlView[];
+  disabled?: boolean;
+  className?: string;
+}
+
 export function CloudChatComposer({ composer }: { composer: CloudChatComposerView }) {
   function submitComposer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -135,17 +141,45 @@ export function CloudChatComposer({ composer }: { composer: CloudChatComposerVie
 }
 
 function CloudChatComposerControlRow({ composer }: { composer: CloudChatComposerView }) {
-  const controls = composer.controls ?? [];
+  return (
+    <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
+      <CloudChatComposerControlStrip
+        controls={composer.controls ?? []}
+        disabled={composer.disabled}
+      />
+      <ComposerActionButton
+        type="submit"
+        aria-label="Send message"
+        disabled={!composer.canSubmit || composer.disabled || composer.isSubmitting}
+        loading={composer.isSubmitting}
+        data-chat-send-button
+      >
+        {composer.isSubmitting ? null : <ArrowUp size={14} />}
+      </ComposerActionButton>
+    </div>
+  );
+}
+
+export function CloudChatComposerControlStrip({
+  controls,
+  disabled = false,
+  className = "",
+}: CloudChatComposerControlStripProps) {
   const leadingControls = controls.filter((control) => control.placement === "leading");
   const modelConfigControls = controls.filter((control) => control.placement !== "leading");
   return (
-    <div className="mb-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[5px] px-2">
+    <div
+      className={twMerge(
+        "grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[5px]",
+        className,
+      )}
+    >
       <div className="flex min-w-0 items-center gap-[5px]">
         {leadingControls.map((control) => (
           <CloudChatSingleControl
             key={control.id}
             control={control}
-            composerDisabled={composer.disabled}
+            composerDisabled={disabled}
           />
         ))}
       </div>
@@ -156,18 +190,9 @@ function CloudChatComposerControlRow({ composer }: { composer: CloudChatComposer
         {modelConfigControls.length > 0 ? (
           <CloudChatModelConfigControl
             controls={modelConfigControls}
-            composerDisabled={composer.disabled}
+            composerDisabled={disabled}
           />
         ) : null}
-        <ComposerActionButton
-          type="submit"
-          aria-label="Send message"
-          disabled={!composer.canSubmit || composer.disabled || composer.isSubmitting}
-          loading={composer.isSubmitting}
-          data-chat-send-button
-        >
-          {composer.isSubmitting ? null : <ArrowUp size={14} />}
-        </ComposerActionButton>
       </div>
     </div>
   );

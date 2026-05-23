@@ -114,24 +114,53 @@ async def apply_session_config_stage(
     assert ctx.target is not None
     assert ctx.workspace is not None
     assert ctx.session is not None
-    if not ctx.claim.reasoning_effort:
+    updates = _session_config_updates(ctx.claim.agent_run_config_snapshot_json)
+    if not updates:
         return ctx
     try:
-        command = await enqueue_update_session_config(
-            ctx,
-            target_id=ctx.target.target_id,
-            cloud_workspace_id=ctx.workspace.cloud_workspace_id,
-            workspace_id=ctx.workspace.anyharness_workspace_id,
-            session_id=ctx.session.anyharness_session_id,
-            stage="update-reasoning-effort",
-            payload={
-                "normalizedControl": "effort",
-                "value": ctx.claim.reasoning_effort,
-            },
-        )
-        await wait_for_command_result(command, timeout=command_wait_timeout(ctx))
+        for control_key, value in updates:
+            command = await enqueue_update_session_config(
+                ctx,
+                target_id=ctx.target.target_id,
+                cloud_workspace_id=ctx.workspace.cloud_workspace_id,
+                workspace_id=ctx.workspace.anyharness_workspace_id,
+                session_id=ctx.session.anyharness_session_id,
+                stage=f"update-session-config-{_safe_stage_key(control_key)}",
+                payload={
+                    "normalizedControl": control_key,
+                    "value": value,
+                },
+            )
+            result = await wait_for_command_result(command, timeout=command_wait_timeout(ctx))
+            if _config_apply_state(result.body) != "applied":
+                await fail_claim(ctx.claim, code="config_apply_failed")
+                return None
     except Exception:
         await fail_claim(ctx.claim, code="config_apply_failed")
         return None
     refreshed = await require_current_claim(ctx.claim)
     return ctx.with_claim(refreshed) if refreshed is not None else None
+
+
+def _session_config_updates(snapshot: dict[str, object] | None) -> list[tuple[str, str]]:
+    controls = snapshot.get("control_values") if snapshot else None
+    if not isinstance(controls, dict):
+        return []
+    updates: list[tuple[str, str]] = []
+    for key in sorted(controls):
+        if key in {"mode", "model"}:
+            continue
+        value = controls.get(key)
+        if isinstance(value, str) and value.strip():
+            updates.append((key, value))
+    return updates
+
+
+def _safe_stage_key(value: str) -> str:
+    sanitized = "".join(char if char.isalnum() else "-" for char in value.lower()).strip("-")
+    return sanitized or "control"
+
+
+def _config_apply_state(body: dict[str, object]) -> str | None:
+    value = body.get("applyState")
+    return value if isinstance(value, str) and value.strip() else None

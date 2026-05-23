@@ -131,9 +131,44 @@ fn start_session_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMa
             "start_session payload must contain agentKind.",
         )
     })?;
-    let mut body = object.clone();
+    let mut body = Map::new();
     body.insert("workspaceId".to_string(), Value::String(workspace_id));
     body.insert("agentKind".to_string(), Value::String(agent_kind));
+    copy_optional_string_field(&mut body, object, "modelId", "model_id");
+    copy_optional_string_field(&mut body, object, "modeId", "mode_id");
+    copy_optional_value_field(
+        &mut body,
+        object,
+        "systemPromptAppend",
+        "system_prompt_append",
+    );
+    copy_optional_bool_field(&mut body, object, "subagentsEnabled", "subagents_enabled");
+    copy_optional_value_field(&mut body, object, "origin", "origin");
+    copy_optional_value_field(
+        &mut body,
+        object,
+        "expectedRuntimeConfigRevision",
+        "expected_runtime_config_revision",
+    );
+    copy_optional_value_field(
+        &mut body,
+        object,
+        "requiredRuntimeConfigRevisionId",
+        "required_runtime_config_revision_id",
+    );
+    copy_optional_value_field(
+        &mut body,
+        object,
+        "requiredRuntimeConfigSequence",
+        "required_runtime_config_sequence",
+    );
+    copy_optional_value_field(
+        &mut body,
+        object,
+        "requiredRuntimeConfigContentHash",
+        "required_runtime_config_content_hash",
+    );
+    copy_optional_value_field(&mut body, object, "sandboxProfileId", "sandbox_profile_id");
     if let Some(sandbox_profile_id) = string_field(object, "sandboxProfileId", "sandbox_profile_id")
         .or_else(|| non_empty(command.sandbox_profile_id.as_deref()))
     {
@@ -165,6 +200,7 @@ fn start_session_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMa
     )?;
     body.entry("origin".to_string())
         .or_insert_with(|| json!({ "kind": "system", "entrypoint": "cloud" }));
+    normalize_start_session_origin(&mut body);
     Ok(Value::Object(body))
 }
 
@@ -395,6 +431,67 @@ fn integer_field(object: &Map<String, Value>, primary: &str, fallback: &str) -> 
         .and_then(Value::as_i64)
 }
 
+fn copy_optional_string_field(
+    body: &mut Map<String, Value>,
+    object: &Map<String, Value>,
+    primary: &str,
+    fallback: &str,
+) {
+    if let Some(value) = string_field(object, primary, fallback) {
+        body.insert(primary.to_string(), Value::String(value));
+    }
+}
+
+fn copy_optional_bool_field(
+    body: &mut Map<String, Value>,
+    object: &Map<String, Value>,
+    primary: &str,
+    fallback: &str,
+) {
+    if let Some(value) = object
+        .get(primary)
+        .or_else(|| object.get(fallback))
+        .and_then(Value::as_bool)
+    {
+        body.insert(primary.to_string(), Value::Bool(value));
+    }
+}
+
+fn copy_optional_value_field(
+    body: &mut Map<String, Value>,
+    object: &Map<String, Value>,
+    primary: &str,
+    fallback: &str,
+) {
+    if let Some(value) = object.get(primary).or_else(|| object.get(fallback)) {
+        body.insert(primary.to_string(), value.clone());
+    }
+}
+
+fn normalize_start_session_origin(body: &mut Map<String, Value>) {
+    let Some(origin) = body.get_mut("origin") else {
+        return;
+    };
+    let Some(origin_object) = origin.as_object_mut() else {
+        *origin = json!({ "kind": "system", "entrypoint": "cloud" });
+        return;
+    };
+    let kind = origin_object
+        .get("kind")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if !matches!(kind, "human" | "cowork" | "api" | "system") {
+        origin_object.insert("kind".to_string(), Value::String("system".to_string()));
+    }
+    let entrypoint = origin_object
+        .get("entrypoint")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if !matches!(entrypoint, "desktop" | "cloud" | "local_runtime" | "cowork") {
+        origin_object.insert("entrypoint".to_string(), Value::String("cloud".to_string()));
+    }
+}
+
 fn require_non_empty(
     value: &str,
     field: &str,
@@ -607,6 +704,60 @@ mod tests {
         assert_eq!(body["agentAuthScope"]["provider"], "proliferate-cloud");
         assert_eq!(body["agentAuthScope"]["id"], "profile-1");
         assert_eq!(body["agentAuthScope"]["targetId"], "target-1");
+    }
+
+    #[test]
+    fn maps_start_session_with_contract_allowlist() {
+        let mut command = test_command(json!({
+            "workspaceId": "workspace-1",
+            "agentKind": "claude",
+            "modelId": "opus",
+            "modeId": "plan",
+            "systemPromptAppend": ["Be concise."],
+            "subagentsEnabled": false,
+            "origin": { "kind": "system", "entrypoint": "slack" },
+            "controlValues": { "reasoning": "high" },
+            "modelIntent": { "reasoning": "high" },
+            "context": { "surface": "home" },
+            "resolved": { "snapshot": true }
+        }));
+        command.kind = "start_session".to_string();
+
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::StartSession { body } = mapped else {
+            panic!("expected start session");
+        };
+        assert_eq!(body["workspaceId"], "workspace-1");
+        assert_eq!(body["agentKind"], "claude");
+        assert_eq!(body["modelId"], "opus");
+        assert_eq!(body["modeId"], "plan");
+        assert_eq!(body["subagentsEnabled"], false);
+        assert_eq!(body.pointer("/origin/entrypoint"), Some(&json!("cloud")));
+        assert_eq!(body["systemPromptAppend"], json!(["Be concise."]));
+        assert!(body.get("controlValues").is_none());
+        assert!(body.get("modelIntent").is_none());
+        assert!(body.get("context").is_none());
+        assert!(body.get("resolved").is_none());
+    }
+
+    #[test]
+    fn maps_start_session_strips_untrusted_agent_auth_scope_without_preflight() {
+        let mut command = test_command(json!({
+            "workspaceId": "workspace-1",
+            "agentKind": "claude",
+            "agentAuthScope": {
+                "provider": "local",
+                "id": "default",
+                "targetId": "other-target"
+            }
+        }));
+        command.kind = "start_session".to_string();
+
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::StartSession { body } = mapped else {
+            panic!("expected start session");
+        };
+        assert!(body.get("agentAuthScope").is_none());
     }
 
     #[test]

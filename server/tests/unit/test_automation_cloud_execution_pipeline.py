@@ -24,7 +24,11 @@ from proliferate.server.automations.worker.cloud_execution.commands import (
 )
 from proliferate.server.automations.worker.cloud_execution.context import (
     AutomationExecutionContext,
+    SessionExecutionContext,
+    TargetExecutionContext,
+    WorkspaceExecutionContext,
 )
+from proliferate.server.automations.worker.cloud_execution.stages import session as session_stage
 from proliferate.server.automations.worker.cloud_execution.stages import target as target_stage
 from proliferate.server.automations.worker.cloud_executor_commands import AutomationCommandResult
 from proliferate.server.automations.worker.cloud_executor_config import build_cloud_executor_config
@@ -37,9 +41,16 @@ def _claim(
     organization_id: uuid.UUID | None = None,
     user_id: uuid.UUID | None = None,
     target_mode: str = AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+    agent_run_config_snapshot_json: dict[str, object] | None = None,
 ) -> AutomationRunClaimValue:
     config_id = uuid.uuid4()
     resolved_user_id = user_id or owner_user_id or uuid.uuid4()
+    snapshot = agent_run_config_snapshot_json or {
+        "config_id": str(config_id),
+        "agent_kind": "codex",
+        "model_id": "gpt-5.4",
+        "control_values": {"mode": "code", "effort": "medium"},
+    }
     return AutomationRunClaimValue(
         id=uuid.uuid4(),
         automation_id=uuid.uuid4(),
@@ -64,12 +75,7 @@ def _claim(
         cloud_agent_run_config_id_snapshot=config_id,
         sandbox_profile_id=None,
         cloud_workspace_exposure_id=None,
-        agent_run_config_snapshot_json={
-            "config_id": str(config_id),
-            "agent_kind": "codex",
-            "model_id": "gpt-5.4",
-            "control_values": {"mode": "code", "effort": "medium"},
-        },
+        agent_run_config_snapshot_json=snapshot,
         cascade_attempt=0,
         last_cascade_command_id=None,
         last_cascade_reason=None,
@@ -369,3 +375,137 @@ def test_parse_start_session_result_accepts_typed_session_id() -> None:
     parsed = parse_start_session_result(result)
 
     assert parsed.session_id == "sess_typed"
+
+
+def _session_config_ctx() -> AutomationExecutionContext:
+    target_id = uuid.uuid4()
+    return AutomationExecutionContext(
+        claim=_claim(),
+        target=TargetExecutionContext(
+            target_id=target_id,
+            target_kind="managed_cloud",
+            default_workspace_root="/workspace",
+            organization_id=None,
+            status="online",
+            sandbox_profile_id=uuid.uuid4(),
+        ),
+        workspace=WorkspaceExecutionContext(
+            cloud_workspace_id=uuid.uuid4(),
+            anyharness_workspace_id="workspace-1",
+            anyharness_repo_root_id="repo-root-1",
+            path="/workspace/proliferate",
+            branch="main",
+        ),
+        session=SessionExecutionContext(anyharness_session_id="session-1"),
+    )
+
+
+@pytest.mark.asyncio
+async def test_apply_session_config_requires_applied_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = _session_config_ctx()
+    failed_codes: list[str] = []
+
+    async def enqueue_config(*_args: object, **_kwargs: object) -> CloudCommandSnapshot:
+        return cast(CloudCommandSnapshot, object())
+
+    async def wait_for_result(
+        command: CloudCommandSnapshot,
+        *,
+        timeout: timedelta,
+    ) -> AutomationCommandResult:
+        return AutomationCommandResult(command=command, result={}, body={"applyState": "queued"})
+
+    async def fail_claim(_claim: object, *, code: str, **_kwargs: object) -> None:
+        failed_codes.append(code)
+
+    monkeypatch.setattr(session_stage, "enqueue_update_session_config", enqueue_config)
+    monkeypatch.setattr(session_stage, "wait_for_command_result", wait_for_result)
+    monkeypatch.setattr(session_stage, "fail_claim", fail_claim)
+
+    result = await session_stage.apply_session_config_stage(ctx)
+
+    assert result is None
+    assert failed_codes == ["config_apply_failed"]
+
+
+@pytest.mark.asyncio
+async def test_apply_session_config_continues_after_applied_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = _session_config_ctx()
+
+    async def enqueue_config(*_args: object, **_kwargs: object) -> CloudCommandSnapshot:
+        return cast(CloudCommandSnapshot, object())
+
+    async def wait_for_result(
+        command: CloudCommandSnapshot,
+        *,
+        timeout: timedelta,
+    ) -> AutomationCommandResult:
+        return AutomationCommandResult(command=command, result={}, body={"applyState": "applied"})
+
+    async def require_claim(claim: AutomationRunClaimValue) -> AutomationRunClaimValue:
+        return claim
+
+    async def fail_claim(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("applied config should not fail the claim")
+
+    monkeypatch.setattr(session_stage, "enqueue_update_session_config", enqueue_config)
+    monkeypatch.setattr(session_stage, "wait_for_command_result", wait_for_result)
+    monkeypatch.setattr(session_stage, "require_current_claim", require_claim)
+    monkeypatch.setattr(session_stage, "fail_claim", fail_claim)
+
+    result = await session_stage.apply_session_config_stage(ctx)
+
+    assert result is not None
+
+
+@pytest.mark.asyncio
+async def test_apply_session_config_applies_all_non_launch_controls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = _session_config_ctx().with_claim(
+        _claim(
+            agent_run_config_snapshot_json={
+                "config_id": str(uuid.uuid4()),
+                "agent_kind": "codex",
+                "model_id": "gpt-5.4",
+                "control_values": {
+                    "mode": "code",
+                    "effort": "high",
+                    "fast_mode": "enabled",
+                },
+            }
+        )
+    )
+    payloads: list[dict[str, str]] = []
+
+    async def enqueue_config(*_args: object, **kwargs: object) -> CloudCommandSnapshot:
+        payload = kwargs["payload"]
+        assert isinstance(payload, dict)
+        payloads.append(cast(dict[str, str], payload))
+        return cast(CloudCommandSnapshot, object())
+
+    async def wait_for_result(
+        command: CloudCommandSnapshot,
+        *,
+        timeout: timedelta,
+    ) -> AutomationCommandResult:
+        return AutomationCommandResult(command=command, result={}, body={"applyState": "applied"})
+
+    async def require_claim(claim: AutomationRunClaimValue) -> AutomationRunClaimValue:
+        return claim
+
+    monkeypatch.setattr(session_stage, "enqueue_update_session_config", enqueue_config)
+    monkeypatch.setattr(session_stage, "wait_for_command_result", wait_for_result)
+    monkeypatch.setattr(session_stage, "require_current_claim", require_claim)
+
+    result = await session_stage.apply_session_config_stage(ctx)
+
+    assert result is not None
+    assert payloads == [
+        {"normalizedControl": "effort", "value": "high"},
+        {"normalizedControl": "fast_mode", "value": "enabled"},
+    ]

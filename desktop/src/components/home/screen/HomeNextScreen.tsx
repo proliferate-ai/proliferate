@@ -9,10 +9,12 @@ import { HomeModePicker } from "@/components/home/screen/HomeModePicker";
 import { HomeModelPicker } from "@/components/home/screen/HomeModelPicker";
 import { HomeTargetPicker } from "@/components/home/screen/HomeTargetPicker";
 import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
+import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { ComposerTextarea } from "@proliferate/product-ui/chat/composer/ComposerTextarea";
 import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { useHomeNextLaunchControls } from "@/hooks/home/derived/use-home-next-launch-controls";
 import { useHomeNextLaunch } from "@/hooks/home/workflows/use-home-next-launch";
 import { useHomeNextState } from "@/hooks/home/derived/use-home-next-state";
 import { useHomeScreen } from "@/hooks/home/facade/use-home-screen";
@@ -59,6 +61,7 @@ export function HomeNextScreen() {
     useState<HomeNextModelSelection | null>(null);
   const [baseBranchOverride, setBaseBranchOverride] = useState<string | null>(null);
   const [modeOverrideId, setModeOverrideId] = useState<string | null>(null);
+  const [launchControlOverrides, setLaunchControlOverrides] = useState<Record<string, string>>({});
   const [submittedPreview, setSubmittedPreview] = useState<{
     id: string;
     text: string;
@@ -77,6 +80,17 @@ export function HomeNextScreen() {
     modelSelectionOverride,
     baseBranchOverride,
     modeOverrideId,
+  });
+  const homeLaunchControls = useHomeNextLaunchControls({
+    modelSelection: homeNext.effectiveModelSelection,
+    modeId: homeNext.effectiveModeId,
+    controlOverrides: launchControlOverrides,
+    onSelectControl: (controlKey, value) => {
+      setLaunchControlOverrides((current) => ({
+        ...current,
+        [controlKey]: value,
+      }));
+    },
   });
   const { isLaunching, launch } = useHomeNextLaunch();
 
@@ -158,6 +172,7 @@ export function HomeNextScreen() {
       text: submittedDraft,
       modelSelection: homeNext.effectiveModelSelection,
       modeId: homeNext.effectiveModeId,
+      launchControlValues: homeLaunchControls.launchControlValues,
       target: homeNext.launchTarget,
     });
     if (!succeeded) {
@@ -262,12 +277,17 @@ export function HomeNextScreen() {
                     onSelect={(selection) => {
                       setModelSelectionOverride(selection);
                       setModeOverrideId(null);
+                      setLaunchControlOverrides({});
                     }}
                   />
                   <HomeModePicker
                     modes={homeNext.modeOptions}
                     selectedMode={homeNext.effectiveMode}
                     onSelect={setModeOverrideId}
+                  />
+                  <SessionConfigControls
+                    agentKind={homeNext.effectiveModelSelection?.kind ?? null}
+                    controls={homeLaunchControls.controls}
                   />
                 </div>
 

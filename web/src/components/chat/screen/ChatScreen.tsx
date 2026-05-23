@@ -12,6 +12,7 @@ import {
 } from "@proliferate/cloud-sdk";
 import {
   useClaimCloudWorkspace,
+  useCloudAgentCatalog,
   useCloudClient,
   useCloudSessionEvents,
   useCloudTranscriptSnapshot,
@@ -37,10 +38,14 @@ import {
 } from "@proliferate/product-model/chats/cloud/transcript-view";
 import {
   buildCloudChatComposerControls,
+  buildLaunchSessionConfigUpdates,
+  DEFAULT_DIRECT_PROMPT_AGENT_KIND,
   DEFAULT_DIRECT_PROMPT_MODEL_ID,
   getLiveConfigControlValue,
   pendingConfigChangeKey,
   readSessionLiveConfig,
+  resolveCloudLaunchSelection,
+  type CloudLaunchComposerSelection,
   type PendingConfigChange,
 } from "@proliferate/product-model/chats/cloud/composer-controls";
 
@@ -50,6 +55,7 @@ import {
   ensureManagedWorkspaceTargetConfigReady,
   type SendPromptPayload,
   type StartSessionPayload,
+  type UpdateSessionConfigPayload,
 } from "../../../lib/access/cloud/pending-home-prompt-dispatch";
 import {
   clearPendingHomePrompt,
@@ -75,11 +81,6 @@ type OptimisticPrompt = {
   commandId?: string | null;
 };
 
-type UpdateSessionConfigPayload = {
-  configId: string;
-  value: string;
-};
-
 type ClipboardWriteStatus = "copied" | "selected" | "failed";
 
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
@@ -91,7 +92,12 @@ export function ChatScreen() {
   const navigate = useNavigate();
   const client = useCloudClient();
   const [draft, setDraft] = useState("");
-  const [draftModelId, setDraftModelId] = useState(DEFAULT_DIRECT_PROMPT_MODEL_ID);
+  const [launchSelection, setLaunchSelection] = useState<CloudLaunchComposerSelection>({
+    agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
+    modelId: DEFAULT_DIRECT_PROMPT_MODEL_ID,
+    modeId: null,
+    controlValues: {},
+  });
   const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
   const [directPromptDispatching, setDirectPromptDispatching] = useState(false);
   const [optimisticPrompts, setOptimisticPrompts] = useState<OptimisticPrompt[]>([]);
@@ -105,6 +111,7 @@ export function ChatScreen() {
   const pendingHomePromptDispatchRunRef = useRef<PendingHomePromptDispatchRun | null>(null);
   const pendingConfigMutationIdRef = useRef(0);
   const workspaceQuery = useCloudWorkspaceSnapshot(workspaceId ?? null, Boolean(workspaceId));
+  const agentCatalog = useCloudAgentCatalog();
   const workspaceLive = useWorkspaceLive(workspaceId ?? null, { enabled: Boolean(workspaceId) });
   const snapshot = useMemo(
     () => mergeWorkspaceSnapshot(workspaceQuery.data, workspaceLive.snapshot),
@@ -204,12 +211,45 @@ export function ChatScreen() {
   const workspaceReadyAgentKindsKey = workspace?.readyAgentKinds?.join("\0") ?? "";
   const workspaceAllowedAgentKindsKey = workspace?.allowedAgentKinds?.join("\0") ?? "";
   const liveConfig = readSessionLiveConfig(session);
+  const resolvedLaunchSelection = useMemo(
+    () => resolveCloudLaunchSelection({
+      catalog: agentCatalog.data,
+      selection: launchSelection,
+    }),
+    [agentCatalog.data, launchSelection],
+  );
   const composerControls = buildCloudChatComposerControls({
     session,
     liveConfig,
     pendingConfigChanges,
-    launchModelId: draftModelId,
-    onLaunchModelSelect: setDraftModelId,
+    launchCatalog: agentCatalog.data,
+    launchSelection: resolvedLaunchSelection,
+    launchModelId: resolvedLaunchSelection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID,
+    onLaunchAgentModelSelect: (agentKind, modelId) => {
+      setLaunchSelection((current) => ({
+        agentKind,
+        modelId,
+        modeId: current.agentKind === agentKind ? current.modeId : null,
+        controlValues: current.agentKind === agentKind ? current.controlValues : {},
+      }));
+    },
+    onLaunchControlSelect: ({ controlKey, value }) => {
+      setLaunchSelection((current) => {
+        if (controlKey === "mode") {
+          return { ...current, modeId: value };
+        }
+        return {
+          ...current,
+          controlValues: {
+            ...current.controlValues,
+            [controlKey]: value,
+          },
+        };
+      });
+    },
+    onLaunchModelSelect: (modelId) => {
+      setLaunchSelection((current) => ({ ...current, modelId }));
+    },
     onSessionConfigSelect: (rawConfigId, value) => {
       void submitSessionConfig(rawConfigId, value);
     },
@@ -280,6 +320,7 @@ export function ChatScreen() {
         pendingPrompt: pendingHomePrompt,
         modelId: pendingHomePrompt.modelId,
         enqueueStartSession: enqueueStartSession.mutateAsync,
+        enqueueConfig: enqueueConfig.mutateAsync,
         enqueuePrompt: enqueuePrompt.mutateAsync,
         setLatestCommandId: (commandId) => {
           if (isCurrentRun()) {
@@ -344,6 +385,7 @@ export function ChatScreen() {
     client,
     enqueuePrompt.mutateAsync,
     enqueueStartSession.mutateAsync,
+    enqueueConfig.mutateAsync,
     navigate,
     pendingHomePrompt,
     workspace?.anyharnessWorkspaceId,
@@ -618,8 +660,13 @@ export function ChatScreen() {
       const pendingPrompt: PendingHomePrompt = {
         id: promptId,
         text,
-        modelId: draftModelId,
-        modeId: null,
+        agentKind: resolvedLaunchSelection.agentKind,
+        modelId: resolvedLaunchSelection.modelId,
+        modeId: resolvedLaunchSelection.modeId,
+        sessionConfigUpdates: buildLaunchSessionConfigUpdates({
+          catalog: agentCatalog.data,
+          selection: resolvedLaunchSelection,
+        }),
         createdAt: Date.now(),
       };
       savePendingHomePrompt(workspace.id, pendingPrompt);
@@ -630,6 +677,7 @@ export function ChatScreen() {
           pendingPrompt,
           modelId: pendingPrompt.modelId,
           enqueueStartSession: enqueueStartSession.mutateAsync,
+          enqueueConfig: enqueueConfig.mutateAsync,
           enqueuePrompt: enqueuePrompt.mutateAsync,
           setLatestCommandId,
           onStatus: setPendingHomePromptStatus,
@@ -822,7 +870,6 @@ export function ChatScreen() {
   const promptSubmitting = enqueuePrompt.isPending || directPromptDispatching;
   const canSubmit = Boolean(
     draft.trim()
-      && !isUnclaimed
       && !promptSubmitting
       && (session ? true : workspaceCommandReady),
   );
@@ -938,6 +985,18 @@ export function ChatScreen() {
           onClick: () => navigate(routes.workspace(workspace.id)),
         }]
         : []}
+      topNotice={isUnclaimed
+        ? {
+          title: "Unclaimed shared workspace.",
+          description: "You can chat here; claim it to take ownership and expose team git actions.",
+          action: {
+            label: "Claim",
+            kind: "claim",
+            loading: claimWorkspace.isPending,
+            onClick: () => void claimCurrentWorkspace(),
+          },
+        }
+        : null}
       desktopHref={desktopWorkspaceDeepLink(workspace.id)}
       composer={{
         value: draft,
@@ -945,11 +1004,11 @@ export function ChatScreen() {
         onSubmit: () => void submitPrompt(),
         controls: composerControls,
         footerControls: composerFooterControls,
-        disabled: isUnclaimed || (!session && !workspaceCommandReady),
+        disabled: !session && !workspaceCommandReady,
         canSubmit,
         isSubmitting: promptSubmitting,
         placeholder: isUnclaimed
-          ? "Claim this workspace to reply"
+          ? "Message this shared workspace"
           : session
             ? "Message this session"
             : workspaceCommandReady
