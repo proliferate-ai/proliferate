@@ -14,6 +14,7 @@ from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.targets.models import (
     ArchiveCloudTargetResponse,
     CloudTargetDetail,
+    CloudTargetExistingEnrollmentRequest,
     CloudTargetEnrollmentRequest,
     CloudTargetEnrollmentResponse,
     CloudTargetSummary,
@@ -23,6 +24,7 @@ from proliferate.server.cloud.targets.models import (
 from proliferate.server.cloud.targets.service import (
     archive_target,
     create_target_enrollment,
+    create_target_enrollment_for_existing_target,
     get_target_detail,
     list_targets,
 )
@@ -38,6 +40,24 @@ async def create_target_enrollment_endpoint(
 ) -> CloudTargetEnrollmentResponse:
     try:
         return await create_target_enrollment(db, user=user, body=body)
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.post("/{target_id}/enrollments", response_model=CloudTargetEnrollmentResponse)
+async def create_existing_target_enrollment_endpoint(
+    target_id: UUID,
+    body: CloudTargetExistingEnrollmentRequest | None = None,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> CloudTargetEnrollmentResponse:
+    try:
+        return await create_target_enrollment_for_existing_target(
+            db,
+            target_id=target_id,
+            user=user,
+            body=body or CloudTargetExistingEnrollmentRequest(),
+        )
     except CloudApiError as error:
         raise_cloud_error(error)
 

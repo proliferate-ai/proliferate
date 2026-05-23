@@ -244,6 +244,8 @@ pub fn run() {
             google_workspace_mcp::release_google_workspace_mcp_runtime_env,
             window_chrome::apply_macos_window_chrome,
             process::command_exists,
+            ssh_tunnel::install_ssh_target_runtime,
+            ssh_tunnel::probe_ssh_target_connection,
             ssh_tunnel::ensure_ssh_anyharness_tunnel,
             keychain::list_configured_env_var_names,
             keychain::list_syncable_agent_auth_credentials,

@@ -136,10 +136,15 @@ class CloudTargetEnrollmentRequest(BaseModel):
     ttl_seconds: int | None = Field(default=None, alias="ttlSeconds")
 
 
+class CloudTargetExistingEnrollmentRequest(BaseModel):
+    ttl_seconds: int | None = Field(default=None, alias="ttlSeconds")
+
+
 class CloudTargetEnrollmentResponse(BaseModel):
     target: CloudTargetDetail
     enrollment_token: str = Field(serialization_alias="enrollmentToken")
     install_command: str = Field(serialization_alias="installCommand")
+    artifact_base_url: str | None = Field(default=None, serialization_alias="artifactBaseUrl")
     expires_at: str = Field(serialization_alias="expiresAt")
 
 
