@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { sessionSlotBelongsToWorkspace } from "@/lib/domain/sessions/activity";
+import { sessionSlotBelongsToWorkspace } from "@proliferate/product-model/sessions/activity";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import {

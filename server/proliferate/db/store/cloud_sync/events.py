@@ -681,6 +681,66 @@ async def resolve_pending_interaction(
     return _interaction_snapshot(row)
 
 
+async def resolve_existing_pending_interaction(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    session_id: str,
+    request_id: str,
+    seq: int,
+    occurred_at: str | None,
+    payload_json: str | None,
+) -> CloudPendingInteractionSnapshot | None:
+    row = (
+        await db.execute(
+            select(CloudPendingInteraction)
+            .where(CloudPendingInteraction.target_id == target_id)
+            .where(CloudPendingInteraction.session_id == session_id)
+            .where(CloudPendingInteraction.request_id == request_id)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    row.status = "resolved"
+    row.resolved_seq = seq
+    row.resolved_at = occurred_at
+    row.payload_json = payload_json if payload_json is not None else row.payload_json
+    row.updated_at = utcnow()
+    await db.flush()
+    return _interaction_snapshot(row)
+
+
+async def fail_existing_pending_interaction(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    session_id: str,
+    request_id: str,
+    occurred_at: str | None,
+    description: str | None,
+    payload_json: str | None,
+) -> CloudPendingInteractionSnapshot | None:
+    row = (
+        await db.execute(
+            select(CloudPendingInteraction)
+            .where(CloudPendingInteraction.target_id == target_id)
+            .where(CloudPendingInteraction.session_id == session_id)
+            .where(CloudPendingInteraction.request_id == request_id)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    if row.status == "resolved":
+        return _interaction_snapshot(row)
+    row.status = "failed"
+    row.description = description if description is not None else row.description
+    row.payload_json = payload_json if payload_json is not None else row.payload_json
+    row.resolved_at = occurred_at
+    row.updated_at = utcnow()
+    await db.flush()
+    return _interaction_snapshot(row)
+
+
 async def resolve_missing_pending_interactions(
     db: AsyncSession,
     *,
@@ -814,7 +874,7 @@ async def list_pending_interactions(
             select(CloudPendingInteraction)
             .where(CloudPendingInteraction.target_id == target_id)
             .where(CloudPendingInteraction.session_id == session_id)
-            .where(CloudPendingInteraction.status == "pending")
+            .where(CloudPendingInteraction.status.in_(("pending", "failed")))
             .order_by(CloudPendingInteraction.requested_seq.asc())
         )
     ).scalars()

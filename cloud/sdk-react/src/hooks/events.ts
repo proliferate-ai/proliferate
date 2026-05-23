@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import {
-  listSessionEvents,
+  listAllSessionEvents,
   type CloudSessionEventsResponse,
 } from "@proliferate/cloud-sdk";
 import { cloudRootKey } from "../lib/query-keys.js";
@@ -24,7 +24,7 @@ export function useCloudSessionEvents(
     sessionId !== undefined;
   return useQuery<CloudSessionEventsResponse>({
     queryKey: cloudSessionEventsKey(targetId, sessionId),
-    queryFn: () => listSessionEvents(sessionId!, { targetId: targetId! }, client),
+    queryFn: () => listAllSessionEvents(sessionId!, { targetId: targetId! }, client),
     enabled: canQuery,
   });
 }

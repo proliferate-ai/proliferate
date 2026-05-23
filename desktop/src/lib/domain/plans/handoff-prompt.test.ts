@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
 import { buildPlanHandoffPrompt } from "./handoff-prompt";
 
 describe("buildPlanHandoffPrompt", () => {

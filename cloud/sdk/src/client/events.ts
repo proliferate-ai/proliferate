@@ -13,6 +13,9 @@ export interface ListSessionEventsInput {
   signal?: AbortSignal;
 }
 
+const DEFAULT_SESSION_EVENT_PAGE_LIMIT = 200;
+const MAX_SESSION_EVENT_PAGES = 50;
+
 export async function listSessionEvents(
   sessionId: string,
   input: ListSessionEventsInput,
@@ -29,4 +32,41 @@ export async function listSessionEvents(
     },
     signal: input.signal,
   });
+}
+
+export async function listAllSessionEvents(
+  sessionId: string,
+  input: ListSessionEventsInput,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudSessionEventsResponse> {
+  const limit = input.limit ?? DEFAULT_SESSION_EVENT_PAGE_LIMIT;
+  let afterSeq = input.afterSeq ?? 0;
+  const events: CloudSessionEvent[] = [];
+
+  for (let page = 0; page < MAX_SESSION_EVENT_PAGES; page += 1) {
+    const response = await listSessionEvents(
+      sessionId,
+      {
+        ...input,
+        afterSeq,
+        limit,
+      },
+      client,
+    );
+    events.push(...response.events);
+
+    const nextCursor = response.nextCursor ?? null;
+    if (response.events.length < limit || nextCursor === null || nextCursor <= afterSeq) {
+      return {
+        events,
+        nextCursor,
+      };
+    }
+    afterSeq = nextCursor;
+  }
+
+  return {
+    events,
+    nextCursor: afterSeq,
+  };
 }

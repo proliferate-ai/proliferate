@@ -72,6 +72,11 @@ Specs:
 - [specs/pending-workspace-shell.md](specs/pending-workspace-shell.md) for
   pending workspace entry, projected session shell, optimistic prompts, and
   workspace/session materialization handoff.
+- [specs/web-chat-home-component-audit.md](specs/web-chat-home-component-audit.md)
+  for the current Web chat/home component inventory and Desktop extraction
+  classification.
+- [specs/web-desktop-parity.md](specs/web-desktop-parity.md) for Web matching
+  Desktop chat/workspace UX through shared product-ui/product-model surfaces.
 - [specs/workspace-files.md](specs/workspace-files.md) for workspace file
   browsing, file viewing, diff viewing, Changes, or all-changes review.
 

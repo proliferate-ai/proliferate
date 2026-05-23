@@ -2,11 +2,11 @@ import { useRef, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { ArrowRight } from "@/components/ui/icons";
-import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
+import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { ChatInputControlRow } from "@/components/workspace/chat/input/ChatInputControlRow";
 import { ComposerSlashCommandSearch } from "@/components/workspace/chat/input/ComposerSlashCommandSearch";
-import { ComposerTextarea } from "@/components/workspace/chat/input/ComposerTextarea";
-import { ComposerTextareaFrame } from "@/components/workspace/chat/input/ComposerTextareaFrame";
+import { ComposerTextarea } from "@proliferate/product-ui/chat/composer/ComposerTextarea";
+import { ComposerTextareaFrame } from "@proliferate/product-ui/chat/composer/ComposerTextareaFrame";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   WORKSPACE_CHAT_COMPOSER_INPUT,

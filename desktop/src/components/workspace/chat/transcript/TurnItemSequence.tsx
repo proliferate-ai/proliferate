@@ -7,15 +7,15 @@ import type {
 import { ClipboardList } from "@/components/ui/icons";
 import { CoworkArtifactTurnCard } from "@/components/workspace/chat/tool-calls/CoworkArtifactTurnCard";
 import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
 import {
   collectTurnCoworkArtifactToolCalls,
-} from "@/lib/domain/chat/tools/cowork-artifact-tool-presentation";
+} from "@proliferate/product-model/chats/tools/cowork-artifact-tool-presentation";
 import {
   blockBelongsToCompletedHistory,
   collectToolCallIdsWithProposedPlanForBlocks,
-} from "@/lib/domain/chat/transcript/transcript-rendering";
-import type { TurnPresentation } from "@/lib/domain/chat/transcript/transcript-presentation";
+} from "@proliferate/product-model/chats/transcript/transcript-rendering";
+import type { TurnPresentation } from "@proliferate/product-model/chats/transcript/transcript-presentation";
 import {
   getTurnDisplayBlockKey,
   TurnDisplayBlockNode,

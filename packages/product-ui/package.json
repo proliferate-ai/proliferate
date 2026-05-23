@@ -59,6 +59,10 @@
       "types": "./dist/automations/AutomationStatusBadge.d.ts",
       "import": "./dist/automations/AutomationStatusBadge.js"
     },
+    "./automations/AutomationCreatePanel": {
+      "types": "./dist/automations/AutomationCreatePanel.d.ts",
+      "import": "./dist/automations/AutomationCreatePanel.js"
+    },
     "./automations/AutomationsList": {
       "types": "./dist/automations/AutomationsList.d.ts",
       "import": "./dist/automations/AutomationsList.js"
@@ -78,6 +82,42 @@
     "./chat/ChatPreviewSurface": {
       "types": "./dist/chat/ChatPreviewSurface.d.ts",
       "import": "./dist/chat/ChatPreviewSurface.js"
+    },
+    "./chat/CloudChatComposer": {
+      "types": "./dist/chat/CloudChatComposer.d.ts",
+      "import": "./dist/chat/CloudChatComposer.js"
+    },
+    "./chat/CloudChatSurface": {
+      "types": "./dist/chat/CloudChatSurface.d.ts",
+      "import": "./dist/chat/CloudChatSurface.js"
+    },
+    "./chat/CloudChatTranscript": {
+      "types": "./dist/chat/CloudChatTranscript.d.ts",
+      "import": "./dist/chat/CloudChatTranscript.js"
+    },
+    "./chat/composer/ChatComposerSurface": {
+      "types": "./dist/chat/composer/ChatComposerSurface.d.ts",
+      "import": "./dist/chat/composer/ChatComposerSurface.js"
+    },
+    "./chat/composer/ComposerActionButton": {
+      "types": "./dist/chat/composer/ComposerActionButton.d.ts",
+      "import": "./dist/chat/composer/ComposerActionButton.js"
+    },
+    "./chat/composer/ComposerControlButton": {
+      "types": "./dist/chat/composer/ComposerControlButton.d.ts",
+      "import": "./dist/chat/composer/ComposerControlButton.js"
+    },
+    "./chat/composer/ComposerPopoverSurface": {
+      "types": "./dist/chat/composer/ComposerPopoverSurface.d.ts",
+      "import": "./dist/chat/composer/ComposerPopoverSurface.js"
+    },
+    "./chat/composer/ComposerTextarea": {
+      "types": "./dist/chat/composer/ComposerTextarea.d.ts",
+      "import": "./dist/chat/composer/ComposerTextarea.js"
+    },
+    "./chat/composer/ComposerTextareaFrame": {
+      "types": "./dist/chat/composer/ComposerTextareaFrame.d.ts",
+      "import": "./dist/chat/composer/ComposerTextareaFrame.js"
     },
     "./feedback/LoadingState": {
       "types": "./dist/feedback/LoadingState.d.ts",
@@ -140,6 +180,8 @@
   "dependencies": {
     "@proliferate/ui": "workspace:*",
     "lucide-react": "^0.468.0",
+    "react-markdown": "^9",
+    "remark-gfm": "^4",
     "tailwind-merge": "^3.5.0"
   },
   "peerDependencies": {

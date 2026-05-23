@@ -88,13 +88,13 @@ vi.mock("@/components/home/screen/HomeModePicker", () => ({
   HomeModePicker: () => <div data-testid="mode-picker" />,
 }));
 
-vi.mock("@/components/workspace/chat/input/ChatComposerSurface", () => ({
+vi.mock("@proliferate/product-ui/chat/composer/ChatComposerSurface", () => ({
   ChatComposerSurface: ({ children }: { children: ReactNode }) => (
     <div data-testid="composer-surface">{children}</div>
   ),
 }));
 
-vi.mock("@/components/workspace/chat/input/ComposerTextarea", () => ({
+vi.mock("@proliferate/product-ui/chat/composer/ComposerTextarea", () => ({
   ComposerTextarea: (props: TextareaHTMLAttributes<HTMLTextAreaElement>) => (
     <textarea aria-label="Prompt" {...props} />
   ),

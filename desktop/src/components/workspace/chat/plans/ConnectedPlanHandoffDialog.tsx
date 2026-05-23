@@ -1,6 +1,6 @@
 import { PlanHandoffDialog } from "@/components/workspace/chat/plans/PlanHandoffDialog";
 import { usePlanHandoffWorkflow } from "@/hooks/plans/workflows/use-plan-handoff-workflow";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
 
 interface ConnectedPlanHandoffDialogProps {
   plan: PromptPlanAttachmentDescriptor;

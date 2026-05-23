@@ -7,7 +7,7 @@ import {
   mergeFetchedHistoryWithExistingEvents,
   mergeFetchedHistoryWithNewerEvents,
 } from "@/lib/domain/sessions/history/history-event-merge";
-import { resolveSessionStatus } from "@/lib/domain/sessions/activity";
+import { resolveSessionStatus } from "@proliferate/product-model/sessions/activity";
 import {
   appendHistoryTail,
   replaySessionHistory,

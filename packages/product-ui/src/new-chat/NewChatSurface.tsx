@@ -1,7 +1,14 @@
-import { useMemo, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import {
+  CloudChatComposer,
+  type CloudChatComposerControlView,
+} from "../chat/CloudChatComposer";
+import {
+  CloudChatTranscript,
+  type CloudChatTranscriptRowView,
+} from "../chat/CloudChatTranscript";
 
 export interface PickerItemView {
   id: string;
@@ -58,6 +65,10 @@ export interface NewChatSurfaceProps {
   mode: PickerView;
   notices: NoticeView[];
   actions: ActionRowView[];
+  transcriptRows?: readonly CloudChatTranscriptRowView[];
+  emptyTitle?: string;
+  emptyDescription?: string;
+  commandMessage?: string | null;
   onDraftChange: (value: string) => void;
   onSubmit: () => void;
   onCancel?: () => void;
@@ -76,158 +87,137 @@ export function NewChatSurface({
   mode,
   notices,
   actions,
+  transcriptRows = [],
+  emptyTitle = "No transcript",
+  emptyDescription,
+  commandMessage = null,
   onDraftChange,
   onSubmit,
   onCancel,
   onPickerSelect,
   onAction,
 }: NewChatSurfaceProps) {
-  return (
-    <div className="web-scrollbar h-full overflow-y-auto bg-background text-foreground">
-      <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center px-6 py-12">
-        <header className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold text-foreground">{heading}</h1>
-        </header>
+  const composerControls = [
+    pickerToComposerControl("target", target, "cloud", "leading", onPickerSelect),
+    pickerToComposerControl("model", model, "bot", "trailing", onPickerSelect),
+    pickerToComposerControl("mode", mode, "settings", "trailing", onPickerSelect),
+  ];
 
-        <div className="rounded-xl border border-border bg-card shadow-floating">
-          <Textarea
-            value={draft}
-            onChange={(event) => onDraftChange(event.target.value)}
-            className="min-h-32 w-full resize-none border-0 bg-transparent px-4 py-4 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus:ring-0"
-            placeholder={placeholder}
+  return (
+    <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground">
+      <main className="web-scrollbar flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-16">
+        <div className="w-full max-w-3xl">
+          <header className="mb-5 flex flex-col items-center text-center">
+            <h1 className="max-w-[34rem] text-2xl font-medium leading-tight text-foreground">
+              {heading}
+            </h1>
+          </header>
+
+          <CloudChatComposer
+            composer={{
+              value: draft,
+              placeholder,
+              canSubmit,
+              isSubmitting: submitting,
+              controls: composerControls,
+              disabled: submitting,
+              onChange: onDraftChange,
+              onSubmit,
+            }}
           />
 
-          <div className="border-t border-border-light px-3 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <PickerButton pickerId="target" picker={target} onPickerSelect={onPickerSelect} />
-              <PickerButton pickerId="model" picker={model} onPickerSelect={onPickerSelect} />
-              <PickerButton pickerId="mode" picker={mode} onPickerSelect={onPickerSelect} />
+          {onCancel ? (
+            <div className="mx-auto mt-2 flex max-w-3xl justify-end px-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : null}
 
-              <div className="ml-auto flex items-center gap-2">
-                {onCancel ? (
+          {commandMessage ? (
+            <p className="mx-auto mt-2 max-w-3xl px-2 text-center text-xs text-muted-foreground">
+              {commandMessage}
+            </p>
+          ) : null}
+
+          {notices.length > 0 ? (
+            <div className="mx-auto mt-3 max-w-2xl space-y-2">
+              {notices.map((notice) => (
+                <NoticeRow key={notice.id} notice={notice} />
+              ))}
+            </div>
+          ) : null}
+
+          {transcriptRows.length > 0 ? (
+            <div className="mx-auto mt-5 max-w-3xl" data-home-submit-preview>
+              <CloudChatTranscript
+                rows={transcriptRows}
+                emptyTitle={emptyTitle}
+                emptyDescription={emptyDescription}
+              />
+            </div>
+          ) : null}
+
+          {actions.length > 0 ? (
+            <div className="mx-auto mt-3 max-w-2xl">
+              <div className="flex flex-col gap-px">
+                {actions.map((action) => (
                   <Button
+                    key={action.id}
                     type="button"
                     variant="ghost"
-                    onClick={onCancel}
-                    disabled={submitting}
+                    size="sm"
+                    disabled={action.disabled}
+                    loading={action.loading}
+                    onClick={() => onAction?.(action.id)}
+                    className="h-auto w-full justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-normal text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                   >
-                    Cancel
+                    {action.icon ? <span className="shrink-0">{action.icon}</span> : null}
+                    <span className="min-w-0 flex-1 truncate">{action.label}</span>
                   </Button>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="inverted"
-                  disabled={!canSubmit}
-                  loading={submitting}
-                  onClick={onSubmit}
-                  className="rounded-full px-3"
-                >
-                  Send
-                </Button>
+                ))}
               </div>
             </div>
-          </div>
+          ) : null}
         </div>
-
-        {notices.length > 0 ? (
-          <div className="mt-3 space-y-2">
-            {notices.map((notice) => (
-              <NoticeRow key={notice.id} notice={notice} />
-            ))}
-          </div>
-        ) : null}
-
-        {actions.length > 0 ? (
-          <div className="mt-5 grid gap-2 sm:grid-cols-3">
-            {actions.map((action) => (
-              <Button
-                key={action.id}
-                type="button"
-                variant="secondary"
-                disabled={action.disabled}
-                loading={action.loading}
-                onClick={() => onAction?.(action.id)}
-                className="h-auto justify-start rounded-lg px-3 py-2 text-left text-sm"
-              >
-                {action.icon ? <span className="shrink-0">{action.icon}</span> : null}
-                <span className="truncate">{action.label}</span>
-              </Button>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      </main>
     </div>
   );
 }
 
-function PickerButton({
-  pickerId,
-  picker,
-  onPickerSelect,
-}: {
-  pickerId: NewChatPickerId;
-  picker: PickerView;
-  onPickerSelect?: (picker: NewChatPickerId, itemId: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const selectedItem = useMemo(() => {
-    for (const group of picker.groups) {
-      const item = group.items.find((candidate) => candidate.selected);
-      if (item) return item;
-    }
-    return picker.groups[0]?.items[0] ?? null;
-  }, [picker.groups]);
-
-  return (
-    <div className="relative">
-      <Button
-        type="button"
-        variant="secondary"
-        disabled={picker.disabled}
-        onClick={() => setOpen((value) => !value)}
-        className="rounded-full px-3"
-      >
-        {picker.icon ? <span className="shrink-0">{picker.icon}</span> : null}
-        <span>{selectedItem?.label ?? picker.label}</span>
-      </Button>
-      {open ? (
-        <div className="absolute bottom-full left-0 z-20 mb-2 w-64 overflow-hidden rounded-lg border border-border bg-popover p-1 shadow-popover">
-          {picker.groups.map((group) => (
-            <div key={group.id}>
-              {group.label ? (
-                <div className="px-2 pb-1 pt-2 text-[10.5px] font-semibold uppercase text-muted-foreground">
-                  {group.label}
-                </div>
-              ) : null}
-              {group.items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  disabled={item.disabled}
-                  onClick={() => {
-                    onPickerSelect?.(pickerId, item.id);
-                    setOpen(false);
-                  }}
-                  className="flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm text-popover-foreground hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
-                >
-                  {item.icon ? <span className="mt-0.5 shrink-0">{item.icon}</span> : null}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{item.label}</span>
-                    {item.description ? (
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {item.description}
-                      </span>
-                    ) : null}
-                  </span>
-                  {item.selected ? <span className="text-xs text-muted-foreground">Selected</span> : null}
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
+function pickerToComposerControl(
+  pickerId: NewChatPickerId,
+  picker: PickerView,
+  icon: CloudChatComposerControlView["icon"],
+  placement: CloudChatComposerControlView["placement"],
+  onPickerSelect?: (picker: NewChatPickerId, itemId: string) => void,
+): CloudChatComposerControlView {
+  return {
+    id: `new-chat-${pickerId}`,
+    key: pickerId,
+    label: picker.label,
+    icon,
+    placement,
+    disabled: picker.disabled,
+    groups: picker.groups.map((group) => ({
+      id: group.id,
+      label: group.label ?? null,
+      options: group.items.map((item) => ({
+        id: item.id,
+        label: item.label,
+        description: item.description ?? null,
+        disabled: item.disabled,
+        selected: item.selected,
+      })),
+    })),
+    onSelect: (itemId) => onPickerSelect?.(pickerId, itemId),
+  };
 }
 
 function NoticeRow({ notice }: { notice: NoticeView }) {

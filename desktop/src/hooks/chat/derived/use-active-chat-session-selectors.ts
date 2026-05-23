@@ -14,25 +14,25 @@ import { parsePermissionOptionActions, type PermissionOptionAction } from "@/lib
 import { resolveCurrentModeLabel } from "@/lib/domain/chat/composer/chat-input";
 import {
   hasVisibleTranscriptContent,
-} from "@/lib/domain/chat/pending-prompts/pending-prompts";
-import { isSessionSlotBusy, resolveSessionViewState, type SessionViewState } from "@/lib/domain/sessions/activity";
-import { getPendingSessionConfigChange, type PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
+} from "@proliferate/product-model/chats/pending-prompts/pending-prompts";
+import { isSessionSlotBusy, resolveSessionViewState, type SessionViewState } from "@proliferate/product-model/sessions/activity";
+import { getPendingSessionConfigChange, type PendingSessionConfigChanges } from "@proliferate/product-model/sessions/pending-config";
 import {
   pendingConfigChangesForSessionIntents,
   outboxEntryToPendingPromptEntry,
   projectPendingPromptsWithSessionIntents,
   queuedOutboxEntriesForSession,
   renderableOutboxEntriesForTranscript,
-} from "@/lib/domain/sessions/intents/session-intent-selectors";
+} from "@proliferate/product-model/sessions/intents/session-intent-selectors";
 import type {
   PromptOutboxEntry,
   SessionIntent,
   SessionUpdateConfigIntent,
-} from "@/lib/domain/sessions/intents/session-intent-model";
+} from "@proliferate/product-model/sessions/intents/session-intent-model";
 import {
   outboxEntriesForSession,
   sessionIntentsForSession,
-} from "@/lib/domain/sessions/intents/session-intent-state";
+} from "@proliferate/product-model/sessions/intents/session-intent-state";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
 import type { SessionStreamConnectionState } from "@/lib/domain/sessions/directory/directory-entry";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";

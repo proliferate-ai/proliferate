@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/copy/plans/plan-prompts";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
 import { buildPlanImplementationPrompt } from "./implementation-prompt";
 
 describe("buildPlanImplementationPrompt", () => {

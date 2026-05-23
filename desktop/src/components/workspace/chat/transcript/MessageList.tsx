@@ -11,8 +11,8 @@ import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useOpenCoworkArtifact } from "@/hooks/cowork/workflows/use-open-cowork-artifact";
 import { useChatTranscriptSelection } from "@/hooks/chat/ui/use-chat-transcript-selection";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
-import { buildTranscriptCopyText } from "@/lib/domain/chat/transcript/transcript-copy";
+import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
+import { buildTranscriptCopyText } from "@proliferate/product-model/chats/transcript/transcript-copy";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
@@ -24,32 +24,32 @@ import {
   turnHasAssistantRenderableTranscriptContent,
   resolveVisibleOptimisticPrompt,
   shouldShowPendingPromptActivity,
-} from "@/lib/domain/chat/pending-prompts/pending-prompts";
+} from "@proliferate/product-model/chats/pending-prompts/pending-prompts";
 import {
   outboxEntryToPendingPromptEntry,
   renderableOutboxEntriesForTranscript,
-} from "@/lib/domain/sessions/intents/session-intent-selectors";
-import type { PromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
-import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
+} from "@proliferate/product-model/sessions/intents/session-intent-selectors";
+import type { PromptOutboxEntry } from "@proliferate/product-model/sessions/intents/session-intent-model";
+import type { TranscriptVirtualRow } from "@proliferate/product-model/chats/transcript/transcript-virtual-rows";
 import { useTranscriptRowModel } from "@/hooks/chat/derived/use-transcript-row-model";
 import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox-actions";
 import {
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
-} from "@/lib/domain/chat/transcript/transcript-trailing-status";
+} from "@proliferate/product-model/chats/transcript/transcript-trailing-status";
 import {
   buildOutboxStartedAtByPromptId,
   collectToolCallIdsWithProposedPlan,
   findTrailingLiveExplorationBlock,
   findTrailingLiveWorkBlock,
   resolveTurnPromptTiming,
-} from "@/lib/domain/chat/transcript/transcript-rendering";
-import type { TranscriptOpenSessionRole } from "@/lib/domain/chat/transcript/transcript-open-target";
+} from "@proliferate/product-model/chats/transcript/transcript-rendering";
+import type { TranscriptOpenSessionRole } from "@proliferate/product-model/chats/transcript/transcript-open-target";
 import type {
   PendingPromptEntry,
   TranscriptState,
 } from "@anyharness/sdk";
-import type { SessionViewState } from "@/lib/domain/sessions/activity";
+import type { SessionViewState } from "@proliferate/product-model/sessions/activity";
 import { VirtualTranscriptRowList } from "@/components/workspace/chat/transcript/VirtualTranscriptRowList";
 import {
   resolvePendingPromptTrailingStatus,

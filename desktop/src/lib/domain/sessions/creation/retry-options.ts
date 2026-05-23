@@ -2,7 +2,7 @@ import type {
   ContentPart,
   PromptInputBlock,
 } from "@anyharness/sdk";
-import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
+import type { PromptAttachmentSnapshot } from "@proliferate/product-model/chats/composer/prompt-attachment-snapshot";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 
 export interface SessionCreateWithResolvedConfigRetryOptions {

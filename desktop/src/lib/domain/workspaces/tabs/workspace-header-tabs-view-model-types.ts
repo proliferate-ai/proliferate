@@ -1,4 +1,4 @@
-import type { SessionViewState } from "@/lib/domain/sessions/activity";
+import type { SessionViewState } from "@proliferate/product-model/sessions/activity";
 import type { DelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/model";
 import type { GroupedChatTab } from "@/lib/domain/workspaces/tabs/grouping";
 import type { HeaderStripRow } from "@/lib/domain/workspaces/tabs/group-rows";

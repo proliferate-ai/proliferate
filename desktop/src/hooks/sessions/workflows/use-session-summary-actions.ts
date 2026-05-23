@@ -3,23 +3,23 @@ import {
   type Session,
 } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { shouldClearOptimisticPromptAfterSessionSummary } from "@/lib/domain/chat/pending-prompts/pending-prompts";
+import { shouldClearOptimisticPromptAfterSessionSummary } from "@proliferate/product-model/chats/pending-prompts/pending-prompts";
 import {
   resolveSessionStatus,
-} from "@/lib/domain/sessions/activity";
+} from "@proliferate/product-model/sessions/activity";
 import {
   getAuthoritativeConfigValue,
   hasQueuedPendingConfigChanges,
   reconcilePendingConfigChanges,
   shouldAcceptAuthoritativeLiveConfig,
   type PendingSessionConfigChange,
-} from "@/lib/domain/sessions/pending-config";
+} from "@proliferate/product-model/sessions/pending-config";
 import {
   pendingConfigChangesForSessionIntents,
-} from "@/lib/domain/sessions/intents/session-intent-selectors";
+} from "@proliferate/product-model/sessions/intents/session-intent-selectors";
 import {
   sessionIntentsForSession,
-} from "@/lib/domain/sessions/intents/session-intent-state";
+} from "@proliferate/product-model/sessions/intents/session-intent-state";
 import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
 import { activityFromTranscript } from "@/lib/domain/sessions/directory/directory-activity";
 import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { CircleQuestion, Sparkles } from "@/components/ui/icons";
 import { CopyMessageButton } from "@/components/workspace/chat/transcript/CopyMessageButton";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
-import type { SessionViewState } from "@/lib/domain/sessions/activity";
+import type { SessionViewState } from "@proliferate/product-model/sessions/activity";
 
 const TURN_HORIZONTAL_PADDING = "px-0";
 const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";

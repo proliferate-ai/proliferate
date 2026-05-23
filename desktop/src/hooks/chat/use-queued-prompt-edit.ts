@@ -3,7 +3,7 @@ import type { PendingPromptEntry } from "@anyharness/sdk";
 import type {
   PromptOutboxDeliveryState,
   PromptOutboxEntry,
-} from "@/lib/domain/sessions/intents/session-intent-model";
+} from "@proliferate/product-model/sessions/intents/session-intent-model";
 import {
   useActivePendingPrompts,
   useActiveSessionId,

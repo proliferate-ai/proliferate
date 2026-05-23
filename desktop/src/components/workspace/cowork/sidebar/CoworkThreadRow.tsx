@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { SidebarStatusIndicatorView } from "@/components/workspace/shell/sidebar/SidebarIndicators";
-import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
+import type { SidebarSessionActivityState } from "@proliferate/product-model/sessions/activity";
 import { sidebarStatusIndicatorFromActivity } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";
 import { coworkThreadTitle } from "@/lib/domain/cowork/threads";

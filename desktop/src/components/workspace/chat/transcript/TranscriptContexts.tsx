@@ -3,7 +3,7 @@ import {
   useContext,
   type ReactNode,
 } from "react";
-import type { TranscriptOpenSessionRole } from "@/lib/domain/chat/transcript/transcript-open-target";
+import type { TranscriptOpenSessionRole } from "@proliferate/product-model/chats/transcript/transcript-open-target";
 
 export type TranscriptOpenSessionHandler = (
   sessionId: string,

@@ -2,13 +2,13 @@ import type { ContentPart, PromptInputBlock, Session } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
-import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
+import type { PromptAttachmentSnapshot } from "@proliferate/product-model/chats/composer/prompt-attachment-snapshot";
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
 import {
   resolveRuntimeTargetForWorkspace,
 } from "@/lib/access/anyharness/runtime-target";
-import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
+import { resolveStatusFromExecutionSummary } from "@proliferate/product-model/sessions/activity";
 import { findCompatibleExistingSession } from "@/lib/domain/sessions/creation/compatible-session";
 import {
   formatSessionCreateFailureMessage,
@@ -42,10 +42,10 @@ import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspa
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
 import {
   pendingConfigChangesForSessionIntents,
-} from "@/lib/domain/sessions/intents/session-intent-selectors";
+} from "@proliferate/product-model/sessions/intents/session-intent-selectors";
 import {
   sessionIntentsForSession,
-} from "@/lib/domain/sessions/intents/session-intent-state";
+} from "@proliferate/product-model/sessions/intents/session-intent-state";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
 import {
   assertDirectSessionCreateRuntimeConfigStamped,

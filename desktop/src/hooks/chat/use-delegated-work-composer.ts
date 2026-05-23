@@ -9,7 +9,7 @@ import {
   deriveDelegatedWorkSummary,
   type DelegatedWorkSummary,
   type DelegatedWorkSummaryCandidate,
-} from "@/lib/domain/chat/subagents/delegated-work";
+} from "@proliferate/product-model/chats/subagents/delegated-work";
 import type { DelegatedAgentIdentity } from "@/lib/domain/delegated-work/model";
 import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
 import {

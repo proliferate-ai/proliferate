@@ -1,5 +1,6 @@
 import type {
   CloudPendingInteraction,
+  CloudSessionEventEnvelope,
   CloudSessionProjection,
   CloudSessionSnapshot,
   CloudTranscriptItem,
@@ -48,6 +49,7 @@ export interface CloudSessionProjectionPatchPayload {
   session: CloudSessionProjection;
   transcriptItem?: CloudTranscriptItem | null;
   pendingInteraction?: CloudPendingInteraction | null;
+  envelope?: CloudSessionEventEnvelope | null;
 }
 
 export type CloudSessionProjectionPatch = CloudProjectionPatch<

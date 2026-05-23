@@ -7,8 +7,8 @@ import {
   type SessionLiveConfigSnapshot,
   type SessionMcpBindingSummary,
 } from "@anyharness/sdk";
-import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
-import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
+import { resolveStatusFromExecutionSummary } from "@proliferate/product-model/sessions/activity";
+import type { PendingSessionConfigChanges } from "@proliferate/product-model/sessions/pending-config";
 import { activityFromTranscript } from "@/lib/domain/sessions/directory/directory-activity";
 import {
   createDirectoryEntry,

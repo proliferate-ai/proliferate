@@ -5,7 +5,7 @@ import {
   FileChangeStats,
   FileDiffCard,
 } from "@/components/ui/content/FileDiffCard";
-import { collectTurnFilePatches } from "@/lib/domain/chat/transcript/turn-file-patches";
+import { collectTurnFilePatches } from "@proliferate/product-model/chats/transcript/turn-file-patches";
 import {
   CHAT_VISIBLE_FILE_CHANGE_LIMIT,
   resolveDiffDisplayPolicy,

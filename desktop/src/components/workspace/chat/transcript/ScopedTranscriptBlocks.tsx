@@ -7,7 +7,7 @@ import {
 import type {
   TranscriptState,
 } from "@anyharness/sdk";
-import type { TurnDisplayBlock } from "@/lib/domain/chat/transcript/transcript-presentation";
+import type { TurnDisplayBlock } from "@proliferate/product-model/chats/transcript/transcript-presentation";
 import { SubagentCreationGroupBlock } from "./SubagentCreationGroupBlock";
 
 export function ScopedTranscriptBlocks({

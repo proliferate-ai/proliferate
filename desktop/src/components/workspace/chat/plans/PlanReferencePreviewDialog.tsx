@@ -1,6 +1,6 @@
 import { ModalShell } from "@/components/ui/ModalShell";
 import { PlanMarkdownBody } from "@/components/workspace/chat/content/PlanMarkdownBody";
-import type { PromptDisplayPlanPart } from "@/lib/domain/chat/composer/prompt-display-parts";
+import type { PromptDisplayPlanPart } from "@proliferate/product-model/chats/composer/prompt-display-parts";
 
 interface PlanReferencePreviewDialogProps {
   open: boolean;

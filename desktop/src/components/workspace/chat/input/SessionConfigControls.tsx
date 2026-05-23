@@ -9,7 +9,7 @@ import { Brain, Check, ChevronDown, Zap } from "@/components/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { ComposerControlButton } from "./ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 import { SessionModeControl } from "./SessionModeControl";
 import { SessionReasoningEffortControl } from "./SessionReasoningEffortControl";

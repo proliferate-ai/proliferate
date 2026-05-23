@@ -4,11 +4,11 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createOptimisticPendingPrompt,
-} from "@/lib/domain/chat/pending-prompts/pending-prompts";
+} from "@proliferate/product-model/chats/pending-prompts/pending-prompts";
 import {
   createPromptOutboxEntry,
   type PromptOutboxEntry,
-} from "@/lib/domain/sessions/intents/session-intent-model";
+} from "@proliferate/product-model/sessions/intents/session-intent-model";
 import { TranscriptPendingPromptRow } from "./TranscriptPendingPromptRow";
 
 const NOW = "2026-05-20T17:00:00.000Z";

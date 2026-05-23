@@ -8,7 +8,7 @@ import type {
 } from "@anyharness/sdk";
 import {
   resolveSessionViewState,
-} from "@/lib/domain/sessions/activity";
+} from "@proliferate/product-model/sessions/activity";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { recordMeasurementWorkflowStep } from "@/lib/infra/measurement/debug-measurement";
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";

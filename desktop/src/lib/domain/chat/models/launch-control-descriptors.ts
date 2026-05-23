@@ -6,7 +6,7 @@ import {
 import {
   getPendingSessionConfigChange,
   type PendingSessionConfigChanges,
-} from "@/lib/domain/sessions/pending-config";
+} from "@proliferate/product-model/sessions/pending-config";
 import type { DesktopAgentLaunchControl } from "@/lib/domain/agents/cloud-launch-catalog";
 
 export interface LaunchControlPreferences {

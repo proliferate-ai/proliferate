@@ -14,8 +14,8 @@ import {
 } from "@/config/chat-layout";
 import {
   shouldStickToVirtualBottom,
-} from "@/lib/domain/chat/transcript/transcript-virtual-rows";
-import type { TranscriptVirtualizationMode } from "@/lib/domain/chat/transcript/transcript-virtualization-config";
+} from "@proliferate/product-model/chats/transcript/transcript-virtual-rows";
+import type { TranscriptVirtualizationMode } from "@proliferate/product-model/chats/transcript/transcript-virtualization-config";
 import {
   HISTORY_PREFETCH_TOP_THRESHOLD_PX,
   logHistoryPrefetchDecisionOnce,
@@ -27,7 +27,7 @@ import {
   type HistoryPrependScrollAnchor,
   type TranscriptRowListBaseProps,
 } from "@/components/workspace/chat/transcript/TranscriptRowListShared";
-import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
+import type { TranscriptVirtualRow } from "@proliferate/product-model/chats/transcript/transcript-virtual-rows";
 
 type TranscriptRowRenderer = (
   row: TranscriptVirtualRow,

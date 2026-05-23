@@ -18,7 +18,7 @@ import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
 import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
 import { useSessionPromptActions } from "@/hooks/sessions/workflows/use-session-prompt-actions";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
-import { type PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
+import { type PromptPlanAttachmentDescriptor } from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
 import { buildPlanImplementationPrompt } from "@/lib/domain/plans/implementation-prompt";
 import { resolvePlanImplementationModeSwitch } from "@/lib/domain/plans/implementation-mode";
 import {

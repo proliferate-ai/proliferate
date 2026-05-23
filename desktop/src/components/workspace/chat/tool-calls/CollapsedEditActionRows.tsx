@@ -8,11 +8,11 @@ import { FileChangeStats, FileDiffCard } from "@/components/ui/content/FileDiffC
 import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
 import { ChevronRight } from "@/components/ui/icons";
 import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-model/chats/tools/tool-call-layout";
 import {
   basename,
   formatEditVerb,
-} from "@/lib/domain/chat/tools/collapsed-action-labels";
+} from "@proliferate/product-model/chats/tools/collapsed-action-labels";
 import { ActionFileLink } from "./CollapsedActionRowPrimitives";
 import { GenericActionRow } from "./CollapsedGenericActionRow";
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.cloud import (
     CloudCommandActorKind,
     CloudCommandKind,
+    CloudCommandSource,
     CloudCommandStatus,
     CloudTargetStatus,
     CloudWorkspaceStatus,
@@ -40,6 +42,20 @@ from proliferate.server.cloud.live.service import publish_command_status_after_c
 from proliferate.server.cloud.runtime.domain.wake import command_kind_requires_wake
 from proliferate.server.cloud.runtime.wake import kick_off_managed_slot_wake
 from proliferate.server.cloud.workspaces.access import cloud_workspace_user_can_read_with_db
+from proliferate.utils.time import utcnow
+
+
+_WEB_COMMAND_QUEUE_EXPIRATION = timedelta(minutes=4)
+_WEB_EXPIRABLE_QUEUED_COMMAND_KINDS = {
+    CloudCommandKind.start_session.value,
+    CloudCommandKind.send_prompt.value,
+    CloudCommandKind.update_session_config.value,
+}
+_WEB_COMMAND_QUEUE_TIMEOUT_CODE = "web_command_queue_timeout"
+_WEB_COMMAND_QUEUE_TIMEOUT_MESSAGE = (
+    "Cloud runtime did not pick up this Web command before it timed out. "
+    "Retry after the workspace shows Live."
+)
 
 
 def _idempotency_scope_for_command(
@@ -60,6 +76,10 @@ def _idempotency_scope_for_command(
         f"user:{target.owner_user_id}:target:{target.id}:"
         f"workspace:{workspace_scope}:session:{session_scope}:kind:{kind}"
     )
+
+
+def _str_or_none(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
 
 
 _PROJECTED_SESSION_COMMAND_KINDS = {
@@ -628,11 +648,13 @@ def _command_has_managed_cloud_workspace(
     kind: str,
     body: CreateCloudCommandRequest,
 ) -> bool:
-    return (
-        _target_requires_cloud_workspace(target)
-        and kind == CloudCommandKind.start_session.value
-        and (body.cloud_workspace_id is not None or body.workspace_id is not None)
-    )
+    if not _target_requires_cloud_workspace(target):
+        return False
+    if kind == CloudCommandKind.start_session.value:
+        return body.cloud_workspace_id is not None or body.workspace_id is not None
+    if kind in _PROJECTED_SESSION_COMMAND_KINDS:
+        return body.cloud_workspace_id is not None
+    return False
 
 
 async def enqueue_command(
@@ -722,6 +744,11 @@ async def enqueue_command(
         actor_user_id=user.id,
         target=target,
         kind=kind,
+        require_target_config=not _command_has_managed_cloud_workspace(
+            target=target,
+            kind=kind,
+            body=body,
+        ),
     )
     command_body = body.model_copy(update={"payload": payload})
     resolved_workspace_id, payload, cloud_workspace_id = await _resolve_command_workspace(
@@ -743,6 +770,7 @@ async def enqueue_command(
         idempotency_key=body.idempotency_key,
     )
     if existing is not None:
+        await _record_pending_prompt_interaction_for_command(db, existing)
         await publish_command_status_after_commit(db, existing)
         await kick_off_command_wake_after_commit_if_required(
             db,
@@ -780,6 +808,7 @@ async def enqueue_command(
                 preconditions_json=compact_command_json(body.preconditions),
                 authorization_context_json=authorization_context_json,
             )
+            await _record_pending_prompt_interaction_for_command(db, command)
         await publish_command_status_after_commit(db, command)
         await kick_off_command_wake_after_commit_if_required(
             db,
@@ -796,6 +825,49 @@ async def enqueue_command(
         if duplicate is not None:
             return duplicate
         raise
+
+
+async def _record_pending_prompt_interaction_for_command(
+    db: AsyncSession,
+    command: commands_store.CloudCommandSnapshot,
+) -> None:
+    if (
+        command.kind != CloudCommandKind.send_prompt.value
+        or command.session_id is None
+        or command.cloud_workspace_id is None
+    ):
+        return
+    try:
+        payload = json.loads(command.payload_json or "{}")
+    except ValueError:
+        return
+    if not isinstance(payload, dict):
+        return
+    prompt_id = _str_or_none(payload.get("promptId"))
+    text = _str_or_none(payload.get("text"))
+    if not prompt_id or not text or not text.strip():
+        return
+    await events_store.upsert_pending_interaction(
+        db,
+        target_id=command.target_id,
+        cloud_workspace_id=command.cloud_workspace_id,
+        workspace_id=command.workspace_id,
+        session_id=command.session_id,
+        request_id=prompt_id,
+        seq=command.observed_event_seq or 0,
+        occurred_at=command.created_at.isoformat(),
+        kind="send_prompt",
+        title="Queued prompt",
+        description="Waiting for response.",
+        payload_json=compact_command_json(
+            {
+                "text": text,
+                "promptId": prompt_id,
+                "commandId": str(command.id),
+                "source": command.source,
+            }
+        ),
+    )
 
 
 async def _validate_agent_auth_preflight(
@@ -1035,7 +1107,96 @@ async def get_command_status(
             user_id,
             command.cloud_workspace_id,
         )
+    command = await _expire_stale_web_command_if_needed(db, command)
     return command
+
+
+async def _expire_stale_web_command_if_needed(
+    db: AsyncSession,
+    command: commands_store.CloudCommandSnapshot,
+) -> commands_store.CloudCommandSnapshot:
+    if command.status != CloudCommandStatus.queued.value:
+        return command
+    if command.source != CloudCommandSource.web.value:
+        return command
+    if command.kind not in _WEB_EXPIRABLE_QUEUED_COMMAND_KINDS:
+        return command
+    now = utcnow()
+    if now - command.created_at < _WEB_COMMAND_QUEUE_EXPIRATION:
+        return command
+    expired = await commands_store.expire_command_if_not_terminal(
+        db,
+        command_id=command.id,
+        error_code=_WEB_COMMAND_QUEUE_TIMEOUT_CODE,
+        error_message=_WEB_COMMAND_QUEUE_TIMEOUT_MESSAGE,
+        now=now,
+        eligible_statuses=(CloudCommandStatus.queued.value,),
+    )
+    if expired is None:
+        return command
+    if expired.status == CloudCommandStatus.expired.value:
+        await _mark_pending_prompt_interaction_failed_for_command(db, expired)
+        await publish_command_status_after_commit(db, expired)
+    return expired
+
+
+async def expire_stale_web_commands_for_target(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+) -> tuple[commands_store.CloudCommandSnapshot, ...]:
+    now = utcnow()
+    expired_commands = await commands_store.expire_stale_queued_commands(
+        db,
+        target_id=target_id,
+        source=CloudCommandSource.web.value,
+        command_kinds=tuple(_WEB_EXPIRABLE_QUEUED_COMMAND_KINDS),
+        older_than=now - _WEB_COMMAND_QUEUE_EXPIRATION,
+        error_code=_WEB_COMMAND_QUEUE_TIMEOUT_CODE,
+        error_message=_WEB_COMMAND_QUEUE_TIMEOUT_MESSAGE,
+        now=now,
+    )
+    for command in expired_commands:
+        await _mark_pending_prompt_interaction_failed_for_command(db, command)
+        await publish_command_status_after_commit(db, command)
+    return expired_commands
+
+
+async def _mark_pending_prompt_interaction_failed_for_command(
+    db: AsyncSession,
+    command: commands_store.CloudCommandSnapshot,
+) -> None:
+    if (
+        command.kind != CloudCommandKind.send_prompt.value
+        or command.session_id is None
+    ):
+        return
+    try:
+        payload = json.loads(command.payload_json or "{}")
+    except ValueError:
+        return
+    if not isinstance(payload, dict):
+        return
+    prompt_id = _str_or_none(payload.get("promptId"))
+    if not prompt_id:
+        return
+    await events_store.fail_existing_pending_interaction(
+        db,
+        target_id=command.target_id,
+        session_id=command.session_id,
+        request_id=prompt_id,
+        occurred_at=utcnow().isoformat(),
+        description=command.error_message or "Prompt could not be delivered.",
+        payload_json=compact_command_json(
+            {
+                **payload,
+                "commandId": str(command.id),
+                "errorCode": command.error_code,
+                "errorMessage": command.error_message,
+                "status": command.status,
+            }
+        ),
+    )
 
 
 async def _validate_managed_runtime_config_current_for_command(
@@ -1044,6 +1205,7 @@ async def _validate_managed_runtime_config_current_for_command(
     actor_user_id: UUID,
     target: targets_store.CloudTargetSnapshot,
     kind: str,
+    require_target_config: bool = True,
 ) -> None:
     if kind not in {
         CloudCommandKind.resolve_interaction.value,
@@ -1060,13 +1222,14 @@ async def _validate_managed_runtime_config_current_for_command(
             "Runtime config sandbox profile not found.",
             status_code=404,
         )
-    configs = await target_config_store.list_target_configs(db, target_id=target.id)
-    if not configs:
-        raise CloudApiError(
-            "cloud_command_target_config_required",
-            "Managed targets require a materialized target config before sessions can start.",
-            status_code=409,
-        )
+    if require_target_config:
+        configs = await target_config_store.list_target_configs(db, target_id=target.id)
+        if not configs:
+            raise CloudApiError(
+                "cloud_command_target_config_required",
+                "Managed targets require a materialized target config before sessions can start.",
+                status_code=409,
+            )
     _current, current_revision = await runtime_config_store.get_current(
         db,
         sandbox_profile_id=target.sandbox_profile_id,

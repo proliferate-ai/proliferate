@@ -7,12 +7,12 @@ import { DelegatedAgentHoverCard } from "@/components/workspace/shell/tabs/Deleg
 import { useTranscriptOpenSession } from "@/components/workspace/chat/transcript/TranscriptContexts";
 import type {
   SubagentMcpReceiptPresentation,
-} from "@/lib/domain/chat/subagents/subagent-tool-presentation";
+} from "@proliferate/product-model/chats/subagents/subagent-tool-presentation";
 import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
 import {
   delegatedWorkStatusCategoryFromLabel,
 } from "@/lib/domain/delegated-work/presentation";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-model/chats/tools/tool-call-layout";
 import type { ToolActionStatus } from "./ToolActionRow";
 
 const CHAT_ACTION_TEXT_CLASS =

@@ -1,6 +1,7 @@
 export * from "./context/CloudClientProvider.js";
 export * from "./hooks/auth.js";
 export * from "./hooks/automations.js";
+export * from "./hooks/agent-run-configs.js";
 export * from "./hooks/agent-auth.js";
 export * from "./hooks/billing.js";
 export * from "./hooks/commands.js";
@@ -10,6 +11,7 @@ export * from "./hooks/events.js";
 export * from "./hooks/live.js";
 export * from "./hooks/organizations.js";
 export * from "./hooks/runtime-config.js";
+export * from "./hooks/repo-configs.js";
 export * from "./hooks/sessions.js";
 export * from "./hooks/targets.js";
 export * from "./hooks/workspaces.js";

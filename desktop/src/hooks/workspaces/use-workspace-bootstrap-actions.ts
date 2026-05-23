@@ -13,7 +13,7 @@ import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-sessi
 import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
-import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
+import { resolveStatusFromExecutionSummary } from "@proliferate/product-model/sessions/activity";
 import {
   choosePreferredWorkspaceSession,
 } from "@/lib/domain/workspaces/selection/selection";

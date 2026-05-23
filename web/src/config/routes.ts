@@ -6,6 +6,7 @@ export const routes = {
   plugins: "/plugins",
   support: "/support",
   settings: "/settings",
+  settingsSection: (sectionId: string) => `/settings/${sectionId}`,
   authCallback: "/auth/callback",
   connectGitHub: "/connect-github",
   desktopHandoff: "/auth/desktop/handoff",

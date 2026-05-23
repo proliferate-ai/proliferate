@@ -37,34 +37,35 @@ const AuthTokenContext = createContext<AuthTokenContextValue | null>(null);
 const queryClient = new QueryClient();
 
 export function WebCloudProvider({ children }: { children: ReactNode }) {
-  const [token, setTokenState] = useState<string | null>(() => readStoredAuthToken());
+  const initialTokenRef = useRef<string | null | undefined>(undefined);
+  if (initialTokenRef.current === undefined) {
+    initialTokenRef.current = readStoredAuthToken();
+  }
+  const [token, setTokenState] = useState<string | null>(initialTokenRef.current);
   const [user, setUserState] = useState<AuthUser | null>(null);
-  const [bootstrapping, setBootstrapping] = useState(true);
+  const [bootstrapping, setBootstrapping] = useState(initialTokenRef.current === null);
   const authEpochRef = useRef(0);
   const client = useMemo(() => createWebCloudClient(webEnv.apiBaseUrl, token), [token]);
 
   useEffect(() => {
+    if (initialTokenRef.current !== null) {
+      setBootstrapping(false);
+      return;
+    }
     let cancelled = false;
     const bootstrapEpoch = authEpochRef.current;
     const bootstrapClient = createWebCloudClient(webEnv.apiBaseUrl, null);
-    const storedToken = readStoredAuthToken();
     bootstrapWebSession(bootstrapClient)
       .then((session) => {
         if (!cancelled && authEpochRef.current === bootstrapEpoch) {
           queryClient.clear();
-          writeStoredAuthToken(session.accessToken);
           setTokenState(session.accessToken);
           setUserState(session.user);
         }
       })
       .catch(() => {
         if (!cancelled && authEpochRef.current === bootstrapEpoch) {
-          if (storedToken) {
-            setTokenState(storedToken);
-          } else {
-            clearStoredAuthToken();
-            setTokenState(null);
-          }
+          setTokenState(null);
           setUserState(null);
         }
       })
@@ -94,7 +95,7 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
       setSession(session) {
         authEpochRef.current += 1;
         queryClient.clear();
-        writeStoredAuthToken(session.accessToken);
+        clearStoredAuthToken();
         setBootstrapping(false);
         setTokenState(session.accessToken);
         setUserState(session.user);

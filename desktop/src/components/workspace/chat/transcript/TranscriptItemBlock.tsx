@@ -4,23 +4,23 @@ import type {
 } from "@anyharness/sdk";
 import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
 import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
-} from "@/lib/domain/chat/tools/claude-plan-tool-call";
+} from "@proliferate/product-model/chats/tools/claude-plan-tool-call";
 import {
   isAgentSessionProvenance,
   isSubagentWakeProvenance,
   resolveReviewFeedbackPromptReference,
-} from "@/lib/domain/chat/subagents/provenance";
+} from "@proliferate/product-model/chats/subagents/provenance";
 import {
   hasProposedPlanForToolCallItem,
-} from "@/lib/domain/chat/transcript/transcript-rendering";
+} from "@proliferate/product-model/chats/transcript/transcript-rendering";
 import {
   resolveUserMessageActionTime,
-} from "@/lib/domain/chat/transcript/transcript-action-time";
-import type { TranscriptOpenSessionRole } from "@/lib/domain/chat/transcript/transcript-open-target";
+} from "@proliferate/product-model/chats/transcript/transcript-action-time";
+import type { TranscriptOpenSessionRole } from "@proliferate/product-model/chats/transcript/transcript-open-target";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { AssistantMessage } from "./AssistantMessage";
 import { ClaudePlanCard } from "./ClaudePlanCard";

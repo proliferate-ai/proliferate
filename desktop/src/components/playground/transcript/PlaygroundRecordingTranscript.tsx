@@ -1,6 +1,6 @@
 import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
 import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
-import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
+import { resolveSessionViewState } from "@proliferate/product-model/sessions/activity";
 import { combineSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";

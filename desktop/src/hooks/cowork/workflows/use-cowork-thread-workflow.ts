@@ -9,7 +9,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/composer/preference-resolvers";
 import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
-import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
+import { resolveStatusFromExecutionSummary } from "@proliferate/product-model/sessions/activity";
 import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildSubmittingPendingWorkspaceEntry,

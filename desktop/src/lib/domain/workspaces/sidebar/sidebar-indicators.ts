@@ -1,6 +1,6 @@
 import type { Workspace } from "@anyharness/sdk";
-import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
-import { resolveWorkspaceExecutionSidebarActivityState } from "@/lib/domain/sessions/activity";
+import type { SidebarSessionActivityState } from "@proliferate/product-model/sessions/activity";
+import { resolveWorkspaceExecutionSidebarActivityState } from "@proliferate/product-model/sessions/activity";
 import { isCloudWorkspacePending } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import type {
   CloudWorkspaceExposureState,

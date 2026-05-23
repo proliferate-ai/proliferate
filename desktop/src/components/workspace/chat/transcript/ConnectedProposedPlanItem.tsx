@@ -5,7 +5,7 @@ import { useProposedPlanActions } from "@/hooks/plans/workflows/use-proposed-pla
 import {
   planAttachmentId,
   type PromptPlanAttachmentDescriptor,
-} from "@/lib/domain/chat/composer/prompt-plan-attachments";
+} from "@proliferate/product-model/chats/composer/prompt-plan-attachments";
 
 type ProposedPlanTranscriptItem = Extract<TranscriptItem, { kind: "proposed_plan" }>;
 

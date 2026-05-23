@@ -19,8 +19,8 @@ import { TurnSeparator } from "@/components/workspace/chat/transcript/TurnSepara
 import {
   ScopedTranscriptBlocks,
 } from "@/components/workspace/chat/transcript/ScopedTranscriptBlocks";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
-import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-model/chats/tools/tool-call-layout";
+import { normalizeToolResultText } from "@proliferate/product-model/chats/tools/tool-result-text";
 import {
   parseAsyncSubagentLaunch,
   parseSubagentLaunchResult,
@@ -29,17 +29,17 @@ import {
   resolveSubagentLaunchDisplay,
   isSubagentExecutionStateRunning,
   isSubagentWorkComplete,
-} from "@/lib/domain/chat/subagents/subagent-launch";
+} from "@proliferate/product-model/chats/subagents/subagent-launch";
 import {
   formatSubagentHeaderVerb,
   isSubagentProvisioningAction,
-} from "@/lib/domain/chat/subagents/subagent-tool-presentation";
+} from "@proliferate/product-model/chats/subagents/subagent-tool-presentation";
 import {
   buildTranscriptDisplayBlocks,
-} from "@/lib/domain/chat/transcript/transcript-presentation";
+} from "@proliferate/product-model/chats/transcript/transcript-presentation";
 import {
   findTrailingLiveExplorationBlock,
-} from "@/lib/domain/chat/transcript/transcript-rendering";
+} from "@proliferate/product-model/chats/transcript/transcript-rendering";
 import { useTranscriptOpenSession } from "./TranscriptContexts";
 import {
   collectDescendantItems,

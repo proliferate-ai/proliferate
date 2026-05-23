@@ -6,7 +6,7 @@ import {
   getAuthoritativeConfigValue,
   type PendingSessionConfigChange,
   type PendingSessionConfigChanges,
-} from "@/lib/domain/sessions/pending-config";
+} from "@proliferate/product-model/sessions/pending-config";
 import {
   planBatchedStreamSideEffects,
   type ReconciledStreamConfigIntent,

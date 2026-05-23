@@ -1,5 +1,5 @@
 import { memo, type ReactNode } from "react";
-import type { TranscriptVirtualRow as TranscriptVirtualRowModel } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
+import type { TranscriptVirtualRow as TranscriptVirtualRowModel } from "@proliferate/product-model/chats/transcript/transcript-virtual-rows";
 
 export type TranscriptVirtualRowRenderer = (
   row: TranscriptVirtualRowModel,

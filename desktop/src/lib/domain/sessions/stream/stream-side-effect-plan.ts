@@ -7,11 +7,11 @@ import type {
 import type {
   PendingSessionConfigChange,
   PendingSessionConfigChanges,
-} from "@/lib/domain/sessions/pending-config";
+} from "@proliferate/product-model/sessions/pending-config";
 import {
   parseSubagentLaunchResult,
   resolveSubagentLaunchDisplay,
-} from "@/lib/domain/chat/subagents/subagent-launch";
+} from "@proliferate/product-model/chats/subagents/subagent-launch";
 
 export interface ReconciledStreamConfigIntent {
   liveConfig: SessionLiveConfigSnapshot;

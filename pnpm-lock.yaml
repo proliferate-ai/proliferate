@@ -387,6 +387,10 @@ importers:
         version: 5.9.3
 
   packages/product-model:
+    dependencies:
+      '@anyharness/sdk':
+        specifier: workspace:*
+        version: link:../../anyharness/sdk
     devDependencies:
       typescript:
         specifier: ^5.7
@@ -403,6 +407,12 @@ importers:
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.1.0)
+      react-markdown:
+        specifier: ^9
+        version: 9.1.0(@types/react@19.1.17)(react@19.1.0)
+      remark-gfm:
+        specifier: ^4
+        version: 4.0.1
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0
@@ -478,6 +488,9 @@ importers:
 
   web:
     dependencies:
+      '@anyharness/sdk':
+        specifier: workspace:*
+        version: link:../anyharness/sdk
       '@proliferate/cloud-sdk':
         specifier: workspace:*
         version: link:../cloud/sdk

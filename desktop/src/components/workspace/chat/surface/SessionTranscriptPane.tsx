@@ -14,7 +14,7 @@ import { TranscriptSwitchingPlaceholder } from "@/components/workspace/chat/surf
 import {
   resolveTranscriptOpenSessionWorkspaceId,
   type TranscriptOpenSessionRole,
-} from "@/lib/domain/chat/transcript/transcript-open-target";
+} from "@proliferate/product-model/chats/transcript/transcript-open-target";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {

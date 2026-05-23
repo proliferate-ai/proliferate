@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createTranscriptState } from "@anyharness/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { toolItem } from "@/lib/domain/chat/transcript/transcript-presentation-test-fixtures";
+import { toolItem } from "@proliferate/product-model/chats/transcript/transcript-presentation-test-fixtures";
 import { CollapsedActions, InlineToolActions } from "./CollapsedActions";
 
 vi.mock("@/hooks/workspaces/files/use-file-reference-actions", () => ({

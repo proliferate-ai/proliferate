@@ -16,7 +16,7 @@ import type {
   SessionSubagentsResponse,
   SessionReviewsResponse,
 } from "@anyharness/sdk";
-import { formatSubagentLabel } from "@/lib/domain/chat/subagents/provenance";
+import { formatSubagentLabel } from "@proliferate/product-model/chats/subagents/provenance";
 import {
   reviewAssignmentHeaderStatusLabel,
   reviewKindLabel,
@@ -31,7 +31,7 @@ import { getCoworkManagedWorkspaces } from "@/lib/access/anyharness/cowork";
 import {
   collectSubagentSessionRelationshipHints,
   type SubagentSessionRelationshipHint,
-} from "@/lib/domain/chat/subagents/session-relationship-hints";
+} from "@proliferate/product-model/chats/subagents/session-relationship-hints";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";

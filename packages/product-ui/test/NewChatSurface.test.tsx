@@ -60,7 +60,7 @@ describe("NewChatSurface", () => {
       />,
     );
 
-    expect(screen.getByText("Send").closest("button")?.disabled).toBe(true);
+    expect(screen.getByLabelText("Send message").closest("button")?.disabled).toBe(true);
 
     rerender(
       <NewChatSurface
@@ -79,7 +79,7 @@ describe("NewChatSurface", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Send"));
+    fireEvent.click(screen.getByLabelText("Send message"));
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 

@@ -1,5 +1,5 @@
 import type { CoworkArtifactSummary, TranscriptState } from "@anyharness/sdk";
-import type { PendingPromptQueueEntry } from "@/lib/domain/chat/pending-prompts/pending-prompt-queue";
+import type { PendingPromptQueueEntry } from "@proliferate/product-model/chats/pending-prompts/pending-prompt-queue";
 import { toolCallItem } from "@/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 
 const PLAYGROUND_ARTIFACT_SUMMARY: CoworkArtifactSummary = {

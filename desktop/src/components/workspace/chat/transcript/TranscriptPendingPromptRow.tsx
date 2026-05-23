@@ -15,14 +15,14 @@ import {
 import {
   isSubagentWakeProvenance,
   resolveReviewFeedbackPromptReference,
-} from "@/lib/domain/chat/subagents/provenance";
+} from "@proliferate/product-model/chats/subagents/provenance";
 import {
   resolveOptimisticPromptActionTime,
-} from "@/lib/domain/chat/transcript/transcript-action-time";
+} from "@proliferate/product-model/chats/transcript/transcript-action-time";
 import {
   resolvePendingPromptTrailingStatus,
 } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
-import type { PromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
+import type { PromptOutboxEntry } from "@proliferate/product-model/sessions/intents/session-intent-model";
 
 const OUTBOX_ACCEPTED_RUNNING_ECHO_GRACE_MS = 15_000;
 

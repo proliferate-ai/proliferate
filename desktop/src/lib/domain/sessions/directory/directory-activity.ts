@@ -3,7 +3,7 @@ import type {
   SessionStatus,
   TranscriptState,
 } from "@anyharness/sdk";
-import { resolveSessionErrorAttentionKey } from "@/lib/domain/sessions/activity";
+import { resolveSessionErrorAttentionKey } from "@proliferate/product-model/sessions/activity";
 import type {
   SessionDirectoryActivitySummary,
   SessionDirectoryEntry,

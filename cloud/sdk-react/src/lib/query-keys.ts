@@ -196,6 +196,36 @@ export function automationRunsKey(automationId: string | null) {
   return [...automationsRootKey(), "runs", automationId] as const;
 }
 
+export function agentRunConfigsRootKey() {
+  return [...cloudRootKey(), "agent-run-configs"] as const;
+}
+
+export interface AgentRunConfigsListKeyOptions {
+  ownerScope?: CloudOwnerScope | "system" | null;
+  organizationId?: string | null;
+  agentKind?: string | null;
+  usableIn?: "personal_sandboxes" | "shared_sandboxes" | null;
+  status?: "active" | "archived" | null;
+}
+
+export function agentRunConfigsListKey(
+  options: AgentRunConfigsListKeyOptions = {},
+) {
+  return [
+    ...agentRunConfigsRootKey(),
+    "list",
+    options.ownerScope ?? null,
+    options.organizationId ?? null,
+    options.agentKind ?? null,
+    options.usableIn ?? null,
+    options.status ?? null,
+  ] as const;
+}
+
+export function agentRunConfigKey(configId: string | null) {
+  return [...agentRunConfigsRootKey(), "detail", configId] as const;
+}
+
 export function organizationsRootKey() {
   return ["organizations"] as const;
 }

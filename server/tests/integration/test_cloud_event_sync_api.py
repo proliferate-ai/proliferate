@@ -109,6 +109,28 @@ class TestCloudEventSyncApi:
                         },
                     },
                 },
+                {
+                    "workspaceId": "workspace-1",
+                    "sessionId": "session-1",
+                    "seq": 6,
+                    "timestamp": "2026-05-13T00:00:05Z",
+                    "turnId": "turn-1",
+                    "event": {"type": "turn_ended", "stopReason": "end_turn"},
+                },
+                {
+                    "workspaceId": "workspace-1",
+                    "sessionId": "session-1",
+                    "seq": 7,
+                    "timestamp": "2026-05-13T00:00:06Z",
+                    "event": {
+                        "type": "pending_prompt_added",
+                        "seq": 1,
+                        "promptId": "prompt-1",
+                        "text": "queued follow-up",
+                        "contentParts": [{"type": "text", "text": "queued follow-up"}],
+                        "queuedAt": "2026-05-13T00:00:06Z",
+                    },
+                },
             ]
         }
         uploaded = await client.post(
@@ -117,10 +139,10 @@ class TestCloudEventSyncApi:
             json=batch,
         )
         assert uploaded.status_code == 200
-        assert uploaded.json()["acceptedEvents"] == 4
+        assert uploaded.json()["acceptedEvents"] == 6
         assert uploaded.json()["liveOnlyEvents"] == 1
         assert uploaded.json()["sessionAcks"] == [
-            {"sessionId": "session-1", "lastContiguousSeq": 5}
+            {"sessionId": "session-1", "lastContiguousSeq": 7}
         ]
 
         duplicate = await client.post(
@@ -130,9 +152,9 @@ class TestCloudEventSyncApi:
         )
         assert duplicate.status_code == 200
         assert duplicate.json()["acceptedEvents"] == 0
-        assert duplicate.json()["duplicateEvents"] == 4
+        assert duplicate.json()["duplicateEvents"] == 6
         assert duplicate.json()["sessionAcks"] == [
-            {"sessionId": "session-1", "lastContiguousSeq": 5}
+            {"sessionId": "session-1", "lastContiguousSeq": 7}
         ]
 
         snapshot = await client.get(
@@ -143,7 +165,7 @@ class TestCloudEventSyncApi:
         body = snapshot.json()
         assert body["session"]["sessionId"] == "session-1"
         assert body["session"]["sourceAgentKind"] == "codex"
-        assert body["session"]["lastEventSeq"] == 5
+        assert body["session"]["lastEventSeq"] == 7
         assert body["transcriptItems"][0]["text"] == "hello"
         assert body["transcriptItems"][0]["payload"]["event"]["item"]["rawInput"]["retention"] == (
             "stripped"
@@ -171,8 +193,24 @@ class TestCloudEventSyncApi:
             headers=auth.headers,
         )
         assert events.status_code == 200
-        assert [event["seq"] for event in events.json()["events"]] == [1, 3, 4, 5]
-        assert events.json()["nextCursor"] == 5
+        event_rows = events.json()["events"]
+        assert [event["seq"] for event in event_rows] == [1, 3, 4, 5, 6, 7]
+        assert events.json()["nextCursor"] == 7
+        event_by_seq = {event["seq"]: event for event in event_rows}
+        item_completed_envelope = event_by_seq[4]["envelope"]
+        assert item_completed_envelope["event"]["item"]["contentParts"] == [
+            {"type": "text", "text": "hello"}
+        ]
+        assert item_completed_envelope["event"]["item"]["rawInput"]["retention"] == "stripped"
+        assert event_by_seq[6]["envelope"]["turnId"] == "turn-1"
+        assert event_by_seq[6]["envelope"]["event"] == {
+            "type": "turn_ended",
+            "stopReason": "end_turn",
+        }
+        assert event_by_seq[7]["envelope"]["event"]["type"] == "pending_prompt_added"
+        assert event_by_seq[7]["envelope"]["event"]["contentParts"] == [
+            {"type": "text", "text": "queued follow-up"}
+        ]
 
         mismatch = dict(batch)
         mismatch_events = list(batch["events"])
@@ -318,6 +356,86 @@ class TestCloudEventSyncApi:
         assert snapshot.status_code == 200
         assert snapshot.json()["transcriptItems"] == []
         assert snapshot.json()["pendingInteractions"] == []
+
+    @pytest.mark.asyncio
+    async def test_user_prompt_echo_resolves_pending_prompt_interaction(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-event-pending-prompt",
+        )
+        target_id, worker_headers = await create_enrolled_target(
+            client,
+            db_session,
+            auth,
+            suffix="pending-prompt",
+        )
+        await seed_exposed_session_projection(
+            db_session,
+            target_id=target_id,
+            auth=auth,
+            workspace_id="workspace-pending-prompt",
+            session_id="session-pending-prompt",
+        )
+        await events_store.upsert_pending_interaction(
+            db_session,
+            target_id=UUID(target_id),
+            cloud_workspace_id=None,
+            workspace_id="workspace-pending-prompt",
+            session_id="session-pending-prompt",
+            request_id="web:pending-prompt-1",
+            seq=0,
+            occurred_at="2026-05-13T00:00:00Z",
+            kind="send_prompt",
+            title="Queued prompt",
+            description="Waiting for response.",
+            payload_json='{"text":"persist this prompt through reload"}',
+        )
+        await db_session.commit()
+
+        uploaded = await client.post(
+            "/v1/cloud/worker/events/batches",
+            headers=worker_headers,
+            json={
+                "events": [
+                    {
+                        "workspaceId": "workspace-pending-prompt",
+                        "sessionId": "session-pending-prompt",
+                        "seq": 1,
+                        "timestamp": "2026-05-13T00:00:01Z",
+                        "turnId": "turn-pending-prompt",
+                        "event": {
+                            "type": "item_completed",
+                            "item": {
+                                "kind": "user_message",
+                                "status": "completed",
+                                "promptId": "web:pending-prompt-1",
+                                "contentParts": [
+                                    {
+                                        "type": "text",
+                                        "text": "persist this prompt through reload",
+                                    }
+                                ],
+                            },
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert uploaded.status_code == 200
+        snapshot = await client.get(
+            f"/v1/cloud/sessions/session-pending-prompt/snapshot?targetId={target_id}",
+            headers=auth.headers,
+        )
+        assert snapshot.status_code == 200
+        body = snapshot.json()
+        assert body["transcriptItems"][0]["text"] == "persist this prompt through reload"
+        assert body["pendingInteractions"] == []
 
     @pytest.mark.asyncio
     async def test_worker_event_batch_discards_workspace_mismatch(

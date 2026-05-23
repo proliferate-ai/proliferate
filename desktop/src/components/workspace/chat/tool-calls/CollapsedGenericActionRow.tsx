@@ -4,9 +4,9 @@ import type {
   ToolCallItem,
 } from "@anyharness/sdk";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
-import { describeToolCallDisplay } from "@/lib/domain/chat/tools/tool-call-display";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
-import { deriveGenericToolOutput } from "@/lib/domain/chat/tools/collapsed-action-labels";
+import { describeToolCallDisplay } from "@proliferate/product-model/chats/tools/tool-call-display";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-model/chats/tools/tool-call-layout";
+import { deriveGenericToolOutput } from "@proliferate/product-model/chats/tools/collapsed-action-labels";
 import {
   ActionDisclosureRow,
   PlainActionRow,

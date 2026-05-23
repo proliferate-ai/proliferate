@@ -55,6 +55,13 @@ export interface SidebarWorkspaceGroupView {
   actions: SidebarActionView[];
 }
 
+export interface SidebarSectionMessageView {
+  title: string;
+  description?: string | null;
+  tone?: "default" | "danger";
+  status?: ReactNode;
+}
+
 export interface SidebarChatRowView {
   id: string;
   label: string;
@@ -93,6 +100,7 @@ export interface ProductSidebarProps {
   chatRows?: SidebarChatRowView[];
   account?: SidebarAccountView | null;
   footerActions?: SidebarActionView[];
+  workspaceSectionMessage?: SidebarSectionMessageView | null;
   shortcutRevealVisible?: boolean;
   onNavSelect: (id: string) => void;
   onWorkspaceSelect: (id: string) => void;
@@ -112,6 +120,7 @@ export function ProductSidebar({
   chatRows = [],
   account = null,
   footerActions = [],
+  workspaceSectionMessage = null,
   shortcutRevealVisible = false,
   onNavSelect,
   onWorkspaceSelect,
@@ -150,6 +159,7 @@ export function ProductSidebar({
         <ProductSidebarScrollableContent>
           <ProductSidebarRepositoriesSection
             groups={workspaceGroups}
+            message={workspaceSectionMessage}
             onGroupToggle={onGroupToggle}
             onWorkspaceSelect={onWorkspaceSelect}
             onAction={onAction}
@@ -390,12 +400,14 @@ function ProductSidebarThreadSection({
 
 function ProductSidebarRepositoriesSection({
   groups,
+  message,
   onGroupToggle,
   onWorkspaceSelect,
   onAction,
   shortcutRevealVisible,
 }: {
   groups: SidebarWorkspaceGroupView[];
+  message?: SidebarSectionMessageView | null;
   onGroupToggle: (id: string) => void;
   onWorkspaceSelect: (id: string) => void;
   onAction: (event: SidebarActionEvent) => void;
@@ -405,7 +417,7 @@ function ProductSidebarRepositoriesSection({
     <section>
       <ProductSidebarSectionHeader label="Repositories" />
       <div className="flex flex-col gap-px">
-        {groups.map((group) => (
+        {groups.length > 0 ? groups.map((group) => (
           <WorkspaceGroup
             key={group.id}
             group={group}
@@ -414,9 +426,43 @@ function ProductSidebarRepositoriesSection({
             onAction={onAction}
             shortcutRevealVisible={shortcutRevealVisible}
           />
-        ))}
+        )) : message ? (
+          <ProductSidebarSectionMessage message={message} />
+        ) : null}
       </div>
     </section>
+  );
+}
+
+function ProductSidebarSectionMessage({
+  message,
+}: {
+  message: SidebarSectionMessageView;
+}) {
+  return (
+    <div className="mx-2 rounded-lg border border-sidebar-border/75 px-3 py-2 text-sidebar-muted-foreground">
+      <div className="flex items-start gap-2">
+        {message.status ? (
+          <span className={`mt-0.5 shrink-0 ${
+            message.tone === "danger" ? "text-destructive" : "text-sidebar-muted-foreground"
+          }`}>
+            {message.status}
+          </span>
+        ) : null}
+        <div className="min-w-0">
+          <p className={`text-sm leading-4 ${
+            message.tone === "danger" ? "text-destructive" : "text-sidebar-foreground"
+          }`}>
+            {message.title}
+          </p>
+          {message.description ? (
+            <p className="mt-1 text-xs leading-4 text-sidebar-muted-foreground">
+              {message.description}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -593,6 +639,7 @@ function WorkspaceRow({
       archived={row.archived}
       status={row.status}
       label={row.label}
+      subtitle={row.subtitle}
       detail={row.detail}
       trailingLabel={row.trailingLabel}
       shortcutLabel={row.shortcutLabel}
@@ -608,6 +655,7 @@ export interface ProductSidebarWorkspaceRowProps extends Omit<HTMLAttributes<HTM
   archived?: boolean;
   status?: ReactNode;
   label: string;
+  subtitle?: string | null;
   detail?: ReactNode;
   trailingLabel?: string | null;
   shortcutLabel?: string | null;
@@ -621,6 +669,7 @@ export function ProductSidebarWorkspaceRow({
   archived = false,
   status = null,
   label,
+  subtitle = null,
   detail = null,
   trailingLabel = null,
   shortcutLabel = null,
@@ -630,11 +679,13 @@ export function ProductSidebarWorkspaceRow({
   className = "",
   ...props
 }: ProductSidebarWorkspaceRowProps) {
+  const hasSubtitle = Boolean(subtitle);
+
   return (
     <SidebarRowSurface
       active={active}
       onPress={onSelect}
-      className={`h-[30px] px-2 py-1 text-sm leading-4 focus-visible:outline-offset-[-2px] ${className}`}
+      className={`${hasSubtitle ? "h-[42px]" : "h-[30px]"} px-2 py-1 text-sm leading-4 focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       {hoverAction ? (
@@ -648,12 +699,20 @@ export function ProductSidebarWorkspaceRow({
         </div>
 
         <div className="ml-1.5 flex min-w-0 flex-1 items-center gap-2 pl-0.5">
-          <div className={`flex min-w-0 flex-1 self-stretch items-center gap-2 text-base leading-5 ${
+          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-base leading-5 ${
             archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
           }`}>
-            <span className="min-w-0 flex-1 truncate select-none" draggable={false}>
+            <span
+              className={`${hasSubtitle ? "max-w-full" : "min-w-0 flex-1"} truncate select-none`}
+              draggable={false}
+            >
               {label}
             </span>
+            {hasSubtitle ? (
+              <span className="max-w-full truncate text-xs leading-3 text-sidebar-muted-foreground select-none" draggable={false}>
+                {subtitle}
+              </span>
+            ) : null}
           </div>
           {detail ? (
             <div className={`flex min-w-[24px] shrink-0 items-center justify-end gap-1.5 text-sidebar-muted-foreground ${
@@ -715,6 +774,7 @@ function ChatRow({
       active={Boolean(row.active)}
       status={row.status}
       label={row.label}
+      subtitle={row.subtitle}
       detail={row.detail}
       trailingLabel={row.trailingLabel}
       hoverAction={hoverAction.length > 0 ? hoverAction : null}
@@ -727,6 +787,7 @@ export interface ProductSidebarThreadRowProps extends Omit<HTMLAttributes<HTMLEl
   active?: boolean;
   status?: ReactNode;
   label: ReactNode;
+  subtitle?: string | null;
   detail?: ReactNode;
   trailingLabel?: string | null;
   hoverAction?: ReactNode;
@@ -738,6 +799,7 @@ export function ProductSidebarThreadRow({
   active = false,
   status = null,
   label,
+  subtitle = null,
   detail = null,
   trailingLabel = null,
   hoverAction = null,
@@ -746,11 +808,13 @@ export function ProductSidebarThreadRow({
   className = "",
   ...props
 }: ProductSidebarThreadRowProps) {
+  const hasSubtitle = Boolean(subtitle);
+
   return (
     <SidebarRowSurface
       active={active}
       onPress={onSelect}
-      className={`h-[30px] pl-2 pr-1 py-1 focus-visible:outline-offset-[-2px] ${className}`}
+      className={`${hasSubtitle ? "h-[42px]" : "h-[30px]"} pl-2 pr-1 py-1 focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       {hoverAction ? (
@@ -764,8 +828,15 @@ export function ProductSidebarThreadRow({
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex flex-1 items-center gap-2 truncate text-base leading-5 text-sidebar-foreground">
-            {label}
+          <div className={`flex min-w-0 flex-1 ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} truncate text-base leading-5 text-sidebar-foreground`}>
+            <span className="max-w-full truncate">
+              {label}
+            </span>
+            {hasSubtitle ? (
+              <span className="max-w-full truncate text-xs leading-3 text-sidebar-muted-foreground">
+                {subtitle}
+              </span>
+            ) : null}
           </div>
           {detail ? (
             <div className="flex min-w-[24px] shrink-0 items-center justify-end gap-1 text-sidebar-muted-foreground">

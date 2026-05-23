@@ -37,6 +37,7 @@ from proliferate.server.cloud.events.models import (
     WorkerEventBatchResponse,
     WorkerEventSessionAck,
     pending_interaction_response,
+    session_event_envelope,
     session_projection_response,
     transcript_item_response,
 )
@@ -586,6 +587,17 @@ async def _apply_projection(
                 payload_json=payload_json,
                 completed=current_event_type == "item_completed",
             )
+            prompt_id = _str_or_none(item.get("promptId"))
+            if item.get("kind") == "user_message" and prompt_id:
+                pending_interaction = await events_store.resolve_existing_pending_interaction(
+                    db,
+                    target_id=auth.target_id,
+                    session_id=session_id,
+                    request_id=prompt_id,
+                    seq=seq,
+                    occurred_at=timestamp,
+                    payload_json=payload_json,
+                )
     elif include_transcript and current_event_type == "interaction_requested":
         request_id = _str_or_none(event_payload.get("requestId"))
         if request_id:
@@ -623,6 +635,7 @@ async def _apply_projection(
         session=session_projection,
         transcript_item=transcript_item,
         pending_interaction=pending_interaction,
+        envelope=session_event_envelope(payload_json),
     )
 
 

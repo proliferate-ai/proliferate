@@ -3,7 +3,7 @@ import {
   resolveModelDisplayName,
   shouldHideModel,
 } from "@/lib/domain/chat/models/model-display";
-import type { PendingSessionConfigChangeStatus } from "@/lib/domain/sessions/pending-config";
+import type { PendingSessionConfigChangeStatus } from "@proliferate/product-model/sessions/pending-config";
 import {
   dynamicLaunchAgentAcceptsModel,
   type DesktopAgentLaunchAgent,

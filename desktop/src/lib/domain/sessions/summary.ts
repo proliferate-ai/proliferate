@@ -8,7 +8,7 @@ import type {
   SessionStatus,
   TranscriptState,
 } from "@anyharness/sdk";
-import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
+import { resolveStatusFromExecutionSummary } from "@proliferate/product-model/sessions/activity";
 
 export interface SessionSlotSummaryPatch {
   agentKind: string;

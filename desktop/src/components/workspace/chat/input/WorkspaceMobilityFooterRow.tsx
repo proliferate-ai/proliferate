@@ -8,7 +8,7 @@ import {
   FolderOpen,
   Spinner,
 } from "@/components/ui/icons";
-import { ComposerControlButton } from "./ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 import { WorkspaceMobilityLocationPopover } from "./WorkspaceMobilityLocationPopover";
 import { WorkspaceOpenInWebFooterControl } from "./WorkspaceOpenInWebFooterControl";
 import { WorkspaceRemoteAccessFooterControl } from "./WorkspaceRemoteAccessFooterControl";

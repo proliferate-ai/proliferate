@@ -640,6 +640,15 @@ def build_worker_config(
     return "\n".join(lines) + "\n"
 
 
+def worker_db_path(runtime_context: SandboxRuntimeContext) -> str:
+    return f"{runtime_context.home_dir}/.proliferate/worker/worker.sqlite3"
+
+
+def worker_db_sidecar_paths(runtime_context: SandboxRuntimeContext) -> tuple[str, ...]:
+    db_path = worker_db_path(runtime_context)
+    return (db_path, f"{db_path}-wal", f"{db_path}-shm", f"{db_path}-journal")
+
+
 def _serve_args(provider: SandboxProvider) -> list[str]:
     args = ["serve", "--require-bearer-auth"]
     if provider.runtime_endpoint_handles_cors:
@@ -732,6 +741,36 @@ def build_detached_supervisor_launch_command(runtime_context: SandboxRuntimeCont
             ),
         ]
     )
+    return "bash -lc " + shlex.quote(script)
+
+
+def build_supervised_runtime_stop_command(runtime_context: SandboxRuntimeContext) -> str:
+    supervisor_binary = supervisor_binary_path(runtime_context)
+    config_path = supervisor_config_path(runtime_context)
+    patterns = [
+        f"{_pgrep_pattern_for_path(supervisor_binary)} --config {config_path} run",
+        _pgrep_pattern_for_path(runtime_context.runtime_binary_path),
+        _pgrep_pattern_for_path(worker_binary_path(runtime_context)),
+    ]
+    kill_lines: list[str] = [
+        "current_pid=$$",
+        "parent_pid=$PPID",
+    ]
+    for pattern in patterns:
+        quoted_pattern = shlex.quote(pattern)
+        kill_lines.extend(
+            [
+                f"pids=$(pgrep -f {quoted_pattern} || true)",
+                'if [ -n "$pids" ]; then',
+                "  for pid in $pids; do",
+                '    if [ "$pid" != "$current_pid" ] && [ "$pid" != "$parent_pid" ]; then',
+                '      kill "$pid" || true',
+                "    fi",
+                "  done",
+                "fi",
+            ]
+        )
+    script = "\n".join(["set -eu", *kill_lines, "sleep 1"])
     return "bash -lc " + shlex.quote(script)
 
 

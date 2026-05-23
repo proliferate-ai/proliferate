@@ -3,7 +3,7 @@
 import { cleanup, render } from "@testing-library/react";
 import { createTranscriptState, type ToolCallItem } from "@anyharness/sdk";
 import { afterEach, describe, expect, it } from "vitest";
-import { toolItem } from "@/lib/domain/chat/transcript/transcript-presentation-test-fixtures";
+import { toolItem } from "@proliferate/product-model/chats/transcript/transcript-presentation-test-fixtures";
 import { ProposedPlanToolCallIdsProvider } from "./ProposedPlanToolCallIdsContext";
 import { TranscriptItemBlock } from "./TranscriptItemBlock";
 

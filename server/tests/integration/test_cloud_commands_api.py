@@ -16,6 +16,7 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db.models.cloud.agent_auth import SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
+from proliferate.db.models.cloud.sync import CloudPendingInteraction
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
@@ -28,8 +29,9 @@ from proliferate.server.cloud.agent_auth.service import (
     request_agent_auth_refresh_for_profile_target,
 )
 from proliferate.server.cloud.commands import service as command_service
+from proliferate.server.cloud.runtime import wake as runtime_wake
 from proliferate.server.cloud.worker import service as worker_service
-from proliferate.utils.crypto import encrypt_json
+from proliferate.utils.crypto import encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
@@ -412,6 +414,13 @@ class TestCloudCommandsApi:
         command = created.json()
         assert command["status"] == "queued"
         assert command["targetId"] == target_id
+
+        immediate_status = await client.get(
+            f"/v1/cloud/commands/{command['commandId']}",
+            headers=auth.headers,
+        )
+        assert immediate_status.status_code == 200
+        assert immediate_status.json()["status"] == "queued"
 
         duplicate = await client.post(
             "/v1/cloud/commands",
@@ -1163,6 +1172,436 @@ class TestCloudCommandsApi:
         assert command_payload["requiredRuntimeConfigSequence"] == 1
         assert command_payload["requiredRuntimeConfigRevisionId"]
         assert command_payload["requiredRuntimeConfigContentHash"]
+
+    @pytest.mark.asyncio
+    async def test_web_send_prompt_records_pending_prompt_interaction(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-pending-prompt",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="pending-prompt",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="pending-prompt",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-pending-prompt",
+        )
+        await db_session.commit()
+
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "web-pending-prompt",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-pending-prompt",
+                "kind": "send_prompt",
+                "source": "web",
+                "payload": {
+                    "text": "persist this prompt through reload",
+                    "promptId": "web:pending-prompt-1",
+                },
+            },
+        )
+
+        assert created.status_code == 200
+        pending = (
+            await db_session.execute(
+                select(CloudPendingInteraction).where(
+                    CloudPendingInteraction.target_id == target_uuid,
+                    CloudPendingInteraction.session_id == "session-pending-prompt",
+                    CloudPendingInteraction.request_id == "web:pending-prompt-1",
+                )
+            )
+        ).scalar_one()
+        assert pending.cloud_workspace_id == UUID(cloud_workspace_id)
+        assert pending.workspace_id == "anyharness-managed-pending-prompt"
+        assert pending.kind == "send_prompt"
+        assert pending.status == "pending"
+        assert pending.description == "Waiting for response."
+        assert json.loads(pending.payload_json or "{}")["text"] == (
+            "persist this prompt through reload"
+        )
+
+    @pytest.mark.asyncio
+    async def test_web_queued_command_status_expires_stale_command(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-web-expire",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="web-expire",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="web-expire",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-web-expire",
+        )
+        await db_session.commit()
+
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "web-stale-command",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-web-expire",
+                "kind": "send_prompt",
+                "source": "web",
+                "payload": {
+                    "text": "stale web prompt",
+                    "promptId": "web:stale-prompt",
+                },
+            },
+        )
+        assert created.status_code == 200
+        command_id = UUID(created.json()["commandId"])
+        command = await db_session.get(CloudCommand, command_id)
+        assert command is not None
+        command.created_at = datetime.now(UTC) - timedelta(minutes=5)
+        command.updated_at = command.created_at
+        await db_session.commit()
+
+        status = await client.get(f"/v1/cloud/commands/{command_id}", headers=auth.headers)
+
+        assert status.status_code == 200
+        payload = status.json()
+        assert payload["status"] == "expired"
+        assert payload["errorCode"] == "web_command_queue_timeout"
+        assert "timed out" in payload["errorMessage"]
+        pending_interaction = (
+            await db_session.execute(
+                select(CloudPendingInteraction)
+                .where(CloudPendingInteraction.request_id == "web:stale-prompt")
+            )
+        ).scalar_one()
+        assert pending_interaction.status == "failed"
+        assert pending_interaction.payload_json is not None
+        interaction_payload = json.loads(pending_interaction.payload_json)
+        assert interaction_payload["commandId"] == str(command_id)
+        assert interaction_payload["status"] == "expired"
+        assert interaction_payload["errorCode"] == "web_command_queue_timeout"
+
+    @pytest.mark.asyncio
+    async def test_worker_lease_expires_stale_web_command(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-web-expire-lease",
+        )
+        target_id, worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="web-expire-lease",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="web-expire-lease",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-web-expire-lease",
+        )
+        await db_session.commit()
+
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "web-stale-command-lease",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-web-expire-lease",
+                "kind": "send_prompt",
+                "source": "web",
+                "payload": {
+                    "text": "stale web prompt from lease",
+                    "promptId": "web:stale-prompt-lease",
+                },
+            },
+        )
+        assert created.status_code == 200
+        command_id = UUID(created.json()["commandId"])
+        command = await db_session.get(CloudCommand, command_id)
+        assert command is not None
+        command.created_at = datetime.now(UTC) - timedelta(minutes=5)
+        command.updated_at = command.created_at
+        await db_session.commit()
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["send_prompt", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+
+        assert lease.status_code == 200
+        assert lease.json()["command"] is None
+        await db_session.refresh(command)
+        assert command.status == "expired"
+        assert command.error_code == "web_command_queue_timeout"
+        pending_interaction = (
+            await db_session.execute(
+                select(CloudPendingInteraction)
+                .where(CloudPendingInteraction.request_id == "web:stale-prompt-lease")
+            )
+        ).scalar_one()
+        assert pending_interaction.status == "failed"
+
+        leased_created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "web-stale-leased-command",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-web-expire-lease",
+                "kind": "send_prompt",
+                "source": "web",
+                "payload": {
+                    "text": "stale leased web prompt",
+                    "promptId": "web:stale-leased-prompt",
+                },
+            },
+        )
+        assert leased_created.status_code == 200
+        leased_command_id = UUID(leased_created.json()["commandId"])
+        leased_command = await db_session.get(CloudCommand, leased_command_id)
+        assert leased_command is not None
+        leased_command.status = "leased"
+        leased_command.lease_id = "stale-lease"
+        leased_command.lease_expires_at = datetime.now(UTC) - timedelta(minutes=1)
+        leased_command.created_at = datetime.now(UTC) - timedelta(minutes=5)
+        leased_command.updated_at = leased_command.created_at
+        await db_session.commit()
+
+        leased_retry = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["send_prompt", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+
+        assert leased_retry.status_code == 200
+        assert leased_retry.json()["command"] is None
+        await db_session.refresh(leased_command)
+        assert leased_command.status == "expired"
+        assert leased_command.error_code == "web_command_queue_timeout"
+
+    @pytest.mark.asyncio
+    async def test_managed_slot_wake_resumes_command_runtime_environment(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-wake-runtime",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="wake-runtime",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="wake-runtime",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-wake-runtime",
+        )
+        workspace = await cloud_workspaces.get_cloud_workspace_by_id(
+            db_session,
+            UUID(cloud_workspace_id),
+        )
+        assert workspace is not None
+        runtime_environment = await cloud_runtime_environments.ensure_runtime_environment_for_workspace(
+            db_session,
+            workspace,
+        )
+        slot = await ensure_profile_slot(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        runtime_environment.active_sandbox_id = slot.id
+        runtime_environment.target_id = target_uuid
+        runtime_environment.runtime_token_ciphertext = encrypt_text("runtime-token")
+        await db_session.commit()
+        monkeypatch.setattr(
+            command_service,
+            "kick_off_managed_slot_wake",
+            lambda _target_id, _command_id=None: None,
+        )
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-wake-runtime",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-wake-runtime",
+                "kind": "send_prompt",
+                "payload": {"text": "wake runtime"},
+            },
+        )
+        assert created.status_code == 200, created.text
+        command_id = UUID(created.json()["commandId"])
+
+        class _Allowed:
+            allowed = True
+            message = None
+            start_block_reason = None
+
+        async def _allow_sandbox_start(**_kwargs: object) -> _Allowed:
+            return _Allowed()
+
+        wake_calls: list[dict[str, object]] = []
+
+        async def _record_runtime_ready(
+            environment: object,
+            *,
+            workspace_id: UUID,
+            allow_launcher_restart: bool,
+            access_token: str,
+            force_launcher_restart: bool,
+            refresh_worker_enrollment_on_restart: bool,
+        ) -> str:
+            wake_calls.append(
+                {
+                    "environment_id": getattr(environment, "id"),
+                    "workspace_id": workspace_id,
+                    "allow_launcher_restart": allow_launcher_restart,
+                    "access_token": access_token,
+                    "force_launcher_restart": force_launcher_restart,
+                    "refresh_worker_enrollment_on_restart": refresh_worker_enrollment_on_restart,
+                }
+            )
+            return "https://runtime.example.test"
+
+        monkeypatch.setattr(
+            runtime_wake,
+            "authorize_sandbox_start_for_billing_subject",
+            _allow_sandbox_start,
+        )
+        monkeypatch.setattr(
+            runtime_wake,
+            "ensure_environment_runtime_ready",
+            _record_runtime_ready,
+        )
+
+        await runtime_wake.run_managed_slot_wake_job(target_uuid, command_id=command_id)
+
+        assert wake_calls == [
+            {
+                "environment_id": runtime_environment.id,
+                "workspace_id": UUID(cloud_workspace_id),
+                "allow_launcher_restart": True,
+                "access_token": "runtime-token",
+                "force_launcher_restart": True,
+                "refresh_worker_enrollment_on_restart": True,
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_managed_materialize_and_start_session_create_exposure_cursor(
@@ -2469,6 +2908,187 @@ class TestCloudCommandsApi:
         payload = json.loads(command.payload_json)
         assert payload["workspaceId"] == "anyharness-managed-runtime-config-cloud-workspace"
         assert payload["requiredRuntimeConfigRevisionId"] == str(revision.id)
+        assert command.cloud_workspace_id == UUID(cloud_workspace_id)
+        await db_session.rollback()
+
+    @pytest.mark.asyncio
+    async def test_managed_send_prompt_with_cloud_workspace_uses_runtime_state(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-send-prompt-runtime-state",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="send-prompt-runtime-state",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_auth_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+        )
+        revision, _created = await runtime_config_store.upsert_revision_and_current(
+            db_session,
+            sandbox_profile_id=profile.id,
+            content_hash=f"sha256:{profile.id.hex}:send-prompt-runtime-state",
+            manifest_json='{"mcpServers":[],"skills":[],"blockingErrors":[]}',
+            warnings_json=None,
+            source="test",
+            generated_by_user_id=UUID(auth.user_id),
+        )
+        state = (
+            await db_session.execute(
+                select(SandboxProfileTargetState).where(
+                    SandboxProfileTargetState.sandbox_profile_id == profile.id,
+                    SandboxProfileTargetState.target_id == target_uuid,
+                )
+            )
+        ).scalar_one()
+        state.runtime_config_status = "applied"
+        state.applied_runtime_config_revision_id = str(revision.id)
+        state.applied_runtime_config_sequence = revision.sequence
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="send-prompt-runtime-state",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-send-prompt-runtime-state",
+        )
+        assert not await target_config_store.list_target_configs(
+            db_session,
+            target_id=target_uuid,
+        )
+        await db_session.commit()
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "send-prompt-runtime-state",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-send-prompt-runtime-state",
+                "kind": "send_prompt",
+                "payload": {"blocks": [{"type": "text", "text": "hello"}]},
+            },
+        )
+
+        assert created.status_code == 200, created.text
+        command = await db_session.get(
+            CloudCommand,
+            UUID(created.json()["commandId"]),
+        )
+        assert command is not None
+        payload = json.loads(command.payload_json)
+        assert payload["sandboxProfileId"] == str(profile.id)
+        assert payload["requiredRuntimeConfigRevisionId"] == str(revision.id)
+        assert command.cloud_workspace_id == UUID(cloud_workspace_id)
+        await db_session.rollback()
+
+    @pytest.mark.asyncio
+    async def test_managed_update_session_config_with_cloud_workspace_uses_runtime_state(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-update-config-runtime-state",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="update-config-runtime-state",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_auth_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+        )
+        revision, _created = await runtime_config_store.upsert_revision_and_current(
+            db_session,
+            sandbox_profile_id=profile.id,
+            content_hash=f"sha256:{profile.id.hex}:update-config-runtime-state",
+            manifest_json='{"mcpServers":[],"skills":[],"blockingErrors":[]}',
+            warnings_json=None,
+            source="test",
+            generated_by_user_id=UUID(auth.user_id),
+        )
+        state = (
+            await db_session.execute(
+                select(SandboxProfileTargetState).where(
+                    SandboxProfileTargetState.sandbox_profile_id == profile.id,
+                    SandboxProfileTargetState.target_id == target_uuid,
+                )
+            )
+        ).scalar_one()
+        state.runtime_config_status = "applied"
+        state.applied_runtime_config_revision_id = str(revision.id)
+        state.applied_runtime_config_sequence = revision.sequence
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="update-config-runtime-state",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-update-config-runtime-state",
+        )
+        assert not await target_config_store.list_target_configs(
+            db_session,
+            target_id=target_uuid,
+        )
+        await db_session.commit()
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "update-config-runtime-state",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-update-config-runtime-state",
+                "kind": "update_session_config",
+                "payload": {"configId": "model", "value": "gpt-5.4-mini"},
+            },
+        )
+
+        assert created.status_code == 200, created.text
+        command = await db_session.get(
+            CloudCommand,
+            UUID(created.json()["commandId"]),
+        )
+        assert command is not None
+        assert json.loads(command.payload_json) == {
+            "configId": "model",
+            "value": "gpt-5.4-mini",
+        }
         assert command.cloud_workspace_id == UUID(cloud_workspace_id)
         await db_session.rollback()
 

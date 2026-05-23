@@ -9,6 +9,7 @@ import shlex
 import time
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
+from urllib.parse import urlparse
 from uuid import UUID
 
 from proliferate.auth.identity.store import get_ready_github_grant_for_user
@@ -351,17 +352,77 @@ def _emit_cloud_event(message: str, payload: dict[str, object]) -> None:
     log_cloud_event(message, **payload)  # type: ignore[arg-type]
 
 
+_LOCAL_CLOUD_BASE_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+
+
+def _is_local_cloud_base_url(value: str) -> bool:
+    parsed = urlparse(value)
+    hostname = (parsed.hostname or "").lower()
+    return hostname in _LOCAL_CLOUD_BASE_HOSTS or hostname.endswith(".localhost")
+
+
 def _cloud_base_url() -> str:
-    for candidate in (
-        settings.cloud_worker_base_url,
-        settings.api_base_url,
-        settings.cloud_mcp_oauth_callback_base_url,
-        settings.cloud_mcp_oauth_callback_fallback_base_url,
+    local_candidates: list[tuple[str, str]] = []
+    for source, candidate in (
+        ("CLOUD_WORKER_BASE_URL", settings.cloud_worker_base_url),
+        ("API_BASE_URL", settings.api_base_url),
+        ("CLOUD_MCP_OAUTH_CALLBACK_BASE_URL", settings.cloud_mcp_oauth_callback_base_url),
+        (
+            "CLOUD_MCP_OAUTH_CALLBACK_FALLBACK_BASE_URL",
+            settings.cloud_mcp_oauth_callback_fallback_base_url,
+        ),
     ):
         normalized = candidate.strip().rstrip("/")
-        if normalized:
-            return normalized
-    return "http://localhost:8000"
+        if not normalized:
+            continue
+        if _is_local_cloud_base_url(normalized):
+            local_candidates.append((source, normalized))
+            continue
+        return normalized
+
+    detail = (
+        " Managed cloud provisioning is currently configured only with local callback URLs: "
+        + ", ".join(f"{source}={value}" for source, value in local_candidates)
+        + "."
+        if local_candidates
+        else ""
+    )
+    raise CloudApiError(
+        "cloud_worker_base_url_required",
+        "Managed cloud worker enrollment requires CLOUD_WORKER_BASE_URL to be a public URL "
+        "reachable from the sandbox. Start an HTTPS tunnel to this server and set "
+        "CLOUD_WORKER_BASE_URL to that tunnel URL."
+        + detail,
+        status_code=400,
+    )
+
+
+async def _log_runtime_diagnostics(
+    message: str,
+    *,
+    provider: SandboxProvider,
+    connected: ConnectedSandbox,
+    workspace_id: UUID,
+) -> None:
+    debug_report = await collect_runtime_debug_report(
+        provider,
+        connected.sandbox,
+        workspace_id=workspace_id,
+        runtime_context=connected.runtime_context,
+    )
+    log_cloud_event(
+        message,
+        level=logging.WARNING,
+        workspace_id=workspace_id,
+        runtime_url=connected.endpoint.runtime_url,
+        launcher_preview=debug_report.get("launcher"),
+        log_preview=debug_report.get("log"),
+        supervisor_config_preview=debug_report.get("supervisor_config"),
+        supervisor_log_preview=debug_report.get("supervisor_log"),
+        process_preview=debug_report.get("processes"),
+        binary_preview=debug_report.get("binary"),
+        workdir_preview=debug_report.get("workdir"),
+    )
 
 
 async def _set_workspace_status(
@@ -775,6 +836,7 @@ async def _launch_supervised_runtime_bundle(
     *,
     runtime_env: dict[str, str],
     runtime_token: str,
+    cloud_base_url: str,
     cloud_sandbox_id: UUID,
     slot_generation: int,
 ) -> UUID:
@@ -811,7 +873,7 @@ async def _launch_supervised_runtime_bundle(
         connected.sandbox,
         config_path,
         build_worker_config(
-            cloud_base_url=_cloud_base_url(),
+            cloud_base_url=cloud_base_url,
             enrollment_token=enrollment.enrollment_token,
             anyharness_base_url=local_anyharness_base_url(provider),
             anyharness_bearer_token=runtime_token,
@@ -1047,6 +1109,7 @@ async def _launch_and_connect_runtime(
     provider: SandboxProvider,
     connected: ConnectedSandbox,
     *,
+    cloud_base_url: str,
     cloud_sandbox_id: UUID,
     slot_generation: int,
 ) -> tuple[ConnectedSandbox, RuntimeHandshake]:
@@ -1065,6 +1128,7 @@ async def _launch_and_connect_runtime(
         connected,
         runtime_env=runtime_env,
         runtime_token=runtime_token,
+        cloud_base_url=cloud_base_url,
         cloud_sandbox_id=cloud_sandbox_id,
         slot_generation=slot_generation,
     )
@@ -1094,24 +1158,11 @@ async def _launch_and_connect_runtime(
             delay_seconds=0.5,
         )
     except Exception:
-        debug_report = await collect_runtime_debug_report(
-            provider,
-            connected.sandbox,
-            workspace_id=ctx.workspace_id,
-            runtime_context=connected.runtime_context,
-        )
-        log_cloud_event(
+        await _log_runtime_diagnostics(
             "cloud runtime launch diagnostics",
-            level=logging.WARNING,
+            provider=provider,
+            connected=connected,
             workspace_id=ctx.workspace_id,
-            runtime_url=connected.endpoint.runtime_url,
-            launcher_preview=debug_report.get("launcher"),
-            log_preview=debug_report.get("log"),
-            supervisor_config_preview=debug_report.get("supervisor_config"),
-            supervisor_log_preview=debug_report.get("supervisor_log"),
-            process_preview=debug_report.get("processes"),
-            binary_preview=debug_report.get("binary"),
-            workdir_preview=debug_report.get("workdir"),
         )
         raise
     tracker.complete(runtime_url=connected.endpoint.runtime_url)
@@ -1126,7 +1177,16 @@ async def _launch_and_connect_runtime(
         detail="Waiting for Proliferate Worker enrollment",
     )
     tracker.begin(ProvisionStep.start_worker_process, target_id=str(target_id))
-    await _wait_for_worker_target_online(target_id, workspace_id=ctx.workspace_id)
+    try:
+        await _wait_for_worker_target_online(target_id, workspace_id=ctx.workspace_id)
+    except Exception:
+        await _log_runtime_diagnostics(
+            "cloud worker enrollment diagnostics",
+            provider=provider,
+            connected=connected,
+            workspace_id=ctx.workspace_id,
+        )
+        raise
     tracker.complete(target_id=str(target_id))
     await _request_agent_auth_refresh_and_wait(
         tracker,
@@ -1292,6 +1352,7 @@ async def provision_workspace(
     provider: SandboxProvider | None = None
     connected: ConnectedSandbox | None = None
     sandbox_record_id: UUID | None = None
+    worker_cloud_base_url: str | None = None
     allocated_sandbox_this_attempt = False
     launched_runtime_this_attempt = False
 
@@ -1335,6 +1396,7 @@ async def provision_workspace(
         if reused_runtime is not None:
             connected, sandbox_record_id, slot_generation, runtime_token = reused_runtime
         else:
+            worker_cloud_base_url = _cloud_base_url()
             await _set_workspace_status(
                 workspace_id,
                 CloudWorkspaceStatus.materializing,
@@ -1424,7 +1486,16 @@ async def provision_workspace(
                 detail="Waiting for Proliferate Worker enrollment",
             )
             tracker.begin(ProvisionStep.start_worker_process, target_id=str(ctx.target_id))
-            await _wait_for_worker_target_online(ctx.target_id, workspace_id=ctx.workspace_id)
+            try:
+                await _wait_for_worker_target_online(ctx.target_id, workspace_id=ctx.workspace_id)
+            except Exception:
+                await _log_runtime_diagnostics(
+                    "cloud worker enrollment diagnostics",
+                    provider=provider,
+                    connected=connected,
+                    workspace_id=ctx.workspace_id,
+                )
+                raise
             tracker.complete(target_id=str(ctx.target_id), reused_runtime=True)
             await _request_agent_auth_refresh_and_wait(
                 tracker,
@@ -1452,6 +1523,8 @@ async def provision_workspace(
                 runtime_token=runtime_token,
             )
         else:
+            if worker_cloud_base_url is None:
+                worker_cloud_base_url = _cloud_base_url()
             await _set_workspace_status(
                 workspace_id,
                 CloudWorkspaceStatus.materializing,
@@ -1462,6 +1535,7 @@ async def provision_workspace(
                 ctx,
                 provider,
                 connected,
+                cloud_base_url=worker_cloud_base_url,
                 cloud_sandbox_id=sandbox_record_id,
                 slot_generation=slot_generation,
             )

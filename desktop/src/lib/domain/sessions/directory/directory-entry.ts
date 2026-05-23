@@ -6,7 +6,7 @@ import type {
   SessionMcpBindingSummary,
   SessionStatus,
 } from "@anyharness/sdk";
-import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
+import type { PendingSessionConfigChanges } from "@proliferate/product-model/sessions/pending-config";
 import {
   sessionRelationshipEqual,
   type SessionChildRelationship,

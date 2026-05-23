@@ -7,7 +7,7 @@ import {
   FolderOpen,
   GitBranch,
 } from "@/components/ui/icons";
-import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 import { WorkspaceMobilityFooterProgressStatus } from "@/components/workspace/chat/input/WorkspaceMobilityFooterRow";
 import { WorkspaceMobilityLocationPopover } from "@/components/workspace/chat/input/WorkspaceMobilityLocationPopover";
 import { WorkspaceMobilityOverlayView } from "@/components/workspace/chat/surface/WorkspaceMobilityOverlay";

@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core.js";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import { subscribeCloudSse, type CloudSseSubscription } from "../streams/sse.js";
 import type {
   CloudCommandStatusPatch,
@@ -29,8 +29,8 @@ export interface SubscribeCloudSessionOptions
 export function subscribeSession(
   sessionId: string,
   options: SubscribeCloudSessionOptions,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): CloudSseSubscription<CloudSessionLiveEvent> {
-  const client = getProliferateClient();
   const onEvent = liveEventHandler(options);
   return subscribeCloudSse({
     url: client.buildUrl(`/v1/cloud/sessions/${encodeURIComponent(sessionId)}/stream`, {
@@ -51,8 +51,8 @@ export function subscribeWorkspace(
     CloudWorkspaceLiveEvent,
     CloudWorkspaceProjectionPatch
   >,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): CloudSseSubscription<CloudWorkspaceLiveEvent> {
-  const client = getProliferateClient();
   const onEvent = liveEventHandler(options);
   return subscribeCloudSse({
     url: client.buildUrl(`/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/stream`, {
@@ -72,8 +72,8 @@ export function subscribeTarget(
     CloudTargetLiveEvent,
     CloudTargetPatch | CloudCommandStatusPatch
   >,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): CloudSseSubscription<CloudTargetLiveEvent> {
-  const client = getProliferateClient();
   const onEvent = liveEventHandler(options);
   return subscribeCloudSse({
     url: client.buildUrl(`/v1/cloud/targets/${encodeURIComponent(targetId)}/stream`, {

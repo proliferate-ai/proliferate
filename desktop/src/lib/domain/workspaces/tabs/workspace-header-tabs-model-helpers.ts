@@ -3,7 +3,7 @@ import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import {
   resolveSessionViewState,
   type SessionViewState,
-} from "@/lib/domain/sessions/activity";
+} from "@proliferate/product-model/sessions/activity";
 import type { ChatVisibilityCandidate } from "@/lib/domain/workspaces/tabs/visibility";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
 import type { SessionDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";

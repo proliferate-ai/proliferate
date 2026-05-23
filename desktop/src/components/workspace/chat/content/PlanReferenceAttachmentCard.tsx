@@ -3,7 +3,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { FileText, X } from "@/components/ui/icons";
 import { CollapsiblePlanCard } from "@/components/workspace/chat/content/CollapsiblePlanCard";
 import { PlanReferencePreviewDialog } from "@/components/workspace/chat/plans/PlanReferencePreviewDialog";
-import type { PromptDisplayPlanPart } from "@/lib/domain/chat/composer/prompt-display-parts";
+import type { PromptDisplayPlanPart } from "@proliferate/product-model/chats/composer/prompt-display-parts";
 
 type PlanReferenceAttachmentCardVariant = "draft" | "compact" | "transcript";
 

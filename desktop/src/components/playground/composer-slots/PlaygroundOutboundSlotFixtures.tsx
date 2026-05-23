@@ -14,7 +14,7 @@ import {
 import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueEntry,
-} from "@/lib/domain/chat/pending-prompts/pending-prompt-queue";
+} from "@proliferate/product-model/chats/pending-prompts/pending-prompt-queue";
 import { noop } from "@/components/playground/PlaygroundComposerActions";
 
 export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {

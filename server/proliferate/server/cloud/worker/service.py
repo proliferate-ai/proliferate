@@ -38,6 +38,7 @@ from proliferate.server.cloud.events.models import (
     WorkerEventBatchResponse,
 )
 from proliferate.server.cloud.events.service import ingest_worker_event_batch
+from proliferate.server.cloud.commands import service as command_service
 from proliferate.server.cloud.live.service import (
     defer_live_publishes_until_commit,
     publish_command_status_after_commit,
@@ -881,6 +882,18 @@ async def lease_worker_command(
     supported_kinds = normalize_supported_command_kinds(body.supported_kinds)
     lease_seconds = clamp_command_lease_seconds(body.lease_timeout_seconds)
     now = utcnow()
+    target = await targets_store.get_target_by_id(db, auth.target_id)
+    if target is None:
+        raise CloudApiError(
+            "cloud_worker_target_missing",
+            "Worker target no longer exists.",
+            status_code=401,
+        )
+    await require_current_managed_worker_slot(db, auth=auth, target=target)
+    expired_commands = await command_service.expire_stale_web_commands_for_target(
+        db,
+        target_id=auth.target_id,
+    )
     command = await commands_store.lease_next_command(
         db,
         target_id=auth.target_id,
@@ -896,6 +909,7 @@ async def lease_worker_command(
         # must be committed before the HTTP response is returned, otherwise the
         # delivery request can race the request-session commit and fail closed as
         # "not leased by this worker."
+    if command is not None or expired_commands:
         await db.commit()
     return WorkerCommandLeaseResponse(
         command=_command_envelope(command) if command is not None else None,

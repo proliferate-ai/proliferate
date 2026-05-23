@@ -1,7 +1,7 @@
 import { CHAT_COMPOSER_LABELS } from "@/copy/chat/chat-copy";
 import { COMPOSER_SHORTCUTS } from "@/config/shortcuts";
 import { ArrowUp, StopSquare } from "@/components/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { ComposerActionButton } from "@proliferate/product-ui/chat/composer/ComposerActionButton";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 
@@ -20,8 +20,6 @@ export function ChatComposerActions({
   onSubmit: () => void;
   onCancel: () => void;
 }) {
-  const buttonClassName =
-    "size-7 rounded-full bg-[var(--color-composer-send-background)] px-0 text-[color:var(--color-composer-send-foreground)] shadow-none hover:bg-[var(--color-composer-send-background)] hover:opacity-90 disabled:cursor-default disabled:opacity-50";
   const startHoverSample = (sampleKey: "send_button" | "stop_button") => {
     startMeasurementOperation({
       kind: "hover_sample",
@@ -41,36 +39,30 @@ export function ChatComposerActions({
     const canQueue = !isEmpty && !isDisabled;
     if (canQueue) {
       return (
-        <Button
+        <ComposerActionButton
           type="button"
-          variant="ghost"
-          size="icon-sm"
           onClick={onSubmit}
           onPointerEnter={() => startHoverSample("send_button")}
           title={`${CHAT_COMPOSER_LABELS.send} to queue`}
           aria-label={`${CHAT_COMPOSER_LABELS.send} to queue`}
           data-chat-send-button
-          className={buttonClassName}
         >
           <ArrowUp className="size-3.5" />
-        </Button>
+        </ComposerActionButton>
       );
     }
 
     return (
-      <Button
+      <ComposerActionButton
         type="button"
-        variant="ghost"
-        size="icon-sm"
         onClick={onCancel}
         onPointerEnter={() => startHoverSample("stop_button")}
         title={CHAT_COMPOSER_LABELS.stop}
         aria-label={CHAT_COMPOSER_LABELS.stop}
         data-chat-stop-button
-        className={buttonClassName}
       >
         <StopSquare className="size-3.5" />
-      </Button>
+      </ComposerActionButton>
     );
   }
 
@@ -81,19 +73,16 @@ export function ChatComposerActions({
     : `${CHAT_COMPOSER_LABELS.send} (${submitShortcutLabel})`;
 
   return (
-    <Button
+    <ComposerActionButton
       type="button"
-      variant="ghost"
-      size="icon-sm"
       onClick={canSubmit ? onSubmit : undefined}
       onPointerEnter={() => startHoverSample("send_button")}
       disabled={!canSubmit}
       title={title}
       aria-label={title}
       data-chat-send-button
-      className={buttonClassName}
     >
       <ArrowUp className="size-3.5" />
-    </Button>
+    </ComposerActionButton>
   );
 }

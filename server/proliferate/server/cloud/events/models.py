@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from proliferate.db.store.cloud_sync import events as events_store
 
@@ -113,6 +113,7 @@ class CloudSessionEventResponse(BaseModel):
     item_id: str | None = Field(default=None, serialization_alias="itemId")
     occurred_at: str | None = Field(default=None, serialization_alias="occurredAt")
     payload: dict[str, object] | None = None
+    envelope: WorkerSessionEventEnvelope | None = None
 
 
 class CloudSessionPatchResponse(BaseModel):
@@ -129,6 +130,7 @@ class CloudSessionPatchResponse(BaseModel):
         default=None,
         serialization_alias="pendingInteraction",
     )
+    envelope: WorkerSessionEventEnvelope | None = None
 
 
 def session_projection_response(
@@ -202,6 +204,7 @@ def session_event_response(
         item_id=value.item_id,
         occurred_at=value.occurred_at,
         payload=_json_dict(value.payload_json),
+        envelope=session_event_envelope(value.payload_json),
     )
 
 
@@ -214,6 +217,7 @@ def session_patch_response(
     session: events_store.CloudSessionProjectionSnapshot,
     transcript_item: events_store.CloudTranscriptItemSnapshot | None = None,
     pending_interaction: events_store.CloudPendingInteractionSnapshot | None = None,
+    envelope: WorkerSessionEventEnvelope | None = None,
 ) -> CloudSessionPatchResponse:
     return CloudSessionPatchResponse(
         target_id=str(target_id),
@@ -229,6 +233,7 @@ def session_patch_response(
             if pending_interaction is not None
             else None
         ),
+        envelope=envelope,
     )
 
 
@@ -237,6 +242,16 @@ def _json_dict(value: str | None) -> dict[str, object] | None:
         return None
     parsed = json.loads(value)
     return parsed if isinstance(parsed, dict) else {"value": parsed}
+
+
+def session_event_envelope(value: str | None) -> WorkerSessionEventEnvelope | None:
+    parsed = _json_dict(value)
+    if parsed is None:
+        return None
+    try:
+        return WorkerSessionEventEnvelope.model_validate(parsed)
+    except ValidationError:
+        return None
 
 
 def _uuid_str(value: UUID | None) -> str | None:

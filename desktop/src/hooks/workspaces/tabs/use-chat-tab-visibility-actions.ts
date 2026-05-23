@@ -6,7 +6,7 @@ import {
   resolveMostRecentHiddenChatTab,
   uniqueIds,
 } from "@/lib/domain/workspaces/tabs/visibility";
-import { resolveSessionErrorAttentionKey } from "@/lib/domain/sessions/activity";
+import { resolveSessionErrorAttentionKey } from "@proliferate/product-model/sessions/activity";
 import {
   failLatencyFlow,
   startLatencyFlow,
