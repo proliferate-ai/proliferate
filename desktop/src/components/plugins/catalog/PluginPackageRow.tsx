@@ -7,21 +7,18 @@ import type { PluginPackagePresentation } from "@/lib/domain/plugins/plugin-pack
 import {
   buildAvailablePluginPresentation,
   buildConnectedPluginPresentation,
-  buildPluginSharedExposurePresentation,
-  type PluginSharedExposurePresentation,
 } from "@/lib/domain/plugins/plugin-package-view-model";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Switch } from "@/components/ui/Switch";
 import { ConnectorIcon } from "@/components/plugins/status/ConnectorIcon";
 import { ConnectorOverflowMenu } from "@/components/plugins/status/ConnectorOverflowMenu";
-import { ConnectorStatusChip } from "@/components/plugins/status/ConnectorStatusChip";
-import { Globe, Plus } from "@/components/ui/icons";
+import { Plus } from "@/components/ui/icons";
 
-const SHARED_EXPOSURE_TONE_CLASSES: Record<PluginSharedExposurePresentation["sharedCloudTone"], string> = {
-  neutral: "border-border/50 bg-muted/20 text-muted-foreground",
-  success: "border-success/25 bg-success/10 text-success",
+const STATUS_TONE_CLASSES: Record<PluginPackagePresentation["statusTone"], string> = {
+  neutral: "border-border/50 bg-muted/30 text-muted-foreground",
+  muted: "border-border/40 bg-muted/20 text-muted-foreground/80",
   warning: "border-warning/30 bg-warning/10 text-warning",
-  muted: "border-border/50 bg-muted/30 text-muted-foreground",
+  error: "border-destructive/40 bg-destructive/10 text-destructive",
 };
 
 export function AvailablePluginPackageRow({
@@ -35,19 +32,23 @@ export function AvailablePluginPackageRow({
 
   return (
     <PluginPackageCard
-      icon={<ConnectorIcon entry={model.entry} size="md" />}
+      icon={<ConnectorIcon entry={model.entry} size="sm" />}
       presentation={presentation}
       onOpen={onConnect}
-      controls={(
+      trailing={(
         <Button
-          variant="ghost"
+          type="button"
+          variant="outline"
           size="icon"
-          onClick={onConnect}
+          onClick={(event) => {
+            event.stopPropagation();
+            onConnect();
+          }}
           aria-label={`Install ${presentation.name}`}
           title={`Install ${presentation.name}`}
-          className="h-7 w-7 shrink-0 rounded-full bg-foreground/5 p-0.5 text-foreground hover:bg-foreground/10"
+          className="size-7 shrink-0 rounded-md"
         >
-          <Plus className="size-4" />
+          <Plus className="size-3.5" />
         </Button>
       )}
     />
@@ -59,58 +60,50 @@ export function ConnectedPluginPackageRow({
   onDelete,
   onManage,
   onReconnect,
-  onSetSharedExposure,
   onStatusClick,
   onToggle,
   pending,
-  canManageSharedExposure,
-  organizationId,
 }: {
   model: ConnectedCardModel;
   onDelete: () => void;
   onManage: () => void;
   onReconnect?: () => void;
-  onSetSharedExposure: (publicToOrg: boolean) => void;
   onStatusClick: () => void;
   onToggle: (enabled: boolean) => void;
   pending: boolean;
-  canManageSharedExposure: boolean;
-  organizationId: string | null;
 }) {
   const presentation = buildConnectedPluginPresentation(model.record, model.status);
-  const exposure = buildPluginSharedExposurePresentation(model.record);
   const enabled = model.record.metadata.enabled;
-  const nextPublicToOrg = !exposure.isFullyPublic;
-  const canShowSharedAction =
-    canManageSharedExposure
-    && Boolean(organizationId)
-    && exposure.configuredItemCount > 0
-    && model.record.metadata.ownerScope !== "organization";
 
   return (
     <PluginPackageCard
-      icon={<ConnectorIcon entry={model.record.catalogEntry} size="md" />}
+      icon={<ConnectorIcon entry={model.record.catalogEntry} size="sm" />}
       presentation={presentation}
-      sharedExposure={exposure}
       onOpen={model.status.actionable ? onStatusClick : onManage}
-      status={<ConnectorStatusChip status={model.status} onClick={onStatusClick} />}
-      controls={(
-        <div className="flex shrink-0 items-center gap-1">
-          {canShowSharedAction && (
+      trailing={(
+        <>
+          {presentation.recoveryActionLabel ? (
             <Button
               type="button"
-              variant={exposure.isFullyPublic ? "ghost" : "outline"}
+              variant="outline"
               size="sm"
               loading={pending}
-              onClick={() => onSetSharedExposure(nextPublicToOrg)}
-              title={nextPublicToOrg
-                ? "Make configured MCP, plugin, and skill items public to shared cloud."
-                : "Make configured MCP, plugin, and skill items private to personal cloud."}
-              className="h-7 px-2"
+              onClick={(event) => {
+                event.stopPropagation();
+                onStatusClick();
+              }}
+              className="h-7 px-2 text-[11px]"
             >
-              <Globe className="size-3.5" />
-              {nextPublicToOrg ? "Make public" : "Make private"}
+              {presentation.recoveryActionLabel}
             </Button>
+          ) : (
+            <Switch
+              checked={enabled}
+              disabled={pending}
+              onChange={onToggle}
+              size="compact"
+              aria-label={`${enabled ? "Disable" : "Enable"} ${presentation.name}`}
+            />
           )}
           <div className="pointer-events-none opacity-0 transition-opacity group-hover/plugin-package:pointer-events-auto group-hover/plugin-package:opacity-100 group-focus-within/plugin-package:pointer-events-auto group-focus-within/plugin-package:opacity-100">
             <ConnectorOverflowMenu
@@ -122,84 +115,69 @@ export function ConnectedPluginPackageRow({
               record={model.record}
             />
           </div>
-          <Switch
-            checked={enabled}
-            disabled={pending}
-            onChange={onToggle}
-            size="compact"
-            aria-label={`${enabled ? "Disable" : "Enable"} ${presentation.name}`}
-          />
-        </div>
+        </>
       )}
     />
   );
 }
 
 function PluginPackageCard({
-  controls,
   icon,
   onOpen,
   presentation,
-  sharedExposure,
-  status,
+  trailing,
 }: {
-  controls: ReactNode;
   icon: ReactNode;
   onOpen: () => void;
   presentation: PluginPackagePresentation;
-  sharedExposure?: PluginSharedExposurePresentation;
-  status?: ReactNode;
+  trailing: ReactNode;
 }) {
   return (
-    <div className="group/plugin-package flex min-h-[60px] flex-col justify-center gap-2.5 rounded-2xl border border-transparent p-2.5 transition-colors hover:bg-foreground/5">
-      <div className="flex items-center gap-3">
+    <article className="group/plugin-package flex min-h-[96px] flex-col gap-2 rounded-lg border border-border/60 bg-foreground/5 p-3 transition-colors hover:bg-foreground/[0.075]">
+      <div className="flex min-w-0 items-start gap-3">
         <Button
           variant="unstyled"
           size="unstyled"
           type="button"
           onClick={onOpen}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 flex-1 items-start gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {icon}
-          <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
-            <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex min-w-0 items-center gap-2 pr-1">
               <div className="truncate text-sm font-medium text-foreground">
                 {presentation.name}
               </div>
+              <PluginStatusPill presentation={presentation} />
             </div>
-            <div className="line-clamp-1 text-sm leading-relaxed text-muted-foreground">
+            <div className="line-clamp-1 text-xs leading-5 text-muted-foreground">
               {presentation.description}
             </div>
-            <div className="line-clamp-1 text-xs text-muted-foreground/80">
-              {presentation.includesLabel}
-            </div>
-            {sharedExposure && (
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                <span className="rounded-full border border-border/50 bg-muted/20 px-2 py-0.5 text-[11px] text-muted-foreground">
-                  {sharedExposure.personalCloudLabel}
-                </span>
-                <span className="rounded-full border border-border/50 bg-muted/20 px-2 py-0.5 text-[11px] text-muted-foreground">
-                  {sharedExposure.sourceLabel}
-                </span>
-                <span
-                  className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${SHARED_EXPOSURE_TONE_CLASSES[sharedExposure.sharedCloudTone]}`}
-                  title={sharedExposure.sharedCloudDescription}
-                >
-                  {sharedExposure.sharedCloudLabel}
-                </span>
-              </div>
-            )}
           </div>
         </Button>
-        {status && (
-          <div className="shrink-0">
-            {status}
-          </div>
-        )}
-        <div className="flex shrink-0 items-center">
-          {controls}
+      </div>
+      <div className="flex min-w-0 items-center gap-2 pl-11">
+        <div className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground/80">
+          {presentation.capabilitySummary}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {trailing}
         </div>
       </div>
-    </div>
+    </article>
+  );
+}
+
+function PluginStatusPill({
+  presentation,
+}: {
+  presentation: PluginPackagePresentation;
+}) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${STATUS_TONE_CLASSES[presentation.statusTone]}`}
+    >
+      {presentation.statusLabel}
+    </span>
   );
 }

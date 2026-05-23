@@ -21,6 +21,8 @@ describe("buildConnectedPluginPresentation", () => {
       .toBe("Connected");
     expect(presentation.components.find((row) => row.kind === "mcp")?.stateLabel)
       .toBe("Off");
+    expect(presentation.statusLabel).toBe("Off");
+    expect(presentation.capabilitySummary).toBe("MCP · no setup");
   });
 
   it("shows broken credential state on the connection row", () => {
@@ -36,6 +38,26 @@ describe("buildConnectedPluginPresentation", () => {
 
     expect(presentation.components.find((row) => row.kind === "app")?.stateLabel)
       .toBe("Needs token");
+    expect(presentation.recoveryActionLabel).toBe("Add token");
+  });
+
+  it("keeps shared/public labels out of the plugin presentation", () => {
+    const presentation = buildConnectedPluginPresentation(
+      installedRecord({
+        enabled: true,
+        broken: false,
+        publicToOrg: true,
+        publicStatus: "public",
+      }),
+      {
+        intent: "connected",
+        label: "Connected",
+        actionable: false,
+        tone: "neutral",
+      },
+    );
+
+    expect(presentation.components.some((row) => row.publicLabel)).toBe(false);
   });
 });
 
