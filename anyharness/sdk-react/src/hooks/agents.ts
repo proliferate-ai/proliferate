@@ -22,7 +22,6 @@ import {
 
 interface RuntimeQueryOptions {
   enabled?: boolean;
-  refetchInterval?: number | false;
 }
 
 export function useAgentsQuery(options?: RuntimeQueryOptions) {
@@ -36,7 +35,6 @@ export function useAgentsQuery(options?: RuntimeQueryOptions) {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.agents.list(requestOptionsWithSignal(undefined, signal));
     },
-    refetchInterval: options?.refetchInterval,
   });
 }
 

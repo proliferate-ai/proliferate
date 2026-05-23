@@ -9,8 +9,9 @@ import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-
 
 /**
  * Auto-triggers agent reconciliation on startup when agents need installation,
- * and polls the agent list during reconciliation so the UI reflects progress
- * as each agent installs sequentially.
+ * refreshes the agent list while the bundled seed hydrates, and keeps the list
+ * current during reconciliation so the UI reflects progress as each agent
+ * installs sequentially.
  *
  * Owns the app-mounted agent reconcile lifecycle. Does not own manual install
  * actions or agent catalog derivation.
@@ -35,6 +36,7 @@ export function useAgentAutoReconcile() {
   const isHealthy = connectionState === "healthy" && runtimeUrl.trim().length > 0;
   const {
     data: runtimeHealth,
+    dataUpdatedAt: runtimeHealthDataUpdatedAt,
     isLoading: runtimeHealthLoading,
   } = useRuntimeHealthQuery({
     enabled: isHealthy,
@@ -50,6 +52,8 @@ export function useAgentAutoReconcile() {
     || agentSeedStatus === "partial"
     || agentSeedStatus === "failed"
     || agentSeedStatus === "not_configured_dev";
+
+  const previousAgentSeedStatus = useRef<string | null>(null);
 
   // Auto-trigger reconcile when agents need installation
   useEffect(() => {
@@ -83,6 +87,32 @@ export function useAgentAutoReconcile() {
     agentsNeedingSetup,
     reconcileStatus,
     reconcileAgents,
+  ]);
+
+  // Keep agents fresh during seed hydration and force one final refresh when hydration completes.
+  useEffect(() => {
+    const normalizedRuntimeUrl = runtimeUrl.trim();
+    const previousStatus = previousAgentSeedStatus.current;
+    previousAgentSeedStatus.current = agentSeedStatus ?? null;
+
+    if (!normalizedRuntimeUrl || runtimeHealthDataUpdatedAt === 0) {
+      return;
+    }
+
+    const isHydrating = agentSeedStatus === "hydrating";
+    const completedHydration =
+      previousStatus === "hydrating" && agentSeedStatus !== "hydrating";
+
+    if (!isHydrating && !completedHydration) {
+      return;
+    }
+
+    void invalidateAgentListResources(normalizedRuntimeUrl);
+  }, [
+    agentSeedStatus,
+    invalidateAgentListResources,
+    runtimeHealthDataUpdatedAt,
+    runtimeUrl,
   ]);
 
   // Keep the authoritative agent list in sync with the polled reconcile job state.
