@@ -1,6 +1,6 @@
 import type { MobileIconName } from "../components/primitives/MobileIcon";
 
-export type RouteId = "home" | "workspaces" | "sessions" | "automations" | "settings";
+export type RouteId = "home" | "work" | "automations" | "settings";
 
 export interface DrawerRoute {
   id: RouteId;
@@ -35,12 +35,15 @@ export interface MobilePendingPrompt {
 
 export const drawerRoutes: DrawerRoute[] = [
   { id: "home", label: "Home", icon: "home" },
-  { id: "workspaces", label: "Workspaces", icon: "workspaces" },
-  { id: "sessions", label: "Sessions", icon: "sessions" },
   { id: "automations", label: "Automations", icon: "calendar-clock" },
   { id: "settings", label: "Settings", icon: "settings" },
 ];
 
+export const allWorkRoute: DrawerRoute = { id: "work", label: "All work", icon: "workspaces" };
+
 export function routeTitle(route: RouteId): string {
+  if (route === allWorkRoute.id) {
+    return allWorkRoute.label;
+  }
   return drawerRoutes.find((item) => item.id === route)?.label ?? "Home";
 }

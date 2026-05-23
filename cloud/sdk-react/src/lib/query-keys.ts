@@ -138,14 +138,16 @@ export function cloudWorkspaceConnectionKey(
   ] as const;
 }
 
+export function cloudWorkspacesListRootKey() {
+  return [...cloudRootKey(), "workspaces", "list"] as const;
+}
+
 export function cloudWorkspacesKey(
   owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
   scope: string | null = null,
 ) {
   return [
-    ...cloudRootKey(),
-    "workspaces",
-    "list",
+    ...cloudWorkspacesListRootKey(),
     owner.ownerScope,
     owner.organizationId,
     scope,

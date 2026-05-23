@@ -29,8 +29,7 @@ import {
   useEnqueueCloudCommand,
   useSessionLive,
   useWorkspaceLive,
-  cloudWorkspacesKey,
-  personalCloudOwnerKey,
+  invalidateCloudWorkspaceLists,
 } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudChatComposerControls,
@@ -49,10 +48,11 @@ import {
   type CloudChatTranscriptRowView,
 } from "@proliferate/product-model/chats/cloud/transcript-view";
 
-import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
+import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileStatusDot } from "../primitives/MobileStatusDot";
 import { MobileTextInput } from "../primitives/MobileTextInput";
 import { MobileTopBar, MobileTopBarIconButton } from "../primitives/MobileTopBar";
+import { MobileWorkspaceActionSheet } from "./MobileWorkspaceActionSheet";
 import type {
   MobileCloudChat,
   MobilePendingPrompt,
@@ -76,6 +76,7 @@ interface MobileChatScreenProps {
   chat: MobileCloudChat;
   ownerUserId: string | null;
   onBack: () => void;
+  onInitialPendingPromptConsumed?: () => void;
   onSessionSelected?: (sessionId: string) => void;
 }
 
@@ -103,6 +104,7 @@ export function MobileChatScreen({
   chat,
   ownerUserId,
   onBack,
+  onInitialPendingPromptConsumed,
   onSessionSelected,
 }: MobileChatScreenProps) {
   const queryClient = useQueryClient();
@@ -123,6 +125,7 @@ export function MobileChatScreen({
   >({});
   const [activeControl, setActiveControl] = useState<CloudChatComposerControlView | null>(null);
   const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
+  const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [claimedLocally, setClaimedLocally] = useState(false);
   const directPromptDispatchingRef = useRef(false);
   const sessionPromptDispatchingRef = useRef(false);
@@ -131,11 +134,10 @@ export function MobileChatScreen({
 
   const workspaceQuery = useCloudWorkspaceSnapshot(chat.workspaceId, true);
   const workspaceLive = useWorkspaceLive(chat.workspaceId, { enabled: true });
-  const snapshot = workspaceLive.snapshot ?? workspaceQuery.data;
-  const workspace = snapshot?.workspace ?? null;
+  const workspace = workspaceQuery.data?.workspace ?? workspaceLive.snapshot?.workspace ?? null;
   const sessions = useMemo(
-    () => [...(snapshot?.sessions ?? [])].sort(compareSessions),
-    [snapshot?.sessions],
+    () => [...(workspaceLive.snapshot?.sessions ?? workspaceQuery.data?.sessions ?? [])].sort(compareSessions),
+    [workspaceLive.snapshot?.sessions, workspaceQuery.data?.sessions],
   );
   const fallbackSession = useMemo(() => sessionProjectionFromChat(chat), [chat]);
   const selectedSession = selectedSessionId
@@ -295,7 +297,8 @@ export function MobileChatScreen({
     }
     let active = true;
     void loadPendingMobilePrompt(chat.workspaceId, ownerUserId).then((stored) => {
-      const restoredRaw = stored ?? chat.initialPendingPrompt ?? null;
+      const initialPrompt = chat.initialPendingPrompt ?? null;
+      const restoredRaw = stored ?? initialPrompt;
       const restored = restoredRaw ? rearmRetryablePendingMobilePrompt(restoredRaw) : null;
       if (active) {
         setPendingPrompt(restored);
@@ -316,12 +319,31 @@ export function MobileChatScreen({
         if (restoredRaw && restored && restoredRaw !== restored && ownerUserId) {
           void savePendingMobilePrompt(chat.workspaceId, ownerUserId, restored);
         }
+        if (initialPrompt) {
+          if (stored) {
+            onInitialPendingPromptConsumed?.();
+          } else if (restored) {
+            void savePendingMobilePrompt(chat.workspaceId, ownerUserId, restored)
+              .then(() => {
+                if (active) {
+                  onInitialPendingPromptConsumed?.();
+                }
+              })
+              .catch(() => undefined);
+          }
+        }
       }
     });
     return () => {
       active = false;
     };
-  }, [chat.initialPendingPrompt, chat.workspaceId, onSessionSelected, ownerUserId]);
+  }, [
+    chat.initialPendingPrompt,
+    chat.workspaceId,
+    onInitialPendingPromptConsumed,
+    onSessionSelected,
+    ownerUserId,
+  ]);
 
   useEffect(() => {
     if (!workspace || workspaceStatus === "ready" || workspaceStatus === "error") {
@@ -559,9 +581,7 @@ export function MobileChatScreen({
           void savePendingMobilePrompt(workspace.id, ownerUserId, dispatchedPrompt);
         }
         void workspaceQuery.refetch();
-        void queryClient.invalidateQueries({
-          queryKey: cloudWorkspacesKey(personalCloudOwnerKey(), "my"),
-        });
+        invalidateCloudWorkspaceLists(queryClient);
       })
       .catch((error: unknown) => {
         if (!isCurrentRun()) {
@@ -634,7 +654,9 @@ export function MobileChatScreen({
     setPendingPromptStatus(null);
     setPendingPromptFailed(false);
     void clearPendingMobilePrompt(workspace.id, ownerUserId);
+    onInitialPendingPromptConsumed?.();
   }, [
+    onInitialPendingPromptConsumed,
     ownerUserId,
     pendingPrompt?.dispatchedSessionId,
     pendingPromptDurable,
@@ -781,22 +803,41 @@ export function MobileChatScreen({
     }
   }
 
-  async function claimChat() {
+  async function claimChat(): Promise<boolean> {
     if (!workspace) {
-      return;
+      return false;
     }
-    await claimWorkspace.mutateAsync({ workspaceId: workspace.id });
-    setClaimedLocally(true);
-    void workspaceQuery.refetch();
+    try {
+      await claimWorkspace.mutateAsync({ workspaceId: workspace.id });
+      setClaimedLocally(true);
+      setPendingPromptStatus(null);
+      void workspaceQuery.refetch();
+      invalidateCloudWorkspaceLists(queryClient);
+      return true;
+    } catch (error) {
+      setPendingPromptStatus(error instanceof Error ? error.message : "Workspace could not be claimed.");
+      return false;
+    }
   }
 
   function startNewSession() {
+    if (pendingDispatchRunRef.current) {
+      pendingDispatchRunRef.current.active = false;
+      pendingDispatchRunRef.current = null;
+    }
+    if (pendingPrompt) {
+      setPendingPrompt(null);
+      if (ownerUserId && workspace) {
+        void clearPendingMobilePrompt(workspace.id, ownerUserId);
+      }
+    }
     setSelectedSessionId(null);
     setNewSessionMode(true);
     setDraft("");
     setPendingPromptStatus(null);
     setPendingPromptFailed(false);
     setSessionPickerOpen(false);
+    setActionSheetOpen(false);
   }
 
   function selectSession(sessionId: string) {
@@ -806,6 +847,7 @@ export function MobileChatScreen({
     setPendingPromptStatus(null);
     setPendingPromptFailed(false);
     setSessionPickerOpen(false);
+    setActionSheetOpen(false);
     onSessionSelected?.(sessionId);
   }
 
@@ -859,28 +901,24 @@ export function MobileChatScreen({
           trailing={
             <View style={styles.headerStatus}>
               <MobileStatusDot status={mobileStatus(session?.status ?? workspaceStatus)} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open sessions"
+                onPress={() => setSessionPickerOpen(true)}
+                style={({ pressed }) => [styles.sessionChip, pressed && styles.sessionChipPressed]}
+              >
+                <Text style={styles.sessionChipText} numberOfLines={1}>
+                  {newSessionMode ? "New session" : session ? shortSessionLabel(session.sessionId) : "Sessions"}
+                </Text>
+              </Pressable>
               <MobileTopBarIconButton
                 name="more"
-                accessibilityLabel="Switch sessions"
-                onPress={() => setSessionPickerOpen(true)}
+                accessibilityLabel="Workspace actions"
+                onPress={() => setActionSheetOpen(true)}
               />
             </View>
           }
         />
-      </View>
-
-      <View style={styles.identityBar}>
-        <IdentityChip label={branchLabel} icon="git-branch" onPress={() => void shareBranch(branchLabel)} />
-        <IdentityChip label={workspace?.visibility ?? chat.visibility} />
-        <IdentityChip label={sessionLive.isConnected ? "Live" : "Snapshot"} />
-        <IdentityChip label={transcriptView.source === "events" ? "Events" : transcriptView.source} />
-        {sessions.length > 0 ? (
-          <IdentityChip
-            label={newSessionMode ? "Starting new session" : "New session"}
-            icon="plus"
-            onPress={startNewSession}
-          />
-        ) : null}
       </View>
 
       {isUnclaimed ? (
@@ -988,9 +1026,24 @@ export function MobileChatScreen({
         sessions={sessions}
         activeSessionId={session?.sessionId ?? null}
         newSessionMode={newSessionMode}
+        unclaimed={isUnclaimed}
         onSelectSession={selectSession}
         onStartNewSession={startNewSession}
         onClose={() => setSessionPickerOpen(false)}
+      />
+      <MobileWorkspaceActionSheet
+        visible={actionSheetOpen}
+        branchLabel={branchLabel}
+        visibilityLabel={workspace?.visibility ?? chat.visibility}
+        liveLabel={sessionLive.isConnected ? "Live" : "Snapshot"}
+        transcriptLabel={transcriptView.source === "events" ? "Events" : transcriptView.source}
+        unclaimed={isUnclaimed}
+        claimPending={claimWorkspace.isPending}
+        onClaim={claimChat}
+        onNewSession={startNewSession}
+        onOpenSessions={() => setSessionPickerOpen(true)}
+        onShareBranch={() => void shareBranch(branchLabel)}
+        onClose={() => setActionSheetOpen(false)}
       />
       <ControlSheet control={activeControl} onClose={() => setActiveControl(null)} />
     </KeyboardAvoidingView>
@@ -1007,40 +1060,47 @@ function ControlSheet({
   return (
     <Modal visible={Boolean(control)} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.sheetLayer}>
-        <Pressable style={styles.sheetScrim} onPress={onClose} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close control options"
+          style={styles.sheetScrim}
+          onPress={onClose}
+        />
         <View style={styles.sheet}>
           <Text style={styles.sheetTitle}>{control?.label}</Text>
-          {control?.groups.map((group) => (
-            <View key={group.id} style={styles.sheetGroup}>
-              {group.label ? <Text style={styles.sheetGroupLabel}>{group.label}</Text> : null}
-              {group.options.map((option) => (
-                <Pressable
-                  key={option.id}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: option.selected, disabled: option.disabled }}
-                  disabled={option.disabled}
-                  onPress={() => {
-                    control.onSelect?.(option.id);
-                    onClose();
-                  }}
-                  style={({ pressed }) => [
-                    styles.sheetOption,
-                    option.selected && styles.sheetOptionSelected,
-                    option.disabled && styles.sheetOptionDisabled,
-                    pressed && styles.sheetOptionPressed,
-                  ]}
-                >
-                  <View style={styles.sheetOptionText}>
-                    <Text style={styles.sheetOptionLabel}>{option.label}</Text>
-                    {option.description ? (
-                      <Text style={styles.sheetOptionDescription}>{option.description}</Text>
-                    ) : null}
-                  </View>
-                  {option.selected ? <MobileIcon name="check" size={16} color={colors.success} /> : null}
-                </Pressable>
-              ))}
-            </View>
-          ))}
+          <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetScrollContent}>
+            {control?.groups.map((group) => (
+              <View key={group.id} style={styles.sheetGroup}>
+                {group.label ? <Text style={styles.sheetGroupLabel}>{group.label}</Text> : null}
+                {group.options.map((option) => (
+                  <Pressable
+                    key={option.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: option.selected, disabled: option.disabled }}
+                    disabled={option.disabled}
+                    onPress={() => {
+                      control.onSelect?.(option.id);
+                      onClose();
+                    }}
+                    style={({ pressed }) => [
+                      styles.sheetOption,
+                      option.selected && styles.sheetOptionSelected,
+                      option.disabled && styles.sheetOptionDisabled,
+                      pressed && styles.sheetOptionPressed,
+                    ]}
+                  >
+                    <View style={styles.sheetOptionText}>
+                      <Text style={styles.sheetOptionLabel}>{option.label}</Text>
+                      {option.description ? (
+                        <Text style={styles.sheetOptionDescription}>{option.description}</Text>
+                      ) : null}
+                    </View>
+                    {option.selected ? <MobileIcon name="check" size={16} color={colors.success} /> : null}
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -1052,6 +1112,7 @@ function SessionPickerSheet({
   sessions,
   activeSessionId,
   newSessionMode,
+  unclaimed,
   onSelectSession,
   onStartNewSession,
   onClose,
@@ -1060,6 +1121,7 @@ function SessionPickerSheet({
   sessions: readonly CloudSessionProjection[];
   activeSessionId: string | null;
   newSessionMode: boolean;
+  unclaimed: boolean;
   onSelectSession: (sessionId: string) => void;
   onStartNewSession: () => void;
   onClose: () => void;
@@ -1067,16 +1129,23 @@ function SessionPickerSheet({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.sheetLayer}>
-        <Pressable style={styles.sheetScrim} onPress={onClose} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close sessions"
+          style={styles.sheetScrim}
+          onPress={onClose}
+        />
         <View style={styles.sheet}>
           <Text style={styles.sheetTitle}>Workspace sessions</Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ selected: newSessionMode }}
+            accessibilityState={{ selected: newSessionMode, disabled: unclaimed }}
+            disabled={unclaimed}
             onPress={onStartNewSession}
             style={({ pressed }) => [
               styles.sheetOption,
               newSessionMode && styles.sheetOptionSelected,
+              unclaimed && styles.sheetOptionDisabled,
               pressed && styles.sheetOptionPressed,
             ]}
           >
@@ -1084,7 +1153,9 @@ function SessionPickerSheet({
             <View style={styles.sheetOptionText}>
               <Text style={styles.sheetOptionLabel}>New session</Text>
               <Text style={styles.sheetOptionDescription}>
-                Start a separate chat in this workspace.
+                {unclaimed
+                  ? "Claim this workspace before starting a session."
+                  : "Start a separate chat in this workspace."}
               </Text>
             </View>
             {newSessionMode ? <MobileIcon name="check" size={16} color={colors.success} /> : null}
@@ -1128,35 +1199,6 @@ function SessionPickerSheet({
         </View>
       </View>
     </Modal>
-  );
-}
-
-function IdentityChip({
-  label,
-  icon,
-  onPress,
-}: {
-  label: string;
-  icon?: Extract<MobileIconName, "git-branch" | "plus">;
-  onPress?: () => void;
-}) {
-  const content = (
-    <>
-      {icon ? <MobileIcon name={icon} size={12} color={colors.faint} /> : null}
-      <Text style={styles.identityText} numberOfLines={1}>{label}</Text>
-    </>
-  );
-  if (!onPress) {
-    return <View style={styles.identityChip}>{content}</View>;
-  }
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.identityChip, pressed && styles.controlButtonPressed]}
-    >
-      {content}
-    </Pressable>
   );
 }
 
@@ -1539,30 +1581,24 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     paddingRight: spacing[1],
   },
-  identityBar: {
-    flexDirection: "row",
-    gap: spacing[2],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
-  },
-  identityChip: {
-    maxWidth: 150,
-    minHeight: 28,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: spacing[2],
-    borderRadius: radius.md,
+  sessionChip: {
+    maxWidth: 96,
+    minHeight: 30,
+    justifyContent: "center",
+    borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.card,
+    paddingHorizontal: spacing[2],
   },
-  identityText: {
-    color: colors.faint,
-    fontSize: 11.5,
-    fontWeight: "500",
+  sessionChipPressed: {
+    opacity: 0.72,
+    backgroundColor: colors.accent,
+  },
+  sessionChipText: {
+    color: colors.fg,
+    fontSize: 11,
+    fontWeight: "700",
   },
   list: {
     flex: 1,
