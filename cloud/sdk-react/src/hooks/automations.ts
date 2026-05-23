@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createAutomation,
   getAutomation,
+  listAgentRunConfigs,
   listAutomationRuns,
   listAutomations,
   pauseAutomationWithClient,
@@ -15,8 +16,11 @@ import {
   type CreateAutomationRequest,
   type ListAutomationsOptions,
   type UpdateAutomationRequest,
+  type CloudAgentRunConfigListResponse,
+  type ListCloudAgentRunConfigsOptions,
 } from "@proliferate/cloud-sdk";
 import {
+  agentRunConfigsListKey,
   automationDetailKey,
   automationRunsKey,
   automationsListKey,
@@ -125,4 +129,55 @@ export function useAutomationActions() {
     runningAutomationNow: runNowMutation.isPending,
     invalidateAutomation,
   };
+}
+
+export function useCloudAgentRunConfigs(
+  options: ListCloudAgentRunConfigsOptions = {},
+  enabled = true,
+) {
+  const client = useCloudClient();
+  return useQuery<CloudAgentRunConfigListResponse>({
+    queryKey: agentRunConfigsListKey(options),
+    queryFn: () => listAgentRunConfigs(options, client),
+    enabled,
+  });
+}
+
+export function useCreateAutomation(options: ListAutomationsOptions = {}) {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<AutomationResponse, Error, CreateAutomationRequest>({
+    mutationFn: (body) => createAutomation(body, client),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: automationsListKey(options) });
+    },
+  });
+}
+
+export function usePauseAutomation(options: ListAutomationsOptions = {}) {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<AutomationResponse, Error, string>({
+    mutationFn: (automationId) => pauseAutomationWithClient(automationId, client),
+    onSuccess: async (automation) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: automationsListKey(options) }),
+        queryClient.invalidateQueries({ queryKey: automationDetailKey(automation.id) }),
+      ]);
+    },
+  });
+}
+
+export function useResumeAutomation(options: ListAutomationsOptions = {}) {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<AutomationResponse, Error, string>({
+    mutationFn: (automationId) => resumeAutomationWithClient(automationId, client),
+    onSuccess: async (automation) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: automationsListKey(options) }),
+        queryClient.invalidateQueries({ queryKey: automationDetailKey(automation.id) }),
+      ]);
+    },
+  });
 }

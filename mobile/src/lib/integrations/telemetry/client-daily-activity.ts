@@ -1,7 +1,10 @@
-import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 import { mobileEnv } from "../../../config/env";
+import {
+  getMobileStorageItem,
+  setMobileStorageItem,
+} from "../../access/mobile-storage";
 
 const STORAGE_PREFIX = "proliferate:client-daily-activity:mobile";
 const inFlightActivityKeys = new Set<string>();
@@ -21,7 +24,7 @@ export async function recordMobileClientDailyActivity(input: {
   const dateKey = new Date().toISOString().slice(0, 10);
   const storageKey = `${STORAGE_PREFIX}:${dateKey}:${input.actorStorageKey ?? "unknown_actor"}`;
   try {
-    if ((await SecureStore.getItemAsync(storageKey)) === "sent") {
+    if ((await getMobileStorageItem(storageKey)) === "sent") {
       return;
     }
   } catch {
@@ -50,7 +53,7 @@ export async function recordMobileClientDailyActivity(input: {
     }
 
     try {
-      await SecureStore.setItemAsync(storageKey, "sent");
+      await setMobileStorageItem(storageKey, "sent");
     } catch {
       // Local throttling is best-effort; the server still dedupes the event.
     }

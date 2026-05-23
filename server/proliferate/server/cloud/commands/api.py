@@ -15,7 +15,10 @@ from proliferate.server.cloud.commands.models import (
     CreateCloudCommandRequest,
     command_response_payload,
 )
-from proliferate.server.cloud.commands.service import enqueue_command, get_command_status
+from proliferate.server.cloud.commands.service import (
+    enqueue_command_and_commit,
+    get_command_status,
+)
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 
 router = APIRouter(prefix="/commands", tags=["cloud-commands"])
@@ -28,8 +31,7 @@ async def enqueue_command_endpoint(
     user: User = Depends(current_active_user),
 ) -> CloudCommandResponse:
     try:
-        command = await enqueue_command(db, user=user, body=body)
-        await db.commit()
+        command = await enqueue_command_and_commit(db, user=user, body=body)
     except CloudApiError as error:
         raise_cloud_error(error)
     return command_response_payload(command)

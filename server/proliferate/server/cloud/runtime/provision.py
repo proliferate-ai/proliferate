@@ -391,8 +391,7 @@ def _cloud_base_url() -> str:
         "cloud_worker_base_url_required",
         "Managed cloud worker enrollment requires CLOUD_WORKER_BASE_URL to be a public URL "
         "reachable from the sandbox. Start an HTTPS tunnel to this server and set "
-        "CLOUD_WORKER_BASE_URL to that tunnel URL."
-        + detail,
+        "CLOUD_WORKER_BASE_URL to that tunnel URL." + detail,
         status_code=400,
     )
 

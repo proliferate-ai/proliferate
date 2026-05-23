@@ -36,7 +36,6 @@ anyharness/crates/proliferate-worker/src/commands/mapping.rs
 desktop/src/components/workspace/chat/input/ComposerModelConfigSelector.tsx
 desktop/src/components/workspace/shell/right-panel/RightPanel.test.tsx
 desktop/src/components/workspace/shell/right-panel/RightPanel.tsx
-desktop/src/lib/domain/chat/transcript/transcript-presentation.test.ts
 desktop/src/lib/workflows/mcp/connector-persistence.test.ts
 desktop/src/lib/workflows/mcp/connector-persistence.ts
 anyharness/sdk/src/reducer/transcript.ts
@@ -82,6 +81,7 @@ server/proliferate/server/cloud/runtime_config/domain/resolver.py
 server/proliferate/server/cloud/runtime_config/service.py
 server/proliferate/server/cloud/worker/service.py
 server/proliferate/server/cloud/agent_auth/service.py
+server/proliferate/server/cloud/runtime/ensure_running.py
 server/proliferate/server/cloud/runtime/provision.py
 server/proliferate/server/cloud/workspaces/service.py
 server/proliferate/db/store/automations.py
@@ -97,4 +97,5 @@ server/proliferate/db/models/cloud/agent_auth.py
 server/proliferate/db/store/cloud_agent_auth/store.py
 server/proliferate/server/cloud/agent_auth/service.py
 server/tests/integration/test_cloud_agent_auth_api.py
+server/tests/unit/test_cloud_runtime_ensure_running.py
 server/tests/integration/test_sandbox_profile_foundation.py

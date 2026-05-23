@@ -1328,8 +1328,9 @@ class TestCloudCommandsApi:
         assert "timed out" in payload["errorMessage"]
         pending_interaction = (
             await db_session.execute(
-                select(CloudPendingInteraction)
-                .where(CloudPendingInteraction.request_id == "web:stale-prompt")
+                select(CloudPendingInteraction).where(
+                    CloudPendingInteraction.request_id == "web:stale-prompt"
+                )
             )
         ).scalar_one()
         assert pending_interaction.status == "failed"
@@ -1422,8 +1423,9 @@ class TestCloudCommandsApi:
         assert command.error_code == "web_command_queue_timeout"
         pending_interaction = (
             await db_session.execute(
-                select(CloudPendingInteraction)
-                .where(CloudPendingInteraction.request_id == "web:stale-prompt-lease")
+                select(CloudPendingInteraction).where(
+                    CloudPendingInteraction.request_id == "web:stale-prompt-lease"
+                )
             )
         ).scalar_one()
         assert pending_interaction.status == "failed"
@@ -1514,9 +1516,11 @@ class TestCloudCommandsApi:
             UUID(cloud_workspace_id),
         )
         assert workspace is not None
-        runtime_environment = await cloud_runtime_environments.ensure_runtime_environment_for_workspace(
-            db_session,
-            workspace,
+        runtime_environment = (
+            await cloud_runtime_environments.ensure_runtime_environment_for_workspace(
+                db_session,
+                workspace,
+            )
         )
         slot = await ensure_profile_slot(
             db_session,
@@ -1569,7 +1573,7 @@ class TestCloudCommandsApi:
         ) -> str:
             wake_calls.append(
                 {
-                    "environment_id": getattr(environment, "id"),
+                    "environment_id": environment.id,
                     "workspace_id": workspace_id,
                     "allow_launcher_restart": allow_launcher_restart,
                     "access_token": access_token,

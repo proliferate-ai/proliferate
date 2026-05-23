@@ -1,4 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  useAuthViewer,
+  useCloudBilling,
+  useCloudRepoConfigs,
+  useOrganizations,
+} from "@proliferate/cloud-sdk-react";
 
 import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileListRow } from "../primitives/MobileListRow";
@@ -20,18 +26,45 @@ interface MobileSettingsScreenProps {
 }
 
 export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScreenProps) {
+  const viewer = useAuthViewer();
+  const organizations = useOrganizations();
+  const billing = useCloudBilling({ ownerScope: "personal" });
+  const repoConfigs = useCloudRepoConfigs();
+  const displayName =
+    viewer.data?.user.display_name?.trim()
+    || viewer.data?.user.email?.split("@")[0]
+    || account.name;
+  const email = viewer.data?.user.email ?? account.handle;
+  const githubConnected = Boolean(viewer.data?.githubConnected);
+  const githubChecking = viewer.isLoading && !viewer.data;
+  const githubStateLabel = githubChecking
+    ? "Checking"
+    : viewer.isError
+    ? "Unknown"
+    : githubConnected
+      ? "Linked"
+      : "Required";
+  const githubNeedsAttention = !githubChecking && (viewer.isError || !githubConnected);
+  const githubIconColor = githubChecking
+    ? colors.faint
+    : githubConnected && !viewer.isError
+      ? colors.success
+      : colors.warning;
+  const configuredRepos = (repoConfigs.data?.configs ?? []).filter((repo) => repo.configured);
+  const organizationRows = organizations.data?.organizations ?? [];
+
   return (
     <MobileScreen contentStyle={styles.screenContent}>
       <View style={styles.profile}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{account.initials}</Text>
+          <Text style={styles.avatarText}>{initialsFor(displayName)}</Text>
         </View>
         <View style={styles.profileText}>
           <Text style={styles.name} numberOfLines={1}>
-            {account.name}
+            {displayName}
           </Text>
           <Text style={styles.handle} numberOfLines={1}>
-            {account.handle}
+            {email}
           </Text>
         </View>
       </View>
@@ -42,30 +75,92 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
           title="GitHub"
           subtitle="Required for cloud sessions"
           trailing={
-            <View style={styles.connected}>
-              <MobileIcon name="check" size={12} color={colors.success} />
-              <Text style={styles.connectedText}>Linked</Text>
+            <View style={[styles.connected, githubNeedsAttention && styles.warningChip]}>
+              <MobileIcon
+                name={githubConnected && !viewer.isError ? "check" : "external"}
+                size={12}
+                color={githubIconColor}
+              />
+              <Text style={[styles.connectedText, githubNeedsAttention && styles.warningText]}>
+                {githubStateLabel}
+              </Text>
             </View>
           }
         />
         <MobileListRow
           leading={<RowIcon name="shield" tint={colors.info} />}
-          title="Two-factor authentication"
-          subtitle="Required by your organization"
+          title="Auth state"
+          subtitle={
+            viewer.isError
+              ? "Could not load account readiness"
+              : viewer.isLoading
+              ? "Checking account readiness..."
+              : viewer.data?.onboardingState === "active"
+                ? "Signed in and GitHub-linked"
+                : "GitHub link required"
+          }
         />
+      </Section>
+
+      <Section label="Cloud">
+        <MobileListRow
+          leading={<RowIcon name="cloud" tint={colors.faint} />}
+          title="Personal plan"
+          subtitle={billingSummary(billing.data, billing.isLoading, billing.isError)}
+        />
+        <MobileListRow
+          leading={<RowIcon name="git-branch" tint={colors.faint} />}
+          title="Configured repositories"
+          subtitle={
+            repoConfigs.isError
+              ? "Could not load repository readiness"
+              : repoConfigs.isLoading
+              ? "Loading repo access..."
+              : configuredRepos.length === 0
+                ? "No personal cloud repos configured"
+                : `${configuredRepos.length} ready for mobile new chat`
+          }
+        />
+      </Section>
+
+      <Section label="Teams">
+        {organizations.isError ? (
+          <MobileListRow
+            leading={<RowIcon name="users" tint={colors.warning} />}
+            title="Could not load teams"
+            subtitle="Personal cloud workspaces are still available"
+          />
+        ) : organizations.isLoading ? (
+          <MobileListRow
+            leading={<RowIcon name="users" tint={colors.faint} />}
+            title="Loading teams"
+            subtitle="Checking organization memberships..."
+          />
+        ) : organizationRows.length === 0 ? (
+          <MobileListRow
+            leading={<RowIcon name="users" tint={colors.faint} />}
+            title="No teams"
+            subtitle="Personal cloud workspaces are still available"
+          />
+        ) : (
+          organizationRows.map((organization) => (
+            <MobileListRow
+              key={organization.id}
+              leading={<RowIcon name="users" tint={colors.info} />}
+              title={organization.name}
+              subtitle={organization.membership?.role
+                ? `${organization.membership.role} access`
+                : "Organization workspace"}
+            />
+          ))
+        )}
       </Section>
 
       <Section label="Configure on web or desktop">
         <MobileListRow
-          leading={<RowIcon name="cloud" tint={colors.faint} />}
-          title="MCPs and skills"
-          subtitle="Manage agent tools and skill bundles"
-          trailing={<Lock />}
-        />
-        <MobileListRow
-          leading={<RowIcon name="git-branch" tint={colors.faint} />}
-          title="Workspaces and repos"
-          subtitle="Add cloud workspaces or change repo access"
+          leading={<RowIcon name="settings" tint={colors.faint} />}
+          title="MCPs, skills, and billing actions"
+          subtitle="Advanced cloud setup still opens on Web or Desktop"
           trailing={<Lock />}
         />
       </Section>
@@ -84,6 +179,42 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
       <Text style={styles.footer}>Proliferate Mobile · build 0.1.0</Text>
     </MobileScreen>
   );
+}
+
+function billingSummary(
+  plan: ReturnType<typeof useCloudBilling>["data"],
+  loading: boolean,
+  failed: boolean,
+): string {
+  if (loading && !plan) {
+    return "Loading cloud plan...";
+  }
+  if (failed) {
+    return "Could not load billing state";
+  }
+  if (!plan) {
+    return "Cloud billing unavailable";
+  }
+  const hours = (
+    plan.proBillingEnabled && plan.isPaidCloud
+      ? plan.remainingManagedCloudHours
+      : plan.remainingSandboxHours
+  ) ?? null;
+  const usage = hours === null || hours === undefined
+    ? "unlimited runtime"
+    : `${Math.max(0, Math.round(hours * 10) / 10)}h remaining`;
+  const health = plan.startBlocked
+    ? plan.startBlockReason ?? "starts blocked"
+    : plan.paymentHealthy
+      ? "ready"
+      : "payment attention needed";
+  return `${plan.plan} - ${usage} - ${health}`;
+}
+
+function initialsFor(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
+  return initials || "P";
 }
 
 function RowIcon({ name, tint }: { name: MobileIconName; tint: string }) {
@@ -192,10 +323,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.successSubtle,
   },
+  warningChip: {
+    backgroundColor: colors.warningSubtle,
+  },
   connectedText: {
     color: colors.success,
     fontSize: 11.5,
     fontWeight: "600",
+  },
+  warningText: {
+    color: colors.warning,
   },
   lockChip: {
     flexDirection: "row",

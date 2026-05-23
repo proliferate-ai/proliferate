@@ -11,9 +11,14 @@ import {
   MobileSectionLabel,
 } from "../primitives/MobileLayout";
 import { colors, radius, spacing } from "../../styles/tokens";
+import type { MobileCloudChat } from "../../navigation/navigation-model";
 
-export function MobileWorkspacesScreen() {
-  const workspaces = useCloudWorkspaces({ scope: "exposed" });
+interface MobileWorkspacesScreenProps {
+  onOpenChat: (chat: MobileCloudChat) => void;
+}
+
+export function MobileWorkspacesScreen({ onOpenChat }: MobileWorkspacesScreenProps) {
+  const workspaces = useCloudWorkspaces({ scope: "my" });
   const shared = (workspaces.data ?? []).filter((workspace) => workspace.visibility !== "private");
   const personal = (workspaces.data ?? []).filter((workspace) => workspace.visibility === "private");
 
@@ -35,12 +40,20 @@ export function MobileWorkspacesScreen() {
         <View style={styles.stack}>
           <Section label="Shared" count={shared.length}>
             {shared.map((workspace) => (
-              <WorkspaceRow key={workspace.id} workspace={workspace} />
+              <WorkspaceRow
+                key={workspace.id}
+                workspace={workspace}
+                onOpen={() => onOpenChat(cloudChatForWorkspace(workspace))}
+              />
             ))}
           </Section>
           <Section label="Personal" count={personal.length}>
             {personal.map((workspace) => (
-              <WorkspaceRow key={workspace.id} workspace={workspace} />
+              <WorkspaceRow
+                key={workspace.id}
+                workspace={workspace}
+                onOpen={() => onOpenChat(cloudChatForWorkspace(workspace))}
+              />
             ))}
           </Section>
         </View>
@@ -72,7 +85,13 @@ function Section({
   );
 }
 
-function WorkspaceRow({ workspace }: { workspace: CloudWorkspaceSummary }) {
+function WorkspaceRow({
+  workspace,
+  onOpen,
+}: {
+  workspace: CloudWorkspaceSummary;
+  onOpen: () => void;
+}) {
   const lastSession = workspace.lastSessionSummary;
   return (
     <MobileListRow
@@ -102,9 +121,26 @@ function WorkspaceRow({ workspace }: { workspace: CloudWorkspaceSummary }) {
           </Text>
         </View>
       }
-      showChevron={Boolean(lastSession)}
+      showChevron
+      onPress={onOpen}
     />
   );
+}
+
+function cloudChatForWorkspace(workspace: CloudWorkspaceSummary): MobileCloudChat {
+  const session = workspace.lastSessionSummary;
+  return {
+    workspaceId: workspace.id,
+    workspaceName: workspace.displayName ?? workspace.repo.name,
+    repoLabel: `${workspace.repo.owner}/${workspace.repo.name}`,
+    branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
+    targetId: workspace.targetId ?? session?.targetId ?? null,
+    workspaceRuntimeId: session?.workspaceId ?? null,
+    sessionId: session?.sessionId ?? null,
+    title: session?.title ?? workspace.displayName ?? workspace.repo.name,
+    status: session?.status ?? workspace.workspaceStatus ?? workspace.status,
+    visibility: workspace.visibility,
+  };
 }
 
 const styles = StyleSheet.create({

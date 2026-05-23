@@ -190,6 +190,13 @@ async def stream_session_events(
                     data=CloudStreamHeartbeatResponse().model_dump(by_alias=True),
                 )
                 continue
+            if message.event != "patch":
+                yield _sse_event(
+                    event=message.event,
+                    event_id=message.event_id,
+                    data=message.data,
+                )
+                continue
             message_seq = _int_or_zero(message.event_id)
             if message_seq <= cursor:
                 continue

@@ -1,5 +1,5 @@
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
@@ -28,13 +28,23 @@ import { MobileWorkspacesScreen } from "../workspaces/MobileWorkspacesScreen";
 import { useMobileClientDailyActivity } from "../../hooks/telemetry/use-mobile-client-daily-activity";
 import { useMobileScreenTelemetry } from "../../hooks/telemetry/use-mobile-screen-telemetry";
 import {
+  deleteMobileStorageItem,
+  getMobileStorageItem,
+  setMobileStorageItem,
+} from "../../lib/access/mobile-storage";
+import {
   drawerRoutes,
   routeTitle,
   type MobileCloudChat,
+  type MobilePendingPrompt,
   type RouteId,
 } from "../../navigation/navigation-model";
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
 import { colors, radius, shadow, spacing } from "../../styles/tokens";
+
+const SHELL_ROUTE_KEY = "proliferate.mobile.shell.route";
+const SHELL_CHAT_KEY = "proliferate.mobile.shell.chat";
+const SHELL_STORAGE_VERSION = 1;
 
 export function MobileShell() {
   const {
@@ -51,6 +61,10 @@ export function MobileShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<MobileCloudChat | null>(null);
   const [linkedWorkspaceId, setLinkedWorkspaceId] = useState<string | null>(null);
+  const [linkedWorkspaceSessionId, setLinkedWorkspaceSessionId] = useState<string | null>(null);
+  const [initialLinkChecked, setInitialLinkChecked] = useState(false);
+  const [navigationRestored, setNavigationRestored] = useState(false);
+  const initialLinkAppliedRef = useRef(false);
   const linkedWorkspace = useCloudWorkspaceSnapshot(
     linkedWorkspaceId,
     authState === "active" && linkedWorkspaceId !== null,
@@ -59,6 +73,7 @@ export function MobileShell() {
   const subtitle = useMemo(() => routeSubtitle(route), [route]);
   const account = useMemo(() => accountSummary(user), [user]);
   const telemetryScreen = selectedChat ? "chat" : route;
+  const ownerUserId = user?.id ?? null;
 
   useMobileScreenTelemetry(authState, telemetryScreen);
   const canRecordAuthenticatedActivity = authState === "active" || authState === "needs_github";
@@ -68,24 +83,33 @@ export function MobileShell() {
     routeOrScreen: authState === "needs_github" ? "connect_github" : telemetryScreen,
     viewingChat: authState === "active" && selectedChat !== null,
   });
-  const applyWorkspaceLink = useCallback((url: string | null) => {
-    const workspaceId = workspaceIdFromUrl(url);
-    if (!workspaceId) {
-      return;
+  const applyWorkspaceLink = useCallback((url: string | null): boolean => {
+    const link = workspaceLinkFromUrl(url);
+    if (!link) {
+      return false;
     }
-    setLinkedWorkspaceId(workspaceId);
+    initialLinkAppliedRef.current = true;
+    setLinkedWorkspaceId(link.workspaceId);
+    setLinkedWorkspaceSessionId(link.sessionId);
     setRoute("workspaces");
     setSelectedChat(null);
     setDrawerOpen(false);
+    return true;
   }, []);
 
   useEffect(() => {
     let active = true;
-    void Linking.getInitialURL().then((url) => {
-      if (active) {
-        applyWorkspaceLink(url);
-      }
-    });
+    void Linking.getInitialURL()
+      .then((url) => {
+        if (active) {
+          applyWorkspaceLink(url);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setInitialLinkChecked(true);
+        }
+      });
     const subscription = Linking.addEventListener("url", ({ url }) => {
       applyWorkspaceLink(url);
     });
@@ -96,17 +120,68 @@ export function MobileShell() {
   }, [applyWorkspaceLink]);
 
   useEffect(() => {
+    if (authState !== "active") {
+      setNavigationRestored(false);
+      return;
+    }
+    if (!initialLinkChecked) {
+      return;
+    }
+    if (initialLinkAppliedRef.current) {
+      setNavigationRestored(true);
+      return;
+    }
+    if (!ownerUserId) {
+      return;
+    }
+    let cancelled = false;
+    void restoreShellNavigation(ownerUserId)
+      .then((stored) => {
+        if (cancelled) {
+          return;
+        }
+        if (stored.route) {
+          setRoute(stored.route);
+        }
+        if (stored.chat) {
+          setSelectedChat(stored.chat);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) {
+          setNavigationRestored(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authState, initialLinkChecked, ownerUserId]);
+
+  useEffect(() => {
+    if (authState !== "active" || !navigationRestored || !ownerUserId) {
+      return;
+    }
+    void persistShellNavigation(ownerUserId, route, selectedChat);
+  }, [authState, navigationRestored, ownerUserId, route, selectedChat]);
+
+  useEffect(() => {
     if (!linkedWorkspaceId || !linkedWorkspace.data) {
       return;
     }
-    const chat = linkedChatForWorkspace(linkedWorkspace.data.workspace, linkedWorkspace.data.sessions);
+    const chat = linkedChatForWorkspace(
+      linkedWorkspace.data.workspace,
+      linkedWorkspace.data.sessions,
+      linkedWorkspaceSessionId,
+    );
     if (chat) {
       setSelectedChat(chat);
     } else {
       setRoute("workspaces");
     }
     setLinkedWorkspaceId(null);
-  }, [linkedWorkspace.data, linkedWorkspaceId]);
+    setLinkedWorkspaceSessionId(null);
+  }, [linkedWorkspace.data, linkedWorkspaceId, linkedWorkspaceSessionId]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -139,11 +214,20 @@ export function MobileShell() {
     setDrawerOpen(false);
   }
 
-  function handleSignOut() {
+  const markSelectedChatSession = useCallback((sessionId: string) => {
+    setSelectedChat((current) => current ? { ...current, sessionId } : current);
+  }, []);
+
+  async function handleSignOut() {
     setRoute("home");
     setDrawerOpen(false);
     setSelectedChat(null);
-    signOut();
+    setLinkedWorkspaceId(null);
+    setLinkedWorkspaceSessionId(null);
+    setNavigationRestored(false);
+    initialLinkAppliedRef.current = false;
+    await clearShellNavigation(ownerUserId).catch(() => undefined);
+    await signOut();
   }
 
   if (authState === "bootstrapping") {
@@ -177,7 +261,7 @@ export function MobileShell() {
         <StatusBar style="light" />
         <MobileConnectGitHubScreen
           onConnect={() => void connectGitHub()}
-          onSignOut={handleSignOut}
+          onSignOut={() => void handleSignOut()}
           loading={loadingAction === "github_link"}
           error={error}
         />
@@ -190,7 +274,12 @@ export function MobileShell() {
       <StatusBar style="light" />
 
       {selectedChat ? (
-        <MobileChatScreen chat={selectedChat} onBack={() => setSelectedChat(null)} />
+        <MobileChatScreen
+          chat={selectedChat}
+          ownerUserId={ownerUserId}
+          onBack={() => setSelectedChat(null)}
+          onSessionSelected={markSelectedChatSession}
+        />
       ) : (
         <>
           <MobileTopBar
@@ -207,15 +296,15 @@ export function MobileShell() {
 
           <View style={styles.body}>
             {route === "home" ? (
-              <MobileHomeScreen onOpenSessions={() => navigate("sessions")} />
+              <MobileHomeScreen ownerUserId={ownerUserId} onOpenChat={openChat} />
             ) : route === "workspaces" ? (
-              <MobileWorkspacesScreen />
+              <MobileWorkspacesScreen onOpenChat={openChat} />
             ) : route === "sessions" ? (
               <MobileSessionsScreen onOpenChat={openChat} />
             ) : route === "automations" ? (
               <MobileAutomationsScreen />
             ) : (
-              <MobileSettingsScreen account={account} onSignOut={handleSignOut} />
+              <MobileSettingsScreen account={account} onSignOut={() => void handleSignOut()} />
             )}
           </View>
 
@@ -237,7 +326,7 @@ export function MobileShell() {
           activeRoute={route}
           onNavigate={navigate}
           onClose={() => setDrawerOpen(false)}
-          onSignOut={handleSignOut}
+          onSignOut={() => void handleSignOut()}
           account={account}
         />
       )}
@@ -289,38 +378,251 @@ function routeSubtitle(route: RouteId): string | undefined {
   }
 }
 
-function workspaceIdFromUrl(url: string | null): string | null {
+function workspaceLinkFromUrl(url: string | null): { workspaceId: string; sessionId: string | null } | null {
   if (!url) {
     return null;
   }
-  const match = url.match(
-    /^(?:proliferate:\/\/workspaces\/|https:\/\/app\.proliferate\.ai\/workspaces\/)([^/?#]+)/u,
-  );
-  return match?.[1] ? decodeURIComponent(match[1]) : null;
+  try {
+    const parsed = new URL(url);
+    const rawParts = parsed.pathname.split("/").filter(Boolean);
+    const parts = parsed.protocol === "proliferate:"
+      ? [parsed.hostname, ...rawParts]
+      : rawParts;
+    const workspaceIndex =
+      parts[0] === "cloud" && parts[1] === "workspaces"
+        ? 1
+        : parts[0] === "workspaces"
+          ? 0
+          : -1;
+    const workspaceId = workspaceIndex >= 0 ? parts[workspaceIndex + 1] : null;
+    if (!workspaceId) {
+      return null;
+    }
+    const sessionPathKind = parts[workspaceIndex + 2];
+    const sessionId =
+      sessionPathKind === "chats" || sessionPathKind === "sessions"
+        ? parts[workspaceIndex + 3] ?? null
+        : parsed.searchParams.get("sessionId");
+    return {
+      workspaceId: decodeURIComponent(workspaceId),
+      sessionId: sessionId ? decodeURIComponent(sessionId) : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+interface StoredShellRoute {
+  version: number;
+  ownerUserId: string;
+  route: RouteId;
+  updatedAt: number;
+}
+
+interface StoredShellChat {
+  version: number;
+  ownerUserId: string;
+  chat: MobileCloudChat;
+  updatedAt: number;
+}
+
+async function restoreShellNavigation(ownerUserId: string): Promise<{
+  chat: MobileCloudChat | null;
+  route: RouteId | null;
+}> {
+  const [storedChat, storedRoute] = await Promise.all([
+    getMobileStorageItem(shellChatKey(ownerUserId)),
+    getMobileStorageItem(shellRouteKey(ownerUserId)),
+  ]);
+  void Promise.all([
+    deleteMobileStorageItem(SHELL_CHAT_KEY),
+    deleteMobileStorageItem(SHELL_ROUTE_KEY),
+  ]).catch(() => undefined);
+  const chat = parseStoredShellChat(storedChat, ownerUserId);
+  const route = parseStoredShellRoute(storedRoute, ownerUserId);
+  if (chat) {
+    return { chat, route };
+  }
+  return { chat: null, route };
+}
+
+async function persistShellNavigation(
+  ownerUserId: string,
+  route: RouteId,
+  selectedChat: MobileCloudChat | null,
+): Promise<void> {
+  if (selectedChat) {
+    await Promise.all([
+      setMobileStorageItem(
+        shellChatKey(ownerUserId),
+        JSON.stringify({
+          version: SHELL_STORAGE_VERSION,
+          ownerUserId,
+          chat: selectedChat,
+          updatedAt: Date.now(),
+        } satisfies StoredShellChat),
+      ),
+      setMobileStorageItem(
+        shellRouteKey(ownerUserId),
+        JSON.stringify({
+          version: SHELL_STORAGE_VERSION,
+          ownerUserId,
+          route,
+          updatedAt: Date.now(),
+        } satisfies StoredShellRoute),
+      ),
+    ]);
+    return;
+  }
+  await Promise.all([
+    deleteMobileStorageItem(shellChatKey(ownerUserId)),
+    setMobileStorageItem(
+      shellRouteKey(ownerUserId),
+      JSON.stringify({
+        version: SHELL_STORAGE_VERSION,
+        ownerUserId,
+        route,
+        updatedAt: Date.now(),
+      } satisfies StoredShellRoute),
+    ),
+  ]);
+}
+
+async function clearShellNavigation(ownerUserId: string | null): Promise<void> {
+  const deletes = [
+    deleteMobileStorageItem(SHELL_CHAT_KEY),
+    deleteMobileStorageItem(SHELL_ROUTE_KEY),
+  ];
+  if (ownerUserId) {
+    deletes.push(
+      deleteMobileStorageItem(shellChatKey(ownerUserId)),
+      deleteMobileStorageItem(shellRouteKey(ownerUserId)),
+    );
+  }
+  await Promise.all(deletes);
+}
+
+function parseStoredShellRoute(value: string | null, ownerUserId: string): RouteId | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value) as Partial<StoredShellRoute>;
+    if (
+      parsed.version === SHELL_STORAGE_VERSION
+      && parsed.ownerUserId === ownerUserId
+      && drawerRoutes.some((route) => route.id === parsed.route)
+    ) {
+      return parsed.route as RouteId;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function parseStoredShellChat(value: string | null, ownerUserId: string): MobileCloudChat | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value) as Partial<StoredShellChat>;
+    if (parsed.version === SHELL_STORAGE_VERSION && parsed.ownerUserId === ownerUserId) {
+      return parseStoredChatValue(parsed.chat);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function parseStoredChatValue(value: unknown): MobileCloudChat | null {
+  const parsed = value as Partial<MobileCloudChat>;
+  if (
+    typeof parsed.workspaceId === "string"
+    && typeof parsed.workspaceName === "string"
+    && typeof parsed.repoLabel === "string"
+    && typeof parsed.branchLabel === "string"
+    && (typeof parsed.targetId === "string" || parsed.targetId === null)
+    && (typeof parsed.workspaceRuntimeId === "string" || parsed.workspaceRuntimeId === null)
+    && (typeof parsed.sessionId === "string" || parsed.sessionId === null)
+    && typeof parsed.title === "string"
+    && typeof parsed.status === "string"
+    && typeof parsed.visibility === "string"
+  ) {
+    return {
+      workspaceId: parsed.workspaceId,
+      workspaceName: parsed.workspaceName,
+      repoLabel: parsed.repoLabel,
+      branchLabel: parsed.branchLabel,
+      targetId: parsed.targetId,
+      workspaceRuntimeId: parsed.workspaceRuntimeId,
+      sessionId: parsed.sessionId,
+      title: parsed.title,
+      status: parsed.status,
+      visibility: parsed.visibility,
+      initialPendingPrompt: parseStoredPendingPrompt(parsed.initialPendingPrompt),
+    };
+  }
+  return null;
+}
+
+function parseStoredPendingPrompt(value: unknown): MobilePendingPrompt | null {
+  const parsed = value as Partial<MobilePendingPrompt>;
+  if (!parsed || typeof parsed.id !== "string" || typeof parsed.text !== "string") {
+    return null;
+  }
+  return {
+    id: parsed.id,
+    text: parsed.text,
+    modelId: typeof parsed.modelId === "string" ? parsed.modelId : null,
+    modeId: typeof parsed.modeId === "string" ? parsed.modeId : null,
+    createdAt: typeof parsed.createdAt === "number" ? parsed.createdAt : Date.now(),
+    dispatchedSessionId:
+      typeof parsed.dispatchedSessionId === "string" ? parsed.dispatchedSessionId : null,
+    failedAt: typeof parsed.failedAt === "number" ? parsed.failedAt : null,
+    failureMessage:
+      typeof parsed.failureMessage === "string" ? parsed.failureMessage : null,
+  };
+}
+
+function shellRouteKey(ownerUserId: string): string {
+  return `${SHELL_ROUTE_KEY}.${encodeURIComponent(ownerUserId)}`;
+}
+
+function shellChatKey(ownerUserId: string): string {
+  return `${SHELL_CHAT_KEY}.${encodeURIComponent(ownerUserId)}`;
 }
 
 function linkedChatForWorkspace(
   workspace: CloudWorkspaceDetail,
   sessions: readonly CloudSessionProjection[],
+  linkedSessionId: string | null,
 ): MobileCloudChat | null {
-  const session = [...sessions].sort((left, right) =>
-    (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0)
-  )[0];
-  if (!session) {
-    return null;
-  }
+  const session = linkedSessionId
+    ? sessions.find((candidate) => candidate.sessionId === linkedSessionId) ?? null
+    : [...sessions].sort(compareSessions)[0] ?? null;
   return {
     workspaceId: workspace.id,
     workspaceName: workspace.displayName ?? workspace.repo.name,
     repoLabel: `${workspace.repo.owner}/${workspace.repo.name}`,
     branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
-    targetId: session.targetId,
-    workspaceRuntimeId: session.workspaceId ?? null,
-    sessionId: session.sessionId,
-    title: session.title ?? workspace.displayName ?? workspace.repo.name,
-    status: session.status,
+    targetId: session?.targetId ?? workspace.targetId ?? null,
+    workspaceRuntimeId: session?.workspaceId ?? workspace.anyharnessWorkspaceId ?? null,
+    sessionId: session?.sessionId ?? linkedSessionId,
+    title: session?.title ?? workspace.displayName ?? workspace.repo.name,
+    status: session?.status ?? workspace.workspaceStatus ?? workspace.status,
     visibility: workspace.visibility,
   };
+}
+
+function compareSessions(left: CloudSessionProjection, right: CloudSessionProjection): number {
+  return sessionRecencyMs(right) - sessionRecencyMs(left)
+    || (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
+}
+
+function sessionRecencyMs(session: Pick<CloudSessionProjection, "lastEventAt" | "startedAt">): number {
+  return Date.parse(session.lastEventAt ?? session.startedAt ?? "") || 0;
 }
 
 interface DrawerProps {

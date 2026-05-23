@@ -14,7 +14,7 @@ from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.integrations.pubsub.models import PubSubMessage
 from proliferate.integrations.pubsub.redis import get_pubsub_bus
 from proliferate.server.cloud.live import service as live_service
-from proliferate.server.cloud.live.domain.channels import target_channel
+from proliferate.server.cloud.live.domain.channels import session_channel, target_channel
 from proliferate.server.cloud.live.service import (
     stream_session_events,
     stream_target_events,
@@ -139,6 +139,118 @@ class TestCloudEventStreamsApi:
             assert mapping(mapping(patch_event["event"])["item"])["contentParts"] == [
                 {"type": "text", "text": "streamed response"}
             ]
+        finally:
+            await stream.aclose()
+
+    @pytest.mark.asyncio
+    async def test_session_stream_command_status_does_not_advance_transcript_cursor(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-session-command-cursor",
+        )
+        target_id, worker_headers = await create_enrolled_target(
+            client,
+            db_session,
+            auth,
+            suffix="session-command-cursor",
+        )
+        await seed_exposed_session_projection(
+            db_session,
+            target_id=target_id,
+            auth=auth,
+            workspace_id="workspace-command-cursor",
+            session_id="session-command-cursor",
+        )
+        uploaded = await client.post(
+            "/v1/cloud/worker/events/batches",
+            headers=worker_headers,
+            json={
+                "events": [
+                    {
+                        "workspaceId": "workspace-command-cursor",
+                        "sessionId": "session-command-cursor",
+                        "seq": 1,
+                        "timestamp": "2026-05-13T00:00:00Z",
+                        "event": {
+                            "type": "session_started",
+                            "nativeSessionId": "native-command-cursor",
+                            "sourceAgentKind": "codex",
+                        },
+                    }
+                ]
+            },
+        )
+        assert uploaded.status_code == 200
+
+        stream = cast(
+            "AsyncGenerator[str, None]",
+            stream_session_events(
+                target_id=UUID(target_id),
+                session_id="session-command-cursor",
+                after_seq=1,
+            ),
+        )
+        try:
+            snapshot_frame = await asyncio.wait_for(anext(stream), timeout=1)
+            assert sse_event(snapshot_frame) == "snapshot"
+            assert sse_id(snapshot_frame) == "1"
+
+            bus = get_pubsub_bus()
+            command_status_task: asyncio.Task[str] = asyncio.create_task(next_stream_frame(stream))
+            await bus.publish(
+                session_channel(
+                    target_id=UUID(target_id),
+                    session_id="session-command-cursor",
+                ),
+                PubSubMessage(
+                    event="command_status",
+                    event_id="9999999999999",
+                    data={"kind": "command_status"},
+                ),
+            )
+            command_status_frame = await asyncio.wait_for(command_status_task, timeout=1)
+            assert sse_event(command_status_frame) == "command_status"
+            assert sse_id(command_status_frame) == "9999999999999"
+
+            patch_task: asyncio.Task[str] = asyncio.create_task(next_stream_frame(stream))
+            live_uploaded = await client.post(
+                "/v1/cloud/worker/events/batches",
+                headers=worker_headers,
+                json={
+                    "events": [
+                        {
+                            "workspaceId": "workspace-command-cursor",
+                            "sessionId": "session-command-cursor",
+                            "seq": 2,
+                            "timestamp": "2026-05-13T00:00:01Z",
+                            "turnId": "turn-command-cursor",
+                            "itemId": "item-command-cursor",
+                            "event": {
+                                "type": "item_completed",
+                                "item": {
+                                    "kind": "assistant_message",
+                                    "status": "completed",
+                                    "sourceAgentKind": "codex",
+                                    "contentParts": [{"type": "text", "text": "still visible"}],
+                                },
+                            },
+                        }
+                    ]
+                },
+            )
+            assert live_uploaded.status_code == 200
+
+            patch_frame = await asyncio.wait_for(patch_task, timeout=2)
+            assert sse_event(patch_frame) == "patch"
+            assert sse_id(patch_frame) == "2"
+            patch_envelope = sse_data(patch_frame)
+            assert patch_envelope["kind"] == "projection_patch"
+            assert mapping(patch_envelope["patch"])["eventType"] == "item_completed"
         finally:
             await stream.aclose()
 

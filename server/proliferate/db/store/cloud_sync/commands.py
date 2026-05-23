@@ -253,21 +253,18 @@ async def expire_stale_queued_commands(
     error_message: str,
     now: datetime,
 ) -> tuple[CloudCommandSnapshot, ...]:
-    query = (
-        select(CloudCommand)
-        .where(
-            or_(
-                and_(
-                    CloudCommand.status == CloudCommandStatus.queued.value,
-                    CloudCommand.created_at <= older_than,
-                ),
-                and_(
-                    CloudCommand.status == CloudCommandStatus.leased.value,
-                    CloudCommand.created_at <= older_than,
-                    CloudCommand.lease_expires_at.is_not(None),
-                    CloudCommand.lease_expires_at <= now,
-                ),
-            )
+    query = select(CloudCommand).where(
+        or_(
+            and_(
+                CloudCommand.status == CloudCommandStatus.queued.value,
+                CloudCommand.created_at <= older_than,
+            ),
+            and_(
+                CloudCommand.status == CloudCommandStatus.leased.value,
+                CloudCommand.created_at <= older_than,
+                CloudCommand.lease_expires_at.is_not(None),
+                CloudCommand.lease_expires_at <= now,
+            ),
         )
     )
     if target_id is not None:
@@ -279,8 +276,9 @@ async def expire_stale_queued_commands(
     rows = list(
         (
             await db.execute(
-                query.with_for_update()
-                .order_by(CloudCommand.created_at.asc(), CloudCommand.id.asc())
+                query.with_for_update().order_by(
+                    CloudCommand.created_at.asc(), CloudCommand.id.asc()
+                )
             )
         )
         .scalars()

@@ -1,6 +1,12 @@
 import { StyleSheet, Text, View } from "react-native";
-import { useCloudWorkspaces } from "@proliferate/cloud-sdk-react";
-import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
+import {
+  useCloudWorkspaceSnapshot,
+  useCloudWorkspaces,
+} from "@proliferate/cloud-sdk-react";
+import type {
+  CloudSessionProjection,
+  CloudWorkspaceSummary,
+} from "@proliferate/cloud-sdk";
 
 import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileKindIcon } from "../primitives/MobileKindIcon";
@@ -15,8 +21,12 @@ interface MobileSessionsScreenProps {
 }
 
 export function MobileSessionsScreen({ onOpenChat }: MobileSessionsScreenProps) {
-  const workspaces = useCloudWorkspaces({ scope: "exposed" });
-  const chats = (workspaces.data ?? []).flatMap(cloudChatsForWorkspace);
+  const workspaces = useCloudWorkspaces({ scope: "my" });
+  const workspaceRows = workspaces.data ?? [];
+  const projectedSessionCount = workspaceRows.reduce(
+    (count, workspace) => count + (workspace.lastSessionSummary ? 1 : 0),
+    0,
+  );
 
   return (
     <MobileScreen contentStyle={styles.screenContent}>
@@ -24,23 +34,53 @@ export function MobileSessionsScreen({ onOpenChat }: MobileSessionsScreenProps) 
         <MobileEmptyState title="Loading sessions" body="Fetching projected cloud sessions." />
       ) : workspaces.error ? (
         <MobileEmptyState title="Could not load sessions" body="Refresh or sign in again." />
-      ) : chats.length === 0 ? (
+      ) : projectedSessionCount === 0 ? (
         <MobileEmptyState
           title="No projected sessions"
           body="Cloud sessions appear here after a workspace has live projection."
         />
       ) : (
         <View style={styles.list}>
-          {chats.map((chat) => (
-            <SessionRow
-              key={`${chat.workspaceId}:${chat.sessionId}`}
-              chat={chat}
-              onPress={() => onOpenChat(chat)}
+          {workspaceRows.map((workspace) => (
+            <WorkspaceSessionRows
+              key={workspace.id}
+              workspace={workspace}
+              onOpenChat={onOpenChat}
             />
           ))}
         </View>
       )}
     </MobileScreen>
+  );
+}
+
+function WorkspaceSessionRows({
+  workspace,
+  onOpenChat,
+}: {
+  workspace: CloudWorkspaceSummary;
+  onOpenChat: (chat: MobileCloudChat) => void;
+}) {
+  const snapshot = useCloudWorkspaceSnapshot(workspace.id, Boolean(workspace.lastSessionSummary));
+  const sessions = snapshot.data?.sessions.length
+    ? [...snapshot.data.sessions].sort(compareSessions)
+    : workspace.lastSessionSummary
+      ? [sessionProjectionFromSummary(workspace)]
+      : [];
+
+  return (
+    <>
+      {sessions.map((session) => {
+        const chat = cloudChatForSession(workspace, session);
+        return (
+          <SessionRow
+            key={`${workspace.id}:${session.sessionId}`}
+            chat={chat}
+            onPress={() => onOpenChat(chat)}
+          />
+        );
+      })}
+    </>
   );
 }
 
@@ -52,7 +92,7 @@ function SessionRow({ chat, onPress }: { chat: MobileCloudChat; onPress: () => v
       onPress={onPress}
       leading={<MobileKindIcon kind={unclaimed ? "shared-chat" : "cloud"} />}
       title={chat.title}
-      subtitle={`${chat.workspaceName} · ${chat.repoLabel}`}
+      subtitle={`${chat.workspaceName} · ${chat.repoLabel} · ${shortSessionLabel(chat.sessionId)}`}
       trailing={
         <View style={styles.trailing}>
           {unclaimed ? (
@@ -71,25 +111,70 @@ function SessionRow({ chat, onPress }: { chat: MobileCloudChat; onPress: () => v
   );
 }
 
-function cloudChatsForWorkspace(workspace: CloudWorkspaceSummary): MobileCloudChat[] {
+function cloudChatForSession(
+  workspace: CloudWorkspaceSummary,
+  session: Pick<
+    CloudSessionProjection,
+    "sessionId" | "targetId" | "workspaceId" | "title" | "status"
+  >,
+): MobileCloudChat {
+  return {
+    workspaceId: workspace.id,
+    workspaceName: workspace.displayName ?? workspace.repo.name,
+    repoLabel: `${workspace.repo.owner}/${workspace.repo.name}`,
+    branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
+    targetId: session.targetId,
+    workspaceRuntimeId: session.workspaceId ?? null,
+    sessionId: session.sessionId,
+    title: session.title ?? workspace.displayName ?? workspace.repo.name,
+    status: session.status,
+    visibility: workspace.visibility,
+  };
+}
+
+function sessionProjectionFromSummary(
+  workspace: CloudWorkspaceSummary,
+): Pick<
+  CloudSessionProjection,
+  "sessionId" | "targetId" | "workspaceId" | "title" | "status" | "lastEventSeq"
+> & SessionRecencyFields {
   const session = workspace.lastSessionSummary;
   if (!session) {
-    return [];
+    throw new Error("Cannot build a session row without a workspace session summary.");
   }
-  return [
-    {
-      workspaceId: workspace.id,
-      workspaceName: workspace.displayName ?? workspace.repo.name,
-      repoLabel: `${workspace.repo.owner}/${workspace.repo.name}`,
-      branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
-      targetId: session.targetId,
-      workspaceRuntimeId: session.workspaceId ?? null,
-      sessionId: session.sessionId,
-      title: session.title ?? workspace.displayName ?? workspace.repo.name,
-      status: session.status,
-      visibility: workspace.visibility,
-    },
-  ];
+  return {
+    sessionId: session.sessionId,
+    targetId: session.targetId,
+    workspaceId: session.workspaceId ?? null,
+    title: session.title ?? null,
+    status: session.status,
+    lastEventSeq: 0,
+    lastEventAt: session.lastEventAt ?? null,
+  };
+}
+
+function compareSessions(
+  left: SessionRecencyFields,
+  right: SessionRecencyFields,
+): number {
+  return sessionRecencyMs(right) - sessionRecencyMs(left)
+    || (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
+}
+
+function sessionRecencyMs(
+  session: SessionRecencyFields,
+): number {
+  return Date.parse(session.lastEventAt ?? session.startedAt ?? "") || 0;
+}
+
+interface SessionRecencyFields {
+  lastEventAt?: string | null;
+  startedAt?: string | null;
+  lastEventSeq?: number | null;
+}
+
+function shortSessionLabel(sessionId: string | null): string {
+  return sessionId ? `session ${sessionId.slice(0, 8)}` : "new session";
 }
 
 function mobileStatus(status: string): "running" | "idle" | "paused" | "failed" | "done" {

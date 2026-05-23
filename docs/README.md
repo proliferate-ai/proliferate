@@ -35,6 +35,9 @@ start of the task, not after implementation has already started.
   - chat composer and composer-adjacent surfaces
 - `docs/frontend/specs/chat-transcript.md`
   - transcript streaming, replay, row models, and long-history rendering
+- `docs/frontend/specs/mobile-cloud-client.md`
+  - mobile cloud client parity, native chat UI, workspace/session workflows,
+    automations, and settings
 - `docs/frontend/specs/workspace-files.md`
   - workspace file browsing, file viewing, diff viewing, and Changes
 

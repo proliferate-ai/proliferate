@@ -9,6 +9,7 @@
     "ios": "pnpm build:shared && expo start --ios",
     "android": "pnpm build:shared && expo start --android",
     "web": "pnpm build:shared && expo start --web",
+    "web:profile": "pnpm build:shared && expo start --web --host localhost --port ${PROLIFERATE_MOBILE_WEB_PORT:-5175}",
     "typecheck": "pnpm build:shared && tsc --noEmit",
     "build:ios": "pnpm build:shared && pnpm dlx eas-cli@18.13.0 build --platform ios --profile production",
     "build:ios:preview": "pnpm build:shared && pnpm dlx eas-cli@18.13.0 build --platform ios --profile preview",
@@ -38,7 +39,8 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-safe-area-context": "~5.6.2",
-    "react-native-svg": "15.12.1"
+    "react-native-svg": "15.12.1",
+    "react-native-web": "^0.21.2"
   },
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",

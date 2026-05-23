@@ -47,6 +47,14 @@
       "types": "./dist/chats/fixtures.d.ts",
       "import": "./dist/chats/fixtures.js"
     },
+    "./chats/cloud/composer-controls": {
+      "types": "./dist/chats/cloud/composer-controls.d.ts",
+      "import": "./dist/chats/cloud/composer-controls.js"
+    },
+    "./chats/cloud/transcript-view": {
+      "types": "./dist/chats/cloud/transcript-view.d.ts",
+      "import": "./dist/chats/cloud/transcript-view.js"
+    },
     "./chats/transcript/envelope-to-state": {
       "types": "./dist/chats/transcript/envelope-to-state.d.ts",
       "import": "./dist/chats/transcript/envelope-to-state.js"
@@ -265,12 +273,13 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "pnpm --filter @anyharness/sdk build && pnpm --filter @proliferate/cloud-sdk build && tsc -p tsconfig.json",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "pnpm --filter @anyharness/sdk build && pnpm --filter @proliferate/cloud-sdk build && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@anyharness/sdk": "workspace:*"
+    "@anyharness/sdk": "workspace:*",
+    "@proliferate/cloud-sdk": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7",

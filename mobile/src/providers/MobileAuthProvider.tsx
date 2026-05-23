@@ -1,4 +1,3 @@
-import * as SecureStore from "expo-secure-store";
 import {
   createContext,
   type ReactNode,
@@ -7,6 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { Platform } from "react-native";
 
 import {
   refreshMobileSession,
@@ -20,10 +20,17 @@ import {
   runMobileOAuthFlow,
 } from "../lib/access/cloud/auth/mobile-auth-flow";
 import { createMobileCloudClient } from "../lib/access/cloud/client";
+import {
+  deleteSecureMobileStorageItem,
+  getSecureMobileStorageItem,
+  setSecureMobileStorageItem,
+} from "../lib/access/mobile-storage";
 import { mobileEnv } from "../config/env";
 
 const ACCESS_TOKEN_KEY = "proliferate.mobile.accessToken";
 const REFRESH_TOKEN_KEY = "proliferate.mobile.refreshToken";
+const SIGNED_OUT_KEY = "proliferate.mobile.signedOutAt";
+const DEV_REFRESH_TOKEN_PARAM = "proliferateDevRefreshToken";
 
 export type MobileAuthState = "bootstrapping" | "signed_out" | "needs_github" | "active";
 export type MobileAuthAction = AuthProviderName | "github_link" | null;
@@ -125,7 +132,17 @@ export function MobileAuthProvider({ children }: { children: ReactNode }) {
       async signOut() {
         setLoadingAction(null);
         setError(null);
-        await clearStoredSession();
+        let tombstoneWritten = false;
+        try {
+          await setSecureMobileStorageItem(SIGNED_OUT_KEY, new Date().toISOString());
+          tombstoneWritten = true;
+          await clearStoredSession();
+        } catch (signOutError) {
+          if (!tombstoneWritten) {
+            setError(errorMessage(signOutError));
+            return;
+          }
+        }
         setAccessToken(null);
         setUser(null);
         setAuthState("signed_out");
@@ -150,7 +167,14 @@ export function useMobileAuth() {
 }
 
 async function bootstrapSession(): Promise<AuthSessionResponse | null> {
-  const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+  const devRefreshToken = readDevWebRefreshTokenFromLocation();
+  if (devRefreshToken) {
+    await deleteSecureMobileStorageItem(SIGNED_OUT_KEY).catch(() => undefined);
+  } else if (await getSecureMobileStorageItem(SIGNED_OUT_KEY)) {
+    await clearStoredSession().catch(() => undefined);
+    return null;
+  }
+  const refreshToken = devRefreshToken ?? (await getSecureMobileStorageItem(REFRESH_TOKEN_KEY));
   if (!refreshToken) {
     return null;
   }
@@ -164,6 +188,55 @@ async function bootstrapSession(): Promise<AuthSessionResponse | null> {
   );
 }
 
+function readDevWebRefreshTokenFromLocation(): string | null {
+  const webWindow = typeof window !== "undefined" ? window : undefined;
+  const globalScope = typeof globalThis !== "undefined"
+    ? globalThis as {
+      history?: { replaceState?: (data: unknown, unused: string, url?: string) => void };
+      location?: {
+        hash: string;
+        hostname: string;
+        pathname: string;
+        search: string;
+      };
+    }
+    : undefined;
+  const location = webWindow?.location ?? globalScope?.location;
+  const history = webWindow?.history ?? globalScope?.history;
+  if (
+    Platform.OS !== "web"
+    || !location
+    || !isLocalDevWebHost(location.hostname)
+  ) {
+    return null;
+  }
+
+  const hash = location.hash.startsWith("#") ? location.hash.slice(1) : location.hash;
+  const params = new URLSearchParams(hash.startsWith("?") ? hash.slice(1) : hash);
+  const refreshToken = params.get(DEV_REFRESH_TOKEN_PARAM);
+  if (!refreshToken) {
+    return null;
+  }
+
+  params.delete(DEV_REFRESH_TOKEN_PARAM);
+  const nextHash = params.toString();
+  const nextUrl = `${location.pathname}${location.search}${nextHash ? `#${nextHash}` : ""}`;
+  if (history?.replaceState) {
+    history.replaceState(null, "", nextUrl);
+  } else {
+    try {
+      location.hash = nextHash ? `#${nextHash}` : "";
+    } catch {
+      // Some embedded web harnesses expose a read-only Location fragment.
+    }
+  }
+  return refreshToken;
+}
+
+function isLocalDevWebHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
 async function applySession(
   session: AuthSessionResponse,
   setAccessToken: (token: string | null) => void,
@@ -172,17 +245,20 @@ async function applySession(
 ): Promise<void> {
   setAccessToken(session.accessToken);
   setUser(session.user);
-  await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, session.accessToken);
+  await Promise.all([
+    setSecureMobileStorageItem(ACCESS_TOKEN_KEY, session.accessToken),
+    deleteSecureMobileStorageItem(SIGNED_OUT_KEY),
+  ]);
   if (session.refreshToken) {
-    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, session.refreshToken);
+    await setSecureMobileStorageItem(REFRESH_TOKEN_KEY, session.refreshToken);
   }
   setAuthState(session.readiness.productReady ? "active" : "needs_github");
 }
 
 async function clearStoredSession(): Promise<void> {
   await Promise.all([
-    SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
-    SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
+    deleteSecureMobileStorageItem(ACCESS_TOKEN_KEY),
+    deleteSecureMobileStorageItem(REFRESH_TOKEN_KEY),
   ]);
 }
 
