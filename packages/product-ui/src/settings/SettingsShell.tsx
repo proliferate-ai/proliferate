@@ -25,6 +25,7 @@ export interface SettingsShellProps {
   onNavigateHome?: () => void;
   updateAction?: ReactNode;
   className?: string;
+  contentClassName?: string;
 }
 
 export function SettingsShell({
@@ -35,6 +36,7 @@ export function SettingsShell({
   onNavigateHome,
   updateAction,
   className = "",
+  contentClassName = "",
 }: SettingsShellProps) {
   return (
     <div
@@ -95,7 +97,9 @@ export function SettingsShell({
 
       <main className="min-w-0 flex-1">
         <AutoHideScrollArea className="h-full">
-          <div className="mx-auto w-full max-w-3xl px-8 py-10">{children}</div>
+          <div className={twMerge("mx-auto w-full max-w-3xl px-8 py-10", contentClassName)}>
+            {children}
+          </div>
         </AutoHideScrollArea>
       </main>
     </div>

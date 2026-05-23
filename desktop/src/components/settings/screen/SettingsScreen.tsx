@@ -222,7 +222,11 @@ export function SettingsScreen({
         <div className="absolute left-0 right-0 top-0 h-10" data-tauri-drag-region="true" />
         <AutoHideScrollArea className="h-full" viewportClassName="px-8 pt-12">
           <div className="flex justify-center pb-16">
-            <div className="w-full max-w-[46rem] space-y-7">
+            <div
+              className={`w-full space-y-7 ${
+                activeSection === "billing" ? "max-w-[72rem]" : "max-w-[46rem]"
+              }`}
+            >
               <SettingsContentBoundary section={activeSection}>
                 {renderSettingsSection(
                   activeSection,

@@ -584,10 +584,10 @@ function writeLaunchEnv(paths, env) {
     ...orderedEnv(env, persistedKeys),
     ANYHARNESS_DEV_URL: `http://127.0.0.1:${env.ANYHARNESS_PORT}`,
     VITE_PROLIFERATE_API_BASE_URL: `http://127.0.0.1:${env.PROLIFERATE_API_PORT}`,
-    VITE_PROLIFERATE_WEB_BASE_URL: `http://localhost:${env.PROLIFERATE_HOSTED_WEB_PORT}`,
+    VITE_PROLIFERATE_WEB_BASE_URL: `http://127.0.0.1:${env.PROLIFERATE_HOSTED_WEB_PORT}`,
     EXPO_PUBLIC_PROLIFERATE_API_BASE_URL: `http://127.0.0.1:${env.PROLIFERATE_API_PORT}`,
     API_BASE_URL: `http://127.0.0.1:${env.PROLIFERATE_API_PORT}`,
-    FRONTEND_BASE_URL: `http://localhost:${env.PROLIFERATE_HOSTED_WEB_PORT}`,
+    FRONTEND_BASE_URL: `http://127.0.0.1:${env.PROLIFERATE_HOSTED_WEB_PORT}`,
     CORS_ALLOW_ORIGINS: [
       `http://localhost:${env.PROLIFERATE_WEB_PORT}`,
       `http://127.0.0.1:${env.PROLIFERATE_WEB_PORT}`,

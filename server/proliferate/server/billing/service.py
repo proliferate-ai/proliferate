@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 from datetime import datetime
@@ -673,6 +674,11 @@ def _require_redirect_urls() -> tuple[str, str, str]:
     return success_url, cancel_url, portal_return_url
 
 
+def _idempotency_shape_suffix(*parts: str | int | None) -> str:
+    payload = "\0".join("" if part is None else str(part) for part in parts)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
 def _require_owner_selection_uuid(value: str | UUID | None, *, field: str) -> UUID:
     if isinstance(value, UUID):
         return value
@@ -869,7 +875,10 @@ async def create_cloud_checkout_session(
             portal = await stripe_billing.create_customer_portal_session(
                 stripe_customer_id=stripe_customer_id,
                 return_url=portal_return_url,
-                idempotency_key=f"portal:active-cloud:{subject_id}",
+                idempotency_key=(
+                    f"portal:active-cloud:{subject_id}:"
+                    f"{_idempotency_shape_suffix(portal_return_url)}"
+                ),
             )
         except stripe_billing.StripeBillingError as error:
             raise _map_stripe_error(error) from error
@@ -881,6 +890,16 @@ async def create_cloud_checkout_session(
             if settings.pro_billing_enabled
             else settings.stripe_cloud_monthly_price_id
         )
+        overage_price_id = (
+            configured_managed_cloud_overage_price_id() if settings.pro_billing_enabled else None
+        )
+        checkout_shape = _idempotency_shape_suffix(
+            monthly_price_id,
+            overage_price_id,
+            seat_quantity,
+            success_url,
+            cancel_url,
+        )
         checkout = await stripe_billing.create_subscription_checkout_session(
             stripe_customer_id=stripe_customer_id,
             billing_subject_id=str(subject_id),
@@ -891,18 +910,14 @@ async def create_cloud_checkout_session(
             ),
             created_by_user_id=str(user.id) if org_context is not None else None,
             cloud_monthly_price_id=monthly_price_id,
-            overage_price_id=(
-                configured_managed_cloud_overage_price_id()
-                if settings.pro_billing_enabled
-                else None
-            ),
+            overage_price_id=overage_price_id,
             seat_quantity=seat_quantity,
             success_url=success_url,
             cancel_url=cancel_url,
             idempotency_key=(
-                f"cloud-checkout:org:{subject_id}:seats:{seat_quantity}"
+                f"cloud-checkout:org:{subject_id}:seats:{seat_quantity}:{checkout_shape}"
                 if org_context is not None
-                else f"cloud-checkout:{subject_id}"
+                else f"cloud-checkout:{subject_id}:{checkout_shape}"
             ),
         )
     except stripe_billing.StripeBillingError as error:
@@ -938,6 +953,11 @@ async def create_refill_checkout_session(
         user,
         selection,
     )
+    refill_shape = _idempotency_shape_suffix(
+        settings.stripe_refill_10h_price_id,
+        success_url,
+        cancel_url,
+    )
     try:
         checkout = await stripe_billing.create_refill_checkout_session(
             stripe_customer_id=stripe_customer_id,
@@ -945,7 +965,7 @@ async def create_refill_checkout_session(
             refill_price_id=settings.stripe_refill_10h_price_id,
             success_url=success_url,
             cancel_url=cancel_url,
-            idempotency_key=f"refill-10h:{subject_id}",
+            idempotency_key=f"refill-10h:{subject_id}:{refill_shape}",
         )
     except stripe_billing.StripeBillingError as error:
         raise _map_stripe_error(error) from error
@@ -967,7 +987,7 @@ async def create_customer_portal_session(
         portal = await stripe_billing.create_customer_portal_session(
             stripe_customer_id=stripe_customer_id,
             return_url=portal_return_url,
-            idempotency_key=f"portal:{subject_id}",
+            idempotency_key=f"portal:{subject_id}:{_idempotency_shape_suffix(portal_return_url)}",
         )
     except stripe_billing.StripeBillingError as error:
         raise _map_stripe_error(error) from error

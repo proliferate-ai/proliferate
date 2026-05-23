@@ -80,8 +80,9 @@ export async function updateAutomation(
 
 export async function pauseAutomation(
   automationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AutomationResponse> {
-  return pauseAutomationWithClient(automationId, getProliferateClient());
+  return pauseAutomationWithClient(automationId, client);
 }
 
 export async function pauseAutomationWithClient(
@@ -97,8 +98,9 @@ export async function pauseAutomationWithClient(
 
 export async function resumeAutomation(
   automationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AutomationResponse> {
-  return resumeAutomationWithClient(automationId, getProliferateClient());
+  return resumeAutomationWithClient(automationId, client);
 }
 
 export async function resumeAutomationWithClient(
@@ -114,8 +116,9 @@ export async function resumeAutomationWithClient(
 
 export async function runAutomationNow(
   automationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AutomationRunResponse> {
-  return runAutomationNowWithClient(automationId, getProliferateClient());
+  return runAutomationNowWithClient(automationId, client);
 }
 
 export async function runAutomationNowWithClient(

@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Building2,
   Check,
+  CheckCircle2,
   Cloud,
   CreditCard,
   Gauge,
@@ -78,16 +79,21 @@ export interface BillingOwnerCardView {
 export interface BillingSettingsPaneProps {
   children: ReactNode;
   planComparisonAction?: BillingActionView;
+  currentPlanKey?: BillingPlanColumn["key"] | null;
+  checkoutReturnState?: "success" | "cancel" | null;
 }
 
 export function BillingSettingsPane({
   children,
   planComparisonAction,
+  currentPlanKey,
+  checkoutReturnState,
 }: BillingSettingsPaneProps) {
   return (
     <div className="space-y-6">
+      {checkoutReturnState ? <CheckoutReturnNotice state={checkoutReturnState} /> : null}
+      <PlanComparisonCard action={planComparisonAction} currentPlanKey={currentPlanKey ?? null} />
       {children}
-      <PlanComparisonCard action={planComparisonAction} />
     </div>
   );
 }
@@ -234,14 +240,26 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
   );
 }
 
-function PlanComparisonCard({ action }: { action?: BillingActionView }) {
+function PlanComparisonCard({
+  action,
+  currentPlanKey,
+}: {
+  action?: BillingActionView;
+  currentPlanKey: BillingPlanColumn["key"] | null;
+}) {
   return (
     <section className="space-y-4">
-      <div className="space-y-0.5">
-        <h2 className="text-sm font-medium text-foreground">Plans</h2>
-        <p className="text-sm text-muted-foreground">
-          Free covers personal work. Team unlocks shared cloud, Slack, and pooled usage for an organization.
-        </p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold text-foreground">Plans</h2>
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            Start free for personal work. Upgrade when your team needs shared cloud,
+            Slack-driven sessions, pooled runtime, and organization controls.
+          </p>
+        </div>
+        {action ? (
+          <BillingButton action={action} variant="primary" className="w-full sm:w-auto" />
+        ) : null}
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
@@ -250,6 +268,7 @@ function PlanComparisonCard({ action }: { action?: BillingActionView }) {
             key={plan.key}
             plan={plan}
             action={plan.key === "team" ? action : undefined}
+            current={currentPlanKey === plan.key}
           />
         ))}
       </div>
@@ -280,12 +299,22 @@ function PlanComparisonCard({ action }: { action?: BillingActionView }) {
 function PlanSummaryCard({
   plan,
   action,
+  current,
 }: {
   plan: BillingPlanColumn;
   action?: BillingActionView;
+  current: boolean;
 }) {
   return (
-    <SettingsCard className={plan.featured ? "border-border-heavy bg-foreground/[0.04]" : ""}>
+    <SettingsCard
+      className={
+        current
+          ? "border-info/50 bg-info/10"
+          : plan.featured
+            ? "border-border-heavy bg-foreground/[0.04]"
+            : ""
+      }
+    >
       <div className="flex h-full flex-col gap-5 p-4">
         <div className="space-y-3">
           <div className="flex items-start justify-between gap-3">
@@ -293,7 +322,7 @@ function PlanSummaryCard({
               <div className="text-sm font-medium text-foreground">{plan.name}</div>
               <div className="mt-1 text-xs leading-5 text-muted-foreground">{plan.tagline}</div>
             </div>
-            {plan.featured ? <Badge tone="info">Popular</Badge> : null}
+            {current ? <Badge tone="success">Current</Badge> : plan.featured ? <Badge tone="info">Popular</Badge> : null}
           </div>
           <div>
             <div className="text-3xl font-semibold text-foreground">{plan.price}</div>
@@ -316,13 +345,44 @@ function PlanSummaryCard({
           </ul>
         </div>
 
-        {action ? (
+        {current ? (
+          <Button type="button" variant="secondary" disabled className="mt-auto w-full">
+            Current plan
+          </Button>
+        ) : action ? (
           <BillingButton action={action} variant="primary" className="mt-auto w-full" />
         ) : (
           <div className="mt-auto h-8" aria-hidden />
         )}
       </div>
     </SettingsCard>
+  );
+}
+
+function CheckoutReturnNotice({ state }: { state: "success" | "cancel" }) {
+  if (state === "success") {
+    return (
+      <div className="rounded-lg border border-success/40 bg-success/10 p-4 text-foreground">
+        <div className="flex items-start gap-3">
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
+          <div className="min-w-0">
+            <div className="text-sm font-medium">Stripe checkout completed</div>
+            <p className="mt-1 text-sm leading-5 text-muted-foreground">
+              Billing is refreshing from Stripe. If the relevant billing card has not updated yet,
+              wait a moment for the webhook to finish and refresh this page.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Notice
+      tone="warning"
+      title="Stripe checkout canceled"
+      description="No plan change was made. You can restart checkout from the Team plan card."
+    />
   );
 }
 

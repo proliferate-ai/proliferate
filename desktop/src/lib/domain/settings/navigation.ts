@@ -16,6 +16,7 @@ const FOCUS_PARAM_NAMES = [
   "kind",
   "cloudRepoOwner",
   "cloudRepoName",
+  "checkout",
 ] as const;
 
 type SettingsFocusParam = (typeof FOCUS_PARAM_NAMES)[number];
@@ -123,6 +124,7 @@ export interface SettingsSelectionInput {
   rawTarget?: string | null;
   rawCredential?: string | null;
   rawKind?: string | null;
+  rawCheckout?: string | null;
   rawInviteHandoff?: string | null;
   repositories: SettingsRepositoryEntry[];
 }
@@ -143,6 +145,7 @@ export function resolveSettingsSelection({
   rawTarget = null,
   rawCredential = null,
   rawKind = null,
+  rawCheckout = null,
   rawInviteHandoff = null,
   repositories,
 }: SettingsSelectionInput): SettingsSelection {
@@ -167,6 +170,7 @@ export function resolveSettingsSelection({
     target: rawTarget,
     credential: rawCredential,
     kind: rawKind,
+    checkout: rawCheckout,
     cloudRepoOwner: rawCloudRepoOwner,
     cloudRepoName: rawCloudRepoName,
   });
@@ -265,6 +269,9 @@ function sanitizeFocusForSection(
       cloudRepoOwner: focus.cloudRepoOwner,
       cloudRepoName: focus.cloudRepoName,
     });
+  }
+  if (section === "billing") {
+    return pickFocus({ checkout: focus.checkout });
   }
   return {};
 }

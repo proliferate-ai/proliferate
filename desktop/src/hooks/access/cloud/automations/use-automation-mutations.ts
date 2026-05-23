@@ -47,17 +47,17 @@ export function useAutomationMutations() {
   });
 
   const pauseMutation = useMutation<AutomationResponse, Error, string>({
-    mutationFn: pauseAutomation,
+    mutationFn: (automationId) => pauseAutomation(automationId),
     onSuccess: (automation) => invalidateAutomation(automation.id),
   });
 
   const resumeMutation = useMutation<AutomationResponse, Error, string>({
-    mutationFn: resumeAutomation,
+    mutationFn: (automationId) => resumeAutomation(automationId),
     onSuccess: (automation) => invalidateAutomation(automation.id),
   });
 
   const runNowMutation = useMutation<AutomationRunResponse, Error, string>({
-    mutationFn: runAutomationNow,
+    mutationFn: (automationId) => runAutomationNow(automationId),
     onSuccess: (_, automationId) => invalidateAutomation(automationId),
   });
 

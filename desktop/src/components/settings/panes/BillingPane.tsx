@@ -1,10 +1,12 @@
 import { useCallback, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import {
   BillingOwnerCard,
   BillingSettingsPane,
   type BillingActionView,
   type BillingOwnerCardView,
+  type BillingPlanView,
 } from "@proliferate/product-ui/billing/BillingSettingsPane";
 
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
@@ -20,6 +22,26 @@ import type { CloudOwnerSelection } from "@/lib/domain/cloud/billing";
 export function BillingPane() {
   const { activeOrganization, activeOrganizationId } = useActiveOrganization();
   const admin = useIsAdmin(activeOrganizationId);
+  const [searchParams] = useSearchParams();
+  const comparisonOwner = activeOrganization && admin.isAdmin
+    ? { ownerScope: "organization" as const, organizationId: activeOrganization.id }
+    : undefined;
+  const comparisonBilling = useCloudBilling(comparisonOwner);
+  const comparisonActions = useCloudBillingActions(comparisonOwner);
+  const [comparisonActionError, setComparisonActionError] = useState<string | null>(null);
+
+  async function openComparisonBillingAction() {
+    setComparisonActionError(null);
+    try {
+      if (comparisonBilling.data?.isPaidCloud) {
+        await comparisonActions.createBillingPortal();
+      } else {
+        await comparisonActions.createCloudCheckout();
+      }
+    } catch (error) {
+      setComparisonActionError(error instanceof Error ? error.message : "Billing action could not start.");
+    }
+  }
 
   return (
     <section className="space-y-6">
@@ -28,7 +50,26 @@ export function BillingPane() {
         description="Manage personal and organization cloud usage, included runtime, overage, and plan changes."
       />
 
-      <BillingSettingsPane>
+      <BillingSettingsPane
+        checkoutReturnState={checkoutReturnStateFromParams(searchParams)}
+        currentPlanKey={planKeyForBilling(comparisonBilling.data)}
+        planComparisonAction={{
+          label: comparisonBilling.data?.isPaidCloud ? "Manage Team billing" : "Upgrade to Team",
+          loading: comparisonBilling.data?.isPaidCloud
+            ? comparisonActions.creatingBillingPortal
+            : comparisonActions.creatingCloudCheckout,
+          disabled: comparisonBilling.isLoading || (activeOrganization ? admin.isLoading : false),
+          onClick: () => {
+            void openComparisonBillingAction();
+          },
+        }}
+      >
+        {comparisonActionError ? (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+            {comparisonActionError}
+          </div>
+        ) : null}
+
         {activeOrganization ? (
           <BillingOwnerController
             title={`${activeOrganization.name} billing`}
@@ -208,6 +249,23 @@ function overageActionForPlan({
       void onUpdate(nextEnabled);
     },
   };
+}
+
+function planKeyForBilling(plan: BillingPlanView | null | undefined) {
+  if (!plan) {
+    return null;
+  }
+  if (plan.isUnlimited && !plan.isPaidCloud) {
+    return "enterprise";
+  }
+  return plan.isPaidCloud ? "team" : "free";
+}
+
+function checkoutReturnStateFromParams(
+  searchParams: URLSearchParams,
+): "success" | "cancel" | null {
+  const checkout = searchParams.get("checkout");
+  return checkout === "success" || checkout === "cancel" ? checkout : null;
 }
 
 function useOpenExternalUrl(url: string | null) {

@@ -99,6 +99,7 @@ export function SettingsScreen() {
             navigate(routes.settingsSection(id));
           }
         }}
+        contentClassName={activeSection === "billing" ? "max-w-6xl" : undefined}
       >
         {activeSection === "account" ? (
           <AccountSection
