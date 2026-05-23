@@ -119,6 +119,21 @@ async def create_enrollment(
     return _enrollment_snapshot(row)
 
 
+async def revoke_pending_enrollments_for_target(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    now: datetime,
+) -> None:
+    await db.execute(
+        update(CloudTargetEnrollment)
+        .where(CloudTargetEnrollment.target_id == target_id)
+        .where(CloudTargetEnrollment.status == CloudTargetEnrollmentStatus.pending.value)
+        .values(status=CloudTargetEnrollmentStatus.revoked.value, updated_at=now)
+    )
+    await db.flush()
+
+
 async def consume_pending_enrollment_by_hash(
     db: AsyncSession,
     *,

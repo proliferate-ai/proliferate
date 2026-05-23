@@ -49,6 +49,9 @@ export type CloudTargetEnrollmentRequest = Omit<
 export type CloudTargetEnrollmentResponse =
   components["schemas"]["CloudTargetEnrollmentResponse"];
 
+export type CloudTargetExistingEnrollmentRequest =
+  components["schemas"]["CloudTargetExistingEnrollmentRequest"];
+
 export type ArchiveCloudTargetResponse =
   components["schemas"]["ArchiveCloudTargetResponse"];
 
