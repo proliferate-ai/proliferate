@@ -8,7 +8,8 @@
     "paths": {
       "@/*": ["src/*"],
       "@anyharness/sdk": ["../anyharness/sdk/src/index.ts"],
-      "@anyharness/sdk-react": ["../anyharness/sdk-react/src/index.ts"]
+      "@anyharness/sdk-react": ["../anyharness/sdk-react/src/index.ts"],
+      "@proliferate/product-model/*": ["../packages/product-model/src/*"]
     },
     "skipLibCheck": true,
 
