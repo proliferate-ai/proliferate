@@ -9,6 +9,7 @@ mod sidecar;
 mod state;
 mod telemetry;
 mod telemetry_file_logging;
+mod workspace_activity_indicator;
 
 use commands::{
     anonymous_telemetry, cloud_worker, config, diagnostics as diagnostics_commands,
@@ -20,7 +21,7 @@ use tauri::Manager;
 #[cfg(target_os = "macos")]
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
-    AppHandle, Emitter, Runtime,
+    AppHandle, Emitter, RunEvent, Runtime,
 };
 #[cfg(any(target_os = "linux", windows))]
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -212,6 +213,7 @@ pub fn run() {
         .manage(sc.clone())
         .manage(cloud_worker_state)
         .manage(QuitFlowState::default())
+        .manage(workspace_activity_indicator::WorkspaceActivityIndicatorStore::default())
         .manage(ssh_tunnel::SshTunnelState::default())
         .invoke_handler(tauri::generate_handler![
             anonymous_telemetry::load_anonymous_telemetry_bootstrap,
@@ -228,6 +230,7 @@ pub fn run() {
             workspace_scratch::read_workspace_scratch_pad,
             workspace_scratch::write_workspace_scratch_pad,
             quit_flow::set_running_agent_count,
+            workspace_activity_indicator::set_workspace_activity_indicator,
             shell::pick_folder,
             shell::copy_text,
             shell::list_available_editors,
@@ -311,6 +314,16 @@ pub fn run() {
         .expect("error while running tauri application")
         .run(|_app_handle, _event| {
             #[cfg(target_os = "macos")]
-            quit_flow::handle_run_event(_app_handle, _event);
+            {
+                if matches!(_event, RunEvent::Ready) {
+                    if let Err(error) = workspace_activity_indicator::setup(_app_handle) {
+                        tracing::warn!(
+                            %error,
+                            "failed to initialize workspace activity indicator on app ready"
+                        );
+                    }
+                }
+                quit_flow::handle_run_event(_app_handle, _event);
+            }
         });
 }

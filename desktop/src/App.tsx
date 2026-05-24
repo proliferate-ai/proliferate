@@ -10,6 +10,7 @@ import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { MacWindowControlsSafeArea } from "@/components/ui/MacWindowControlsSafeArea"
 import { applyAppearancePreference, initializeTheme } from "@/config/theme"
 import { useExportRunningAgentCount } from "@/hooks/app/lifecycle/use-export-running-agent-count"
+import { useWorkspaceActivityIndicator } from "@/hooks/app/lifecycle/use-workspace-activity-indicator"
 import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions"
 import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap"
@@ -280,6 +281,7 @@ function AppRuntime() {
         <ShortcutRevealProvider>
           <MacWindowControlsSafeArea />
           <UpdateRestartDialog />
+          <WorkspaceActivityIndicatorMount />
           <RuntimeInputSyncGate />
           <WorktreeCleanupPolicySyncGate />
           <InstrumentedRoutes>
@@ -325,6 +327,13 @@ function AppRuntime() {
       </AppCommandActionsProvider>
     </>
   )
+}
+
+function WorkspaceActivityIndicatorMount() {
+  recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_activity_indicator")
+  useWorkspaceActivityIndicator()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_activity_indicator")
+  return null
 }
 
 function RuntimeInputSyncGate() {
