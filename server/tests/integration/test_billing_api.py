@@ -765,6 +765,35 @@ class TestBillingApi:
         assert organizations.status_code == 200
         assert organizations.json()["organizations"][0]["name"] == "Activation Team"
 
+        team_billing = await client.get("/v1/billing/team", headers=headers)
+        assert team_billing.status_code == 200
+        team_billing_body = team_billing.json()
+        assert team_billing_body["team"]["organizationId"] == str(organization_id)
+        assert team_billing_body["team"]["subscriptionStatus"] == "active"
+
+        captured_portal: dict[str, object] = {}
+
+        async def fake_create_customer_portal_session(
+            **kwargs: object,
+        ) -> stripe_billing.StripeUrlResponse:
+            captured_portal.update(kwargs)
+            return stripe_billing.StripeUrlResponse(url="https://portal.test/team")
+
+        monkeypatch.setattr(
+            stripe_billing,
+            "create_customer_portal_session",
+            fake_create_customer_portal_session,
+        )
+
+        portal = await client.post("/v1/billing/team/customer-portal", headers=headers)
+        assert portal.status_code == 200
+        assert portal.json() == {"url": "https://portal.test/team"}
+        assert captured_portal["stripe_customer_id"] == "cus_team_activation"
+        assert captured_portal["return_url"] == "https://app.test/portal"
+        assert str(captured_portal["idempotency_key"]).startswith(
+            f"portal:{billing_subject_id}:"
+        )
+
     @pytest.mark.asyncio
     async def test_team_checkout_activation_rejects_customer_mismatch(
         self,

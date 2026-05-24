@@ -266,10 +266,7 @@ async def ensure_organization_billing_subject(
         )
         .on_conflict_do_nothing(
             index_elements=[BillingSubject.organization_id],
-            index_where=(
-                (BillingSubject.kind == BILLING_SUBJECT_KIND_ORGANIZATION)
-                & BillingSubject.organization_id.is_not(None)
-            ),
+            index_where=text("kind = 'organization' AND organization_id IS NOT NULL"),
         )
         .returning(BillingSubject.id)
     )

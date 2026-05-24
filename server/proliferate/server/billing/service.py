@@ -919,7 +919,8 @@ async def create_team_billing_portal_session(
     db: AsyncSession,
     user: User,
 ) -> BillingUrlResponse:
-    membership = await _require_current_team_membership(db, user)
+    async with db.begin():
+        membership = await _require_current_team_membership(db, user)
     return await create_customer_portal_session(
         db,
         user,
