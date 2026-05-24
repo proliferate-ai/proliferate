@@ -8,6 +8,7 @@ from uuid import UUID
 
 from proliferate.db.models.organizations import (
     Organization,
+    OrganizationCheckoutIntent,
     OrganizationInvitation,
     OrganizationMembership,
 )
@@ -19,6 +20,7 @@ class OrganizationRecord:
     name: str
     logo_domain: str | None
     logo_image: str | None
+    status: str
     created_at: datetime
     updated_at: datetime
 
@@ -88,6 +90,38 @@ class InvitationAcceptRecord:
     membership: MembershipRecord
 
 
+@dataclass(frozen=True)
+class CheckoutIntentRecord:
+    id: UUID
+    organization_id: UUID
+    created_by_user_id: UUID
+    billing_subject_id: UUID
+    team_name: str
+    status: str
+    activation_status: str
+    activation_error_code: str | None
+    activation_error_message: str | None
+    last_webhook_event_id: str | None
+    stripe_checkout_session_id: str | None
+    stripe_customer_id: str | None
+    stripe_subscription_id: str | None
+    idempotency_key: str
+    invite_emails_json: str | None
+    checkout_url: str | None
+    expires_at: datetime
+    completed_at: datetime | None
+    failed_at: datetime | None
+    cancelled_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class CheckoutIntentWithOrganizationRecord:
+    intent: CheckoutIntentRecord
+    organization: OrganizationRecord
+
+
 def normalize_invitation_email(email: str) -> str:
     return email.strip().lower()
 
@@ -98,6 +132,7 @@ def organization_record(organization: Organization) -> OrganizationRecord:
         name=organization.name,
         logo_domain=organization.logo_domain,
         logo_image=organization.logo_image,
+        status=organization.status,
         created_at=organization.created_at,
         updated_at=organization.updated_at,
     )
@@ -133,4 +168,31 @@ def invitation_record(invitation: OrganizationInvitation) -> InvitationRecord:
         expired_at=invitation.expired_at,
         created_at=invitation.created_at,
         updated_at=invitation.updated_at,
+    )
+
+
+def checkout_intent_record(intent: OrganizationCheckoutIntent) -> CheckoutIntentRecord:
+    return CheckoutIntentRecord(
+        id=intent.id,
+        organization_id=intent.organization_id,
+        created_by_user_id=intent.created_by_user_id,
+        billing_subject_id=intent.billing_subject_id,
+        team_name=intent.team_name,
+        status=intent.status,
+        activation_status=intent.activation_status,
+        activation_error_code=intent.activation_error_code,
+        activation_error_message=intent.activation_error_message,
+        last_webhook_event_id=intent.last_webhook_event_id,
+        stripe_checkout_session_id=intent.stripe_checkout_session_id,
+        stripe_customer_id=intent.stripe_customer_id,
+        stripe_subscription_id=intent.stripe_subscription_id,
+        idempotency_key=intent.idempotency_key,
+        invite_emails_json=intent.invite_emails_json,
+        checkout_url=intent.checkout_url,
+        expires_at=intent.expires_at,
+        completed_at=intent.completed_at,
+        failed_at=intent.failed_at,
+        cancelled_at=intent.cancelled_at,
+        created_at=intent.created_at,
+        updated_at=intent.updated_at,
     )

@@ -16,20 +16,26 @@ from proliferate.server.billing.models import (
     BillingServiceError,
     BillingUrlResponse,
     CloudPlanInfo,
+    CurrentTeamCheckoutResponse,
     OverageSettingsRequest,
     OverageSettingsResponse,
     PlanInfo,
     StripeWebhookAck,
+    TeamCheckoutRequest,
+    TeamCheckoutResponse,
 )
 from proliferate.server.billing.service import (
+    cancel_current_team_checkout,
     create_cloud_checkout_session,
     create_customer_portal_session,
     create_refill_checkout_session,
+    create_team_checkout_session,
     get_billing_overview,
     get_billing_overview_for_owner,
     get_cloud_plan,
     get_cloud_plan_for_owner,
     get_current_plan,
+    get_current_team_checkout,
     update_overage_settings,
 )
 from proliferate.server.billing.stripe_webhooks import handle_stripe_webhook
@@ -107,6 +113,58 @@ async def create_cloud_checkout(
             user,
             _owner_selection_from_body(request),
         )
+    except BillingServiceError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code, "message": error.message},
+        ) from error
+
+
+@router.post("/team-checkout", response_model=TeamCheckoutResponse)
+async def create_team_checkout(
+    request: TeamCheckoutRequest,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session, use_cache=False),
+) -> TeamCheckoutResponse:
+    try:
+        return await create_team_checkout_session(
+            db,
+            user,
+            team_name=request.team_name,
+            invite_emails=[str(email) for email in request.invite_emails],
+        )
+    except BillingServiceError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code, "message": error.message},
+        ) from error
+
+
+@router.get("/team-checkout/current", response_model=CurrentTeamCheckoutResponse)
+async def get_current_team_checkout_endpoint(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session, use_cache=False),
+) -> CurrentTeamCheckoutResponse:
+    try:
+        return await get_current_team_checkout(db, user)
+    except BillingServiceError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code, "message": error.message},
+        ) from error
+
+
+@router.post(
+    "/team-checkout/{intent_id}/cancel",
+    response_model=CurrentTeamCheckoutResponse,
+)
+async def cancel_current_team_checkout_endpoint(
+    intent_id: UUID,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session, use_cache=False),
+) -> CurrentTeamCheckoutResponse:
+    try:
+        return await cancel_current_team_checkout(db, user, intent_id)
     except BillingServiceError as error:
         raise HTTPException(
             status_code=error.status_code,

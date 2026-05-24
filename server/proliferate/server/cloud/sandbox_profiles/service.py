@@ -107,6 +107,37 @@ async def ensure_organization(
     )
 
 
+async def ensure_organization_for_activation(
+    db: AsyncSession,
+    *,
+    created_by_user_id: UUID,
+    organization_id: UUID,
+) -> profile_store.SandboxProfileSnapshot:
+    profile = await profile_store.ensure_organization_sandbox_profile(
+        db,
+        organization_id=organization_id,
+        created_by_user_id=created_by_user_id,
+    )
+    target = await targets_store.ensure_primary_profile_target(
+        db,
+        sandbox_profile_id=profile.id,
+        created_by_user_id=created_by_user_id,
+    )
+    refreshed = await profile_store.load_sandbox_profile_by_id(db, profile.id)
+    if refreshed is None:
+        raise CloudApiError(
+            "sandbox_profile_not_found",
+            "Sandbox profile was not created.",
+            status_code=500,
+        )
+    return profile_store.SandboxProfileSnapshot(
+        **{
+            **refreshed.__dict__,
+            "primary_target_id": target.id,
+        }
+    )
+
+
 async def get_profile(
     db: AsyncSession,
     *,

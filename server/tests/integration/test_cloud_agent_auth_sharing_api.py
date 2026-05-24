@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 from base64 import b64encode
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.organizations import (
+    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_ROLE_OWNER,
+    ORGANIZATION_STATUS_ACTIVE,
+)
 from proliferate.db.models.auth import OAuthAccount, User
+from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.cloud_agent_auth import store
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
@@ -54,6 +61,31 @@ def _headers(tokens: dict[str, str]) -> dict[str, str]:
     return {"Authorization": f"Bearer {tokens['access_token']}"}
 
 
+async def _create_organization_for_user(db_session: AsyncSession, user_id: str) -> str:
+    now = datetime.now(UTC)
+    organization = Organization(
+        name="Agent Auth Team",
+        status=ORGANIZATION_STATUS_ACTIVE,
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(organization)
+    await db_session.flush()
+    db_session.add(
+        OrganizationMembership(
+            organization_id=organization.id,
+            user_id=UUID(user_id),
+            role=ORGANIZATION_ROLE_OWNER,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.commit()
+    return str(organization.id)
+
+
 def _claude_file_payload(api_key: str) -> dict[str, object]:
     return {
         "authMode": "file",
@@ -77,9 +109,7 @@ async def test_shared_personal_synced_credential_lists_active_share_for_org_sele
         email="agent-auth-shared-synced@example.com",
     )
 
-    organizations = await client.get("/v1/organizations", headers=_headers(tokens))
-    assert organizations.status_code == 200
-    organization_id = organizations.json()["organizations"][0]["id"]
+    organization_id = await _create_organization_for_user(db_session, tokens["user_id"])
 
     response = await client.put(
         "/v1/cloud/agent-auth/credentials/synced/claude",
@@ -175,9 +205,7 @@ async def test_managed_credits_route_requires_server_entitlement_budget(
         email="agent-auth-managed-credits-not-entitled@example.com",
     )
 
-    organizations = await client.get("/v1/organizations", headers=_headers(tokens))
-    assert organizations.status_code == 200
-    organization_id = organizations.json()["organizations"][0]["id"]
+    organization_id = await _create_organization_for_user(db_session, tokens["user_id"])
 
     response = await client.post(
         f"/v1/cloud/organizations/{organization_id}/agent-auth/managed-credits",
@@ -215,9 +243,7 @@ async def test_managed_credits_do_not_reuse_org_byok_credential_with_same_name(
         email="agent-auth-managed-credits-display-collision@example.com",
     )
 
-    organizations = await client.get("/v1/organizations", headers=_headers(tokens))
-    assert organizations.status_code == 200
-    organization_id = organizations.json()["organizations"][0]["id"]
+    organization_id = await _create_organization_for_user(db_session, tokens["user_id"])
 
     byok = await client.post(
         "/v1/cloud/agent-auth/credentials/gateway",

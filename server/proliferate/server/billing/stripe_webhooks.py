@@ -79,6 +79,7 @@ from proliferate.server.billing.pricing import (
     classify_monthly_price_id,
 )
 from proliferate.server.billing.seats import pro_period_grant_source_ref
+from proliferate.server.billing.service import activate_team_checkout_from_stripe_session
 from proliferate.server.notifications import (
     BillingSlackEvent,
     BillingSlackNotification,
@@ -177,7 +178,7 @@ async def _dispatch_stripe_event(event: dict[str, Any]) -> tuple[BillingSlackNot
     event_type = event.get("type")
     stripe_object = _event_object(event)
     if event_type == "checkout.session.completed":
-        await _handle_checkout_session_completed(stripe_object)
+        await _handle_checkout_session_completed(stripe_object, event_id=event.get("id"))
     elif event_type in {"customer.subscription.created", "customer.subscription.updated"}:
         result = await _sync_subscription_for_billing_notifications(
             stripe_object,
@@ -224,7 +225,19 @@ async def _subject_from_object(stripe_object: dict[str, Any]) -> BillingSubject 
     )
 
 
-async def _handle_checkout_session_completed(session: dict[str, Any]) -> None:
+async def _handle_checkout_session_completed(
+    session: dict[str, Any],
+    *,
+    event_id: object = None,
+) -> None:
+    if session.get("mode") == "subscription" and _metadata(session).get(
+        "purpose"
+    ) == "team_subscription":
+        await activate_team_checkout_from_stripe_session(
+            session=session,
+            webhook_event_id=event_id if isinstance(event_id, str) else None,
+        )
+        return
     if session.get("mode") != "payment" or _metadata(session).get("purpose") != "refill_10h":
         return
     session_id = session.get("id")

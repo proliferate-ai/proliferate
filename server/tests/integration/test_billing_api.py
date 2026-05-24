@@ -19,10 +19,14 @@ from proliferate.constants.billing import (
 )
 from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
 from proliferate.constants.organizations import (
+    ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING,
+    ORGANIZATION_INVITATION_DELIVERY_SKIPPED,
+    ORGANIZATION_INVITATION_STATUS_PENDING,
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
     ORGANIZATION_ROLE_MEMBER,
     ORGANIZATION_ROLE_OWNER,
+    ORGANIZATION_STATUS_PENDING_CHECKOUT,
 )
 from proliferate.db.models.auth import OAuthAccount
 from proliferate.db.models.billing import (
@@ -33,9 +37,16 @@ from proliferate.db.models.billing import (
     BillingUsageExport,
     UsageSegment,
 )
+from proliferate.db.models.cloud.agent_auth import SandboxProfile
+from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.models.organizations import Organization, OrganizationMembership
+from proliferate.db.models.organizations import (
+    Organization,
+    OrganizationCheckoutIntent,
+    OrganizationInvitation,
+    OrganizationMembership,
+)
 from proliferate.db.store.billing import (
     ensure_billing_grant,
     ensure_free_included_grant,
@@ -46,9 +57,13 @@ from proliferate.db.store.billing import (
 from proliferate.db.store.cloud_runtime_environments import (
     ensure_runtime_environment_for_workspace,
 )
+from proliferate.integrations import resend
 from proliferate.integrations.billing import stripe as stripe_billing
 from proliferate.integrations.github import GitHubRepoBranches
-from proliferate.server.billing.service import process_pending_seat_adjustments
+from proliferate.server.billing.service import (
+    activate_team_checkout_from_stripe_session,
+    process_pending_seat_adjustments,
+)
 from proliferate.server.cloud.workspaces import service as cloud_service
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
@@ -385,6 +400,286 @@ class TestBillingApi:
         assert portal["stripe_customer_id"] == "cus_checkout_portal"
         assert portal["return_url"] == "https://app.test/portal"
         assert portal["idempotency_key"].startswith(f"portal:active-cloud:{subject.id}:")
+
+    @pytest.mark.asyncio
+    async def test_team_checkout_creates_pending_org_without_membership(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "pro_billing_enabled", True)
+        monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "price_pro")
+        monkeypatch.setattr(settings, "stripe_managed_cloud_overage_price_id", "price_overage")
+        monkeypatch.setattr(settings, "stripe_checkout_success_url", "https://app.test/success")
+        monkeypatch.setattr(settings, "stripe_checkout_cancel_url", "https://app.test/cancel")
+        monkeypatch.setattr(
+            settings,
+            "stripe_customer_portal_return_url",
+            "https://app.test/portal",
+        )
+        captured: dict[str, object] = {}
+
+        async def fake_validate_pro_subscription_price_configuration() -> None:
+            captured["validated"] = True
+
+        async def fake_create_customer(**kwargs: object) -> dict[str, str]:
+            captured["customer"] = kwargs
+            return {"id": "cus_team_checkout"}
+
+        async def fake_create_subscription_checkout_session(
+            **kwargs: object,
+        ) -> stripe_billing.StripeUrlResponse:
+            captured["checkout"] = kwargs
+            return stripe_billing.StripeUrlResponse(
+                url="https://checkout.test/team",
+                id="cs_team_checkout",
+            )
+
+        monkeypatch.setattr(
+            stripe_billing,
+            "validate_pro_subscription_price_configuration",
+            fake_validate_pro_subscription_price_configuration,
+        )
+        monkeypatch.setattr(stripe_billing, "create_customer", fake_create_customer)
+        monkeypatch.setattr(
+            stripe_billing,
+            "create_subscription_checkout_session",
+            fake_create_subscription_checkout_session,
+        )
+
+        session = await _register_and_login(client, "billing-team-checkout@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        response = await client.post(
+            "/v1/billing/team-checkout",
+            headers=headers,
+            json={"teamName": "Acme Research", "inviteEmails": ["teammate@example.com"]},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["url"] == "https://checkout.test/team"
+        assert body["intentId"]
+        assert captured["validated"] is True
+        checkout = captured["checkout"]
+        assert isinstance(checkout, dict)
+        assert checkout["purpose"] == "team_subscription"
+        assert checkout["checkout_intent_id"] == body["intentId"]
+        assert checkout["seat_quantity"] == 1
+
+        organizations = await client.get("/v1/organizations", headers=headers)
+        assert organizations.status_code == 200
+        assert organizations.json() == {"organizations": []}
+
+        intent = await db_session.get(OrganizationCheckoutIntent, uuid.UUID(body["intentId"]))
+        assert intent is not None
+        assert intent.status == ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING
+        assert intent.checkout_url == "https://checkout.test/team"
+        assert intent.stripe_checkout_session_id == "cs_team_checkout"
+        organization = await db_session.get(Organization, intent.organization_id)
+        assert organization is not None
+        assert organization.status == ORGANIZATION_STATUS_PENDING_CHECKOUT
+        membership = (
+            await db_session.execute(
+                select(OrganizationMembership).where(
+                    OrganizationMembership.user_id == uuid.UUID(session["user_id"])
+                )
+            )
+        ).scalar_one_or_none()
+        assert membership is None
+
+        current = await client.get("/v1/billing/team-checkout/current", headers=headers)
+        assert current.status_code == 200
+        assert current.json()["intent"]["id"] == body["intentId"]
+
+        reused = await client.post(
+            "/v1/billing/team-checkout",
+            headers=headers,
+            json={"teamName": "Acme Research"},
+        )
+        assert reused.status_code == 200
+        assert reused.json() == body
+
+    @pytest.mark.asyncio
+    async def test_team_checkout_activation_creates_team_and_shared_sandbox(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "pro_billing_enabled", True)
+        monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "price_pro")
+        monkeypatch.setattr(settings, "stripe_managed_cloud_overage_price_id", "price_overage")
+        monkeypatch.setattr(settings, "stripe_checkout_success_url", "https://app.test/success")
+        monkeypatch.setattr(settings, "stripe_checkout_cancel_url", "https://app.test/cancel")
+        monkeypatch.setattr(
+            settings,
+            "stripe_customer_portal_return_url",
+            "https://app.test/portal",
+        )
+
+        async def fake_validate_pro_subscription_price_configuration() -> None:
+            return None
+
+        async def fake_create_customer(**_kwargs: object) -> dict[str, str]:
+            return {"id": "cus_team_activation"}
+
+        async def fake_create_subscription_checkout_session(
+            **_kwargs: object,
+        ) -> stripe_billing.StripeUrlResponse:
+            return stripe_billing.StripeUrlResponse(
+                url="https://checkout.test/team-activation",
+                id="cs_team_activation",
+            )
+
+        monkeypatch.setattr(
+            stripe_billing,
+            "validate_pro_subscription_price_configuration",
+            fake_validate_pro_subscription_price_configuration,
+        )
+        monkeypatch.setattr(stripe_billing, "create_customer", fake_create_customer)
+        monkeypatch.setattr(
+            stripe_billing,
+            "create_subscription_checkout_session",
+            fake_create_subscription_checkout_session,
+        )
+        sent_invites: list[dict[str, str]] = []
+
+        async def fake_send_organization_invitation_email(
+            **kwargs: str,
+        ) -> resend.ResendEmailResult:
+            sent_invites.append(dict(kwargs))
+            return resend.ResendEmailResult(provider_message_id=None, skipped=True)
+
+        monkeypatch.setattr(
+            resend,
+            "send_organization_invitation_email",
+            fake_send_organization_invitation_email,
+        )
+
+        session = await _register_and_login(client, "billing-team-activation@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        response = await client.post(
+            "/v1/billing/team-checkout",
+            headers=headers,
+            json={
+                "teamName": "Activation Team",
+                "inviteEmails": ["New.Member@example.com"],
+            },
+        )
+        assert response.status_code == 200
+        intent_id = uuid.UUID(response.json()["intentId"])
+        db_session.expire_all()
+        intent = await db_session.get(OrganizationCheckoutIntent, intent_id)
+        assert intent is not None
+        organization_id = intent.organization_id
+        created_by_user_id = intent.created_by_user_id
+        billing_subject_id = intent.billing_subject_id
+        metadata = {
+            "purpose": "team_subscription",
+            "organization_checkout_intent_id": str(intent.id),
+            "organization_id": str(organization_id),
+            "created_by_user_id": str(created_by_user_id),
+            "billing_subject_id": str(billing_subject_id),
+        }
+
+        async def fake_retrieve_subscription(_subscription_id: str) -> dict[str, object]:
+            return {
+                "id": "sub_team_activation",
+                "customer": "cus_team_activation",
+                "status": "active",
+                "cancel_at_period_end": False,
+                "latest_invoice": "in_team_activation",
+                "metadata": metadata,
+                "items": {
+                    "data": [
+                        {
+                            "id": "si_team_activation_monthly",
+                            "price": {"id": "price_pro"},
+                            "quantity": 1,
+                            "current_period_start": 1_776_586_422,
+                            "current_period_end": 1_779_178_422,
+                        },
+                        {
+                            "id": "si_team_activation_overage",
+                            "price": {"id": "price_overage"},
+                            "current_period_start": 1_776_586_422,
+                            "current_period_end": 1_779_178_422,
+                        },
+                    ]
+                },
+            }
+
+        monkeypatch.setattr(stripe_billing, "retrieve_subscription", fake_retrieve_subscription)
+
+        await activate_team_checkout_from_stripe_session(
+            session={
+                "id": "cs_team_activation",
+                "customer": "cus_team_activation",
+                "subscription": "sub_team_activation",
+                "metadata": metadata,
+            },
+            webhook_event_id="evt_team_activation",
+        )
+
+        db_session.expire_all()
+        organization = await db_session.get(Organization, organization_id)
+        assert organization is not None
+        assert organization.status == "active"
+        membership = (
+            await db_session.execute(
+                select(OrganizationMembership).where(
+                    OrganizationMembership.organization_id == organization.id,
+                    OrganizationMembership.user_id == uuid.UUID(session["user_id"]),
+                )
+            )
+        ).scalar_one()
+        assert membership.role == ORGANIZATION_ROLE_OWNER
+        assert membership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
+        subscription = (
+            await db_session.execute(
+                select(BillingSubscription).where(
+                    BillingSubscription.stripe_subscription_id == "sub_team_activation"
+                )
+            )
+        ).scalar_one()
+        assert subscription.billing_subject_id == billing_subject_id
+        profile = (
+            await db_session.execute(
+                select(SandboxProfile).where(SandboxProfile.organization_id == organization.id)
+            )
+        ).scalar_one()
+        target = (
+            await db_session.execute(
+                select(CloudTarget).where(CloudTarget.sandbox_profile_id == profile.id)
+            )
+        ).scalar_one()
+        assert target.display_name == "Shared cloud sandbox"
+        assert target.profile_target_role == "primary"
+        invitation = (
+            await db_session.execute(
+                select(OrganizationInvitation).where(
+                    OrganizationInvitation.organization_id == organization.id
+                )
+            )
+        ).scalar_one()
+        assert invitation.email == "new.member@example.com"
+        assert invitation.role == ORGANIZATION_ROLE_MEMBER
+        assert invitation.status == ORGANIZATION_INVITATION_STATUS_PENDING
+        assert invitation.delivery_status == ORGANIZATION_INVITATION_DELIVERY_SKIPPED
+        assert len(sent_invites) == 1
+        assert sent_invites[0]["to_email"] == "new.member@example.com"
+        assert sent_invites[0]["organization_name"] == "Activation Team"
+        assert sent_invites[0]["inviter_email"] == "billing-team-activation@example.com"
+        invite_base_url = (settings.api_base_url or settings.frontend_base_url).rstrip("/")
+        assert sent_invites[0]["invite_url"].startswith(
+            f"{invite_base_url}/v1/organizations/invitations/landing?token="
+        )
+
+        organizations = await client.get("/v1/organizations", headers=headers)
+        assert organizations.status_code == 200
+        assert organizations.json()["organizations"][0]["name"] == "Activation Team"
 
     @pytest.mark.asyncio
     async def test_pro_overage_used_is_scoped_to_current_period(

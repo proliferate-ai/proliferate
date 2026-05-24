@@ -36,6 +36,10 @@ from proliferate.db.store.organization_records import (
     normalize_invitation_email,
     organization_record,
 )
+from proliferate.db.store.organizations import (
+    acquire_membership_activation_lock,
+    get_current_membership_for_user,
+)
 from proliferate.utils.time import utcnow
 
 
@@ -172,6 +176,40 @@ async def list_organization_invitations(
         await db.execute(
             select(OrganizationInvitation)
             .where(OrganizationInvitation.organization_id == organization_id)
+            .order_by(OrganizationInvitation.created_at.desc())
+        )
+    ).scalars()
+    return [invitation_record(invitation) for invitation in rows.all()]
+
+
+async def list_pending_invitations_for_email(
+    db: AsyncSession,
+    email: str,
+) -> list[InvitationRecord]:
+    now = utcnow()
+    normalized_email = normalize_invitation_email(email)
+    await db.execute(
+        update(OrganizationInvitation)
+        .where(
+            OrganizationInvitation.email == normalized_email,
+            OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
+            OrganizationInvitation.expires_at <= now,
+        )
+        .values(
+            status=ORGANIZATION_INVITATION_STATUS_EXPIRED,
+            expired_at=now,
+            handoff_token_hash=None,
+            handoff_expires_at=None,
+            updated_at=now,
+        )
+    )
+    rows = (
+        await db.execute(
+            select(OrganizationInvitation)
+            .where(
+                OrganizationInvitation.email == normalized_email,
+                OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
+            )
             .order_by(OrganizationInvitation.created_at.desc())
         )
     ).scalars()
@@ -357,6 +395,36 @@ async def accept_invitation_handoff(
         return None, "invitation_handoff_expired"
     if invitation.email != normalized_email:
         return None, "invitation_email_mismatch"
+
+    await acquire_membership_activation_lock(db, authenticated_user_id)
+    current = await get_current_membership_for_user(db, authenticated_user_id)
+    if current is not None and current.organization.id != invitation.organization_id:
+        return None, "already_in_organization"
+
+    if current is not None and current.organization.id == invitation.organization_id:
+        membership = (
+            await db.execute(
+                select(OrganizationMembership).where(
+                    OrganizationMembership.id == current.membership.id,
+                    OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+                )
+            )
+        ).scalar_one_or_none()
+        if membership is None:
+            return None, "invalid_invitation"
+        invitation.status = ORGANIZATION_INVITATION_STATUS_ACCEPTED
+        invitation.accepted_by_user_id = authenticated_user_id
+        invitation.accepted_at = now
+        invitation.handoff_token_hash = None
+        invitation.handoff_expires_at = None
+        invitation.updated_at = now
+        return (
+            InvitationAcceptRecord(
+                organization=organization_record(organization),
+                membership=membership_record(membership),
+            ),
+            None,
+        )
 
     result = await db.execute(
         pg_insert(OrganizationMembership)
