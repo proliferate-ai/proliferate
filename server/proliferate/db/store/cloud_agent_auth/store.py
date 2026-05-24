@@ -14,6 +14,7 @@ from proliferate.db.models.cloud.agent_auth import (
     AgentAuthCredential,
     AgentAuthCredentialShare,
     AgentGatewayBudgetSubject,
+    AgentGatewayFreeCreditEntitlement,
     AgentGatewayPolicy,
     AgentGatewayProviderCredential,
     AgentGatewayRuntimeGrant,
@@ -33,6 +34,7 @@ from proliferate.db.store.cloud_agent_auth.records import (
     AgentAuthCredentialRecord,
     AgentAuthCredentialShareRecord,
     AgentGatewayBudgetSubjectRecord,
+    AgentGatewayFreeCreditEntitlementRecord,
     AgentGatewayPolicyRecord,
     AgentGatewayProviderCredentialRecord,
     AgentGatewayRuntimeGrantRecord,
@@ -110,16 +112,40 @@ def _budget_subject_record(row: AgentGatewayBudgetSubject) -> AgentGatewayBudget
         id=row.id,
         budget_kind=row.budget_kind,
         owner_scope=row.owner_scope,
+        owner_user_id=row.owner_user_id,
         organization_id=row.organization_id,
         litellm_team_id=row.litellm_team_id,
         included_budget_usd=row.included_budget_usd,
         budget_duration=row.budget_duration,
+        entitlement_source=row.entitlement_source,
+        entitlement_period_key=row.entitlement_period_key,
         litellm_sync_status=row.litellm_sync_status,
         litellm_sync_fingerprint=row.litellm_sync_fingerprint,
         status=row.status,
         revision=row.revision,
         last_provisioned_at=row.last_provisioned_at,
         last_litellm_reconciled_at=row.last_litellm_reconciled_at,
+        last_error_code=row.last_error_code,
+        last_error_message=row.last_error_message,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def _free_credit_entitlement_record(
+    row: AgentGatewayFreeCreditEntitlement,
+) -> AgentGatewayFreeCreditEntitlementRecord:
+    return AgentGatewayFreeCreditEntitlementRecord(
+        id=row.id,
+        user_id=row.user_id,
+        budget_subject_id=row.budget_subject_id,
+        source=row.source,
+        period_key=row.period_key,
+        included_budget_usd=row.included_budget_usd,
+        status=row.status,
+        activated_at=row.activated_at,
+        exhausted_at=row.exhausted_at,
+        revoked_at=row.revoked_at,
         last_error_code=row.last_error_code,
         last_error_message=row.last_error_message,
         created_at=row.created_at,
@@ -770,14 +796,64 @@ async def ensure_managed_budget_subject(
     last_error_code: str | None = None,
     last_error_message: str | None = None,
 ) -> AgentGatewayBudgetSubjectRecord:
+    return await ensure_managed_budget_subject_for_owner(
+        db,
+        owner_scope="organization",
+        owner_user_id=None,
+        organization_id=organization_id,
+        included_budget_usd=included_budget_usd,
+        budget_duration=AGENT_GATEWAY_BUDGET_DURATION_V1,
+        entitlement_source=None,
+        entitlement_period_key=None,
+        litellm_team_id=litellm_team_id,
+        litellm_sync_status=litellm_sync_status,
+        litellm_sync_fingerprint=litellm_sync_fingerprint,
+        status=status,
+        last_error_code=last_error_code,
+        last_error_message=last_error_message,
+    )
+
+
+async def ensure_managed_budget_subject_for_owner(
+    db: AsyncSession,
+    *,
+    owner_scope: str,
+    owner_user_id: UUID | None,
+    organization_id: UUID | None,
+    included_budget_usd: str,
+    budget_duration: str | None,
+    entitlement_source: str | None,
+    entitlement_period_key: str | None,
+    litellm_team_id: str | None,
+    litellm_sync_status: str,
+    litellm_sync_fingerprint: str | None,
+    status: str,
+    last_error_code: str | None = None,
+    last_error_message: str | None = None,
+) -> AgentGatewayBudgetSubjectRecord:
+    owner_filters = [
+        AgentGatewayBudgetSubject.owner_scope == owner_scope,
+        AgentGatewayBudgetSubject.budget_kind == "proliferate_managed",
+        AgentGatewayBudgetSubject.status != "revoked",
+    ]
+    if owner_scope == "personal":
+        owner_filters.extend(
+            [
+                AgentGatewayBudgetSubject.owner_user_id == owner_user_id,
+                AgentGatewayBudgetSubject.organization_id.is_(None),
+            ]
+        )
+    else:
+        owner_filters.extend(
+            [
+                AgentGatewayBudgetSubject.organization_id == organization_id,
+                AgentGatewayBudgetSubject.owner_user_id.is_(None),
+            ]
+        )
     row = (
         await db.execute(
             select(AgentGatewayBudgetSubject)
-            .where(
-                AgentGatewayBudgetSubject.organization_id == organization_id,
-                AgentGatewayBudgetSubject.budget_kind == "proliferate_managed",
-                AgentGatewayBudgetSubject.status != "revoked",
-            )
+            .where(*owner_filters)
             .with_for_update()
         )
     ).scalar_one_or_none()
@@ -785,11 +861,14 @@ async def ensure_managed_budget_subject(
     if row is None:
         row = AgentGatewayBudgetSubject(
             budget_kind="proliferate_managed",
-            owner_scope="organization",
+            owner_scope=owner_scope,
+            owner_user_id=owner_user_id,
             organization_id=organization_id,
             litellm_team_id=litellm_team_id,
             included_budget_usd=included_budget_usd,
-            budget_duration=AGENT_GATEWAY_BUDGET_DURATION_V1,
+            budget_duration=budget_duration,
+            entitlement_source=entitlement_source,
+            entitlement_period_key=entitlement_period_key,
             litellm_sync_status=litellm_sync_status,
             litellm_sync_fingerprint=litellm_sync_fingerprint,
             status=status,
@@ -806,6 +885,9 @@ async def ensure_managed_budget_subject(
         changed = (
             row.litellm_team_id != litellm_team_id
             or row.included_budget_usd != included_budget_usd
+            or row.budget_duration != budget_duration
+            or row.entitlement_source != entitlement_source
+            or row.entitlement_period_key != entitlement_period_key
             or row.litellm_sync_status != litellm_sync_status
             or row.litellm_sync_fingerprint != litellm_sync_fingerprint
             or row.status != status
@@ -814,6 +896,9 @@ async def ensure_managed_budget_subject(
         )
         row.litellm_team_id = litellm_team_id
         row.included_budget_usd = included_budget_usd
+        row.budget_duration = budget_duration
+        row.entitlement_source = entitlement_source
+        row.entitlement_period_key = entitlement_period_key
         row.litellm_sync_status = litellm_sync_status
         row.litellm_sync_fingerprint = litellm_sync_fingerprint
         row.status = status
@@ -833,16 +918,168 @@ async def get_managed_budget_subject(
     db: AsyncSession,
     organization_id: UUID,
 ) -> AgentGatewayBudgetSubjectRecord | None:
+    return await get_managed_budget_subject_for_owner(
+        db,
+        owner_scope="organization",
+        owner_user_id=None,
+        organization_id=organization_id,
+    )
+
+
+async def get_managed_budget_subject_for_owner(
+    db: AsyncSession,
+    *,
+    owner_scope: str,
+    owner_user_id: UUID | None,
+    organization_id: UUID | None,
+) -> AgentGatewayBudgetSubjectRecord | None:
+    owner_filters = [
+        AgentGatewayBudgetSubject.owner_scope == owner_scope,
+        AgentGatewayBudgetSubject.budget_kind == "proliferate_managed",
+        AgentGatewayBudgetSubject.status != "revoked",
+    ]
+    if owner_scope == "personal":
+        owner_filters.extend(
+            [
+                AgentGatewayBudgetSubject.owner_user_id == owner_user_id,
+                AgentGatewayBudgetSubject.organization_id.is_(None),
+            ]
+        )
+    else:
+        owner_filters.extend(
+            [
+                AgentGatewayBudgetSubject.organization_id == organization_id,
+                AgentGatewayBudgetSubject.owner_user_id.is_(None),
+            ]
+        )
     row = (
         await db.execute(
-            select(AgentGatewayBudgetSubject).where(
-                AgentGatewayBudgetSubject.organization_id == organization_id,
-                AgentGatewayBudgetSubject.budget_kind == "proliferate_managed",
-                AgentGatewayBudgetSubject.status != "revoked",
-            )
+            select(AgentGatewayBudgetSubject).where(*owner_filters)
         )
     ).scalar_one_or_none()
     return _budget_subject_record(row) if row is not None else None
+
+
+async def get_user_managed_budget_subject(
+    db: AsyncSession,
+    user_id: UUID,
+) -> AgentGatewayBudgetSubjectRecord | None:
+    return await get_managed_budget_subject_for_owner(
+        db,
+        owner_scope="personal",
+        owner_user_id=user_id,
+        organization_id=None,
+    )
+
+
+async def ensure_free_credit_entitlement(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    source: str,
+    period_key: str,
+    included_budget_usd: str,
+    status: str,
+    budget_subject_id: UUID | None = None,
+    last_error_code: str | None = None,
+    last_error_message: str | None = None,
+) -> AgentGatewayFreeCreditEntitlementRecord:
+    row = (
+        await db.execute(
+            select(AgentGatewayFreeCreditEntitlement)
+            .where(
+                AgentGatewayFreeCreditEntitlement.user_id == user_id,
+                AgentGatewayFreeCreditEntitlement.source == source,
+                AgentGatewayFreeCreditEntitlement.period_key == period_key,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    now = utcnow()
+    if row is None:
+        row = AgentGatewayFreeCreditEntitlement(
+            user_id=user_id,
+            budget_subject_id=budget_subject_id,
+            source=source,
+            period_key=period_key,
+            included_budget_usd=included_budget_usd,
+            status=status,
+            activated_at=now if status == "active" else None,
+            exhausted_at=now if status == "exhausted" else None,
+            revoked_at=now if status == "revoked" else None,
+            last_error_code=last_error_code,
+            last_error_message=last_error_message,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(row)
+    else:
+        changed = (
+            row.budget_subject_id != budget_subject_id
+            or row.included_budget_usd != included_budget_usd
+            or row.status != status
+            or row.last_error_code != last_error_code
+            or row.last_error_message != last_error_message
+        )
+        row.budget_subject_id = budget_subject_id
+        row.included_budget_usd = included_budget_usd
+        row.status = status
+        row.last_error_code = last_error_code
+        row.last_error_message = last_error_message
+        if status == "active" and row.activated_at is None:
+            row.activated_at = now
+        if status == "exhausted" and row.exhausted_at is None:
+            row.exhausted_at = now
+        if status == "revoked" and row.revoked_at is None:
+            row.revoked_at = now
+        if changed:
+            row.updated_at = now
+    await db.flush()
+    return _free_credit_entitlement_record(row)
+
+
+async def get_free_credit_entitlement(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    source: str,
+    period_key: str,
+) -> AgentGatewayFreeCreditEntitlementRecord | None:
+    row = (
+        await db.execute(
+            select(AgentGatewayFreeCreditEntitlement).where(
+                AgentGatewayFreeCreditEntitlement.user_id == user_id,
+                AgentGatewayFreeCreditEntitlement.source == source,
+                AgentGatewayFreeCreditEntitlement.period_key == period_key,
+            )
+        )
+    ).scalar_one_or_none()
+    return _free_credit_entitlement_record(row) if row is not None else None
+
+
+async def get_free_credit_entitlement_for_budget(
+    db: AsyncSession,
+    budget_subject_id: UUID,
+    *,
+    source: str | None = None,
+    period_key: str | None = None,
+) -> AgentGatewayFreeCreditEntitlementRecord | None:
+    filters = [
+        AgentGatewayFreeCreditEntitlement.budget_subject_id == budget_subject_id,
+        AgentGatewayFreeCreditEntitlement.status != "revoked",
+    ]
+    if source is not None:
+        filters.append(AgentGatewayFreeCreditEntitlement.source == source)
+    if period_key is not None:
+        filters.append(AgentGatewayFreeCreditEntitlement.period_key == period_key)
+    row = (
+        await db.execute(
+            select(AgentGatewayFreeCreditEntitlement)
+            .where(*filters)
+            .order_by(AgentGatewayFreeCreditEntitlement.updated_at.desc())
+        )
+    ).scalars().first()
+    return _free_credit_entitlement_record(row) if row is not None else None
 
 
 async def ensure_gateway_policy(
@@ -951,6 +1188,38 @@ async def get_managed_gateway_credential(
     organization_id: UUID,
     agent_kind: str,
 ) -> AgentAuthCredentialRecord | None:
+    return await get_managed_gateway_credential_for_owner(
+        db,
+        owner_scope="organization",
+        owner_user_id=None,
+        organization_id=organization_id,
+        agent_kind=agent_kind,
+    )
+
+
+async def get_managed_gateway_credential_for_owner(
+    db: AsyncSession,
+    *,
+    owner_scope: str,
+    owner_user_id: UUID | None,
+    organization_id: UUID | None,
+    agent_kind: str,
+) -> AgentAuthCredentialRecord | None:
+    owner_filters = [AgentAuthCredential.owner_scope == owner_scope]
+    if owner_scope == "personal":
+        owner_filters.extend(
+            [
+                AgentAuthCredential.owner_user_id == owner_user_id,
+                AgentAuthCredential.organization_id.is_(None),
+            ]
+        )
+    else:
+        owner_filters.extend(
+            [
+                AgentAuthCredential.organization_id == organization_id,
+                AgentAuthCredential.owner_user_id.is_(None),
+            ]
+        )
     row = (
         (
             await db.execute(
@@ -960,8 +1229,7 @@ async def get_managed_gateway_credential(
                     AgentGatewayPolicy.credential_id == AgentAuthCredential.id,
                 )
                 .where(
-                    AgentAuthCredential.owner_scope == "organization",
-                    AgentAuthCredential.organization_id == organization_id,
+                    *owner_filters,
                     AgentAuthCredential.agent_kind == agent_kind,
                     AgentAuthCredential.credential_kind == "managed_gateway",
                     AgentAuthCredential.revoked_at.is_(None),

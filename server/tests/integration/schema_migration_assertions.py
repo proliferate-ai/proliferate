@@ -34,6 +34,7 @@ async def assert_current_schema(
         "agent_auth_credential",
         "agent_auth_credential_share",
         "agent_gateway_budget_subject",
+        "agent_gateway_free_credit_entitlement",
         "agent_gateway_policy",
         "agent_gateway_provider_credential",
         "agent_gateway_runtime_grant",
@@ -633,6 +634,52 @@ async def assert_current_schema(
         "ix_agent_gateway_runtime_grant_cloud_sandbox_id",
         "ix_agent_gateway_runtime_grant_slot",
     } <= runtime_grant_indexes
+
+    budget_subject_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("agent_gateway_budget_subject")
+        }
+    )
+    assert {
+        "owner_user_id",
+        "entitlement_source",
+        "entitlement_period_key",
+    } <= budget_subject_columns
+    budget_subject_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints(
+                "agent_gateway_budget_subject"
+            )
+        }
+    )
+    assert {
+        "ck_agent_gateway_budget_subject_owner_scope",
+        "ck_agent_gateway_budget_subject_owner_fields",
+    } <= budget_subject_checks
+    budget_subject_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("agent_gateway_budget_subject")
+        }
+    )
+    assert {
+        "uq_agent_gateway_managed_budget_subject_org",
+        "uq_agent_gateway_managed_budget_subject_user",
+        "ix_agent_gateway_budget_subject_owner_user_id",
+    } <= budget_subject_indexes
+
+    free_credit_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("agent_gateway_free_credit_entitlement")
+        }
+    )
+    assert {
+        "uq_agent_gateway_free_credit_entitlement_user_period_source",
+        "ix_agent_gateway_free_credit_entitlement_budget_subject",
+    } <= free_credit_indexes
 
     client_daily_activity_indexes = await conn.run_sync(
         lambda sync_conn: {

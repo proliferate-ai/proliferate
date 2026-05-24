@@ -1288,6 +1288,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/agent-auth/free-credits/ensure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ensure Free Managed Credits Endpoint */
+        post: operations["ensure_free_managed_credits_endpoint_v1_cloud_agent_auth_free_credits_ensure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/organizations/{organization_id}/agent-auth/managed-credits": {
         parameters: {
             query?: never;
@@ -3616,17 +3633,22 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /**
-             * Organizationid
-             * Format: uuid
-             */
-            organizationId: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Owneruserid */
+            ownerUserId: string | null;
+            /** Organizationid */
+            organizationId: string | null;
             /** Litellmteamid */
             litellmTeamId: string | null;
             /** Includedbudgetusd */
             includedBudgetUsd: string;
             /** Budgetduration */
-            budgetDuration: string;
+            budgetDuration: string | null;
+            /** Entitlementsource */
+            entitlementSource: string | null;
+            /** Entitlementperiodkey */
+            entitlementPeriodKey: string | null;
             /** Litellmsyncstatus */
             litellmSyncStatus: string;
             /** Status */
@@ -3659,11 +3681,54 @@ export interface components {
             managedCreditsOrganizationEnabled: boolean;
             /** Defaultmanagedbudgetusd */
             defaultManagedBudgetUsd: string | null;
+            /** Managedcreditagentkinds */
+            managedCreditAgentKinds: string[];
+            /** Topology */
+            topology: string;
+            /** Routeisolation */
+            routeIsolation: string;
+            /** Liveproofstatus */
+            liveProofStatus: string;
             /** Byokenabled */
             byokEnabled: boolean;
+            /** Byokpersonalenabled */
+            byokPersonalEnabled: boolean;
+            /** Byokorganizationenabled */
+            byokOrganizationEnabled: boolean;
+            /** Byokorganizationdisabledreason */
+            byokOrganizationDisabledReason: string | null;
             byokProviders: components["schemas"]["AgentGatewayByokProviderCapabilities"];
             /** Opencodegatewayenabled */
             opencodeGatewayEnabled: boolean;
+        };
+        /** AgentGatewayFreeCreditEntitlementResponse */
+        AgentGatewayFreeCreditEntitlementResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Userid
+             * Format: uuid
+             */
+            userId: string;
+            /** Budgetsubjectid */
+            budgetSubjectId: string | null;
+            /** Source */
+            source: string;
+            /** Periodkey */
+            periodKey: string;
+            /** Includedbudgetusd */
+            includedBudgetUsd: string;
+            /** Status */
+            status: string;
+            /** Activatedat */
+            activatedAt: string | null;
+            /** Lasterrorcode */
+            lastErrorCode: string | null;
+            /** Lasterrormessage */
+            lastErrorMessage: string | null;
         };
         /** AgentGatewayPolicyResponse */
         AgentGatewayPolicyResponse: {
@@ -5373,6 +5438,8 @@ export interface components {
             ownerScope: "personal" | "organization";
             /** Organizationid */
             organizationId?: string | null;
+            /** Requiredagentkind */
+            requiredAgentKind?: string | null;
         };
         /** CreateGatewayCredentialRequest */
         CreateGatewayCredentialRequest: {
@@ -5476,6 +5543,34 @@ export interface components {
              */
             received: boolean;
         };
+        /** EnsureFreeManagedCreditsRequest */
+        EnsureFreeManagedCreditsRequest: {
+            /** Agentkind */
+            agentKind?: ("claude" | "codex" | "opencode" | "gemini") | null;
+            /** Modelid */
+            modelId?: string | null;
+        };
+        /** EnsureFreeManagedCreditsResponse */
+        EnsureFreeManagedCreditsResponse: {
+            /** Status */
+            status: string;
+            /** Launchenabled */
+            launchEnabled: boolean;
+            /** Primaryaction */
+            primaryAction: string;
+            /** Readyagentmodels */
+            readyAgentModels: components["schemas"]["FreeManagedCreditReadyAgentModelResponse"][];
+            entitlement: components["schemas"]["AgentGatewayFreeCreditEntitlementResponse"] | null;
+            budgetSubject: components["schemas"]["AgentGatewayBudgetSubjectResponse"] | null;
+            /** Credentials */
+            credentials: components["schemas"]["AgentAuthCredentialResponse"][];
+            /** Policies */
+            policies: components["schemas"]["AgentGatewayPolicyResponse"][];
+            /** Lasterrorcode */
+            lastErrorCode: string | null;
+            /** Lasterrormessage */
+            lastErrorMessage: string | null;
+        };
         /** EnsureManagedCreditsRequest */
         EnsureManagedCreditsRequest: Record<string, never>;
         /** EnsureManagedCreditsResponse */
@@ -5529,6 +5624,18 @@ export interface components {
         FinalizeWorkspaceMobilityHandoffRequest: {
             /** Cloudworkspaceid */
             cloudWorkspaceId?: string | null;
+        };
+        /** FreeManagedCreditReadyAgentModelResponse */
+        FreeManagedCreditReadyAgentModelResponse: {
+            /** Agentkind */
+            agentKind: string;
+            /** Publicmodelnames */
+            publicModelNames: string[];
+            /**
+             * Credentialid
+             * Format: uuid
+             */
+            credentialId: string;
         };
         /** GenerateSessionTitleRequest */
         GenerateSessionTitleRequest: {
@@ -11195,6 +11302,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncSyncedCredentialResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ensure_free_managed_credits_endpoint_v1_cloud_agent_auth_free_credits_ensure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnsureFreeManagedCreditsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnsureFreeManagedCreditsResponse"];
                 };
             };
             /** @description Validation Error */

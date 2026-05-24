@@ -23,6 +23,7 @@ from proliferate.auth.authorization import PolicyDenied
 from proliferate.config import settings
 from proliferate.constants.billing import BILLING_PLAN_PRO
 from proliferate.constants.cloud import (
+    AGENT_GATEWAY_BUDGET_DURATION_V1,
     AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
     AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN,
     AGENT_GATEWAY_TOKEN_HASH_KEY_ID,
@@ -39,12 +40,16 @@ from proliferate.constants.cloud import (
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.db import engine as db_engine
 from proliferate.db.store import organizations as organization_store
-from proliferate.db.store.billing import ensure_organization_billing_subject
+from proliferate.db.store.billing import (
+    ensure_agent_gateway_free_credit_allocation,
+    ensure_organization_billing_subject,
+)
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_agent_auth.records import (
     AgentAuthCredentialRecord,
     AgentAuthCredentialShareRecord,
     AgentGatewayBudgetSubjectRecord,
+    AgentGatewayFreeCreditEntitlementRecord,
     AgentGatewayPolicyRecord,
     AgentGatewayProviderCredentialRecord,
     AgentGatewayRuntimeGrantRecord,
@@ -59,6 +64,10 @@ from proliferate.integrations.aws import (
 )
 from proliferate.integrations.litellm import LiteLLMAdminClient, LiteLLMIntegrationError
 from proliferate.server.billing.service import get_billing_snapshot_for_subject_in_session
+from proliferate.server.cloud.agent_auth.domain.byok_policy import (
+    GatewayByokVerdict,
+    gateway_byok_policy_verdict,
+)
 from proliferate.server.cloud.agent_auth.domain.desired_state import (
     LiteLLMModelDeploymentPlan,
     fingerprint_litellm_policy_state,
@@ -76,6 +85,7 @@ from proliferate.server.cloud.agent_auth.domain.synced_payload import (
 from proliferate.server.cloud.agent_auth.errors import AgentAuthError
 from proliferate.server.cloud.agent_auth.models import (
     CreateGatewayCredentialRequest,
+    EnsureFreeManagedCreditsRequest,
     EnsureManagedCreditsRequest,
     LiteLLMModelDeploymentRequest,
     SyncSyncedCredentialRequest,
@@ -96,7 +106,8 @@ from proliferate.utils.time import utcnow
 
 _ORG_ADMIN_ROLES = {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN}
 _GATEWAY_GRANT_TTL = timedelta(days=7)
-_MANAGED_CREDIT_AGENT_KINDS_V1: tuple[CloudAgentKind, ...] = ("claude",)
+_DEFAULT_MANAGED_CREDIT_AGENT_KINDS: tuple[CloudAgentKind, ...] = ("claude",)
+_USER_FREE_CREDIT_SOURCE = "signup_free_credit"
 _CLEANUP_SELECTION_ERROR_CODES = {
     "credential_revoked",
     "credential_share_revoked",
@@ -126,6 +137,27 @@ class EnsureManagedCreditsResult:
     budget_subject: AgentGatewayBudgetSubjectRecord
     credentials: tuple[AgentAuthCredentialRecord, ...]
     policies: tuple[AgentGatewayPolicyRecord, ...]
+
+
+@dataclass(frozen=True)
+class FreeManagedCreditReadyAgentModel:
+    agent_kind: str
+    public_model_names: tuple[str, ...]
+    credential_id: UUID
+
+
+@dataclass(frozen=True)
+class EnsureFreeManagedCreditsResult:
+    status: str
+    launch_enabled: bool
+    primary_action: str
+    ready_agent_models: tuple[FreeManagedCreditReadyAgentModel, ...]
+    entitlement: AgentGatewayFreeCreditEntitlementRecord | None
+    budget_subject: AgentGatewayBudgetSubjectRecord | None
+    credentials: tuple[AgentAuthCredentialRecord, ...]
+    policies: tuple[AgentGatewayPolicyRecord, ...]
+    last_error_code: str | None
+    last_error_message: str | None
 
 
 @dataclass(frozen=True)
@@ -460,6 +492,7 @@ async def create_gateway_credential(
         )
     _validate_policy_owner_scope(body.policy_kind, body.owner_scope)
     _require_gateway_byok_enabled(body.provider_kind)
+    _require_gateway_byok_create_allowed(body.policy_kind)
 
     validation = _validate_provider_payload(body.provider_kind, body.payload)
     credential = await store.create_agent_auth_credential(
@@ -582,7 +615,10 @@ async def ensure_managed_credits_for_organization(
     # Customer-facing callers never choose managed-credit amounts. The value
     # comes from the organization's billing plan and deploy-time entitlement
     # settings.
-    included_budget_usd = await _managed_credit_entitlement_budget(db, organization_id)
+    included_budget_usd = await _organization_managed_credit_entitlement_budget(
+        db,
+        organization_id,
+    )
     existing_budget = await store.get_managed_budget_subject(db, organization_id)
     team_id = existing_budget.litellm_team_id if existing_budget else None
     sync_status = "failed"
@@ -590,7 +626,7 @@ async def ensure_managed_credits_for_organization(
     fingerprint = None
     error_code = "litellm_not_configured"
     error_message = "LiteLLM provisioning is not configured."
-    requested_agent_kinds = _MANAGED_CREDIT_AGENT_KINDS_V1
+    requested_agent_kinds = _managed_credit_agent_kinds()
     managed_deployments = tuple(
         deployment
         for agent_kind in requested_agent_kinds
@@ -637,7 +673,7 @@ async def ensure_managed_credits_for_organization(
             fingerprint = _deployment_fingerprint(
                 policy_kind="proliferate_managed",
                 litellm_team_id=team_id,
-                budget_subject_id=str(existing_budget.id) if existing_budget else None,
+                budget_subject_id=None,
                 provider_kind="proliferate_bedrock_pool",
                 deployments=managed_deployments,
             )
@@ -730,6 +766,369 @@ async def ensure_managed_credits_for_organization(
         budget_subject=budget,
         credentials=tuple(credentials),
         policies=tuple(policies),
+    )
+
+
+async def ensure_free_managed_credits_for_user(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    body: EnsureFreeManagedCreditsRequest,
+) -> EnsureFreeManagedCreditsResult:
+    budget_amount = _user_free_credit_entitlement_budget(require_positive=False)
+    period_key = _user_free_credit_period_key()
+    requested_agent_kinds = _managed_credit_agent_kinds()
+    if body.agent_kind is not None:
+        requested_agent_kinds = (
+            (body.agent_kind,) if body.agent_kind in requested_agent_kinds else ()
+        )
+    existing_entitlement = await store.get_free_credit_entitlement(
+        db,
+        user_id=actor_user_id,
+        source=_USER_FREE_CREDIT_SOURCE,
+        period_key=period_key,
+    )
+    existing_budget = await store.get_user_managed_budget_subject(db, actor_user_id)
+    if not settings.agent_gateway_enabled:
+        return EnsureFreeManagedCreditsResult(
+            status="gateway_disabled",
+            launch_enabled=False,
+            primary_action="disabled",
+            ready_agent_models=(),
+            entitlement=existing_entitlement,
+            budget_subject=existing_budget,
+            credentials=(),
+            policies=(),
+            last_error_code="agent_gateway_disabled",
+            last_error_message="Agent Gateway is disabled.",
+        )
+    if not settings.agent_gateway_user_free_credit_enabled or Decimal(budget_amount) <= 0:
+        return EnsureFreeManagedCreditsResult(
+            status="not_entitled",
+            launch_enabled=False,
+            primary_action="none",
+            ready_agent_models=(),
+            entitlement=existing_entitlement,
+            budget_subject=existing_budget,
+            credentials=(),
+            policies=(),
+            last_error_code="free_credits_not_entitled",
+            last_error_message="Free managed credits are not enabled for this user.",
+        )
+    if existing_entitlement is not None and existing_entitlement.status in {
+        "exhausted",
+        "expired",
+        "revoked",
+    }:
+        return EnsureFreeManagedCreditsResult(
+            status=existing_entitlement.status,
+            launch_enabled=False,
+            primary_action="none",
+            ready_agent_models=(),
+            entitlement=existing_entitlement,
+            budget_subject=existing_budget,
+            credentials=(),
+            policies=(),
+            last_error_code=existing_entitlement.last_error_code
+            or f"free_credits_{existing_entitlement.status}",
+            last_error_message=existing_entitlement.last_error_message
+            or "Free managed credits are not available for this period.",
+        )
+    if body.agent_kind is not None and not requested_agent_kinds:
+        return EnsureFreeManagedCreditsResult(
+            status="agent_not_configured",
+            launch_enabled=False,
+            primary_action="none",
+            ready_agent_models=(),
+            entitlement=existing_entitlement,
+            budget_subject=existing_budget,
+            credentials=(),
+            policies=(),
+            last_error_code="managed_credit_agent_not_configured",
+            last_error_message=(
+                f"Proliferate free credits are not configured for {body.agent_kind}."
+            ),
+        )
+    if not await ensure_agent_gateway_free_credit_allocation(
+        db,
+        user_id=actor_user_id,
+        period_key=period_key,
+    ):
+        return EnsureFreeManagedCreditsResult(
+            status="not_entitled",
+            launch_enabled=False,
+            primary_action="connect_github",
+            ready_agent_models=(),
+            entitlement=existing_entitlement,
+            budget_subject=existing_budget,
+            credentials=(),
+            policies=(),
+            last_error_code="free_credits_github_allocation_unavailable",
+            last_error_message=(
+                "Free managed credits require a linked GitHub account that has not "
+                "already received this allocation."
+            ),
+        )
+
+    profile = await store.ensure_personal_sandbox_profile(
+        db,
+        user_id=actor_user_id,
+        created_by_user_id=actor_user_id,
+    )
+    entitlement = await store.ensure_free_credit_entitlement(
+        db,
+        user_id=actor_user_id,
+        source=_USER_FREE_CREDIT_SOURCE,
+        period_key=period_key,
+        included_budget_usd=budget_amount,
+        status="provisioning",
+    )
+    team_id = existing_budget.litellm_team_id if existing_budget else None
+    budget_duration = _user_free_credit_budget_duration()
+    managed_deployments = tuple(
+        deployment
+        for agent_kind in requested_agent_kinds
+        for deployment in _gateway_deployments_for_credential(
+            agent_kind=agent_kind,
+            provider_kind="proliferate_bedrock_pool",
+        )
+    )
+    sync_status = "failed"
+    status = "invalid"
+    fingerprint = None
+    error_code = "litellm_not_configured"
+    error_message = "LiteLLM provisioning is not configured."
+    if existing_budget is not None and team_id:
+        expected_fingerprint = _deployment_fingerprint(
+            policy_kind="proliferate_managed",
+            litellm_team_id=team_id,
+            budget_subject_id=None,
+            provider_kind="proliferate_bedrock_pool",
+            deployments=managed_deployments,
+        )
+        if (
+            managed_deployments
+            and existing_budget.status == "ready"
+            and existing_budget.litellm_sync_status == "synced"
+            and existing_budget.included_budget_usd == budget_amount
+            and existing_budget.budget_duration == budget_duration
+            and existing_budget.entitlement_source == _USER_FREE_CREDIT_SOURCE
+            and existing_budget.entitlement_period_key == period_key
+            and existing_budget.litellm_sync_fingerprint == expected_fingerprint
+        ):
+            sync_status = "synced"
+            status = "ready"
+            fingerprint = expected_fingerprint
+            error_code = None
+            error_message = None
+    if not managed_deployments:
+        error_code = "managed_credit_models_not_configured"
+        error_message = "No managed-credit model deployments are configured."
+    if (
+        managed_deployments
+        and sync_status != "synced"
+        and settings.agent_gateway_enabled
+        and settings.agent_gateway_litellm_master_key
+    ):
+        try:
+            client = LiteLLMAdminClient()
+            team = await client.ensure_team(
+                team_alias=f"user-{actor_user_id}-free-credits",
+                team_id=team_id,
+                max_budget=budget_amount,
+                budget_duration=budget_duration,
+            )
+            team_id = team.team_id
+            for deployment in managed_deployments:
+                await client.create_model_deployment(
+                    public_model_name=deployment.public_model_name,
+                    provider_model=deployment.provider_model,
+                    litellm_params=_provider_litellm_params(
+                        provider_kind="proliferate_bedrock_pool",
+                        provider_payload={},
+                        deployment=deployment,
+                    ),
+                    metadata={
+                        "ownerScope": "personal",
+                        "userId": str(actor_user_id),
+                        "budgetKind": "proliferate_managed",
+                        "entitlementId": str(entitlement.id),
+                    },
+                )
+            sync_status = "synced"
+            status = "ready"
+            fingerprint = _deployment_fingerprint(
+                policy_kind="proliferate_managed",
+                litellm_team_id=team_id,
+                budget_subject_id=None,
+                provider_kind="proliferate_bedrock_pool",
+                deployments=managed_deployments,
+            )
+            error_code = None
+            error_message = None
+        except LiteLLMIntegrationError as exc:
+            error_code = "litellm_provisioning_failed"
+            error_message = _safe_error_message(str(exc), {})
+
+    budget = await store.ensure_managed_budget_subject_for_owner(
+        db,
+        owner_scope="personal",
+        owner_user_id=actor_user_id,
+        organization_id=None,
+        included_budget_usd=budget_amount,
+        budget_duration=budget_duration,
+        entitlement_source=_USER_FREE_CREDIT_SOURCE,
+        entitlement_period_key=period_key,
+        litellm_team_id=team_id,
+        litellm_sync_status=sync_status,
+        litellm_sync_fingerprint=fingerprint,
+        status=status,
+        last_error_code=error_code,
+        last_error_message=error_message,
+    )
+    entitlement = await store.ensure_free_credit_entitlement(
+        db,
+        user_id=actor_user_id,
+        source=_USER_FREE_CREDIT_SOURCE,
+        period_key=period_key,
+        included_budget_usd=budget_amount,
+        budget_subject_id=budget.id,
+        status="active" if status == "ready" else "provisioning",
+        last_error_code=error_code,
+        last_error_message=error_message,
+    )
+
+    credentials: list[AgentAuthCredentialRecord] = []
+    policies: list[AgentGatewayPolicyRecord] = []
+    ready_models: list[FreeManagedCreditReadyAgentModel] = []
+    existing_selections = {
+        selection.agent_kind: selection
+        for selection in await store.list_selections_for_profile(db, profile.id)
+    }
+    for agent_kind in requested_agent_kinds:
+        deployments = _gateway_deployments_for_credential(
+            agent_kind=agent_kind,
+            provider_kind="proliferate_bedrock_pool",
+        )
+        if not deployments:
+            continue
+        credential = await store.get_managed_gateway_credential_for_owner(
+            db,
+            owner_scope="personal",
+            owner_user_id=actor_user_id,
+            organization_id=None,
+            agent_kind=agent_kind,
+        )
+        redacted_summary_json = json.dumps(
+            {
+                "providerKind": "proliferate_bedrock_pool",
+                "budgetSubjectId": str(budget.id),
+                "freeCreditEntitlementId": str(entitlement.id),
+            },
+            sort_keys=True,
+        )
+        if credential is None:
+            credential = await store.create_agent_auth_credential(
+                db,
+                owner_scope="personal",
+                owner_user_id=actor_user_id,
+                organization_id=None,
+                created_by_user_id=actor_user_id,
+                agent_kind=agent_kind,
+                credential_kind="managed_gateway",
+                display_name="Proliferate free credits",
+                redacted_summary_json=redacted_summary_json,
+                status="ready" if status == "ready" else "invalid",
+            )
+        else:
+            desired_credential_status = "ready" if status == "ready" else "invalid"
+            if (
+                credential.status != desired_credential_status
+                or credential.redacted_summary_json != redacted_summary_json
+            ):
+                credential = (
+                    await store.update_credential_status(
+                        db,
+                        credential_id=credential.id,
+                        status=desired_credential_status,
+                        redacted_summary_json=redacted_summary_json,
+                    )
+                    or credential
+                )
+        policy = await _ensure_managed_policy(
+            db,
+            credential=credential,
+            budget=budget,
+            sync_status=sync_status,
+            status=status,
+            fingerprint=fingerprint,
+            error_code=error_code,
+            error_message=error_message,
+            existing_policy=await store.get_gateway_policy_for_credential(db, credential.id),
+        )
+        desired_policy_credential_status = "ready" if policy.status == "ready" else "invalid"
+        if credential.status != desired_policy_credential_status:
+            credential = (
+                await store.update_credential_status(
+                    db,
+                    credential_id=credential.id,
+                    status=desired_policy_credential_status,
+                )
+                or credential
+            )
+        credentials.append(credential)
+        policies.append(policy)
+        if policy.status == "ready" and policy.litellm_sync_status == "synced":
+            ready_models.append(
+                FreeManagedCreditReadyAgentModel(
+                    agent_kind=agent_kind,
+                    public_model_names=tuple(
+                        deployment.public_model_name for deployment in deployments
+                    ),
+                    credential_id=credential.id,
+                )
+            )
+            if existing_selections.get(agent_kind) is None:
+                await select_credential_for_profile(
+                    db,
+                    actor_user_id=actor_user_id,
+                    sandbox_profile_id=profile.id,
+                    agent_kind=agent_kind,
+                    credential_id=credential.id,
+                    credential_share_id=None,
+                    force_restart=False,
+                )
+
+    launch_enabled = bool(ready_models)
+    await store.record_audit_event(
+        db,
+        action="free_credits.ensure",
+        actor_user_id=actor_user_id,
+        owner_scope="personal",
+        owner_user_id=actor_user_id,
+        organization_id=None,
+        sandbox_profile_id=profile.id,
+        metadata_json=json.dumps(
+            {
+                "includedBudgetUsd": budget_amount,
+                "agentKinds": list(requested_agent_kinds),
+                "litellmSyncStatus": sync_status,
+                "launchEnabled": launch_enabled,
+            },
+            sort_keys=True,
+        ),
+    )
+    return EnsureFreeManagedCreditsResult(
+        status="ready" if launch_enabled else "provisioning",
+        launch_enabled=launch_enabled,
+        primary_action="launch" if launch_enabled else "retry",
+        ready_agent_models=tuple(ready_models),
+        entitlement=entitlement,
+        budget_subject=budget,
+        credentials=tuple(credentials),
+        policies=tuple(policies),
+        last_error_code=error_code,
+        last_error_message=error_message,
     )
 
 
@@ -1099,6 +1498,27 @@ async def select_credential_for_profile(
             code="gateway_not_supported_for_agent",
             status_code=400,
         )
+    existing_selection = next(
+        (
+            selection
+            for selection in await store.list_selections_for_profile(db, profile.id)
+            if selection.agent_kind == agent_kind
+        ),
+        None,
+    )
+    selected_revision = credential.revision
+    if (
+        existing_selection is not None
+        and existing_selection.credential_id == credential.id
+        and existing_selection.credential_share_id == (share.id if share is not None else None)
+        and existing_selection.materialization_mode == plan.materialization_mode
+        and existing_selection.selected_revision == selected_revision
+        and existing_selection.status == "active"
+        and existing_selection.last_error_code is None
+        and existing_selection.last_error_message is None
+        and not force_restart
+    ):
+        return existing_selection
     selection = await store.upsert_selection(
         db,
         sandbox_profile_id=profile.id,
@@ -1107,7 +1527,7 @@ async def select_credential_for_profile(
         credential_id=credential.id,
         credential_share_id=share.id if share is not None else None,
         materialization_mode=plan.materialization_mode,
-        selected_revision=credential.revision,
+        selected_revision=selected_revision,
         status="active",
         last_error_code=None,
         last_error_message=None,
@@ -1976,14 +2396,61 @@ async def _reconcile_managed_budget_subject(
     *,
     budget: AgentGatewayBudgetSubjectRecord,
 ) -> AgentGatewayBudgetSubjectRecord:
-    included_budget_usd = await _managed_credit_entitlement_budget(
-        db,
-        budget.organization_id,
-        require_positive=False,
-    )
+    if budget.owner_scope == "personal":
+        entitlement_source = budget.entitlement_source or _USER_FREE_CREDIT_SOURCE
+        entitlement_period_key = budget.entitlement_period_key or _user_free_credit_period_key()
+        entitlement = await store.get_free_credit_entitlement_for_budget(
+            db,
+            budget.id,
+            source=entitlement_source,
+            period_key=entitlement_period_key,
+        )
+        included_budget_usd = (
+            _budget_amount(entitlement.included_budget_usd)
+            if entitlement is not None
+            else _user_free_credit_entitlement_budget(require_positive=False)
+        )
+        team_alias = f"user-{budget.owner_user_id}-free-credits"
+        owner_metadata = {
+            "ownerScope": "personal",
+            "userId": str(budget.owner_user_id),
+            "budgetKind": budget.budget_kind,
+        }
+        budget_duration = budget.budget_duration
+    else:
+        if budget.organization_id is None:
+            return await store.ensure_managed_budget_subject_for_owner(
+                db,
+                owner_scope=budget.owner_scope,
+                owner_user_id=budget.owner_user_id,
+                organization_id=budget.organization_id,
+                included_budget_usd=budget.included_budget_usd,
+                budget_duration=budget.budget_duration,
+                entitlement_source=budget.entitlement_source,
+                entitlement_period_key=budget.entitlement_period_key,
+                litellm_team_id=budget.litellm_team_id,
+                litellm_sync_status="failed",
+                litellm_sync_fingerprint=budget.litellm_sync_fingerprint,
+                status="invalid",
+                last_error_code="managed_budget_owner_invalid",
+                last_error_message="Managed budget subject is missing its organization.",
+            )
+        included_budget_usd = await _organization_managed_credit_entitlement_budget(
+            db,
+            budget.organization_id,
+            require_positive=False,
+        )
+        team_alias = f"org-{budget.organization_id}-managed-credits"
+        owner_metadata = {
+            "organizationId": str(budget.organization_id),
+            "budgetKind": budget.budget_kind,
+        }
+        entitlement_source = budget.entitlement_source
+        entitlement_period_key = budget.entitlement_period_key
+        budget_duration = budget.budget_duration or AGENT_GATEWAY_BUDGET_DURATION_V1
     managed_deployments = tuple(
         deployment
-        for agent_kind in _MANAGED_CREDIT_AGENT_KINDS_V1
+        for agent_kind in _managed_credit_agent_kinds()
         for deployment in _gateway_deployments_for_credential(
             agent_kind=agent_kind,
             provider_kind="proliferate_bedrock_pool",
@@ -1999,10 +2466,10 @@ async def _reconcile_managed_budget_subject(
         try:
             client = LiteLLMAdminClient()
             team = await client.ensure_team(
-                team_alias=f"org-{budget.organization_id}-managed-credits",
+                team_alias=team_alias,
                 team_id=budget.litellm_team_id,
                 max_budget=included_budget_usd,
-                budget_duration=budget.budget_duration,
+                budget_duration=budget_duration,
             )
             team_id = team.team_id
             for deployment in managed_deployments:
@@ -2016,10 +2483,7 @@ async def _reconcile_managed_budget_subject(
                         provider_payload={},
                         deployment=deployment,
                     ),
-                    metadata={
-                        "organizationId": str(budget.organization_id),
-                        "budgetKind": budget.budget_kind,
-                    },
+                    metadata=owner_metadata,
                 )
             sync_status = "synced"
             status = (
@@ -2030,7 +2494,7 @@ async def _reconcile_managed_budget_subject(
             fingerprint = _deployment_fingerprint(
                 policy_kind="proliferate_managed",
                 litellm_team_id=team_id,
-                budget_subject_id=str(budget.id),
+                budget_subject_id=None,
                 provider_kind="proliferate_bedrock_pool",
                 deployments=managed_deployments,
             )
@@ -2039,10 +2503,15 @@ async def _reconcile_managed_budget_subject(
         except LiteLLMIntegrationError as exc:
             error_code = "litellm_provisioning_failed"
             error_message = _safe_error_message(str(exc), {})
-    return await store.ensure_managed_budget_subject(
+    return await store.ensure_managed_budget_subject_for_owner(
         db,
+        owner_scope=budget.owner_scope,
+        owner_user_id=budget.owner_user_id,
         organization_id=budget.organization_id,
         included_budget_usd=included_budget_usd,
+        budget_duration=budget_duration,
+        entitlement_source=entitlement_source,
+        entitlement_period_key=entitlement_period_key,
         litellm_team_id=team_id,
         litellm_sync_status=sync_status,
         litellm_sync_fingerprint=fingerprint,
@@ -2223,6 +2692,24 @@ async def _ensure_managed_policy(
     error_message: str | None,
     existing_policy: AgentGatewayPolicyRecord | None = None,
 ) -> AgentGatewayPolicyRecord:
+    if credential.owner_scope != budget.owner_scope:
+        raise AgentAuthError(
+            "Managed credential and budget subject owners do not match.",
+            code="managed_budget_owner_mismatch",
+            status_code=500,
+        )
+    if credential.owner_user_id != budget.owner_user_id:
+        raise AgentAuthError(
+            "Managed credential and budget subject users do not match.",
+            code="managed_budget_owner_mismatch",
+            status_code=500,
+        )
+    if credential.organization_id != budget.organization_id:
+        raise AgentAuthError(
+            "Managed credential and budget subject organizations do not match.",
+            code="managed_budget_owner_mismatch",
+            status_code=500,
+        )
     virtual_key_id = existing_policy.litellm_virtual_key_id if existing_policy else None
     virtual_key_ciphertext = (
         existing_policy.litellm_virtual_key_ciphertext if existing_policy else None
@@ -2253,8 +2740,8 @@ async def _ensure_managed_policy(
         db,
         credential_id=credential.id,
         policy_kind="proliferate_managed",
-        owner_scope="organization",
-        owner_user_id=None,
+        owner_scope=credential.owner_scope,
+        owner_user_id=credential.owner_user_id,
         organization_id=credential.organization_id,
         budget_subject_id=budget.id,
         litellm_team_id=budget.litellm_team_id,
@@ -2492,6 +2979,16 @@ def _require_gateway_byok_enabled(provider_kind: str) -> None:
         )
 
 
+def _require_gateway_byok_create_allowed(policy_kind: str) -> None:
+    verdict = _gateway_byok_policy_verdict(policy_kind)
+    if not verdict.allowed:
+        raise AgentAuthError(
+            verdict.message or "Gateway BYOK provider credentials are disabled.",
+            code=verdict.code or "gateway_byok_disabled",
+            status_code=403,
+        )
+
+
 async def _gateway_byok_launch_verdict(
     db: AsyncSession,
     policy: AgentGatewayPolicyRecord,
@@ -2503,10 +3000,11 @@ async def _gateway_byok_launch_verdict(
             "unsupported_gateway_policy_kind",
             "Gateway policy kind is not supported.",
         )
-    if not settings.agent_gateway_byok_enabled:
+    verdict = _gateway_byok_policy_verdict(policy.policy_kind)
+    if not verdict.allowed:
         return (
-            "gateway_byok_disabled",
-            "Gateway BYOK provider credentials are disabled.",
+            verdict.code or "gateway_byok_disabled",
+            verdict.message or "Gateway BYOK provider credentials are disabled.",
         )
     provider_credential = await store.get_provider_credential_for_policy(db, policy.id)
     if provider_credential is None:
@@ -2534,6 +3032,18 @@ def _gateway_byok_provider_enabled(provider_kind: str) -> bool:
     if provider_kind == "openai_compatible":
         return settings.agent_gateway_openai_compatible_byok_enabled
     return False
+
+
+def _gateway_byok_policy_verdict(policy_kind: str) -> GatewayByokVerdict:
+    return gateway_byok_policy_verdict(
+        policy_kind=policy_kind,
+        gateway_byok_enabled=settings.agent_gateway_byok_enabled,
+        personal_byok_enabled=settings.agent_gateway_personal_byok_enabled,
+        litellm_topology=settings.agent_gateway_litellm_topology,
+        customer_secret_isolation_verified=(
+            settings.agent_gateway_litellm_customer_secret_isolation_verified
+        ),
+    )
 
 
 def _safe_error_message(
@@ -3104,7 +3614,44 @@ def _budget_amount(value: str) -> str:
     return format(amount, "f")
 
 
-async def _managed_credit_entitlement_budget(
+def _managed_credit_agent_kinds() -> tuple[CloudAgentKind, ...]:
+    configured = [
+        item.strip()
+        for item in settings.agent_gateway_managed_credit_agent_kinds.split(",")
+        if item.strip()
+    ]
+    agent_kinds = tuple(
+        item for item in configured if item in {"claude", "codex", "opencode", "gemini"}
+    )
+    return agent_kinds or _DEFAULT_MANAGED_CREDIT_AGENT_KINDS
+
+
+def _user_free_credit_period_key() -> str:
+    period = settings.agent_gateway_user_free_credit_period.strip() or "registration"
+    if period == "monthly":
+        return utcnow().strftime("%Y-%m")
+    return "registration"
+
+
+def _user_free_credit_budget_duration() -> str | None:
+    period = settings.agent_gateway_user_free_credit_period.strip() or "registration"
+    if period == "monthly":
+        return AGENT_GATEWAY_BUDGET_DURATION_V1
+    return None
+
+
+def _user_free_credit_entitlement_budget(*, require_positive: bool = True) -> str:
+    budget = _budget_amount(settings.agent_gateway_user_free_credit_usd)
+    if require_positive and Decimal(budget) <= 0:
+        raise AgentAuthError(
+            "Free managed credits are not enabled for this user.",
+            code="free_credits_not_entitled",
+            status_code=403,
+        )
+    return budget
+
+
+async def _organization_managed_credit_entitlement_budget(
     db: AsyncSession,
     organization_id: UUID,
     *,

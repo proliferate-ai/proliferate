@@ -48,13 +48,15 @@ export type PendingConfigChange = {
   commandId?: string | null;
 };
 
-export const DEFAULT_DIRECT_PROMPT_MODEL_ID = "gpt-5.4";
-export const DEFAULT_DIRECT_PROMPT_AGENT_KIND = "codex";
+export const DEFAULT_DIRECT_PROMPT_MODEL_ID = "us.anthropic.claude-sonnet-4-6";
+export const DEFAULT_DIRECT_PROMPT_AGENT_KIND = "claude";
 
 const CLOUD_MODEL_OPTIONS = [
-  { id: "gpt-5.4", label: "GPT-5.4", description: "Balanced cloud work" },
-  { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", description: "Fast lighter tasks" },
-  { id: "gpt-5.3-codex", label: "GPT-5.3 Codex", description: "Coding-heavy work" },
+  {
+    id: "us.anthropic.claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    description: "Balanced cloud work",
+  },
 ] as const;
 
 export interface LaunchSessionConfigUpdate {

@@ -30,6 +30,7 @@ from proliferate.constants.billing import (
     BILLING_USAGE_EXPORT_STATUS_SENDING,
     BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
     BILLING_USAGE_EXPORT_STATUS_WRITTEN_OFF,
+    FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
     FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL,
     FREE_CLOUD_ALLOCATION_PERIOD_V2,
     FREE_INCLUDED_GRANT_TYPE,
@@ -311,6 +312,25 @@ async def ensure_free_trial_v2_grant(db: AsyncSession, subject: BillingSubject) 
     return False
 
 
+async def ensure_agent_gateway_free_credit_allocation(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    period_key: str,
+) -> bool:
+    github_provider_user_id = await _linked_github_provider_user_id(db, user_id)
+    if github_provider_user_id is None:
+        return False
+    subject = await ensure_personal_billing_subject(db, user_id)
+    return await _ensure_free_cloud_allocation(
+        db,
+        allocation_kind=FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
+        subject=subject,
+        github_provider_user_id=github_provider_user_id,
+        period_key=period_key,
+    )
+
+
 async def _linked_github_provider_user_id(db: AsyncSession, user_id: UUID) -> str | None:
     return await db.scalar(
         select(AuthIdentity.provider_subject)
@@ -346,18 +366,35 @@ async def _ensure_free_trial_allocation(
     subject: BillingSubject,
     github_provider_user_id: str,
 ) -> bool:
+    return await _ensure_free_cloud_allocation(
+        db,
+        allocation_kind=FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL,
+        subject=subject,
+        github_provider_user_id=github_provider_user_id,
+        period_key=FREE_CLOUD_ALLOCATION_PERIOD_V2,
+    )
+
+
+async def _ensure_free_cloud_allocation(
+    db: AsyncSession,
+    *,
+    allocation_kind: str,
+    subject: BillingSubject,
+    github_provider_user_id: str,
+    period_key: str,
+) -> bool:
     if subject.user_id is None:
         return False
     now = utcnow()
     result = await db.execute(
         pg_insert(FreeCloudAllocation)
         .values(
-            allocation_kind=FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL,
+            allocation_kind=allocation_kind,
             github_provider_user_id=github_provider_user_id,
             billing_subject_id=subject.id,
             user_id=subject.user_id,
             issued_billing_grant_id=None,
-            period_key=FREE_CLOUD_ALLOCATION_PERIOD_V2,
+            period_key=period_key,
             status="active",
             created_at=now,
             updated_at=now,
@@ -378,9 +415,9 @@ async def _ensure_free_trial_allocation(
         await db.execute(
             select(FreeCloudAllocation)
             .where(
-                FreeCloudAllocation.allocation_kind == FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL,
+                FreeCloudAllocation.allocation_kind == allocation_kind,
                 FreeCloudAllocation.github_provider_user_id == github_provider_user_id,
-                FreeCloudAllocation.period_key == FREE_CLOUD_ALLOCATION_PERIOD_V2,
+                FreeCloudAllocation.period_key == period_key,
             )
             .with_for_update()
         )

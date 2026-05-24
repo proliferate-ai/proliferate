@@ -43,6 +43,7 @@ from proliferate.server.agent_gateway.models import (
     GatewayForwardStream,
     GatewayModelsResponse,
 )
+from proliferate.server.cloud.agent_auth.domain.byok_policy import gateway_byok_policy_verdict
 from proliferate.utils.crypto import decrypt_text
 from proliferate.utils.time import duration_ms, utcnow
 
@@ -182,6 +183,8 @@ async def forward_gateway_request(
         raise
     except LiteLLMRuntimeStatusError as exc:
         mapped = _map_litellm_error(exc)
+        if mapped.code == "credits_exhausted" and authorized is not None:
+            await _mark_authorized_budget_exhausted(db, authorized)
         _log_gateway_request(
             started=started,
             gateway_path=gateway_path,
@@ -397,10 +400,19 @@ async def _require_gateway_policy_launchable(
             code="gateway_route_unavailable",
             status_code=503,
         )
-    if not settings.agent_gateway_byok_enabled:
+    verdict = gateway_byok_policy_verdict(
+        policy_kind=policy.policy_kind,
+        gateway_byok_enabled=settings.agent_gateway_byok_enabled,
+        personal_byok_enabled=settings.agent_gateway_personal_byok_enabled,
+        litellm_topology=settings.agent_gateway_litellm_topology,
+        customer_secret_isolation_verified=(
+            settings.agent_gateway_litellm_customer_secret_isolation_verified
+        ),
+    )
+    if not verdict.allowed:
         raise AgentGatewayError(
-            "Gateway BYOK provider credentials are disabled.",
-            code="gateway_byok_disabled",
+            verdict.message or "Gateway BYOK provider credentials are disabled.",
+            code=verdict.code or "gateway_byok_disabled",
             status_code=403,
         )
     provider_credential = await store.get_provider_credential_for_policy(db, policy.id)
@@ -457,6 +469,55 @@ async def _require_budget_ready(
             code="gateway_route_unavailable",
             status_code=503,
         )
+
+
+async def _mark_authorized_budget_exhausted(
+    db: AsyncSession,
+    authorized: AuthorizedGatewayRequest,
+) -> None:
+    policy = await store.get_gateway_policy(db, authorized.policy_id)
+    if policy is None or policy.budget_subject_id is None:
+        return
+    budget = await store.get_budget_subject(db, policy.budget_subject_id)
+    if budget is None:
+        return
+    await store.ensure_managed_budget_subject_for_owner(
+        db,
+        owner_scope=budget.owner_scope,
+        owner_user_id=budget.owner_user_id,
+        organization_id=budget.organization_id,
+        included_budget_usd=budget.included_budget_usd,
+        budget_duration=budget.budget_duration,
+        entitlement_source=budget.entitlement_source,
+        entitlement_period_key=budget.entitlement_period_key,
+        litellm_team_id=budget.litellm_team_id,
+        litellm_sync_status=budget.litellm_sync_status,
+        litellm_sync_fingerprint=budget.litellm_sync_fingerprint,
+        status="exhausted",
+        last_error_code="credits_exhausted",
+        last_error_message="Managed credits are exhausted.",
+    )
+    if budget.owner_scope != "personal":
+        return
+    entitlement = await store.get_free_credit_entitlement_for_budget(
+        db,
+        budget.id,
+        source=budget.entitlement_source,
+        period_key=budget.entitlement_period_key,
+    )
+    if entitlement is None:
+        return
+    await store.ensure_free_credit_entitlement(
+        db,
+        user_id=entitlement.user_id,
+        source=entitlement.source,
+        period_key=entitlement.period_key,
+        included_budget_usd=entitlement.included_budget_usd,
+        budget_subject_id=budget.id,
+        status="exhausted",
+        last_error_code="credits_exhausted",
+        last_error_message="Managed credits are exhausted.",
+    )
 
 
 def _json_body(body: bytes) -> dict[str, object]:

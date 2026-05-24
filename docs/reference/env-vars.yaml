@@ -357,10 +357,46 @@
   description: Public Proliferate gateway base URL written into sandbox agent auth config
   tags: [local-dev, self-hosted, production]
 
-- name: AGENT_GATEWAY_DEFAULT_MANAGED_BUDGET_USD
+- name: AGENT_GATEWAY_MANAGED_BUDGET_FREE_USD
   secret: false
   default: "0"
-  description: Included managed-credit budget provisioned to LiteLLM for an organization in V1; zero disables managed credits
+  description: Included organization managed-credit budget for free-plan organizations; zero disables org managed credits for this plan
+  tags: [local-dev, production]
+
+- name: AGENT_GATEWAY_MANAGED_BUDGET_PRO_USD
+  secret: false
+  default: "0"
+  description: Included organization managed-credit budget for Pro organizations; zero disables org managed credits for this plan
+  tags: [local-dev, production]
+
+- name: AGENT_GATEWAY_MANAGED_BUDGET_UNLIMITED_USD
+  secret: false
+  default: "0"
+  description: Included organization managed-credit budget for unlimited-plan organizations; zero disables org managed credits for this plan
+  tags: [local-dev, production]
+
+- name: AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED
+  secret: false
+  default: "false"
+  description: Enables personal Proliferate-provided LLM credits for GitHub-linked users
+  tags: [local-dev, production]
+
+- name: AGENT_GATEWAY_USER_FREE_CREDIT_USD
+  secret: false
+  default: "0"
+  description: Personal free managed-credit amount provisioned through LiteLLM; zero disables the allocation
+  tags: [local-dev, production]
+
+- name: AGENT_GATEWAY_USER_FREE_CREDIT_PERIOD
+  secret: false
+  default: "registration"
+  description: Free-credit period key mode; registration is one-time, monthly uses YYYY-MM period keys and LiteLLM 30d budgets
+  tags: [local-dev, production]
+
+- name: AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS
+  secret: false
+  default: "claude"
+  description: Comma-separated agent kinds eligible for Proliferate managed credits; unsupported kinds are ignored
   tags: [local-dev, production]
 
 - name: AGENT_GATEWAY_MAX_REQUEST_BYTES
@@ -378,7 +414,25 @@
 - name: AGENT_GATEWAY_BYOK_ENABLED
   secret: false
   default: "false"
-  description: Enables user/org provider credentials through the gateway; hosted-cloud V1 leaves this disabled
+  description: Enables user/org provider credentials through the gateway; also requires verified LiteLLM route isolation before any BYOK policy can launch
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_PERSONAL_BYOK_ENABLED
+  secret: false
+  default: "false"
+  description: Enables personal BYOK provider credentials after AGENT_GATEWAY_BYOK_ENABLED and route-isolation verification are also enabled
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_LITELLM_TOPOLOGY
+  secret: false
+  default: "oss_shared"
+  description: LiteLLM routing topology label; BYOK launch gates allow enterprise_shared or isolated_router only
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_LITELLM_CUSTOMER_SECRET_ISOLATION_VERIFIED
+  secret: false
+  default: "false"
+  description: Operator proof flag that customer-owned BYOK secrets cannot share an unsafe public model route
   tags: [local-dev, self-hosted, production]
 
 - name: AGENT_GATEWAY_ANTHROPIC_BYOK_ENABLED

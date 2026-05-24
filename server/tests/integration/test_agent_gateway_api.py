@@ -44,6 +44,9 @@ class _GatewaySeed:
 def _enable_agent_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_byok_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_personal_byok_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_litellm_topology", "enterprise_shared")
+    monkeypatch.setattr(settings, "agent_gateway_litellm_customer_secret_isolation_verified", True)
     monkeypatch.setattr(settings, "agent_gateway_anthropic_byok_enabled", True)
 
 
@@ -383,6 +386,35 @@ async def test_gateway_fails_closed_when_byok_provider_disabled_after_grant_issu
 
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "gateway_byok_disabled"
+    assert fake_client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_gateway_fails_closed_when_byok_route_isolation_becomes_unverified(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed = await _seed_gateway_grant(db_session)
+    fake_client = _FakeRuntimeClient()
+    monkeypatch.setattr(
+        "proliferate.server.agent_gateway.service.LiteLLMRuntimeClient",
+        lambda: fake_client,
+    )
+    monkeypatch.setattr(
+        settings,
+        "agent_gateway_litellm_customer_secret_isolation_verified",
+        False,
+    )
+
+    response = await client.post(
+        "/anthropic/v1/messages",
+        headers={"Authorization": f"Bearer {seed.raw_token}"},
+        json={"model": "us.anthropic.claude-sonnet-4-6", "messages": []},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "gateway_byok_route_isolation_unverified"
     assert fake_client.calls == []
 
 
