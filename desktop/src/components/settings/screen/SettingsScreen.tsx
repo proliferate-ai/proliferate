@@ -18,6 +18,7 @@ import { CloudUnavailablePane } from "@/components/settings/panes/CloudUnavailab
 import { ComputePane } from "@/components/settings/panes/ComputePane";
 import { EnvironmentsPane } from "@/components/settings/panes/EnvironmentsPane";
 import { SharedEnvironmentsPane } from "@/components/settings/panes/SharedEnvironmentsPane";
+import { WorktreesPane } from "@/components/settings/panes/WorktreesPane";
 import {
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
@@ -147,6 +148,9 @@ function renderSettingsSection(
     }
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
+  if (activeSection === "worktrees") {
+    return <WorktreesPane />;
   }
   return (
     <EnvironmentsPane

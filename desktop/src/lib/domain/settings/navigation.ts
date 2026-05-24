@@ -33,7 +33,7 @@ export function normalizeSettingsSection(value: string | null): SettingsSection 
   if (value === "defaults" || value === "advanced") {
     return "agent-defaults";
   }
-  if (value === "repo" || value === "worktrees" || value === "cloudRepo") {
+  if (value === "repo" || value === "cloudRepo") {
     return "environments";
   }
   if (value === "cloud") {

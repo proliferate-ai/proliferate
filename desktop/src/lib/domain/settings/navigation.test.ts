@@ -240,12 +240,12 @@ describe("settings navigation", () => {
     });
   });
 
-  it("redirects legacy worktrees links to environments", () => {
+  it("resolves the worktrees settings section", () => {
     expect(resolveSettingsSelection({
       rawSection: "worktrees",
       repositories: [],
     })).toEqual({
-      activeSection: "environments",
+      activeSection: "worktrees",
       activeRepoSourceRoot: null,
       focus: {},
       inviteHandoff: null,
