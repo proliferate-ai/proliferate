@@ -181,9 +181,9 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "build": "pnpm --filter @proliferate/product-model build && tsc -p tsconfig.json",
+    "typecheck": "pnpm --filter @proliferate/product-model build && tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --filter @proliferate/product-model build && vitest run"
   },
   "dependencies": {
     "@proliferate/product-model": "workspace:*",
