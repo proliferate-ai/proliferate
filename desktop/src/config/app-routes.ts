@@ -2,6 +2,7 @@ export const APP_ROUTES = {
   home: "/",
   plugins: "/plugins",
   automations: "/automations",
+  workspaces: "/workspaces",
   settings: "/settings",
 } as const;
 

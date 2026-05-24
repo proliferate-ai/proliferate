@@ -167,6 +167,14 @@
       "types": "./dist/workspaces/CloudWorkspaceList.d.ts",
       "import": "./dist/workspaces/CloudWorkspaceList.js"
     },
+    "./workspaces/WorkspaceInventory": {
+      "types": "./dist/workspaces/WorkspaceInventory.d.ts",
+      "import": "./dist/workspaces/WorkspaceInventory.js"
+    },
+    "./workspaces/WorkspacesSurface": {
+      "types": "./dist/workspaces/WorkspacesSurface.d.ts",
+      "import": "./dist/workspaces/WorkspacesSurface.js"
+    },
     "./support/SupportSurface": {
       "types": "./dist/support/SupportSurface.d.ts",
       "import": "./dist/support/SupportSurface.js"
@@ -178,6 +186,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@proliferate/product-model": "workspace:*",
     "@proliferate/ui": "workspace:*",
     "lucide-react": "^0.468.0",
     "react-markdown": "^9",

@@ -29,6 +29,14 @@ const selectionMocks = vi.hoisted(() => ({
   selectWorkspace: vi.fn(async () => undefined),
 }));
 
+const logicalWorkspaceMocks = vi.hoisted(() => ({
+  logicalWorkspaces: [] as unknown[],
+}));
+
+const shellMocks = vi.hoisted(() => ({
+  openExternal: vi.fn(async () => undefined),
+}));
+
 const toastMocks = vi.hoisted(() => ({
   show: vi.fn(),
 }));
@@ -66,6 +74,18 @@ vi.mock("@/hooks/workspaces/selection/use-workspace-selection", () => ({
   }),
 }));
 
+vi.mock("@/hooks/workspaces/derived/use-logical-workspaces", () => ({
+  useLogicalWorkspaces: () => ({
+    logicalWorkspaces: logicalWorkspaceMocks.logicalWorkspaces,
+  }),
+}));
+
+vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
+  useTauriShellActions: () => ({
+    openExternal: shellMocks.openExternal,
+  }),
+}));
+
 vi.mock("@/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof toastMocks.show }) => unknown) =>
     selector({ show: toastMocks.show }),
@@ -92,7 +112,9 @@ beforeEach(() => {
   harnessMocks.state.selectedWorkspaceId = null;
   mobilityMocks.state.selectionLocked = false;
   mobilityMocks.state.selectedLogicalWorkspaceId = null;
+  logicalWorkspaceMocks.logicalWorkspaces = [];
   selectionMocks.selectWorkspace.mockResolvedValue(undefined);
+  shellMocks.openExternal.mockResolvedValue(undefined);
 });
 
 describe("useWorkspaceNavigationWorkflow", () => {
@@ -174,5 +196,26 @@ describe("useWorkspaceNavigationWorkflow", () => {
     expect(selectionMocks.selectWorkspace).toHaveBeenCalledWith("logical-current", {
       latencyFlowId: "flow-1",
     });
+  });
+
+  it("opens shared unclaimed cloud workspaces in the web app instead of selecting them in desktop", () => {
+    logicalWorkspaceMocks.logicalWorkspaces = [{
+      id: "logical-unclaimed",
+      localWorkspace: null,
+      mobilityWorkspace: null,
+      cloudWorkspace: {
+        id: "cloud-unclaimed-1",
+        visibility: "shared_unclaimed",
+      },
+    }];
+    const { result } = renderHook(() => useWorkspaceNavigationWorkflow());
+
+    act(() => result.current.selectWorkspaceFromSurface("logical-unclaimed", "sidebar"));
+
+    expect(shellMocks.openExternal).toHaveBeenCalledWith(
+      "https://app.proliferate.ai/cloud/workspaces/cloud-unclaimed-1",
+    );
+    expect(selectionMocks.selectWorkspace).not.toHaveBeenCalled();
+    expect(routerMocks.navigate).not.toHaveBeenCalled();
   });
 });

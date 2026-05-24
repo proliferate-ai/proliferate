@@ -179,6 +179,10 @@
       "types": "./dist/workspaces/presentation.d.ts",
       "import": "./dist/workspaces/presentation.js"
     },
+    "./workspaces/inventory": {
+      "types": "./dist/workspaces/inventory.d.ts",
+      "import": "./dist/workspaces/inventory.js"
+    },
     "./chats/composer/prompt-attachment-rules": {
       "types": "./dist/chats/composer/prompt-attachment-rules.d.ts",
       "import": "./dist/chats/composer/prompt-attachment-rules.js"

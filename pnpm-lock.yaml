@@ -407,6 +407,9 @@ importers:
 
   packages/product-ui:
     dependencies:
+      '@proliferate/product-model':
+        specifier: workspace:*
+        version: link:../product-model
       '@proliferate/ui':
         specifier: workspace:*
         version: link:../ui

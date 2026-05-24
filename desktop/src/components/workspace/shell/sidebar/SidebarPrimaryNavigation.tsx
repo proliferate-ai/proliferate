@@ -1,6 +1,7 @@
 import {
   Blocks,
   CalendarClock,
+  Grid,
   Home,
   LifeBuoy,
 } from "@/components/ui/icons";
@@ -13,6 +14,7 @@ interface SidebarPrimaryNavigationProps {
   homeActive: boolean;
   pluginsActive: boolean;
   automationsActive: boolean;
+  workspacesActive: boolean;
   supportActive: boolean;
   shortcutRevealVisible: boolean;
   shortcutLabels: {
@@ -24,6 +26,7 @@ interface SidebarPrimaryNavigationProps {
   onGoHome: () => void;
   onGoPlugins: () => void;
   onGoAutomations: () => void;
+  onGoWorkspaces: () => void;
   onOpenSupport: () => void;
 }
 
@@ -31,12 +34,14 @@ export function SidebarPrimaryNavigation({
   homeActive,
   pluginsActive,
   automationsActive,
+  workspacesActive,
   supportActive,
   shortcutRevealVisible,
   shortcutLabels,
   onGoHome,
   onGoPlugins,
   onGoAutomations,
+  onGoWorkspaces,
   onOpenSupport,
 }: SidebarPrimaryNavigationProps) {
   const navItems: SidebarNavItemView[] = [
@@ -53,6 +58,12 @@ export function SidebarPrimaryNavigation({
       icon: <Blocks className="size-4" />,
       label: "Plugins",
       shortcutLabel: shortcutLabels.plugins,
+    },
+    {
+      id: "workspaces",
+      active: workspacesActive,
+      icon: <Grid className="size-4" />,
+      label: "Workspaces",
     },
     {
       id: "automations",
@@ -77,6 +88,9 @@ export function SidebarPrimaryNavigation({
         break;
       case "plugins":
         onGoPlugins();
+        break;
+      case "workspaces":
+        onGoWorkspaces();
         break;
       case "automations":
         onGoAutomations();

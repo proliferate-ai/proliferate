@@ -55,6 +55,10 @@ export function useWorkspaceSidebarActions() {
     goToTopLevelRoute(APP_ROUTES.automations);
   }, [goToTopLevelRoute]);
 
+  const handleGoWorkspaces = useCallback(() => {
+    goToTopLevelRoute(APP_ROUTES.workspaces);
+  }, [goToTopLevelRoute]);
+
   const handleSelectWorkspace = useCallback((workspaceId: string) => {
     selectWorkspaceFromSurface(workspaceId, "sidebar");
   }, [selectWorkspaceFromSurface]);
@@ -213,6 +217,7 @@ export function useWorkspaceSidebarActions() {
     handleGoHome,
     handleGoPlugins,
     handleGoAutomations,
+    handleGoWorkspaces,
     handleSidebarIndicatorAction,
     handleMarkWorkspaceDone,
     handleRetryWorkspaceCleanup,
