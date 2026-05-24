@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentAuthCredential } from "@proliferate/cloud-sdk";
+import type { AgentAuthCredential, AgentGatewayCapabilities } from "@proliferate/cloud-sdk";
 import {
   agentAuthCanCreateGatewayCredentialForAgent,
   agentAuthCredentialAvailability,
@@ -29,6 +29,33 @@ function credential(
     revision: 1,
     activeCredentialShareId: null,
     revokedAt: null,
+    ...overrides,
+  };
+}
+
+function capabilities(
+  overrides: Partial<AgentGatewayCapabilities>,
+): AgentGatewayCapabilities {
+  return {
+    enabled: true,
+    managedCreditsPersonalEnabled: true,
+    managedCreditsOrganizationEnabled: true,
+    defaultManagedBudgetUsd: "20",
+    managedCreditAgentKinds: ["claude"],
+    topology: "enterprise_shared",
+    routeIsolation: "enterprise_team_project",
+    liveProofStatus: "passed",
+    byokEnabled: true,
+    byokPersonalEnabled: true,
+    byokOrganizationEnabled: true,
+    byokOrganizationDisabledReason: null,
+    byokProviders: {
+      anthropicApiKey: false,
+      openaiApiKey: false,
+      bedrockAssumeRole: false,
+      openaiCompatible: false,
+    },
+    opencodeGatewayEnabled: false,
     ...overrides,
   };
 }
@@ -90,11 +117,7 @@ describe("agentAuthCredentialAvailability", () => {
         credentialKind: "managed_gateway",
         redactedSummary: { providerKind: "anthropic_api_key" },
       }),
-      {
-        enabled: true,
-        managedCreditsPersonalEnabled: true,
-        managedCreditsOrganizationEnabled: true,
-        defaultManagedBudgetUsd: "20",
+      capabilities({
         byokEnabled: false,
         byokProviders: {
           anthropicApiKey: false,
@@ -102,8 +125,7 @@ describe("agentAuthCredentialAvailability", () => {
           bedrockAssumeRole: false,
           openaiCompatible: false,
         },
-        opencodeGatewayEnabled: false,
-      },
+      }),
     );
 
     expect(availability.status).toBe("unavailable");
@@ -116,20 +138,14 @@ describe("agentAuthCredentialAvailability", () => {
         credentialKind: "managed_gateway",
         redactedSummary: { providerKind: "openai_api_key" },
       }),
-      {
-        enabled: true,
-        managedCreditsPersonalEnabled: true,
-        managedCreditsOrganizationEnabled: true,
-        defaultManagedBudgetUsd: "20",
-        byokEnabled: true,
+      capabilities({
         byokProviders: {
           anthropicApiKey: false,
           openaiApiKey: true,
           bedrockAssumeRole: false,
           openaiCompatible: false,
         },
-        opencodeGatewayEnabled: false,
-      },
+      }),
     );
 
     expect(availability.status).toBe("available");
@@ -174,20 +190,10 @@ describe("agentAuthManagedCreditsCapabilityLabel", () => {
   it("describes disabled organization managed credits", () => {
     expect(
       agentAuthManagedCreditsCapabilityLabel(
-        {
-          enabled: true,
-          managedCreditsPersonalEnabled: true,
+        capabilities({
           managedCreditsOrganizationEnabled: false,
-          defaultManagedBudgetUsd: "20",
           byokEnabled: false,
-          byokProviders: {
-            anthropicApiKey: false,
-            openaiApiKey: false,
-            bedrockAssumeRole: false,
-            openaiCompatible: false,
-          },
-          opencodeGatewayEnabled: false,
-        },
+        }),
         "organization",
       ),
     ).toBe("Managed credits are not enabled for shared cloud sandboxes.");
@@ -196,25 +202,19 @@ describe("agentAuthManagedCreditsCapabilityLabel", () => {
 
 describe("agentAuthCanCreateGatewayCredentialForAgent", () => {
   it("matches gateway provider forms to the harness they can configure", () => {
-    const capabilities = {
-      enabled: true,
-      managedCreditsPersonalEnabled: true,
-      managedCreditsOrganizationEnabled: true,
-      defaultManagedBudgetUsd: "20",
-      byokEnabled: true,
+    const inputCapabilities = capabilities({
       byokProviders: {
         anthropicApiKey: true,
         openaiApiKey: true,
         bedrockAssumeRole: false,
         openaiCompatible: false,
       },
-      opencodeGatewayEnabled: false,
-    };
+    });
 
-    expect(agentAuthCanCreateGatewayCredentialForAgent("claude", capabilities)).toBe(true);
-    expect(agentAuthCanCreateGatewayCredentialForAgent("codex", capabilities)).toBe(true);
-    expect(agentAuthCanCreateGatewayCredentialForAgent("opencode", capabilities)).toBe(false);
-    expect(agentAuthCanCreateGatewayCredentialForAgent("gemini", capabilities)).toBe(false);
+    expect(agentAuthCanCreateGatewayCredentialForAgent("claude", inputCapabilities)).toBe(true);
+    expect(agentAuthCanCreateGatewayCredentialForAgent("codex", inputCapabilities)).toBe(true);
+    expect(agentAuthCanCreateGatewayCredentialForAgent("opencode", inputCapabilities)).toBe(false);
+    expect(agentAuthCanCreateGatewayCredentialForAgent("gemini", inputCapabilities)).toBe(false);
   });
 });
 

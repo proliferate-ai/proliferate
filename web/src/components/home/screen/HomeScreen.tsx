@@ -2,6 +2,7 @@ import { Bot, Cloud, GitBranch, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  useAgentAuthMutations,
   useCloudAgentCatalog,
   useCloudRepoConfigs,
   useCreateCloudWorkspace,
@@ -69,6 +70,7 @@ export function HomeScreen() {
   const repoConfigs = useCloudRepoConfigs();
   const agentCatalog = useCloudAgentCatalog();
   const createWorkspace = useCreateCloudWorkspace();
+  const agentAuthMutations = useAgentAuthMutations();
   const repoOptions = useMemo(
     () => buildRepoOptions(repoConfigs.data?.configs ?? [], webEnv.defaultCloudRepo),
     [repoConfigs.data?.configs],
@@ -167,6 +169,17 @@ export function HomeScreen() {
         }),
         createdAt: Date.now(),
       };
+      const freeCredits = await agentAuthMutations.ensureFreeCredits({});
+      if (
+        freeCredits.status !== "not_entitled"
+        && freeCredits.status !== "gateway_disabled"
+        && !freeCredits.launchEnabled
+      ) {
+        throw new Error(
+          freeCredits.lastErrorMessage
+            ?? "Cloud agent credits are not ready yet. Please retry in a moment.",
+        );
+      }
       const workspace = await createWorkspace.mutateAsync({
         gitProvider: "github",
         gitOwner: selectedRepo.gitOwner,
@@ -174,6 +187,7 @@ export function HomeScreen() {
         branchName: buildBranchName(text),
         displayName: buildWorkspaceDisplayName(text),
         ownerScope: "personal",
+        requiredAgentKind: resolvedLaunchSelection.agentKind,
       });
       savePendingHomePrompt(workspace.id, workspacePendingPrompt);
       navigate(routes.workspace(workspace.id));
@@ -190,7 +204,9 @@ export function HomeScreen() {
     }
   }
 
-  const submitting = createWorkspace.isPending || submitInFlightRef.current;
+  const submitting = createWorkspace.isPending
+    || agentAuthMutations.isEnsuringFreeCredits
+    || submitInFlightRef.current;
   const transcriptRows = useMemo(
     () => buildPendingPromptRows(pendingPrompt),
     [pendingPrompt],

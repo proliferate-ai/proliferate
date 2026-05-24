@@ -22,6 +22,8 @@ export type AgentGatewayProviderCredential =
   components["schemas"]["AgentGatewayProviderCredentialResponse"];
 export type AgentGatewayBudgetSubject =
   components["schemas"]["AgentGatewayBudgetSubjectResponse"];
+export type AgentGatewayFreeCreditEntitlement =
+  components["schemas"]["AgentGatewayFreeCreditEntitlementResponse"];
 export type CreateGatewayCredentialRequest =
   components["schemas"]["CreateGatewayCredentialRequest"];
 export type CreateGatewayCredentialResponse =
@@ -35,6 +37,10 @@ export type EnsureManagedCreditsRequest =
   components["schemas"]["EnsureManagedCreditsRequest"];
 export type EnsureManagedCreditsResponse =
   components["schemas"]["EnsureManagedCreditsResponse"];
+export type EnsureFreeManagedCreditsRequest =
+  components["schemas"]["EnsureFreeManagedCreditsRequest"];
+export type EnsureFreeManagedCreditsResponse =
+  components["schemas"]["EnsureFreeManagedCreditsResponse"];
 export type SandboxProfile =
   components["schemas"]["SandboxProfileResponse"];
 export type SandboxProfileTargetState =

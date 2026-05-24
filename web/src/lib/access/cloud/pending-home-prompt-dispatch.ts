@@ -1,5 +1,6 @@
 import {
   getCommandStatus,
+  ensureFreeManagedCredits,
   materializeTargetConfig,
   type CloudCommandEnvelope,
   type CloudCommandResponse,
@@ -106,6 +107,11 @@ async function startSessionForPrompt(args: {
   if (!targetId || !anyharnessWorkspaceId) {
     throw new Error("Workspace is ready but missing runtime command routing.");
   }
+  await ensurePersonalManagedAgentAuthReady({
+    client: args.client,
+    onStatus: args.onStatus,
+  });
+  assertStillCurrent(args.shouldContinue);
   await ensureManagedWorkspaceTargetConfigReady({
     client: args.client,
     workspace: args.workspace,
@@ -158,6 +164,23 @@ async function startSessionForPrompt(args: {
     updatedAt: null,
     createdAt: null,
   } as CloudSessionProjection;
+}
+
+async function ensurePersonalManagedAgentAuthReady(args: {
+  client: ProliferateCloudClient;
+  onStatus: (status: string) => void;
+}): Promise<void> {
+  args.onStatus("Checking cloud agent credits.");
+  const result = await ensureFreeManagedCredits({}, args.client);
+  if (result.status === "not_entitled" || result.status === "gateway_disabled") {
+    return;
+  }
+  if (!result.launchEnabled) {
+    throw new Error(
+      result.lastErrorMessage
+        ?? "Cloud agent credits are not ready yet. Please retry in a moment.",
+    );
+  }
 }
 
 async function applyPendingSessionConfigUpdates(args: {

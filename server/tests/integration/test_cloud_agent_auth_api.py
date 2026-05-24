@@ -16,7 +16,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_OWNER,
     ORGANIZATION_STATUS_ACTIVE,
 )
-from proliferate.db.models.auth import OAuthAccount, User
+from proliferate.db.models.auth import AuthIdentity, OAuthAccount, User
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
@@ -51,6 +51,16 @@ async def _create_user_and_get_tokens(
             access_token="github-access-token",
             account_id=f"github-{user.id}",
             account_email=email,
+        )
+    )
+    db_session.add(
+        AuthIdentity(
+            user_id=user.id,
+            provider="github",
+            provider_subject=f"github-{user.id}",
+            email=email,
+            email_verified=True,
+            display_name="Agent Auth Tester",
         )
     )
     await db_session.commit()
@@ -110,6 +120,19 @@ def _claude_file_payload(api_key: str) -> dict[str, object]:
 def _enable_anthropic_gateway_byok(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_byok_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_personal_byok_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_litellm_topology",
+        "enterprise_shared",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_litellm_customer_secret_isolation_verified",
         True,
     )
     monkeypatch.setattr(
@@ -499,6 +522,44 @@ async def test_gateway_byok_provider_flag_must_be_enabled(
 
 
 @pytest.mark.asyncio
+async def test_personal_gateway_byok_requires_explicit_personal_flag(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_byok_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_anthropic_byok_enabled",
+        True,
+    )
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-personal-byok-disabled@example.com",
+    )
+
+    response = await client.post(
+        "/v1/cloud/agent-auth/credentials/gateway",
+        headers=_headers(tokens),
+        json={
+            "ownerScope": "personal",
+            "agentKind": "claude",
+            "displayName": "Personal Anthropic gateway",
+            "policyKind": "personal_byok",
+            "providerKind": "anthropic_api_key",
+            "payload": {"apiKey": "sk-ant-test"},
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "personal_byok_disabled"
+
+
+@pytest.mark.asyncio
 async def test_gateway_credential_fails_closed_without_live_provider_validation_when_byok_enabled(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -823,6 +884,136 @@ async def test_managed_credits_use_global_litellm_model_deployment(
     assert body["credentials"][0]["status"] == "ready"
     assert fake_litellm.deployments
     assert "team_id" not in fake_litellm.deployments[0]
+
+
+@pytest.mark.asyncio
+async def test_free_managed_credits_provision_personal_budget_and_selection(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_litellm_master_key",
+        "sk-master-test",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_user_free_credit_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_user_free_credit_usd",
+        "5.00",
+    )
+
+    class _FakeLiteLLMAdminClient:
+        def __init__(self) -> None:
+            self.deployments: list[dict[str, object]] = []
+            self.team_updates = 0
+            self.keys = 0
+
+        async def ensure_team(self, **kwargs: object) -> object:
+            self.team_updates += 1
+            assert kwargs["max_budget"] == "5.00"
+            assert kwargs["budget_duration"] is None
+            assert str(kwargs["team_alias"]).startswith("user-")
+            return SimpleNamespace(team_id="team-free-credit")
+
+        async def create_model_deployment(self, **kwargs: object) -> object:
+            self.deployments.append(dict(kwargs))
+            return SimpleNamespace(
+                model_id="model-free-credit",
+                public_model_name=kwargs["public_model_name"],
+                team_id=kwargs.get("team_id"),
+            )
+
+        async def generate_key(self, **_kwargs: object) -> object:
+            self.keys += 1
+            return SimpleNamespace(key="litellm-free-credit-key", key_id="key-free-credit")
+
+    fake_litellm = _FakeLiteLLMAdminClient()
+    monkeypatch.setattr(agent_auth_service, "LiteLLMAdminClient", lambda: fake_litellm)
+
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-free-credits@example.com",
+    )
+    actor_user_id = UUID(tokens["user_id"])
+
+    response = await client.post(
+        "/v1/cloud/agent-auth/free-credits/ensure",
+        headers=_headers(tokens),
+        json={},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["launchEnabled"] is True
+    assert body["primaryAction"] == "launch"
+    assert body["entitlement"]["status"] == "active"
+    assert body["budgetSubject"]["ownerScope"] == "personal"
+    assert body["budgetSubject"]["ownerUserId"] == str(actor_user_id)
+    assert body["budgetSubject"]["organizationId"] is None
+    assert body["budgetSubject"]["includedBudgetUsd"] == "5.00"
+    assert body["budgetSubject"]["budgetDuration"] is None
+    assert body["credentials"][0]["displayName"] == "Proliferate free credits"
+    assert body["credentials"][0]["status"] == "ready"
+    assert body["readyAgentModels"][0]["agentKind"] == "claude"
+    assert fake_litellm.deployments
+    assert "team_id" not in fake_litellm.deployments[0]
+
+    profile = await store.get_active_personal_sandbox_profile_for_user(db_session, actor_user_id)
+    assert profile is not None
+    selections = await store.list_selections_for_profile(db_session, profile.id)
+    assert len(selections) == 1
+    assert selections[0].credential_id == UUID(body["credentials"][0]["id"])
+
+    repeat = await client.post(
+        "/v1/cloud/agent-auth/free-credits/ensure",
+        headers=_headers(tokens),
+        json={},
+    )
+
+    assert repeat.status_code == 200
+    assert repeat.json()["status"] == "ready"
+    assert fake_litellm.team_updates == 1
+    assert len(fake_litellm.deployments) == 1
+    assert fake_litellm.keys == 1
+    unchanged_profile = await store.get_active_personal_sandbox_profile_for_user(
+        db_session,
+        actor_user_id,
+    )
+    assert unchanged_profile is not None
+    assert unchanged_profile.desired_agent_auth_revision == profile.desired_agent_auth_revision
+
+    await store.ensure_free_credit_entitlement(
+        db_session,
+        user_id=actor_user_id,
+        source="signup_free_credit",
+        period_key="registration",
+        included_budget_usd="5.00",
+        budget_subject_id=UUID(body["budgetSubject"]["id"]),
+        status="exhausted",
+        last_error_code="credits_exhausted",
+        last_error_message="spent",
+    )
+    await db_session.commit()
+    exhausted = await client.post(
+        "/v1/cloud/agent-auth/free-credits/ensure",
+        headers=_headers(tokens),
+        json={},
+    )
+
+    assert exhausted.status_code == 200
+    assert exhausted.json()["status"] == "exhausted"
+    assert exhausted.json()["launchEnabled"] is False
+    assert fake_litellm.team_updates == 1
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,7 @@ import {
   deleteAgentAuthCredential,
   deleteAgentAuthCredentialShare,
   enableSandboxProfileCloud,
+  ensureFreeManagedCredits,
   ensureManagedCreditsForOrganization,
   ensureOrganizationSandboxProfile,
   ensurePersonalSandboxProfile,
@@ -20,6 +21,7 @@ import {
   type AgentAuthCredentialListOptions,
   type CloudCapabilities,
   type CreateGatewayCredentialRequest,
+  type EnsureFreeManagedCreditsRequest,
   type EnsureManagedCreditsRequest,
   type SandboxAgentAuthSelection,
   type SandboxAgentAuthTargetState,
@@ -195,6 +197,12 @@ export function useAgentAuthMutations() {
     onSuccess: invalidateAgentAuth,
   });
 
+  const ensureFreeCredits = useMutation({
+    mutationFn: (request?: EnsureFreeManagedCreditsRequest) =>
+      ensureFreeManagedCredits(request ?? {}, client),
+    onSuccess: invalidateAgentAuth,
+  });
+
   return {
     createCredential: createCredential.mutateAsync,
     isCreatingCredential: createCredential.isPending,
@@ -215,5 +223,7 @@ export function useAgentAuthMutations() {
     isSelectingCredential: selectCredential.isPending,
     ensureManagedCredits: ensureManagedCredits.mutateAsync,
     isEnsuringManagedCredits: ensureManagedCredits.isPending,
+    ensureFreeCredits: ensureFreeCredits.mutateAsync,
+    isEnsuringFreeCredits: ensureFreeCredits.isPending,
   };
 }

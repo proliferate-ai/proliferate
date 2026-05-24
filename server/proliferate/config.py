@@ -180,9 +180,16 @@ class Settings(BaseSettings):
     agent_gateway_managed_budget_free_usd: str = "0"
     agent_gateway_managed_budget_pro_usd: str = "0"
     agent_gateway_managed_budget_unlimited_usd: str = "0"
+    agent_gateway_user_free_credit_enabled: bool = False
+    agent_gateway_user_free_credit_usd: str = "0"
+    agent_gateway_user_free_credit_period: str = "registration"
+    agent_gateway_managed_credit_agent_kinds: str = "claude"
     agent_gateway_max_request_bytes: int = 4_194_304
     agent_gateway_request_timeout_seconds: float = 120.0
     agent_gateway_byok_enabled: bool = False
+    agent_gateway_personal_byok_enabled: bool = False
+    agent_gateway_litellm_topology: str = "oss_shared"
+    agent_gateway_litellm_customer_secret_isolation_verified: bool = False
     agent_gateway_anthropic_byok_enabled: bool = False
     agent_gateway_openai_byok_enabled: bool = False
     agent_gateway_bedrock_byok_enabled: bool = False

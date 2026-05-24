@@ -23,7 +23,11 @@ async def test_cloud_capabilities_response_shape(
 ) -> None:
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_byok_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_litellm_topology", "enterprise_shared")
+    monkeypatch.setattr(settings, "agent_gateway_litellm_customer_secret_isolation_verified", True)
     monkeypatch.setattr(settings, "agent_gateway_anthropic_byok_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_user_free_credit_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_user_free_credit_usd", "7.50")
     monkeypatch.setattr(settings, "agent_gateway_managed_budget_free_usd", "12.50")
     monkeypatch.setattr(settings, "agent_gateway_managed_budget_pro_usd", "0")
     monkeypatch.setattr(settings, "agent_gateway_managed_budget_unlimited_usd", "0")
@@ -41,5 +45,9 @@ async def test_cloud_capabilities_response_shape(
     assert agent_gateway["managedCreditsPersonalEnabled"] is True
     assert agent_gateway["managedCreditsOrganizationEnabled"] is True
     assert agent_gateway["defaultManagedBudgetUsd"] == "12.50"
+    assert agent_gateway["managedCreditAgentKinds"] == ["claude"]
+    assert agent_gateway["routeIsolation"] == "enterprise_team_project"
+    assert agent_gateway["liveProofStatus"] == "passed"
     assert agent_gateway["byokEnabled"] is True
+    assert agent_gateway["byokOrganizationEnabled"] is True
     assert agent_gateway["byokProviders"]["anthropicApiKey"] is True

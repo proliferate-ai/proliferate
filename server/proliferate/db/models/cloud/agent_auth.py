@@ -12,6 +12,7 @@ from proliferate.constants.cloud import (
     SUPPORTED_AGENT_AUTH_CREDENTIAL_STATUSES,
     SUPPORTED_AGENT_AUTH_OWNER_SCOPES,
     SUPPORTED_AGENT_GATEWAY_BUDGET_SUBJECT_STATUSES,
+    SUPPORTED_AGENT_GATEWAY_FREE_CREDIT_ENTITLEMENT_STATUSES,
     SUPPORTED_AGENT_GATEWAY_POLICY_KINDS,
     SUPPORTED_AGENT_GATEWAY_POLICY_STATUSES,
     SUPPORTED_AGENT_GATEWAY_PROTOCOL_FACADES,
@@ -266,12 +267,15 @@ class AgentGatewayBudgetSubject(Base):
             name="ck_agent_gateway_budget_subject_kind",
         ),
         CheckConstraint(
-            "owner_scope = 'organization'",
+            "owner_scope IN ('personal', 'organization')",
             name="ck_agent_gateway_budget_subject_owner_scope",
         ),
         CheckConstraint(
-            "organization_id IS NOT NULL",
-            name="ck_agent_gateway_budget_subject_org",
+            "((owner_scope = 'personal' AND owner_user_id IS NOT NULL "
+            "AND organization_id IS NULL) OR "
+            "(owner_scope = 'organization' AND owner_user_id IS NULL "
+            "AND organization_id IS NOT NULL))",
+            name="ck_agent_gateway_budget_subject_owner_fields",
         ),
         CheckConstraint(
             f"litellm_sync_status IN {SUPPORTED_AGENT_GATEWAY_SYNC_STATUSES}",
@@ -285,20 +289,42 @@ class AgentGatewayBudgetSubject(Base):
             "uq_agent_gateway_managed_budget_subject_org",
             "organization_id",
             unique=True,
-            postgresql_where=text("budget_kind = 'proliferate_managed' AND status != 'revoked'"),
+            postgresql_where=text(
+                "owner_scope = 'organization' "
+                "AND budget_kind = 'proliferate_managed' "
+                "AND status != 'revoked'"
+            ),
+        ),
+        Index(
+            "uq_agent_gateway_managed_budget_subject_user",
+            "owner_user_id",
+            unique=True,
+            postgresql_where=text(
+                "owner_scope = 'personal' "
+                "AND budget_kind = 'proliferate_managed' "
+                "AND status != 'revoked'"
+            ),
         ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     budget_kind: Mapped[str] = mapped_column(String(32), default="proliferate_managed")
-    owner_scope: Mapped[str] = mapped_column(String(32), default="organization")
-    organization_id: Mapped[uuid.UUID] = mapped_column(
+    owner_scope: Mapped[str] = mapped_column(String(32), default="organization", index=True)
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("organization.id", ondelete="CASCADE"),
         index=True,
+        nullable=True,
     )
     litellm_team_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     included_budget_usd: Mapped[str] = mapped_column(String(64))
-    budget_duration: Mapped[str] = mapped_column(String(32), default="30d")
+    budget_duration: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    entitlement_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    entitlement_period_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     litellm_sync_status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     litellm_sync_fingerprint: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="invalid", index=True)
@@ -311,6 +337,52 @@ class AgentGatewayBudgetSubject(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
+class AgentGatewayFreeCreditEntitlement(Base):
+    __tablename__ = "agent_gateway_free_credit_entitlement"
+    __table_args__ = (
+        CheckConstraint(
+            f"status IN {SUPPORTED_AGENT_GATEWAY_FREE_CREDIT_ENTITLEMENT_STATUSES}",
+            name="ck_agent_gateway_free_credit_entitlement_status",
+        ),
+        Index(
+            "uq_agent_gateway_free_credit_entitlement_user_period_source",
+            "user_id",
+            "period_key",
+            "source",
+            unique=True,
+        ),
+        Index(
+            "ix_agent_gateway_free_credit_entitlement_budget_subject",
+            "budget_subject_id",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
+    )
+    budget_subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agent_gateway_budget_subject.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    source: Mapped[str] = mapped_column(String(64), default="signup_free_credit")
+    period_key: Mapped[str] = mapped_column(String(64), default="registration")
+    included_budget_usd: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32), default="provisioning", index=True)
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    exhausted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

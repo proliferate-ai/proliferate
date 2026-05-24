@@ -127,6 +127,14 @@ class AgentGatewayBudgetSubjectStatus(StrEnum):
     revoked = "revoked"
 
 
+class AgentGatewayFreeCreditEntitlementStatus(StrEnum):
+    provisioning = "provisioning"
+    active = "active"
+    exhausted = "exhausted"
+    expired = "expired"
+    revoked = "revoked"
+
+
 class AgentGatewayProviderKind(StrEnum):
     proliferate_bedrock_pool = "proliferate_bedrock_pool"
     anthropic_api_key = "anthropic_api_key"
@@ -197,6 +205,9 @@ SUPPORTED_AGENT_GATEWAY_POLICY_STATUSES: tuple[str, ...] = tuple(
 )
 SUPPORTED_AGENT_GATEWAY_BUDGET_SUBJECT_STATUSES: tuple[str, ...] = tuple(
     status.value for status in AgentGatewayBudgetSubjectStatus
+)
+SUPPORTED_AGENT_GATEWAY_FREE_CREDIT_ENTITLEMENT_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in AgentGatewayFreeCreditEntitlementStatus
 )
 SUPPORTED_AGENT_GATEWAY_PROVIDER_KINDS: tuple[str, ...] = tuple(
     kind.value for kind in AgentGatewayProviderKind

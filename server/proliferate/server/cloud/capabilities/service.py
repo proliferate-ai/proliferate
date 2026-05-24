@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 
 from proliferate.config import settings
+from proliferate.server.cloud.agent_auth.domain.byok_policy import gateway_route_isolation_ready
 from proliferate.server.cloud.capabilities.models import (
     AgentGatewayByokProviderCapabilities,
     AgentGatewayCapabilities,
@@ -23,14 +24,53 @@ def cloud_capabilities() -> CloudCapabilitiesResponse:
         (budget for budget in managed_budgets if _positive_decimal_string(budget)),
         None,
     )
-    managed_credits_enabled = gateway_enabled and default_managed_budget is not None
+    personal_managed_budget = settings.agent_gateway_user_free_credit_usd.strip()
+    managed_credits_personal_enabled = (
+        gateway_enabled
+        and settings.agent_gateway_user_free_credit_enabled
+        and _positive_decimal_string(personal_managed_budget)
+    )
+    managed_credits_organization_enabled = gateway_enabled and default_managed_budget is not None
+    topology = settings.agent_gateway_litellm_topology.strip().lower() or "oss_shared"
+    route_isolation = _route_isolation_label(topology)
+    live_proof_status = (
+        "passed"
+        if settings.agent_gateway_litellm_customer_secret_isolation_verified
+        else "not_run"
+    )
+    route_isolation_ready = gateway_route_isolation_ready(
+        litellm_topology=topology,
+        customer_secret_isolation_verified=(
+            settings.agent_gateway_litellm_customer_secret_isolation_verified
+        ),
+    )
+    org_byok_enabled = (
+        gateway_enabled
+        and settings.agent_gateway_byok_enabled
+        and route_isolation_ready
+    )
+    personal_byok_enabled = (
+        gateway_enabled
+        and settings.agent_gateway_byok_enabled
+        and settings.agent_gateway_personal_byok_enabled
+        and route_isolation_ready
+    )
     return CloudCapabilitiesResponse(
         agentGateway=AgentGatewayCapabilities(
             enabled=gateway_enabled,
-            managedCreditsPersonalEnabled=managed_credits_enabled,
-            managedCreditsOrganizationEnabled=managed_credits_enabled,
+            managedCreditsPersonalEnabled=managed_credits_personal_enabled,
+            managedCreditsOrganizationEnabled=managed_credits_organization_enabled,
             defaultManagedBudgetUsd=default_managed_budget,
+            managedCreditAgentKinds=_managed_credit_agent_kinds(),
+            topology=topology,
+            routeIsolation=route_isolation,
+            liveProofStatus=live_proof_status,
             byokEnabled=gateway_enabled and settings.agent_gateway_byok_enabled,
+            byokPersonalEnabled=personal_byok_enabled,
+            byokOrganizationEnabled=org_byok_enabled,
+            byokOrganizationDisabledReason=(
+                None if org_byok_enabled else "gateway_byok_route_isolation_unverified"
+            ),
             byokProviders=AgentGatewayByokProviderCapabilities(
                 anthropicApiKey=(
                     gateway_enabled
@@ -64,3 +104,23 @@ def _positive_decimal_string(value: str) -> bool:
         return parsed.is_finite() and parsed > 0
     except (InvalidOperation, ValueError):
         return False
+
+
+def _managed_credit_agent_kinds() -> list[str]:
+    configured = [
+        item.strip()
+        for item in settings.agent_gateway_managed_credit_agent_kinds.split(",")
+        if item.strip()
+    ]
+    agent_kinds = [
+        item for item in configured if item in {"claude", "codex", "opencode", "gemini"}
+    ]
+    return agent_kinds or ["claude"]
+
+
+def _route_isolation_label(topology: str) -> str:
+    if topology == "enterprise_shared":
+        return "enterprise_team_project"
+    if topology == "isolated_router":
+        return "isolated_router"
+    return "none"

@@ -12,6 +12,8 @@ import type {
   CreateGatewayCredentialResponse,
   CreateOpenAiApiKeyCredentialInput,
   CreateOpenAiCompatibleCredentialInput,
+  EnsureFreeManagedCreditsRequest,
+  EnsureFreeManagedCreditsResponse,
   EnsureManagedCreditsRequest,
   EnsureManagedCreditsResponse,
   SandboxAgentAuthSelection,
@@ -266,6 +268,17 @@ export async function getSandboxAgentAuthTargetStates(
     method: "GET",
     path: "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-target-states",
     pathParams: { sandbox_profile_id: sandboxProfileId },
+  });
+}
+
+export async function ensureFreeManagedCredits(
+  input: EnsureFreeManagedCreditsRequest = {},
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<EnsureFreeManagedCreditsResponse> {
+  return client.requestJson<EnsureFreeManagedCreditsResponse>({
+    method: "POST",
+    path: "/v1/cloud/agent-auth/free-credits/ensure",
+    body: input,
   });
 }
 

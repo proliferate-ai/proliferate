@@ -38,7 +38,11 @@ export const AGENT_AUTH_GATEWAY_PROVIDER_OPTIONS: AgentAuthGatewayProviderOption
 export function agentAuthGatewayProviderOptionsForCapabilities(
   capabilities: AgentGatewayCapabilities | null,
 ): AgentAuthGatewayProviderOption[] {
-  if (!capabilities?.enabled || !capabilities.byokEnabled) {
+  if (
+    !capabilities?.enabled
+    || !capabilities.byokEnabled
+    || (!capabilities.byokPersonalEnabled && !capabilities.byokOrganizationEnabled)
+  ) {
     return [];
   }
   return AGENT_AUTH_GATEWAY_PROVIDER_OPTIONS.filter((option) => {

@@ -12,6 +12,7 @@ from proliferate.db.store.cloud_agent_auth.records import (
     AgentAuthCredentialRecord,
     AgentAuthCredentialShareRecord,
     AgentGatewayBudgetSubjectRecord,
+    AgentGatewayFreeCreditEntitlementRecord,
     AgentGatewayPolicyRecord,
     AgentGatewayProviderCredentialRecord,
     SandboxAgentAuthSelectionRecord,
@@ -39,6 +40,11 @@ class LiteLLMModelDeploymentRequest(BaseModel):
 
 class EnsureManagedCreditsRequest(BaseModel):
     pass
+
+
+class EnsureFreeManagedCreditsRequest(BaseModel):
+    agent_kind: AgentKind | None = Field(default=None, alias="agentKind")
+    model_id: str | None = Field(default=None, alias="modelId")
 
 
 class CreateGatewayCredentialRequest(BaseModel):
@@ -135,10 +141,14 @@ class AgentAuthCredentialShareResponse(BaseModel):
 
 class AgentGatewayBudgetSubjectResponse(BaseModel):
     id: UUID
-    organization_id: UUID = Field(alias="organizationId")
+    owner_scope: str = Field(alias="ownerScope")
+    owner_user_id: UUID | None = Field(alias="ownerUserId")
+    organization_id: UUID | None = Field(alias="organizationId")
     litellm_team_id: str | None = Field(alias="litellmTeamId")
     included_budget_usd: str = Field(alias="includedBudgetUsd")
-    budget_duration: str = Field(alias="budgetDuration")
+    budget_duration: str | None = Field(alias="budgetDuration")
+    entitlement_source: str | None = Field(alias="entitlementSource")
+    entitlement_period_key: str | None = Field(alias="entitlementPeriodKey")
     litellm_sync_status: str = Field(alias="litellmSyncStatus")
     status: str
     revision: int
@@ -293,6 +303,40 @@ class EnsureManagedCreditsResponse(BaseModel):
     policies: list[AgentGatewayPolicyResponse]
 
 
+class AgentGatewayFreeCreditEntitlementResponse(BaseModel):
+    id: UUID
+    user_id: UUID = Field(alias="userId")
+    budget_subject_id: UUID | None = Field(alias="budgetSubjectId")
+    source: str
+    period_key: str = Field(alias="periodKey")
+    included_budget_usd: str = Field(alias="includedBudgetUsd")
+    status: str
+    activated_at: str | None = Field(alias="activatedAt")
+    last_error_code: str | None = Field(alias="lastErrorCode")
+    last_error_message: str | None = Field(alias="lastErrorMessage")
+
+
+class FreeManagedCreditReadyAgentModelResponse(BaseModel):
+    agent_kind: str = Field(alias="agentKind")
+    public_model_names: list[str] = Field(alias="publicModelNames")
+    credential_id: UUID = Field(alias="credentialId")
+
+
+class EnsureFreeManagedCreditsResponse(BaseModel):
+    status: str
+    launch_enabled: bool = Field(alias="launchEnabled")
+    primary_action: str = Field(alias="primaryAction")
+    ready_agent_models: list[FreeManagedCreditReadyAgentModelResponse] = Field(
+        alias="readyAgentModels"
+    )
+    entitlement: AgentGatewayFreeCreditEntitlementResponse | None
+    budget_subject: AgentGatewayBudgetSubjectResponse | None = Field(alias="budgetSubject")
+    credentials: list[AgentAuthCredentialResponse]
+    policies: list[AgentGatewayPolicyResponse]
+    last_error_code: str | None = Field(alias="lastErrorCode")
+    last_error_message: str | None = Field(alias="lastErrorMessage")
+
+
 def sandbox_profile_response(record: SandboxProfileRecord) -> SandboxProfileResponse:
     return SandboxProfileResponse(
         id=record.id,
@@ -351,13 +395,34 @@ def budget_subject_response(
 ) -> AgentGatewayBudgetSubjectResponse:
     return AgentGatewayBudgetSubjectResponse(
         id=record.id,
+        ownerScope=record.owner_scope,
+        ownerUserId=record.owner_user_id,
         organizationId=record.organization_id,
         litellmTeamId=record.litellm_team_id,
         includedBudgetUsd=record.included_budget_usd,
         budgetDuration=record.budget_duration,
+        entitlementSource=record.entitlement_source,
+        entitlementPeriodKey=record.entitlement_period_key,
         litellmSyncStatus=record.litellm_sync_status,
         status=record.status,
         revision=record.revision,
+        lastErrorCode=record.last_error_code,
+        lastErrorMessage=record.last_error_message,
+    )
+
+
+def free_credit_entitlement_response(
+    record: AgentGatewayFreeCreditEntitlementRecord,
+) -> AgentGatewayFreeCreditEntitlementResponse:
+    return AgentGatewayFreeCreditEntitlementResponse(
+        id=record.id,
+        userId=record.user_id,
+        budgetSubjectId=record.budget_subject_id,
+        source=record.source,
+        periodKey=record.period_key,
+        includedBudgetUsd=record.included_budget_usd,
+        status=record.status,
+        activatedAt=_iso(record.activated_at),
         lastErrorCode=record.last_error_code,
         lastErrorMessage=record.last_error_message,
     )

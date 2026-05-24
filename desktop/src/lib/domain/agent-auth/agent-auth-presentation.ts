@@ -278,12 +278,25 @@ export function agentAuthManagedCreditsCapabilityLabel(
 
 export function agentAuthByokCapabilityLabel(
   capabilities: AgentGatewayCapabilities | null | undefined,
+  ownerScope?: "personal" | "organization",
 ): string {
   if (!capabilities) {
     return "Checking BYOK capability.";
   }
   if (!capabilities.enabled || !capabilities.byokEnabled) {
     return "BYOK provider forms are not enabled for this deployment.";
+  }
+  if (ownerScope === "personal" && !capabilities.byokPersonalEnabled) {
+    return "Personal BYOK is unavailable for this deployment.";
+  }
+  if (ownerScope === "organization" && !capabilities.byokOrganizationEnabled) {
+    return "Organization BYOK is unavailable until gateway route isolation is verified.";
+  }
+  if (!capabilities.byokPersonalEnabled && !capabilities.byokOrganizationEnabled) {
+    return "BYOK is configured but no cloud owner scope is enabled for provider credentials.";
+  }
+  if (!capabilities.byokOrganizationEnabled && capabilities.byokOrganizationDisabledReason) {
+    return "Organization BYOK is unavailable until gateway route isolation is verified.";
   }
   return "BYOK provider forms are enabled for this deployment.";
 }
@@ -293,6 +306,9 @@ export function agentAuthCanCreateGatewayCredentialForAgent(
   capabilities: AgentGatewayCapabilities | null | undefined,
 ): boolean {
   if (!capabilities?.enabled || !capabilities.byokEnabled) {
+    return false;
+  }
+  if (!capabilities.byokPersonalEnabled && !capabilities.byokOrganizationEnabled) {
     return false;
   }
   if (agentKind === "claude") {
@@ -319,6 +335,12 @@ export function gatewayByokCredentialEnabled(
 ): boolean {
   const providerKind = credential.redactedSummary.providerKind;
   if (!capabilities?.enabled || !capabilities.byokEnabled) {
+    return false;
+  }
+  if (credential.ownerScope === "organization" && !capabilities.byokOrganizationEnabled) {
+    return false;
+  }
+  if (credential.ownerScope === "personal" && !capabilities.byokPersonalEnabled) {
     return false;
   }
   if (providerKind === "anthropic_api_key") {

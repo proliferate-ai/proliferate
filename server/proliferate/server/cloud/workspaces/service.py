@@ -1233,6 +1233,7 @@ async def create_cloud_workspace(
     base_branch: str | None,
     branch_name: str,
     display_name: str | None,
+    required_agent_kind: str | None = None,
     owner_selection: OwnerSelection | None = None,
 ) -> WorkspaceDetail:
     if owner_selection is not None and owner_selection.owner_scope == "organization":
@@ -1255,6 +1256,7 @@ async def create_cloud_workspace(
         base_branch=base_branch,
         branch_name=branch_name,
         display_name=display_name,
+        required_agent_kind=required_agent_kind,
     )
 
     try:

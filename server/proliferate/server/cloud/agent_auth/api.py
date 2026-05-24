@@ -17,8 +17,11 @@ from proliferate.server.cloud.agent_auth.models import (
     AgentAuthMutationResponse,
     CreateGatewayCredentialRequest,
     CreateGatewayCredentialResponse,
+    EnsureFreeManagedCreditsRequest,
+    EnsureFreeManagedCreditsResponse,
     EnsureManagedCreditsRequest,
     EnsureManagedCreditsResponse,
+    FreeManagedCreditReadyAgentModelResponse,
     SandboxAgentAuthSelectionResponse,
     SandboxProfileAgentAuthTargetStateResponse,
     SelectAgentAuthCredentialRequest,
@@ -31,6 +34,7 @@ from proliferate.server.cloud.agent_auth.models import (
     budget_subject_response,
     credential_response,
     credential_share_response,
+    free_credit_entitlement_response,
     policy_response,
     provider_credential_response,
     selection_response,
@@ -38,6 +42,7 @@ from proliferate.server.cloud.agent_auth.models import (
 )
 from proliferate.server.cloud.agent_auth.service import (
     create_gateway_credential,
+    ensure_free_managed_credits_for_user,
     ensure_managed_credits_for_organization,
     list_credentials_for_response,
     list_selections,
@@ -114,6 +119,49 @@ async def sync_synced_agent_auth_credential_endpoint(
         changed=result.changed,
         credential=credential_response(result.credential),
         selection=selection_response(result.selection),
+    )
+
+
+@router.post(
+    "/agent-auth/free-credits/ensure",
+    response_model=EnsureFreeManagedCreditsResponse,
+)
+async def ensure_free_managed_credits_endpoint(
+    body: EnsureFreeManagedCreditsRequest,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> EnsureFreeManagedCreditsResponse:
+    result = await ensure_free_managed_credits_for_user(
+        db,
+        actor_user_id=user.id,
+        body=body,
+    )
+    return EnsureFreeManagedCreditsResponse(
+        status=result.status,
+        launchEnabled=result.launch_enabled,
+        primaryAction=result.primary_action,
+        readyAgentModels=[
+            FreeManagedCreditReadyAgentModelResponse(
+                agentKind=model.agent_kind,
+                publicModelNames=list(model.public_model_names),
+                credentialId=model.credential_id,
+            )
+            for model in result.ready_agent_models
+        ],
+        entitlement=(
+            free_credit_entitlement_response(result.entitlement)
+            if result.entitlement is not None
+            else None
+        ),
+        budgetSubject=(
+            budget_subject_response(result.budget_subject)
+            if result.budget_subject is not None
+            else None
+        ),
+        credentials=[credential_response(record) for record in result.credentials],
+        policies=[policy_response(record) for record in result.policies],
+        lastErrorCode=result.last_error_code,
+        lastErrorMessage=result.last_error_message,
     )
 
 

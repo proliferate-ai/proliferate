@@ -68,16 +68,37 @@ class AgentGatewayBudgetSubjectRecord:
     id: UUID
     budget_kind: str
     owner_scope: str
-    organization_id: UUID
+    owner_user_id: UUID | None
+    organization_id: UUID | None
     litellm_team_id: str | None
     included_budget_usd: str
-    budget_duration: str
+    budget_duration: str | None
+    entitlement_source: str | None
+    entitlement_period_key: str | None
     litellm_sync_status: str
     litellm_sync_fingerprint: str | None
     status: str
     revision: int
     last_provisioned_at: datetime | None
     last_litellm_reconciled_at: datetime | None
+    last_error_code: str | None
+    last_error_message: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class AgentGatewayFreeCreditEntitlementRecord:
+    id: UUID
+    user_id: UUID
+    budget_subject_id: UUID | None
+    source: str
+    period_key: str
+    included_budget_usd: str
+    status: str
+    activated_at: datetime | None
+    exhausted_at: datetime | None
+    revoked_at: datetime | None
     last_error_code: str | None
     last_error_message: str | None
     created_at: datetime

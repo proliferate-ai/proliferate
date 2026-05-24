@@ -73,8 +73,12 @@ export function CloudAgentAuthCredentialForm({
     ? adminOrganizations.find((organization) => organization.id === selectedOrganizationId)?.id
       ?? null
     : null;
+  const ownerScopeAvailable = ownerScope === "organization"
+    ? agentGatewayCapabilities?.byokOrganizationEnabled === true
+    : agentGatewayCapabilities?.byokPersonalEnabled === true;
   const canCreate =
     displayName.trim().length > 0
+    && ownerScopeAvailable
     && (ownerScope === "personal" || Boolean(credentialOrganizationId))
     && agentAuthGatewayCreatePayloadReady(
       providerKind,
@@ -129,7 +133,7 @@ export function CloudAgentAuthCredentialForm({
     <SettingsCard>
       <SettingsCardRow
         label="Cloud API key credentials"
-        description={agentAuthByokCapabilityLabel(agentGatewayCapabilities)}
+        description={agentAuthByokCapabilityLabel(agentGatewayCapabilities, ownerScope)}
       >
         <Badge tone={gatewayByokEnabled ? "success" : "neutral"}>
           {gatewayByokEnabled ? "Available" : "Unavailable"}
@@ -158,10 +162,21 @@ export function CloudAgentAuthCredentialForm({
                   }}
                 >
                   {allowedOwnerScopes.includes("personal") && (
-                    <option value="personal">Personal</option>
+                    <option
+                      value="personal"
+                      disabled={agentGatewayCapabilities?.byokPersonalEnabled !== true}
+                    >
+                      Personal
+                    </option>
                   )}
                   {allowedOwnerScopes.includes("organization") && (
-                    <option value="organization" disabled={!firstAdminOrganizationId}>
+                    <option
+                      value="organization"
+                      disabled={
+                        !firstAdminOrganizationId
+                        || agentGatewayCapabilities?.byokOrganizationEnabled !== true
+                      }
+                    >
                       Organization
                     </option>
                   )}
