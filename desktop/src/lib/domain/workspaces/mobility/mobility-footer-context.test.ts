@@ -3,6 +3,7 @@ import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-wor
 import {
   buildPendingMobilityFooterContext,
   buildMobilityFooterContext,
+  workspaceMobilitySelectedMaterializationKindFromWorkspaceId,
   type WorkspaceMobilitySelectedMaterializationKind,
 } from "@/lib/domain/workspaces/mobility/mobility-footer-context";
 import {
@@ -360,6 +361,13 @@ describe("buildMobilityFooterContext", () => {
       isInteractive: false,
       isActive: true,
     });
+  });
+
+  it("treats cloud and direct-target synthetic ids as cloud materializations", () => {
+    expect(workspaceMobilitySelectedMaterializationKindFromWorkspaceId(null)).toBeNull();
+    expect(workspaceMobilitySelectedMaterializationKindFromWorkspaceId("workspace-1")).toBe("local");
+    expect(workspaceMobilitySelectedMaterializationKindFromWorkspaceId("cloud:cloud-1")).toBe("cloud");
+    expect(workspaceMobilitySelectedMaterializationKindFromWorkspaceId("target:ssh-1:workspace-1")).toBe("cloud");
   });
 
   it("does not build a footer context for pending cowork threads", () => {

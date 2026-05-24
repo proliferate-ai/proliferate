@@ -125,4 +125,32 @@ describe("AutomationRunLocationSelector", () => {
     expect(onSelectOwner).toHaveBeenCalledWith("organization");
     expect(onSelectTarget).toHaveBeenCalledWith(cloudTarget);
   });
+
+  it("shows team target rows when the organization scope is active", () => {
+    const onSelectOwner = vi.fn();
+    const onSelectTarget = vi.fn();
+    render(
+      <AutomationRunLocationSelector
+        ownerScope="organization"
+        canChangeOwner
+        ownerOptions={ownerOptions}
+        personalGroups={personalGroups}
+        teamGroups={teamGroups}
+        isLoading={false}
+        disabledReason={null}
+        onSelectOwner={onSelectOwner}
+        onSelectTarget={onSelectTarget}
+        onConfigureCloud={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Run location: Team Shared workspace",
+    }));
+    expect(screen.getByText("Team workspace")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Shared cloud/ }));
+    expect(onSelectOwner).toHaveBeenCalledWith("organization");
+    expect(onSelectTarget).toHaveBeenCalledWith(cloudTarget);
+  });
 });

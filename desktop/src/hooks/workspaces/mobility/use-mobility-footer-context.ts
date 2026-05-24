@@ -2,11 +2,10 @@ import { useMemo } from "react";
 import {
   buildPendingMobilityFooterContext,
   buildMobilityFooterContext,
-  type WorkspaceMobilitySelectedMaterializationKind,
+  workspaceMobilitySelectedMaterializationKindFromWorkspaceId,
   type MobilityFooterContext,
 } from "@/lib/domain/workspaces/mobility/mobility-footer-context";
 import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-target-options";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceMobilityState } from "./use-workspace-mobility-state";
@@ -19,10 +18,8 @@ export function useMobilityFooterContext(): MobilityFooterContext | null {
   const computeTargets = useComputeTargetOptions({
     enabled: Boolean(mobility.selectedLogicalWorkspace),
   });
-  const selectedMaterializationKind: WorkspaceMobilitySelectedMaterializationKind | null =
-    selectedWorkspaceId
-      ? parseCloudWorkspaceSyntheticId(selectedWorkspaceId) ? "cloud" : "local"
-      : null;
+  const selectedMaterializationKind =
+    workspaceMobilitySelectedMaterializationKindFromWorkspaceId(selectedWorkspaceId);
 
   return useMemo(() => {
     if (

@@ -82,13 +82,24 @@ export function AutomationRunLocationSelector({
     ? "Team"
     : selectedRow?.label ?? (isLoading ? "Loading targets" : "Personal");
   const triggerDetail = ownerScope === "organization"
-    ? "Shared workspace"
+    ? selectedRow?.repoLabel ?? "Shared workspace"
     : selectedRow?.repoLabel ?? null;
   const triggerIcon = ownerScope === "organization"
-    ? <CloudIcon className="size-3.5" />
+    ? selectedRow
+      ? targetRowIcon(selectedRow, "trigger")
+      : <CloudIcon className="size-3.5" />
     : selectedRow
     ? targetRowIcon(selectedRow, "trigger")
     : <FolderOpen className="size-3.5" />;
+  const activeGroups = ownerScope === "organization" ? teamGroups : personalGroups;
+  const activeOption = ownerScope === "organization" ? teamOption : personalOption;
+  const activeOwnerDisabledReason = activeOption?.disabledReason ?? null;
+  const activeEmptyLabel = ownerScope === "organization"
+    ? disabledReason ?? "No shared team workspace configured."
+    : disabledReason ?? "No personal workspace target.";
+  const activeWorkspaceLabel = ownerScope === "organization"
+    ? "Team workspace"
+    : "Personal workspace";
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
@@ -130,7 +141,6 @@ export function AutomationRunLocationSelector({
                       if (personalDefaultRow) {
                         onSelectTarget(personalDefaultRow.target);
                       }
-                      close();
                     }}
                   />
                   <RunLocationMenuItem
@@ -148,24 +158,21 @@ export function AutomationRunLocationSelector({
                       if (teamDefaultRow) {
                         onSelectTarget(teamDefaultRow.target);
                       }
-                      close();
                     }}
                   />
-                  {ownerScope === "personal" ? (
-                    <div className={RUN_LOCATION_DIVIDER_CLASS} />
-                  ) : null}
+                  <div className={RUN_LOCATION_DIVIDER_CLASS} />
                 </>
               ) : null}
-              {ownerScope === "personal" ? (
+              {ownerScope === "personal" || ownerScope === "organization" ? (
                 <>
-                  <RunLocationSectionHeader label={canChangeOwner ? "Personal workspace" : "Run in"} />
+                  <RunLocationSectionHeader label={canChangeOwner ? activeWorkspaceLabel : "Run in"} />
                   <RunLocationRows
                     activeOwnerScope={ownerScope}
-                    disabledReason={personalOption?.disabledReason ?? null}
-                    emptyLabel={disabledReason ?? "No personal workspace target."}
-                    groups={personalGroups}
+                    disabledReason={activeOwnerDisabledReason}
+                    emptyLabel={activeEmptyLabel}
+                    groups={activeGroups}
                     isLoading={isLoading}
-                    ownerScope="personal"
+                    ownerScope={ownerScope}
                     onConfigureCloud={(target) => {
                       onConfigureCloud(target);
                       close();
@@ -173,24 +180,6 @@ export function AutomationRunLocationSelector({
                     onSelectOwner={onSelectOwner}
                     onSelectTarget={(target) => {
                       onSelectTarget(target);
-                      close();
-                    }}
-                  />
-                </>
-              ) : !canChangeOwner ? (
-                <>
-                  <RunLocationSectionHeader label="Run as" />
-                  <RunLocationMenuItem
-                    disabled={Boolean(teamDisabledReason)}
-                    icon={<CloudIcon className="size-full" />}
-                    label="Team"
-                    detail="Shared workspace"
-                    selected
-                    title={teamDisabledReason ?? "Run in the shared team workspace."}
-                    onClick={() => {
-                      if (!teamDisabledReason && teamDefaultRow) {
-                        onSelectTarget(teamDefaultRow.target);
-                      }
                       close();
                     }}
                   />

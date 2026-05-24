@@ -3,6 +3,8 @@ import {
   type PendingWorkspaceEntry,
 } from "@/lib/domain/workspaces/creation/pending-entry";
 import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
+import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   isWorkspaceMobilityTransitionPhase,
   mobilityDestinationKind,
@@ -76,6 +78,21 @@ function pendingVariant(entry: PendingWorkspaceEntry): SidebarWorkspaceVariant {
     case "select-existing":
       return "local";
   }
+}
+
+export function workspaceMobilitySelectedMaterializationKindFromWorkspaceId(
+  workspaceId: string | null,
+): WorkspaceMobilitySelectedMaterializationKind | null {
+  if (!workspaceId) {
+    return null;
+  }
+  if (
+    parseCloudWorkspaceSyntheticId(workspaceId)
+    || parseTargetWorkspaceSyntheticId(workspaceId)
+  ) {
+    return "cloud";
+  }
+  return "local";
 }
 
 export function buildMobilityFooterContext(args: {
