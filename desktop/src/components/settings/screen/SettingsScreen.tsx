@@ -5,7 +5,6 @@ import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
 import { AgentAuthenticationPane } from "@/components/settings/panes/AgentAuthenticationPane";
 import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
-import { AgentsPane } from "@/components/settings/panes/AgentsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 import { KeyboardShortcutsPane } from "@/components/settings/panes/KeyboardShortcutsPane";
@@ -55,9 +54,6 @@ function renderSettingsSection(
   onSelectRepo: (sourceRoot: string) => void,
   onSelectCloudEnvironment: (gitOwner: string, gitRepoName: string) => void,
 ): ReactNode {
-  if (activeSection === "agents") {
-    return <AgentsPane />;
-  }
   if (activeSection === "agent-defaults") {
     return <AgentDefaultsPane />;
   }

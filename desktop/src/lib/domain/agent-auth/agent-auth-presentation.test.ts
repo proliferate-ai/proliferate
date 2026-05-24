@@ -34,18 +34,9 @@ function credential(
 }
 
 describe("credentialSelectableReason", () => {
-  it("requires an active share for personal synced credentials in organization profiles", () => {
+  it("allows personal synced credentials in organization profiles without an owner share", () => {
     expect(
       credentialSelectableReason(credential({}), "organization"),
-    ).toBe("Personal synced credentials need an active owner share before shared sandbox selection.");
-  });
-
-  it("allows shared personal synced credentials in organization profiles", () => {
-    expect(
-      credentialSelectableReason(
-        credential({ activeCredentialShareId: "share-1" }),
-        "organization",
-      ),
     ).toBeNull();
   });
 });

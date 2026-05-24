@@ -33,8 +33,8 @@ def test_gateway_selection_plan_maps_agent_protocols() -> None:
     assert gemini.code == "gateway_not_supported_for_agent"
 
 
-def test_org_profile_requires_share_for_personal_synced_credential() -> None:
-    denied = can_select_credential_for_profile(
+def test_org_profile_allows_personal_synced_credential_without_share() -> None:
+    allowed = can_select_credential_for_profile(
         profile_owner_scope="organization",
         profile_owner_user_id=None,
         profile_organization_id="org-1",
@@ -44,10 +44,9 @@ def test_org_profile_requires_share_for_personal_synced_credential() -> None:
         credential_kind="synced_path",
         has_active_share=False,
     )
-    assert isinstance(denied, PolicyDenied)
-    assert denied.code == "credential_share_required"
+    assert isinstance(allowed, PolicyAllowed)
 
-    allowed = can_select_credential_for_profile(
+    shared = can_select_credential_for_profile(
         profile_owner_scope="organization",
         profile_owner_user_id=None,
         profile_organization_id="org-1",
@@ -57,7 +56,7 @@ def test_org_profile_requires_share_for_personal_synced_credential() -> None:
         credential_kind="synced_path",
         has_active_share=True,
     )
-    assert isinstance(allowed, PolicyAllowed)
+    assert isinstance(shared, PolicyAllowed)
 
 
 def test_protected_env_allowlist_is_agent_and_mode_scoped() -> None:

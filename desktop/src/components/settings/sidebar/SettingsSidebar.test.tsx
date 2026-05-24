@@ -132,7 +132,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "Billing",
       "Workspace",
       "Environments",
-      "Shared environments",
+      "Shared Sandbox",
       "Compute",
       "Agents",
       "Agent Defaults",
@@ -167,7 +167,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
       onSelectSection,
     });
 
-    const sharedEnvironments = screen.getByRole("button", { name: /Shared environments/ }) as HTMLButtonElement;
+    const sharedEnvironments = screen.getByRole("button", { name: /Shared Sandbox/ }) as HTMLButtonElement;
     expect(sharedEnvironments.disabled).toBe(true);
     expect(sharedEnvironments.getAttribute("title")).toBe("Admin access required");
 

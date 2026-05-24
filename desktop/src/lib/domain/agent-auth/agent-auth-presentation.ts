@@ -283,7 +283,7 @@ export function agentAuthByokCapabilityLabel(
     return "Checking BYOK capability.";
   }
   if (!capabilities.enabled || !capabilities.byokEnabled) {
-    return "BYOK provider forms are hidden in hosted cloud.";
+    return "BYOK provider forms are not enabled for this deployment.";
   }
   return "BYOK provider forms are enabled for this deployment.";
 }
@@ -362,18 +362,10 @@ export function credentialSummaryDetails(credential: AgentAuthCredential): strin
 
 export function credentialSelectableReason(
   credential: AgentAuthCredential,
-  profileOwnerScope: string,
+  _profileOwnerScope: string,
 ): string | null {
   if (credential.status !== "ready") {
     return `Credential is ${agentAuthCredentialStatusLabel(credential.status)}.`;
-  }
-  if (
-    profileOwnerScope === "organization"
-    && credential.ownerScope === "personal"
-    && credential.credentialKind === "synced_path"
-    && !credential.activeCredentialShareId
-  ) {
-    return "Personal synced credentials need an active owner share before shared sandbox selection.";
   }
   return null;
 }

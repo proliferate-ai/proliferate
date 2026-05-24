@@ -87,7 +87,7 @@ export function useHomeScreen() {
         navigate("/settings?section=agent-defaults");
         return;
       case "agent-settings":
-        navigate("/settings?section=agents");
+        navigate("/settings?section=agent-defaults");
         return;
       case "repository-settings": {
         const firstRepository = repositoryToConfigure ?? repositories[0];

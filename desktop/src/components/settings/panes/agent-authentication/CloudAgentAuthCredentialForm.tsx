@@ -22,7 +22,7 @@ import {
   type AgentAuthGatewayProviderChoice,
 } from "@/lib/domain/agent-auth/agent-auth-gateway-form";
 
-interface OrganizationOption {
+export interface OrganizationOption {
   id: string;
   name: string;
   membership?: {
@@ -35,6 +35,7 @@ export interface CloudAgentAuthCredentialFormProps {
   selectedOrganizationId: string | null;
   onSelectedOrganizationChange: (organizationId: string | null) => void;
   agentGatewayCapabilities: AgentGatewayCapabilities | null;
+  allowedOwnerScopes?: readonly ("personal" | "organization")[];
 }
 
 export function CloudAgentAuthCredentialForm({
@@ -42,6 +43,7 @@ export function CloudAgentAuthCredentialForm({
   selectedOrganizationId,
   onSelectedOrganizationChange,
   agentGatewayCapabilities,
+  allowedOwnerScopes = ["personal", "organization"],
 }: CloudAgentAuthCredentialFormProps) {
   const adminOrganizations = organizations.filter(isAdminOrganization);
   const firstAdminOrganizationId = adminOrganizations[0]?.id ?? null;
@@ -55,7 +57,8 @@ export function CloudAgentAuthCredentialForm({
     "anthropic_api_key",
   );
   const [agentKind, setAgentKind] = useState<AgentAuthGatewayOpenAiAgentKind>("codex");
-  const [ownerScope, setOwnerScope] = useState<"personal" | "organization">("personal");
+  const [ownerScope, setOwnerScope] =
+    useState<"personal" | "organization">(allowedOwnerScopes[0] ?? "personal");
   const [displayName, setDisplayName] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -83,6 +86,12 @@ export function CloudAgentAuthCredentialForm({
       setProviderKind(providerOptions[0].value);
     }
   }, [providerKind, providerOptions]);
+
+  useEffect(() => {
+    if (!allowedOwnerScopes.includes(ownerScope)) {
+      setOwnerScope(allowedOwnerScopes[0] ?? "personal");
+    }
+  }, [allowedOwnerScopes, ownerScope]);
 
   useEffect(() => {
     if (
@@ -119,46 +128,66 @@ export function CloudAgentAuthCredentialForm({
   return (
     <SettingsCard>
       <SettingsCardRow
-        label="Advanced gateway credentials"
+        label="Cloud API key credentials"
         description={agentAuthByokCapabilityLabel(agentGatewayCapabilities)}
       >
         <Badge tone={gatewayByokEnabled ? "success" : "neutral"}>
-          {gatewayByokEnabled ? "Enabled" : "Hidden"}
+          {gatewayByokEnabled ? "Available" : "Unavailable"}
         </Badge>
       </SettingsCardRow>
 
-      {gatewayByokEnabled && (
+      {gatewayByokEnabled ? (
         <div className="space-y-3 border-t border-border-light p-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="agent-auth-owner-scope">New credential owner</Label>
-              <Select
-                id="agent-auth-owner-scope"
-                value={ownerScope}
-                onChange={(event) => {
-                  const nextOwnerScope = event.target.value as typeof ownerScope;
-                  setOwnerScope(nextOwnerScope);
-                  if (
-                    nextOwnerScope === "organization"
-                    && !selectedOrganizationCanOwnCredential
-                    && firstAdminOrganizationId
-                  ) {
-                    onSelectedOrganizationChange(firstAdminOrganizationId);
-                  }
-                }}
-              >
-                <option value="personal">Personal</option>
-                <option value="organization" disabled={!firstAdminOrganizationId}>
-                  Organization
-                </option>
-              </Select>
-              {ownerScope === "organization" && (
-                <p className="mt-1 text-xs leading-4 text-muted-foreground">
-                  Saved to {selectedOrganizationName(organizations, selectedOrganizationId)
-                    ?? "the selected team"}.
-                </p>
-              )}
-            </div>
+            {allowedOwnerScopes.length > 1 ? (
+              <div>
+                <Label htmlFor="agent-auth-owner-scope">New credential owner</Label>
+                <Select
+                  id="agent-auth-owner-scope"
+                  value={ownerScope}
+                  onChange={(event) => {
+                    const nextOwnerScope = event.target.value as typeof ownerScope;
+                    setOwnerScope(nextOwnerScope);
+                    if (
+                      nextOwnerScope === "organization"
+                      && !selectedOrganizationCanOwnCredential
+                      && firstAdminOrganizationId
+                    ) {
+                      onSelectedOrganizationChange(firstAdminOrganizationId);
+                    }
+                  }}
+                >
+                  {allowedOwnerScopes.includes("personal") && (
+                    <option value="personal">Personal</option>
+                  )}
+                  {allowedOwnerScopes.includes("organization") && (
+                    <option value="organization" disabled={!firstAdminOrganizationId}>
+                      Organization
+                    </option>
+                  )}
+                </Select>
+                {ownerScope === "organization" && (
+                  <p className="mt-1 text-xs leading-4 text-muted-foreground">
+                    Saved to {selectedOrganizationName(organizations, selectedOrganizationId)
+                      ?? "the selected team"}.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <Label>New credential owner</Label>
+                <div className="mt-1 rounded-md border border-border-light bg-foreground/5 px-3 py-2 text-sm text-foreground">
+                  {ownerScope === "organization"
+                    ? selectedOrganizationName(organizations, selectedOrganizationId) ?? "Organization"
+                    : "Personal"}
+                </div>
+                {ownerScope === "organization" && (
+                  <p className="mt-1 text-xs leading-4 text-muted-foreground">
+                    Saved to the shared sandbox credential library.
+                  </p>
+                )}
+              </div>
+            )}
             <div>
               <Label htmlFor="agent-auth-provider-kind">Provider</Label>
               <Select
@@ -296,6 +325,11 @@ export function CloudAgentAuthCredentialForm({
               Add credential
             </Button>
           </div>
+        </div>
+      ) : (
+        <div className="border-t border-border-light px-4 py-3 text-xs leading-4 text-muted-foreground">
+          API key, OpenAI-compatible, and Bedrock credential forms appear here when
+          this deployment enables provider BYOK support.
         </div>
       )}
     </SettingsCard>
