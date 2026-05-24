@@ -21,6 +21,7 @@ import {
   Search,
   Sparkles,
   Terminal,
+  Tree,
   X,
 } from "@/components/ui/icons";
 import { matchesPickerSearch } from "@/lib/infra/search/search";
@@ -92,7 +93,7 @@ function launchKindIcon(
     : TARGET_PICKER_TRIGGER_ICON_CLASS;
   switch (kind) {
     case "worktree":
-      return <GitBranchIcon className={iconClassName} />;
+      return <Tree className={iconClassName} />;
     case "local":
       return <Monitor className={iconClassName} />;
     case "cloud":

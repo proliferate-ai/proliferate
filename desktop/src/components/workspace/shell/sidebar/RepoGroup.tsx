@@ -1,10 +1,11 @@
 import { type ReactNode, useState } from "react";
-import { ChevronRight, CloudIcon, Folder, FolderFilled, GitBranchIcon, Plus, Settings, Trash } from "@/components/ui/icons";
+import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, Plus, Settings, Trash } from "@/components/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
+import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import {
@@ -72,7 +73,7 @@ export function RepoGroup({
       label={name}
       count={count}
       collapsed={collapsed}
-      icon={<Folder className="size-3.5 shrink-0" />}
+      icon={<FolderClosedFilled className="size-3.5 shrink-0" />}
       expandedIcon={<FolderFilled className="size-3.5 shrink-0" />}
       hoverIcon={(
         <ChevronRight
@@ -99,7 +100,7 @@ export function RepoGroup({
           {(close) => (
             <>
               <PopoverMenuItem
-                icon={<Folder className="size-3.5 shrink-0" />}
+                icon={<SidebarWorkspaceVariantIcon variant="local" className="size-3.5 shrink-0" />}
                 label="New local workspace"
                 trailing={(
                   <ShortcutBadge
@@ -110,7 +111,7 @@ export function RepoGroup({
                 onClick={() => { close(); onNewLocalWorkspace?.(); }}
               />
               <PopoverMenuItem
-                icon={<GitBranchIcon className="size-3.5 shrink-0" />}
+                icon={<SidebarWorkspaceVariantIcon variant="worktree" className="size-3.5 shrink-0" />}
                 label="New worktree"
                 trailing={(
                   <ShortcutBadge
