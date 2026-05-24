@@ -3,6 +3,7 @@ export const routes = {
   auth: "/auth",
   workspaces: "/workspaces",
   automations: "/automations",
+  automation: (automationId: string) => `/automations/${automationId}`,
   plugins: "/plugins",
   support: "/support",
   settings: "/settings",

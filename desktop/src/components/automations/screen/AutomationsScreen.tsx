@@ -1,8 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { PageContentFrame } from "@/components/ui/PageContentFrame";
-import { ArrowLeft, Pause, Pencil, Play, Zap } from "@/components/ui/icons";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { AutomationEditorModal } from "@/components/automations/editor/AutomationEditorModal";
 import { useAutomationActions } from "@/hooks/automations/workflows/use-automation-actions";
@@ -14,7 +11,6 @@ import {
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { buildAutomationRowViewModel } from "@/lib/domain/automations/run/view-model";
 import {
   buildCloudRepoSettingsHref,
   buildSharedCloudRepoSettingsHref,
@@ -39,8 +35,8 @@ import {
   groupAutomationInventoryItems,
   type AutomationSurfaceViewMode,
 } from "@proliferate/product-model/automations/inventory";
+import { AutomationDetailSurface } from "@proliferate/product-ui/automations/AutomationDetailSurface";
 import { AutomationSurface } from "@proliferate/product-ui/automations/AutomationSurface";
-import { AutomationRunsList } from "@proliferate/product-ui/automations/AutomationRunsList";
 
 const EMPTY_AUTOMATIONS: AutomationRecord[] = [];
 const EMPTY_AUTOMATION_RUNS: AutomationRunRecord[] = [];
@@ -130,7 +126,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   );
   const actions = useAutomationActions();
   const automationItems = useMemo(
-    () => buildAutomationInventoryItems(automations),
+    () => buildAutomationInventoryItems(automations, { clientSurface: "desktop" }),
     [automations],
   );
   const automationGroups = useMemo(
@@ -140,12 +136,22 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const calendarDays = useMemo(
     () => buildAutomationCalendarWeek(automations, {
       includePaused: includePausedCalendar,
+      clientSurface: "desktop",
     }),
     [automations, includePausedCalendar],
   );
+  const selectedAutomationItem = useMemo(
+    () => selectedAutomation
+      ? buildAutomationInventoryItems([selectedAutomation], { clientSurface: "desktop" })[0] ?? null
+      : null,
+    [selectedAutomation],
+  );
   const runRecords: AutomationRunRecord[] = runsData?.runs ?? EMPTY_AUTOMATION_RUNS;
   const runItems = useMemo(
-    () => buildAutomationRunInventoryItems(runRecords, { pendingCloudWorkspaceId }),
+    () => buildAutomationRunInventoryItems(runRecords, {
+      clientSurface: "desktop",
+      pendingCloudWorkspaceId,
+    }),
     [pendingCloudWorkspaceId, runRecords],
   );
   const runById = useMemo(
@@ -185,19 +191,34 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     await actions.updateAutomation({ automationId, body });
   };
 
-  const handleOpenCloudWorkspace = useCallback(async (cloudWorkspaceId: string) => {
+  const handleOpenCloudWorkspace = useCallback(async (run: AutomationRunRecord) => {
+    const cloudWorkspaceId = run.cloudWorkspaceId;
+    if (!cloudWorkspaceId) {
+      return;
+    }
     setPendingCloudWorkspaceId(cloudWorkspaceId);
     try {
       const workspace = await refreshCloudWorkspace(cloudWorkspaceId);
+      const workspaceId = cloudWorkspaceSyntheticId(workspace.id);
       navigate("/");
-      await selectWorkspace(cloudWorkspaceSyntheticId(workspace.id), { force: true });
+      if (run.anyharnessSessionId) {
+        const result = await openWorkspaceSession({
+          workspaceId,
+          sessionId: run.anyharnessSessionId,
+        });
+        if (result.result === "stale") {
+          showToast("Workspace selection changed before the automation session opened.");
+        }
+        return;
+      }
+      await selectWorkspace(workspaceId, { force: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to open workspace.";
       showToast(message);
     } finally {
       setPendingCloudWorkspaceId(null);
     }
-  }, [navigate, refreshCloudWorkspace, selectWorkspace, showToast]);
+  }, [navigate, openWorkspaceSession, refreshCloudWorkspace, selectWorkspace, showToast]);
 
   const handleOpenLocalWorkspace = async (run: AutomationRunRecord) => {
     if (!run.anyharnessWorkspaceId) {
@@ -247,7 +268,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
       return;
     }
     if (run.cloudWorkspaceId) {
-      void handleOpenCloudWorkspace(run.cloudWorkspaceId);
+      void handleOpenCloudWorkspace(run);
       return;
     }
     if (run.anyharnessWorkspaceId) {
@@ -277,127 +298,35 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     || actions.isResumingAutomation
     || actions.isRunningAutomationNow;
 
-  const renderDetailHeader = () => {
-    if (!selectedAutomation) {
-      return (
-        <div className="py-2">
-          <h2 className="text-2xl font-medium text-foreground">Automation</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Loading automation...</p>
-        </div>
-      );
-    }
-
-    const view = buildAutomationRowViewModel(selectedAutomation);
-    const enabled = selectedAutomation.enabled;
-    return (
-      <div className="relative flex min-w-0 flex-col">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/automations")}
-          className="absolute -top-8 -ml-2 w-fit"
-        >
-          <ArrowLeft className="size-4" />
-          Automations
-        </Button>
-        <div className="flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
-            <h2 className="truncate text-2xl font-medium text-foreground">
-              {view.title}
-            </h2>
-            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-              <span className="truncate">{view.repoLabel}</span>
-              <span aria-hidden="true">·</span>
-              <span>{view.executionLabel}</span>
-              <span aria-hidden="true">·</span>
-              <span>{view.statusLabel}</span>
-            </div>
-            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-              <span>{view.scheduleLabel}</span>
-              <span aria-hidden="true">·</span>
-              <span>Next {view.nextRunPlainLabel}</span>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => actions.runAutomationNow(selectedAutomation.id)}
-              disabled={busy || !enabled}
-              title={enabled ? "Queue a manual run" : "Resume before queueing a run"}
-            >
-              <Zap className="size-4" />
-              Run now
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => openEdit(selectedAutomation)}
-              disabled={busy}
-            >
-              <Pencil className="size-4" />
-              Edit
-            </Button>
-            {enabled ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => actions.pauseAutomation(selectedAutomation.id)}
-                disabled={busy}
-              >
-                <Pause className="size-4" />
-                Pause
-              </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => actions.resumeAutomation(selectedAutomation.id)}
-                disabled={busy}
-              >
-                <Play className="size-4" />
-                Resume
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
   return (
     <>
       <MainSidebarPageShell>
         {isDetailView ? (
-          <PageContentFrame
-            stickyTitle={selectedAutomation?.title ?? "Automation"}
-            header={renderDetailHeader()}
-            maxWidthClassName="max-w-none"
-          >
-            {selectedDetailError ? (
-              <section className="py-3">
-                <p className="text-sm font-medium text-foreground">Automation not found</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  It may have been deleted or you may not have access to it.
-                </p>
-                <Button variant="ghost" size="sm" onClick={() => navigate("/automations")} className="mt-4 -ml-2">
-                  <ArrowLeft className="size-4" />
-                  Back to automations
-                </Button>
-              </section>
-            ) : (
-              <section className="min-w-0">
-                <div className="mt-1 flex h-9 w-full items-center gap-2 rounded-[10px] bg-foreground/[0.042] px-3">
-                  <span className="text-sm font-medium leading-5 text-foreground">Run history</span>
-                  <span className="text-sm tabular-nums text-muted-foreground">{runItems.length}</span>
-                </div>
-                <AutomationRunsList
-                  runs={runItems}
-                  loading={selectedDetailLoading || runsLoading}
-                  onRunSelect={handleOpenRun}
-                />
-              </section>
-            )}
-          </PageContentFrame>
+          <AutomationDetailSurface
+            automation={selectedAutomationItem}
+            runs={runItems}
+            loadingAutomation={selectedDetailLoading}
+            loadingRuns={selectedDetailLoading || runsLoading}
+            notFound={selectedDetailError}
+            busy={busy}
+            onBack={() => navigate("/automations")}
+            onRunNow={(automationId) => {
+              void actions.runAutomationNow(automationId);
+            }}
+            onEdit={(automationId) => {
+              const automation = automations.find((item) => item.id === automationId) ?? selectedAutomation;
+              if (automation) {
+                openEdit(automation);
+              }
+            }}
+            onPause={(automationId) => {
+              void actions.pauseAutomation(automationId);
+            }}
+            onResume={(automationId) => {
+              void actions.resumeAutomation(automationId);
+            }}
+            onRunSelect={handleOpenRun}
+          />
         ) : (
           <AutomationSurface
             mode={surfaceMode}

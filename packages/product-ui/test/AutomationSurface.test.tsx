@@ -54,6 +54,45 @@ describe("AutomationSurface", () => {
     expect(onRunNow).toHaveBeenCalledWith("auto-1");
   });
 
+  it("keeps soft-disabled run actions visible and explains why", () => {
+    const onRunNow = vi.fn();
+
+    render(
+      <AutomationSurface
+        mode="list"
+        groups={[
+          {
+            ...automationGroups()[0],
+            items: [
+              {
+                ...automationGroups()[0].items[0],
+                enabled: false,
+                statusLabel: "Paused",
+                runNowDisabledReason: "Resume before queueing a run.",
+              },
+            ],
+          },
+        ]}
+        calendarDays={calendarDays()}
+        includePaused={false}
+        onModeChange={vi.fn()}
+        onIncludePausedChange={vi.fn()}
+        onNew={vi.fn()}
+        onAutomationSelect={vi.fn()}
+        onEdit={vi.fn()}
+        onPause={vi.fn()}
+        onResume={vi.fn()}
+        onRunNow={onRunNow}
+      />,
+    );
+
+    const runButton = screen.getByRole("button", {
+      name: "Run automation now: Resume before queueing a run.",
+    });
+    fireEvent.click(runButton);
+    expect(onRunNow).not.toHaveBeenCalled();
+  });
+
   it("renders calendar days and scheduled occurrences", () => {
     const onModeChange = vi.fn();
     const onAutomationSelect = vi.fn();
@@ -108,6 +147,46 @@ describe("AutomationRunsList", () => {
     expect(screen.queryByRole("button", { name: /Queued/u })).toBeNull();
     expect(screen.getAllByText("Queued").length).toBeGreaterThan(0);
   });
+
+  it("shows desktop-required run rows without making them look disabled", () => {
+    render(
+      <AutomationRunsList
+        runs={[
+          runItem({
+            id: "run-local",
+            title: "Dispatched",
+            statusLabel: "Dispatched",
+            openState: "desktop_required",
+            openLabel: "Check this out on the desktop.",
+            openDisabledReason: "Check this out on the desktop.",
+          }),
+        ]}
+        onRunSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /Dispatched/u })).toBeNull();
+    expect(screen.getAllByText("Dispatched").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Check this out on the desktop/u)).toBeTruthy();
+  });
+
+  it("includes transient opening state in the row label", () => {
+    render(
+      <AutomationRunsList
+        runs={[
+          runItem({
+            id: "run-opening",
+            title: "Session started",
+            statusLabel: "Session started",
+            openState: "opening",
+          }),
+        ]}
+        onRunSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("listitem", { name: /Opening/u })).toBeTruthy();
+  });
 });
 
 function automationGroups(): AutomationInventoryGroupView[] {
@@ -125,9 +204,11 @@ function automationGroups(): AutomationInventoryGroupView[] {
           nextRunLabel: "tomorrow at 9:00 AM",
           scopeLabel: "Personal",
           targetLabel: "Personal cloud",
+          targetAvailability: "managed_cloud",
           statusKind: "waiting",
           statusLabel: "Enabled",
           enabled: true,
+          runNowDisabledReason: null,
           updatedAt: "2026-05-23T00:00:00Z",
           searchText: "Nightly skill index",
         },
@@ -186,6 +267,8 @@ function runItem(
     targetLabel: "Personal cloud",
     errorLabel: null,
     openState: "none",
+    openLabel: "Open workspace",
+    openDisabledReason: null,
     ...overrides,
   };
 }

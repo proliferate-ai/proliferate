@@ -35,6 +35,7 @@ export function App() {
         <Route index element={<HomePage />} />
         <Route path="workspaces" element={<WorkspacesPage />} />
         <Route path="automations" element={<AutomationsPage />} />
+        <Route path="automations/:automationId" element={<AutomationsPage />} />
         <Route path="plugins" element={<PluginsPage />} />
         <Route path="support" element={<SupportPage />} />
         <Route path="settings" element={<SettingsPage />} />

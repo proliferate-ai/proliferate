@@ -39,6 +39,7 @@ interface AutomationCreatePanelProps {
   agentControls: readonly CloudChatComposerControlView[];
   loadingOptions?: boolean;
   submitting?: boolean;
+  submitDisabled?: boolean;
   error?: ReactNode;
   timeDisabled?: boolean;
   onChange: (values: AutomationCreateFormValues) => void;
@@ -55,6 +56,7 @@ export function AutomationCreatePanel({
   agentControls,
   loadingOptions = false,
   submitting = false,
+  submitDisabled = false,
   error,
   timeDisabled = false,
   onChange,
@@ -221,7 +223,7 @@ export function AutomationCreatePanel({
             <Button type="button" variant="ghost" onClick={onCancel} disabled={submitting}>
               Cancel
             </Button>
-            <Button type="submit" loading={submitting}>
+            <Button type="submit" loading={submitting} disabled={submitDisabled}>
               Create
             </Button>
           </div>

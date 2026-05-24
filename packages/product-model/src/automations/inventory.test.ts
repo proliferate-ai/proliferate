@@ -93,6 +93,32 @@ describe("automation inventory", () => {
     ]);
   });
 
+  it("marks non-managed targets as desktop-required on web", () => {
+    const [local] = buildAutomationInventoryItems([
+      automation({ targetMode: "local" }),
+    ], { clientSurface: "web", now: NOW });
+    const [ssh] = buildAutomationInventoryItems([
+      automation({ executionTarget: "ssh", targetKind: "ssh" }),
+    ], { clientSurface: "web", now: NOW });
+    const [desktopLocal] = buildAutomationInventoryItems([
+      automation({ targetMode: "local" }),
+    ], { clientSurface: "desktop", now: NOW });
+
+    expect(local).toMatchObject({
+      targetAvailability: "desktop_required",
+      runNowDisabledReason: "Check this out on the desktop.",
+    });
+    expect(ssh).toMatchObject({
+      targetLabel: "SSH target",
+      targetAvailability: "desktop_required",
+      runNowDisabledReason: "Check this out on the desktop.",
+    });
+    expect(desktopLocal).toMatchObject({
+      targetAvailability: "desktop_required",
+      runNowDisabledReason: null,
+    });
+  });
+
   it("builds a seven day daily calendar", () => {
     const week = buildAutomationCalendarWeek([
       automation(),
@@ -251,6 +277,22 @@ describe("automation inventory", () => {
     expect(week[1].occurrences).toMatchObject([{ automationId: "auto-1" }]);
   });
 
+  it("uses target kind when labeling calendar occurrences", () => {
+    const week = buildAutomationCalendarWeek([
+      automation({
+        targetMode: "personal_cloud",
+        targetKind: "ssh",
+      }),
+    ], {
+      anchorDate: ANCHOR,
+      now: NOW,
+    });
+
+    expect(week[1].occurrences).toMatchObject([
+      { targetLabel: "SSH target" },
+    ]);
+  });
+
   it("maps run statuses", () => {
     const items = buildAutomationRunInventoryItems([
       run("queued"),
@@ -264,12 +306,85 @@ describe("automation inventory", () => {
 
     expect(items.map((item) => [item.statusLabel, item.statusKind, item.openState, item.targetLabel])).toEqual([
       ["Queued", "waiting", "none", "Personal cloud"],
-      ["Creating workspace", "working", "none", "Personal cloud"],
-      ["Dispatching", "working", "none", "Personal cloud"],
-      ["Dispatched", "done", "openable", "Personal cloud"],
-      ["Dispatched", "done", "openable", "SSH target"],
+      ["Creating cloud workspace", "working", "none", "Personal cloud"],
+      ["Sending prompt", "working", "none", "Personal cloud"],
+      ["Session started", "done", "openable", "Personal cloud"],
+      ["Session started", "done", "openable", "SSH target"],
       ["Failed", "blocked", "none", "Personal cloud"],
       ["Cancelled", "done", "none", "Personal cloud"],
+    ]);
+  });
+
+  it("preserves local automation run status copy", () => {
+    const items = buildAutomationRunInventoryItems([
+      run("queued", { id: "queued-local-mode", targetMode: "local" }),
+      run("creating_workspace", { id: "creating-local-mode", targetMode: "local" }),
+      run("provisioning_workspace", {
+        id: "provisioning-local-execution",
+        executionTarget: "local",
+      }),
+    ]);
+
+    expect(items.map((item) => [item.id, item.statusLabel])).toEqual([
+      ["queued-local-mode", "Queued, local executor not available yet"],
+      ["creating-local-mode", "Creating local worktree"],
+      ["provisioning-local-execution", "Preparing worktree"],
+    ]);
+  });
+
+  it("keeps local and ssh runs visible but desktop-required on web", () => {
+    const items = buildAutomationRunInventoryItems([
+      run("dispatched", {
+        id: "run-local",
+        targetMode: "local",
+        anyharnessWorkspaceId: "aw-local",
+      }),
+      run("dispatched", {
+        id: "run-ssh",
+        targetMode: "personal_cloud",
+        anyharnessWorkspaceId: "aw-ssh",
+        cloudTargetKindSnapshot: "ssh",
+      }),
+      run("dispatched", {
+        id: "run-cloud",
+        cloudWorkspaceId: "cw-1",
+      }),
+    ], { clientSurface: "web" });
+
+    expect(items.map((item) => [
+      item.id,
+      item.openState,
+      item.openDisabledReason,
+      item.targetLabel,
+    ])).toEqual([
+      ["run-local", "desktop_required", "Check this out on the desktop.", "Local"],
+      ["run-ssh", "desktop_required", "Check this out on the desktop.", "SSH target"],
+      ["run-cloud", "openable", null, "Personal cloud"],
+    ]);
+  });
+
+  it("does not replace run status with desktop-required before a desktop workspace exists", () => {
+    const items = buildAutomationRunInventoryItems([
+      run("queued", {
+        id: "run-local-queued",
+        targetMode: "local",
+      }),
+      run("failed", {
+        id: "run-ssh-failed",
+        targetMode: "personal_cloud",
+        cloudTargetKindSnapshot: "ssh",
+        lastErrorMessage: "Could not create workspace",
+      }),
+    ], { clientSurface: "web" });
+
+    expect(items.map((item) => [
+      item.id,
+      item.statusLabel,
+      item.openState,
+      item.openDisabledReason,
+    ])).toEqual([
+      ["run-local-queued", "Queued, local executor not available yet", "none", null],
+      ["run-ssh-failed", "Failed", "none", null],
     ]);
   });
 });
