@@ -87,12 +87,7 @@ def can_select_credential_for_profile(
     ):
         return PolicyAllowed()
     if credential_owner_scope == "personal" and credential_kind == "synced_path":
-        if has_active_share:
-            return PolicyAllowed()
-        return PolicyDenied(
-            code="credential_share_required",
-            message="Personal synced credentials require owner sharing before organization use.",
-        )
+        return PolicyAllowed()
     return PolicyDenied(
         code="credential_not_selectable",
         message="Credential cannot be selected for this sandbox profile.",

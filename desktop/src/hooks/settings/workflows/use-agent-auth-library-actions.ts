@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AgentAuthAgentKind,
   AgentAuthCredential,
@@ -22,7 +22,10 @@ import { isAgentAuthAdminRole } from "@/lib/domain/agent-auth/agent-auth-present
 export type AgentAuthLibraryOrganizationOption =
   NonNullable<ReturnType<typeof useOrganizations>["data"]>["organizations"][number];
 
-export function useAgentAuthLibraryActions(initialAgentKind: AgentAuthAgentKind | null) {
+export function useAgentAuthLibraryActions(
+  initialAgentKind: AgentAuthAgentKind | null,
+  initialOrganizationId: string | null = null,
+) {
   const organizations = useOrganizations();
   const organizationOptions = organizations.data?.organizations ?? [];
   const organizationIdsKey = organizationOptions.map((organization) => organization.id).join(":");
@@ -51,6 +54,9 @@ export function useAgentAuthLibraryActions(initialAgentKind: AgentAuthAgentKind 
   );
   const [rescanning, setRescanning] = useState(false);
   const [organizationProfile, setOrganizationProfile] = useState<SandboxProfile | null>(null);
+  const [personalProfile, setPersonalProfile] = useState<SandboxProfile | null>(null);
+  const [organizationProfileLoading, setOrganizationProfileLoading] = useState(false);
+  const autoLoadedOrganizationProfileIdRef = useRef<string | null>(null);
   const [focusedAgentKind, setFocusedAgentKind] = useState<AgentAuthAgentKind | null>(
     initialAgentKind,
   );
@@ -69,20 +75,14 @@ export function useAgentAuthLibraryActions(initialAgentKind: AgentAuthAgentKind 
     selectedOrganizationId && adminOrganizationIds.has(selectedOrganizationId),
   );
   const selections = useSandboxAgentAuthSelections(organizationProfile?.id ?? null);
+  const personalSelections = useSandboxAgentAuthSelections(personalProfile?.id ?? null);
   const localSourcesByProvider = useMemo(
     () => new Map(localSources.map((source) => [source.provider, source])),
     [localSources],
   );
-  const personalCredentialsForSelectedTeam = useMemo(() => {
-    if (!selectedOrganizationId || !currentUserId) {
-      return personalCredentials.data ?? [];
-    }
-    return (organizationCredentials.data ?? []).filter((credential) =>
-      credential.ownerScope === "personal" && credential.ownerUserId === currentUserId);
-  }, [currentUserId, organizationCredentials.data, personalCredentials.data, selectedOrganizationId]);
   const personalCredentialsByAgent = useMemo(
-    () => groupCredentialsByAgent(personalCredentialsForSelectedTeam),
-    [personalCredentialsForSelectedTeam],
+    () => groupCredentialsByAgent(personalCredentials.data ?? []),
+    [personalCredentials.data],
   );
 
   useEffect(() => {
@@ -92,17 +92,61 @@ export function useAgentAuthLibraryActions(initialAgentKind: AgentAuthAgentKind 
       }
       return;
     }
+    const nextSelectedId =
+      initialOrganizationId
+      && organizationOptions.some((organization) => organization.id === initialOrganizationId)
+        ? initialOrganizationId
+        : organizationOptions[0].id;
     if (
       selectedOrganizationId === null
       || !organizationOptions.some((organization) => organization.id === selectedOrganizationId)
+      || (initialOrganizationId !== null && selectedOrganizationId !== nextSelectedId)
     ) {
-      setSelectedOrganizationId(organizationOptions[0].id);
+      setSelectedOrganizationId(nextSelectedId);
     }
-  }, [organizationIdsKey, organizationOptions, selectedOrganizationId]);
+  }, [initialOrganizationId, organizationIdsKey, organizationOptions, selectedOrganizationId]);
 
   useEffect(() => {
     setOrganizationProfile(null);
+    setOrganizationProfileLoading(false);
+    autoLoadedOrganizationProfileIdRef.current = null;
   }, [selectedOrganizationId]);
+
+  useEffect(() => {
+    if (
+      initialOrganizationId === null
+      || selectedOrganizationId === null
+      || organizationProfile !== null
+      || autoLoadedOrganizationProfileIdRef.current === selectedOrganizationId
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    autoLoadedOrganizationProfileIdRef.current = selectedOrganizationId;
+    setOrganizationProfileLoading(true);
+    void mutations.ensureOrganizationProfile({ organizationId: selectedOrganizationId })
+      .then((nextProfile) => {
+        if (!cancelled) {
+          setOrganizationProfile(nextProfile);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          autoLoadedOrganizationProfileIdRef.current = null;
+          setFeedback(error instanceof Error ? error.message : "Could not load shared sandbox auth.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setOrganizationProfileLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialOrganizationId, organizationProfile, selectedOrganizationId]);
 
   useEffect(() => {
     if (!initialAgentKind) {
@@ -225,9 +269,66 @@ export function useAgentAuthLibraryActions(initialAgentKind: AgentAuthAgentKind 
         organizationId: selectedOrganizationId,
       });
       setOrganizationProfile(nextProfile);
-      setFeedback("Team defaults loaded.");
+      setFeedback("Shared sandbox auth refreshed.");
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Could not load team defaults.");
+      setFeedback(error instanceof Error ? error.message : "Could not load shared sandbox auth.");
+    }
+  }
+
+  async function ensureOrganizationProfileLoaded() {
+    if (organizationProfile) {
+      return organizationProfile;
+    }
+    if (!selectedOrganizationId) {
+      throw new Error("Select a team before choosing shared sandbox auth.");
+    }
+    const nextProfile = await mutations.ensureOrganizationProfile({
+      organizationId: selectedOrganizationId,
+    });
+    setOrganizationProfile(nextProfile);
+    return nextProfile;
+  }
+
+  async function ensurePersonalProfileLoaded() {
+    if (personalProfile) {
+      return personalProfile;
+    }
+    const nextProfile = await mutations.ensurePersonalProfile();
+    setPersonalProfile(nextProfile);
+    return nextProfile;
+  }
+
+  async function handleEnsurePersonalProfile() {
+    setFeedback(null);
+    try {
+      await ensurePersonalProfileLoaded();
+      setFeedback("Personal cloud auth profile loaded.");
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Could not load personal cloud defaults.");
+    }
+  }
+
+  async function handleSelectPersonalDefault(
+    agentKind: AgentAuthAgentKind,
+    credentialId: string,
+  ) {
+    if (!credentialId) {
+      return;
+    }
+    setFeedback(null);
+    try {
+      const profile = await ensurePersonalProfileLoaded();
+      await mutations.selectCredential({
+        sandboxProfileId: profile.id,
+        agentKind,
+        selection: {
+          credentialId,
+          credentialShareId: null,
+        },
+      });
+      setFeedback("Personal cloud default saved.");
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Could not save personal cloud default.");
     }
   }
 
@@ -250,19 +351,23 @@ export function useAgentAuthLibraryActions(initialAgentKind: AgentAuthAgentKind 
     agentKind: AgentAuthAgentKind,
     credentialId: string,
   ) {
-    if (!organizationProfile || !credentialId) {
+    if (!credentialId) {
       return;
     }
     setFeedback(null);
     try {
+      const profile = await ensureOrganizationProfileLoaded();
+      const selectedCredential = (organizationCredentials.data ?? []).find(
+        (credential) => credential.id === credentialId && credential.agentKind === agentKind,
+      );
       await mutations.selectCredential({
-        sandboxProfileId: organizationProfile.id,
+        sandboxProfileId: profile.id,
         agentKind,
         selection: {
           credentialId,
-          credentialShareId: (organizationCredentials.data ?? []).find(
-            (credential) => credential.id === credentialId && credential.agentKind === agentKind,
-          )?.activeCredentialShareId ?? null,
+          credentialShareId: selectedCredential?.ownerUserId === currentUserId
+            ? null
+            : selectedCredential?.activeCredentialShareId ?? null,
         },
       });
       setFeedback("Team default saved.");
@@ -283,10 +388,14 @@ export function useAgentAuthLibraryActions(initialAgentKind: AgentAuthAgentKind 
     personalCredentialsByAgent,
     organizationCredentials: organizationCredentials.data ?? [],
     organizationCredentialsLoading: organizationCredentials.isLoading,
+    organizationSelectionsLoading: organizationProfileLoading
+      || (organizationProfile !== null && (selections.isLoading || selections.isFetching)),
     personalCredentialsLoading: personalCredentials.isLoading,
     organizationCredentialsError: organizationCredentials.error,
     personalCredentialsError: personalCredentials.error,
     capabilities: agentGatewayCapabilities,
+    personalProfile,
+    personalSelections: personalSelections.data ?? [],
     organizationProfile,
     selections: selections.data ?? [],
     isAdminForSelectedOrganization,
@@ -305,7 +414,9 @@ export function useAgentAuthLibraryActions(initialAgentKind: AgentAuthAgentKind 
     handleRevokeShare,
     handleRevokeCredential,
     handleEnsureOrganizationProfile,
+    handleEnsurePersonalProfile,
     handleEnsureManagedCredits,
+    handleSelectPersonalDefault,
     handleSelectTeamDefault,
   };
 }

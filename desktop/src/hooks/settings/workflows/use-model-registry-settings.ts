@@ -32,7 +32,14 @@ export function useModelRegistrySettings() {
     enabled: connectionState !== "failed",
   });
   const refreshModelRegistry = useRefreshAgentModelRegistryMutation();
-  const { agents, isLoading: agentsLoading, readyAgentKinds } = useAgentCatalog();
+  const {
+    agents,
+    agentsNeedingSetup,
+    isLoading: agentsLoading,
+    isReconciling,
+    readyAgentKinds,
+    reconcileResultsByKind,
+  } = useAgentCatalog();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
@@ -71,7 +78,10 @@ export function useModelRegistrySettings() {
     connectionState,
     runtimeError,
     agents,
+    agentsNeedingSetup,
     agentsLoading,
+    isReconciling,
+    reconcileResultsByKind,
     modelRegistries,
     modelRegistriesLoading,
     runtimeLaunchOptions,

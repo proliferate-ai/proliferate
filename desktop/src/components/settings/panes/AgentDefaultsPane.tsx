@@ -1,10 +1,15 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
+import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { ModelRegistryPane } from "@/components/settings/panes/ModelRegistryPane";
 import { AgentHarnessConfigComposer } from "@/components/settings/shared/AgentHarnessConfigComposer";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { ProviderIcon } from "@/components/ui/provider-icons";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
@@ -25,6 +30,11 @@ import type {
 import type {
   DefaultLiveSessionControlKey,
 } from "@/lib/domain/preferences/user/session-defaults";
+import {
+  getAgentStatusDisplay,
+  type AgentStatusTone,
+} from "@/lib/domain/agents/status-presentation";
+import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import type { SettingsAgentDefaultRow } from "@/lib/domain/settings/agent-defaults";
 import {
   withUpdatedDefaultLiveSessionControlValueByAgentKind,
@@ -32,11 +42,15 @@ import {
 import { buildPrimaryHarnessPreferenceUpdate } from "@/lib/domain/settings/chat-defaults";
 
 export function AgentDefaultsPane() {
+  const navigate = useNavigate();
+  const [setupAgent, setSetupAgent] = useState<AgentSummary | null>(null);
   const {
     connectionState,
     runtimeError,
     agents,
+    agentsNeedingSetup,
     agentsLoading,
+    isReconciling,
     modelRegistries,
     modelRegistriesLoading,
     runtimeLaunchOptions,
@@ -45,6 +59,7 @@ export function AgentDefaultsPane() {
     agentDefaultRows,
     orderedAgentDefaultRows,
     primaryHarnessLabel,
+    reconcileResultsByKind,
   } = useModelRegistrySettings();
   const cloudAgentCatalogQuery = useCloudAgentCatalog(connectionState !== "failed");
   const launchAgents = useMemo(
@@ -75,7 +90,10 @@ export function AgentDefaultsPane() {
 
   return (
     <section className="space-y-5">
-      <SettingsPageHeader title="Agent Defaults" />
+      <SettingsPageHeader
+        title="Agent Defaults"
+        description="Configure how each agent harness launches by default. Authentication lives in Agent Authentication."
+      />
 
       <AgentDefaultsSection title="Default harness">
         <SettingsCard>
@@ -196,8 +214,152 @@ export function AgentDefaultsPane() {
           </div>
         </AgentDefaultsSection>
       ))}
+
+      {connectionState !== "failed" && agentsNeedingSetup.length > 0 ? (
+        <AgentConfigurationIssuesSection
+          agents={agentsNeedingSetup}
+          agentsLoading={agentsLoading}
+          isReconciling={isReconciling}
+          reconcileResultsByKind={reconcileResultsByKind}
+          onOpenAuthentication={(agentKind) => {
+            navigate(buildSettingsHref({
+              section: "agent-authentication",
+              kind: agentKind,
+            }));
+          }}
+          onReviewSetup={setSetupAgent}
+        />
+      ) : null}
+
+      {setupAgent ? (
+        <AgentSetupModal
+          agent={setupAgent}
+          onClose={() => setSetupAgent(null)}
+          reconcileState={isReconciling ? "reconciling" : "idle"}
+          reconcileResult={reconcileResultsByKind.get(setupAgent.kind)}
+        />
+      ) : null}
     </section>
   );
+}
+
+function AgentConfigurationIssuesSection({
+  agents,
+  agentsLoading,
+  isReconciling,
+  reconcileResultsByKind,
+  onOpenAuthentication,
+  onReviewSetup,
+}: {
+  agents: AgentSummary[];
+  agentsLoading: boolean;
+  isReconciling: boolean;
+  reconcileResultsByKind: Map<string, ReconcileAgentResult>;
+  onOpenAuthentication: (agentKind: string) => void;
+  onReviewSetup: (agent: AgentSummary) => void;
+}) {
+  return (
+    <AgentDefaultsSection
+      title="Needs configuration"
+      description="These harnesses are installed or known, but cannot be used as launch defaults yet."
+    >
+      <SettingsCard>
+        {agentsLoading ? (
+          <div className="p-3">
+            <LoadingState
+              message="Checking agent configuration"
+              subtext="Refreshing harness readiness..."
+            />
+          </div>
+        ) : agents.map((agent) => {
+          const reconcileResult = reconcileResultsByKind.get(agent.kind);
+          const status = getAgentStatusDisplay(agent, {
+            reconcileResult,
+            isReconciling,
+          });
+          const usesAuthenticationPage = agent.readiness === "credentials_required"
+            || agent.readiness === "login_required";
+
+          return (
+            <div
+              key={agent.kind}
+              className="flex items-start gap-3 border-b border-border/60 px-3 py-3 last:border-b-0"
+            >
+              <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-foreground/5 text-muted-foreground">
+                <ProviderIcon kind={agent.kind} className="size-4" />
+              </span>
+
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {agent.displayName}
+                  </span>
+                  <Badge tone={badgeToneForAgentStatus(status.tone)}>
+                    {status.label}
+                  </Badge>
+                </div>
+                <p className="text-sm leading-5 text-muted-foreground">
+                  {configurationDetailForAgent(agent, reconcileResult)}
+                </p>
+                {agent.expectedEnvVars.length > 0 ? (
+                  <p className="text-xs text-muted-foreground/80">
+                    Expected credentials: {agent.expectedEnvVars.join(", ")}
+                  </p>
+                ) : null}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  if (usesAuthenticationPage) {
+                    onOpenAuthentication(agent.kind);
+                    return;
+                  }
+                  onReviewSetup(agent);
+                }}
+              >
+                {usesAuthenticationPage ? "Open auth" : "Review setup"}
+              </Button>
+            </div>
+          );
+        })}
+      </SettingsCard>
+    </AgentDefaultsSection>
+  );
+}
+
+function badgeToneForAgentStatus(tone: AgentStatusTone): BadgeTone {
+  if (tone === "success") return "success";
+  if (tone === "warning") return "warning";
+  if (tone === "destructive") return "destructive";
+  return "neutral";
+}
+
+function configurationDetailForAgent(
+  agent: AgentSummary,
+  reconcileResult?: ReconcileAgentResult,
+): string {
+  if (reconcileResult?.outcome === "failed" && reconcileResult.message?.trim()) {
+    return reconcileResult.message;
+  }
+  if (agent.message?.trim()) {
+    return agent.message;
+  }
+  if (agent.readiness === "credentials_required") {
+    return "Add or select credentials in Agent Authentication before using this harness as a default.";
+  }
+  if (agent.readiness === "login_required") {
+    return "Complete authentication in Agent Authentication before using this harness as a default.";
+  }
+  if (agent.readiness === "install_required") {
+    return "The managed harness install has not completed yet.";
+  }
+  if (agent.readiness === "error") {
+    return "Review setup details, then refresh the runtime once the issue is fixed.";
+  }
+  return "This harness is not ready to use as a launch default.";
 }
 
 function AgentDefaultComposer({

@@ -1,6 +1,5 @@
 import type { ComponentType } from "react";
 import {
-  Blocks,
   BotMessageSquare,
   Building2,
   CircleUser,
@@ -63,7 +62,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       {
         kind: "section",
         id: "shared-environments",
-        label: "Shared environments",
+        label: "Shared Sandbox",
         icon: UsersRound,
         adminOnly: true,
       },
@@ -74,7 +73,6 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     id: "agents",
     heading: "Agents",
     items: [
-      { kind: "section", id: "agents", label: "Agents", icon: Blocks },
       { kind: "section", id: "agent-defaults", label: "Agent Defaults", icon: SlidersHorizontal },
       {
         kind: "section",
