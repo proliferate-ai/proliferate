@@ -36,6 +36,10 @@ anyharness/crates/proliferate-worker/src/commands/mapping.rs
 desktop/src/components/workspace/chat/input/ComposerModelConfigSelector.tsx
 desktop/src/components/workspace/shell/right-panel/RightPanel.test.tsx
 desktop/src/components/workspace/shell/right-panel/RightPanel.tsx
+desktop/src/components/automations/editor/AutomationEditorModal.tsx
+desktop/src/components/home/screen/HomeTargetPicker.tsx
+desktop/src/components/settings/panes/SlackBotPane.tsx
+desktop/src/components/settings/panes/compute/ComputeTargetDetails.tsx
 desktop/src/lib/workflows/mcp/connector-persistence.test.ts
 desktop/src/lib/workflows/mcp/connector-persistence.ts
 anyharness/sdk/src/reducer/transcript.ts
@@ -47,8 +51,11 @@ desktop/src/hooks/sessions/use-session-runtime-actions.ts
 desktop/src/hooks/workspaces/tabs/use-workspace-shell-activation.ts
 desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts
 desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts
+desktop/src/hooks/home/workflows/use-home-next-launch.ts
 desktop/src/lib/integrations/auth/orchestration.ts
+desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.ts
 desktop/src/lib/infra/measurement/boot-stall-diagnostics.ts
+desktop/src-tauri/src/commands/ssh_tunnel.rs
 desktop/src/hooks/workspaces/tabs/use-workspace-shell-activation.ts
 desktop/src/lib/infra/measurement/boot-stall-diagnostics.ts
 desktop/src/lib/integrations/auth/orchestration.ts
