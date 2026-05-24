@@ -11,6 +11,7 @@ export interface DeferredHomeLaunch {
   agentKind: string;
   modelId: string;
   modeId: string | null;
+  launchControlValues?: Record<string, string>;
   promptText: string;
   promptId: string;
   launchIntentId: string;

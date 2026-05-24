@@ -107,6 +107,7 @@ export function useHomeDeferredLaunchRunner() {
           text: readyLaunch.promptText,
           promptId: readyLaunch.promptId,
           launchIntentId: readyLaunch.launchIntentId,
+          launchControlValues: readyLaunch.launchControlValues,
           ...(readyLaunch.modeId ? { modeId: readyLaunch.modeId } : {}),
         });
         // Clear even if the hook re-ran mid-flight; the prompt was sent, so a remount must not retry it.

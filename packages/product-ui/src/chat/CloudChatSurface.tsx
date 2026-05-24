@@ -37,6 +37,12 @@ export interface CloudChatHeaderActionView {
   onClick?: () => void;
 }
 
+export interface CloudChatTopNoticeView {
+  title: string;
+  description?: string | null;
+  action?: CloudChatPrimaryActionView | null;
+}
+
 export interface CloudChatSurfaceProps {
   title: string;
   eyebrowItems: readonly string[];
@@ -48,6 +54,7 @@ export interface CloudChatSurfaceProps {
   commandMessage?: string | null;
   primaryAction?: CloudChatPrimaryActionView | null;
   headerActions?: readonly CloudChatHeaderActionView[];
+  topNotice?: CloudChatTopNoticeView | null;
   desktopHref?: string | null;
   telemetryBlocked?: boolean;
   onBack: () => void;
@@ -64,6 +71,7 @@ export function CloudChatSurface({
   commandMessage = null,
   primaryAction = null,
   headerActions = [],
+  topNotice = null,
   desktopHref = null,
   telemetryBlocked = false,
   onBack,
@@ -121,6 +129,26 @@ export function CloudChatSurface({
           <MoreHorizontal size={16} />
         </IconButton>
       </header>
+      {topNotice ? (
+        <div className="flex shrink-0 items-center gap-3 border-b border-warning/20 bg-warning-subtle px-4 py-2 text-sm text-warning">
+          <div className="min-w-0 flex-1">
+            <span className="font-medium">{topNotice.title}</span>
+            {topNotice.description ? (
+              <span className="ml-1 text-warning/80">{topNotice.description}</span>
+            ) : null}
+          </div>
+          {topNotice.action ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={topNotice.action.loading}
+              onClick={topNotice.action.onClick}
+            >
+              {topNotice.action.label}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="web-scrollbar min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-6 py-6">

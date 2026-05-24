@@ -4,12 +4,14 @@ import type { ReactNode, TextareaHTMLAttributes } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "./HomeNextScreen";
+import { HOME_NEXT_TARGET_SELECTION_STORAGE_KEY } from "@/hooks/home/ui/use-home-next-target-selection-state";
 
 const screenMocks = vi.hoisted(() => {
   const handleHomeAction = vi.fn();
   const launch = vi.fn();
   const clearDraftText = vi.fn();
   const navigate = vi.fn();
+  const onboardingCards: any[] = [];
   const homeNext = {
     selectedRepository: null,
     repositories: [],
@@ -19,6 +21,8 @@ const screenMocks = vi.hoisted(() => {
       isLoading: false,
       isError: false,
     },
+    sshTargetOptions: [],
+    sshTargetsLoading: false,
     cloudRepoActionBySourceRoot: {},
     cloudRepoTarget: null,
     cloudRepoAction: { kind: "create" },
@@ -39,7 +43,10 @@ const screenMocks = vi.hoisted(() => {
     launch,
     clearDraftText,
     navigate,
+    onboardingCards,
     homeNext,
+    homeNextStateArgs: null as any,
+    targetPickerProps: null as any,
   };
 });
 
@@ -48,7 +55,17 @@ vi.mock("react-router-dom", () => ({
 }));
 
 vi.mock("@/hooks/home/derived/use-home-next-state", () => ({
-  useHomeNextState: () => screenMocks.homeNext,
+  useHomeNextState: (args: any) => {
+    screenMocks.homeNextStateArgs = args;
+    return screenMocks.homeNext;
+  },
+}));
+
+vi.mock("@/hooks/home/derived/use-home-next-launch-controls", () => ({
+  useHomeNextLaunchControls: () => ({
+    controls: [],
+    launchControlValues: {},
+  }),
 }));
 
 vi.mock("@/hooks/home/workflows/use-home-next-launch", () => ({
@@ -60,7 +77,7 @@ vi.mock("@/hooks/home/workflows/use-home-next-launch", () => ({
 
 vi.mock("@/hooks/home/facade/use-home-screen", () => ({
   useHomeScreen: () => ({
-    actionCards: [],
+    onboardingCards: screenMocks.onboardingCards,
     isAddingRepo: false,
     handleHomeAction: screenMocks.handleHomeAction,
   }),
@@ -77,7 +94,28 @@ vi.mock("@/stores/home/home-draft-handoff-store", () => ({
 }));
 
 vi.mock("@/components/home/screen/HomeTargetPicker", () => ({
-  HomeTargetPicker: () => <div data-testid="target-picker" />,
+  HomeTargetPicker: (props: any) => {
+    screenMocks.targetPickerProps = props;
+    return (
+      <div data-testid="target-picker">
+        <button type="button" onClick={() => props.onSelectCowork()}>
+          Mock cowork
+        </button>
+        <button type="button" onClick={() => props.onSelectRepository("/repo-b")}>
+          Mock repo
+        </button>
+        <button type="button" onClick={() => props.onSelectRuntime("local")}>
+          Mock local
+        </button>
+        <button type="button" onClick={() => props.onSelectRuntime("ssh", "ssh-target-1")}>
+          Mock ssh
+        </button>
+        <button type="button" onClick={() => props.onSelectBranch("feature/sticky")}>
+          Mock branch
+        </button>
+      </div>
+    );
+  },
 }));
 
 vi.mock("@/components/home/screen/HomeModelPicker", () => ({
@@ -120,17 +158,41 @@ vi.mock("@/components/workspace/chat/transcript/UserMessage", () => ({
   ),
 }));
 
+function installLocalStorageMock() {
+  const values = new Map<string, string>();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      get length() {
+        return values.size;
+      },
+      clear: () => values.clear(),
+      getItem: (key: string) => values.get(key) ?? null,
+      key: (index: number) => Array.from(values.keys())[index] ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, String(value)),
+    },
+  });
+}
+
 function resetHomeNext() {
   screenMocks.homeNext.targetDisabledReason = null;
   screenMocks.homeNext.modelAvailabilityState = "launchable";
   screenMocks.homeNext.canLaunchTarget = true;
   screenMocks.homeNext.effectiveModelSelection = { kind: "codex", modelId: "gpt-5.4" };
   screenMocks.homeNext.launchTarget = { kind: "cowork" };
+  screenMocks.onboardingCards.splice(0);
+  screenMocks.homeNext.sshTargetOptions = [];
+  screenMocks.homeNext.sshTargetsLoading = false;
+  screenMocks.homeNextStateArgs = null;
+  screenMocks.targetPickerProps = null;
 }
 
 describe("HomeNextScreen model availability notices", () => {
   beforeEach(() => {
+    installLocalStorageMock();
     resetHomeNext();
+    window.localStorage.clear();
     screenMocks.handleHomeAction.mockClear();
     screenMocks.launch.mockClear();
     screenMocks.launch.mockResolvedValue(true);
@@ -220,5 +282,104 @@ describe("HomeNextScreen model availability notices", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
 
     expect(screen.getByText("start worktree")).toBeTruthy();
+  });
+
+  it("renders onboarding cards as the only home onboarding actions", () => {
+    screenMocks.onboardingCards.push(
+      {
+        id: "add-repository",
+        title: "Add a GitHub repo",
+        icon: "github",
+      },
+      {
+        id: "agent-defaults",
+        title: "Configure default harnesses",
+        icon: "sliders",
+      },
+    );
+
+    render(<HomeNextScreen />);
+
+    expect(screen.getByText("Add a GitHub repo")).toBeTruthy();
+    expect(screen.getByText("Configure default harnesses")).toBeTruthy();
+    expect(screen.queryByText("Manage agents")).toBeNull();
+    expect(screen.queryByText("Add another repository")).toBeNull();
+    expect(screen.queryByText(/Choose a local GitHub clone/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add a GitHub repo" }));
+    expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("add-repository");
+
+    fireEvent.click(screen.getByRole("button", { name: "Configure default harnesses" }));
+    expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("agent-defaults");
+  });
+});
+
+describe("HomeNextScreen target selection persistence", () => {
+  beforeEach(() => {
+    installLocalStorageMock();
+    resetHomeNext();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("hydrates the last selected launch target into home next state", () => {
+    window.localStorage.setItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, JSON.stringify({
+      destination: "repository",
+      repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
+      repoLaunchKind: "ssh",
+      selectedSshTargetId: "ssh-target-1",
+      baseBranchOverride: "feature/sticky",
+    }));
+
+    render(<HomeNextScreen />);
+
+    expect(screenMocks.homeNextStateArgs).toMatchObject({
+      destination: "repository",
+      repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
+      repoLaunchKind: "ssh",
+      selectedSshTargetId: "ssh-target-1",
+      baseBranchOverride: "feature/sticky",
+    });
+  });
+
+  it("persists repository, branch, and runtime choices from the target picker", () => {
+    render(<HomeNextScreen />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mock repo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mock branch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mock ssh" }));
+
+    expect(JSON.parse(window.localStorage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY)!))
+      .toMatchObject({
+        destination: "repository",
+        repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
+        repoLaunchKind: "ssh",
+        selectedSshTargetId: "ssh-target-1",
+        baseBranchOverride: "feature/sticky",
+      });
+  });
+
+  it("keeps the selected branch when switching to a local runtime", () => {
+    window.localStorage.setItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, JSON.stringify({
+      destination: "repository",
+      repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
+      repoLaunchKind: "worktree",
+      selectedSshTargetId: null,
+      baseBranchOverride: "feature/sticky",
+    }));
+    render(<HomeNextScreen />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mock local" }));
+
+    expect(JSON.parse(window.localStorage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY)!))
+      .toMatchObject({
+        destination: "repository",
+        repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
+        repoLaunchKind: "local",
+        baseBranchOverride: "feature/sticky",
+      });
   });
 });

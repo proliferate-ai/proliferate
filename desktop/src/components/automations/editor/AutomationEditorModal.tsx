@@ -4,7 +4,11 @@ import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Textarea } from "@/components/ui/Textarea";
+import { AgentHarnessModelSelector } from "@/components/agents/AgentHarnessModelSelector";
+import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
 import { useAutomationTargetSelection } from "@/hooks/automations/derived/use-automation-target-selection";
+import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { useAgentRunConfigMutations } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-config-mutations";
 import type { AutomationTargetSelection } from "@/lib/domain/automations/target/selection";
 import type {
   AutomationRecord,
@@ -15,7 +19,17 @@ import type {
   AutomationOwnerScope,
   AutomationTargetMode,
 } from "@/lib/domain/automations/run/types";
-import { useAgentRunConfigs } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
+import {
+  buildLaunchControlDescriptors,
+} from "@/lib/domain/chat/models/launch-control-descriptors";
+import type {
+  DesktopAgentLaunchAgent,
+  DesktopAgentLaunchModel,
+} from "@/lib/domain/agents/cloud-launch-catalog";
+import type {
+  LiveSessionControlDescriptor,
+  SupportedLiveControlKey,
+} from "@/lib/domain/chat/session-controls/session-controls";
 import {
   defaultAutomationTimezone,
   presetForRrule,
@@ -28,7 +42,6 @@ import {
   AutomationSchedulePopover,
   AutomationTemplatePopover,
 } from "./AutomationEditorControls";
-import { AutomationAgentRunConfigPicker } from "@/components/automations/controls/AutomationAgentRunConfigPicker";
 import { AutomationRunLocationSelector } from "@/components/automations/controls/AutomationRunLocationSelector";
 
 type SchedulePresetValue = AutomationSchedulePresetOrCustom;
@@ -79,8 +92,14 @@ export function AutomationEditorModal({
   const [timezone, setTimezone] = useState(
     automation?.schedule.timezone ?? defaultAutomationTimezone(),
   );
-  const [cloudAgentRunConfigId, setCloudAgentRunConfigId] = useState<string | null>(
-    automation?.cloudAgentRunConfigId ?? null,
+  const [agentKind, setAgentKind] = useState<string | null>(
+    automation?.agentKind ?? null,
+  );
+  const [modelId, setModelId] = useState<string | null>(
+    automation?.modelId ?? null,
+  );
+  const [agentControlValues, setAgentControlValues] = useState<Record<string, string>>(
+    () => initialAutomationControlValues(automation),
   );
   const [error, setError] = useState<string | null>(null);
   const [pendingConfigureTarget, setPendingConfigureTarget] = useState<{
@@ -115,15 +134,53 @@ export function AutomationEditorModal({
     : selectedTarget?.executionTarget === "local"
       ? "local"
       : "personal_cloud";
-  const runConfigsQuery = useAgentRunConfigs({
-    ownerScope: isTeamAutomation ? undefined : ownerScope,
-    organizationId: effectiveOrganizationId,
-    usableIn: isTeamAutomation ? "shared_sandboxes" : "personal_sandboxes",
-    status: "active",
-  }, open && (!isTeamAutomation || effectiveOrganizationId !== null));
-  const runConfigs = (runConfigsQuery.data?.configs ?? []).filter((config) =>
-    !isTeamAutomation || config.ownerScope !== "personal"
+  const cloudAgentCatalogQuery = useCloudAgentCatalog(open);
+  const agentRunConfigMutations = useAgentRunConfigMutations();
+  const launchAgents = cloudAgentCatalogQuery.data?.agents ?? [];
+  const selectedAgent = useMemo(
+    () => resolveAutomationAgent(launchAgents, agentKind),
+    [agentKind, launchAgents],
   );
+  const selectedModel = useMemo(
+    () => resolveAutomationModel(selectedAgent, modelId),
+    [modelId, selectedAgent],
+  );
+  const effectiveAgentKind = selectedAgent?.kind ?? null;
+  const effectiveModelId = selectedModel?.id ?? null;
+  const agentControlDescriptors = useMemo(
+    () => selectedAgent && effectiveModelId
+      ? buildLaunchControlDescriptors({
+        selection: { kind: selectedAgent.kind, modelId: effectiveModelId },
+        launchAgents: [selectedAgent],
+        pendingConfigChanges: null,
+        preferences: {
+          defaultSessionModeByAgentKind: agentControlValues.mode
+            ? { [selectedAgent.kind]: agentControlValues.mode }
+            : {},
+          defaultLiveSessionControlValuesByAgentKind: {
+            [selectedAgent.kind]: agentControlValues,
+          },
+        },
+        onSelect: (
+          _agentKind: string,
+          _controlKey: SupportedLiveControlKey,
+          rawConfigId: string,
+          value: string,
+        ) => {
+          setAgentControlValues((current) => ({
+            ...current,
+            [rawConfigId]: value,
+          }));
+        },
+      })
+      : [],
+    [agentControlValues, effectiveModelId, selectedAgent],
+  );
+  const selectedAgentControlValues = useMemo(
+    () => selectedControlValues(agentControlDescriptors),
+    [agentControlDescriptors],
+  );
+  const agentSelectionReady = Boolean(effectiveAgentKind && effectiveModelId);
   const ownerOptions = useMemo(() => [
     {
       value: "personal" as const,
@@ -147,7 +204,9 @@ export function AutomationEditorModal({
     .map((group) => ({
       ...group,
       rows: group.rows.filter((row) =>
-        row.kind === "configureCloud" || row.target.executionTarget === "cloud"
+        row.kind === "configureCloud"
+        || row.target.executionTarget === "cloud"
+        || row.target.executionTarget === "ssh"
       ),
     }))
     .filter((group) => group.rows.length > 0), [teamTargetSelection.groups]);
@@ -155,18 +214,23 @@ export function AutomationEditorModal({
     ? "Select a configured cloud workspace for team automation."
     : activeTargetSelection.disabledReason;
   const canSubmitTarget = activeTargetSelection.canSubmit
-    && (!isTeamAutomation || selectedTarget?.executionTarget === "cloud");
+    && (!isTeamAutomation || selectedTarget?.executionTarget !== "local");
   const targetSelectionLoading = personalTargetSelection.isLoading
     || teamTargetSelection.isLoading;
 
   useEffect(() => {
-    if (!cloudAgentRunConfigId || runConfigsQuery.isLoading) {
+    if (!open || launchAgents.length === 0) {
       return;
     }
-    if (!runConfigs.some((config) => config.id === cloudAgentRunConfigId)) {
-      setCloudAgentRunConfigId(null);
+    const resolvedAgent = resolveAutomationAgent(launchAgents, agentKind);
+    if (resolvedAgent && resolvedAgent.kind !== agentKind) {
+      setAgentKind(resolvedAgent.kind);
     }
-  }, [cloudAgentRunConfigId, runConfigs, runConfigsQuery.isLoading]);
+    const resolvedModel = resolveAutomationModel(resolvedAgent, modelId);
+    if (resolvedModel && resolvedModel.id !== modelId) {
+      setModelId(resolvedModel.id);
+    }
+  }, [agentKind, launchAgents, modelId, open]);
 
   const submit = async () => {
     setError(null);
@@ -186,8 +250,8 @@ export function AutomationEditorModal({
       setError(targetDisabledReason ?? "Select a target before saving.");
       return;
     }
-    if (!cloudAgentRunConfigId) {
-      setError("Choose an agent run config before saving.");
+    if (!effectiveAgentKind || !effectiveModelId) {
+      setError("Choose an agent harness before saving.");
       return;
     }
     const timezoneError = validateAutomationTimezone(timezone);
@@ -201,14 +265,26 @@ export function AutomationEditorModal({
       return;
     }
     const schedule = { rrule: rrule.trim(), timezone: timezone.trim() };
+    let createdRunConfigId: string | null = null;
     try {
+      const runConfig = await agentRunConfigMutations.createMutation.mutateAsync({
+        name: automationRunConfigName(title),
+        ownerScope,
+        organizationId: effectiveOrganizationId,
+        agentKind: effectiveAgentKind,
+        modelId: effectiveModelId,
+        controlValues: selectedAgentControlValues,
+        usableInPersonalSandboxes: !isTeamAutomation,
+        usableInSharedSandboxes: isTeamAutomation,
+      });
+      createdRunConfigId = runConfig.id;
       if (automation) {
         await onUpdate(automation.id, {
           title: title.trim(),
           prompt: prompt.trim(),
           schedule,
           targetMode,
-          cloudAgentRunConfigId,
+          cloudAgentRunConfigId: runConfig.id,
         });
       } else {
         await onCreate({
@@ -220,11 +296,15 @@ export function AutomationEditorModal({
           ownerScope,
           organizationId: effectiveOrganizationId,
           targetMode,
-          cloudAgentRunConfigId,
+          cloudAgentRunConfigId: runConfig.id,
         });
       }
       onClose();
     } catch (caught) {
+      if (createdRunConfigId) {
+        await agentRunConfigMutations.deleteMutation.mutateAsync(createdRunConfigId)
+          .catch(() => undefined);
+      }
       setError(caught instanceof Error ? caught.message : "Failed to save automation.");
     }
   };
@@ -248,7 +328,12 @@ export function AutomationEditorModal({
       || timezone.trim() !== initialTimezone.trim()
       || targetOverride !== null
       || draftOwnerScope !== (automation?.ownerScope ?? initialOwnerScope)
-      || cloudAgentRunConfigId !== (automation?.cloudAgentRunConfigId ?? null);
+      || effectiveAgentKind !== (automation?.agentKind ?? null)
+      || effectiveModelId !== (automation?.modelId ?? null)
+      || !controlValuesEqual(
+        selectedAgentControlValues,
+        initialAutomationControlValues(automation),
+      );
   };
 
   const handleConfigureCloudTarget = (target: {
@@ -277,7 +362,6 @@ export function AutomationEditorModal({
       return;
     }
     setDraftOwnerScope(nextOwnerScope);
-    setCloudAgentRunConfigId(null);
     setError(null);
     if (nextOwnerScope === "organization" && targetOverride?.executionTarget === "local") {
       setTargetOverride(null);
@@ -362,14 +446,17 @@ export function AutomationEditorModal({
                   onTimezoneChange={setTimezone}
                   onRruleBlur={() => setError(validateAutomationRrule(rrule))}
                 />
-                <AutomationAgentRunConfigPicker
-                  configs={runConfigs}
-                  selectedConfigId={cloudAgentRunConfigId}
-                  isLoading={runConfigsQuery.isLoading}
-                  disabledReason={isTeamAutomation
-                    ? "No shared team agent configs"
-                    : "No agent run configs"}
-                  onSelect={(config) => setCloudAgentRunConfigId(config?.id ?? null)}
+                <AutomationAgentHarnessControls
+                  agents={launchAgents}
+                  selectedAgent={selectedAgent}
+                  selectedModel={selectedModel}
+                  controls={agentControlDescriptors}
+                  loading={cloudAgentCatalogQuery.isLoading}
+                  onSelectModel={(nextAgent, nextModel) => {
+                    setAgentKind(nextAgent.kind);
+                    setModelId(nextModel.id);
+                    setAgentControlValues({});
+                  }}
                 />
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -378,10 +465,11 @@ export function AutomationEditorModal({
                 </Button>
                 <Button
                   type="submit"
-                  loading={busy}
+                  loading={busy || agentRunConfigMutations.createMutation.isPending}
                   disabled={
-                    (!automation && (runConfigsQuery.isLoading || targetSelectionLoading))
-                    || !cloudAgentRunConfigId
+                    (!automation && (cloudAgentCatalogQuery.isLoading || targetSelectionLoading))
+                    || agentRunConfigMutations.createMutation.isPending
+                    || !agentSelectionReady
                     || !canSubmitTarget
                   }
                 >
@@ -402,4 +490,121 @@ export function AutomationEditorModal({
       />
     </>
   );
+}
+
+function AutomationAgentHarnessControls({
+  agents,
+  selectedAgent,
+  selectedModel,
+  controls,
+  loading,
+  onSelectModel,
+}: {
+  agents: DesktopAgentLaunchAgent[];
+  selectedAgent: DesktopAgentLaunchAgent | null;
+  selectedModel: DesktopAgentLaunchModel | null;
+  controls: LiveSessionControlDescriptor[];
+  loading: boolean;
+  onSelectModel: (agent: DesktopAgentLaunchAgent, model: DesktopAgentLaunchModel) => void;
+}) {
+  const label = selectedAgent && selectedModel
+    ? `${selectedAgent.displayName} · ${selectedModel.displayName}`
+    : loading
+      ? "Loading agents"
+      : "Agent harness";
+
+  return (
+    <>
+      <AgentHarnessModelSelector
+        label={label}
+        agentKind={selectedAgent?.kind ?? null}
+        selectedModelId={selectedModel?.id ?? null}
+        disabled={loading || agents.length === 0}
+        className="max-w-[16rem]"
+        menuClassName="w-80"
+        modelGroups={agents.map((agent) => ({
+          agentKind: agent.kind,
+          agentDisplayName: agent.displayName,
+          models: agent.models.map((model) => ({
+            id: model.id,
+            label: model.displayName,
+            detail: agent.displayName,
+          })),
+        })).filter((group) => group.models.length > 0)}
+        onSelectModel={(nextAgentKind, nextModelId) => {
+          const nextAgent = agents.find((agent) => agent.kind === nextAgentKind) ?? null;
+          const nextModel = nextAgent?.models.find((model) => model.id === nextModelId) ?? null;
+          if (nextAgent && nextModel) {
+            onSelectModel(nextAgent, nextModel);
+          }
+        }}
+      />
+      <SessionConfigControls
+        agentKind={selectedAgent?.kind ?? null}
+        controls={controls}
+      />
+    </>
+  );
+}
+
+function resolveAutomationAgent(
+  agents: DesktopAgentLaunchAgent[],
+  agentKind: string | null,
+): DesktopAgentLaunchAgent | null {
+  return agents.find((agent) => agent.kind === agentKind)
+    ?? agents.find((agent) => agent.models.length > 0)
+    ?? null;
+}
+
+function resolveAutomationModel(
+  agent: DesktopAgentLaunchAgent | null,
+  modelId: string | null,
+): DesktopAgentLaunchModel | null {
+  if (!agent) {
+    return null;
+  }
+  return agent.models.find((model) => model.id === modelId)
+    ?? agent.models.find((model) => model.id === agent.defaultModelId)
+    ?? agent.models.find((model) => model.isDefault)
+    ?? agent.models[0]
+    ?? null;
+}
+
+function selectedControlValues(
+  controls: LiveSessionControlDescriptor[],
+): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const control of controls) {
+    const selected = control.options.find((option) => option.selected);
+    if (selected?.value) {
+      values[control.rawConfigId] = selected.value;
+    }
+  }
+  return values;
+}
+
+function initialAutomationControlValues(
+  automation: AutomationRecord | null,
+): Record<string, string> {
+  return {
+    ...(automation?.modeId ? { mode: automation.modeId } : {}),
+    ...(automation?.reasoningEffort ? { effort: automation.reasoningEffort } : {}),
+  };
+}
+
+function controlValuesEqual(
+  left: Record<string, string>,
+  right: Record<string, string>,
+): boolean {
+  const leftEntries = Object.entries(left).filter(([, value]) => value.trim().length > 0);
+  const rightEntries = Object.entries(right).filter(([, value]) => value.trim().length > 0);
+  if (leftEntries.length !== rightEntries.length) {
+    return false;
+  }
+  return leftEntries.every(([key, value]) => right[key] === value);
+}
+
+function automationRunConfigName(title: string): string {
+  const trimmed = title.trim();
+  return `Automation · ${trimmed ? trimmed.slice(0, 80) : "Untitled"}`;
 }

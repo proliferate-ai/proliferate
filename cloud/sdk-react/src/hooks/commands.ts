@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   enqueueCommand,
   getCommandStatus,
@@ -6,8 +6,9 @@ import {
   type CloudCommandResponse,
   type CloudCommandStatus,
 } from "@proliferate/cloud-sdk";
-import { cloudCommandKey } from "../lib/query-keys.js";
+import { cloudCommandKey, cloudWorkspaceSnapshotKey } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
+import { invalidateCloudWorkspaceLists } from "./workspaces.js";
 
 export function useCloudCommandStatus(commandId: string | null, enabled = true) {
   const client = useCloudClient();
@@ -24,8 +25,18 @@ export function useCloudCommandStatus(commandId: string | null, enabled = true) 
 
 export function useEnqueueCloudCommand<TPayload>() {
   const client = useCloudClient();
+  const queryClient = useQueryClient();
   return useMutation<CloudCommandResponse, Error, CloudCommandEnvelope<TPayload>>({
     mutationFn: (command) => enqueueCommand(command, client),
+    onSuccess(result, command) {
+      invalidateCloudWorkspaceLists(queryClient);
+      const workspaceId = result.cloudWorkspaceId ?? command.cloudWorkspaceId ?? null;
+      if (workspaceId) {
+        void queryClient.invalidateQueries({
+          queryKey: cloudWorkspaceSnapshotKey(workspaceId),
+        });
+      }
+    },
   });
 }
 

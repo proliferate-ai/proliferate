@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import {
   PickerEmptyRow,
   PickerPopoverContent,
 } from "@/components/ui/PickerPopoverContent";
 import { PillControlButton } from "@/components/ui/PillControlButton";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import {
+  POPOVER_SURFACE_CLASS,
+  PopoverButton,
+} from "@/components/ui/PopoverButton";
 import {
   Check,
   ChevronRight,
@@ -16,9 +20,11 @@ import {
   Monitor,
   Search,
   Sparkles,
+  Terminal,
   X,
 } from "@/components/ui/icons";
 import { matchesPickerSearch } from "@/lib/infra/search/search";
+import type { ComputeLaunchTargetOption } from "@/lib/domain/compute/target-options";
 import type {
   HomeNextDestination,
   HomeNextRepoLaunchKind,
@@ -35,13 +41,23 @@ interface HomeTargetPickerProps {
   branchOptions: string[];
   branchLoading: boolean;
   cloudActionBySourceRoot: Record<string, CloudRepoActionState>;
+  sshTargetOptions: ComputeLaunchTargetOption[];
+  selectedSshTargetId: string | null;
+  sshTargetsLoading: boolean;
   onSelectCowork: () => void;
   onSelectRepository: (sourceRoot: string) => void;
-  onSelectRuntime: (launchKind: HomeNextRepoLaunchKind) => void;
+  onSelectRuntime: (launchKind: HomeNextRepoLaunchKind, targetId?: string | null) => void;
   onSelectBranch: (branchName: string) => void;
   onAddRepository: () => void;
   onConfigureCloud: (repository: SettingsRepositoryEntry) => void;
 }
+
+const TARGET_PICKER_SURFACE_CLASS = `w-60 min-w-[175px] ${POPOVER_SURFACE_CLASS}`;
+const TARGET_PICKER_SECTION_CLASS =
+  "flex min-h-6 items-center truncate px-2 py-1 text-sm leading-4 text-muted-foreground";
+const TARGET_PICKER_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-foreground/10";
+const TARGET_PICKER_TRIGGER_ICON_CLASS = "size-3.5";
+const TARGET_PICKER_MENU_ICON_CLASS = "size-full";
 
 function launchKindLabel(kind: HomeNextRepoLaunchKind): string {
   switch (kind) {
@@ -50,18 +66,39 @@ function launchKindLabel(kind: HomeNextRepoLaunchKind): string {
     case "local":
       return "Work locally";
     case "cloud":
-      return "Cloud workspace";
+      return "Cloud";
+    case "ssh":
+      return "SSH target";
   }
 }
 
-function launchKindIcon(kind: HomeNextRepoLaunchKind) {
+function launchKindIcon(
+  kind: HomeNextRepoLaunchKind,
+  target?: ComputeLaunchTargetOption | null,
+  variant: "trigger" | "menu" = "trigger",
+) {
+  if (kind === "ssh" && target) {
+    if (variant === "menu") {
+      return <ComputeTargetSwatch appearance={target.appearance} size="inherit" />;
+    }
+    return (
+      <span className={TARGET_PICKER_TRIGGER_ICON_CLASS}>
+        <ComputeTargetSwatch appearance={target.appearance} size="inherit" />
+      </span>
+    );
+  }
+  const iconClassName = variant === "menu"
+    ? TARGET_PICKER_MENU_ICON_CLASS
+    : TARGET_PICKER_TRIGGER_ICON_CLASS;
   switch (kind) {
     case "worktree":
-      return <GitBranchIcon className="size-3.5" />;
+      return <GitBranchIcon className={iconClassName} />;
     case "local":
-      return <Monitor className="size-3.5" />;
+      return <Monitor className={iconClassName} />;
     case "cloud":
-      return <CloudIcon className="size-3.5" />;
+      return <CloudIcon className={iconClassName} />;
+    case "ssh":
+      return <Terminal className={iconClassName} />;
   }
 }
 
@@ -77,22 +114,53 @@ function projectLabel(input: {
 
 function TargetSection({ label }: { label: string }) {
   return (
-    <div className="px-3 pb-1.5 pt-2.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/60">
+    <div className={TARGET_PICKER_SECTION_CLASS}>
       {label}
     </div>
   );
 }
 
-function targetRowSubtext(input: {
-  repository: SettingsRepositoryEntry;
-  launchKind: HomeNextRepoLaunchKind;
-  selectedBranchName: string | null;
-}): string {
-  if (input.launchKind === "local") {
-    return `${input.repository.name} · existing checkout`;
-  }
-
-  return `${input.repository.name} · ${input.selectedBranchName ?? "default branch"}`;
+function TargetPickerMenuItem({
+  icon,
+  label,
+  trailing,
+  disabled,
+  title,
+  onClick,
+}: {
+  icon?: ReactNode;
+  label: string;
+  trailing?: ReactNode;
+  disabled?: boolean;
+  title?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      className="group/menu-item flex w-full cursor-default select-none flex-col rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground outline-none transition-colors hover:bg-popover-accent focus:bg-popover-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+      onClick={(event: MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        onClick();
+      }}
+    >
+      <span className="flex w-full items-center gap-1.5">
+        {icon ? (
+          <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100">
+            {icon}
+          </span>
+        ) : null}
+        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+        {trailing ? (
+          <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100">
+            {trailing}
+          </span>
+        ) : null}
+      </span>
+    </button>
+  );
 }
 
 function runtimeOptionLabel(input: {
@@ -106,7 +174,7 @@ function runtimeOptionLabel(input: {
     return input.cloudAction.label;
   }
   if (input.cloudAction.kind === "configure") {
-    return "Configure cloud workspace";
+    return "Set up cloud";
   }
   if (input.cloudAction.kind === "hidden") {
     return "Cloud unavailable";
@@ -190,6 +258,9 @@ export function HomeTargetPicker({
   branchOptions,
   branchLoading,
   cloudActionBySourceRoot,
+  sshTargetOptions,
+  selectedSshTargetId,
+  sshTargetsLoading,
   onSelectCowork,
   onSelectRepository,
   onSelectRuntime,
@@ -210,11 +281,16 @@ export function HomeTargetPicker({
   const selectedRepositoryCloudAction: CloudRepoActionState = selectedRepository
     ? cloudActionBySourceRoot[selectedRepository.sourceRoot] ?? { kind: "hidden", label: null }
     : { kind: "hidden", label: null };
+  const selectedSshTarget =
+    sshTargetOptions.find((target) => target.id === selectedSshTargetId) ?? null;
+  const filteredSshTargetOptions = sshTargetOptions;
   const clearSearch = () => {
     setProjectSearchValue("");
     setRuntimeSearchValue("");
   };
-  const runtimeLabel = repoLaunchKind === "cloud"
+  const runtimeLabel = repoLaunchKind === "ssh"
+    ? selectedSshTarget?.label ?? launchKindLabel(repoLaunchKind)
+    : repoLaunchKind === "cloud"
     ? runtimeOptionLabel({
       launchKind: repoLaunchKind,
       cloudAction: selectedRepositoryCloudAction,
@@ -222,7 +298,7 @@ export function HomeTargetPicker({
     : launchKindLabel(repoLaunchKind);
   const runtimeButton = (
     <PillControlButton
-      icon={launchKindIcon(repoLaunchKind)}
+      icon={launchKindIcon(repoLaunchKind, selectedSshTarget)}
       label={destination === "cowork" ? "No repository" : runtimeLabel}
       disabled={!selectedRepository || destination === "cowork"}
       disclosure={!!selectedRepository && destination === "repository"}
@@ -313,12 +389,14 @@ export function HomeTargetPicker({
         <PopoverButton
           trigger={runtimeButton}
           side="top"
-          className="w-[22rem] rounded-xl border border-border bg-popover p-1 shadow-floating"
+          className={TARGET_PICKER_SURFACE_CLASS}
         >
           {(close) => (
-            <PickerPopoverContent>
-              <TargetSection label="Run in" />
-              {(["worktree", "local", "cloud"] as const).map((launchKind) => {
+            <PickerPopoverContent
+              className="max-h-[min(20rem,calc(100vh-1rem))]"
+              bodyClassName="py-0"
+            >
+              {(["local", "worktree", "cloud"] as const).map((launchKind) => {
                 const isSelected = repoLaunchKind === launchKind;
                 const cloudConfigure =
                   launchKind === "cloud" && selectedRepositoryCloudAction.kind === "configure";
@@ -327,9 +405,9 @@ export function HomeTargetPicker({
                 const cloudHidden =
                   launchKind === "cloud" && selectedRepositoryCloudAction.kind === "hidden";
                 return (
-                  <PopoverMenuItem
+                  <TargetPickerMenuItem
                     key={launchKind}
-                    icon={launchKindIcon(launchKind)}
+                    icon={launchKindIcon(launchKind, null, "menu")}
                     label={runtimeOptionLabel({
                       launchKind,
                       cloudAction: selectedRepositoryCloudAction,
@@ -347,17 +425,34 @@ export function HomeTargetPicker({
                       clearSearch();
                       close();
                     }}
-                  >
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground/80">
-                      {targetRowSubtext({
-                        repository: selectedRepository,
-                        launchKind,
-                        selectedBranchName,
-                      })}
-                    </span>
-                  </PopoverMenuItem>
+                  />
                 );
               })}
+              {sshTargetsLoading || filteredSshTargetOptions.length > 0 ? (
+                <div className={TARGET_PICKER_DIVIDER_CLASS} />
+              ) : null}
+              {sshTargetsLoading ? (
+                <PickerEmptyRow label="Loading targets" />
+              ) : filteredSshTargetOptions.length > 0 ? (
+                filteredSshTargetOptions.map((target) => {
+                  const isSelected = repoLaunchKind === "ssh" && selectedSshTargetId === target.id;
+                  return (
+                    <TargetPickerMenuItem
+                      key={`ssh:${target.id}`}
+                      icon={<ComputeTargetSwatch appearance={target.appearance} size="inherit" />}
+                      label={target.label}
+                      disabled={target.disabledReason !== null}
+                      title={target.disabledReason ?? undefined}
+                      trailing={isSelected ? <Check className="size-3.5" /> : null}
+                      onClick={() => {
+                        onSelectRuntime("ssh", target.id);
+                        clearSearch();
+                        close();
+                      }}
+                    />
+                  );
+                })
+              ) : null}
             </PickerPopoverContent>
           )}
         </PopoverButton>

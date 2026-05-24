@@ -175,6 +175,10 @@
       "types": "./dist/workspaces/model.d.ts",
       "import": "./dist/workspaces/model.js"
     },
+    "./workspaces/cloud-work-inventory": {
+      "types": "./dist/workspaces/cloud-work-inventory.d.ts",
+      "import": "./dist/workspaces/cloud-work-inventory.js"
+    },
     "./workspaces/presentation": {
       "types": "./dist/workspaces/presentation.d.ts",
       "import": "./dist/workspaces/presentation.js"

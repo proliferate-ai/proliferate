@@ -27,6 +27,11 @@ export type StartSessionPayload = {
   };
 };
 
+export type UpdateSessionConfigPayload = {
+  configId: string;
+  value: string;
+};
+
 type EnqueueCloudCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,
 ) => Promise<CloudCommandResponse>;
@@ -42,12 +47,24 @@ export async function dispatchPendingHomePrompt(args: {
   pendingPrompt: PendingHomePrompt;
   modelId: string | null;
   enqueueStartSession: EnqueueCloudCommand<StartSessionPayload>;
+  enqueueConfig: EnqueueCloudCommand<UpdateSessionConfigPayload>;
   enqueuePrompt: EnqueueCloudCommand<SendPromptPayload>;
   setLatestCommandId: (commandId: string) => void;
   onStatus: (status: string) => void;
   shouldContinue: () => boolean;
 }): Promise<PendingHomePromptDispatchResult> {
   const session = await startSessionForPrompt(args);
+  assertStillCurrent(args.shouldContinue);
+  await applyPendingSessionConfigUpdates({
+    client: args.client,
+    workspace: args.workspace,
+    session,
+    pendingPrompt: args.pendingPrompt,
+    enqueueConfig: args.enqueueConfig,
+    setLatestCommandId: args.setLatestCommandId,
+    onStatus: args.onStatus,
+    shouldContinue: args.shouldContinue,
+  });
   assertStillCurrent(args.shouldContinue);
   args.onStatus("Sending queued prompt.");
   const command = await args.enqueuePrompt({
@@ -98,8 +115,8 @@ async function startSessionForPrompt(args: {
     shouldContinue: args.shouldContinue,
   });
   assertStillCurrent(args.shouldContinue);
-  const agentKind = resolveAgentKind(args.workspace);
-  const modelId = agentKind === "codex" ? args.modelId : null;
+  const agentKind = args.pendingPrompt.agentKind ?? resolveAgentKind(args.workspace);
+  const modelId = args.pendingPrompt.modelId ?? args.modelId;
   const modeId = args.pendingPrompt.modeId;
   const command = await args.enqueueStartSession({
     idempotencyKey: `${args.pendingPrompt.id}:start-session`,
@@ -141,6 +158,47 @@ async function startSessionForPrompt(args: {
     updatedAt: null,
     createdAt: null,
   } as CloudSessionProjection;
+}
+
+async function applyPendingSessionConfigUpdates(args: {
+  client: ProliferateCloudClient;
+  workspace: CloudWorkspaceDetail;
+  session: CloudSessionProjection;
+  pendingPrompt: PendingHomePrompt;
+  enqueueConfig: EnqueueCloudCommand<UpdateSessionConfigPayload>;
+  setLatestCommandId: (commandId: string) => void;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<void> {
+  const updates = args.pendingPrompt.sessionConfigUpdates ?? [];
+  if (updates.length === 0) {
+    return;
+  }
+  args.onStatus("Applying session configuration.");
+  for (const update of updates) {
+    assertStillCurrent(args.shouldContinue);
+    const command = await args.enqueueConfig({
+      idempotencyKey: `${args.pendingPrompt.id}:config:${update.configId}`,
+      targetId: args.session.targetId,
+      workspaceId: args.session.workspaceId,
+      cloudWorkspaceId: args.workspace.id,
+      sessionId: args.session.sessionId,
+      kind: "update_session_config",
+      source: "web",
+      payload: update,
+    });
+    args.setLatestCommandId(command.commandId);
+    const completed = await waitForCommandTerminal(
+      command.commandId,
+      args.client,
+      args.shouldContinue,
+      args.onStatus,
+    );
+    assertCommandAccepted(completed);
+    if (configApplyState(completed) !== "applied") {
+      throw new Error("Session configuration was queued but not applied.");
+    }
+  }
 }
 
 export async function ensureManagedWorkspaceTargetConfigReady(
@@ -292,6 +350,11 @@ function parseStartedSessionId(command: CloudCommandResponse): string {
     }
   }
   throw new Error("Cloud session command completed without a session id.");
+}
+
+function configApplyState(command: CloudCommandResponse): string | null {
+  return nestedString(command.result?.body, "applyState")
+    ?? nestedString(command.result, "applyState");
 }
 
 function nestedObject(value: unknown, key: string): Record<string, unknown> | null {

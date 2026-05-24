@@ -13,13 +13,21 @@ import {
   validateAutomationRrule,
   validateAutomationTimezone,
 } from "@proliferate/product-model/automations/schedule";
+import {
+  buildCloudLaunchComposerControls,
+  buildLaunchRunConfigControlValues,
+  DEFAULT_DIRECT_PROMPT_AGENT_KIND,
+  DEFAULT_DIRECT_PROMPT_MODEL_ID,
+  resolveCloudLaunchSelection,
+  type CloudLaunchComposerSelection,
+} from "@proliferate/product-model/chats/cloud/composer-controls";
 import type {
-  CloudAgentRunConfig,
   CloudRepoConfigSummary,
   CreateAutomationRequest,
 } from "@proliferate/cloud-sdk";
 import {
-  useAgentRunConfigs,
+  useAgentRunConfigActions,
+  useCloudAgentCatalog,
   useAutomationActions,
   useAutomations,
   useCloudRepoConfigs,
@@ -35,7 +43,6 @@ import { ProductNotice } from "@proliferate/product-ui/layout/ProductNotice";
 import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
 
 const EMPTY_REPO_CONFIGS: CloudRepoConfigSummary[] = [];
-const EMPTY_AGENT_CONFIGS: CloudAgentRunConfig[] = [];
 const PERSONAL_OWNER_KEY = "personal";
 const DEFAULT_SCHEDULE_PRESET: AutomationSchedulePreset = "daily";
 const SCHEDULE_OPTIONS: AutomationCreateOption[] = AUTOMATION_SCHEDULE_PRESETS.map((option) => ({
@@ -46,14 +53,17 @@ const SCHEDULE_OPTIONS: AutomationCreateOption[] = AUTOMATION_SCHEDULE_PRESETS.m
 export function AutomationsScreen() {
   const automations = useAutomations();
   const repoConfigs = useCloudRepoConfigs();
-  const agentRunConfigs = useAgentRunConfigs({
-    ownerScope: "personal",
-    usableIn: "personal_sandboxes",
-    status: "active",
-  });
+  const agentCatalog = useCloudAgentCatalog();
   const actions = useAutomationActions();
+  const runConfigActions = useAgentRunConfigActions();
   const [createOpen, setCreateOpen] = useState(false);
   const [createValues, setCreateValues] = useState(createInitialFormValues);
+  const [launchSelection, setLaunchSelection] = useState<CloudLaunchComposerSelection>({
+    agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
+    modelId: DEFAULT_DIRECT_PROMPT_MODEL_ID,
+    modeId: null,
+    controlValues: {},
+  });
   const [createError, setCreateError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<{
@@ -65,9 +75,41 @@ export function AutomationsScreen() {
     () => buildRepoOptions(repoConfigs.data?.configs ?? EMPTY_REPO_CONFIGS),
     [repoConfigs.data?.configs],
   );
-  const runConfigOptions = useMemo(
-    () => buildRunConfigOptions(agentRunConfigs.data?.configs ?? EMPTY_AGENT_CONFIGS),
-    [agentRunConfigs.data?.configs],
+  const resolvedLaunchSelection = useMemo(
+    () => resolveCloudLaunchSelection({
+      catalog: agentCatalog.data,
+      selection: launchSelection,
+    }),
+    [agentCatalog.data, launchSelection],
+  );
+  const agentControls = useMemo(
+    () => buildCloudLaunchComposerControls({
+      catalog: agentCatalog.data,
+      selection: resolvedLaunchSelection,
+      onAgentModelSelect: (agentKind, modelId) => {
+        setLaunchSelection((current) => ({
+          agentKind,
+          modelId,
+          modeId: current.agentKind === agentKind ? current.modeId : null,
+          controlValues: current.agentKind === agentKind ? current.controlValues : {},
+        }));
+      },
+      onControlSelect: ({ controlKey, value }) => {
+        setLaunchSelection((current) => {
+          if (controlKey === "mode") {
+            return { ...current, modeId: value };
+          }
+          return {
+            ...current,
+            controlValues: {
+              ...current.controlValues,
+              [controlKey]: value,
+            },
+          };
+        });
+      },
+    }),
+    [agentCatalog.data, resolvedLaunchSelection],
   );
   const timezoneOptions = useMemo(
     () => automationTimezoneOptions(createValues.timezone),
@@ -82,29 +124,19 @@ export function AutomationsScreen() {
       const repoStillAvailable = repoOptions.some((option) =>
         option.value === current.repoKey && !option.disabled
       );
-      const configStillAvailable = runConfigOptions.some((option) =>
-        option.value === current.cloudAgentRunConfigId && !option.disabled
-      );
       const nextRepoKey = repoStillAvailable
         ? current.repoKey
         : repoOptions.find((option) => !option.disabled)?.value ?? "";
-      const nextConfigId = configStillAvailable
-        ? current.cloudAgentRunConfigId
-        : runConfigOptions.find((option) => !option.disabled)?.value ?? "";
 
-      if (
-        nextRepoKey === current.repoKey
-        && nextConfigId === current.cloudAgentRunConfigId
-      ) {
+      if (nextRepoKey === current.repoKey) {
         return current;
       }
       return {
         ...current,
         repoKey: nextRepoKey,
-        cloudAgentRunConfigId: nextConfigId,
       };
     });
-  }, [createOpen, repoOptions, runConfigOptions]);
+  }, [createOpen, repoOptions]);
 
   async function submitCreate() {
     setCreateError(null);
@@ -127,11 +159,8 @@ export function AutomationsScreen() {
       return;
     }
 
-    const selectedRunConfig = agentRunConfigs.data?.configs.find((config) =>
-      config.id === createValues.cloudAgentRunConfigId
-    );
-    if (!selectedRunConfig) {
-      setCreateError("Choose an active agent run config before creating the automation.");
+    if (!resolvedLaunchSelection.agentKind || !resolvedLaunchSelection.modelId) {
+      setCreateError("Choose an agent and model before creating the automation.");
       return;
     }
 
@@ -152,7 +181,22 @@ export function AutomationsScreen() {
       return;
     }
 
-    const body: CreateAutomationRequest = {
+    const runConfigName = `${title} agent`;
+    const runConfig = {
+      name: runConfigName,
+      ownerScope: "personal" as const,
+      organizationId: null,
+      agentKind: resolvedLaunchSelection.agentKind,
+      modelId: resolvedLaunchSelection.modelId,
+      controlValues: buildLaunchRunConfigControlValues({
+        catalog: agentCatalog.data,
+        selection: resolvedLaunchSelection,
+      }),
+      usableInPersonalSandboxes: true,
+      usableInSharedSandboxes: false,
+    };
+
+    const bodyBase: Omit<CreateAutomationRequest, "cloudAgentRunConfigId"> = {
       title,
       prompt,
       ownerScope: "personal",
@@ -161,14 +205,22 @@ export function AutomationsScreen() {
       gitRepoName: repoIdentity.gitRepoName,
       schedule,
       targetMode: "personal_cloud",
-      cloudAgentRunConfigId: selectedRunConfig.id,
     };
 
+    let createdRunConfigId: string | null = null;
     try {
-      await actions.createAutomation(body);
+      const createdRunConfig = await runConfigActions.createAgentRunConfig(runConfig);
+      createdRunConfigId = createdRunConfig.id;
+      await actions.createAutomation({
+        ...bodyBase,
+        cloudAgentRunConfigId: createdRunConfig.id,
+      });
       setCreateValues(createInitialFormValues());
       setCreateOpen(false);
     } catch (error) {
+      if (createdRunConfigId) {
+        void runConfigActions.deleteAgentRunConfig(createdRunConfigId).catch(() => undefined);
+      }
       setCreateError(error instanceof Error ? error.message : "Automation could not be created.");
     }
   }
@@ -194,9 +246,10 @@ export function AutomationsScreen() {
     }
   }
 
-  const optionLoadError = repoConfigs.error || agentRunConfigs.error
-    ? "Could not load repo or agent config options. Retry from the page or refresh."
+  const optionLoadError = repoConfigs.error || agentCatalog.error
+    ? "Could not load repo or agent options. Retry from the page or refresh."
     : null;
+  const submitting = actions.creatingAutomation || runConfigActions.creatingAgentRunConfig;
 
   return (
     <ProductPageShell
@@ -212,9 +265,9 @@ export function AutomationsScreen() {
             repoOptions={repoOptions}
             scheduleOptions={SCHEDULE_OPTIONS}
             timezoneOptions={timezoneOptions}
-            runConfigOptions={runConfigOptions}
-            loadingOptions={repoConfigs.isLoading || agentRunConfigs.isLoading}
-            submitting={actions.creatingAutomation}
+            agentControls={agentControls}
+            loadingOptions={repoConfigs.isLoading || agentCatalog.isLoading}
+            submitting={submitting}
             error={createError ?? optionLoadError}
             timeDisabled={!schedulePresetAcceptsTime(
               parseSchedulePreset(createValues.schedulePreset) ?? "custom",
@@ -284,7 +337,6 @@ function createInitialFormValues(): AutomationCreateFormValues {
     schedulePreset: DEFAULT_SCHEDULE_PRESET,
     scheduleTime: "09:00",
     timezone: defaultAutomationTimezone(),
-    cloudAgentRunConfigId: "",
   };
 }
 
@@ -294,15 +346,6 @@ function buildRepoOptions(configs: CloudRepoConfigSummary[]): AutomationCreateOp
     label: `${config.gitOwner}/${config.gitRepoName}${config.configured ? "" : " (not configured)"}`,
     disabled: !config.configured,
   }));
-}
-
-function buildRunConfigOptions(configs: CloudAgentRunConfig[]): AutomationCreateOption[] {
-  return configs
-    .filter((config) => config.status === "active")
-    .map((config) => ({
-      value: config.id,
-      label: `${config.name} (${config.agentKind} - ${config.modelId})`,
-    }));
 }
 
 function repoKey(gitOwner: string, gitRepoName: string): string {

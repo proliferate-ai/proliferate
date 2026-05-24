@@ -37,6 +37,7 @@ import {
   putSessionRecord,
 } from "@/stores/sessions/session-records";
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
+import { mergeLiveDefaultLaunchControls } from "@/lib/domain/sessions/creation/launch-controls";
 import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
 import { materializeSessionRecord } from "@/hooks/sessions/workflows/session-creation-local-state";
 import {
@@ -144,6 +145,7 @@ export function useCoworkThreadWorkflow() {
     agentKind: string;
     modelId: string;
     modeId?: string | null;
+    launchControlValues?: Record<string, string>;
     draftText?: string | null;
     sourceWorkspaceId?: string | null;
   }) => {
@@ -177,6 +179,7 @@ export function useCoworkThreadWorkflow() {
         agentKind: input.agentKind,
         modelId: input.modelId,
         modeId,
+        launchControlValues: input.launchControlValues,
         displayTitle: input.modelId,
       },
     });
@@ -221,8 +224,11 @@ export function useCoworkThreadWorkflow() {
         session: result.session,
         agentKind: input.agentKind,
         modelRegistries,
-        defaultLiveSessionControlValuesByAgentKind:
-          preferences.defaultLiveSessionControlValuesByAgentKind,
+        defaultLiveSessionControlValuesByAgentKind: mergeLiveDefaultLaunchControls({
+          defaults: preferences.defaultLiveSessionControlValuesByAgentKind,
+          agentKind: input.agentKind,
+          values: input.launchControlValues ?? {},
+        }),
       });
 
       if (!isAttemptCurrent(entry.attemptId)) {
@@ -392,6 +398,7 @@ export function useCoworkThreadWorkflow() {
     agentKind: string;
     modelId: string;
     modeId?: string | null;
+    launchControlValues?: Record<string, string>;
     draftText?: string | null;
     sourceWorkspaceId?: string | null;
   }) => {
@@ -399,6 +406,7 @@ export function useCoworkThreadWorkflow() {
       agentKind: input.agentKind,
       modelId: input.modelId,
       modeId: input.modeId,
+      launchControlValues: input.launchControlValues,
       draftText: input.draftText,
       sourceWorkspaceId: input.sourceWorkspaceId,
     });

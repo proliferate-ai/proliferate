@@ -22,6 +22,10 @@ export function cloudCapabilitiesKey() {
   return [...cloudRootKey(), "capabilities"] as const;
 }
 
+export function cloudAgentCatalogKey() {
+  return [...cloudRootKey(), "agent-catalog", "v1"] as const;
+}
+
 export function agentAuthCredentialsKey(
   organizationId: string | null = null,
   agentKind: string | null = null,
@@ -138,14 +142,16 @@ export function cloudWorkspaceConnectionKey(
   ] as const;
 }
 
+export function cloudWorkspacesListRootKey() {
+  return [...cloudRootKey(), "workspaces", "list"] as const;
+}
+
 export function cloudWorkspacesKey(
   owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
   scope: string | null = null,
 ) {
   return [
-    ...cloudRootKey(),
-    "workspaces",
-    "list",
+    ...cloudWorkspacesListRootKey(),
     owner.ownerScope,
     owner.organizationId,
     scope,
@@ -224,6 +230,22 @@ export function agentRunConfigsListKey(
 
 export function agentRunConfigKey(configId: string | null) {
   return [...agentRunConfigsRootKey(), "detail", configId] as const;
+}
+
+export interface AgentRunConfigDefaultsKeyOptions {
+  ownerScope?: CloudOwnerScope | null;
+  organizationId?: string | null;
+}
+
+export function agentRunConfigDefaultsKey(
+  options: AgentRunConfigDefaultsKeyOptions = {},
+) {
+  return [
+    ...agentRunConfigsRootKey(),
+    "defaults",
+    options.ownerScope ?? "personal",
+    options.organizationId ?? null,
+  ] as const;
 }
 
 export function organizationsRootKey() {

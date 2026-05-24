@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
+import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-target-options";
+import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/use-mobility-footer-context";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 import { useMobilityPromptState } from "@/hooks/workspaces/mobility/use-mobility-prompt-state";
@@ -11,11 +13,17 @@ import { isWorkspaceMobilityTransitionPhase } from "@/lib/domain/workspaces/mobi
 import { resolveMobilityFooterProgressStatus } from "@/lib/domain/workspaces/mobility/mobility-footer-progress";
 import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
 import { isMobilityPromptPrimaryActionPending } from "@/lib/domain/workspaces/mobility/mobility-prompt";
+import {
+  buildWorkspaceMobilityDestinationOptions,
+  type WorkspaceMobilityDestinationId,
+  type WorkspaceMobilityDestinationOption,
+} from "@/lib/domain/workspaces/mobility/mobility-destinations";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
 
 export function useWorkspaceMobilityFooterFlow() {
   const { openExternal } = useTauriShellActions();
+  const footerContext = useMobilityFooterContext();
   const showToast = useToastStore((state) => state.show);
   const {
     signIn: signInWithGitHub,
@@ -25,6 +33,9 @@ export function useWorkspaceMobilityFooterFlow() {
   } = useGitHubSignIn();
   const { data: githubAuthAvailability } = useGitHubDesktopAuthAvailability();
   const mobilityState = useWorkspaceMobilityState();
+  const computeTargets = useComputeTargetOptions({
+    enabled: Boolean(footerContext),
+  });
   const {
     activatePromptRequest,
     clearPrompt,
@@ -38,14 +49,33 @@ export function useWorkspaceMobilityFooterFlow() {
   const [isPreparing, setIsPreparing] = useState(false);
   const [hasResolvedPrompt, setHasResolvedPrompt] = useState(false);
   const [preparationError, setPreparationError] = useState<string | null>(null);
+  const [selectedDestinationId, setSelectedDestinationId] =
+    useState<WorkspaceMobilityDestinationId | null>(null);
   const [isOpeningGitHubAccess, setIsOpeningGitHubAccess] = useState(false);
   const [optimisticProgressDirection, setOptimisticProgressDirection] =
     useState<WorkspaceMobilityDirection | null>(null);
   const prepareRequestTokenRef = useRef(0);
+  const destinationOptions = useMemo(() => (
+    footerContext
+      ? buildWorkspaceMobilityDestinationOptions({
+        locationKind: footerContext.locationKind,
+        sshTargets: computeTargets.sshTargetOptions,
+      })
+      : []
+  ), [
+    computeTargets.sshTargetOptions,
+    footerContext,
+  ]);
+  const selectedDestination = useMemo(() => (
+    destinationOptions.find((option) => option.id === selectedDestinationId) ?? null
+  ), [
+    destinationOptions,
+    selectedDestinationId,
+  ]);
   const rawPrompt = useMobilityPromptState(
     isPreparing,
     hasResolvedPrompt,
-    popoverOpen && !mobilityState.selectionLocked,
+    popoverOpen && selectedDestination !== null && !mobilityState.selectionLocked,
     preparationError,
   );
   const prompt = mobilityState.selectionLocked ? null : rawPrompt;
@@ -137,6 +167,7 @@ export function useWorkspaceMobilityFooterFlow() {
 
   useEffect(() => {
     resetPromptState();
+    setSelectedDestinationId(null);
     setOptimisticProgressDirection(null);
   }, [mobilityState.selectedLogicalWorkspaceId, resetPromptState]);
 
@@ -155,11 +186,11 @@ export function useWorkspaceMobilityFooterFlow() {
   ]);
 
   useEffect(() => {
-    if (!popoverOpen) {
+    if (!popoverOpen || !selectedDestination) {
       return;
     }
 
-    if (mobilityState.selectionLocked || !canPrepare) {
+    if (mobilityState.selectionLocked || !selectedDestination.direction || !canPrepare) {
       setIsPreparing(false);
       setHasResolvedPrompt(true);
       setPreparationError(null);
@@ -178,6 +209,7 @@ export function useWorkspaceMobilityFooterFlow() {
     mobilityState.selectionLocked,
     popoverOpen,
     runPromptPreparation,
+    selectedDestination,
   ]);
 
   useEffect(() => {
@@ -187,6 +219,7 @@ export function useWorkspaceMobilityFooterFlow() {
 
     setPopoverOpen(false);
     resetPromptState();
+    setSelectedDestinationId(null);
     clearPromptRequest();
     clearPrompt();
   }, [
@@ -200,6 +233,7 @@ export function useWorkspaceMobilityFooterFlow() {
   const closePopover = useCallback(() => {
     setPopoverOpen(false);
     resetPromptState();
+    setSelectedDestinationId(null);
     clearPromptRequest();
     clearPrompt();
   }, [
@@ -224,6 +258,7 @@ export function useWorkspaceMobilityFooterFlow() {
     setPopoverOpen(open);
     if (!open) {
       resetPromptState();
+      setSelectedDestinationId(null);
       clearPromptRequest();
       clearPrompt();
     }
@@ -233,6 +268,31 @@ export function useWorkspaceMobilityFooterFlow() {
     clearPromptRequest,
     mobilityState.selectedLogicalWorkspaceId,
     mobilityState.selectionLocked,
+    resetPromptState,
+  ]);
+
+  const handleDestinationSelect = useCallback((destination: WorkspaceMobilityDestinationOption) => {
+    if (destination.disabledReason) {
+      return;
+    }
+    resetPromptState();
+    clearPromptRequest();
+    clearPrompt();
+    setSelectedDestinationId(destination.id);
+  }, [
+    clearPrompt,
+    clearPromptRequest,
+    resetPromptState,
+  ]);
+
+  const handleDestinationBack = useCallback(() => {
+    resetPromptState();
+    clearPromptRequest();
+    clearPrompt();
+    setSelectedDestinationId(null);
+  }, [
+    clearPrompt,
+    clearPromptRequest,
     resetPromptState,
   ]);
 
@@ -246,6 +306,7 @@ export function useWorkspaceMobilityFooterFlow() {
         setOptimisticProgressDirection(mobilityState.confirmSnapshot?.direction ?? mobilityState.status.direction);
         setPopoverOpen(false);
         resetPromptState();
+        setSelectedDestinationId(null);
         clearPromptRequest();
         try {
           await confirmMove();
@@ -323,6 +384,8 @@ export function useWorkspaceMobilityFooterFlow() {
 
   return {
     prompt,
+    destinationOptions,
+    selectedDestinationId,
     progressStatus,
     popoverOpen,
     confirmSnapshot: mobilityState.confirmSnapshot,
@@ -336,6 +399,8 @@ export function useWorkspaceMobilityFooterFlow() {
       : false,
     handlePopoverOpenChange,
     closePopover,
+    handleDestinationSelect,
+    handleDestinationBack,
     handlePrimaryAction,
   };
 }

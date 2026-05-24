@@ -25,15 +25,19 @@ export function ComputePane({ initialTargetId = null }: ComputePaneProps) {
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const { data, isLoading } = useCloudTargets();
   const targets: ComputeTargetSummary[] = data ?? EMPTY_TARGETS;
+  const sshTargets = useMemo(
+    () => targets.filter((target) => target.kind === "ssh"),
+    [targets],
+  );
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const consumedInitialTargetIdRef = useRef<string | null>(null);
   const selectedTargetExists = selectedTargetId
-    ? targets.some((target) => target.id === selectedTargetId)
+    ? sshTargets.some((target) => target.id === selectedTargetId)
     : false;
   const effectiveTargetId = selectedTargetExists ? selectedTargetId : null;
   const selectedSummary = useMemo(
-    () => targets.find((target) => target.id === effectiveTargetId) ?? null,
-    [effectiveTargetId, targets],
+    () => sshTargets.find((target) => target.id === effectiveTargetId) ?? null,
+    [effectiveTargetId, sshTargets],
   );
   const { data: selectedDetail, isLoading: detailLoading } = useCloudTarget(
     effectiveTargetId,
@@ -46,18 +50,18 @@ export function ComputePane({ initialTargetId = null }: ComputePaneProps) {
     if (
       initialTargetId
       && consumedInitialTargetIdRef.current !== initialTargetId
-      && targets.some((target) => target.id === initialTargetId)
+      && sshTargets.some((target) => target.id === initialTargetId)
     ) {
       consumedInitialTargetIdRef.current = initialTargetId;
       setSelectedTargetId(initialTargetId);
     }
-  }, [initialTargetId, targets]);
+  }, [initialTargetId, sshTargets]);
 
   useEffect(() => {
-    if (selectedTargetId && !targets.some((target) => target.id === selectedTargetId)) {
+    if (selectedTargetId && !sshTargets.some((target) => target.id === selectedTargetId)) {
       setSelectedTargetId(null);
     }
-  }, [selectedTargetId, targets]);
+  }, [selectedTargetId, sshTargets]);
 
   const commonDialog = (
     <AddSshTargetDialog
@@ -125,7 +129,7 @@ export function ComputePane({ initialTargetId = null }: ComputePaneProps) {
       />
 
       <ComputeTargetList
-        targets={targets}
+        targets={sshTargets}
         appearancePreferences={appearancePreferences.preferences}
         loading={isLoading || appearancePreferences.loading}
         selectedTargetId={effectiveTargetId}

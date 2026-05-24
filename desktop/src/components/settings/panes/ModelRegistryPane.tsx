@@ -47,21 +47,21 @@ export function ModelRegistryPane({
   }
 
   return (
-    <div className="border-t border-border/60 px-3 py-2">
+    <div className="px-1 py-1">
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
           aria-expanded={expanded}
           aria-controls={listId}
-          className="group flex min-w-0 flex-1 items-center gap-2 rounded-md py-1 text-left"
+          className="group flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-muted-foreground hover:bg-muted/35 hover:text-foreground/80"
           onClick={() => setExpanded((value) => !value)}
         >
           <ChevronDown
-            className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? "" : "-rotate-90"}`}
+            className={`size-3 shrink-0 text-foreground-tertiary transition-transform ${expanded ? "" : "-rotate-90"}`}
           />
-          <span className="min-w-0">
-            <span className="block text-sm font-medium text-foreground">Visible models</span>
-            <span className="block text-xs text-muted-foreground">
+          <span className="flex min-w-0 items-baseline gap-1.5">
+            <span className="truncate text-xs font-medium">Visible models</span>
+            <span className="shrink-0 text-xs text-foreground-tertiary">
               {visibleCount}/{models.length} shown
             </span>
           </span>
@@ -69,9 +69,10 @@ export function ModelRegistryPane({
         {refreshable ? (
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
             loading={refreshing}
+            className="h-7 text-xs text-muted-foreground"
             onClick={onRefresh}
           >
             Refresh
@@ -79,7 +80,7 @@ export function ModelRegistryPane({
         ) : null}
       </div>
       {expanded ? (
-        <div id={listId} className="pt-2">
+        <div id={listId} className="pl-5 pt-1.5">
           <Input
             aria-label={`Search ${agentKind} models`}
             className="mb-2 h-8 px-2"

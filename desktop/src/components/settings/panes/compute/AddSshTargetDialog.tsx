@@ -13,8 +13,9 @@ import {
   type ComputeTargetColorId,
   type ComputeTargetIconId,
 } from "@/lib/domain/compute/target-appearance";
+import type { SshTargetConnectPhase } from "@/lib/workflows/compute/ssh-target-connect-workflow";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
-import { ComputeTargetIconGlyph } from "./ComputeTargetSwatch";
+import { ComputeTargetIconGlyph } from "@/components/compute/ComputeTargetSwatch";
 import { EnrollmentCommandBlock } from "./EnrollmentCommandBlock";
 
 interface AddSshTargetDialogProps {
@@ -44,10 +45,13 @@ export function AddSshTargetDialog({
   const canCreateOrganizationTarget = Boolean(activeOrganizationId && admin.isAdmin);
   const {
     enrollment,
+    phaseState,
     isCreating,
     clearEnrollment,
     startSshEnrollment,
   } = useComputeTargetEnrollment();
+  const connected = phaseState?.phase === "connected";
+  const failed = phaseState?.phase === "failed";
 
   const close = () => {
     clearEnrollment();
@@ -89,12 +93,12 @@ export function AddSshTargetDialog({
     <ModalShell
       open={open}
       onClose={close}
-      title="Add SSH target"
-      description="Create a one-time enrollment command for a machine you can SSH into."
+      title="Connect SSH target"
+      description="Enter SSH details once. Desktop will install the target runtime and verify the connection."
       sizeClassName="max-w-2xl"
       footer={(
         <Button type="button" variant="outline" onClick={close}>
-          Done
+          {connected ? "Done" : "Cancel"}
         </Button>
       )}
     >
@@ -253,12 +257,55 @@ export function AddSshTargetDialog({
             loading={isCreating}
             disabled={!displayName.trim() || !sshHost.trim() || !sshUser.trim()}
           >
-            {COMPUTE_COPY.createEnrollmentCommand}
+            {COMPUTE_COPY.connectTarget}
           </Button>
         )}
+        {phaseState && (
+          <div className="rounded-md border border-border/60 bg-foreground/5 p-3 text-sm">
+            <div className="font-medium text-foreground">{phaseState.label}</div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {phaseHelp(phaseState.phase)}
+            </p>
+          </div>
+        )}
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {enrollment && <EnrollmentCommandBlock command={enrollment.installCommand} />}
+        {connected && enrollment?.localUrl && (
+          <p className="text-sm text-muted-foreground">
+            {COMPUTE_COPY.connectSuccess} {enrollment.localUrl}.
+          </p>
+        )}
+        {connected && enrollment && !enrollment.localUrl && (
+          <p className="text-sm text-muted-foreground">
+            {COMPUTE_COPY.connectSuccessNoTunnel}
+          </p>
+        )}
+        {failed && enrollment && !isCreating && (
+          <EnrollmentCommandBlock command={enrollment.installCommand} />
+        )}
       </form>
     </ModalShell>
   );
+}
+
+function phaseHelp(phase: SshTargetConnectPhase): string {
+  switch (phase) {
+    case "checking_ssh":
+      return "Checking that this Desktop can reach the target over SSH.";
+    case "creating_enrollment":
+      return "Preparing the Cloud target record and single-use worker enrollment.";
+    case "saving_profile":
+      return "Saving SSH connection details locally on this Desktop.";
+    case "installing_runtime":
+      return "Streaming the Proliferate installer to the target over SSH.";
+    case "waiting_for_worker":
+      return "Waiting for the remote worker to enroll and report inventory.";
+    case "verifying_desktop_access":
+      return "Opening an SSH tunnel to the target AnyHarness runtime.";
+    case "connected":
+      return "The target is connected and ready for launch preflight checks.";
+    case "failed":
+      return "Automatic setup stopped. Use the recovery details below, or cancel and try again.";
+    case "idle":
+      return "Ready to connect.";
+  }
 }

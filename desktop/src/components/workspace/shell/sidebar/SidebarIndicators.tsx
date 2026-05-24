@@ -127,6 +127,7 @@ function SidebarDetailIndicatorView({
       <Tooltip content={indicator.tooltip} className="inline-flex shrink-0 items-center justify-center">
         <SidebarWorkspaceVariantIcon
           variant={indicator.variant}
+          targetAppearance={indicator.targetAppearance ?? null}
           className={`size-3 ${className}`}
         />
       </Tooltip>

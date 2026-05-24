@@ -1,4 +1,5 @@
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import type { ComputeLaunchTargetOption } from "@/lib/domain/compute/target-options";
 import type {
   AutomationExecutionTarget,
   AutomationTargetCloudWorkspaceRecord,
@@ -11,6 +12,7 @@ export interface AutomationTargetSelection {
   executionTarget: AutomationExecutionTarget;
   gitOwner: string;
   gitRepoName: string;
+  cloudTargetId?: string | null;
 }
 
 export interface AutomationTargetRepoIdentity {
@@ -27,6 +29,7 @@ export type AutomationTargetRow =
     label: string;
     description: string | null;
     target: AutomationTargetSelection;
+    computeTargetOption?: ComputeLaunchTargetOption | null;
     disabledReason: string | null;
     selected: boolean;
   }
@@ -60,6 +63,7 @@ export interface AutomationTargetState {
 interface BuildAutomationTargetStateInput {
   repoConfigs: readonly AutomationTargetRepoConfigRecord[] | null | undefined;
   cloudWorkspaces?: readonly AutomationTargetCloudWorkspaceRecord[] | null | undefined;
+  sshTargets?: readonly ComputeLaunchTargetOption[] | null | undefined;
   repositories: readonly SettingsRepositoryEntry[] | null | undefined;
   selectedTarget: AutomationTargetSelection | null;
   savedTarget?: AutomationTargetSelection | null;
@@ -83,6 +87,7 @@ interface TargetRepoDraft {
 export function buildAutomationTargetState({
   repoConfigs,
   cloudWorkspaces,
+  sshTargets,
   repositories,
   selectedTarget,
   savedTarget = null,
@@ -111,18 +116,21 @@ export function buildAutomationTargetState({
     cloudAvailable,
   );
   const groups = repoDrafts.map((draft) =>
-    buildTargetGroup(draft, effectiveTarget, cloudAvailable)
+    buildTargetGroup(draft, effectiveTarget, cloudAvailable, sshTargets ?? [])
   );
   const selectedRow = findSelectedTargetRow(groups, effectiveTarget);
+  const unsupportedReason = effectiveTarget?.executionTarget === "ssh"
+    ? "SSH automation dispatch is not wired yet."
+    : null;
   const disabledReason = effectiveTarget
-    ? selectedRow?.disabledReason ?? null
+    ? selectedRow?.disabledReason ?? unsupportedReason
     : "Select a local worktree or configured cloud workspace.";
 
   return {
     groups,
     selectedTarget: effectiveTarget,
     selectedRow,
-    canSubmit: Boolean(effectiveTarget && selectedRow && !selectedRow.disabledReason),
+    canSubmit: Boolean(effectiveTarget && selectedRow && !selectedRow.disabledReason && !unsupportedReason),
     disabledReason,
   };
 }
@@ -139,7 +147,11 @@ export function isSameAutomationRepo(
 }
 
 export function automationTargetId(target: AutomationTargetSelection): string {
-  return `${repoKey(target.gitOwner, target.gitRepoName)}:${target.executionTarget}`;
+  return [
+    repoKey(target.gitOwner, target.gitRepoName),
+    target.executionTarget,
+    target.cloudTargetId ?? null,
+  ].filter(Boolean).join(":");
 }
 
 function buildTargetRepoDrafts(input: {
@@ -238,6 +250,7 @@ function buildTargetGroup(
   draft: TargetRepoDraft,
   selectedTarget: AutomationTargetSelection | null,
   cloudAvailable: boolean,
+  sshTargets: readonly ComputeLaunchTargetOption[],
 ): AutomationTargetGroup {
   const rows: AutomationTargetRow[] = [];
   const hasCloudTargetRow =
@@ -295,6 +308,27 @@ function buildTargetGroup(
       description: "Run on this device in a local AnyHarness worktree.",
       target,
       disabledReason: draft.hasLocalRepository ? null : "Local repository is unavailable.",
+      selected: isSameAutomationTarget(selectedTarget, target),
+    });
+  }
+
+  for (const sshTarget of sshTargets) {
+    const target = {
+      executionTarget: "ssh",
+      gitOwner: draft.gitOwner,
+      gitRepoName: draft.gitRepoName,
+      cloudTargetId: sshTarget.id,
+    } satisfies AutomationTargetSelection;
+    rows.push({
+      kind: "target",
+      id: automationTargetId(target),
+      repoKey: draft.repoKey,
+      repoLabel: draft.label,
+      label: sshTarget.label,
+      description: sshTarget.detail,
+      target,
+      computeTargetOption: sshTarget,
+      disabledReason: sshTarget.disabledReason,
       selected: isSameAutomationTarget(selectedTarget, target),
     });
   }
@@ -357,6 +391,10 @@ function constrainTargetToRows(
       : firstDefaultTarget([draft], cloudAvailable);
   }
 
+  if (target.executionTarget === "ssh") {
+    return target.cloudTargetId ? target : firstDefaultTarget([draft], cloudAvailable);
+  }
+
   return draft.hasLocalRepository || draft.hasSavedLocalTarget
     ? target
     : firstDefaultTarget([draft], cloudAvailable);
@@ -389,6 +427,7 @@ function isSameAutomationTarget(
     left
     && right
     && left.executionTarget === right.executionTarget
+    && (left.executionTarget !== "ssh" || left.cloudTargetId === right.cloudTargetId)
     && isSameAutomationRepo(left, right),
   );
 }

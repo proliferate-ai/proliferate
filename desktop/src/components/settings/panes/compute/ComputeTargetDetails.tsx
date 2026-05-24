@@ -7,6 +7,8 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@/components/ui/Label";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
+import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
+import { useComputeTargetEnrollment } from "@/hooks/settings/workflows/use-compute-target-enrollment";
 import { useSshDirectTargetProfile } from "@/hooks/settings/workflows/use-ssh-direct-target-profile";
 import { useSandboxProfileTargetState } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 import { useSandboxProfileRuntimeConfig } from "@proliferate/cloud-sdk-react/hooks/runtime-config";
@@ -29,8 +31,9 @@ import type {
   ComputeTargetSummary,
 } from "@/lib/domain/compute/target-types";
 import { ComputeTargetAgentAuthCard } from "./ComputeTargetAgentAuthCard";
+import { EnrollmentCommandBlock } from "./EnrollmentCommandBlock";
 import { ComputeTargetReadiness } from "./ComputeTargetReadiness";
-import { ComputeTargetIconGlyph, ComputeTargetSwatch } from "./ComputeTargetSwatch";
+import { ComputeTargetIconGlyph, ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
 
 interface ComputeTargetDetailsProps {
   target: ComputeTargetDetail | ComputeTargetSummary | null;
@@ -52,6 +55,8 @@ export function ComputeTargetDetails({
   const directProfile = useSshDirectTargetProfile(
     target?.kind === "ssh" ? target.id : null,
   );
+  const reconnect = useComputeTargetEnrollment();
+  const targetOrgAdmin = useIsAdmin(target?.organizationId ?? null);
   const readinessSandboxProfileId = target?.sandboxProfileId ?? null;
   const shouldLoadSandboxReadiness = target?.kind === "managed_cloud"
     && readinessSandboxProfileId !== null;
@@ -146,6 +151,8 @@ export function ComputeTargetDetails({
   const canTestConnection = target.kind === "ssh"
     && Boolean(sshHost.trim())
     && Boolean(sshUser.trim());
+  const canReconnect = canTestConnection
+    && (target.ownerScope !== "organization" || targetOrgAdmin.isAdmin);
 
   async function handleSave() {
     if (!target) {
@@ -177,6 +184,35 @@ export function ComputeTargetDetails({
     try {
       const result = await directProfile.testConnection(buildSshProfileInput(target.id));
       setFeedback(`${COMPUTE_COPY.testConnectionSuccess} ${result.localUrl}.`);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : COMPUTE_COPY.testConnectionError);
+    }
+  }
+
+  async function handleReconnect() {
+    if (!target || target.kind !== "ssh") {
+      return;
+    }
+    setFeedback(null);
+    try {
+      const profileInput = buildSshProfileInput(target.id);
+      const result = await reconnect.reconnectSshTarget({
+        targetId: target.id,
+        displayName: displayName.trim() || target.displayName,
+        ownerScope: target.ownerScope,
+        organizationId: target.organizationId ?? null,
+        defaultWorkspaceRoot: workspaceRoot.trim() || target.defaultWorkspaceRoot || null,
+        directAccess: profileInput,
+        appearance: {
+          iconId,
+          colorId,
+        },
+      });
+      setFeedback(
+        result.localUrl
+          ? `${COMPUTE_COPY.connectSuccess} ${result.localUrl}.`
+          : COMPUTE_COPY.connectSuccessNoTunnel,
+      );
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : COMPUTE_COPY.testConnectionError);
     }
@@ -223,16 +259,33 @@ export function ComputeTargetDetails({
               {computeTargetStatusLabel(target.status)}
             </Badge>
             {target.kind === "ssh" && (
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={!canTestConnection}
-                loading={directProfile.testing}
-                onClick={() => { void handleTestConnection(); }}
-              >
-                <RefreshCw className="size-3.5" />
-                {COMPUTE_COPY.testConnection}
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={!canReconnect}
+                  loading={reconnect.isCreating}
+                  onClick={() => { void handleReconnect(); }}
+                  title={
+                    target.ownerScope === "organization" && !targetOrgAdmin.isAdmin
+                      ? "Only organization admins can reconnect shared SSH targets."
+                      : undefined
+                  }
+                >
+                  <RefreshCw className="size-3.5" />
+                  {COMPUTE_COPY.reconnectTarget}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={!canTestConnection}
+                  loading={directProfile.testing}
+                  onClick={() => { void handleTestConnection(); }}
+                >
+                  <RefreshCw className="size-3.5" />
+                  {COMPUTE_COPY.testConnection}
+                </Button>
+              </>
             )}
             <Button type="button" onClick={() => { void handleSave(); }}>
               <Check className="size-3.5" />
@@ -411,7 +464,17 @@ export function ComputeTargetDetails({
           )}
         </section>
 
+        {reconnect.phaseState && (
+          <div className="rounded-md border border-border/60 bg-foreground/5 p-3 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{reconnect.phaseState.label}</span>
+          </div>
+        )}
+
         {feedback && <p className="text-xs text-muted-foreground">{feedback}</p>}
+
+        {reconnect.phaseState?.phase === "failed" && reconnect.enrollment && !reconnect.isCreating && (
+          <EnrollmentCommandBlock command={reconnect.enrollment.installCommand} />
+        )}
 
         {target.status !== "archived" && (
           <>

@@ -16,7 +16,7 @@ import {
 } from "@/lib/domain/compute/target-appearance";
 import type { ComputeTargetSummary } from "@/lib/domain/compute/target-types";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
-import { ComputeTargetSwatch } from "./ComputeTargetSwatch";
+import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
 
 interface ComputeTargetListProps {
   targets: ComputeTargetSummary[];
@@ -46,13 +46,13 @@ export function ComputeTargetList({
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-medium text-foreground">Targets</h3>
+              <h3 className="text-sm font-medium text-foreground">SSH Targets</h3>
               {!loading && targets.length > 0 ? (
                 <Badge tone="neutral">{targetCountLabel(targets.length)}</Badge>
               ) : null}
             </div>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Select a runtime target to inspect readiness, access, and auth.
+              Select an SSH target to inspect setup, readiness, local access, and auth.
             </p>
           </div>
         </div>

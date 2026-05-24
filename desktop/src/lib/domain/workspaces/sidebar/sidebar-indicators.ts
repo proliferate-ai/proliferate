@@ -1,6 +1,7 @@
 import type { Workspace } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@proliferate/product-model/sessions/activity";
 import { resolveWorkspaceExecutionSidebarActivityState } from "@proliferate/product-model/sessions/activity";
+import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
 import { isCloudWorkspacePending } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import type {
   CloudWorkspaceExposureState,
@@ -11,7 +12,7 @@ import { automationWorkspaceDefaultDisplayNameFromBranch } from "@/lib/domain/wo
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import type { SidebarCloudWorkspaceSummary } from "./cloud-workspace";
 
-export type SidebarWorkspaceVariant = "local" | "worktree" | "cloud";
+export type SidebarWorkspaceVariant = "local" | "worktree" | "cloud" | "ssh";
 
 export type SidebarIndicatorAction =
   | { kind: "open_workspace"; workspaceId: string }
@@ -78,6 +79,7 @@ export type SidebarDetailIndicator =
     kind: "materialization";
     variant: SidebarWorkspaceVariant;
     tooltip: string;
+    targetAppearance?: ComputeTargetAppearance | null;
   }
   | {
     kind: "cloud_access";
@@ -134,11 +136,26 @@ type WorkspaceWithCreatorContext = {
 export function sidebarWorkspaceVariantForLogicalWorkspace(
   workspace: LogicalWorkspace,
 ): SidebarWorkspaceVariant {
+  if (logicalWorkspaceUsesSshTarget(workspace)) {
+    return "ssh";
+  }
   return workspace.effectiveOwner === "cloud"
     ? "cloud"
     : workspace.localWorkspace?.kind === "worktree"
       ? "worktree"
       : "local";
+}
+
+export function logicalWorkspaceUsesSshTarget(workspace: LogicalWorkspace): boolean {
+  return workspace.lifecycle === "ssh_active"
+    || workspace.cloudWorkspace?.sandboxType === "ssh"
+    || workspace.cloudWorkspace?.directTargetContext?.targetKind === "ssh";
+}
+
+export function logicalWorkspaceSshTargetId(workspace: LogicalWorkspace): string | null {
+  return workspace.cloudWorkspace?.directTargetContext?.targetId
+    ?? workspace.cloudWorkspace?.targetId
+    ?? null;
 }
 
 export function sidebarStatusIndicatorFromActivity(args: {
@@ -233,6 +250,7 @@ export function detailIndicatorsForWorkspace(
   workspace: LogicalWorkspace,
   variant: SidebarWorkspaceVariant,
   finishSuggestion?: { workspaceId: string; readinessFingerprint: string } | null,
+  targetAppearance?: ComputeTargetAppearance | null,
 ): SidebarDetailIndicator[] {
   const creator = creatorDetailIndicator(workspace);
   const cloudAccess = cloudAccessDetailIndicator(workspace);
@@ -255,7 +273,8 @@ export function detailIndicatorsForWorkspace(
     {
       kind: "materialization" as const,
       variant,
-      tooltip: materializationTooltip(variant),
+      tooltip: materializationTooltip(variant, targetAppearance),
+      targetAppearance: variant === "ssh" ? targetAppearance ?? null : null,
     },
   ];
 }
@@ -566,8 +585,15 @@ function isAutomationBranch(branchName: string | null | undefined): boolean {
   );
 }
 
-function materializationTooltip(variant: SidebarWorkspaceVariant): string {
+function materializationTooltip(
+  variant: SidebarWorkspaceVariant,
+  targetAppearance?: ComputeTargetAppearance | null,
+): string {
   switch (variant) {
+    case "ssh":
+      return targetAppearance
+        ? `SSH target · ${targetAppearance.displayName}`
+        : "SSH target · runs on a connected target";
     case "cloud":
       return "Cloud · runs on remote infrastructure";
     case "worktree":

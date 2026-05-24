@@ -17,6 +17,7 @@ export interface ChatLaunchRetryInput {
   text: string;
   modelSelection: HomeNextModelSelection;
   modeId: string | null;
+  launchControlValues?: Record<string, string>;
   target: HomeLaunchTarget;
 }
 

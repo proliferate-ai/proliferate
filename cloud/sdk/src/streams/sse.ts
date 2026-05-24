@@ -3,7 +3,40 @@ export interface CloudSseSubscription<TEvent> {
   readonly closed: boolean;
 }
 
-export class CloudSseErrorEvent extends Event {
+// Expo/React Native does not provide DOM Event, but SSE callbacks expose Event-like errors.
+const CloudSseBaseEvent: new (type: string, eventInitDict?: EventInit) => Event =
+  typeof Event !== "undefined"
+    ? Event
+    : class CloudSseEventPolyfill {
+        readonly type: string;
+        readonly bubbles = false;
+        readonly cancelable = false;
+        readonly composed = false;
+        readonly currentTarget = null;
+        readonly defaultPrevented = false;
+        readonly eventPhase = 0;
+        readonly isTrusted = false;
+        readonly target = null;
+        readonly timeStamp = Date.now();
+
+        constructor(type: string) {
+          this.type = type;
+        }
+
+        composedPath(): EventTarget[] {
+          return [];
+        }
+
+        initEvent(): void {}
+
+        preventDefault(): void {}
+
+        stopImmediatePropagation(): void {}
+
+        stopPropagation(): void {}
+      } as unknown as new (type: string, eventInitDict?: EventInit) => Event;
+
+export class CloudSseErrorEvent extends CloudSseBaseEvent {
   readonly message: string;
   readonly status: number | null;
 
@@ -48,7 +81,7 @@ export function subscribeCloudSse<TEvent>(
   })
     .then(() => {
       if (!closed && !controller.signal.aborted) {
-        options.onError?.(new Event("eof"));
+        options.onError?.(createCloudSseEvent("eof"));
       }
     })
     .catch((error) => {
@@ -114,13 +147,22 @@ async function defaultFetchResponse(input: {
 }
 
 function normalizeCloudSseError(error: unknown): Event {
-  if (error instanceof Event) {
+  if (isCloudSseEvent(error)) {
     return error;
   }
   if (error instanceof Error) {
     return new CloudSseErrorEvent(error.message);
   }
   return new CloudSseErrorEvent("Cloud stream failed.");
+}
+
+function createCloudSseEvent(type: string): Event {
+  return new CloudSseBaseEvent(type);
+}
+
+function isCloudSseEvent(error: unknown): error is Event {
+  return error instanceof CloudSseErrorEvent
+    || (typeof Event !== "undefined" && error instanceof Event);
 }
 
 function dispatchCloudSseFrame<TEvent>(

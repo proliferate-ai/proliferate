@@ -25,6 +25,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
+import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-target-options";
 
 interface UseWorkspaceSidebarStateArgs {
   showArchived: boolean;
@@ -89,6 +90,7 @@ export function useWorkspaceSidebarState({
   const finishSuggestionsByWorkspaceId = useWorkspaceFinishSuggestions(workspaceCollections);
   const { repoRoots } = useStandardRepoProjection();
   const { data: gitStatus } = useWorkspaceMetadataSync();
+  const computeTargets = useComputeTargetOptions();
 
   const archivedSet = useMemo(
     () => new Set(archivedWorkspaceIds),
@@ -124,6 +126,7 @@ export function useWorkspaceSidebarState({
       "pendingWorkspaceEntry",
       "workspaceActivities",
       "gitStatus",
+      "targetAppearance",
     ],
     count: (value) => value.length,
   }, () => buildSidebarGroupStates({
@@ -143,9 +146,11 @@ export function useWorkspaceSidebarState({
       lastViewedAt,
       workspaceLastInteracted,
       finishSuggestionsByWorkspaceId,
+      targetAppearanceById: computeTargets.targetAppearanceById,
     })), [
     activeSessionTitle,
     archivedSet,
+    computeTargets.targetAppearanceById,
     gitStatus,
     hiddenRepoRootSet,
     lastViewedAt,

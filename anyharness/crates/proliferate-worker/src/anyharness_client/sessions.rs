@@ -239,13 +239,8 @@ impl AnyHarnessClient {
             if !live_config.is_success() {
                 return Ok(NormalizedControlLookup::Failed(live_config));
             }
-            if let Some(control) = live_config
-                .body
-                .get("liveConfig")
-                .and_then(|live| live.get("normalizedControls"))
-                .and_then(|controls| controls.get(control_id))
-            {
-                return Ok(NormalizedControlLookup::Found(control.clone()));
+            if let Some(control) = find_normalized_control(&live_config.body, control_id) {
+                return Ok(NormalizedControlLookup::Found(control));
             }
             if Instant::now() >= deadline {
                 return Ok(NormalizedControlLookup::Missing);
@@ -253,6 +248,37 @@ impl AnyHarnessClient {
             sleep(LIVE_CONFIG_POLL_INTERVAL).await;
         }
     }
+}
+
+fn find_normalized_control(live_config_body: &Value, control_id: &str) -> Option<Value> {
+    let controls = live_config_body
+        .get("liveConfig")
+        .and_then(|live| live.get("normalizedControls"))?;
+    if let Some(control) = controls.get(control_id).filter(|value| value.is_object()) {
+        return Some(control.clone());
+    }
+    let controls_object = controls.as_object()?;
+    for (slot, control) in controls_object {
+        if slot == "extras" || !control.is_object() {
+            continue;
+        }
+        if normalized_control_matches(control, control_id) {
+            return Some(control.clone());
+        }
+    }
+    controls
+        .get("extras")
+        .and_then(Value::as_array)
+        .and_then(|extras| {
+            extras
+                .iter()
+                .find(|control| normalized_control_matches(control, control_id))
+                .cloned()
+        })
+}
+
+fn normalized_control_matches(control: &Value, control_id: &str) -> bool {
+    control.get("key").and_then(Value::as_str) == Some(control_id)
 }
 
 fn normalized_config_applied_response() -> AnyHarnessCommandResponse {
@@ -283,4 +309,91 @@ pub(crate) async fn parse_anyharness_response(
         serde_json::from_str(&text).unwrap_or_else(|_| Value::String(text))
     };
     Ok(AnyHarnessCommandResponse { status, body })
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::find_normalized_control;
+
+    #[test]
+    fn finds_normalized_control_by_semantic_key_in_camel_slot() {
+        let body = json!({
+            "liveConfig": {
+                "normalizedControls": {
+                    "fastMode": {
+                        "key": "fast_mode",
+                        "label": "Fast mode",
+                        "rawConfigId": "cfg-fast",
+                        "currentValue": "on",
+                        "values": [{ "value": "on" }, { "value": "off" }]
+                    }
+                }
+            }
+        });
+
+        let control = find_normalized_control(&body, "fast_mode").expect("control");
+        assert_eq!(control["rawConfigId"], "cfg-fast");
+    }
+
+    #[test]
+    fn finds_normalized_control_by_semantic_key_in_extras() {
+        let body = json!({
+            "liveConfig": {
+                "normalizedControls": {
+                    "model": {
+                        "key": "model",
+                        "rawConfigId": "cfg-model",
+                        "currentValue": "opus",
+                        "values": [{ "value": "opus" }]
+                    },
+                    "extras": [
+                        {
+                            "key": "reasoning_effort",
+                            "label": "Reasoning",
+                            "rawConfigId": "cfg-reasoning",
+                            "currentValue": "high",
+                            "values": [{ "value": "medium" }, { "value": "high" }]
+                        }
+                    ]
+                }
+            }
+        });
+
+        let control = find_normalized_control(&body, "reasoning_effort").expect("control");
+        assert_eq!(control["rawConfigId"], "cfg-reasoning");
+    }
+
+    #[test]
+    fn preserves_direct_slot_lookup_for_legacy_callers() {
+        let body = json!({
+            "liveConfig": {
+                "normalizedControls": {
+                    "mode": {
+                        "key": "permission_mode",
+                        "rawConfigId": "cfg-mode",
+                        "currentValue": "plan",
+                        "values": [{ "value": "plan" }]
+                    }
+                }
+            }
+        });
+
+        let control = find_normalized_control(&body, "mode").expect("control");
+        assert_eq!(control["rawConfigId"], "cfg-mode");
+    }
+
+    #[test]
+    fn does_not_return_extras_array_as_control() {
+        let body = json!({
+            "liveConfig": {
+                "normalizedControls": {
+                    "extras": []
+                }
+            }
+        });
+
+        assert!(find_normalized_control(&body, "extras").is_none());
+    }
 }

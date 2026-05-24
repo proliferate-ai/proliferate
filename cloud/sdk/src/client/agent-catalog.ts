@@ -1,11 +1,13 @@
-import { getProliferateClient } from "./core.js";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type { CloudAgentCatalogResponse } from "../types/index.js";
 
 const AGENT_CATALOG_SCHEMA_VERSION = 1;
 
-export async function getCloudAgentCatalog(): Promise<CloudAgentCatalogResponse> {
+export async function getCloudAgentCatalog(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudAgentCatalogResponse> {
   return (
-    await getProliferateClient().GET("/v1/catalogs/agents", {
+    await client.GET("/v1/catalogs/agents", {
       params: { query: { schemaVersion: AGENT_CATALOG_SCHEMA_VERSION } },
     })
   ).data!;
