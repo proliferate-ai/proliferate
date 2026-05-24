@@ -1,4 +1,5 @@
 import { CalendarClock, List, Plus, RotateCcw } from "lucide-react";
+import { type ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -22,13 +23,14 @@ export interface AutomationSurfaceProps {
   busyAutomationId?: string | null;
   busyAction?: "pause" | "resume" | "run" | null;
   actionsDisabled?: boolean;
+  description?: ReactNode;
   maxWidthClassName?: string;
   onModeChange: (mode: AutomationSurfaceViewMode) => void;
   onIncludePausedChange: (includePaused: boolean) => void;
   onNew: () => void;
   onRetry?: () => void;
   onAutomationSelect: (automationId: string) => void;
-  onEdit: (automationId: string) => void;
+  onEdit?: (automationId: string) => void;
   onPause: (automationId: string) => void;
   onResume: (automationId: string) => void;
   onRunNow: (automationId: string) => void;
@@ -45,6 +47,7 @@ export function AutomationSurface({
   busyAutomationId = null,
   busyAction = null,
   actionsDisabled = false,
+  description = "Create scheduled work against local, personal cloud, and shared cloud targets.",
   maxWidthClassName = "max-w-none",
   onModeChange,
   onIncludePausedChange,
@@ -61,7 +64,7 @@ export function AutomationSurface({
   return (
     <ProductPageShell
       title="Automations"
-      description="Create scheduled work against local, personal cloud, and shared cloud targets."
+      description={description}
       actions={(
         <Button type="button" onClick={onNew}>
           <Plus className="size-4" aria-hidden />

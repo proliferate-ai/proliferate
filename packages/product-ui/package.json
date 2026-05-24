@@ -51,17 +51,13 @@
       "types": "./dist/auth/RedirectCallbackScreen.d.ts",
       "import": "./dist/auth/RedirectCallbackScreen.js"
     },
-    "./automations/AutomationRow": {
-      "types": "./dist/automations/AutomationRow.d.ts",
-      "import": "./dist/automations/AutomationRow.js"
-    },
-    "./automations/AutomationStatusBadge": {
-      "types": "./dist/automations/AutomationStatusBadge.d.ts",
-      "import": "./dist/automations/AutomationStatusBadge.js"
-    },
     "./automations/AutomationCreatePanel": {
       "types": "./dist/automations/AutomationCreatePanel.d.ts",
       "import": "./dist/automations/AutomationCreatePanel.js"
+    },
+    "./automations/AutomationDetailSurface": {
+      "types": "./dist/automations/AutomationDetailSurface.d.ts",
+      "import": "./dist/automations/AutomationDetailSurface.js"
     },
     "./automations/AutomationCalendarView": {
       "types": "./dist/automations/AutomationCalendarView.d.ts",
@@ -82,10 +78,6 @@
     "./automations/AutomationSurface": {
       "types": "./dist/automations/AutomationSurface.d.ts",
       "import": "./dist/automations/AutomationSurface.js"
-    },
-    "./automations/AutomationsList": {
-      "types": "./dist/automations/AutomationsList.d.ts",
-      "import": "./dist/automations/AutomationsList.js"
     },
     "./billing/BillingSettingsPane": {
       "types": "./dist/billing/BillingSettingsPane.d.ts",

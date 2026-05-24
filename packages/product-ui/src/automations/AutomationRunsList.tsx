@@ -58,6 +58,13 @@ function AutomationRunRow({
 }) {
   const openable = run.openState === "openable" && typeof onRunSelect === "function";
   const opening = run.openState === "opening";
+  const desktopRequired = run.openState === "desktop_required";
+  const trailingLabel = opening
+    ? pendingLabel
+    : run.statusLabel;
+  const secondaryLabel = desktopRequired && run.openDisabledReason
+    ? `${run.timestampLabel} · ${run.openDisabledReason}`
+    : run.timestampLabel;
   const rowClass = twMerge(
     "group relative grid h-12 w-full grid-cols-[18px_minmax(0,1fr)_4rem] items-center gap-x-3 rounded-[5px] px-3 py-1 text-left transition-colors sm:grid-cols-[18px_minmax(0,1fr)_7rem_4rem] md:grid-cols-[18px_minmax(0,1fr)_7rem_8rem_4rem]",
     openable
@@ -75,8 +82,8 @@ function AutomationRunRow({
         <span className="block min-w-0 truncate text-sm font-medium leading-5 text-foreground">
           {run.title}
         </span>
-        <span className="block min-w-0 truncate text-xs leading-4 text-muted-foreground">
-          {run.timestampLabel}
+        <span className="block min-w-0 truncate text-xs leading-4 text-muted-foreground" title={secondaryLabel}>
+          {secondaryLabel}
         </span>
       </span>
 
@@ -89,8 +96,9 @@ function AutomationRunRow({
             "truncate transition-opacity",
             openable ? "group-hover:opacity-0 group-focus-visible:opacity-0" : "",
           )}
+          title={trailingLabel}
         >
-          {opening ? pendingLabel : run.statusLabel}
+          {trailingLabel}
         </span>
         {openable ? (
           <span
@@ -106,7 +114,7 @@ function AutomationRunRow({
 
   if (!openable) {
     return (
-      <div className={rowClass} role="listitem" aria-label={runRowAriaLabel(run)}>
+      <div className={rowClass} role="listitem" aria-label={runRowAriaLabel(run, trailingLabel)}>
         {inner}
       </div>
     );
@@ -120,7 +128,7 @@ function AutomationRunRow({
         type="button"
         onClick={() => onRunSelect?.(run.id)}
         className={rowClass}
-        aria-label={`${runRowAriaLabel(run)}, open workspace`}
+        aria-label={`${runRowAriaLabel(run, trailingLabel)}, open workspace`}
       >
         {inner}
       </Button>
@@ -145,12 +153,14 @@ function MetadataCell({
   );
 }
 
-function runRowAriaLabel(run: AutomationRunInventoryItemView): string {
+function runRowAriaLabel(run: AutomationRunInventoryItemView, trailingLabel: string): string {
   return [
     run.title,
     run.timestampLabel,
     `trigger ${run.triggerLabel}`,
     `target ${run.targetLabel}`,
     `status ${run.statusLabel}`,
-  ].join(", ");
+    run.openState === "opening" ? trailingLabel : null,
+    run.openState === "desktop_required" ? run.openDisabledReason ?? run.openLabel : null,
+  ].filter(Boolean).join(", ");
 }

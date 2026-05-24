@@ -1,5 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
+import type {
+  AutomationResponse,
+  AutomationRunResponse,
+  CloudRepoConfigSummary,
+  CreateAutomationRequest,
+} from "@proliferate/cloud-sdk";
+import {
+  useAgentRunConfigActions,
+  useAutomationActions,
+  useAutomationDetail,
+  useAutomationRuns,
+  useAutomations,
+  useCloudAgentCatalog,
+  useCloudRepoConfigs,
+  useOrganizations,
+} from "@proliferate/cloud-sdk-react";
+import {
+  buildAutomationCalendarWeek,
+  buildAutomationInventoryItems,
+  buildAutomationRunInventoryItems,
+  groupAutomationInventoryItems,
+  type AutomationSurfaceViewMode,
+} from "@proliferate/product-model/automations/inventory";
 import type {
   AutomationSchedulePreset,
 } from "@proliferate/product-model/automations/schedule";
@@ -7,7 +31,6 @@ import {
   AUTOMATION_SCHEDULE_PRESETS,
   automationTimezoneOptions,
   defaultAutomationTimezone,
-  formatAutomationTimestamp,
   rruleForPresetAtTime,
   schedulePresetAcceptsTime,
   validateAutomationRrule,
@@ -21,27 +44,18 @@ import {
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
 } from "@proliferate/product-model/chats/cloud/composer-controls";
-import type {
-  CloudRepoConfigSummary,
-  CreateAutomationRequest,
-} from "@proliferate/cloud-sdk";
-import {
-  useAgentRunConfigActions,
-  useCloudAgentCatalog,
-  useAutomationActions,
-  useAutomations,
-  useCloudRepoConfigs,
-} from "@proliferate/cloud-sdk-react";
-
 import {
   AutomationCreatePanel,
   type AutomationCreateFormValues,
   type AutomationCreateOption,
 } from "@proliferate/product-ui/automations/AutomationCreatePanel";
-import { AutomationsList } from "@proliferate/product-ui/automations/AutomationsList";
-import { ProductNotice } from "@proliferate/product-ui/layout/ProductNotice";
-import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
+import { AutomationDetailSurface } from "@proliferate/product-ui/automations/AutomationDetailSurface";
+import { AutomationSurface } from "@proliferate/product-ui/automations/AutomationSurface";
 
+import { routes } from "../../../config/routes";
+
+const EMPTY_AUTOMATIONS: AutomationResponse[] = [];
+const EMPTY_AUTOMATION_RUNS: AutomationRunResponse[] = [];
 const EMPTY_REPO_CONFIGS: CloudRepoConfigSummary[] = [];
 const PERSONAL_OWNER_KEY = "personal";
 const DEFAULT_SCHEDULE_PRESET: AutomationSchedulePreset = "daily";
@@ -50,14 +64,38 @@ const SCHEDULE_OPTIONS: AutomationCreateOption[] = AUTOMATION_SCHEDULE_PRESETS.m
   label: option.label,
 }));
 
-export function AutomationsScreen() {
-  const automations = useAutomations();
+interface AutomationsScreenProps {
+  selectedAutomationId?: string | null;
+}
+
+export function AutomationsScreen({ selectedAutomationId = null }: AutomationsScreenProps) {
+  const navigate = useNavigate();
+  const personalAutomations = useAutomations({
+    ownerScope: "personal",
+    organizationId: null,
+  });
+  const organizations = useOrganizations();
+  const adminOrganizations = useMemo(() => {
+    const organizationsList = organizations.data?.organizations ?? [];
+    return organizationsList.filter((organization) => {
+      const role = organization.membership?.role;
+      return organization.membership?.status === "active" && (role === "owner" || role === "admin");
+    });
+  }, [organizations.data?.organizations]);
+  const teamOrganizationId = adminOrganizations[0]?.id ?? null;
+  const teamAutomations = useAutomations({
+    ownerScope: "organization",
+    organizationId: teamOrganizationId,
+    enabled: teamOrganizationId !== null,
+  });
   const repoConfigs = useCloudRepoConfigs();
   const agentCatalog = useCloudAgentCatalog();
   const actions = useAutomationActions();
   const runConfigActions = useAgentRunConfigActions();
   const [createOpen, setCreateOpen] = useState(false);
   const [createValues, setCreateValues] = useState(createInitialFormValues);
+  const [surfaceMode, setSurfaceMode] = useState<AutomationSurfaceViewMode>("list");
+  const [includePausedCalendar, setIncludePausedCalendar] = useState(false);
   const [launchSelection, setLaunchSelection] = useState<CloudLaunchComposerSelection>({
     agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
     modelId: DEFAULT_DIRECT_PROMPT_MODEL_ID,
@@ -66,10 +104,75 @@ export function AutomationsScreen() {
   });
   const [createError, setCreateError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingCloudWorkspaceId, setPendingCloudWorkspaceId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<{
     automationId: string;
     action: "pause" | "resume" | "run";
   } | null>(null);
+
+  const automations = useMemo(() => {
+    const combined = [
+      ...(personalAutomations.data?.automations ?? EMPTY_AUTOMATIONS),
+      ...(teamAutomations.data?.automations ?? EMPTY_AUTOMATIONS),
+    ];
+    return [...combined].sort((left, right) =>
+      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+    );
+  }, [personalAutomations.data?.automations, teamAutomations.data?.automations]);
+  const automationsLoading = personalAutomations.isLoading
+    || (teamOrganizationId !== null && teamAutomations.isLoading);
+  const automationsError = Boolean(personalAutomations.error)
+    || (teamOrganizationId !== null && Boolean(teamAutomations.error));
+  const hasAutomationLoadError = automationsError && automations.length === 0;
+  const partialAutomationLoadError = automationsError && automations.length > 0
+    ? "Some automations could not load. The list may be incomplete."
+    : null;
+
+  const selectedFromList = useMemo(
+    () => automations.find((automation) => automation.id === selectedAutomationId) ?? null,
+    [automations, selectedAutomationId],
+  );
+  const selectedDetail = useAutomationDetail(
+    selectedFromList ? null : selectedAutomationId,
+    selectedAutomationId !== null && selectedFromList === null,
+  );
+  const selectedAutomation = selectedFromList ?? selectedDetail.data ?? null;
+  const automationKnown = selectedFromList !== null || selectedDetail.data !== undefined;
+  const runs = useAutomationRuns(selectedAutomationId, selectedAutomationId !== null && automationKnown);
+  const runRecords = runs.data?.runs ?? EMPTY_AUTOMATION_RUNS;
+  const runById = useMemo(
+    () => new Map(runRecords.map((run) => [run.id, run])),
+    [runRecords],
+  );
+
+  const automationItems = useMemo(
+    () => buildAutomationInventoryItems(automations, { clientSurface: "web" }),
+    [automations],
+  );
+  const automationGroups = useMemo(
+    () => groupAutomationInventoryItems(automationItems),
+    [automationItems],
+  );
+  const calendarDays = useMemo(
+    () => buildAutomationCalendarWeek(automations, {
+      clientSurface: "web",
+      includePaused: includePausedCalendar,
+    }),
+    [automations, includePausedCalendar],
+  );
+  const selectedAutomationItem = useMemo(
+    () => selectedAutomation
+      ? buildAutomationInventoryItems([selectedAutomation], { clientSurface: "web" })[0] ?? null
+      : null,
+    [selectedAutomation],
+  );
+  const runItems = useMemo(
+    () => buildAutomationRunInventoryItems(runRecords, {
+      clientSurface: "web",
+      pendingCloudWorkspaceId,
+    }),
+    [pendingCloudWorkspaceId, runRecords],
+  );
 
   const repoOptions = useMemo(
     () => buildRepoOptions(repoConfigs.data?.configs ?? EMPTY_REPO_CONFIGS),
@@ -141,6 +244,10 @@ export function AutomationsScreen() {
   async function submitCreate() {
     setCreateError(null);
     setActionError(null);
+    if (optionsUnavailable) {
+      setCreateError(optionLoadError ?? "Automation options are still loading.");
+      return;
+    }
     const title = createValues.title.trim();
     const prompt = createValues.prompt.trim();
     if (!title || !prompt) {
@@ -211,12 +318,13 @@ export function AutomationsScreen() {
     try {
       const createdRunConfig = await runConfigActions.createAgentRunConfig(runConfig);
       createdRunConfigId = createdRunConfig.id;
-      await actions.createAutomation({
+      const created = await actions.createAutomation({
         ...bodyBase,
         cloudAgentRunConfigId: createdRunConfig.id,
       });
       setCreateValues(createInitialFormValues());
       setCreateOpen(false);
+      navigate(`/automations/${created.id}`);
     } catch (error) {
       if (createdRunConfigId) {
         void runConfigActions.deleteAgentRunConfig(createdRunConfigId).catch(() => undefined);
@@ -246,19 +354,55 @@ export function AutomationsScreen() {
     }
   }
 
+  function openRun(runId: string) {
+    const run = runById.get(runId);
+    if (!run?.cloudWorkspaceId) {
+      return;
+    }
+    setPendingCloudWorkspaceId(run.cloudWorkspaceId);
+    navigate(run.anyharnessSessionId
+      ? routes.chat(run.cloudWorkspaceId, run.anyharnessSessionId)
+      : routes.workspace(run.cloudWorkspaceId));
+    window.setTimeout(() => setPendingCloudWorkspaceId(null), 0);
+  }
+
   const optionLoadError = repoConfigs.error || agentCatalog.error
     ? "Could not load repo or agent options. Retry from the page or refresh."
     : null;
+  const optionsUnavailable = repoConfigs.isLoading
+    || agentCatalog.isLoading
+    || Boolean(repoConfigs.error)
+    || Boolean(agentCatalog.error);
   const submitting = actions.creatingAutomation || runConfigActions.creatingAgentRunConfig;
+  const busy = actions.creatingAutomation
+    || actions.updatingAutomation
+    || actions.pausingAutomation
+    || actions.resumingAutomation
+    || actions.runningAutomationNow;
+
+  if (selectedAutomationId) {
+    return (
+      <AutomationDetailSurface
+        automation={selectedAutomationItem}
+        runs={runItems}
+        loadingAutomation={selectedDetail.isLoading}
+        loadingRuns={selectedDetail.isLoading || runs.isLoading}
+        notFound={Boolean(selectedDetail.error)}
+        actionError={actionError}
+        busy={busy || busyAction !== null}
+        onBack={() => navigate(routes.automations)}
+        onRunNow={(automationId) => void runAutomationAction(automationId, "run")}
+        onPause={(automationId) => void runAutomationAction(automationId, "pause")}
+        onResume={(automationId) => void runAutomationAction(automationId, "resume")}
+        onRunSelect={openRun}
+      />
+    );
+  }
 
   return (
-    <ProductPageShell
-      title="Automations"
-      description="Scheduled personal cloud work for configured repos."
-      telemetryBlocked
-    >
+    <>
       {createOpen ? (
-        <div className="mb-4">
+        <div className="mx-auto mb-4 max-w-none px-8 pt-8">
           <AutomationCreatePanel
             values={createValues}
             ownerOptions={[{ value: PERSONAL_OWNER_KEY, label: "Personal" }]}
@@ -268,6 +412,7 @@ export function AutomationsScreen() {
             agentControls={agentControls}
             loadingOptions={repoConfigs.isLoading || agentCatalog.isLoading}
             submitting={submitting}
+            submitDisabled={optionsUnavailable}
             error={createError ?? optionLoadError}
             timeDisabled={!schedulePresetAcceptsTime(
               parseSchedulePreset(createValues.schedulePreset) ?? "custom",
@@ -281,50 +426,37 @@ export function AutomationsScreen() {
           />
         </div>
       ) : null}
-      {actionError ? (
-        <ProductNotice
-          tone="destructive"
-          title="Automation action failed"
-          description={actionError}
-          className="mb-4"
-        />
-      ) : null}
-      <AutomationsList
-        loading={automations.isLoading}
-        error={Boolean(automations.error)}
-        onRetry={() => void automations.refetch()}
+      <AutomationSurface
+        mode={surfaceMode}
+        groups={automationGroups}
+        calendarDays={calendarDays}
+        includePaused={includePausedCalendar}
+        description="Create scheduled work against configured cloud repositories."
+        loading={automationsLoading}
+        error={hasAutomationLoadError}
+        actionError={actionError ?? partialAutomationLoadError}
+        busyAutomationId={busyAction?.automationId ?? null}
+        busyAction={busyAction?.action ?? null}
+        actionsDisabled={busy || busyAction !== null}
+        maxWidthClassName="max-w-none"
+        onModeChange={setSurfaceMode}
+        onIncludePausedChange={setIncludePausedCalendar}
         onNew={() => {
           setCreateError(null);
           setCreateOpen(true);
         }}
+        onRetry={() => {
+          void personalAutomations.refetch();
+          if (teamOrganizationId !== null) {
+            void teamAutomations.refetch();
+          }
+        }}
+        onAutomationSelect={(automationId) => navigate(`/automations/${automationId}`)}
         onPause={(automationId) => void runAutomationAction(automationId, "pause")}
         onResume={(automationId) => void runAutomationAction(automationId, "resume")}
         onRunNow={(automationId) => void runAutomationAction(automationId, "run")}
-        busyAutomationId={busyAction?.automationId ?? null}
-        busyAction={busyAction?.action ?? null}
-        items={(automations.data?.automations ?? []).map((automation) => ({
-          id: automation.id,
-          title: automation.title,
-          repo: `${automation.gitOwner}/${automation.gitRepoName}`,
-          schedule: automation.schedule.summary,
-          target: targetModeLabel(automation.targetMode),
-          ownerLabel: "Personal",
-          lastRun: automation.lastScheduledAt
-            ? formatAutomationTimestamp(
-              automation.lastScheduledAt,
-              automation.schedule.timezone,
-            )
-            : null,
-          nextRun: automation.schedule.nextRunAt
-            ? formatAutomationTimestamp(
-              automation.schedule.nextRunAt,
-              automation.schedule.timezone,
-            )
-            : null,
-          enabled: automation.enabled,
-        }))}
       />
-    </ProductPageShell>
+    </>
   );
 }
 
@@ -366,17 +498,4 @@ function parseRepoKey(value: string): { gitOwner: string; gitRepoName: string } 
 function parseSchedulePreset(value: string): AutomationSchedulePreset | null {
   const preset = AUTOMATION_SCHEDULE_PRESETS.find((option) => option.value === value);
   return preset?.value ?? null;
-}
-
-function targetModeLabel(targetMode: string): string {
-  switch (targetMode) {
-    case "personal_cloud":
-      return "Personal cloud";
-    case "shared_cloud":
-      return "Shared cloud";
-    case "local":
-      return "Desktop local";
-    default:
-      return targetMode;
-  }
 }

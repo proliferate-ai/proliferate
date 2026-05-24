@@ -14,7 +14,7 @@ export interface AutomationInventoryListProps {
   busyAction?: "pause" | "resume" | "run" | null;
   actionsDisabled?: boolean;
   onAutomationSelect: (automationId: string) => void;
-  onEdit: (automationId: string) => void;
+  onEdit?: (automationId: string) => void;
   onPause: (automationId: string) => void;
   onResume: (automationId: string) => void;
   onRunNow: (automationId: string) => void;
@@ -74,11 +74,13 @@ function AutomationInventoryRow({
   busy: "pause" | "resume" | "run" | null;
   actionsDisabled: boolean;
   onAutomationSelect: (automationId: string) => void;
-  onEdit: (automationId: string) => void;
+  onEdit?: (automationId: string) => void;
   onPause: (automationId: string) => void;
   onResume: (automationId: string) => void;
   onRunNow: (automationId: string) => void;
 }) {
+  const runNowReason = runNowDisabledReason(item);
+
   return (
     <div role="listitem" className="group relative">
       <Button
@@ -120,6 +122,7 @@ function AutomationInventoryRow({
           label="Run automation now"
           busy={busy === "run"}
           disabled={actionsDisabled || (busy !== null && busy !== "run") || !item.enabled}
+          disabledReason={runNowReason}
           onClick={() => onRunNow(item.id)}
         >
           <Zap className="size-3.5" aria-hidden />
@@ -150,13 +153,14 @@ function AutomationActionMenu({
   item: AutomationInventoryItemView;
   busy: "pause" | "resume" | "run" | null;
   actionsDisabled: boolean;
-  onEdit: (automationId: string) => void;
+  onEdit?: (automationId: string) => void;
   onPause: (automationId: string) => void;
   onResume: (automationId: string) => void;
   onRunNow: (automationId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
+  const runNowReason = runNowDisabledReason(item);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -194,20 +198,23 @@ function AutomationActionMenu({
             label="Run now"
             icon={<Zap className="size-3.5" aria-hidden />}
             disabled={actionsDisabled || busy !== null || !item.enabled}
+            disabledReason={runNowReason}
             onClick={() => {
               onRunNow(item.id);
               close();
             }}
           />
-          <MenuAction
-            label="Edit"
-            icon={<Pencil className="size-3.5" aria-hidden />}
-            disabled={actionsDisabled || busy !== null}
-            onClick={() => {
-              onEdit(item.id);
-              close();
-            }}
-          />
+          {onEdit ? (
+            <MenuAction
+              label="Edit"
+              icon={<Pencil className="size-3.5" aria-hidden />}
+              disabled={actionsDisabled || busy !== null}
+              onClick={() => {
+                onEdit(item.id);
+                close();
+              }}
+            />
+          ) : null}
           <MenuAction
             label={item.enabled ? "Pause" : "Resume"}
             icon={item.enabled ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
@@ -232,6 +239,7 @@ function RowIconButton({
   label,
   busy = false,
   disabled = false,
+  disabledReason = null,
   expanded,
   onClick,
 }: {
@@ -239,21 +247,28 @@ function RowIconButton({
   label: string;
   busy?: boolean;
   disabled?: boolean;
+  disabledReason?: string | null;
   expanded?: boolean;
   onClick: () => void;
 }) {
+  const softDisabled = Boolean(disabledReason);
+  const accessibleLabel = disabledReason ? `${label}: ${disabledReason}` : label;
   return (
     <Button
       variant="unstyled"
       size="unstyled"
       type="button"
-      aria-label={label}
+      aria-label={accessibleLabel}
       aria-expanded={expanded}
-      title={label}
-      disabled={disabled || busy}
-      loading={busy}
-      onClick={onClick}
-      className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground disabled:opacity-45"
+      aria-disabled={softDisabled || undefined}
+      title={disabledReason ?? label}
+      disabled={!softDisabled && (disabled || busy)}
+      loading={!softDisabled && busy}
+      onClick={() => {
+        if (softDisabled || disabled || busy) return;
+        onClick();
+      }}
+      className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground aria-disabled:cursor-default aria-disabled:text-muted-foreground disabled:opacity-45"
     >
       {children}
     </Button>
@@ -264,26 +279,42 @@ function MenuAction({
   label,
   icon,
   disabled = false,
+  disabledReason = null,
   onClick,
 }: {
   label: string;
   icon: ReactNode;
   disabled?: boolean;
+  disabledReason?: string | null;
   onClick: () => void;
 }) {
+  const softDisabled = Boolean(disabledReason);
   return (
     <Button
       variant="unstyled"
       size="unstyled"
       type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-popover-accent hover:text-foreground disabled:opacity-45"
+      disabled={!softDisabled && disabled}
+      aria-disabled={softDisabled || undefined}
+      title={disabledReason ?? label}
+      onClick={() => {
+        if (disabled || softDisabled) return;
+        onClick();
+      }}
+      className="flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-popover-accent hover:text-foreground aria-disabled:cursor-default aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground disabled:opacity-45"
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{icon}</span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="min-w-0 flex-1 truncate">
+        {label}
+        {disabledReason ? <span className="sr-only">: {disabledReason}</span> : null}
+      </span>
     </Button>
   );
+}
+
+function runNowDisabledReason(item: AutomationInventoryItemView): string | null {
+  return item.runNowDisabledReason
+    ?? (!item.enabled ? "Resume before queueing a run." : null);
 }
 
 function MetadataCell({

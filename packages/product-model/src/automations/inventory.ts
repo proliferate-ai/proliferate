@@ -1,4 +1,5 @@
 export type AutomationSurfaceViewMode = "list" | "calendar";
+export type AutomationClientSurface = "desktop" | "web";
 
 export type AutomationInventoryStatusKind =
   | "waiting"
@@ -6,6 +7,10 @@ export type AutomationInventoryStatusKind =
   | "review"
   | "blocked"
   | "done";
+
+export type AutomationTargetAvailability =
+  | "managed_cloud"
+  | "desktop_required";
 
 export type AutomationTargetMode =
   | "local"
@@ -29,6 +34,7 @@ export interface AutomationInventoryRecord {
   ownerScope?: "personal" | "organization" | string | null;
   targetMode?: AutomationTargetMode | null;
   executionTarget?: string | null;
+  targetKind?: string | null;
   enabled: boolean;
   updatedAt?: string | null;
 }
@@ -41,9 +47,11 @@ export interface AutomationInventoryItemView {
   nextRunLabel: string;
   scopeLabel: string;
   targetLabel: string;
+  targetAvailability: AutomationTargetAvailability;
   statusKind: AutomationInventoryStatusKind;
   statusLabel: string;
   enabled: boolean;
+  runNowDisabledReason: string | null;
   updatedAt: string | null;
   searchText: string;
 }
@@ -107,7 +115,7 @@ export interface AutomationRunInventoryRecord {
   updatedAt: string;
 }
 
-export type AutomationRunOpenState = "none" | "openable" | "opening";
+export type AutomationRunOpenState = "none" | "openable" | "opening" | "desktop_required";
 
 export interface AutomationRunInventoryItemView {
   id: string;
@@ -119,10 +127,13 @@ export interface AutomationRunInventoryItemView {
   targetLabel: string;
   errorLabel: string | null;
   openState: AutomationRunOpenState;
+  openLabel: string;
+  openDisabledReason: string | null;
 }
 
 export interface BuildAutomationInventoryOptions {
   now?: Date | number;
+  clientSurface?: AutomationClientSurface;
 }
 
 export interface BuildAutomationCalendarWeekOptions extends BuildAutomationInventoryOptions {
@@ -132,7 +143,10 @@ export interface BuildAutomationCalendarWeekOptions extends BuildAutomationInven
 
 export interface BuildAutomationRunInventoryOptions {
   pendingCloudWorkspaceId?: string | null;
+  clientSurface?: AutomationClientSurface;
 }
+
+export const AUTOMATION_DESKTOP_REQUIRED_MESSAGE = "Check this out on the desktop.";
 
 interface ParsedRrule {
   freq: string;
@@ -152,7 +166,10 @@ export function buildAutomationInventoryItems(
   options: BuildAutomationInventoryOptions = {},
 ): AutomationInventoryItemView[] {
   const now = normalizeDate(options.now);
-  return automations.map((automation) => automationInventoryItem(automation, now));
+  const clientSurface = options.clientSurface ?? "desktop";
+  return automations.map((automation) =>
+    automationInventoryItem(automation, now, clientSurface)
+  );
 }
 
 export function groupAutomationInventoryItems(
@@ -197,13 +214,24 @@ export function buildAutomationRunInventoryItems(
   runs: readonly AutomationRunInventoryRecord[],
   options: BuildAutomationRunInventoryOptions = {},
 ): AutomationRunInventoryItemView[] {
+  const clientSurface = options.clientSurface ?? "desktop";
   return runs.map((run) => {
-    const openable = Boolean(run.cloudWorkspaceId || run.anyharnessWorkspaceId);
+    const targetKind = run.targetKindSnapshot ?? run.cloudTargetKindSnapshot;
+    const managedCloud = automationTargetAvailability(
+      run.targetMode,
+      run.executionTarget,
+      targetKind,
+    ) === "managed_cloud";
+    const openable = clientSurface === "web"
+      ? Boolean(managedCloud && run.cloudWorkspaceId)
+      : Boolean(run.cloudWorkspaceId || run.anyharnessWorkspaceId);
     const opening = Boolean(
       run.cloudWorkspaceId
       && options.pendingCloudWorkspaceId
       && run.cloudWorkspaceId === options.pendingCloudWorkspaceId,
     );
+    const hasDesktopOpenTarget = Boolean(run.anyharnessWorkspaceId);
+    const desktopRequired = clientSurface === "web" && !managedCloud && hasDesktopOpenTarget;
     return {
       id: run.id,
       title: automationRunTitle(run),
@@ -214,10 +242,12 @@ export function buildAutomationRunInventoryItems(
       targetLabel: automationTargetLabel(
         run.targetMode,
         run.executionTarget,
-        run.targetKindSnapshot ?? run.cloudTargetKindSnapshot,
+        targetKind,
       ),
       errorLabel: run.status === "failed" ? run.lastErrorMessage ?? null : null,
-      openState: opening ? "opening" : openable ? "openable" : "none",
+      openState: desktopRequired ? "desktop_required" : opening ? "opening" : openable ? "openable" : "none",
+      openLabel: desktopRequired ? AUTOMATION_DESKTOP_REQUIRED_MESSAGE : "Open workspace",
+      openDisabledReason: desktopRequired ? AUTOMATION_DESKTOP_REQUIRED_MESSAGE : null,
     };
   });
 }
@@ -225,10 +255,23 @@ export function buildAutomationRunInventoryItems(
 function automationInventoryItem(
   automation: AutomationInventoryRecord,
   now: Date,
+  clientSurface: AutomationClientSurface,
 ): AutomationInventoryItemView {
   const repoLabel = `${automation.gitOwner}/${automation.gitRepoName}`;
   const scopeLabel = automation.ownerScope === "organization" ? "Team" : "Personal";
-  const targetLabel = automationTargetLabel(automation.targetMode, automation.executionTarget);
+  const targetLabel = automationTargetLabel(
+    automation.targetMode,
+    automation.executionTarget,
+    automation.targetKind,
+  );
+  const targetAvailability = automationTargetAvailability(
+    automation.targetMode,
+    automation.executionTarget,
+    automation.targetKind,
+  );
+  const runNowDisabledReason = clientSurface === "web" && targetAvailability === "desktop_required"
+    ? AUTOMATION_DESKTOP_REQUIRED_MESSAGE
+    : null;
   const nextRunLabel = automation.enabled
     ? formatNextRunLabel(automation.schedule.nextRunAt, automation.schedule.timezone, now)
     : "Paused";
@@ -241,9 +284,11 @@ function automationInventoryItem(
     nextRunLabel,
     scopeLabel,
     targetLabel,
+    targetAvailability,
     statusKind: "waiting",
     statusLabel,
     enabled: automation.enabled,
+    runNowDisabledReason,
     updatedAt: automation.updatedAt ?? null,
     searchText: [
       automation.title,
@@ -255,6 +300,35 @@ function automationInventoryItem(
       statusLabel,
     ].join(" "),
   };
+}
+
+function automationTargetAvailability(
+  targetMode?: AutomationTargetMode | null,
+  executionTarget?: string | null,
+  targetKind?: string | null,
+): AutomationTargetAvailability {
+  if (executionTarget === "local" || targetMode === "local") {
+    return "desktop_required";
+  }
+  if (executionTarget === "ssh") {
+    return "desktop_required";
+  }
+  if (targetKind && !isManagedCloudTargetKind(targetKind)) {
+    return "desktop_required";
+  }
+  if (targetMode === "personal_cloud" || targetMode === "shared_cloud") {
+    return "managed_cloud";
+  }
+  if (executionTarget === "cloud") {
+    return "managed_cloud";
+  }
+  return "desktop_required";
+}
+
+function isManagedCloudTargetKind(targetKind: string): boolean {
+  return targetKind === "managed_cloud"
+    || targetKind === "cloud"
+    || targetKind === "cowork";
 }
 
 function addAutomationOccurrences(
@@ -417,7 +491,11 @@ function calendarOccurrence(
     title: automation.title,
     timeLabel: formatTimeOnly(date, automation.schedule.timezone),
     scopeLabel: automation.ownerScope === "organization" ? "Team" : "Personal",
-    targetLabel: automationTargetLabel(automation.targetMode, automation.executionTarget),
+    targetLabel: automationTargetLabel(
+      automation.targetMode,
+      automation.executionTarget,
+      automation.targetKind,
+    ),
     scheduleLabel: automation.schedule.summary,
     statusKind: "waiting",
     statusLabel: automation.enabled ? "Enabled" : "Paused",
@@ -472,21 +550,22 @@ function automationRunStatusKind(status: string): AutomationInventoryStatusKind 
 }
 
 function automationRunStatusLabel(run: AutomationRunInventoryRecord): string {
+  const local = isLocalRun(run);
   switch (run.status) {
     case "queued":
-      return "Queued";
+      return local ? "Queued, local executor not available yet" : "Queued";
     case "claimed":
-      return "Claimed";
+      return "Claimed by executor";
     case "creating_workspace":
-      return run.targetMode === "local" ? "Creating local workspace" : "Creating workspace";
+      return local ? "Creating local worktree" : "Creating cloud workspace";
     case "provisioning_workspace":
-      return run.targetMode === "local" ? "Preparing local workspace" : "Provisioning workspace";
+      return local ? "Preparing worktree" : "Preparing runtime";
     case "creating_session":
       return "Creating session";
     case "dispatching":
-      return "Dispatching";
+      return "Sending prompt";
     case "dispatched":
-      return "Dispatched";
+      return "Session started";
     case "failed":
       return "Failed";
     case "cancelled":
@@ -494,6 +573,10 @@ function automationRunStatusLabel(run: AutomationRunInventoryRecord): string {
     default:
       return `Unknown status: ${run.status}`;
   }
+}
+
+function isLocalRun(run: AutomationRunInventoryRecord): boolean {
+  return run.targetMode === "local" || run.executionTarget === "local";
 }
 
 function automationRunTimestampLabel(run: AutomationRunInventoryRecord): string {
