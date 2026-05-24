@@ -132,6 +132,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "Billing",
       "Workspace",
       "Environments",
+      "Worktrees",
       "Shared Sandbox",
       "Compute",
       "Agents",
@@ -151,7 +152,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
 
     expect(screen.queryByText("Workflows")).toBeNull();
     expect(screen.queryByRole("button", { name: "Cloud" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Worktrees" })).toBeNull();
   });
 
   it("renders admin tags for admin-only settings rows", () => {

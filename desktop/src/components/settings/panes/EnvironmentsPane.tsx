@@ -15,8 +15,6 @@ import type { SettingsFocus } from "@/lib/domain/settings/navigation";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { LocalRepoSection } from "./repo/LocalRepoSection";
 import { CloudRepoSection } from "./repo/CloudRepoSection";
-import { AutomaticSyncSection } from "./environments/AutomaticSyncSection";
-import { WorktreeStorageSection } from "./environments/WorktreeStorageSection";
 import { AddCloudEnvironmentDialogController } from "./environments/AddCloudEnvironmentDialogController";
 import { CloudOnlyEnvironmentDetail } from "./environments/CloudOnlyEnvironmentDetail";
 
@@ -139,8 +137,6 @@ export function EnvironmentsPane({
           onAddCloudEnvironment={cloudActive ? () => setAddCloudEnvironmentOpen(true) : undefined}
           onRetryCloudEnvironments={cloudRepoConfigs.isError ? () => { void cloudRepoConfigs.refetch(); } : undefined}
         />
-        <WorktreeStorageSection />
-        <AutomaticSyncSection repositories={repositories} />
         <AddCloudEnvironmentDialogController
           open={addCloudEnvironmentOpen}
           onClose={() => setAddCloudEnvironmentOpen(false)}

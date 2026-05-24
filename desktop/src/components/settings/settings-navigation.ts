@@ -6,6 +6,7 @@ import {
   ClipboardList,
   CreditCard,
   FolderList,
+  GitBranch,
   Keyboard,
   LifeBuoy,
   Palette,
@@ -59,6 +60,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     heading: "Workspace",
     items: [
       { kind: "section", id: "environments", label: "Environments", icon: FolderList },
+      { kind: "section", id: "worktrees", label: "Worktrees", icon: GitBranch },
       {
         kind: "section",
         id: "shared-environments",
