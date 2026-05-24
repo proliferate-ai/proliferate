@@ -16,7 +16,7 @@ import {
 } from "@/lib/domain/compute/target-appearance";
 import type { ComputeTargetSummary } from "@/lib/domain/compute/target-types";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
-import { ComputeTargetSwatch } from "./ComputeTargetSwatch";
+import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
 
 interface ComputeTargetListProps {
   targets: ComputeTargetSummary[];

@@ -33,7 +33,7 @@ import type {
 import { ComputeTargetAgentAuthCard } from "./ComputeTargetAgentAuthCard";
 import { EnrollmentCommandBlock } from "./EnrollmentCommandBlock";
 import { ComputeTargetReadiness } from "./ComputeTargetReadiness";
-import { ComputeTargetIconGlyph, ComputeTargetSwatch } from "./ComputeTargetSwatch";
+import { ComputeTargetIconGlyph, ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
 
 interface ComputeTargetDetailsProps {
   target: ComputeTargetDetail | ComputeTargetSummary | null;

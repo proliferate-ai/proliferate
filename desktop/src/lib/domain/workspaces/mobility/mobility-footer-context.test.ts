@@ -3,6 +3,7 @@ import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-wor
 import {
   buildPendingMobilityFooterContext,
   buildMobilityFooterContext,
+  workspaceMobilitySelectedMaterializationKindFromWorkspaceId,
   type WorkspaceMobilitySelectedMaterializationKind,
 } from "@/lib/domain/workspaces/mobility/mobility-footer-context";
 import {
@@ -188,6 +189,75 @@ describe("buildMobilityFooterContext", () => {
     });
   });
 
+  it("uses the SSH target variant and appearance for direct-target cloud workspaces", () => {
+    const context = buildMobilityFooterContext({
+      logicalWorkspace: makeLogicalWorkspace({
+        cloudWorkspace: {
+          id: "cloud-ssh-1",
+          displayName: null,
+          actionBlockKind: null,
+          actionBlockReason: null,
+          postReadyPhase: "idle",
+          postReadyFilesApplied: 0,
+          postReadyFilesTotal: 0,
+          postReadyStartedAt: null,
+          postReadyCompletedAt: null,
+          status: "ready",
+          workspaceStatus: "ready",
+          runtime: {
+            environmentId: "runtime-1",
+            status: "running",
+            generation: 1,
+            actionBlockKind: null,
+            actionBlockReason: null,
+          },
+          statusDetail: null,
+          lastError: null,
+          templateVersion: "v1",
+          createdAt: "2026-04-14T00:00:00Z",
+          updatedAt: "2026-04-14T00:00:00Z",
+          repo: {
+            provider: "github",
+            owner: "openai",
+            name: "proliferate",
+            baseBranch: "main",
+            branch: "feature/workspace-mobility",
+          },
+          visibility: "private",
+          sandboxType: "ssh",
+          directTargetContext: {
+            targetId: "ssh-target-1",
+            targetKind: "ssh",
+            anyharnessWorkspaceId: "workspace-ssh-1",
+          },
+        },
+        effectiveOwner: "cloud",
+        lifecycle: "ssh_active",
+        localWorkspace: null,
+      }),
+      status: makeStatus(),
+      targetAppearanceById: {
+        "ssh-target-1": {
+          displayName: "Pop OS",
+          iconId: "terminal",
+          iconLabel: "Terminal",
+          colorId: "blue",
+          colorLabel: "Blue",
+          colorValue: "#4a72b5",
+        },
+      },
+    });
+
+    expect(context).toMatchObject({
+      locationLabel: "Cloud workspace",
+      movementLabel: "Bring back local",
+      variant: "ssh",
+      targetAppearance: {
+        displayName: "Pop OS",
+      },
+    });
+  });
+
   it("keeps the location control interactive even for non-repo workspaces", () => {
     const context = buildMobilityFooterContext({
       logicalWorkspace: makeLogicalWorkspace({
@@ -291,6 +361,13 @@ describe("buildMobilityFooterContext", () => {
       isInteractive: false,
       isActive: true,
     });
+  });
+
+  it("treats cloud and direct-target synthetic ids as cloud materializations", () => {
+    expect(workspaceMobilitySelectedMaterializationKindFromWorkspaceId(null)).toBeNull();
+    expect(workspaceMobilitySelectedMaterializationKindFromWorkspaceId("workspace-1")).toBe("local");
+    expect(workspaceMobilitySelectedMaterializationKindFromWorkspaceId("cloud:cloud-1")).toBe("cloud");
+    expect(workspaceMobilitySelectedMaterializationKindFromWorkspaceId("target:ssh-1:workspace-1")).toBe("cloud");
   });
 
   it("does not build a footer context for pending cowork threads", () => {

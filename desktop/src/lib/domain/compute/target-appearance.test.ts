@@ -17,7 +17,7 @@ describe("compute target appearance", () => {
 
   it("defaults icons from target kind", () => {
     expect(defaultComputeTargetIconId("managed_cloud")).toBe("cloud");
-    expect(defaultComputeTargetIconId("ssh")).toBe("monitor");
+    expect(defaultComputeTargetIconId("ssh")).toBe("terminal");
   });
 
   it("normalizes persisted preferences", () => {

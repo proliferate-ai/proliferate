@@ -13,6 +13,7 @@ import { WorkspaceMobilityLocationPopover } from "@/components/workspace/chat/in
 import { WorkspaceMobilityOverlayView } from "@/components/workspace/chat/surface/WorkspaceMobilityOverlay";
 import type { ScenarioKey } from "@/config/playground";
 import type { MobilityPromptState } from "@/lib/domain/workspaces/mobility/mobility-prompt";
+import type { WorkspaceMobilityDestinationOption } from "@/lib/domain/workspaces/mobility/mobility-destinations";
 import {
   getMobilityOverlayTitle,
   mobilityStatusCopy,
@@ -79,9 +80,12 @@ export function PlaygroundMobilityFooterRow({ scenario }: { scenario: ScenarioKe
       {prompt && (
         <div className="absolute bottom-full left-2 z-10 mb-2">
           <WorkspaceMobilityLocationPopover
+            destinationOptions={mobilityDestinationOptionsForScenario(isCloudScenario)}
+            selectedDestinationId={isCloudScenario ? "local_workspace" : "cloud_workspace"}
             prompt={prompt}
             snapshot={mobilitySnapshotForScenario(scenario)}
             onClose={noop}
+            onSelectDestination={noop}
             onPrimaryAction={noop}
           />
         </div>
@@ -110,6 +114,28 @@ export function renderMobilityOverlayPreview(scenario: ScenarioKey): ReactNode |
   }
 
   return null;
+}
+
+function mobilityDestinationOptionsForScenario(
+  isCloudScenario: boolean,
+): WorkspaceMobilityDestinationOption[] {
+  return isCloudScenario
+    ? [{
+      id: "local_workspace",
+      kind: "local_workspace",
+      label: "Local workspace",
+      detail: "Bring this workspace back to your local repo.",
+      disabledReason: null,
+      direction: "cloud_to_local",
+    }]
+    : [{
+      id: "cloud_workspace",
+      kind: "cloud_workspace",
+      label: "Cloud workspace",
+      detail: "Move this workspace to a personal cloud sandbox.",
+      disabledReason: null,
+      direction: "local_to_cloud",
+    }];
 }
 
 function mobilityPromptForScenario(

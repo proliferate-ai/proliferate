@@ -1,4 +1,5 @@
 import type { ComponentType, CSSProperties, SVGProps } from "react";
+import { twMerge } from "tailwind-merge";
 import {
   Blocks,
   CloudIcon,
@@ -13,7 +14,7 @@ import type {
   ComputeTargetIconId,
 } from "@/lib/domain/compute/target-appearance";
 
-type SwatchSize = "sm" | "md";
+type SwatchSize = "inherit" | "xs" | "sm" | "md";
 
 const ICONS: Record<ComputeTargetIconId, ComponentType<SVGProps<SVGSVGElement>>> = {
   monitor: Monitor,
@@ -26,8 +27,17 @@ const ICONS: Record<ComputeTargetIconId, ComponentType<SVGProps<SVGSVGElement>>>
 };
 
 const SIZE_CLASSES: Record<SwatchSize, string> = {
+  inherit: "size-full rounded-[0.25em]",
+  xs: "size-4 rounded-[4px]",
   sm: "size-7 rounded-md",
   md: "size-8 rounded-lg",
+};
+
+const ICON_SIZE_CLASSES: Record<SwatchSize, string> = {
+  inherit: "size-[62.5%]",
+  xs: "size-2.5",
+  sm: "size-4",
+  md: "size-4",
 };
 
 export function ComputeTargetSwatch({
@@ -46,10 +56,14 @@ export function ComputeTargetSwatch({
   return (
     <span
       aria-label={`${appearance.iconLabel} target`}
-      className={`inline-flex shrink-0 items-center justify-center bg-[var(--compute-target-color)] text-foreground ${SIZE_CLASSES[size]} ${className}`}
+      className={twMerge(
+        "inline-flex shrink-0 items-center justify-center bg-[var(--compute-target-color)] text-foreground",
+        SIZE_CLASSES[size],
+        className,
+      )}
       style={style}
     >
-      <Icon className="size-4" aria-hidden="true" />
+      <Icon className={ICON_SIZE_CLASSES[size]} aria-hidden="true" />
     </span>
   );
 }

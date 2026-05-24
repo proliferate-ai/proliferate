@@ -79,7 +79,7 @@ export function useHomeNextRepositorySelection({
 
   const branchQuery = useRepoRootGitBranchesQuery({
     repoRootId: selectedRepository?.repoRootId ?? null,
-    enabled: !!selectedRepository && (repoLaunchKind === "worktree" || repoLaunchKind === "cloud"),
+    enabled: !!selectedRepository && repoLaunchKind !== "local",
   });
   const branchRefs = branchQuery.data ?? EMPTY_BRANCH_REFS;
   const branchOptions = useMemo(

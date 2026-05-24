@@ -204,7 +204,9 @@ export function AutomationEditorModal({
     .map((group) => ({
       ...group,
       rows: group.rows.filter((row) =>
-        row.kind === "configureCloud" || row.target.executionTarget === "cloud"
+        row.kind === "configureCloud"
+        || row.target.executionTarget === "cloud"
+        || row.target.executionTarget === "ssh"
       ),
     }))
     .filter((group) => group.rows.length > 0), [teamTargetSelection.groups]);
@@ -212,7 +214,7 @@ export function AutomationEditorModal({
     ? "Select a configured cloud workspace for team automation."
     : activeTargetSelection.disabledReason;
   const canSubmitTarget = activeTargetSelection.canSubmit
-    && (!isTeamAutomation || selectedTarget?.executionTarget === "cloud");
+    && (!isTeamAutomation || selectedTarget?.executionTarget !== "local");
   const targetSelectionLoading = personalTargetSelection.isLoading
     || teamTargetSelection.isLoading;
 

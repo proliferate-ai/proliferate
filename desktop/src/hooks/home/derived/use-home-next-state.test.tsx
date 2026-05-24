@@ -52,8 +52,12 @@ const stateMocks = vi.hoisted(() => {
     effectiveMode: null,
     effectiveModeId: null,
   } as any;
+  const computeTargets = {
+    sshTargetOptions: [],
+    isLoading: false,
+  } as any;
 
-  return { model, repository, mode };
+  return { model, repository, mode, computeTargets };
 });
 
 vi.mock("@/hooks/home/derived/use-home-next-model-selection", () => ({
@@ -66,6 +70,10 @@ vi.mock("@/hooks/home/derived/use-home-next-repository-selection", () => ({
 
 vi.mock("@/hooks/home/derived/use-home-next-mode-selection", () => ({
   useHomeNextModeSelection: () => stateMocks.mode,
+}));
+
+vi.mock("@/hooks/compute/derived/use-compute-target-options", () => ({
+  useComputeTargetOptions: () => stateMocks.computeTargets,
 }));
 
 function resetMocks() {
@@ -95,6 +103,8 @@ function resetMocks() {
   };
   stateMocks.repository.cloudRepoAction = { kind: "create" };
   stateMocks.repository.launchTarget = { kind: "local", sourceRoot: "/repo" };
+  stateMocks.computeTargets.sshTargetOptions = [];
+  stateMocks.computeTargets.isLoading = false;
 }
 
 function renderHomeNextState({

@@ -16,14 +16,13 @@ import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage"
 import { Button } from "@proliferate/ui/primitives/Button";
 import { useHomeNextLaunchControls } from "@/hooks/home/derived/use-home-next-launch-controls";
 import { useHomeNextLaunch } from "@/hooks/home/workflows/use-home-next-launch";
+import { useHomeNextTargetSelectionState } from "@/hooks/home/ui/use-home-next-target-selection-state";
 import { useHomeNextState } from "@/hooks/home/derived/use-home-next-state";
 import { useHomeScreen } from "@/hooks/home/facade/use-home-screen";
 import { useHomeDraftHandoffStore } from "@/stores/home/home-draft-handoff-store";
 import {
-  type HomeNextDestination,
   type HomeNextModelSelection,
   type HomeNextRepoLaunchKind,
-  type HomeNextRepositorySelection,
 } from "@/lib/domain/home/home-next-launch";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
@@ -93,13 +92,16 @@ export function HomeNextScreen() {
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState("");
-  const [destination, setDestination] = useState<HomeNextDestination>("cowork");
-  const [repositorySelection, setRepositorySelection] =
-    useState<HomeNextRepositorySelection>({ kind: "auto" });
-  const [repoLaunchKind, setRepoLaunchKind] = useState<HomeNextRepoLaunchKind>("worktree");
+  const {
+    destination,
+    repositorySelection,
+    repoLaunchKind,
+    selectedSshTargetId,
+    baseBranchOverride,
+    patchTargetSelection,
+  } = useHomeNextTargetSelectionState();
   const [modelSelectionOverride, setModelSelectionOverride] =
     useState<HomeNextModelSelection | null>(null);
-  const [baseBranchOverride, setBaseBranchOverride] = useState<string | null>(null);
   const [modeOverrideId, setModeOverrideId] = useState<string | null>(null);
   const [launchControlOverrides, setLaunchControlOverrides] = useState<Record<string, string>>({});
   const [submittedPreview, setSubmittedPreview] = useState<{
@@ -120,6 +122,7 @@ export function HomeNextScreen() {
     modelSelectionOverride,
     baseBranchOverride,
     modeOverrideId,
+    selectedSshTargetId,
   });
   const homeLaunchControls = useHomeNextLaunchControls({
     modelSelection: homeNext.effectiveModelSelection,
@@ -354,25 +357,29 @@ export function HomeNextScreen() {
               branchOptions={homeNext.branchOptions}
               branchLoading={homeNext.branchQuery.isLoading}
               cloudActionBySourceRoot={homeNext.cloudRepoActionBySourceRoot}
+              sshTargetOptions={homeNext.sshTargetOptions}
+              selectedSshTargetId={selectedSshTargetId}
+              sshTargetsLoading={homeNext.sshTargetsLoading}
               onSelectCowork={() => {
-                setDestination("cowork");
+                patchTargetSelection({ destination: "cowork" });
               }}
               onSelectRepository={(sourceRoot) => {
                 const launchKind = resolveLaunchKindForRepository(sourceRoot);
-                setDestination("repository");
-                setRepositorySelection({ kind: "repository", sourceRoot });
-                setRepoLaunchKind(launchKind);
-                if (launchKind === "local") {
-                  setBaseBranchOverride(null);
-                }
+                patchTargetSelection({
+                  destination: "repository",
+                  repositorySelection: { kind: "repository", sourceRoot },
+                  repoLaunchKind: launchKind,
+                });
               }}
-              onSelectRuntime={(launchKind) => {
-                setRepoLaunchKind(launchKind);
-                if (launchKind === "local") {
-                  setBaseBranchOverride(null);
-                }
+              onSelectRuntime={(launchKind, targetId = null) => {
+                patchTargetSelection({
+                  repoLaunchKind: launchKind,
+                  selectedSshTargetId: launchKind === "ssh" ? targetId : selectedSshTargetId,
+                });
               }}
-              onSelectBranch={setBaseBranchOverride}
+              onSelectBranch={(branchName) => {
+                patchTargetSelection({ baseBranchOverride: branchName });
+              }}
               onAddRepository={() => handleHomeAction("add-repository")}
               onConfigureCloud={handleConfigureCloud}
             />

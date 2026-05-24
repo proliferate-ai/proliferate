@@ -20,6 +20,7 @@ const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
   { label: "Local", variant: "local" },
   { label: "Worktrees", variant: "worktree" },
   { label: "Cloud", variant: "cloud" },
+  { label: "SSH targets", variant: "ssh" },
 ];
 
 interface SidebarRepositoriesHeaderProps {
