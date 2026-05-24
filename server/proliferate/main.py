@@ -107,14 +107,17 @@ async def _proliferate_error_handler(
     _request: Request,
     error: ProliferateError,
 ) -> JSONResponse:
+    detail = {
+        "code": error.code,
+        "message": error.message,
+    }
+    extra_detail = getattr(error, "extra_detail", None)
+    if isinstance(extra_detail, dict):
+        detail.update(extra_detail)
     return JSONResponse(
         status_code=error.status_code,
-        content={
-            "detail": {
-                "code": error.code,
-                "message": error.message,
-            }
-        },
+        content={"detail": detail},
+        headers=getattr(error, "headers", None),
     )
 
 

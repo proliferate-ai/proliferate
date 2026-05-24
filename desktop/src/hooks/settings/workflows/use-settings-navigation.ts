@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { type SettingsSection } from "@/config/settings";
 import { type SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import {
+  buildCloudRepoSettingsHref,
   buildSettingsHref,
   resolveSettingsSelection,
 } from "@/lib/domain/settings/navigation";
@@ -95,9 +96,14 @@ export function useSettingsNavigation({
     });
   }, [navigateTo]);
 
+  const selectCloudEnvironment = useCallback((gitOwner: string, gitRepoName: string) => {
+    navigate(buildCloudRepoSettingsHref(gitOwner, gitRepoName));
+  }, [navigate]);
+
   return {
     ...selection,
     selectSection,
     selectRepo,
+    selectCloudEnvironment,
   };
 }

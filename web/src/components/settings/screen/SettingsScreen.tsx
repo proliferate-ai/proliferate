@@ -1,4 +1,4 @@
-import { Apple, CircleUserRound, CreditCard, Github, LifeBuoy, UsersRound } from "lucide-react";
+import { Apple, CircleUserRound, CreditCard, Github, GitBranch, LifeBuoy, UsersRound } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -24,8 +24,9 @@ import { routes } from "../../../config/routes";
 import { startWebAuthFlow } from "../../../lib/access/cloud/auth/web-auth-flow";
 import { useAuthToken } from "../../../providers/WebCloudProvider";
 import { BillingSettingsSection } from "./BillingSettingsSection";
+import { EnvironmentsSettingsSection } from "./EnvironmentsSettingsSection";
 
-type SettingsSectionId = "account" | "teams" | "billing" | "support";
+type SettingsSectionId = "account" | "environments" | "teams" | "billing" | "support";
 const SETTINGS_ICON_SIZE = 14;
 
 export function SettingsScreen() {
@@ -77,6 +78,11 @@ export function SettingsScreen() {
                 icon: <CircleUserRound size={SETTINGS_ICON_SIZE} />,
               },
               {
+                id: "environments",
+                label: "Environments",
+                icon: <GitBranch size={SETTINGS_ICON_SIZE} />,
+              },
+              {
                 id: "teams",
                 label: "Teams",
                 icon: <UsersRound size={SETTINGS_ICON_SIZE} />,
@@ -113,6 +119,8 @@ export function SettingsScreen() {
               signOut: () => void signOut(),
             })}
           />
+        ) : activeSection === "environments" ? (
+          <EnvironmentsSettingsSection />
         ) : activeSection === "teams" ? (
           <TeamsSection />
         ) : activeSection === "billing" ? (
@@ -126,7 +134,11 @@ export function SettingsScreen() {
 }
 
 function isSettingsSectionId(value: string | undefined): value is SettingsSectionId {
-  return value === "account" || value === "teams" || value === "billing" || value === "support";
+  return value === "account"
+    || value === "environments"
+    || value === "teams"
+    || value === "billing"
+    || value === "support";
 }
 
 function AccountSection({ props }: { props: AccountSettingsPaneProps }) {

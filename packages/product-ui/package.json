@@ -171,6 +171,22 @@
       "types": "./dist/new-chat/NewChatSurface.d.ts",
       "import": "./dist/new-chat/NewChatSurface.js"
     },
+    "./repos/AddCloudRepoDialog": {
+      "types": "./dist/repos/AddCloudRepoDialog.d.ts",
+      "import": "./dist/repos/AddCloudRepoDialog.js"
+    },
+    "./environments/AddCloudEnvironmentDialog": {
+      "types": "./dist/environments/AddCloudEnvironmentDialog.d.ts",
+      "import": "./dist/environments/AddCloudEnvironmentDialog.js"
+    },
+    "./environments/CloudEnvironmentList": {
+      "types": "./dist/environments/CloudEnvironmentList.d.ts",
+      "import": "./dist/environments/CloudEnvironmentList.js"
+    },
+    "./environments/CloudEnvironmentEditor": {
+      "types": "./dist/environments/CloudEnvironmentEditor.d.ts",
+      "import": "./dist/environments/CloudEnvironmentEditor.js"
+    },
     "./workspaces/WorkspaceRow": {
       "types": "./dist/workspaces/WorkspaceRow.d.ts",
       "import": "./dist/workspaces/WorkspaceRow.js"

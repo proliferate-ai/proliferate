@@ -1,17 +1,24 @@
-import type { ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronRight, Folder } from "@/components/ui/icons";
+import { CloudEnvironmentList } from "@proliferate/product-ui/environments/CloudEnvironmentList";
 import {
-  EnvironmentPanel,
-  EnvironmentPanelRow,
-  EnvironmentSection,
-} from "@/components/ui/EnvironmentLayout";
+  buildCloudEnvironmentListItems,
+} from "@proliferate/product-model/environments/cloud-environments";
+import {
+  formatGitRepoId,
+  parseGitRepoId,
+} from "@proliferate/product-model/repos/repo-id";
+import { ChevronRight } from "@/components/ui/icons";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import type { SettingsFocus } from "@/lib/domain/settings/navigation";
+import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { LocalRepoSection } from "./repo/LocalRepoSection";
 import { CloudRepoSection } from "./repo/CloudRepoSection";
 import { AutomaticSyncSection } from "./environments/AutomaticSyncSection";
 import { WorktreeStorageSection } from "./environments/WorktreeStorageSection";
+import { AddCloudEnvironmentDialogController } from "./environments/AddCloudEnvironmentDialogController";
+import { CloudOnlyEnvironmentDetail } from "./environments/CloudOnlyEnvironmentDetail";
 
 interface EnvironmentsPaneProps {
   repositories: SettingsRepositoryEntry[];
@@ -20,33 +27,10 @@ interface EnvironmentsPaneProps {
   cloudActive: boolean;
   cloudSignInChecking: boolean;
   cloudSignInAvailable: boolean;
+  focus: SettingsFocus;
   onSelectRepository: (sourceRoot: string) => void;
+  onSelectCloudEnvironment: (gitOwner: string, gitRepoName: string) => void;
   onBackToList: () => void;
-}
-
-function RepositoryIdentityRow({
-  repository,
-  action,
-}: {
-  repository: SettingsRepositoryEntry;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <Folder className="size-5 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 space-y-0.5">
-          <div className="truncate text-sm font-medium text-foreground">
-            {repository.name}
-          </div>
-          <div className="truncate text-xs text-muted-foreground">
-            {repository.secondaryLabel ?? repository.sourceRoot}
-          </div>
-        </div>
-      </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
-    </div>
-  );
 }
 
 export function EnvironmentsPane({
@@ -56,55 +40,121 @@ export function EnvironmentsPane({
   cloudActive,
   cloudSignInChecking,
   cloudSignInAvailable,
+  focus,
   onSelectRepository,
+  onSelectCloudEnvironment,
   onBackToList,
 }: EnvironmentsPaneProps) {
-  if (!selectedRepository) {
-    return (
-      <section className="space-y-6">
-        <SettingsPageHeader
-          title="Environments"
-          description="Per-repo configuration for local worktrees and personal cloud workspaces."
-        />
+  const [addCloudEnvironmentOpen, setAddCloudEnvironmentOpen] = useState(false);
+  const cloudRepoConfigs = useCloudRepoConfigs(cloudActive);
+  const selectedCloudRepo = focus.cloudRepoOwner && focus.cloudRepoName
+    ? {
+      gitOwner: focus.cloudRepoOwner,
+      gitRepoName: focus.cloudRepoName,
+    }
+    : null;
+  const cloudConfigByRepoId = useMemo(() => {
+    const byId = new Map<string, { configured: boolean }>();
+    for (const config of cloudRepoConfigs.data?.configs ?? []) {
+      byId.set(formatGitRepoId({
+        gitOwner: config.gitOwner,
+        gitRepoName: config.gitRepoName,
+      }), config);
+    }
+    return byId;
+  }, [cloudRepoConfigs.data?.configs]);
+  const cloudEnvironmentItems = useMemo(() => buildCloudEnvironmentListItems({
+    configs: cloudRepoConfigs.data?.configs ?? [],
+    localCheckouts: repositories
+      .filter((repository) => repository.gitOwner && repository.gitRepoName)
+      .map((repository) => ({
+        gitOwner: repository.gitOwner!,
+        gitRepoName: repository.gitRepoName!,
+        sourceRoot: repository.sourceRoot,
+        name: repository.name,
+        secondaryLabel: repository.secondaryLabel,
+      })),
+  }), [cloudRepoConfigs.data?.configs, repositories]);
 
-        <EnvironmentSection
-          title="Your repositories"
-          description="Click a repository to configure its environment."
-        >
-          <EnvironmentPanel>
-            {repositories.length === 0 ? (
-              <EnvironmentPanelRow>
-                <p className="text-sm text-muted-foreground">
-                  No local environments are available yet.
-                </p>
-              </EnvironmentPanelRow>
-            ) : (
-              repositories.map((repository) => (
-                <EnvironmentPanelRow key={`${repository.sourceRoot}:${repository.repoRootId}`}>
-                  <RepositoryIdentityRow
-                    repository={repository}
-                    action={(
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => onSelectRepository(repository.sourceRoot)}
-                        className="px-2"
-                      >
-                        Configure
-                        <ChevronRight className="size-4" />
-                      </Button>
-                    )}
-                  />
-                </EnvironmentPanelRow>
-              ))
-            )}
-          </EnvironmentPanel>
-      </EnvironmentSection>
-      <WorktreeStorageSection />
-      <AutomaticSyncSection repositories={repositories} />
-    </section>
-  );
-}
+  if (!selectedRepository && selectedCloudRepo && cloudActive) {
+    return (
+      <CloudOnlyEnvironmentDetail
+        gitOwner={selectedCloudRepo.gitOwner}
+        gitRepoName={selectedCloudRepo.gitRepoName}
+        cloudActive={cloudActive}
+        onBack={onBackToList}
+        onSaved={() => { void cloudRepoConfigs.refetch(); }}
+      />
+    );
+  }
+
+  if (!selectedRepository) {
+    const cloudUnavailableReason = cloudUnavailableDescription({
+      cloudEnabled,
+      cloudActive,
+      cloudSignInChecking,
+      cloudSignInAvailable,
+    });
+
+    return (
+      <>
+        <CloudEnvironmentList
+          title="Environments"
+          description="Configure local checkouts and personal Cloud environments."
+          localCheckouts={repositories.map((repository) => {
+            const repoId = repository.gitOwner && repository.gitRepoName
+              ? formatGitRepoId({
+                gitOwner: repository.gitOwner,
+                gitRepoName: repository.gitRepoName,
+              })
+              : null;
+            const cloudConfig = repoId ? cloudConfigByRepoId.get(repoId) : null;
+            return {
+              id: repository.sourceRoot,
+              name: repository.name,
+              description: repository.secondaryLabel ?? repository.sourceRoot,
+              cloudStatusLabel: cloudConfig
+                ? cloudConfig.configured
+                  ? "Cloud enabled"
+                  : "Cloud disabled"
+                : null,
+            };
+          })}
+          cloudEnvironments={cloudEnvironmentItems.map((environment) => ({
+            id: environment.id,
+            fullName: environment.fullName,
+            description: environment.description,
+            configured: environment.configured,
+            localState: environment.localState,
+          }))}
+          loadingCloudEnvironments={cloudRepoConfigs.isLoading}
+          cloudUnavailableReason={cloudUnavailableReason}
+          onSelectLocalCheckout={onSelectRepository}
+          onSelectCloudEnvironment={(repoId) => {
+            const parsed = parseGitRepoId(repoId);
+            if (parsed) {
+              onSelectCloudEnvironment(parsed.gitOwner, parsed.gitRepoName);
+            }
+          }}
+          onAddCloudEnvironment={cloudActive ? () => setAddCloudEnvironmentOpen(true) : undefined}
+          onRetryCloudEnvironments={cloudRepoConfigs.isError ? () => { void cloudRepoConfigs.refetch(); } : undefined}
+        />
+        <WorktreeStorageSection />
+        <AutomaticSyncSection repositories={repositories} />
+        <AddCloudEnvironmentDialogController
+          open={addCloudEnvironmentOpen}
+          onClose={() => setAddCloudEnvironmentOpen(false)}
+          onEnvironmentAdded={(repoId) => {
+            const parsed = parseGitRepoId(repoId);
+            if (parsed) {
+              onSelectCloudEnvironment(parsed.gitOwner, parsed.gitRepoName);
+              void cloudRepoConfigs.refetch();
+            }
+          }}
+        />
+      </>
+    );
+  }
 
   return (
     <section className="space-y-6">
@@ -135,4 +185,29 @@ export function EnvironmentsPane({
       />
     </section>
   );
+}
+
+function cloudUnavailableDescription({
+  cloudEnabled,
+  cloudActive,
+  cloudSignInChecking,
+  cloudSignInAvailable,
+}: {
+  cloudEnabled: boolean;
+  cloudActive: boolean;
+  cloudSignInChecking: boolean;
+  cloudSignInAvailable: boolean;
+}): string | null {
+  if (cloudActive) {
+    return null;
+  }
+  if (!cloudEnabled) {
+    return "Cloud environments are unavailable in this build or deployment.";
+  }
+  if (cloudSignInChecking) {
+    return "Checking cloud sign-in before loading personal Cloud environments.";
+  }
+  return cloudSignInAvailable
+    ? "Sign in to configure personal Cloud environments."
+    : "GitHub sign-in is unavailable, so Cloud environments cannot load.";
 }

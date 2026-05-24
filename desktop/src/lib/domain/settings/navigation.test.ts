@@ -150,6 +150,41 @@ describe("settings navigation", () => {
     });
   });
 
+  it("keeps modern cloud repo settings links keyed by owner and repo", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "environments",
+      rawCloudRepoOwner: "owner",
+      rawCloudRepoName: "name",
+      repositories: [repo({ sourceRoot: "/repo-a" })],
+    })).toEqual({
+      activeSection: "environments",
+      activeRepoSourceRoot: null,
+      focus: {
+        cloudRepoOwner: "owner",
+        cloudRepoName: "name",
+      },
+      inviteHandoff: null,
+    });
+  });
+
+  it("prefers explicit local repo settings links when both local and cloud focus are present", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "environments",
+      rawRepo: "/repo-a",
+      rawCloudRepoOwner: "owner",
+      rawCloudRepoName: "name",
+      repositories: [repo({ sourceRoot: "/repo-a" })],
+    })).toEqual({
+      activeSection: "environments",
+      activeRepoSourceRoot: "/repo-a",
+      focus: {
+        cloudRepoOwner: "owner",
+        cloudRepoName: "name",
+      },
+      inviteHandoff: null,
+    });
+  });
+
   it("falls legacy cloudRepo links back to environments when multiple local repos match", () => {
     expect(resolveSettingsSelection({
       rawSection: "cloudRepo",

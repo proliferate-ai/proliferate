@@ -37,6 +37,7 @@ interface SettingsScreenProps {
   onNavigateHome: () => void;
   onSelectSection: (section: SettingsSection) => void;
   onSelectRepo: (sourceRoot: string) => void;
+  onSelectCloudEnvironment: (gitOwner: string, gitRepoName: string) => void;
 }
 
 function renderSettingsSection(
@@ -52,6 +53,7 @@ function renderSettingsSection(
   focus: SettingsFocus,
   onSelectSection: (section: SettingsSection) => void,
   onSelectRepo: (sourceRoot: string) => void,
+  onSelectCloudEnvironment: (gitOwner: string, gitRepoName: string) => void,
 ): ReactNode {
   if (activeSection === "agents") {
     return <AgentsPane />;
@@ -158,7 +160,9 @@ function renderSettingsSection(
       cloudActive={cloudActive}
       cloudSignInChecking={cloudSignInChecking}
       cloudSignInAvailable={cloudSignInAvailable}
+      focus={focus}
       onSelectRepository={onSelectRepo}
+      onSelectCloudEnvironment={onSelectCloudEnvironment}
       onBackToList={() => onSelectSection("environments")}
     />
   );
@@ -172,6 +176,7 @@ export function SettingsScreen({
   onNavigateHome,
   onSelectSection,
   onSelectRepo,
+  onSelectCloudEnvironment,
 }: SettingsScreenProps) {
   const { cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
   const { activeOrganizationId } = useActiveOrganization();
@@ -245,6 +250,7 @@ export function SettingsScreen({
                   focus,
                   onSelectSection,
                   onSelectRepo,
+                  onSelectCloudEnvironment,
                 )}
               </SettingsContentBoundary>
             </div>

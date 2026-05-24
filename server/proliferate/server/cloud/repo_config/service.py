@@ -238,16 +238,17 @@ def _normalize_files(files: list[CloudRepoFileInput]) -> list[CloudRepoFileInput
     return normalized
 
 
-async def _validate_default_branch(
+async def _validate_repo_access_and_default_branch(
     db: AsyncSession,
     user_id: UUID,
     *,
     git_owner: str,
     git_repo_name: str,
     default_branch: str | None,
+    require_access: bool,
 ) -> str | None:
     normalized_default_branch = (default_branch or "").strip() or None
-    if normalized_default_branch is None:
+    if normalized_default_branch is None and not require_access:
         return None
 
     github_grant = await get_ready_github_grant_for_user(db, user_id=user_id)
@@ -267,6 +268,9 @@ async def _validate_default_branch(
             "Reconnect GitHub and grant repository access before setting a cloud default branch."
         ),
     )
+    if normalized_default_branch is None:
+        return repo_branches.default_branch
+
     if normalized_default_branch not in repo_branches.branches:
         raise CloudApiError(
             "github_branch_not_found",
@@ -286,18 +290,23 @@ async def save_repo_config(
     body: SaveCloudRepoConfigRequest,
 ) -> CloudRepoConfigValue:
     env_vars = normalize_env_vars(body.env_vars)
-    default_branch = await _validate_default_branch(
+    default_branch = await _validate_repo_access_and_default_branch(
         db,
         user_id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         default_branch=body.default_branch,
+        require_access=body.configured,
     )
-    files = _normalize_files(
-        [
-            CloudRepoFileInput(relative_path=item.relative_path, content=item.content)
-            for item in body.files
-        ]
+    files = (
+        _normalize_files(
+            [
+                CloudRepoFileInput(relative_path=item.relative_path, content=item.content)
+                for item in body.files
+            ]
+        )
+        if body.files is not None
+        else None
     )
     billing_snapshot = await get_billing_snapshot_for_request(db, user_id)
     cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
@@ -343,12 +352,13 @@ async def save_organization_repo_config(
         organization_id=organization_id,
     )
     env_vars = normalize_env_vars(body.env_vars)
-    default_branch = await _validate_default_branch(
+    default_branch = await _validate_repo_access_and_default_branch(
         db,
         user_id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         default_branch=body.default_branch,
+        require_access=body.configured,
     )
     files = (
         _normalize_files(

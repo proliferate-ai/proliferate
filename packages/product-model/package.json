@@ -175,6 +175,14 @@
       "types": "./dist/telemetry/scrub.d.ts",
       "import": "./dist/telemetry/scrub.js"
     },
+    "./repos/repo-id": {
+      "types": "./dist/repos/repo-id.d.ts",
+      "import": "./dist/repos/repo-id.js"
+    },
+    "./environments/cloud-environments": {
+      "types": "./dist/environments/cloud-environments.d.ts",
+      "import": "./dist/environments/cloud-environments.js"
+    },
     "./workspaces/model": {
       "types": "./dist/workspaces/model.d.ts",
       "import": "./dist/workspaces/model.js"

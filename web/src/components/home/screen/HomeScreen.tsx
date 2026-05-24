@@ -1,4 +1,4 @@
-import { Bot, Cloud, GitBranch } from "lucide-react";
+import { Bot, Cloud, GitBranch, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -14,6 +14,11 @@ import {
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
 } from "@proliferate/product-model/chats/cloud/composer-controls";
+import {
+  formatGitRepoId,
+  normalizeGitRepoId,
+  parseGitRepoId,
+} from "@proliferate/product-model/repos/repo-id";
 
 import type {
   NewChatPickerId,
@@ -26,6 +31,7 @@ import type { CloudChatTranscriptRowView } from "@proliferate/product-ui/chat/Cl
 import { webEnv } from "../../../config/env";
 import { routes } from "../../../config/routes";
 import { savePendingHomePrompt } from "../../../lib/access/cloud/pending-home-prompt-store";
+import { AddCloudEnvironmentDialogController } from "../../environments/screen/AddCloudEnvironmentDialogController";
 
 const HOME_PLACEHOLDER = "Describe a quick remote task...";
 
@@ -49,8 +55,9 @@ export function HomeScreen() {
   const submitInFlightRef = useRef(false);
   const [draft, setDraft] = useState("");
   const [repoId, setRepoId] = useState(() =>
-    readLastRepoId() ?? normalizeRepoId(webEnv.defaultCloudRepo) ?? ""
+    readLastRepoId() ?? normalizeGitRepoId(webEnv.defaultCloudRepo) ?? ""
   );
+  const [addRepoOpen, setAddRepoOpen] = useState(false);
   const [launchSelection, setLaunchSelection] = useState<CloudLaunchComposerSelection>({
     agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
     modelId: DEFAULT_DIRECT_PROMPT_MODEL_ID,
@@ -108,10 +115,10 @@ export function HomeScreen() {
   );
 
   useEffect(() => {
-    if (!selectedRepo && repoOptions[0]) {
+    if (!repoId && !selectedRepo && repoOptions[0]) {
       setRepoId(repoOptions[0].id);
     }
-  }, [repoOptions, selectedRepo]);
+  }, [repoId, repoOptions, selectedRepo]);
 
   function handlePickerSelect(picker: NewChatPickerId, itemId: string) {
     if (picker === "target") {
@@ -119,6 +126,18 @@ export function HomeScreen() {
       writeLastRepoId(itemId);
       return;
     }
+  }
+
+  function handleAction(actionId: string) {
+    if (actionId === "add-repo") {
+      setAddRepoOpen(true);
+    }
+  }
+
+  function handleRepoSelected(nextRepoId: string) {
+    setRepoId(nextRepoId);
+    writeLastRepoId(nextRepoId);
+    void repoConfigs.refetch();
   }
 
   async function handleSubmit() {
@@ -223,10 +242,22 @@ export function HomeScreen() {
             ? "Creating a cloud workspace. The prompt will send as soon as the workspace is ready."
             : null
         }
-        actions={[]}
+        actions={[
+          {
+            id: "add-repo",
+            label: "Add cloud environment",
+            icon: <Plus size={13} />,
+          },
+        ]}
         onDraftChange={setDraft}
         onSubmit={() => void handleSubmit()}
         onPickerSelect={handlePickerSelect}
+        onAction={handleAction}
+      />
+      <AddCloudEnvironmentDialogController
+        open={addRepoOpen}
+        onClose={() => setAddRepoOpen(false)}
+        onEnvironmentAdded={handleRepoSelected}
       />
     </div>
   );
@@ -357,7 +388,10 @@ function buildRepoOptions(
     if (!config.configured) {
       continue;
     }
-    const id = repoId(config.gitOwner, config.gitRepoName);
+    const id = formatGitRepoId({
+      gitOwner: config.gitOwner,
+      gitRepoName: config.gitRepoName,
+    });
     options.set(id, {
       id,
       gitOwner: config.gitOwner,
@@ -367,9 +401,9 @@ function buildRepoOptions(
     });
   }
 
-  const normalizedDefault = normalizeRepoId(defaultRepo);
+  const normalizedDefault = normalizeGitRepoId(defaultRepo);
   if (normalizedDefault && !options.has(normalizedDefault)) {
-    const parsed = parseRepoId(normalizedDefault);
+    const parsed = parseGitRepoId(normalizedDefault);
     if (parsed) {
       options.set(normalizedDefault, {
         id: normalizedDefault,
@@ -398,33 +432,9 @@ function buildWorkspaceDisplayName(prompt: string): string {
   return firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine;
 }
 
-function repoId(gitOwner: string, gitRepoName: string): string {
-  return `${gitOwner}/${gitRepoName}`;
-}
-
-function normalizeRepoId(value: string | null | undefined): string | null {
-  const parsed = parseRepoId(value);
-  return parsed ? repoId(parsed.gitOwner, parsed.gitRepoName) : null;
-}
-
-function parseRepoId(value: string | null | undefined): {
-  gitOwner: string;
-  gitRepoName: string;
-} | null {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const [gitOwner, gitRepoName, ...rest] = trimmed.split("/");
-  if (!gitOwner || !gitRepoName || rest.length > 0) {
-    return null;
-  }
-  return { gitOwner, gitRepoName };
-}
-
 function readLastRepoId(): string | null {
   try {
-    return normalizeRepoId(window.localStorage.getItem("proliferate.web.homeRepo"));
+    return normalizeGitRepoId(window.localStorage.getItem("proliferate.web.homeRepo"));
   } catch {
     return null;
   }

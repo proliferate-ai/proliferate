@@ -30,9 +30,10 @@ export async function listOrganizationCloudRepoConfigs(
 export async function getCloudRepoConfig(
   gitOwner: string,
   gitRepoName: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudRepoConfigResponse> {
   return (
-    await getProliferateClient().GET("/v1/cloud/repos/{git_owner}/{git_repo_name}/config", {
+    await client.GET("/v1/cloud/repos/{git_owner}/{git_repo_name}/config", {
       params: { path: { git_owner: gitOwner, git_repo_name: gitRepoName } },
     })
   ).data!;
@@ -59,13 +60,39 @@ export async function saveCloudRepoConfig(
   gitOwner: string,
   gitRepoName: string,
   body: SaveCloudRepoConfigRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudRepoConfigResponse> {
   return (
-    await getProliferateClient().PUT("/v1/cloud/repos/{git_owner}/{git_repo_name}/config", {
+    await client.PUT("/v1/cloud/repos/{git_owner}/{git_repo_name}/config", {
       params: { path: { git_owner: gitOwner, git_repo_name: gitRepoName } },
       body,
     })
   ).data!;
+}
+
+export function buildMinimalCloudRepoConfigRequest(
+  defaultBranch: string | null,
+): SaveCloudRepoConfigRequest {
+  return {
+    configured: true,
+    defaultBranch,
+    envVars: {},
+    setupScript: "",
+    runCommand: "",
+  };
+}
+
+export function buildReenableCloudRepoConfigRequest(
+  config: CloudRepoConfigResponse,
+  defaultBranch: string | null,
+): SaveCloudRepoConfigRequest {
+  return {
+    configured: true,
+    defaultBranch: config.defaultBranch ?? defaultBranch,
+    envVars: config.envVars ?? {},
+    setupScript: config.setupScript ?? "",
+    runCommand: config.runCommand ?? "",
+  };
 }
 
 export async function saveOrganizationCloudRepoConfig(

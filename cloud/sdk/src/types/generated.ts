@@ -161,6 +161,9 @@ export type CloudWorkspaceCreatorContext =
 export type CloudWorkspaceDirectTargetContext =
   components["schemas"]["WorkspaceDirectTargetContext"];
 export type CloudConnectionInfo       = components["schemas"]["WorkspaceConnection"];
+export type CloudGitRepositorySummary = components["schemas"]["CloudGitRepositorySummary"];
+export type CloudGitRepositoriesResponse =
+  components["schemas"]["CloudGitRepositoriesResponse"];
 export type CloudRepoBranchesResponse = components["schemas"]["RepoBranchesResponse"];
 export type CloudRepoConfigSummary    = components["schemas"]["CloudRepoConfigSummary"];
 export type CloudRepoConfigsListResponse = components["schemas"]["CloudRepoConfigsListResponse"];

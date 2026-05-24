@@ -33,7 +33,11 @@ from proliferate.db.store.cloud_mcp.oauth_flows import (
 )
 from proliferate.db.store.cloud_mcp.oauth_clients import upsert_oauth_client
 from proliferate.db.store.billing import ensure_personal_billing_subject
-from proliferate.integrations.github import GitHubRepoBranches
+from proliferate.integrations.github import (
+    GitHubRepositoryPage,
+    GitHubRepositorySummary,
+    GitHubRepoBranches,
+)
 from proliferate.integrations.mcp_oauth import TokenResponse
 from proliferate.integrations.sandbox.base import ProviderSandboxState
 from proliferate.server.cloud.errors import CloudApiError
@@ -806,6 +810,13 @@ class TestCloudRepoConfig:
         client: AsyncClient,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release"],
+            )
+
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
         monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_OBSERVE)
         monkeypatch.setattr(settings, "cloud_free_repo_limit", 1)
 
@@ -1034,7 +1045,125 @@ class TestCloudRepoBranches:
         assert response.json() == {
             "defaultBranch": "main",
             "branches": ["main", "release", "stable"],
+            "permission": None,
+            "private": False,
+            "fork": False,
+            "archived": False,
+            "disabled": False,
         }
+
+
+class TestCloudRepoCatalog:
+    @pytest.mark.asyncio
+    async def test_list_cloud_repositories_marks_repo_config_state(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release"],
+                permission="push",
+                private=True,
+            )
+
+        async def _github_repositories(*_args, **_kwargs) -> GitHubRepositoryPage:
+            return GitHubRepositoryPage(
+                repositories=[
+                    GitHubRepositorySummary(
+                        owner="acme",
+                        name="rocket",
+                        full_name="acme/rocket",
+                        default_branch="main",
+                        private=True,
+                        fork=False,
+                        archived=False,
+                        disabled=False,
+                        html_url="https://github.com/acme/rocket",
+                        owner_avatar_url=None,
+                        pushed_at="2026-05-01T00:00:00Z",
+                        updated_at="2026-05-02T00:00:00Z",
+                        permission="push",
+                    ),
+                    GitHubRepositorySummary(
+                        owner="acme",
+                        name="disabled",
+                        full_name="acme/disabled",
+                        default_branch="main",
+                        private=False,
+                        fork=False,
+                        archived=False,
+                        disabled=False,
+                        html_url=None,
+                        owner_avatar_url=None,
+                        pushed_at=None,
+                        updated_at=None,
+                        permission="admin",
+                    ),
+                    GitHubRepositorySummary(
+                        owner="acme",
+                        name="missing",
+                        full_name="acme/missing",
+                        default_branch="main",
+                        private=False,
+                        fork=False,
+                        archived=False,
+                        disabled=False,
+                        html_url=None,
+                        owner_avatar_url=None,
+                        pushed_at=None,
+                        updated_at=None,
+                        permission="pull",
+                    ),
+                ],
+                next_cursor="cursor-2",
+            )
+
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
+        monkeypatch.setattr(
+            repos_service,
+            "list_github_repositories",
+            _github_repositories,
+        )
+
+        session = await _register_and_login(client, "cloud-repo-catalog@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _link_github_account(db_session, session["user_id"])
+        await _configure_repo(client, headers, git_owner="acme", git_repo_name="rocket")
+        disabled = await client.put(
+            "/v1/cloud/repos/acme/disabled/config",
+            headers=headers,
+            json={
+                "configured": False,
+                "defaultBranch": None,
+                "envVars": {},
+                "setupScript": "",
+                "runCommand": "",
+            },
+        )
+        assert disabled.status_code == 200
+
+        response = await client.get(
+            "/v1/cloud/repos",
+            headers=headers,
+            params={"limit": 25},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store, private"
+        assert response.headers["vary"] == "Authorization, Cookie"
+        payload = response.json()
+        assert payload["nextCursor"] == "cursor-2"
+        assert [
+            (repo["fullName"], repo["repoConfigState"], repo["configured"])
+            for repo in payload["repositories"]
+        ] == [
+            ("acme/rocket", "configured", True),
+            ("acme/disabled", "disabled", False),
+            ("acme/missing", "missing", False),
+        ]
 
 
 class TestCloudWorkspaces:

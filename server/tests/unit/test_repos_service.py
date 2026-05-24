@@ -13,10 +13,14 @@ import pytest
 
 from proliferate.integrations.github import (
     GitHubIntegrationError,
+    GitHubRepositoryPage,
+    GitHubRepositorySummary,
     GitHubRepoBranches,
     GitHubRepoAccessRequired,
+    GitHubRateLimited,
     list_branches,
 )
+from proliferate.db.store.cloud_repo_config import CloudRepoConfigSummaryValue
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repos.domain.github_credentials import (
     CloudRepoGitHubCredentials,
@@ -26,6 +30,7 @@ from proliferate.server.cloud.repos.service import (
     build_cloud_repo_credentials_for_user,
     get_cloud_repo_branches,
     get_linked_github_account,
+    list_cloud_repositories,
     get_repo_branches_for_credentials,
     get_repo_branches_for_user,
 )
@@ -237,7 +242,134 @@ class TestGetCloudRepoBranches:
             assert result.model_dump(by_alias=True) == {
                 "defaultBranch": "main",
                 "branches": ["main", "release", "stable"],
+                "permission": None,
+                "private": False,
+                "fork": False,
+                "archived": False,
+                "disabled": False,
             }
+
+
+class TestListCloudRepositories:
+    @pytest.mark.asyncio
+    async def test_maps_github_repositories_and_existing_config_state(self) -> None:
+        credentials = CloudRepoGitHubCredentials(
+            user_id=uuid.uuid4(),
+            access_token="gh-token",
+        )
+        github_page = GitHubRepositoryPage(
+            repositories=[
+                GitHubRepositorySummary(
+                    owner="acme",
+                    name="rocket",
+                    full_name="acme/rocket",
+                    default_branch="main",
+                    private=True,
+                    fork=False,
+                    archived=False,
+                    disabled=False,
+                    html_url="https://github.com/acme/rocket",
+                    owner_avatar_url=None,
+                    pushed_at="2026-05-01T00:00:00Z",
+                    updated_at="2026-05-02T00:00:00Z",
+                    permission="push",
+                ),
+                GitHubRepositorySummary(
+                    owner="acme",
+                    name="disabled",
+                    full_name="acme/disabled",
+                    default_branch="main",
+                    private=False,
+                    fork=False,
+                    archived=False,
+                    disabled=False,
+                    html_url=None,
+                    owner_avatar_url=None,
+                    pushed_at=None,
+                    updated_at=None,
+                    permission="admin",
+                ),
+            ],
+            next_cursor="cursor-2",
+        )
+        configs = [
+            CloudRepoConfigSummaryValue(
+                id=uuid.uuid4(),
+                owner_scope="personal",
+                user_id=credentials.user_id,
+                organization_id=None,
+                git_owner="acme",
+                git_repo_name="rocket",
+                configured=True,
+                configured_at=None,
+                files_version=0,
+            ),
+            CloudRepoConfigSummaryValue(
+                id=uuid.uuid4(),
+                owner_scope="personal",
+                user_id=credentials.user_id,
+                organization_id=None,
+                git_owner="acme",
+                git_repo_name="disabled",
+                configured=False,
+                configured_at=None,
+                files_version=0,
+            ),
+        ]
+
+        with (
+            patch(
+                "proliferate.server.cloud.repos.service.list_github_repositories",
+                new_callable=AsyncMock,
+                return_value=github_page,
+            ) as list_github,
+            patch(
+                "proliferate.server.cloud.repos.service.list_cloud_repo_configs",
+                new_callable=AsyncMock,
+                return_value=configs,
+            ),
+        ):
+            result = await list_cloud_repositories(
+                object(),  # type: ignore[arg-type]
+                credentials,
+                query=None,
+                limit=25,
+            )
+
+        list_github.assert_awaited_once_with(
+            "gh-token",
+            cursor=None,
+            limit=25,
+            affiliation="owner,collaborator,organization_member",
+            visibility="all",
+        )
+        assert result.next_cursor == "cursor-2"
+        assert [repo.repo_config_state for repo in result.repositories] == [
+            "configured",
+            "disabled",
+        ]
+        assert result.repositories[0].configured is True
+        assert result.repositories[1].configured is False
+
+    @pytest.mark.asyncio
+    async def test_maps_github_rate_limits(self) -> None:
+        credentials = CloudRepoGitHubCredentials(
+            user_id=uuid.uuid4(),
+            access_token="gh-token",
+        )
+        with patch(
+            "proliferate.server.cloud.repos.service.list_github_repositories",
+            new_callable=AsyncMock,
+            side_effect=GitHubRateLimited("slow down", retry_after_seconds=30),
+        ), pytest.raises(CloudApiError) as exc_info:
+            await list_cloud_repositories(
+                object(),  # type: ignore[arg-type]
+                credentials,
+            )
+        assert exc_info.value.code == "github_rate_limited"
+        assert exc_info.value.status_code == 429
+        assert exc_info.value.extra_detail == {"retryAfterSeconds": 30}
+        assert exc_info.value.headers == {"Retry-After": "30"}
 
 
 class TestListBranchesAlias:
