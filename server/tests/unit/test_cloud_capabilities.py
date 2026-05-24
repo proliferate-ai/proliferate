@@ -14,6 +14,11 @@ def test_cloud_capabilities_gate_gateway_byok(monkeypatch: pytest.MonkeyPatch) -
         "agent_gateway_litellm_customer_secret_isolation_verified",
         True,
     )
+    monkeypatch.setattr(
+        service.settings,
+        "agent_gateway_litellm_isolation_proof_ref",
+        "runbook/proofs/litellm-team-isolation-2026-05-24",
+    )
     monkeypatch.setattr(service.settings, "agent_gateway_anthropic_byok_enabled", True)
     monkeypatch.setattr(service.settings, "agent_gateway_openai_byok_enabled", False)
     monkeypatch.setattr(service.settings, "agent_gateway_bedrock_byok_enabled", True)
@@ -42,6 +47,31 @@ def test_cloud_capabilities_gate_gateway_byok(monkeypatch: pytest.MonkeyPatch) -
     assert capabilities.agent_gateway.byok_providers.bedrock_assume_role is True
     assert capabilities.agent_gateway.byok_providers.openai_compatible is True
     assert capabilities.agent_gateway.opencode_gateway_enabled is False
+
+
+def test_cloud_capabilities_fail_closed_without_litellm_proof_ref(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(service.settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(service.settings, "agent_gateway_byok_enabled", True)
+    monkeypatch.setattr(service.settings, "agent_gateway_personal_byok_enabled", True)
+    monkeypatch.setattr(service.settings, "agent_gateway_litellm_topology", "enterprise_shared")
+    monkeypatch.setattr(
+        service.settings,
+        "agent_gateway_litellm_customer_secret_isolation_verified",
+        True,
+    )
+    monkeypatch.setattr(service.settings, "agent_gateway_litellm_isolation_proof_ref", "")
+
+    capabilities = service.cloud_capabilities()
+
+    assert capabilities.agent_gateway.live_proof_status == "not_run"
+    assert capabilities.agent_gateway.byok_organization_enabled is False
+    assert capabilities.agent_gateway.byok_personal_enabled is False
+    assert (
+        capabilities.agent_gateway.byok_organization_disabled_reason
+        == "gateway_byok_route_isolation_unverified"
+    )
 
 
 def test_cloud_capabilities_fail_closed_when_gateway_disabled(

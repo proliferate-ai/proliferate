@@ -8,7 +8,9 @@ import json
 import logging
 import math
 import secrets
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 from uuid import UUID
 
@@ -25,13 +27,18 @@ from proliferate.constants.billing import (
     BILLING_MODE_OFF,
     BILLING_PLAN_FREE,
     BILLING_PLAN_PRO,
+    BILLING_PRICE_CLASS_PRO,
     BILLING_SUBJECT_KIND_PERSONAL,
     BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
     BILLING_USAGE_EXPORT_STATUS_OBSERVED,
     BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
+    FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
+    FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL,
+    FREE_CLOUD_ALLOCATION_PERIOD_V2,
     FREE_INCLUDED_GRANT_TYPE,
     FREE_TRIAL_V2_GRANT_TYPE,
     PRO_DEFAULT_OVERAGE_CAP_CENTS_PER_SEAT,
+    PRO_FREE_TRIAL_HOURS,
     PRO_OVERAGE_CAP_CENTS_PER_SEAT_MAX,
     PRO_OVERAGE_PRICE_PER_HOUR_CENTS,
     PRO_SEAT_PRORATION_GRANT_TYPE,
@@ -65,16 +72,24 @@ from proliferate.db.store.billing import (
     BillingAccountingResult,
     BillingSnapshotState,
     BillingSubjectStripeState,
+    FreeCloudAllocationEnsureOutcome,
     account_usage_for_billing_subject,
     bind_stripe_customer_to_billing_subject,
     claim_pending_seat_adjustments,
     claim_usage_exports_for_sending,
     count_active_seats_for_billing_subject_id,
     ensure_billing_grant_record,
+    ensure_free_cloud_allocation_outcome,
+    ensure_personal_billing_subject,
     get_billing_snapshot_state_for_subject,
     get_billing_snapshot_state_for_user,
+    get_existing_billing_snapshot_state_for_user,
+    get_free_cloud_allocation_for_github_identity,
+    get_free_cloud_allocation_for_user,
+    get_linked_github_provider_user_id,
     get_or_create_organization_stripe_customer_state,
     get_or_create_user_stripe_customer_state,
+    list_billing_notification_events_for_subject,
     list_billing_subject_ids_for_usage_accounting,
     load_billing_snapshot_state,
     load_billing_snapshot_state_for_subject,
@@ -85,14 +100,17 @@ from proliferate.db.store.billing import (
     mark_usage_export_succeeded,
     maybe_create_org_seat_adjustment,
     record_billing_decision_event,
+    record_billing_notification_event,
     resolve_billing_subject_id_for_workspace,
     set_overage_policy_for_subject,
     set_overage_policy_for_user,
     upsert_billing_subscription,
 )
+from proliferate.db.store.cloud_agent_auth.records import AgentGatewayBudgetSubjectRecord
 from proliferate.db.store.organization_records import (
     CheckoutIntentRecord,
     CheckoutIntentWithOrganizationRecord,
+    OrganizationWithMembershipRecord,
 )
 from proliferate.db.store.organizations import (
     acquire_membership_activation_lock,
@@ -145,6 +163,7 @@ from proliferate.server.billing.domain.webhooks import (
     subscription_period as _stripe_subscription_period,
 )
 from proliferate.server.billing.models import (
+    AccountCreditsEnsureOutcome,
     BillingOverview,
     BillingServiceError,
     BillingSnapshot,
@@ -163,6 +182,7 @@ from proliferate.server.billing.models import (
 from proliferate.server.billing.policy import free_v2_policy, pro_policy, unlimited_numeric_policy
 from proliferate.server.billing.pricing import (
     billing_price_ids_from_settings,
+    classify_monthly_price_id,
     configured_managed_cloud_meter_event_name,
     configured_managed_cloud_overage_price_id,
     configured_pro_monthly_price_id,
@@ -179,6 +199,148 @@ from proliferate.server.organizations.domain.profile import (
 )
 
 logger = logging.getLogger("proliferate.billing.service")
+
+_ACCOUNT_FREE_LLM_CREDIT_SOURCE = "signup_free_credit"
+
+
+async def _mark_team_checkout_failed_with_event(
+    db: AsyncSession,
+    intent: object,
+    *,
+    organization_id: UUID,
+    activation_status: str,
+    error_code: str,
+    error_message: str,
+    webhook_event_id: str | None,
+) -> None:
+    failed = await mark_team_checkout_failed(
+        db,
+        intent,  # type: ignore[arg-type]
+        activation_status=activation_status,
+        error_code=error_code,
+        error_message=error_message,
+        webhook_event_id=webhook_event_id,
+    )
+    await record_billing_notification_event(
+        db,
+        billing_subject_id=failed.billing_subject_id,
+        organization_id=organization_id,
+        user_id=failed.created_by_user_id,
+        kind="checkout_failed",
+        severity="error",
+        source="stripe" if webhook_event_id else "billing",
+        external_ref=webhook_event_id,
+        idempotency_key=f"checkout_failed:{failed.id}:{error_code}",
+        payload_json={
+            "activation_status": activation_status,
+            "error_code": error_code,
+            "error_message": error_message,
+        },
+        occurred_at=utcnow(),
+    )
+
+
+@dataclass(frozen=True)
+class AccountFreeCloudCreditsRecord:
+    included_hours: float
+    used_hours: float
+    remaining_hours: float
+    status: str
+
+
+@dataclass(frozen=True)
+class AccountFreeLlmReadyAgentModelRecord:
+    agent_kind: str
+    model_id: str
+
+
+@dataclass(frozen=True)
+class AccountFreeLlmCreditsRecord:
+    enabled: bool
+    status: str
+    included_budget_usd: str
+    period_key: str
+    launch_enabled: bool
+    ready_agent_models: tuple[AccountFreeLlmReadyAgentModelRecord, ...]
+    last_error_code: str | None
+    last_error_message: str | None
+
+
+@dataclass(frozen=True)
+class AccountCreditsOverviewRecord:
+    billing_subject_id: UUID | None
+    free_cloud: AccountFreeCloudCreditsRecord
+    free_llm: AccountFreeLlmCreditsRecord
+    github_required: bool
+    free_allocation_status: str
+    start_blocked: bool
+    start_block_reason: str | None
+    blocked_resource: str | None
+
+
+@dataclass(frozen=True)
+class AccountCreditsEnsureRecord:
+    account_credits: AccountCreditsOverviewRecord
+    free_allocation_outcome: AccountCreditsEnsureOutcome
+    free_allocation_blocked_reason: str | None
+
+
+@dataclass(frozen=True)
+class TeamManagedCloudBillingRecord:
+    included_hours: float | None
+    used_hours: float
+    remaining_hours: float | None
+    overage_enabled: bool
+    overage_cap_cents: int | None
+    overage_used_cents: int
+
+
+@dataclass(frozen=True)
+class TeamManagedLlmBillingRecord:
+    included_budget_usd: str | None
+    status: str
+    period_key: str | None
+    litellm_sync_status: str | None
+    last_error_code: str | None
+
+
+@dataclass(frozen=True)
+class TeamBillingOverviewRecord:
+    organization_id: UUID
+    name: str
+    role: str
+    can_manage_billing: bool
+    plan: str
+    subscription_status: str | None
+    payment_healthy: bool
+    seat_quantity: int | None
+    active_member_count: int
+    current_period_start: datetime | None
+    current_period_end: datetime | None
+    hosted_invoice_url: str | None
+    managed_cloud: TeamManagedCloudBillingRecord
+    managed_llm: TeamManagedLlmBillingRecord
+    start_blocked: bool
+    start_block_reason: str | None
+    blocked_resource: str | None
+
+
+@dataclass(frozen=True)
+class TeamBillingEnvelopeRecord:
+    team: TeamBillingOverviewRecord | None
+    can_create_team: bool
+    pending_checkout: TeamCheckoutIntentResponse | None
+
+
+@dataclass(frozen=True)
+class BillingEventSummaryRecord:
+    id: UUID
+    kind: str
+    severity: str
+    occurred_at: datetime
+    recorded_at: datetime
+    summary: str
+    stripe_object_id: str | None
 
 
 def _billing_plan_rule_config() -> BillingPlanRuleConfig:
@@ -608,6 +770,536 @@ async def get_cloud_plan_for_owner(
     context = await _resolve_billing_owner_context(db, user, owner_selection)
     snapshot = await _get_billing_snapshot_for_subject_request(db, context.billing_subject_id)
     return _cloud_plan_from_snapshot(snapshot)
+
+
+async def get_account_credits_overview(
+    db: AsyncSession,
+    user: User,
+) -> AccountCreditsOverviewRecord:
+    return await _account_credits_overview_record(db, user)
+
+
+async def ensure_account_credits(
+    db: AsyncSession,
+    user: User,
+) -> AccountCreditsEnsureRecord:
+    subject = await ensure_personal_billing_subject(db, user.id)
+    allocation_result = None
+    if settings.pro_billing_enabled:
+        allocation_result = await ensure_free_cloud_allocation_outcome(
+            db,
+            allocation_kind=FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL,
+            subject=subject,
+            period_key=FREE_CLOUD_ALLOCATION_PERIOD_V2,
+        )
+    elif _account_free_llm_enabled():
+        allocation_result = await ensure_free_cloud_allocation_outcome(
+            db,
+            allocation_kind=FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
+            subject=subject,
+            period_key=_account_free_llm_period_key(),
+        )
+    await get_billing_snapshot_state_for_user(db, user.id)
+    free_llm_result = None
+    if _account_free_llm_enabled():
+        try:
+            from proliferate.server.cloud.agent_auth.errors import AgentAuthError
+            from proliferate.server.cloud.agent_auth.models import (
+                EnsureFreeManagedCreditsRequest,
+            )
+            from proliferate.server.cloud.agent_auth.service import (
+                ensure_free_managed_credits_for_user,
+            )
+
+            free_llm_result = await ensure_free_managed_credits_for_user(
+                db,
+                actor_user_id=user.id,
+                body=EnsureFreeManagedCreditsRequest(),
+            )
+        except AgentAuthError as error:
+            logger.warning(
+                "Failed to ensure account free managed credits",
+                extra={"user_id": str(user.id), "error": str(error)},
+            )
+    account_credits = await _account_credits_overview_record(
+        db,
+        user,
+        free_llm_result=free_llm_result,
+        mutation_snapshot=True,
+    )
+    outcome = _account_credits_outcome(allocation_result.outcome if allocation_result else None)
+    return AccountCreditsEnsureRecord(
+        account_credits=account_credits,
+        free_allocation_outcome=outcome,
+        free_allocation_blocked_reason=(
+            allocation_result.blocked_reason if allocation_result is not None else None
+        ),
+    )
+
+
+async def get_team_billing_overview(
+    db: AsyncSession,
+    user: User,
+) -> TeamBillingEnvelopeRecord:
+    membership = await get_current_membership_for_user(db, user.id)
+    pending = await get_current_team_checkout_intent(db, user.id)
+    if membership is None:
+        return TeamBillingEnvelopeRecord(
+            team=None,
+            can_create_team=True,
+            pending_checkout=(
+                _team_checkout_intent_response(pending) if pending is not None else None
+            ),
+        )
+    state = await get_or_create_organization_stripe_customer_state(
+        db,
+        membership.organization.id,
+    )
+    snapshot_state = await get_billing_snapshot_state_for_subject(db, state.billing_subject_id)
+    snapshot = _build_billing_snapshot(snapshot_state)
+    subscription = _current_subscription(snapshot_state.subscriptions)
+    can_manage_billing = membership.membership.role in {
+        ORGANIZATION_ROLE_OWNER,
+        ORGANIZATION_ROLE_ADMIN,
+    }
+    budget = await _team_managed_llm_budget(db, membership.organization.id)
+    return TeamBillingEnvelopeRecord(
+        team=TeamBillingOverviewRecord(
+            organization_id=membership.organization.id,
+            name=membership.organization.name,
+            role=membership.membership.role,
+            can_manage_billing=can_manage_billing,
+            plan=(
+                "team"
+                if snapshot.is_paid_cloud or snapshot.plan == BILLING_PLAN_PRO
+                else snapshot.plan
+            ),
+            subscription_status=subscription.status if subscription is not None else None,
+            payment_healthy=snapshot.payment_healthy,
+            seat_quantity=(
+                subscription.seat_quantity
+                if subscription is not None
+                else snapshot_state.active_seat_count
+            ),
+            active_member_count=snapshot_state.active_seat_count,
+            current_period_start=(
+                subscription.current_period_start if subscription is not None else None
+            ),
+            current_period_end=(
+                subscription.current_period_end if subscription is not None else None
+            ),
+            hosted_invoice_url=snapshot.hosted_invoice_url if can_manage_billing else None,
+            managed_cloud=TeamManagedCloudBillingRecord(
+                included_hours=snapshot.included_managed_cloud_hours or snapshot.included_hours,
+                used_hours=snapshot.used_hours,
+                remaining_hours=(
+                    snapshot.remaining_managed_cloud_hours or snapshot.remaining_hours
+                ),
+                overage_enabled=snapshot.managed_cloud_overage_enabled,
+                overage_cap_cents=snapshot.managed_cloud_overage_cap_cents,
+                overage_used_cents=snapshot.managed_cloud_overage_used_cents,
+            ),
+            managed_llm=TeamManagedLlmBillingRecord(
+                included_budget_usd=budget.included_budget_usd if budget is not None else None,
+                status=_managed_llm_status(budget),
+                period_key=budget.entitlement_period_key if budget is not None else None,
+                litellm_sync_status=budget.litellm_sync_status if budget is not None else None,
+                last_error_code=budget.last_error_code if budget is not None else None,
+            ),
+            start_blocked=snapshot.start_blocked,
+            start_block_reason=_facade_block_reason(snapshot.start_block_reason),
+            blocked_resource=_blocked_resource(snapshot.start_block_reason),
+        ),
+        can_create_team=False,
+        pending_checkout=None,
+    )
+
+
+async def create_team_billing_portal_session(
+    db: AsyncSession,
+    user: User,
+) -> BillingUrlResponse:
+    membership = await _require_current_team_membership(db, user)
+    return await create_customer_portal_session(
+        db,
+        user,
+        OwnerSelection(
+            owner_scope="organization",
+            organization_id=membership.organization.id,
+        ),
+    )
+
+
+async def update_team_overage_settings(
+    db: AsyncSession,
+    user: User,
+    *,
+    enabled: bool,
+    cap_cents_per_seat: int | None = None,
+) -> OverageSettingsResponse:
+    membership = await _require_current_team_membership(db, user)
+    return await update_overage_settings(
+        db,
+        user,
+        enabled=enabled,
+        cap_cents_per_seat=cap_cents_per_seat,
+        owner_selection=OwnerSelection(
+            owner_scope="organization",
+            organization_id=membership.organization.id,
+        ),
+    )
+
+
+async def list_team_billing_events(
+    db: AsyncSession,
+    user: User,
+) -> tuple[BillingEventSummaryRecord, ...]:
+    membership = await get_current_membership_for_user(db, user.id)
+    if membership is None:
+        return ()
+    state = await get_or_create_organization_stripe_customer_state(
+        db,
+        membership.organization.id,
+    )
+    can_manage_billing = membership.membership.role in {
+        ORGANIZATION_ROLE_OWNER,
+        ORGANIZATION_ROLE_ADMIN,
+    }
+    if not can_manage_billing:
+        return ()
+    events = await list_billing_notification_events_for_subject(
+        db,
+        billing_subject_id=state.billing_subject_id,
+    )
+    return tuple(
+        BillingEventSummaryRecord(
+            id=event.id,
+            kind=event.kind,
+            severity=event.severity,
+            occurred_at=event.occurred_at,
+            recorded_at=event.created_at,
+            summary=_billing_event_summary(event.kind),
+            stripe_object_id=(
+                event.external_ref
+                if can_manage_billing and event.source == "stripe"
+                else None
+            ),
+        )
+        for event in events
+    )
+
+
+def _account_credits_outcome(
+    outcome: FreeCloudAllocationEnsureOutcome | None,
+) -> AccountCreditsEnsureOutcome:
+    if outcome is None:
+        return AccountCreditsEnsureOutcome.NOT_APPLICABLE
+    return AccountCreditsEnsureOutcome(outcome.value)
+
+
+def _account_free_llm_period_key() -> str:
+    period = settings.agent_gateway_user_free_credit_period.strip() or "registration"
+    if period == "monthly":
+        return utcnow().strftime("%Y-%m")
+    return "registration"
+
+
+def _budget_amount_or_zero(raw_value: str) -> str:
+    try:
+        amount = Decimal(raw_value)
+    except (InvalidOperation, TypeError):
+        return "0"
+    if amount < 0:
+        return "0"
+    return format(amount, "f")
+
+
+def _account_free_llm_enabled() -> bool:
+    budget = Decimal(_budget_amount_or_zero(settings.agent_gateway_user_free_credit_usd))
+    return (
+        settings.agent_gateway_enabled
+        and settings.agent_gateway_user_free_credit_enabled
+        and budget > 0
+    )
+
+
+def _managed_credit_agent_kinds_for_billing() -> tuple[str, ...]:
+    configured = [
+        item.strip()
+        for item in settings.agent_gateway_managed_credit_agent_kinds.split(",")
+        if item.strip()
+    ]
+    agent_kinds = tuple(
+        item for item in configured if item in {"claude", "codex", "opencode", "gemini"}
+    )
+    return agent_kinds or ("claude",)
+
+
+def _managed_credit_ready_models() -> tuple[AccountFreeLlmReadyAgentModelRecord, ...]:
+    models: list[AccountFreeLlmReadyAgentModelRecord] = []
+    for agent_kind in _managed_credit_agent_kinds_for_billing():
+        if agent_kind == "claude":
+            models.append(
+                AccountFreeLlmReadyAgentModelRecord(
+                    agent_kind=agent_kind,
+                    model_id="us.anthropic.claude-sonnet-4-6",
+                )
+            )
+    return tuple(models)
+
+
+async def _account_credits_overview_record(
+    db: AsyncSession,
+    user: User,
+    *,
+    free_llm_result: object | None = None,
+    mutation_snapshot: bool = False,
+) -> AccountCreditsOverviewRecord:
+    state = (
+        await get_billing_snapshot_state_for_user(db, user.id)
+        if mutation_snapshot
+        else await get_existing_billing_snapshot_state_for_user(db, user.id)
+    )
+    snapshot = _build_billing_snapshot(state) if state is not None else None
+    if snapshot is None:
+        included_hours = (
+            PRO_FREE_TRIAL_HOURS
+            if settings.pro_billing_enabled
+            else settings.cloud_free_sandbox_hours
+        )
+        used_hours = 0.0
+        remaining_hours = max(included_hours, 0.0)
+        billing_subject_id = None
+        start_blocked = False
+        start_block_reason = None
+    else:
+        included_hours = snapshot.included_hours or 0.0
+        used_hours = snapshot.used_hours
+        remaining_hours = snapshot.remaining_hours or 0.0
+        billing_subject_id = snapshot.billing_subject_id
+        start_blocked = snapshot.start_blocked
+        start_block_reason = snapshot.start_block_reason
+
+    allocation_status, github_required = await _account_free_allocation_status(
+        db,
+        user_id=user.id,
+        remaining_hours=remaining_hours,
+    )
+    free_llm = await _account_free_llm_record(
+        db,
+        user_id=user.id,
+        ensure_result=free_llm_result,
+    )
+    llm_blocked = free_llm.enabled and free_llm.status == "exhausted"
+    account_start_reason = _facade_block_reason(start_block_reason)
+    if not start_blocked and llm_blocked:
+        start_blocked = True
+        account_start_reason = "llm_credits_exhausted"
+    return AccountCreditsOverviewRecord(
+        billing_subject_id=billing_subject_id,
+        free_cloud=AccountFreeCloudCreditsRecord(
+            included_hours=included_hours,
+            used_hours=used_hours,
+            remaining_hours=remaining_hours,
+            status="exhausted" if allocation_status == "exhausted" else allocation_status,
+        ),
+        free_llm=free_llm,
+        github_required=github_required,
+        free_allocation_status=allocation_status,
+        start_blocked=start_blocked,
+        start_block_reason=account_start_reason,
+        blocked_resource=(
+            "llm"
+            if account_start_reason == "llm_credits_exhausted"
+            else _blocked_resource(start_block_reason)
+        ),
+    )
+
+
+async def _account_free_allocation_status(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    remaining_hours: float,
+) -> tuple[str, bool]:
+    if settings.pro_billing_enabled:
+        allocation_kind = FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL
+        period_key = FREE_CLOUD_ALLOCATION_PERIOD_V2
+    elif _account_free_llm_enabled():
+        allocation_kind = FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS
+        period_key = _account_free_llm_period_key()
+    else:
+        return ("available", False)
+    github_provider_user_id = await get_linked_github_provider_user_id(db, user_id)
+    if github_provider_user_id is None:
+        return ("requires_github", True)
+    allocation = await get_free_cloud_allocation_for_user(
+        db,
+        user_id=user_id,
+        allocation_kind=allocation_kind,
+        period_key=period_key,
+    )
+    if allocation is not None:
+        return ("exhausted" if remaining_hours <= 0 else "available", False)
+    existing = await get_free_cloud_allocation_for_github_identity(
+        db,
+        github_provider_user_id=github_provider_user_id,
+        allocation_kind=allocation_kind,
+        period_key=period_key,
+    )
+    if existing is not None and existing.user_id != user_id:
+        return ("already_allocated_elsewhere", True)
+    return ("available", False)
+
+
+async def _account_free_llm_record(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    ensure_result: object | None = None,
+) -> AccountFreeLlmCreditsRecord:
+    period_key = _account_free_llm_period_key()
+    included_budget_usd = _budget_amount_or_zero(settings.agent_gateway_user_free_credit_usd)
+    if ensure_result is not None:
+        ready_models = tuple(
+            AccountFreeLlmReadyAgentModelRecord(
+                agent_kind=model.agent_kind,
+                model_id=public_model_name,
+            )
+            for model in ensure_result.ready_agent_models
+            for public_model_name in model.public_model_names
+        )
+        return AccountFreeLlmCreditsRecord(
+            enabled=_account_free_llm_enabled(),
+            status=ensure_result.status,
+            included_budget_usd=included_budget_usd,
+            period_key=period_key,
+            launch_enabled=ensure_result.launch_enabled,
+            ready_agent_models=ready_models,
+            last_error_code=ensure_result.last_error_code,
+            last_error_message=ensure_result.last_error_message,
+        )
+
+    from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
+
+    entitlement = await agent_auth_store.get_free_credit_entitlement(
+        db,
+        user_id=user_id,
+        source=_ACCOUNT_FREE_LLM_CREDIT_SOURCE,
+        period_key=period_key,
+    )
+    budget = await agent_auth_store.get_user_managed_budget_subject(db, user_id)
+    enabled = _account_free_llm_enabled()
+    if not settings.agent_gateway_enabled:
+        status = "gateway_disabled"
+    elif not enabled:
+        status = "disabled"
+    elif entitlement is not None:
+        status = entitlement.status
+    elif budget is not None:
+        status = "active" if budget.status == "ready" else budget.status
+    else:
+        status = "not_configured"
+    launch_enabled = (
+        enabled
+        and status in {"active", "ready"}
+        and budget is not None
+        and budget.status == "ready"
+        and budget.litellm_sync_status == "synced"
+    )
+    ready_models = _managed_credit_ready_models() if launch_enabled else ()
+    return AccountFreeLlmCreditsRecord(
+        enabled=enabled,
+        status=status,
+        included_budget_usd=included_budget_usd,
+        period_key=period_key,
+        launch_enabled=launch_enabled,
+        ready_agent_models=ready_models,
+        last_error_code=(
+            entitlement.last_error_code
+            if entitlement is not None and entitlement.last_error_code is not None
+            else budget.last_error_code if budget is not None else None
+        ),
+        last_error_message=(
+            entitlement.last_error_message
+            if entitlement is not None and entitlement.last_error_message is not None
+            else budget.last_error_message if budget is not None else None
+        ),
+    )
+
+
+def _current_subscription(subscriptions: list[BillingSubscription]) -> BillingSubscription | None:
+    for subscription in subscriptions:
+        if subscription.status in {"active", "trialing", "past_due", "unpaid"}:
+            return subscription
+    return subscriptions[0] if subscriptions else None
+
+
+async def _team_managed_llm_budget(
+    db: AsyncSession,
+    organization_id: UUID,
+) -> AgentGatewayBudgetSubjectRecord | None:
+    from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
+
+    return await agent_auth_store.get_managed_budget_subject(db, organization_id)
+
+
+def _managed_llm_status(budget: AgentGatewayBudgetSubjectRecord | None) -> str:
+    if budget is None:
+        return "not_configured"
+    if budget.status == "ready":
+        return "ready"
+    return budget.status
+
+
+async def _require_current_team_membership(
+    db: AsyncSession,
+    user: User,
+) -> OrganizationWithMembershipRecord:
+    membership = await get_current_membership_for_user(db, user.id)
+    if membership is None:
+        raise BillingServiceError(
+            "team_not_found",
+            "You do not belong to a team.",
+            status_code=404,
+        )
+    return membership
+
+
+def _facade_block_reason(reason: str | None) -> str | None:
+    if reason == WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED:
+        return "compute_credits_exhausted"
+    return reason
+
+
+def _blocked_resource(reason: str | None) -> str | None:
+    if reason == WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED:
+        return "compute"
+    if reason in {
+        WORKSPACE_ACTION_BLOCK_KIND_OVERAGE_DISABLED,
+        WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED,
+    }:
+        return "compute"
+    if reason == WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT:
+        return "billing"
+    return "billing" if reason else None
+
+
+def _billing_event_summary(kind: str) -> str:
+    return {
+        "invoice_paid": "Invoice paid",
+        "invoice_payment_failed": "Invoice payment failed",
+        "invoice_upcoming": "Upcoming invoice",
+        "trial_ending": "Trial ending soon",
+        "subscription_updated": "Subscription updated",
+        "subscription_deleted": "Subscription ended",
+        "checkout_activated": "Checkout activated",
+        "checkout_failed": "Checkout failed",
+        "seat_adjustment_confirmed": "Seat adjustment confirmed",
+        "seat_adjustment_failed": "Seat adjustment failed",
+        "managed_llm_budget_exhausted": "Managed LLM credits exhausted",
+        "managed_llm_budget_synced": "Managed LLM credits synced",
+    }.get(kind, "Billing event")
 
 
 def _billing_overview_from_snapshot(snapshot: BillingSnapshot) -> BillingOverview:
@@ -1308,20 +2000,53 @@ async def activate_team_checkout_from_stripe_session(
         "billing_subject_id": billing_subject_id_value,
     }.items():
         if subscription_metadata.get(key) != expected:
-            raise BillingServiceError(
-                "team_checkout_subscription_metadata_mismatch",
-                "Team checkout subscription metadata does not match the checkout session.",
-                status_code=409,
-            )
+            async with db_engine.async_session_factory() as db, db.begin():
+                row = await load_team_checkout_intent_for_update(db, intent_id)
+                if row is not None:
+                    intent, organization = row
+                    await _mark_team_checkout_failed_with_event(
+                        db,
+                        intent,
+                        organization_id=organization.id,
+                        activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BILLING_STATE,
+                        error_code="team_checkout_subscription_metadata_mismatch",
+                        error_message=(
+                            "Team checkout subscription metadata does not match "
+                            "the checkout session."
+                        ),
+                        webhook_event_id=webhook_event_id,
+                    )
+            return
+    subscription_shape_error = _team_subscription_shape_error(
+        subscription,
+        expected_customer_id=customer_id,
+    )
+    if subscription_shape_error is not None:
+        error_code, error_message = subscription_shape_error
+        async with db_engine.async_session_factory() as db, db.begin():
+            row = await load_team_checkout_intent_for_update(db, intent_id)
+            if row is not None:
+                intent, organization = row
+                await _mark_team_checkout_failed_with_event(
+                    db,
+                    intent,
+                    organization_id=organization.id,
+                    activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BILLING_STATE,
+                    error_code=error_code,
+                    error_message=error_message,
+                    webhook_event_id=webhook_event_id,
+                )
+        return
     status = subscription.get("status")
     if status not in {"active", "trialing"}:
         async with db_engine.async_session_factory() as db, db.begin():
             row = await load_team_checkout_intent_for_update(db, intent_id)
             if row is not None:
-                intent, _organization = row
-                await mark_team_checkout_failed(
+                intent, organization = row
+                await _mark_team_checkout_failed_with_event(
                     db,
                     intent,
+                    organization_id=organization.id,
                     activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BILLING_STATE,
                     error_code="subscription_not_active",
                     error_message="Team subscription is not active or trialing.",
@@ -1350,12 +2075,24 @@ async def activate_team_checkout_from_stripe_session(
                 "Team checkout intent does not match Stripe metadata.",
                 status_code=409,
             )
+        if intent.stripe_customer_id != customer_id:
+            await _mark_team_checkout_failed_with_event(
+                db,
+                intent,
+                organization_id=organization.id,
+                activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BILLING_STATE,
+                error_code="team_checkout_customer_mismatch",
+                error_message="Team checkout customer does not match the pending intent.",
+                webhook_event_id=webhook_event_id,
+            )
+            return
         if intent.status != ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING:
             return
         if organization.status != ORGANIZATION_STATUS_PENDING_CHECKOUT:
-            await mark_team_checkout_failed(
+            await _mark_team_checkout_failed_with_event(
                 db,
                 intent,
+                organization_id=organization.id,
                 activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BUSINESS_STATE,
                 error_code="organization_not_pending_checkout",
                 error_message="Team checkout organization is not pending checkout.",
@@ -1364,9 +2101,10 @@ async def activate_team_checkout_from_stripe_session(
             return
         creator = await db.get(User, created_by_user_id)
         if creator is None:
-            await mark_team_checkout_failed(
+            await _mark_team_checkout_failed_with_event(
                 db,
                 intent,
+                organization_id=organization.id,
                 activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BUSINESS_STATE,
                 error_code="checkout_creator_not_found",
                 error_message="Checkout creator account was not found.",
@@ -1376,9 +2114,10 @@ async def activate_team_checkout_from_stripe_session(
         await acquire_membership_activation_lock(db, created_by_user_id)
         current = await get_current_membership_for_user(db, created_by_user_id)
         if current is not None:
-            await mark_team_checkout_failed(
+            await _mark_team_checkout_failed_with_event(
                 db,
                 intent,
+                organization_id=organization.id,
                 activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BUSINESS_STATE,
                 error_code="creator_already_in_organization",
                 error_message="Checkout creator already belongs to a team.",
@@ -1404,6 +2143,19 @@ async def activate_team_checkout_from_stripe_session(
             organization_id=activated.organization.id,
             created_by_user_id=created_by_user_id,
         )
+        await record_billing_notification_event(
+            db,
+            billing_subject_id=billing_subject_id,
+            organization_id=activated.organization.id,
+            user_id=created_by_user_id,
+            kind="checkout_activated",
+            severity="info",
+            source="stripe" if webhook_event_id else "billing",
+            external_ref=webhook_event_id,
+            idempotency_key=f"checkout_activated:{intent.id}",
+            payload_json={"stripe_subscription_id": subscription_id},
+            occurred_at=utcnow(),
+        )
         staged_invites = (
             activated.organization.id,
             activated.organization.name,
@@ -1428,6 +2180,61 @@ async def activate_team_checkout_from_stripe_session(
         )
 
 
+def _team_subscription_shape_error(
+    subscription: dict,
+    *,
+    expected_customer_id: str,
+) -> tuple[str, str] | None:
+    subscription_customer_id = _stripe_id_from_expandable(subscription.get("customer"))
+    if subscription_customer_id != expected_customer_id:
+        return (
+            "subscription_customer_mismatch",
+            "Team checkout subscription customer does not match the checkout session.",
+        )
+    details = _stripe_subscription_item_details(
+        subscription,
+        monthly_price_ids=monthly_subscription_price_ids(billing_price_ids_from_settings()),
+        overage_price_ids=overage_subscription_price_ids(billing_price_ids_from_settings()),
+    )
+    if (
+        details.monthly_item_id is None
+        or details.monthly_price_id is None
+        or classify_monthly_price_id(details.monthly_price_id) != BILLING_PRICE_CLASS_PRO
+    ):
+        return (
+            "subscription_missing_team_price",
+            "Team checkout subscription is missing the configured Team seat price.",
+        )
+    if details.seat_quantity is None or details.seat_quantity < 1:
+        return (
+            "subscription_invalid_seat_quantity",
+            "Team checkout subscription has an invalid seat quantity.",
+        )
+    if (
+        settings.stripe_managed_cloud_overage_price_id
+        and details.metered_item_id is None
+    ):
+        return (
+            "subscription_missing_overage_item",
+            "Team checkout subscription is missing the configured managed cloud overage item.",
+        )
+    current_period_start, current_period_end = _stripe_subscription_period(
+        subscription,
+        monthly_item_id=details.monthly_item_id,
+        metered_item_id=details.metered_item_id,
+    )
+    if (
+        current_period_start is None
+        or current_period_end is None
+        or current_period_end <= current_period_start
+    ):
+        return (
+            "subscription_invalid_period",
+            "Team checkout subscription has an invalid billing period.",
+        )
+    return None
+
+
 async def create_cloud_checkout_session(
     db: AsyncSession,
     user: User,
@@ -1435,6 +2242,8 @@ async def create_cloud_checkout_session(
 ) -> BillingUrlResponse:
     selection = owner_selection or OwnerSelection()
     org_context: OwnerContext | None = None
+    if selection.owner_scope == "personal":
+        await _require_personal_paid_checkout_allowed(db, user)
     if selection.owner_scope == "organization":
         async with db.begin():
             org_context = await _resolve_billing_owner_context(db, user, selection)
@@ -1449,7 +2258,7 @@ async def create_cloud_checkout_session(
         if not settings.pro_billing_enabled:
             raise BillingServiceError(
                 "org_pro_billing_disabled",
-                "Organization Pro billing is not available yet.",
+                "Team billing is not available yet.",
                 status_code=409,
             )
     success_url, cancel_url, portal_return_url = _require_redirect_urls()
@@ -1538,13 +2347,14 @@ async def create_refill_checkout_session(
     if selection.owner_scope == "organization":
         raise BillingServiceError(
             "refill_checkout_not_supported_for_org",
-            "Refill checkout is not supported for organizations.",
+            "Legacy cloud credit checkout is not supported for organizations.",
             status_code=409,
         )
+    await _require_personal_paid_checkout_allowed(db, user)
     if settings.pro_billing_enabled:
         raise BillingServiceError(
             "refill_checkout_disabled",
-            "Refill checkout is not available for Pro billing.",
+            "Legacy cloud credit checkout is unavailable for Team billing.",
             status_code=409,
         )
     success_url, cancel_url, _portal_return_url = _require_redirect_urls()
@@ -1576,16 +2386,39 @@ async def create_refill_checkout_session(
     return BillingUrlResponse(url=checkout.url)
 
 
+async def _require_personal_paid_checkout_allowed(db: AsyncSession, user: User) -> None:
+    if (
+        settings.proliferate_product_mode != "hosted_product"
+        or settings.billing_legacy_personal_paid_checkout_enabled
+    ):
+        return
+    async with db.begin():
+        state = await get_existing_billing_snapshot_state_for_user(db, user.id)
+        legacy_active = False
+        if state is not None:
+            legacy_active = _build_billing_snapshot(state).legacy_cloud_subscription
+    if legacy_active:
+        return
+    raise BillingServiceError(
+        "personal_paid_billing_unavailable",
+        "Personal paid Cloud checkout is unavailable. Start a Team plan for paid Cloud usage.",
+        status_code=409,
+    )
+
+
 async def create_customer_portal_session(
     db: AsyncSession,
     user: User,
     owner_selection: OwnerSelection | None = None,
 ) -> BillingUrlResponse:
     _success_url, _cancel_url, portal_return_url = _require_redirect_urls()
+    selection = owner_selection or OwnerSelection()
+    if selection.owner_scope == "personal":
+        await _require_personal_paid_checkout_allowed(db, user)
     subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
         db,
         user,
-        owner_selection or OwnerSelection(),
+        selection,
     )
     try:
         portal = await stripe_billing.create_customer_portal_session(

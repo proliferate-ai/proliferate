@@ -675,6 +675,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workspaces/launch-preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Launch Cloud Workspace Preflight Endpoint */
+        post: operations["launch_cloud_workspace_preflight_endpoint_v1_cloud_workspaces_launch_preflight_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workspaces/remote-access": {
         parameters: {
             query?: never;
@@ -2811,6 +2828,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/account-credits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Account Credits Endpoint */
+        get: operations["get_account_credits_endpoint_v1_billing_account_credits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/account-credits/ensure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ensure Account Credits Endpoint */
+        post: operations["ensure_account_credits_endpoint_v1_billing_account_credits_ensure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/cloud-checkout": {
         parameters: {
             query?: never;
@@ -2822,6 +2873,142 @@ export interface paths {
         put?: never;
         /** Create Cloud Checkout */
         post: operations["create_cloud_checkout_v1_billing_cloud_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/team-checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Team Checkout */
+        post: operations["create_team_checkout_v1_billing_team_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Team Billing Endpoint */
+        get: operations["get_team_billing_endpoint_v1_billing_team_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/team/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Team Checkout Facade Endpoint */
+        post: operations["create_team_checkout_facade_endpoint_v1_billing_team_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/team/customer-portal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Team Customer Portal Endpoint */
+        post: operations["create_team_customer_portal_endpoint_v1_billing_team_customer_portal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/team/overage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Team Overage Settings Endpoint */
+        patch: operations["update_team_overage_settings_endpoint_v1_billing_team_overage_patch"];
+        trace?: never;
+    };
+    "/v1/billing/team/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Team Billing Events Endpoint */
+        get: operations["list_team_billing_events_endpoint_v1_billing_team_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/team-checkout/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Current Team Checkout Endpoint */
+        get: operations["get_current_team_checkout_endpoint_v1_billing_team_checkout_current_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/team-checkout/{intent_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Current Team Checkout Endpoint */
+        post: operations["cancel_current_team_checkout_endpoint_v1_billing_team_checkout__intent_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2907,6 +3094,23 @@ export interface paths {
         put?: never;
         /** Accept Organization Invitation Endpoint */
         post: operations["accept_organization_invitation_endpoint_v1_organizations_invitations_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/invitations/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Current User Organization Invitations Endpoint */
+        get: operations["list_current_user_organization_invitations_endpoint_v1_organizations_invitations_current_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3313,6 +3517,68 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccountCreditsEnsureResponse */
+        AccountCreditsEnsureResponse: {
+            accountCredits: components["schemas"]["AccountCreditsOverview"];
+            /** Freeallocationoutcome */
+            freeAllocationOutcome: string;
+            /** Freeallocationblockedreason */
+            freeAllocationBlockedReason?: string | null;
+        };
+        /** AccountCreditsOverview */
+        AccountCreditsOverview: {
+            /** Billingsubjectid */
+            billingSubjectId: string | null;
+            freeCloud: components["schemas"]["AccountFreeCloudCredits"];
+            freeLlm: components["schemas"]["AccountFreeLlmCredits"];
+            /** Githubrequired */
+            githubRequired: boolean;
+            /** Freeallocationstatus */
+            freeAllocationStatus: string;
+            /** Startblocked */
+            startBlocked: boolean;
+            /** Startblockreason */
+            startBlockReason?: string | null;
+            /** Blockedresource */
+            blockedResource?: string | null;
+        };
+        /** AccountFreeCloudCredits */
+        AccountFreeCloudCredits: {
+            /** Includedhours */
+            includedHours: number;
+            /** Usedhours */
+            usedHours: number;
+            /** Remaininghours */
+            remainingHours: number;
+            /** Status */
+            status: string;
+        };
+        /** AccountFreeLlmCredits */
+        AccountFreeLlmCredits: {
+            /** Enabled */
+            enabled: boolean;
+            /** Status */
+            status: string;
+            /** Includedbudgetusd */
+            includedBudgetUsd: string;
+            /** Periodkey */
+            periodKey: string;
+            /** Launchenabled */
+            launchEnabled: boolean;
+            /** Readyagentmodels */
+            readyAgentModels: components["schemas"]["AccountFreeLlmReadyAgentModel"][];
+            /** Lasterrorcode */
+            lastErrorCode?: string | null;
+            /** Lasterrormessage */
+            lastErrorMessage?: string | null;
+        };
+        /** AccountFreeLlmReadyAgentModel */
+        AccountFreeLlmReadyAgentModel: {
+            /** Agentkind */
+            agentKind: string;
+            /** Modelid */
+            modelId: string;
+        };
         /** AccountReadinessResponse */
         AccountReadinessResponse: {
             /** Productready */
@@ -4276,6 +4542,31 @@ export interface components {
             /** Nextrunat */
             nextRunAt: string | null;
         };
+        /** BillingEventSummary */
+        BillingEventSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Severity */
+            severity: string;
+            /** Occurredat */
+            occurredAt: string;
+            /** Recordedat */
+            recordedAt: string;
+            /** Summary */
+            summary: string;
+            /** Stripeobjectid */
+            stripeObjectId?: string | null;
+        };
+        /** BillingEventsResponse */
+        BillingEventsResponse: {
+            /** Events */
+            events: components["schemas"]["BillingEventSummary"][];
+        };
         /** BillingOverview */
         BillingOverview: {
             /**
@@ -5108,6 +5399,56 @@ export interface components {
             /** Lasteventseq */
             lastEventSeq: number;
         };
+        /** CloudWorkspaceLaunchPreflightBillingSummary */
+        CloudWorkspaceLaunchPreflightBillingSummary: {
+            /**
+             * Ownerscope
+             * @enum {string}
+             */
+            ownerScope: "personal" | "organization";
+            /** Organizationid */
+            organizationId?: string | null;
+            /** Billingsubjectid */
+            billingSubjectId?: string | null;
+            /** Plan */
+            plan?: string | null;
+            /** Paymenthealthy */
+            paymentHealthy?: boolean | null;
+            /** Remainingseconds */
+            remainingSeconds?: number | null;
+            /** Managedllmstatus */
+            managedLlmStatus?: string | null;
+        };
+        /** CloudWorkspaceLaunchPreflightRequest */
+        CloudWorkspaceLaunchPreflightRequest: {
+            /**
+             * Ownerscope
+             * @default personal
+             * @enum {string}
+             */
+            ownerScope: "personal" | "organization";
+            /** Organizationid */
+            organizationId?: string | null;
+            /**
+             * Targetkind
+             * @default managed_cloud
+             */
+            targetKind: string;
+            /** Requiredagentkind */
+            requiredAgentKind?: string | null;
+            /** Requiredmanagedresources */
+            requiredManagedResources?: ("compute" | "llm" | "gateway")[];
+        };
+        /** CloudWorkspaceLaunchPreflightResponse */
+        CloudWorkspaceLaunchPreflightResponse: {
+            /** Launchallowed */
+            launchAllowed: boolean;
+            /** Blockedreason */
+            blockedReason?: string | null;
+            /** Blockedresource */
+            blockedResource?: ("compute" | "llm" | "gateway" | "billing" | "seat") | null;
+            billing: components["schemas"]["CloudWorkspaceLaunchPreflightBillingSummary"];
+        };
         /** CloudWorkspaceRepoConfigStatusResponse */
         CloudWorkspaceRepoConfigStatusResponse: {
             /** Currentrepofilesversion */
@@ -5498,6 +5839,10 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+        };
+        /** CurrentTeamCheckoutResponse */
+        CurrentTeamCheckoutResponse: {
+            intent?: components["schemas"]["TeamCheckoutIntentResponse"] | null;
         };
         /** DirectAccessTokenRequest */
         DirectAccessTokenRequest: {
@@ -6136,6 +6481,12 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /**
+             * Status
+             * @default active
+             * @enum {string}
+             */
+            status: "pending_checkout" | "active" | "suspended" | "archived";
             /** Logodomain */
             logoDomain?: string | null;
             /** Logoimage */
@@ -7327,6 +7678,121 @@ export interface components {
             username?: string | null;
             /** Email */
             email?: string | null;
+        };
+        /** TeamBillingEnvelope */
+        TeamBillingEnvelope: {
+            team: components["schemas"]["TeamBillingOverview"] | null;
+            /** Cancreateteam */
+            canCreateTeam: boolean;
+            pendingCheckout?: components["schemas"]["TeamCheckoutIntentResponse"] | null;
+        };
+        /** TeamBillingOverview */
+        TeamBillingOverview: {
+            /**
+             * Organizationid
+             * Format: uuid
+             */
+            organizationId: string;
+            /** Name */
+            name: string;
+            /** Role */
+            role: string;
+            /** Canmanagebilling */
+            canManageBilling: boolean;
+            /** Plan */
+            plan: string;
+            /** Subscriptionstatus */
+            subscriptionStatus?: string | null;
+            /** Paymenthealthy */
+            paymentHealthy: boolean;
+            /** Seatquantity */
+            seatQuantity?: number | null;
+            /** Activemembercount */
+            activeMemberCount: number;
+            /** Currentperiodstart */
+            currentPeriodStart?: string | null;
+            /** Currentperiodend */
+            currentPeriodEnd?: string | null;
+            /** Hostedinvoiceurl */
+            hostedInvoiceUrl?: string | null;
+            managedCloud: components["schemas"]["TeamManagedCloudBilling"];
+            managedLlm: components["schemas"]["TeamManagedLlmBilling"];
+            /** Startblocked */
+            startBlocked: boolean;
+            /** Startblockreason */
+            startBlockReason?: string | null;
+            /** Blockedresource */
+            blockedResource?: string | null;
+        };
+        /** TeamCheckoutIntentResponse */
+        TeamCheckoutIntentResponse: {
+            /** Id */
+            id: string;
+            /** Organizationid */
+            organizationId: string;
+            /** Teamname */
+            teamName: string;
+            /** Status */
+            status: string;
+            /** Activationstatus */
+            activationStatus: string;
+            /** Activationerrorcode */
+            activationErrorCode?: string | null;
+            /** Activationerrormessage */
+            activationErrorMessage?: string | null;
+            /** Checkouturl */
+            checkoutUrl?: string | null;
+            /** Expiresat */
+            expiresAt: string;
+        };
+        /** TeamCheckoutRequest */
+        TeamCheckoutRequest: {
+            /** Teamname */
+            teamName: string;
+            /** Inviteemails */
+            inviteEmails?: string[];
+        };
+        /** TeamCheckoutResponse */
+        TeamCheckoutResponse: {
+            /** Url */
+            url: string;
+            /** Intentid */
+            intentId: string;
+        };
+        /** TeamManagedCloudBilling */
+        TeamManagedCloudBilling: {
+            /** Includedhours */
+            includedHours?: number | null;
+            /** Usedhours */
+            usedHours: number;
+            /** Remaininghours */
+            remainingHours?: number | null;
+            /** Overageenabled */
+            overageEnabled: boolean;
+            /** Overagecapcents */
+            overageCapCents?: number | null;
+            /** Overageusedcents */
+            overageUsedCents: number;
+        };
+        /** TeamManagedLlmBilling */
+        TeamManagedLlmBilling: {
+            /** Includedbudgetusd */
+            includedBudgetUsd?: string | null;
+            /** Status */
+            status: string;
+            /** Periodkey */
+            periodKey?: string | null;
+            /** Litellmsyncstatus */
+            litellmSyncStatus?: string | null;
+            /** Lasterrorcode */
+            lastErrorCode?: string | null;
+        };
+        /** TeamOverageSettingsRequest */
+        TeamOverageSettingsRequest: {
+            /** Enabled */
+            enabled: boolean;
+            /** Capcentsperseat */
+            capCentsPerSeat?: number | null;
         };
         /**
          * TokenRequest
@@ -10098,6 +10564,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    launch_cloud_workspace_preflight_endpoint_v1_cloud_workspaces_launch_preflight_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudWorkspaceLaunchPreflightRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudWorkspaceLaunchPreflightResponse"];
                 };
             };
             /** @description Validation Error */
@@ -14542,6 +15041,46 @@ export interface operations {
             };
         };
     };
+    get_account_credits_endpoint_v1_billing_account_credits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountCreditsOverview"];
+                };
+            };
+        };
+    };
+    ensure_account_credits_endpoint_v1_billing_account_credits_ensure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountCreditsEnsureResponse"];
+                };
+            };
+        };
+    };
     create_cloud_checkout_v1_billing_cloud_checkout_post: {
         parameters: {
             query?: never;
@@ -14562,6 +15101,216 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BillingUrlResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_team_checkout_v1_billing_team_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamCheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamCheckoutResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_team_billing_endpoint_v1_billing_team_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamBillingEnvelope"];
+                };
+            };
+        };
+    };
+    create_team_checkout_facade_endpoint_v1_billing_team_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamCheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamCheckoutResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_team_customer_portal_endpoint_v1_billing_team_customer_portal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingUrlResponse"];
+                };
+            };
+        };
+    };
+    update_team_overage_settings_endpoint_v1_billing_team_overage_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamOverageSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverageSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_team_billing_events_endpoint_v1_billing_team_events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingEventsResponse"];
+                };
+            };
+        };
+    };
+    get_current_team_checkout_endpoint_v1_billing_team_checkout_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentTeamCheckoutResponse"];
+                };
+            };
+        };
+    };
+    cancel_current_team_checkout_endpoint_v1_billing_team_checkout__intent_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentTeamCheckoutResponse"];
                 };
             };
             /** @description Validation Error */
@@ -14734,6 +15483,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_current_user_organization_invitations_endpoint_v1_organizations_invitations_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationInvitationsResponse"];
                 };
             };
         };

@@ -97,7 +97,7 @@ describe("agentAuthGatewayCreatePayloadReady", () => {
         baseUrl: "",
         roleArn: "arn:aws:iam::123456789012:role/proliferate-bedrock",
         region: "us-east-1",
-        externalId: "proliferate-dev",
+        externalId: "",
       }),
     ).toBe(true);
   });
@@ -117,7 +117,7 @@ describe("buildAgentAuthGatewayCredentialRequest", () => {
           baseUrl: "",
           roleArn: " arn:aws:iam::123456789012:role/proliferate-bedrock ",
           region: " us-east-1 ",
-          externalId: " external-id ",
+          externalId: " ignored-client-value ",
         },
       }),
     ).toMatchObject({
@@ -130,7 +130,6 @@ describe("buildAgentAuthGatewayCredentialRequest", () => {
       payload: {
         roleArn: "arn:aws:iam::123456789012:role/proliferate-bedrock",
         region: "us-east-1",
-        externalId: "external-id",
       },
     });
   });

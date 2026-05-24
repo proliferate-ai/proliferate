@@ -137,10 +137,19 @@ lives in `server/proliferate/constants/billing.py`. It is not env-overridable.
 | `AGENT_GATEWAY_LITELLM_BASE_URL` | No | When gateway is enabled | Private LiteLLM proxy base URL |
 | `AGENT_GATEWAY_LITELLM_MASTER_KEY` | Yes | When provisioning gateway credentials or managed credits | LiteLLM admin key for teams, virtual keys, and model deployments |
 | `AGENT_GATEWAY_PUBLIC_BASE_URL` | No | When sandbox gateway auth is materialized | Public Proliferate gateway base URL written into sandbox auth config |
-| `AGENT_GATEWAY_DEFAULT_MANAGED_BUDGET_USD` | No | Only for managed credits | Organization managed-credit entitlement; `0` disables managed credits |
+| `AGENT_GATEWAY_MANAGED_BUDGET_FREE_USD` | No | Only for managed credits | Free-plan managed-credit entitlement; `0` disables managed credits |
+| `AGENT_GATEWAY_MANAGED_BUDGET_PRO_USD` | No | Only for managed credits | Team-plan managed-credit entitlement; `0` disables managed credits |
+| `AGENT_GATEWAY_MANAGED_BUDGET_UNLIMITED_USD` | No | Only for managed credits | Unlimited/enterprise managed-credit entitlement; `0` disables managed credits |
 | `AGENT_GATEWAY_MAX_REQUEST_BYTES` | No | No | Maximum gateway request body size |
 | `AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS` | No | No | Timeout for gateway forwarding to LiteLLM |
 | `AGENT_GATEWAY_BYOK_ENABLED` | No | No | Enables user/org provider credentials through the gateway; hosted-cloud V1 leaves this disabled |
+| `AGENT_GATEWAY_PERSONAL_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables personal BYOK provider credentials for cloud use |
+| `AGENT_GATEWAY_PROVIDER_LIVE_VALIDATION_ENABLED` | No | Required for production BYOK | Requires live provider validation before non-Bedrock BYOK credentials become ready |
+| `AGENT_GATEWAY_LITELLM_TOPOLOGY` | No | Required for BYOK | LiteLLM routing topology; BYOK readiness accepts `enterprise_shared` only with proof or `isolated_router` only with runtime support |
+| `AGENT_GATEWAY_LITELLM_CONFIG_FINGERPRINT` | No | Required for production BYOK proof checks | Operator fingerprint for the exact deployed LiteLLM routing config |
+| `AGENT_GATEWAY_RUNTIME_SUPPORTS_ISOLATED_ROUTER` | No | Only for `isolated_router` BYOK | Readiness-only proof that gateway runtime selects per-policy LiteLLM routers |
+| `AGENT_GATEWAY_LITELLM_ISOLATION_PROOF_REF` | No | Required for BYOK | Readable JSON proof artifact tied to image digest, topology, config fingerprint, and live proof script hash |
+| `AGENT_GATEWAY_LITELLM_CUSTOMER_SECRET_ISOLATION_VERIFIED` | No | Required for BYOK | Operator flag that must be backed by the proof artifact above |
 | `AGENT_GATEWAY_ANTHROPIC_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables Anthropic API key credentials through the gateway |
 | `AGENT_GATEWAY_OPENAI_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables OpenAI API key credentials through the gateway |
 | `AGENT_GATEWAY_BEDROCK_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables AWS Bedrock AssumeRole credentials through the gateway |

@@ -128,6 +128,7 @@ describe("cloud workspace creation helpers", () => {
       branchName: attempt.branchName,
       displayName: null,
       ownerScope: "personal",
+      organizationId: null,
     });
     expect(attempt.triedBranchNames).toEqual(new Set([attempt.branchName]));
   });

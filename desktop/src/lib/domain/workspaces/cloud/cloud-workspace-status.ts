@@ -12,11 +12,15 @@ const PENDING_STATUSES = new Set<CloudWorkspaceStatus>([
 const START_BLOCK_REASONS = [
   "concurrency_limit",
   "credits_exhausted",
+  "compute_credits_exhausted",
+  "llm_credits_exhausted",
   "overage_disabled",
   "cap_exhausted",
   "payment_failed",
   "admin_hold",
   "external_billing_hold",
+  "agent_gateway_disabled",
+  "managed_credit_agent_not_configured",
 ] as const;
 
 export type CloudStartBlockReason = (typeof START_BLOCK_REASONS)[number];

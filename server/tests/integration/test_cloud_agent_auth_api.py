@@ -23,7 +23,7 @@ from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.agent_auth import service as agent_auth_service
 from proliferate.server.cloud.worker import service as worker_service
-from proliferate.utils.crypto import decrypt_text, encrypt_json, encrypt_text
+from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
@@ -137,7 +137,42 @@ def _enable_anthropic_gateway_byok(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_litellm_isolation_proof_ref",
+        "runbook/proofs/litellm-team-isolation-2026-05-24",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
         "agent_gateway_anthropic_byok_enabled",
+        True,
+    )
+
+
+def _enable_bedrock_gateway_byok(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_byok_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_personal_byok_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_litellm_topology",
+        "enterprise_shared",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_litellm_customer_secret_isolation_verified",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_litellm_isolation_proof_ref",
+        "runbook/proofs/litellm-team-isolation-2026-05-24",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_bedrock_byok_enabled",
         True,
     )
 
@@ -592,6 +627,61 @@ async def test_gateway_credential_fails_closed_without_live_provider_validation_
     assert body["policy"]["lastErrorCode"] == "provider_live_validation_deferred"
     assert body["providerCredential"]["validationStatus"] == "unvalidated"
     assert body["providerCredential"]["redactedSummary"]["apiKey"] == "sk-a...test"
+
+
+@pytest.mark.asyncio
+async def test_bedrock_gateway_credential_generates_external_id_server_side(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_bedrock_gateway_byok(monkeypatch)
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-bedrock-external-id@example.com",
+    )
+
+    response = await client.post(
+        "/v1/cloud/agent-auth/credentials/gateway",
+        headers=_headers(tokens),
+        json={
+            "ownerScope": "personal",
+            "agentKind": "claude",
+            "displayName": "Personal Bedrock gateway",
+            "policyKind": "personal_byok",
+            "providerKind": "bedrock_assume_role",
+            "payload": {
+                "roleArn": "arn:aws:iam::123456789012:role/ProliferateBedrockRole",
+                "region": "us-west-2",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["credential"]["status"] == "invalid"
+    assert body["policy"]["lastErrorCode"] == "provider_live_validation_deferred"
+    provider = body["providerCredential"]
+    assert provider["validationStatus"] == "unvalidated"
+    assert provider["redactedSummary"] == {
+        "providerKind": "bedrock_assume_role",
+        "roleArn": "arn:aws:iam::123456789012:role/ProliferateBedrockRole",
+        "region": "us-west-2",
+        "accountId": "123456789012",
+    }
+
+    policy = await store.get_gateway_policy_for_credential(
+        db_session,
+        uuid.UUID(body["credential"]["id"]),
+    )
+    assert policy is not None
+    provider_credential = await store.get_provider_credential_for_policy(db_session, policy.id)
+    assert provider_credential is not None
+    stored_payload = decrypt_json(provider_credential.payload_ciphertext)
+    assert stored_payload["roleArn"] == "arn:aws:iam::123456789012:role/ProliferateBedrockRole"
+    assert stored_payload["region"] == "us-west-2"
+    assert stored_payload["externalId"].startswith("proliferate-")
 
 
 @pytest.mark.asyncio
@@ -1086,12 +1176,17 @@ async def test_litellm_reconciler_repairs_valid_byok_policy(
     class _FakeLiteLLMAdminClient:
         def __init__(self) -> None:
             self.deployments: list[dict[str, object]] = []
+            self.routings: list[dict[str, object]] = []
 
         async def ensure_team(self, **_kwargs: object) -> object:
             return SimpleNamespace(team_id="team-reconciled")
 
         async def generate_key(self, **_kwargs: object) -> object:
             return SimpleNamespace(key="litellm-reconciled-key", key_id="key-reconciled")
+
+        async def reconcile_credential_routing(self, **kwargs: object) -> object:
+            self.routings.append(dict(kwargs))
+            return SimpleNamespace(credential_name=kwargs["credential_name"])
 
         async def create_model_deployment(self, **kwargs: object) -> object:
             self.deployments.append(dict(kwargs))
@@ -1121,10 +1216,15 @@ async def test_litellm_reconciler_repairs_valid_byok_policy(
     repaired_credential = await store.get_credential(db_session, credential.id)
     assert repaired_credential is not None
     assert repaired_credential.status == "ready"
-    assert fake_litellm.deployments[0]["litellm_params"] == {
+    assert fake_litellm.routings
+    assert fake_litellm.routings[0]["credential_values"] == {
         "api_key": "sk-provider-secret",
+    }
+    assert fake_litellm.deployments[0]["litellm_params"] == {
+        "litellm_credential_name": f"credential-{credential.id}-anthropic_api_key",
         "custom_llm_provider": "anthropic",
     }
+    assert "sk-provider-secret" not in str(fake_litellm.deployments[0])
 
 
 @pytest.mark.asyncio

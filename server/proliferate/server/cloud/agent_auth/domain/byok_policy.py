@@ -19,6 +19,7 @@ def gateway_byok_policy_verdict(
     personal_byok_enabled: bool,
     litellm_topology: str,
     customer_secret_isolation_verified: bool,
+    isolation_proof_ref: str | None = None,
 ) -> GatewayByokVerdict:
     if not gateway_byok_enabled:
         return GatewayByokVerdict(
@@ -35,11 +36,12 @@ def gateway_byok_policy_verdict(
     if policy_kind in {"personal_byok", "org_byok"} and not gateway_route_isolation_ready(
         litellm_topology=litellm_topology,
         customer_secret_isolation_verified=customer_secret_isolation_verified,
+        isolation_proof_ref=isolation_proof_ref,
     ):
         return GatewayByokVerdict(
             allowed=False,
             code="gateway_byok_route_isolation_unverified",
-            message="Gateway BYOK requires verified LiteLLM route isolation.",
+            message="Gateway BYOK requires a verified LiteLLM route-isolation proof.",
         )
     return GatewayByokVerdict(allowed=True, code=None, message=None)
 
@@ -48,8 +50,9 @@ def gateway_route_isolation_ready(
     *,
     litellm_topology: str,
     customer_secret_isolation_verified: bool,
+    isolation_proof_ref: str | None = None,
 ) -> bool:
     topology = litellm_topology.strip().lower()
-    if topology not in {"enterprise_shared", "isolated_router"}:
+    if topology != "enterprise_shared":
         return False
-    return customer_secret_isolation_verified
+    return customer_secret_isolation_verified and bool((isolation_proof_ref or "").strip())

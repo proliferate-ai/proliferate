@@ -8,15 +8,18 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.authorization import OwnerSelection
+from proliferate.auth.authorization import OwnerContext, OwnerSelection
+from proliferate.config import settings
 from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
     USAGE_SEGMENT_CLOSED_BY_DESTROY,
     USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
     WORKSPACE_ACTION_BLOCK_KIND_ADMIN_HOLD,
+    WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED,
     WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT,
     WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
     WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD,
+    WORKSPACE_ACTION_BLOCK_KIND_OVERAGE_DISABLED,
     WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
 )
 from proliferate.constants.cloud import (
@@ -61,6 +64,7 @@ from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
     create_cloud_workspace_for_user,
+    create_managed_cloud_workspace_for_profile,
     delete_cloud_workspace_records_for_workspace,
     get_cloud_workspace_by_id,
     get_existing_managed_cloud_workspace_for_profile,
@@ -122,6 +126,9 @@ from proliferate.server.cloud.runtime.scheduler import schedule_workspace_provis
 from proliferate.server.cloud.runtime.service import (
     get_workspace_connection,
 )
+from proliferate.server.cloud.sandbox_profiles.service import (
+    ensure_organization as ensure_organization_sandbox_profile,
+)
 from proliferate.server.cloud.workspaces.access import (
     cloud_workspace_user_can_archive,
     cloud_workspace_user_can_archive_with_db,
@@ -138,6 +145,9 @@ from proliferate.server.cloud.workspaces.domain.lifecycle import (
 )
 from proliferate.server.cloud.workspaces.models import (
     BootstrapWorkspaceRemoteAccessRequest,
+    CloudWorkspaceLaunchPreflightBillingSummary,
+    CloudWorkspaceLaunchPreflightRequest,
+    CloudWorkspaceLaunchPreflightResponse,
     WorkspaceConnection,
     WorkspaceCreatorContext,
     WorkspaceDetail,
@@ -443,6 +453,39 @@ def _raise_repo_limit_exceeded(error: CloudRepoLimitExceededError) -> NoReturn:
         ),
         status_code=403,
     ) from error
+
+
+def _preflight_block_reason(reason: str | None) -> str | None:
+    if reason == WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED:
+        return "compute_credits_exhausted"
+    if reason == WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT:
+        return "concurrency_limit"
+    if reason == WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED:
+        return "payment_failed"
+    if reason == WORKSPACE_ACTION_BLOCK_KIND_ADMIN_HOLD:
+        return "admin_hold"
+    if reason == WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD:
+        return "external_billing_hold"
+    return reason
+
+
+def _preflight_block_resource(reason: str | None) -> str | None:
+    if reason in {
+        "compute_credits_exhausted",
+        "concurrency_limit",
+        WORKSPACE_ACTION_BLOCK_KIND_OVERAGE_DISABLED,
+        WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED,
+        "overage_disabled",
+        "cap_exhausted",
+        WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
+        WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT,
+    }:
+        return "compute"
+    if reason == "agent_gateway_disabled":
+        return "gateway"
+    if reason in {"llm_credits_exhausted", "managed_credit_agent_not_configured"}:
+        return "llm"
+    return "billing" if reason else None
 
 
 async def _load_personal_agent_auth_agent_kinds(user_id: UUID) -> tuple[str, ...]:
@@ -1129,6 +1172,8 @@ async def _resolve_new_managed_cloud_workspace_create(
         billing_subject_id = profile.billing_subject_id
         saved_default_branch = (repo_config.default_branch or "").strip() or None
         profile_owner_scope = profile.owner_scope
+        profile_owner_user_id = profile.owner_user_id
+        profile_organization_id = profile.organization_id
 
     repo_branches = await get_github_repo_branches(
         user,
@@ -1182,6 +1227,26 @@ async def _resolve_new_managed_cloud_workspace_create(
             "The selected agent is not supported for cloud workspaces.",
             status_code=400,
         )
+
+    owner_context = OwnerContext(
+        owner_scope=profile_owner_scope,  # type: ignore[arg-type]
+        actor_user_id=user.id,
+        owner_user_id=profile_owner_user_id,
+        organization_id=profile_organization_id,
+        membership_id=None,
+        membership_role=None,
+        billing_subject_id=billing_subject_id,
+    )
+    async with db_engine.async_session_factory() as db:
+        blocked_reason, _managed_llm_status = await _launch_preflight_llm_block(
+            db,
+            user=user,
+            owner_context=owner_context,
+            required_agent_kind=required_agent_kind,
+        )
+    if blocked_reason is not None:
+        _raise_llm_launch_blocked(blocked_reason)
+
     if profile_owner_scope == "personal":
         if required_agent_kind is not None and required_agent_kind not in selected_agent_kinds:
             raise CloudApiError(
@@ -1223,6 +1288,124 @@ async def _resolve_new_managed_cloud_workspace_create(
     )
 
 
+async def launch_cloud_workspace_preflight(
+    db: AsyncSession,
+    user: User,
+    body: CloudWorkspaceLaunchPreflightRequest,
+) -> CloudWorkspaceLaunchPreflightResponse:
+    required_resources = set(body.required_managed_resources or ["compute"])
+    owner_selection = OwnerSelection(
+        owner_scope=body.owner_scope,
+        organization_id=body.organization_id,
+    )
+    try:
+        owner_context = await resolve_owner_context(user, owner_selection, db=db)
+    except OrganizationServiceError:
+        return CloudWorkspaceLaunchPreflightResponse(
+            launchAllowed=False,
+            blockedReason="subscription_required_for_team",
+            blockedResource="billing",
+            billing=CloudWorkspaceLaunchPreflightBillingSummary(
+                ownerScope=body.owner_scope,
+                organizationId=str(body.organization_id) if body.organization_id else None,
+                billingSubjectId=None,
+                plan=None,
+                paymentHealthy=None,
+                remainingSeconds=None,
+                managedLlmStatus=None,
+            ),
+        )
+
+    if owner_context.owner_scope == "organization":
+        authorization = await authorize_sandbox_start_for_billing_subject(
+            actor_user_id=user.id,
+            billing_subject_id=owner_context.billing_subject_id,
+        )
+    else:
+        authorization = await authorize_sandbox_start(user_id=user.id, workspace_id=None)
+    snapshot = await get_billing_snapshot_for_subject(authorization.billing_subject_id)
+
+    blocked_reason: str | None = None
+    if "compute" in required_resources and snapshot.start_blocked:
+        blocked_reason = _preflight_block_reason(snapshot.start_block_reason)
+
+    managed_llm_status: str | None = None
+    if blocked_reason is None and "llm" in required_resources:
+        blocked_reason, managed_llm_status = await _launch_preflight_llm_block(
+            db,
+            user=user,
+            owner_context=owner_context,
+            required_agent_kind=body.required_agent_kind,
+        )
+
+    blocked_resource = _preflight_block_resource(blocked_reason)
+    return CloudWorkspaceLaunchPreflightResponse(
+        launchAllowed=blocked_reason is None,
+        blockedReason=blocked_reason,
+        blockedResource=blocked_resource,
+        billing=CloudWorkspaceLaunchPreflightBillingSummary(
+            ownerScope=owner_context.owner_scope,
+            organizationId=(
+                str(owner_context.organization_id)
+                if owner_context.organization_id is not None
+                else None
+            ),
+            billingSubjectId=str(snapshot.billing_subject_id),
+            plan=snapshot.plan,
+            paymentHealthy=snapshot.payment_healthy,
+            remainingSeconds=snapshot.remaining_seconds,
+            managedLlmStatus=managed_llm_status,
+        ),
+    )
+
+
+async def _launch_preflight_llm_block(
+    db: AsyncSession,
+    *,
+    user: User,
+    owner_context: OwnerContext,
+    required_agent_kind: str | None,
+) -> tuple[str | None, str | None]:
+    if required_agent_kind is not None and required_agent_kind not in allowed_agent_kinds():
+        return "managed_credit_agent_not_configured", "unsupported_agent"
+    if owner_context.owner_scope == "personal":
+        selected_agent_kinds = await _load_personal_agent_auth_agent_kinds(user.id)
+        if required_agent_kind is not None and required_agent_kind not in selected_agent_kinds:
+            return "managed_credit_agent_not_configured", "agent_auth_missing"
+        if not selected_agent_kinds:
+            return "managed_credit_agent_not_configured", "agent_auth_missing"
+        return None, "ready"
+
+    if not settings.agent_gateway_enabled:
+        return "agent_gateway_disabled", "gateway_disabled"
+    if owner_context.organization_id is None:
+        return "subscription_required_for_team", "not_configured"
+    budget = await agent_auth_store.get_managed_budget_subject(db, owner_context.organization_id)
+    if budget is None:
+        return "managed_credit_agent_not_configured", "not_configured"
+    if budget.status == "exhausted":
+        return "llm_credits_exhausted", "exhausted"
+    if budget.status != "ready" or budget.litellm_sync_status != "synced":
+        return "managed_credit_agent_not_configured", budget.status
+    return None, "ready"
+
+
+def _raise_llm_launch_blocked(blocked_reason: str) -> NoReturn:
+    messages = {
+        "agent_gateway_disabled": "Managed LLM gateway is disabled.",
+        "managed_credit_agent_not_configured": (
+            "Managed LLM credits are not ready for this cloud target."
+        ),
+        "llm_credits_exhausted": "Managed LLM credits are exhausted for this period.",
+        "subscription_required_for_team": "A Team subscription is required for this launch.",
+    }
+    raise CloudApiError(
+        blocked_reason,
+        messages.get(blocked_reason, "Managed LLM readiness blocked this launch."),
+        status_code=409,
+    )
+
+
 async def create_cloud_workspace(
     user: User,
     *,
@@ -1244,10 +1427,68 @@ async def create_cloud_workspace(
                 status_code=404,
             )
         try:
-            await resolve_owner_context(user, owner_selection, db=db)
+            owner_context = await resolve_owner_context(user, owner_selection, db=db)
         except OrganizationServiceError as error:
             _map_owner_context_error(error)
-        _raise_org_cloud_not_ready()
+        if owner_context.organization_id is None:
+            raise CloudApiError(
+                "organization_not_found",
+                "Organization not found.",
+                status_code=404,
+            )
+        profile = await ensure_organization_sandbox_profile(
+            db,
+            user=user,
+            organization_id=owner_context.organization_id,
+        )
+        if profile.primary_target_id is None:
+            raise CloudApiError(
+                "cloud_target_not_found",
+                "Team cloud target not found.",
+                status_code=404,
+            )
+        resolved = await _resolve_new_managed_cloud_workspace_create(
+            user,
+            sandbox_profile_id=profile.id,
+            target_id=profile.primary_target_id,
+            git_provider=git_provider,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            base_branch=base_branch,
+            branch_name=branch_name,
+            display_name=display_name,
+            required_agent_kind=required_agent_kind,
+        )
+        try:
+            workspace = await create_managed_cloud_workspace_for_profile(
+                db,
+                sandbox_profile_id=profile.id,
+                target_id=profile.primary_target_id,
+                created_by_user_id=user.id,
+                display_name=resolved.display_name,
+                git_provider=resolved.git_provider,
+                git_owner=resolved.git_owner,
+                git_repo_name=resolved.git_repo_name,
+                git_branch=resolved.git_branch,
+                git_base_branch=resolved.git_base_branch,
+                worktree_path=None,
+                origin_json=CLOUD_HUMAN_ORIGIN_JSON,
+                template_version=get_configured_sandbox_provider().template_version,
+                origin="manual_web",
+            )
+        except CloudRepoLimitExceededError as error:
+            _raise_repo_limit_exceeded(error)
+        await db.commit()
+        await db.refresh(workspace)
+        log_cloud_event(
+            "team cloud workspace queued",
+            workspace_id=workspace.id,
+            repo=f"{resolved.git_owner}/{resolved.git_repo_name}",
+            base_branch=resolved.git_base_branch,
+            branch_name=resolved.git_branch,
+        )
+        schedule_workspace_provision(workspace.id)
+        return await _build_workspace_detail(workspace)
     resolved = await _resolve_new_cloud_workspace_create(
         user,
         git_provider=git_provider,

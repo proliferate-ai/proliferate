@@ -13,6 +13,8 @@ from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.workspaces.models import (
     BootstrapWorkspaceRemoteAccessRequest,
+    CloudWorkspaceLaunchPreflightRequest,
+    CloudWorkspaceLaunchPreflightResponse,
     CreateCloudWorkspaceRequest,
     UpdateCloudWorkspaceBranchRequest,
     UpdateCloudWorkspaceDisplayNameRequest,
@@ -28,6 +30,7 @@ from proliferate.server.cloud.workspaces.service import (
     enable_cloud_workspace_remote_access,
     get_cloud_connection,
     get_cloud_workspace_detail,
+    launch_cloud_workspace_preflight,
     list_cloud_workspaces_for_user,
     start_cloud_workspace,
     stop_cloud_workspace,
@@ -88,6 +91,18 @@ async def create_cloud_workspace_endpoint(
     except CloudApiError as error:
         raise_cloud_error(error)
     return payload
+
+
+@router.post("/workspaces/launch-preflight", response_model=CloudWorkspaceLaunchPreflightResponse)
+async def launch_cloud_workspace_preflight_endpoint(
+    body: CloudWorkspaceLaunchPreflightRequest,
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> CloudWorkspaceLaunchPreflightResponse:
+    try:
+        return await launch_cloud_workspace_preflight(db, user, body)
+    except CloudApiError as error:
+        raise_cloud_error(error)
 
 
 @router.post("/workspaces/remote-access", response_model=WorkspaceDetail)

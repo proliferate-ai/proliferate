@@ -111,8 +111,7 @@ export function agentAuthGatewayCreatePayloadReady(
     return values.apiKey.trim().length > 0 && values.baseUrl.trim().length > 0;
   }
   return values.roleArn.trim().length > 0
-    && values.region.trim().length > 0
-    && values.externalId.trim().length > 0;
+    && values.region.trim().length > 0;
 }
 
 export function buildAgentAuthGatewayCredentialRequest(input: {
@@ -131,7 +130,6 @@ export function buildAgentAuthGatewayCredentialRequest(input: {
     ? {
         roleArn: input.values.roleArn.trim(),
         region: input.values.region.trim(),
-        externalId: input.values.externalId.trim(),
       }
     : input.providerKind === "openai_compatible"
       ? {

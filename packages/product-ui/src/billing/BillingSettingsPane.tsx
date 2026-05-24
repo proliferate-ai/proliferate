@@ -71,7 +71,6 @@ export interface BillingOwnerCardView {
   retryAction?: BillingActionView;
   manageAction?: BillingActionView;
   upgradeAction?: BillingActionView;
-  refillAction?: BillingActionView;
   overageAction?: BillingActionView;
   invoiceAction?: BillingActionView;
 }
@@ -159,7 +158,6 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
             ) : !plan.isPaidCloud && view.upgradeAction ? (
               <BillingButton action={view.upgradeAction} variant="primary" />
             ) : null}
-            {view.refillAction ? <BillingButton action={view.refillAction} variant="secondary" /> : null}
           </div>
         </div>
 
@@ -253,8 +251,8 @@ function PlanComparisonCard({
         <div className="space-y-1">
           <h2 className="text-lg font-semibold text-foreground">Plans</h2>
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            Start free for personal work. Upgrade when your team needs shared cloud,
-            Slack-driven sessions, pooled runtime, and organization controls.
+            Start with Account credits. Start a Team plan when you need shared cloud,
+            Slack-driven sessions, pooled runtime, and admin controls.
           </p>
         </div>
         {action ? (
@@ -599,7 +597,7 @@ function overageSummary(plan: BillingPlanView): {
   }
   if (!plan.proBillingEnabled && !plan.hasUnlimitedCloudHours) {
     return {
-      title: "Overage billing",
+      title: "Cloud overage",
       enabled: plan.overageEnabled,
       description: "Allow additional cloud runtime after prepaid hours are exhausted.",
     };

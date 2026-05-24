@@ -483,10 +483,13 @@ export function useHomeNextLaunch() {
           gitOwner: target.gitOwner,
           gitRepoName: target.gitRepoName,
           baseBranch: target.baseBranch,
+          ownerScope: target.ownerScope,
+          organizationId: target.organizationId,
         },
           {
             latencyFlowId,
             initialSession,
+            requiredAgentKind: modelSelection.kind,
           },
         );
       const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({

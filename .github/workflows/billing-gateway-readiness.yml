@@ -1,0 +1,28 @@
+name: Billing Gateway Readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      aws:
+        description: "Run AWS identity-backed checks"
+        required: false
+        default: "false"
+
+jobs:
+  readiness:
+    name: Billing and gateway readiness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check readiness env and gateway policy
+        run: |
+          args=""
+          if [ "${{ inputs.aws }}" = "true" ]; then
+            args="--aws"
+          fi
+          node scripts/check-production-billing-gateway-readiness.mjs $args

@@ -15,6 +15,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.db.models.base import Base, utcnow
@@ -137,6 +138,87 @@ class BillingDecisionEvent(Base):
     active_sandbox_count: Mapped[int] = mapped_column(default=0)
     remaining_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class BillingNotificationEvent(Base):
+    __tablename__ = "billing_notification_event"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ("
+            "'invoice_paid', "
+            "'invoice_payment_failed', "
+            "'invoice_upcoming', "
+            "'trial_ending', "
+            "'subscription_updated', "
+            "'subscription_deleted', "
+            "'checkout_activated', "
+            "'checkout_failed', "
+            "'seat_adjustment_confirmed', "
+            "'seat_adjustment_failed', "
+            "'managed_llm_budget_exhausted', "
+            "'managed_llm_budget_synced'"
+            ")",
+            name="ck_billing_notification_event_kind",
+        ),
+        CheckConstraint(
+            "severity IN ('info', 'warning', 'error')",
+            name="ck_billing_notification_event_severity",
+        ),
+        CheckConstraint(
+            "source IN ('stripe', 'billing', 'seat_adjustment', 'agent_gateway', 'system')",
+            name="ck_billing_notification_event_source",
+        ),
+        UniqueConstraint(
+            "idempotency_key",
+            name="uq_billing_notification_event_idempotency_key",
+        ),
+        Index(
+            "ix_billing_notification_event_subject_occurred_at",
+            "billing_subject_id",
+            "occurred_at",
+        ),
+        Index(
+            "ix_billing_notification_event_org_occurred_at",
+            "organization_id",
+            "occurred_at",
+        ),
+        Index(
+            "ix_billing_notification_event_source_external_ref",
+            "source",
+            "external_ref",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    billing_subject_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    kind: Mapped[str] = mapped_column(String(64))
+    severity: Mapped[str] = mapped_column(String(32))
+    source: Mapped[str] = mapped_column(String(64))
+    external_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    payload_json: Mapped[dict[str, object]] = mapped_column(
+        JSONB,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        server_default=text("now()"),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        server_default=text("now()"),
+    )
 
 
 class BillingGrant(Base):

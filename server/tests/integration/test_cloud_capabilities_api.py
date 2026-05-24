@@ -25,6 +25,11 @@ async def test_cloud_capabilities_response_shape(
     monkeypatch.setattr(settings, "agent_gateway_byok_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_litellm_topology", "enterprise_shared")
     monkeypatch.setattr(settings, "agent_gateway_litellm_customer_secret_isolation_verified", True)
+    monkeypatch.setattr(
+        settings,
+        "agent_gateway_litellm_isolation_proof_ref",
+        "runbook/proofs/litellm-team-isolation-2026-05-24",
+    )
     monkeypatch.setattr(settings, "agent_gateway_anthropic_byok_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_user_free_credit_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_user_free_credit_usd", "7.50")

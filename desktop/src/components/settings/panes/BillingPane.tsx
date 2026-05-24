@@ -1,291 +1,256 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
-  BillingOwnerCard,
-  BillingSettingsPane,
-  type BillingActionView,
-  type BillingOwnerCardView,
-  type BillingPlanView,
-} from "@proliferate/product-ui/billing/BillingSettingsPane";
+  buildAccountCreditsPanelView,
+  buildTeamBillingPanelView,
+} from "@proliferate/product-model/billing/model";
+import { AccountCreditsPanel } from "@proliferate/product-ui/billing/AccountCreditsPanel";
+import { BillingSettingsPane } from "@proliferate/product-ui/billing/BillingSettingsPane";
+import { TeamBillingPanel } from "@proliferate/product-ui/billing/TeamBillingPanel";
 
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import {
-  useCloudBilling,
-  useCloudBillingActions,
+  useAccountCredits,
+  useAccountCreditsActions,
+  useTeamBilling,
+  useTeamBillingActions,
+  useTeamBillingEvents,
 } from "@/hooks/cloud/facade/use-cloud-billing";
-import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import type { CloudOwnerSelection } from "@/lib/domain/cloud/billing";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 
 export function BillingPane() {
   const navigate = useNavigate();
-  const { activeOrganization, activeOrganizationId } = useActiveOrganization();
-  const admin = useIsAdmin(activeOrganizationId);
+  const { openExternal } = useTauriShellActions();
+  const { organizationsQuery } = useActiveOrganization();
   const [searchParams] = useSearchParams();
-  const comparisonOwner = activeOrganization && admin.isAdmin
-    ? { ownerScope: "organization" as const, organizationId: activeOrganization.id }
-    : undefined;
-  const comparisonBilling = useCloudBilling(comparisonOwner);
-  const comparisonActions = useCloudBillingActions(comparisonOwner);
-  const [comparisonActionError, setComparisonActionError] = useState<string | null>(null);
+  const checkoutReturnState = checkoutReturnStateFromParams(searchParams);
 
-  async function openComparisonBillingAction() {
-    setComparisonActionError(null);
-    if (!activeOrganization) {
-      navigate(buildSettingsHref({ section: "organization" }));
+  const accountCredits = useAccountCredits();
+  const accountCreditActions = useAccountCreditsActions();
+  const teamBilling = useTeamBilling();
+  const teamEvents = useTeamBillingEvents({
+    enabled: Boolean(teamBilling.data?.team?.canManageBilling),
+  });
+  const teamBillingActions = useTeamBillingActions();
+
+  const [accountActionError, setAccountActionError] = useState<string | null>(null);
+  const [teamActionError, setTeamActionError] = useState<string | null>(null);
+
+  const accountView = useMemo(
+    () => buildAccountCreditsPanelView(accountCredits.data),
+    [accountCredits.data],
+  );
+  const teamView = useMemo(
+    () => buildTeamBillingPanelView(
+      teamBilling.data,
+      teamBilling.data?.team?.canManageBilling ? (teamEvents.data?.events ?? []) : [],
+    ),
+    [teamBilling.data, teamEvents.data?.events],
+  );
+
+  useEffect(() => {
+    if (!checkoutReturnState) {
       return;
     }
-    if (!admin.isAdmin) {
-      setComparisonActionError("Team billing is managed by owners and admins.");
-      return;
-    }
+    void teamBilling.refetch();
+    void teamEvents.refetch();
+    void organizationsQuery.refetch();
+  }, [checkoutReturnState]);
+
+  const canManageTeamBilling = Boolean(teamBilling.data?.team?.canManageBilling);
+  const hostedInvoiceUrl = teamBilling.data?.team?.hostedInvoiceUrl ?? null;
+  const pendingCheckoutUrl = teamBilling.data?.pendingCheckout?.checkoutUrl ?? null;
+  const hasPendingCheckout = Boolean(teamBilling.data?.pendingCheckout);
+
+  async function ensureAccountCredits() {
+    setAccountActionError(null);
     try {
-      if (comparisonBilling.data?.isPaidCloud) {
-        await comparisonActions.createBillingPortal();
-      } else {
-        await comparisonActions.createCloudCheckout();
-      }
+      await accountCreditActions.ensureAccountCredits();
+      await accountCredits.refetch();
     } catch (error) {
-      setComparisonActionError(error instanceof Error ? error.message : "Billing action could not start.");
+      setAccountActionError(error instanceof Error ? error.message : "Account credits could not be checked.");
     }
   }
+
+  async function openTeamBillingPortal() {
+    if (!canManageTeamBilling) {
+      setTeamActionError("Team billing is managed by owners and admins.");
+      return;
+    }
+    setTeamActionError(null);
+    try {
+      await teamBillingActions.createTeamBillingPortal();
+    } catch (error) {
+      setTeamActionError(error instanceof Error ? error.message : "Team billing could not be opened.");
+    }
+  }
+
+  async function toggleTeamOverage() {
+    if (!canManageTeamBilling || !teamBilling.data?.team) {
+      return;
+    }
+    setTeamActionError(null);
+    try {
+      await teamBillingActions.updateTeamOverageSettings({
+        enabled: !teamBilling.data.team.managedCloud.overageEnabled,
+      });
+      await teamBilling.refetch();
+    } catch (error) {
+      setTeamActionError(error instanceof Error ? error.message : "Team overage could not be updated.");
+    }
+  }
+
+  const startTeam = useCallback(() => {
+    navigate(buildSettingsHref({ section: "organization" }));
+  }, [navigate]);
+
+  const continueCheckout = useCallback(() => {
+    if (pendingCheckoutUrl) {
+      void openExternal(pendingCheckoutUrl);
+    } else {
+      navigate(buildSettingsHref({ section: "organization" }));
+    }
+  }, [navigate, openExternal, pendingCheckoutUrl]);
+
+  const connectGitHub = useCallback(() => {
+    navigate(buildSettingsHref({ section: "account" }));
+  }, [navigate]);
+
+  const openInvoice = useOpenExternalUrl(hostedInvoiceUrl);
 
   return (
     <section className="space-y-6">
       <SettingsPageHeader
         title="Billing"
-        description="Review account credits and manage Team billing, seats, shared cloud runtime, overage, and plan changes."
+        description="Review Account credits and manage Team billing, seats, shared cloud runtime, overage, and plan changes."
       />
 
       <BillingSettingsPane
-        checkoutReturnState={checkoutReturnStateFromParams(searchParams)}
-        currentPlanKey={planKeyForBilling(comparisonBilling.data)}
-        planComparisonAction={{
-          label: !activeOrganization
-            ? "Create Team"
-            : comparisonBilling.data?.isPaidCloud
-              ? "Manage Team billing"
-              : "Upgrade Team",
-          loading: comparisonBilling.data?.isPaidCloud
-            ? comparisonActions.creatingBillingPortal
-            : comparisonActions.creatingCloudCheckout,
-          disabled: comparisonBilling.isLoading || (activeOrganization ? admin.isLoading : false),
-          onClick: () => {
-            void openComparisonBillingAction();
-          },
-        }}
+        checkoutReturnState={checkoutReturnState}
+        currentPlanKey={teamBilling.data?.team ? "team" : "free"}
+        planComparisonAction={
+          teamBilling.data?.team
+            ? canManageTeamBilling
+              ? {
+                  label: "Manage Team billing",
+                  loading: teamBillingActions.creatingTeamBillingPortal,
+                  onClick: () => {
+                    void openTeamBillingPortal();
+                  },
+                }
+              : undefined
+            : hasPendingCheckout
+              ? {
+                  label: "Continue checkout",
+                  onClick: continueCheckout,
+                }
+              : {
+                  label: "Start Team",
+                  onClick: startTeam,
+                }
+        }
       >
-        {comparisonActionError ? (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-            {comparisonActionError}
-          </div>
-        ) : null}
-
-        <BillingOwnerController
-          title="Account credits"
-          description="Included cloud usage and onboarding credits for work you launch from this account."
-          iconKind="personal"
-          actionsEnabled={false}
-          accountCreditsOnly
+        <AccountCreditsPanel
+          view={accountView}
+          loading={accountCredits.isLoading}
+          error={accountCredits.isError ? "Account credits could not be loaded." : null}
+          actionError={accountActionError}
+          retryAction={accountCredits.isError
+            ? {
+                label: "Retry",
+                onClick: () => {
+                  void accountCredits.refetch();
+                },
+              }
+            : undefined}
+          ensureAction={{
+            label: accountView?.primaryActionLabel ?? "Check credits",
+            loading: accountCreditActions.ensuringAccountCredits,
+            onClick: () => {
+              void ensureAccountCredits();
+            },
+          }}
+          connectGitHubAction={{
+            label: "Connect GitHub",
+            onClick: connectGitHub,
+          }}
+          startTeamAction={!teamBilling.data?.team && teamBilling.data?.canCreateTeam
+            ? {
+                label: hasPendingCheckout ? "Continue checkout" : "Start Team",
+                onClick: hasPendingCheckout ? continueCheckout : startTeam,
+              }
+            : undefined}
         />
 
-        {activeOrganization ? (
-          <BillingOwnerController
-            title={`${activeOrganization.name} billing`}
-            description={
-              admin.isAdmin
-                ? "Applies to shared cloud workspaces, team automations, Slack sessions, and shared sandbox usage."
-                : "Organization billing is managed by owners and admins."
-            }
-            iconKind="organization"
-            owner={{ ownerScope: "organization", organizationId: activeOrganization.id }}
-            actionsEnabled={admin.isAdmin}
-          />
-        ) : (
+        <TeamBillingPanel
+          view={teamView}
+          loading={teamBilling.isLoading}
+          error={teamBilling.isError ? "Team billing could not be loaded." : null}
+          actionError={teamActionError}
+          retryAction={teamBilling.isError
+            ? {
+                label: "Retry",
+                onClick: () => {
+                  void teamBilling.refetch();
+                },
+              }
+            : undefined}
+          startTeamAction={teamView?.canCreateTeam
+            ? {
+                label: "Start Team",
+                onClick: startTeam,
+              }
+            : undefined}
+          continueCheckoutAction={pendingCheckoutUrl
+            ? {
+                label: "Continue checkout",
+                onClick: continueCheckout,
+              }
+            : undefined}
+          manageBillingAction={canManageTeamBilling
+            ? {
+                label: "Manage Team billing",
+                loading: teamBillingActions.creatingTeamBillingPortal,
+                onClick: () => {
+                  void openTeamBillingPortal();
+                },
+              }
+            : undefined}
+          toggleOverageAction={canManageTeamBilling && teamBilling.data?.team
+            ? {
+                label: teamBilling.data.team.managedCloud.overageEnabled
+                  ? "Turn off overage"
+                  : "Turn on overage",
+                loading: teamBillingActions.updatingTeamOverageSettings,
+                onClick: () => {
+                  void toggleTeamOverage();
+                },
+              }
+            : undefined}
+          invoiceAction={canManageTeamBilling && hostedInvoiceUrl
+            ? {
+                label: "View invoice",
+                onClick: openInvoice,
+              }
+            : undefined}
+        />
+
+        {teamEvents.isError && canManageTeamBilling ? (
           <SettingsCard>
             <SettingsCardRow
-              label="Team billing"
-              description="Create a team from Organization settings to add seats, shared cloud, Slack work, and org admin controls."
+              label="Billing events"
+              description="Recent Team billing events could not be loaded."
             />
           </SettingsCard>
-        )}
+        ) : null}
       </BillingSettingsPane>
     </section>
   );
-}
-
-function BillingOwnerController({
-  title,
-  description,
-  iconKind,
-  owner,
-  actionsEnabled,
-  accountCreditsOnly = false,
-}: {
-  title: string;
-  description: string;
-  iconKind: "personal" | "organization";
-  owner?: CloudOwnerSelection;
-  actionsEnabled: boolean;
-  accountCreditsOnly?: boolean;
-}) {
-  const billing = useCloudBilling(owner);
-  const billingActions = useCloudBillingActions(owner);
-  const billingPlan = billing.data;
-  const [actionError, setActionError] = useState<string | null>(null);
-  const invoiceUrl = billingPlan?.hostedInvoiceUrl ?? null;
-  const openInvoice = useOpenExternalUrl(invoiceUrl);
-
-  async function openBillingAction(action: "checkout" | "portal" | "refill") {
-    if (!actionsEnabled) {
-      return;
-    }
-    setActionError(null);
-    try {
-      if (action === "portal") {
-        await billingActions.createBillingPortal();
-      } else if (action === "refill") {
-        await billingActions.createRefillCheckout();
-      } else {
-        await billingActions.createCloudCheckout();
-      }
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Billing action could not start.");
-    }
-  }
-
-  async function updateOverage(enabled: boolean) {
-    if (!actionsEnabled) {
-      return;
-    }
-    setActionError(null);
-    try {
-      await billingActions.updateOverageEnabled({ enabled });
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Overage settings could not be updated.");
-    }
-  }
-
-  const view: BillingOwnerCardView = {
-    title,
-    description,
-    iconKind,
-    plan: billingPlan,
-    loading: billing.isLoading,
-    error: billing.isError ? "Billing details could not be loaded." : null,
-    actionError,
-    retryAction: billing.isError
-      ? {
-          label: "Retry",
-          onClick: () => {
-            void billing.refetch();
-          },
-        }
-      : undefined,
-    manageAction: actionsEnabled && !accountCreditsOnly
-      ? {
-          label: "Manage billing",
-          loading: billingActions.creatingBillingPortal,
-          onClick: () => {
-            void openBillingAction("portal");
-          },
-        }
-      : undefined,
-    upgradeAction: actionsEnabled && !accountCreditsOnly
-      ? {
-          label: "Upgrade Team",
-          loading: billingActions.creatingCloudCheckout,
-          onClick: () => {
-            void openBillingAction("checkout");
-          },
-        }
-      : undefined,
-    refillAction: actionsEnabled
-      && !accountCreditsOnly
-      && billingPlan?.isPaidCloud
-      && !billingPlan.proBillingEnabled
-      && !billingPlan.hasUnlimitedCloudHours
-      ? {
-          label: "Refill 10h",
-          loading: billingActions.creatingRefillCheckout,
-          onClick: () => {
-            void openBillingAction("refill");
-          },
-        }
-      : undefined,
-    overageAction: actionsEnabled && !accountCreditsOnly
-      ? overageActionForPlan({
-          plan: billingPlan,
-          loading: billingActions.updatingOverage,
-          onUpdate: updateOverage,
-        })
-      : undefined,
-    invoiceAction: actionsEnabled && !accountCreditsOnly && invoiceUrl
-      ? {
-          label: "View invoice",
-          onClick: openInvoice,
-        }
-      : undefined,
-  };
-
-  return <BillingOwnerCard view={view} />;
-}
-
-function overageActionForPlan({
-  plan,
-  loading,
-  onUpdate,
-}: {
-  plan: ReturnType<typeof useCloudBilling>["data"];
-  loading: boolean;
-  onUpdate: (enabled: boolean) => Promise<void>;
-}): BillingActionView | undefined {
-  if (!plan?.isPaidCloud || plan.isUnlimited) {
-    return undefined;
-  }
-
-  if (plan.proBillingEnabled && plan.legacyCloudSubscription) {
-    return undefined;
-  }
-
-  if (plan.proBillingEnabled) {
-    const nextEnabled = !plan.managedCloudOverageEnabled;
-    return {
-      label: nextEnabled ? "Turn on overage" : "Turn off overage",
-      loading,
-      onClick: () => {
-        void onUpdate(nextEnabled);
-      },
-    };
-  }
-
-  if (plan.hasUnlimitedCloudHours) {
-    return undefined;
-  }
-
-  const nextEnabled = !plan.overageEnabled;
-  return {
-    label: nextEnabled ? "Turn on overage" : "Turn off overage",
-    loading,
-    onClick: () => {
-      void onUpdate(nextEnabled);
-    },
-  };
-}
-
-function planKeyForBilling(plan: BillingPlanView | null | undefined) {
-  if (!plan) {
-    return null;
-  }
-  if (plan.isUnlimited && !plan.isPaidCloud) {
-    return "enterprise";
-  }
-  return plan.isPaidCloud ? "team" : "free";
 }
 
 function checkoutReturnStateFromParams(

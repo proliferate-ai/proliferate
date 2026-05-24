@@ -227,10 +227,22 @@
   description: "Billing mode: off, observe, or enforce"
   tags: [production]
 
+- name: PROLIFERATE_PRODUCT_MODE
+  secret: false
+  default: "local_dev"
+  description: "Product mode: local_dev, self_managed, or hosted_product"
+  tags: [local-dev, production]
+
 - name: PRO_BILLING_ENABLED
   secret: false
   default: "false"
   description: Enables Pro billing policy, free-v2 trial behavior, and Pro response fields
+  tags: [production]
+
+- name: BILLING_LEGACY_PERSONAL_PAID_CHECKOUT_ENABLED
+  secret: false
+  default: "false"
+  description: Allows new personal paid checkout in hosted product for legacy migration windows only
   tags: [production]
 
 - name: STRIPE_SECRET_KEY
@@ -423,11 +435,35 @@
   description: Enables personal BYOK provider credentials after AGENT_GATEWAY_BYOK_ENABLED and route-isolation verification are also enabled
   tags: [local-dev, self-hosted, production]
 
+- name: AGENT_GATEWAY_PROVIDER_LIVE_VALIDATION_ENABLED
+  secret: false
+  default: "false"
+  description: Requires live provider credential validation before a BYOK credential can become ready; production BYOK readiness fails unless this is true
+  tags: [local-dev, self-hosted, production]
+
 - name: AGENT_GATEWAY_LITELLM_TOPOLOGY
   secret: false
   default: "oss_shared"
   description: LiteLLM routing topology label; BYOK launch gates allow enterprise_shared or isolated_router only
   tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_LITELLM_CONFIG_FINGERPRINT
+  secret: false
+  default: ""
+  description: Operator-provided fingerprint of the deployed LiteLLM routing config used to match BYOK proof artifacts during production readiness checks
+  tags: [production]
+
+- name: AGENT_GATEWAY_RUNTIME_SUPPORTS_ISOLATED_ROUTER
+  secret: false
+  default: "false"
+  description: Readiness-only flag proving the gateway runtime selects a per-policy LiteLLM router when AGENT_GATEWAY_LITELLM_TOPOLOGY=isolated_router
+  tags: [production]
+
+- name: AGENT_GATEWAY_LITELLM_ISOLATION_PROOF_REF
+  secret: false
+  default: ""
+  description: Read-only proof artifact reference for the deployed LiteLLM route-isolation verification
+  tags: [production]
 
 - name: AGENT_GATEWAY_LITELLM_CUSTOMER_SECRET_ISOLATION_VERIFIED
   secret: false

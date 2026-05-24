@@ -10,11 +10,12 @@ import secrets
 import socket
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 from uuid import UUID
 
+import httpx
 from cryptography.fernet import InvalidToken
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +44,8 @@ from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.billing import (
     ensure_agent_gateway_free_credit_allocation,
     ensure_organization_billing_subject,
+    get_billing_snapshot_state_for_subject,
+    get_or_create_organization_stripe_customer_state,
 )
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_agent_auth.records import (
@@ -113,6 +116,7 @@ _CLEANUP_SELECTION_ERROR_CODES = {
     "credential_share_revoked",
 }
 _OPENCODE_ALLOWED_AUTH_FILES: frozenset[str] = frozenset({".config/opencode/auth.json"})
+_PROVIDER_VALIDATION_TIMEOUT_SECONDS = 10.0
 _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES = frozenset(
     {
         CloudCommandStatus.accepted.value,
@@ -494,7 +498,8 @@ async def create_gateway_credential(
     _require_gateway_byok_enabled(body.provider_kind)
     _require_gateway_byok_create_allowed(body.policy_kind)
 
-    validation = _validate_provider_payload(body.provider_kind, body.payload)
+    provider_payload = _provider_payload_for_storage(body.provider_kind, body.payload)
+    validation = await _validate_provider_payload(body.provider_kind, provider_payload)
     credential = await store.create_agent_auth_credential(
         db,
         owner_scope=body.owner_scope,
@@ -541,7 +546,7 @@ async def create_gateway_credential(
             litellm_sync_fingerprint=None,
             status="invalid",
             last_error_code=validation.error_code,
-            last_error_message=_safe_error_message(validation.error_message, body.payload),
+            last_error_message=_safe_error_message(validation.error_message, provider_payload),
         )
         sync_status = "failed"
         status = "invalid"
@@ -557,7 +562,7 @@ async def create_gateway_credential(
             organization_id=organization_id,
             budget_subject_id=None,
             provider_kind=body.provider_kind,
-            provider_payload=body.payload,
+            provider_payload=provider_payload,
             model_deployments=_gateway_deployments_for_credential(
                 agent_kind=body.agent_kind,
                 provider_kind=body.provider_kind,
@@ -567,13 +572,13 @@ async def create_gateway_credential(
         db,
         policy_id=policy.id,
         provider_kind=body.provider_kind,
-        payload_ciphertext=encrypt_json(dict(body.payload)),
+        payload_ciphertext=encrypt_json(dict(provider_payload)),
         payload_ciphertext_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
         redacted_summary_json=json.dumps(validation.redacted_summary, sort_keys=True),
         validation_status=validation.status,
         validated_at=utcnow() if validation.status == "valid" else None,
         validation_error_code=validation.error_code,
-        validation_error_message=_safe_error_message(validation.error_message, body.payload),
+        validation_error_message=_safe_error_message(validation.error_message, provider_payload),
     )
     credential = await store.update_credential_status(
         db,
@@ -619,6 +624,7 @@ async def ensure_managed_credits_for_organization(
         db,
         organization_id,
     )
+    entitlement_period = await _organization_managed_credit_period(db, organization_id)
     existing_budget = await store.get_managed_budget_subject(db, organization_id)
     team_id = existing_budget.litellm_team_id if existing_budget else None
     sync_status = "failed"
@@ -647,7 +653,7 @@ async def ensure_managed_credits_for_organization(
                 team_alias=f"org-{organization_id}-managed-credits",
                 team_id=team_id,
                 max_budget=included_budget_usd,
-                budget_duration="30d",
+                budget_duration=entitlement_period.budget_duration,
             )
             team_id = team.team_id
             for deployment in managed_deployments:
@@ -686,6 +692,8 @@ async def ensure_managed_credits_for_organization(
         db,
         organization_id=organization_id,
         included_budget_usd=included_budget_usd,
+        budget_duration=entitlement_period.budget_duration,
+        entitlement_period_key=entitlement_period.period_key,
         litellm_team_id=team_id,
         litellm_sync_status=sync_status,
         litellm_sync_fingerprint=fingerprint,
@@ -2417,6 +2425,7 @@ async def _reconcile_managed_budget_subject(
             "budgetKind": budget.budget_kind,
         }
         budget_duration = budget.budget_duration
+        same_period = True
     else:
         if budget.organization_id is None:
             return await store.ensure_managed_budget_subject_for_owner(
@@ -2440,14 +2449,16 @@ async def _reconcile_managed_budget_subject(
             budget.organization_id,
             require_positive=False,
         )
+        entitlement_period = await _organization_managed_credit_period(db, budget.organization_id)
         team_alias = f"org-{budget.organization_id}-managed-credits"
         owner_metadata = {
             "organizationId": str(budget.organization_id),
             "budgetKind": budget.budget_kind,
         }
         entitlement_source = budget.entitlement_source
-        entitlement_period_key = budget.entitlement_period_key
-        budget_duration = budget.budget_duration or AGENT_GATEWAY_BUDGET_DURATION_V1
+        entitlement_period_key = entitlement_period.period_key
+        budget_duration = entitlement_period.budget_duration or budget.budget_duration
+        same_period = entitlement_period_key == budget.entitlement_period_key
     managed_deployments = tuple(
         deployment
         for agent_kind in _managed_credit_agent_kinds()
@@ -2488,7 +2499,8 @@ async def _reconcile_managed_budget_subject(
             sync_status = "synced"
             status = (
                 "exhausted"
-                if budget.status == "exhausted" or Decimal(included_budget_usd) <= 0
+                if (same_period and budget.status == "exhausted")
+                or Decimal(included_budget_usd) <= 0
                 else "ready"
             )
             fingerprint = _deployment_fingerprint(
@@ -2808,6 +2820,26 @@ async def _provision_policy(
                 team_id=litellm_team_id,
             )
             litellm_team_id = team.team_id
+            credential_name = f"credential-{credential.id}-{provider_kind}"
+            await client.reconcile_credential_routing(
+                team_id=team.team_id,
+                credential_name=credential_name,
+                credential_info=_provider_credential_info(provider_kind=provider_kind),
+                credential_values=_provider_credential_values(
+                    provider_kind=provider_kind,
+                    provider_payload=provider_payload,
+                ),
+                model_config=_provider_model_config(
+                    provider_kind=provider_kind,
+                    credential_name=credential_name,
+                    deployments=model_deployments,
+                ),
+                existing_metadata={
+                    "credentialId": str(credential.id),
+                    "policyKind": policy_kind,
+                    "ownerScope": owner_scope,
+                },
+            )
             if virtual_key_ciphertext is None:
                 key = await client.generate_key(
                     team_id=team.team_id,
@@ -2825,6 +2857,7 @@ async def _provision_policy(
                         provider_kind=provider_kind,
                         provider_payload=provider_payload,
                         deployment=deployment,
+                        credential_name=credential_name,
                     ),
                     metadata={
                         "credentialId": str(credential.id),
@@ -2872,26 +2905,84 @@ def _provider_litellm_params(
     provider_kind: str,
     provider_payload: dict[str, str],
     deployment: LiteLLMModelDeploymentRequest,
+    credential_name: str | None = None,
 ) -> dict[str, object]:
     params: dict[str, object] = {}
+    if credential_name:
+        params["litellm_credential_name"] = credential_name
     if provider_kind == "anthropic_api_key":
-        params["api_key"] = provider_payload["apiKey"]
+        if not credential_name:
+            params["api_key"] = provider_payload["apiKey"]
         params.setdefault("custom_llm_provider", "anthropic")
     elif provider_kind == "openai_api_key":
-        params["api_key"] = provider_payload["apiKey"]
+        if not credential_name:
+            params["api_key"] = provider_payload["apiKey"]
         params.setdefault("custom_llm_provider", "openai")
     elif provider_kind == "openai_compatible":
-        params["api_key"] = provider_payload["apiKey"]
-        params["api_base"] = provider_payload["baseUrl"]
+        if not credential_name:
+            params["api_key"] = provider_payload["apiKey"]
+            params["api_base"] = provider_payload["baseUrl"]
         params.setdefault("custom_llm_provider", "openai")
     elif provider_kind == "bedrock_assume_role":
-        params["aws_role_name"] = provider_payload["roleArn"]
-        params["aws_external_id"] = provider_payload["externalId"]
-        params["aws_region_name"] = provider_payload["region"]
+        if not credential_name:
+            params["aws_role_name"] = provider_payload["roleArn"]
+            params["aws_external_id"] = provider_payload["externalId"]
+            params["aws_region_name"] = provider_payload["region"]
         params.setdefault("custom_llm_provider", "bedrock")
     elif provider_kind == "proliferate_bedrock_pool":
         params.setdefault("custom_llm_provider", "bedrock")
     return params
+
+
+def _provider_credential_info(*, provider_kind: str) -> dict[str, object]:
+    if provider_kind == "anthropic_api_key":
+        return {"custom_llm_provider": "anthropic"}
+    if provider_kind in {"openai_api_key", "openai_compatible"}:
+        return {"custom_llm_provider": "openai"}
+    if provider_kind == "bedrock_assume_role":
+        return {"custom_llm_provider": "bedrock"}
+    return {"custom_llm_provider": provider_kind}
+
+
+def _provider_credential_values(
+    *,
+    provider_kind: str,
+    provider_payload: dict[str, str],
+) -> dict[str, object]:
+    if provider_kind == "anthropic_api_key":
+        return {"api_key": provider_payload["apiKey"]}
+    if provider_kind == "openai_api_key":
+        return {"api_key": provider_payload["apiKey"]}
+    if provider_kind == "openai_compatible":
+        return {
+            "api_key": provider_payload["apiKey"],
+            "api_base": provider_payload["baseUrl"],
+        }
+    if provider_kind == "bedrock_assume_role":
+        return {
+            "aws_role_name": provider_payload["roleArn"],
+            "aws_external_id": provider_payload["externalId"],
+            "aws_region_name": provider_payload["region"],
+        }
+    return {}
+
+
+def _provider_model_config(
+    *,
+    provider_kind: str,
+    credential_name: str,
+    deployments: Sequence[LiteLLMModelDeploymentRequest],
+) -> dict[str, object]:
+    return {
+        deployment.public_model_name: {
+            "litellm_params": {
+                "model": deployment.provider_model,
+                "litellm_credential_name": credential_name,
+                **_provider_credential_info(provider_kind=provider_kind),
+            }
+        }
+        for deployment in deployments
+    }
 
 
 def _gateway_deployments_for_credential(
@@ -3043,7 +3134,18 @@ def _gateway_byok_policy_verdict(policy_kind: str) -> GatewayByokVerdict:
         customer_secret_isolation_verified=(
             settings.agent_gateway_litellm_customer_secret_isolation_verified
         ),
+        isolation_proof_ref=settings.agent_gateway_litellm_isolation_proof_ref,
     )
+
+
+def _provider_payload_for_storage(
+    provider_kind: str,
+    payload: dict[str, str],
+) -> dict[str, str]:
+    normalized = dict(payload)
+    if provider_kind == "bedrock_assume_role":
+        normalized["externalId"] = f"proliferate-{secrets.token_urlsafe(24)}"
+    return normalized
 
 
 def _safe_error_message(
@@ -3067,7 +3169,26 @@ class _ProviderValidation:
     error_message: str | None
 
 
-def _validate_provider_payload(
+@dataclass(frozen=True)
+class _ManagedCreditPeriod:
+    period_key: str | None
+    budget_duration: str | None
+
+
+async def _validate_provider_payload(
+    provider_kind: str,
+    payload: dict[str, str],
+) -> _ProviderValidation:
+    validation = _validate_provider_payload_shape(provider_kind, payload)
+    if (
+        validation.status == "invalid"
+        or not settings.agent_gateway_provider_live_validation_enabled
+    ):
+        return validation
+    return await _live_validate_provider_payload(provider_kind, payload, validation)
+
+
+def _validate_provider_payload_shape(
     provider_kind: str,
     payload: dict[str, str],
 ) -> _ProviderValidation:
@@ -3133,8 +3254,97 @@ def _validate_provider_payload(
     )
 
 
+async def _live_validate_provider_payload(
+    provider_kind: str,
+    payload: dict[str, str],
+    shape_validation: _ProviderValidation,
+) -> _ProviderValidation:
+    if provider_kind == "anthropic_api_key":
+        return await _validate_provider_models_endpoint(
+            provider_kind=provider_kind,
+            url="https://api.anthropic.com/v1/models",
+            headers={
+                "x-api-key": payload["apiKey"],
+                "anthropic-version": "2023-06-01",
+            },
+            redacted_summary=shape_validation.redacted_summary,
+        )
+    if provider_kind == "openai_api_key":
+        return await _validate_provider_models_endpoint(
+            provider_kind=provider_kind,
+            url="https://api.openai.com/v1/models",
+            headers={"Authorization": f"Bearer {payload['apiKey']}"},
+            redacted_summary=shape_validation.redacted_summary,
+        )
+    if provider_kind == "openai_compatible":
+        return await _validate_provider_models_endpoint(
+            provider_kind=provider_kind,
+            url=f"{payload['baseUrl'].rstrip('/')}/models",
+            headers={"Authorization": f"Bearer {payload['apiKey']}"},
+            redacted_summary=shape_validation.redacted_summary,
+        )
+    if provider_kind == "bedrock_assume_role":
+        return _ProviderValidation(
+            status="unvalidated",
+            redacted_summary=shape_validation.redacted_summary,
+            error_code="bedrock_live_validation_requires_proof",
+            error_message=(
+                "Bedrock AssumeRole credentials require the live proof runner because "
+                "server-side STS permissions vary by deployment."
+            ),
+        )
+    return shape_validation
+
+
+async def _validate_provider_models_endpoint(
+    *,
+    provider_kind: str,
+    url: str,
+    headers: dict[str, str],
+    redacted_summary: dict[str, object],
+) -> _ProviderValidation:
+    try:
+        async with httpx.AsyncClient(timeout=_PROVIDER_VALIDATION_TIMEOUT_SECONDS) as client:
+            response = await client.get(url, headers=headers)
+    except httpx.HTTPError:
+        return _ProviderValidation(
+            status="invalid",
+            redacted_summary=redacted_summary,
+            error_code="provider_live_validation_unreachable",
+            error_message="Provider validation endpoint could not be reached.",
+        )
+    if 200 <= response.status_code < 300:
+        return _ProviderValidation(
+            status="valid",
+            redacted_summary=redacted_summary,
+            error_code=None,
+            error_message=None,
+        )
+    if response.status_code in {401, 403}:
+        return _ProviderValidation(
+            status="invalid",
+            redacted_summary=redacted_summary,
+            error_code="provider_auth_failed",
+            error_message=f"{provider_kind} rejected the credential during live validation.",
+        )
+    return _ProviderValidation(
+        status="invalid",
+        redacted_summary=redacted_summary,
+        error_code="provider_live_validation_failed",
+        error_message=(
+            f"{provider_kind} validation failed with HTTP {response.status_code}."
+        ),
+    )
+
+
 def _validate_openai_compatible_url(raw_url: str) -> str:
     parsed = urlparse(raw_url.strip())
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise AgentAuthError(
+            "OpenAI-compatible base URL cannot include credentials, query, or fragment.",
+            code="invalid_base_url",
+            status_code=400,
+        )
     if parsed.scheme != "https" or not parsed.netloc:
         raise AgentAuthError(
             "OpenAI-compatible base URL must be an HTTPS URL.",
@@ -3148,7 +3358,14 @@ def _validate_openai_compatible_url(raw_url: str) -> str:
             code="invalid_base_url",
             status_code=400,
         )
-    if host in {"localhost", "127.0.0.1", "::1"}:
+    normalized_host = host.strip().lower().rstrip(".")
+    if normalized_host in {
+        "localhost",
+        "metadata.google.internal",
+        "metadata",
+        "169.254.169.254",
+        "100.100.100.200",
+    }:
         raise AgentAuthError(
             "OpenAI-compatible base URL cannot point to localhost.",
             code="invalid_base_url",
@@ -3164,7 +3381,14 @@ def _validate_openai_compatible_url(raw_url: str) -> str:
         ) from exc
     for address in addresses:
         ip = ipaddress.ip_address(address)
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
             raise AgentAuthError(
                 "OpenAI-compatible base URL cannot resolve to a private network.",
                 code="invalid_base_url",
@@ -3674,6 +3898,47 @@ async def _organization_managed_credit_entitlement_budget(
             status_code=403,
         )
     return budget
+
+
+async def _organization_managed_credit_period(
+    db: AsyncSession,
+    organization_id: UUID,
+) -> _ManagedCreditPeriod:
+    state = await get_or_create_organization_stripe_customer_state(db, organization_id)
+    snapshot = await get_billing_snapshot_state_for_subject(db, state.billing_subject_id)
+    subscription = next(
+        (
+            item
+            for item in snapshot.subscriptions
+            if item.status in {"active", "trialing"}
+            and item.current_period_start is not None
+            and item.current_period_end is not None
+            and item.current_period_end > item.current_period_start
+        ),
+        None,
+    )
+    if subscription is None:
+        return _ManagedCreditPeriod(
+            period_key=None,
+            budget_duration=AGENT_GATEWAY_BUDGET_DURATION_V1,
+        )
+    start = _iso_z(subscription.current_period_start)
+    end = _iso_z(subscription.current_period_end)
+    seconds = max(
+        1,
+        int((subscription.current_period_end - subscription.current_period_start).total_seconds()),
+    )
+    days = max(1, (seconds + 86_399) // 86_400)
+    return _ManagedCreditPeriod(
+        period_key=f"stripe:{subscription.stripe_subscription_id}:{start}:{end}",
+        budget_duration=f"{days}d",
+    )
+
+
+def _iso_z(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _redact_secret(value: str) -> str:

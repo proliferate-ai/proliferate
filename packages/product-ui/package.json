@@ -83,6 +83,14 @@
       "types": "./dist/billing/BillingSettingsPane.d.ts",
       "import": "./dist/billing/BillingSettingsPane.js"
     },
+    "./billing/AccountCreditsPanel": {
+      "types": "./dist/billing/AccountCreditsPanel.d.ts",
+      "import": "./dist/billing/AccountCreditsPanel.js"
+    },
+    "./billing/TeamBillingPanel": {
+      "types": "./dist/billing/TeamBillingPanel.d.ts",
+      "import": "./dist/billing/TeamBillingPanel.js"
+    },
     "./brand/ProliferateMark": {
       "types": "./dist/brand/ProliferateMark.d.ts",
       "import": "./dist/brand/ProliferateMark.js"

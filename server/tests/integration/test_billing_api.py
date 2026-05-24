@@ -19,7 +19,9 @@ from proliferate.constants.billing import (
 )
 from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
 from proliferate.constants.organizations import (
+    ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BILLING_STATE,
     ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING,
+    ORGANIZATION_CHECKOUT_INTENT_STATUS_FAILED,
     ORGANIZATION_INVITATION_DELIVERY_SKIPPED,
     ORGANIZATION_INVITATION_STATUS_PENDING,
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
@@ -32,6 +34,7 @@ from proliferate.db.models.auth import OAuthAccount
 from proliferate.db.models.billing import (
     BillingEntitlement,
     BillingGrant,
+    BillingNotificationEvent,
     BillingSeatAdjustment,
     BillingSubscription,
     BillingUsageExport,
@@ -159,6 +162,77 @@ async def test_ensure_free_included_grant_is_concurrent_safe(
 
 
 class TestBillingApi:
+    @pytest.mark.asyncio
+    async def test_account_credits_and_team_billing_facades_default_cleanly(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "cloud_free_sandbox_hours", 6.0)
+        monkeypatch.setattr(settings, "pro_billing_enabled", False)
+        monkeypatch.setattr(settings, "agent_gateway_enabled", False)
+        monkeypatch.setattr(settings, "agent_gateway_user_free_credit_enabled", False)
+
+        session = await _register_and_login(client, "billing-facade-defaults@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        account_response = await client.get("/v1/billing/account-credits", headers=headers)
+        assert account_response.status_code == 200
+        account = account_response.json()
+        assert account["billingSubjectId"] is None
+        assert account["freeCloud"] == {
+            "includedHours": 6.0,
+            "usedHours": 0.0,
+            "remainingHours": 6.0,
+            "status": "available",
+        }
+        assert account["freeLlm"]["enabled"] is False
+        assert account["githubRequired"] is False
+        assert account["startBlocked"] is False
+
+        ensure_response = await client.post(
+            "/v1/billing/account-credits/ensure",
+            headers=headers,
+        )
+        assert ensure_response.status_code == 200
+        ensured = ensure_response.json()
+        assert ensured["freeAllocationOutcome"] == "not_applicable"
+        assert ensured["accountCredits"]["billingSubjectId"] is not None
+        assert ensured["accountCredits"]["freeCloud"]["remainingHours"] == 6.0
+
+        team_response = await client.get("/v1/billing/team", headers=headers)
+        assert team_response.status_code == 200
+        assert team_response.json() == {
+            "team": None,
+            "canCreateTeam": True,
+            "pendingCheckout": None,
+        }
+
+    @pytest.mark.asyncio
+    async def test_hosted_product_blocks_new_personal_paid_checkout(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "proliferate_product_mode", "hosted_product")
+        monkeypatch.setattr(settings, "billing_legacy_personal_paid_checkout_enabled", False)
+        monkeypatch.setattr(settings, "pro_billing_enabled", False)
+
+        session = await _register_and_login(
+            client,
+            "billing-personal-checkout-blocked@example.com",
+        )
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        response = await client.post("/v1/billing/cloud-checkout", headers=headers)
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "personal_paid_billing_unavailable"
+
+        portal_response = await client.post("/v1/billing/customer-portal", headers=headers)
+        assert portal_response.status_code == 409
+        assert portal_response.json()["detail"]["code"] == "personal_paid_billing_unavailable"
+
     @pytest.mark.asyncio
     async def test_overview_and_plan_default_to_free_included_hours(
         self,
@@ -645,6 +719,16 @@ class TestBillingApi:
             )
         ).scalar_one()
         assert subscription.billing_subject_id == billing_subject_id
+        activation_event = (
+            await db_session.execute(
+                select(BillingNotificationEvent).where(
+                    BillingNotificationEvent.billing_subject_id == billing_subject_id,
+                    BillingNotificationEvent.kind == "checkout_activated",
+                )
+            )
+        ).scalar_one()
+        assert activation_event.severity == "info"
+        assert activation_event.external_ref == "evt_team_activation"
         profile = (
             await db_session.execute(
                 select(SandboxProfile).where(SandboxProfile.organization_id == organization.id)
@@ -680,6 +764,127 @@ class TestBillingApi:
         organizations = await client.get("/v1/organizations", headers=headers)
         assert organizations.status_code == 200
         assert organizations.json()["organizations"][0]["name"] == "Activation Team"
+
+    @pytest.mark.asyncio
+    async def test_team_checkout_activation_rejects_customer_mismatch(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "pro_billing_enabled", True)
+        monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "price_pro")
+        monkeypatch.setattr(settings, "stripe_managed_cloud_overage_price_id", "price_overage")
+        monkeypatch.setattr(settings, "stripe_checkout_success_url", "https://app.test/success")
+        monkeypatch.setattr(settings, "stripe_checkout_cancel_url", "https://app.test/cancel")
+        monkeypatch.setattr(
+            settings,
+            "stripe_customer_portal_return_url",
+            "https://app.test/portal",
+        )
+
+        async def fake_validate_pro_subscription_price_configuration() -> None:
+            return None
+
+        async def fake_create_customer(**_kwargs: object) -> dict[str, str]:
+            return {"id": "cus_team_expected"}
+
+        async def fake_create_subscription_checkout_session(
+            **_kwargs: object,
+        ) -> stripe_billing.StripeUrlResponse:
+            return stripe_billing.StripeUrlResponse(
+                url="https://checkout.test/customer-mismatch",
+                id="cs_team_customer_mismatch",
+            )
+
+        monkeypatch.setattr(
+            stripe_billing,
+            "validate_pro_subscription_price_configuration",
+            fake_validate_pro_subscription_price_configuration,
+        )
+        monkeypatch.setattr(stripe_billing, "create_customer", fake_create_customer)
+        monkeypatch.setattr(
+            stripe_billing,
+            "create_subscription_checkout_session",
+            fake_create_subscription_checkout_session,
+        )
+
+        session = await _register_and_login(client, "billing-team-customer-mismatch@example.com")
+        response = await client.post(
+            "/v1/billing/team-checkout",
+            headers={"Authorization": f"Bearer {session['access_token']}"},
+            json={"teamName": "Mismatch Team"},
+        )
+        assert response.status_code == 200
+        intent_id = uuid.UUID(response.json()["intentId"])
+        db_session.expire_all()
+        intent = await db_session.get(OrganizationCheckoutIntent, intent_id)
+        assert intent is not None
+        metadata = {
+            "purpose": "team_subscription",
+            "organization_checkout_intent_id": str(intent.id),
+            "organization_id": str(intent.organization_id),
+            "created_by_user_id": str(intent.created_by_user_id),
+            "billing_subject_id": str(intent.billing_subject_id),
+        }
+
+        async def fake_retrieve_subscription(_subscription_id: str) -> dict[str, object]:
+            return {
+                "id": "sub_team_customer_mismatch",
+                "customer": "cus_team_actual",
+                "status": "active",
+                "cancel_at_period_end": False,
+                "latest_invoice": "in_team_customer_mismatch",
+                "metadata": metadata,
+                "items": {
+                    "data": [
+                        {
+                            "id": "si_team_customer_mismatch_monthly",
+                            "price": {"id": "price_pro"},
+                            "quantity": 1,
+                            "current_period_start": 1_776_586_422,
+                            "current_period_end": 1_779_178_422,
+                        },
+                        {
+                            "id": "si_team_customer_mismatch_overage",
+                            "price": {"id": "price_overage"},
+                            "current_period_start": 1_776_586_422,
+                            "current_period_end": 1_779_178_422,
+                        },
+                    ]
+                },
+            }
+
+        monkeypatch.setattr(stripe_billing, "retrieve_subscription", fake_retrieve_subscription)
+
+        await activate_team_checkout_from_stripe_session(
+            session={
+                "id": "cs_team_customer_mismatch",
+                "customer": "cus_team_actual",
+                "subscription": "sub_team_customer_mismatch",
+                "metadata": metadata,
+            },
+            webhook_event_id="evt_team_customer_mismatch",
+        )
+
+        db_session.expire_all()
+        failed_intent = await db_session.get(OrganizationCheckoutIntent, intent_id)
+        assert failed_intent is not None
+        assert failed_intent.status == ORGANIZATION_CHECKOUT_INTENT_STATUS_FAILED
+        assert failed_intent.activation_status == (
+            ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BILLING_STATE
+        )
+        assert failed_intent.activation_error_code == "team_checkout_customer_mismatch"
+        events = (
+            await db_session.execute(
+                select(BillingNotificationEvent).where(
+                    BillingNotificationEvent.billing_subject_id == intent.billing_subject_id,
+                    BillingNotificationEvent.kind == "checkout_failed",
+                )
+            )
+        ).scalars().all()
+        assert len(events) == 1
+        assert events[0].external_ref == "evt_team_customer_mismatch"
 
     @pytest.mark.asyncio
     async def test_pro_overage_used_is_scoped_to_current_period(
@@ -976,6 +1181,75 @@ class TestBillingApi:
 
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "refill_checkout_not_supported_for_org"
+
+    @pytest.mark.asyncio
+    async def test_team_billing_events_are_hidden_from_members(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        owner_session = await _register_and_login(
+            client,
+            "billing-events-owner@example.com",
+        )
+        member_session = await _register_and_login(
+            client,
+            "billing-events-member@example.com",
+        )
+        owner_id = uuid.UUID(owner_session["user_id"])
+        member_id = uuid.UUID(member_session["user_id"])
+        organization = Organization(name="Billing Events")
+        db_session.add(organization)
+        await db_session.flush()
+        db_session.add_all(
+            [
+                OrganizationMembership(
+                    organization_id=organization.id,
+                    user_id=owner_id,
+                    role=ORGANIZATION_ROLE_OWNER,
+                    status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+                    joined_at=datetime.now(UTC),
+                ),
+                OrganizationMembership(
+                    organization_id=organization.id,
+                    user_id=member_id,
+                    role=ORGANIZATION_ROLE_MEMBER,
+                    status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+                    joined_at=datetime.now(UTC),
+                ),
+            ]
+        )
+        subject = await ensure_organization_billing_subject(db_session, organization.id)
+        db_session.add(
+            BillingNotificationEvent(
+                billing_subject_id=subject.id,
+                organization_id=organization.id,
+                user_id=owner_id,
+                kind="invoice_paid",
+                severity="info",
+                source="stripe",
+                external_ref="in_visible_to_admin",
+                idempotency_key=f"test-billing-events:{organization.id}",
+                payload_json={},
+                occurred_at=datetime.now(UTC),
+            )
+        )
+        await db_session.commit()
+
+        owner_response = await client.get(
+            "/v1/billing/team/events",
+            headers={"Authorization": f"Bearer {owner_session['access_token']}"},
+        )
+        member_response = await client.get(
+            "/v1/billing/team/events",
+            headers={"Authorization": f"Bearer {member_session['access_token']}"},
+        )
+
+        assert owner_response.status_code == 200
+        assert owner_response.json()["events"][0]["summary"] == "Invoice paid"
+        assert owner_response.json()["events"][0]["stripeObjectId"] == "in_visible_to_admin"
+        assert member_response.status_code == 200
+        assert member_response.json() == {"events": []}
 
     @pytest.mark.asyncio
     async def test_org_cloud_plan_reports_active_member_seats(

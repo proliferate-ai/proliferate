@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     debug: bool = False
     api_base_url: str = ""
     api_path_prefix: str = ""
+    proliferate_product_mode: str = Field(
+        default="local_dev",
+        validation_alias=AliasChoices("PROLIFERATE_PRODUCT_MODE", "PRODUCT_MODE"),
+    )
     telemetry_mode: str = Field(
         default="local_dev",
         validation_alias=AliasChoices("PROLIFERATE_TELEMETRY_MODE", "TELEMETRY_MODE"),
@@ -108,6 +112,7 @@ class Settings(BaseSettings):
     cloud_concurrent_sandbox_limit: int = 200
     cloud_billing_mode: str = "off"
     pro_billing_enabled: bool = False
+    billing_legacy_personal_paid_checkout_enabled: bool = False
     support_slack_webhook_url: str = ""
     signups_slack_webhook_url: str = ""
     billing_positive_slack_webhook_url: str = ""
@@ -188,7 +193,9 @@ class Settings(BaseSettings):
     agent_gateway_request_timeout_seconds: float = 120.0
     agent_gateway_byok_enabled: bool = False
     agent_gateway_personal_byok_enabled: bool = False
+    agent_gateway_provider_live_validation_enabled: bool = False
     agent_gateway_litellm_topology: str = "oss_shared"
+    agent_gateway_litellm_isolation_proof_ref: str = ""
     agent_gateway_litellm_customer_secret_isolation_verified: bool = False
     agent_gateway_anthropic_byok_enabled: bool = False
     agent_gateway_openai_byok_enabled: bool = False
@@ -212,6 +219,15 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_secrets_in_production(self) -> "Settings":
+        if self.proliferate_product_mode not in {
+            "local_dev",
+            "self_managed",
+            "hosted_product",
+        }:
+            raise ValueError(
+                "proliferate_product_mode must be one of: local_dev, self_managed, "
+                "hosted_product"
+            )
         if self.telemetry_mode not in {"local_dev", "self_managed", "hosted_product"}:
             raise ValueError(
                 "telemetry_mode must be one of: local_dev, self_managed, hosted_product"

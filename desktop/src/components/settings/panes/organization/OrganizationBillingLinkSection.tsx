@@ -13,8 +13,8 @@ export function OrganizationBillingLinkSection() {
     <OrganizationSection title="Billing">
       <SettingsCard>
         <SettingsCardRow
-          label="Organization billing"
-          description="Manage organization plan, seats, and overage from Billing."
+          label="Team billing"
+          description="Manage the Team plan, seats, and overage from Billing."
         >
           <Button
             type="button"

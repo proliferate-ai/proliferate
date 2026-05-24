@@ -107,14 +107,17 @@ async function startSessionForPrompt(args: {
   if (!targetId || !anyharnessWorkspaceId) {
     throw new Error("Workspace is ready but missing runtime command routing.");
   }
-  await ensurePersonalManagedAgentAuthReady({
-    client: args.client,
-    onStatus: args.onStatus,
-  });
+  if (args.pendingPrompt.ownerScope !== "organization") {
+    await ensurePersonalManagedAgentAuthReady({
+      client: args.client,
+      onStatus: args.onStatus,
+    });
+  }
   assertStillCurrent(args.shouldContinue);
   await ensureManagedWorkspaceTargetConfigReady({
     client: args.client,
     workspace: args.workspace,
+    pendingPrompt: args.pendingPrompt,
     idempotencyKey: `${args.pendingPrompt.id}:target-config`,
     setLatestCommandId: args.setLatestCommandId,
     onStatus: args.onStatus,
@@ -228,6 +231,7 @@ export async function ensureManagedWorkspaceTargetConfigReady(
   args: {
     client: ProliferateCloudClient;
     workspace: CloudWorkspaceDetail;
+    pendingPrompt?: PendingHomePrompt;
     idempotencyKey: string;
     setLatestCommandId: (commandId: string) => void;
     onStatus: (status: string) => void;
@@ -246,7 +250,10 @@ export async function ensureManagedWorkspaceTargetConfigReady(
   const response = await materializeTargetConfig(
     targetId,
     {
-      ownerScope: "personal",
+      ownerScope: args.pendingPrompt?.ownerScope ?? "personal",
+      organizationId: args.pendingPrompt?.ownerScope === "organization"
+        ? args.pendingPrompt.organizationId ?? null
+        : null,
       gitProvider: "github",
       gitOwner: repo.owner,
       gitRepoName: repo.name,

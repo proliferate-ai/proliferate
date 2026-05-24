@@ -47,6 +47,11 @@ def _enable_agent_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "agent_gateway_personal_byok_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_litellm_topology", "enterprise_shared")
     monkeypatch.setattr(settings, "agent_gateway_litellm_customer_secret_isolation_verified", True)
+    monkeypatch.setattr(
+        settings,
+        "agent_gateway_litellm_isolation_proof_ref",
+        "runbook/proofs/litellm-team-isolation-2026-05-24",
+    )
     monkeypatch.setattr(settings, "agent_gateway_anthropic_byok_enabled", True)
 
 
@@ -419,6 +424,31 @@ async def test_gateway_fails_closed_when_byok_route_isolation_becomes_unverified
 
 
 @pytest.mark.asyncio
+async def test_gateway_fails_closed_when_byok_route_isolation_proof_ref_is_missing(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed = await _seed_gateway_grant(db_session)
+    fake_client = _FakeRuntimeClient()
+    monkeypatch.setattr(
+        "proliferate.server.agent_gateway.service.LiteLLMRuntimeClient",
+        lambda: fake_client,
+    )
+    monkeypatch.setattr(settings, "agent_gateway_litellm_isolation_proof_ref", "")
+
+    response = await client.post(
+        "/anthropic/v1/messages",
+        headers={"Authorization": f"Bearer {seed.raw_token}"},
+        json={"model": "us.anthropic.claude-sonnet-4-6", "messages": []},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "gateway_byok_route_isolation_unverified"
+    assert fake_client.calls == []
+
+
+@pytest.mark.asyncio
 async def test_gateway_rejects_oversized_body_before_authorization(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -671,7 +701,7 @@ async def test_gateway_maps_litellm_budget_errors(
     )
 
     assert response.status_code == 402
-    assert response.json()["detail"]["code"] == "credits_exhausted"
+    assert response.json()["detail"]["code"] == "provider_quota_exhausted"
 
 
 @pytest.mark.asyncio

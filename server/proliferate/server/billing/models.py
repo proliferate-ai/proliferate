@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Literal
 from uuid import UUID
 
@@ -256,4 +258,234 @@ class OverageSettingsResponse(BillingBaseModel):
     overage_cap_cents_per_seat: int | None = Field(
         default=None,
         alias="overageCapCentsPerSeat",
+    )
+
+
+class AccountCreditsEnsureOutcome(StrEnum):
+    CREATED = "created"
+    EXISTING_SAME_SUBJECT = "existing_same_subject"
+    MISSING_GITHUB_IDENTITY = "missing_github_identity"
+    GITHUB_IDENTITY_ALREADY_ALLOCATED = "github_identity_already_allocated"
+    DISABLED_BY_DEPLOYMENT = "disabled_by_deployment"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class AccountFreeCloudCredits(BillingBaseModel):
+    included_hours: float = Field(alias="includedHours")
+    used_hours: float = Field(alias="usedHours")
+    remaining_hours: float = Field(alias="remainingHours")
+    status: str
+
+
+class AccountFreeLlmReadyAgentModel(BillingBaseModel):
+    agent_kind: str = Field(alias="agentKind")
+    model_id: str = Field(alias="modelId")
+
+
+class AccountFreeLlmCredits(BillingBaseModel):
+    enabled: bool
+    status: str
+    included_budget_usd: str = Field(alias="includedBudgetUsd")
+    period_key: str = Field(alias="periodKey")
+    launch_enabled: bool = Field(alias="launchEnabled")
+    ready_agent_models: list[AccountFreeLlmReadyAgentModel] = Field(alias="readyAgentModels")
+    last_error_code: str | None = Field(default=None, alias="lastErrorCode")
+    last_error_message: str | None = Field(default=None, alias="lastErrorMessage")
+
+
+class AccountCreditsOverview(BillingBaseModel):
+    billing_subject_id: UUID | None = Field(alias="billingSubjectId")
+    free_cloud: AccountFreeCloudCredits = Field(alias="freeCloud")
+    free_llm: AccountFreeLlmCredits = Field(alias="freeLlm")
+    github_required: bool = Field(alias="githubRequired")
+    free_allocation_status: str = Field(alias="freeAllocationStatus")
+    start_blocked: bool = Field(alias="startBlocked")
+    start_block_reason: str | None = Field(default=None, alias="startBlockReason")
+    blocked_resource: str | None = Field(default=None, alias="blockedResource")
+
+
+class AccountCreditsEnsureResponse(BillingBaseModel):
+    account_credits: AccountCreditsOverview = Field(alias="accountCredits")
+    free_allocation_outcome: str = Field(alias="freeAllocationOutcome")
+    free_allocation_blocked_reason: str | None = Field(
+        default=None,
+        alias="freeAllocationBlockedReason",
+    )
+
+
+class TeamOverageSettingsRequest(BillingBaseModel):
+    enabled: bool
+    cap_cents_per_seat: int | None = Field(default=None, alias="capCentsPerSeat")
+
+
+class TeamManagedCloudBilling(BillingBaseModel):
+    included_hours: float | None = Field(default=None, alias="includedHours")
+    used_hours: float = Field(alias="usedHours")
+    remaining_hours: float | None = Field(default=None, alias="remainingHours")
+    overage_enabled: bool = Field(alias="overageEnabled")
+    overage_cap_cents: int | None = Field(default=None, alias="overageCapCents")
+    overage_used_cents: int = Field(alias="overageUsedCents")
+
+
+class TeamManagedLlmBilling(BillingBaseModel):
+    included_budget_usd: str | None = Field(default=None, alias="includedBudgetUsd")
+    status: str
+    period_key: str | None = Field(default=None, alias="periodKey")
+    litellm_sync_status: str | None = Field(default=None, alias="litellmSyncStatus")
+    last_error_code: str | None = Field(default=None, alias="lastErrorCode")
+
+
+class TeamBillingOverview(BillingBaseModel):
+    organization_id: UUID = Field(alias="organizationId")
+    name: str
+    role: str
+    can_manage_billing: bool = Field(alias="canManageBilling")
+    plan: str
+    subscription_status: str | None = Field(default=None, alias="subscriptionStatus")
+    payment_healthy: bool = Field(alias="paymentHealthy")
+    seat_quantity: int | None = Field(default=None, alias="seatQuantity")
+    active_member_count: int = Field(alias="activeMemberCount")
+    current_period_start: str | None = Field(default=None, alias="currentPeriodStart")
+    current_period_end: str | None = Field(default=None, alias="currentPeriodEnd")
+    hosted_invoice_url: str | None = Field(default=None, alias="hostedInvoiceUrl")
+    managed_cloud: TeamManagedCloudBilling = Field(alias="managedCloud")
+    managed_llm: TeamManagedLlmBilling = Field(alias="managedLlm")
+    start_blocked: bool = Field(alias="startBlocked")
+    start_block_reason: str | None = Field(default=None, alias="startBlockReason")
+    blocked_resource: str | None = Field(default=None, alias="blockedResource")
+
+
+class TeamBillingEnvelope(BillingBaseModel):
+    team: TeamBillingOverview | None
+    can_create_team: bool = Field(alias="canCreateTeam")
+    pending_checkout: TeamCheckoutIntentResponse | None = Field(
+        default=None,
+        alias="pendingCheckout",
+    )
+
+
+class BillingEventSummary(BillingBaseModel):
+    id: UUID
+    kind: str
+    severity: str
+    occurred_at: str = Field(alias="occurredAt")
+    recorded_at: str = Field(alias="recordedAt")
+    summary: str
+    stripe_object_id: str | None = Field(default=None, alias="stripeObjectId")
+
+
+class BillingEventsResponse(BillingBaseModel):
+    events: list[BillingEventSummary]
+
+
+def _wire_datetime(value: datetime | None) -> str | None:
+    coerced = coerce_utc(value)
+    if coerced is None:
+        return None
+    return coerced.isoformat().replace("+00:00", "Z")
+
+
+def _round_hours(value: float | None, digits: int = 4) -> float | None:
+    return round(value, digits) if value is not None else None
+
+
+def account_credits_overview_response(record: object) -> AccountCreditsOverview:
+    return AccountCreditsOverview(
+        billingSubjectId=record.billing_subject_id,
+        freeCloud=AccountFreeCloudCredits(
+            includedHours=round(record.free_cloud.included_hours, 2),
+            usedHours=round(record.free_cloud.used_hours, 4),
+            remainingHours=round(record.free_cloud.remaining_hours, 4),
+            status=record.free_cloud.status,
+        ),
+        freeLlm=AccountFreeLlmCredits(
+            enabled=record.free_llm.enabled,
+            status=record.free_llm.status,
+            includedBudgetUsd=record.free_llm.included_budget_usd,
+            periodKey=record.free_llm.period_key,
+            launchEnabled=record.free_llm.launch_enabled,
+            readyAgentModels=[
+                AccountFreeLlmReadyAgentModel(
+                    agentKind=model.agent_kind,
+                    modelId=model.model_id,
+                )
+                for model in record.free_llm.ready_agent_models
+            ],
+            lastErrorCode=record.free_llm.last_error_code,
+            lastErrorMessage=record.free_llm.last_error_message,
+        ),
+        githubRequired=record.github_required,
+        freeAllocationStatus=record.free_allocation_status,
+        startBlocked=record.start_blocked,
+        startBlockReason=record.start_block_reason,
+        blockedResource=record.blocked_resource,
+    )
+
+
+def account_credits_ensure_response(record: object) -> AccountCreditsEnsureResponse:
+    return AccountCreditsEnsureResponse(
+        accountCredits=account_credits_overview_response(record.account_credits),
+        freeAllocationOutcome=record.free_allocation_outcome.value,
+        freeAllocationBlockedReason=record.free_allocation_blocked_reason,
+    )
+
+
+def team_billing_envelope_response(record: object) -> TeamBillingEnvelope:
+    team = record.team
+    return TeamBillingEnvelope(
+        team=None if team is None else _team_billing_overview_response(team),
+        canCreateTeam=record.can_create_team,
+        pendingCheckout=record.pending_checkout,
+    )
+
+
+def _team_billing_overview_response(record: object) -> TeamBillingOverview:
+    return TeamBillingOverview(
+        organizationId=record.organization_id,
+        name=record.name,
+        role=record.role,
+        canManageBilling=record.can_manage_billing,
+        plan=record.plan,
+        subscriptionStatus=record.subscription_status,
+        paymentHealthy=record.payment_healthy,
+        seatQuantity=record.seat_quantity,
+        activeMemberCount=record.active_member_count,
+        currentPeriodStart=_wire_datetime(record.current_period_start),
+        currentPeriodEnd=_wire_datetime(record.current_period_end),
+        hostedInvoiceUrl=record.hosted_invoice_url,
+        managedCloud=TeamManagedCloudBilling(
+            includedHours=_round_hours(record.managed_cloud.included_hours, 2),
+            usedHours=round(record.managed_cloud.used_hours, 4),
+            remainingHours=_round_hours(record.managed_cloud.remaining_hours, 4),
+            overageEnabled=record.managed_cloud.overage_enabled,
+            overageCapCents=record.managed_cloud.overage_cap_cents,
+            overageUsedCents=record.managed_cloud.overage_used_cents,
+        ),
+        managedLlm=TeamManagedLlmBilling(
+            includedBudgetUsd=record.managed_llm.included_budget_usd,
+            status=record.managed_llm.status,
+            periodKey=record.managed_llm.period_key,
+            litellmSyncStatus=record.managed_llm.litellm_sync_status,
+            lastErrorCode=record.managed_llm.last_error_code,
+        ),
+        startBlocked=record.start_blocked,
+        startBlockReason=record.start_block_reason,
+        blockedResource=record.blocked_resource,
+    )
+
+
+def billing_events_response(records: Iterable[object]) -> BillingEventsResponse:
+    return BillingEventsResponse(
+        events=[
+            BillingEventSummary(
+                id=record.id,
+                kind=record.kind,
+                severity=record.severity,
+                occurredAt=_wire_datetime(record.occurred_at) or "",
+                recordedAt=_wire_datetime(record.recorded_at) or "",
+                summary=record.summary,
+                stripeObjectId=record.stripe_object_id,
+            )
+            for record in records
+        ]
     )

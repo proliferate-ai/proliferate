@@ -4,7 +4,13 @@ import type {
   CloudWorkspaceDetail,
   CreateCloudWorkspaceRequest,
 } from "@/lib/access/cloud/client";
-import { createCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
+import { ProliferateClientError } from "@proliferate/cloud-sdk";
+import { ensureAccountCredits } from "@proliferate/cloud-sdk/client/billing";
+import {
+  createCloudWorkspace,
+  launchCloudWorkspacePreflight,
+} from "@proliferate/cloud-sdk/client/workspaces";
+import { billingBlockPresentation } from "@proliferate/product-model/billing/presentation";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildNextCloudWorkspaceAttempt,
@@ -49,6 +55,7 @@ interface CreateCloudWorkspaceAndEnterOptions {
   repoGroupKeyToExpand?: string | null;
   latencyFlowId?: string | null;
   initialSession?: PendingWorkspaceInitialSession | null;
+  requiredAgentKind?: string | null;
 }
 
 export type CloudWorkspaceEntryResult =
@@ -83,7 +90,37 @@ function buildRepoTargetFromRequest(
     gitOwner: request.gitOwner,
     gitRepoName: request.gitRepoName,
     baseBranch: request.baseBranch ?? null,
+    ownerScope: request.ownerScope ?? "personal",
+    organizationId: request.organizationId ?? null,
   };
+}
+
+async function ensureLaunchBillingReady(input: CreateCloudWorkspaceRequest): Promise<void> {
+  const ownerScope = input.ownerScope ?? "personal";
+  if (ownerScope === "personal") {
+    await ensureAccountCredits();
+  }
+  const preflight = await launchCloudWorkspacePreflight({
+    ownerScope,
+    organizationId: ownerScope === "organization" ? input.organizationId ?? null : null,
+    targetKind: ownerScope === "organization" ? "team_cloud" : "personal_cloud",
+    requiredAgentKind: input.requiredAgentKind ?? null,
+    requiredManagedResources: input.requiredAgentKind
+      ? ["compute", "llm", "gateway"]
+      : ["compute"],
+  });
+  if (preflight.launchAllowed) {
+    return;
+  }
+  const block = billingBlockPresentation(
+    preflight.blockedReason,
+    preflight.blockedResource ?? null,
+  );
+  const message = `${block.title}: ${block.description}`;
+  if (preflight.blockedReason === "managed_credit_agent_not_configured") {
+    throw new ProliferateClientError(message, 403, "missing_supported_credentials");
+  }
+  throw new Error(message);
 }
 
 export function useCreateCloudWorkspace() {
@@ -108,6 +145,7 @@ export function useCreateCloudWorkspace() {
     },
     mutationFn: async (input) => {
       try {
+        await ensureLaunchBillingReady(input);
         return await createCloudWorkspace(input);
       } catch (error) {
         const didSync = await autoSyncDetectedAgentAuthCredentialsIfNeeded(
@@ -117,6 +155,7 @@ export function useCreateCloudWorkspace() {
         if (!didSync) {
           throw error;
         }
+        await ensureLaunchBillingReady(input);
         return await createCloudWorkspace(input);
       }
     },
@@ -138,6 +177,7 @@ export function useCreateCloudWorkspace() {
     repoGroupKeyToExpand?: string | null;
     latencyFlowId?: string | null;
     initialSession?: PendingWorkspaceInitialSession | null;
+    requiredAgentKind?: string | null;
   }): Promise<CloudWorkspaceEntryResult> => {
     const startedAt = startLatencyTimer();
     const repoLabel = `${args.target.gitOwner}/${args.target.gitRepoName}`;
@@ -167,15 +207,18 @@ export function useCreateCloudWorkspace() {
           triedBranchNames,
         });
       triedBranchNames = attempt.triedBranchNames;
+      const request = args.requiredAgentKind && !attempt.request.requiredAgentKind
+        ? { ...attempt.request, requiredAgentKind: args.requiredAgentKind }
+        : attempt.request;
 
       const nextEntry = buildSubmittingPendingWorkspaceEntry({
         attemptId,
         selectedWorkspaceId: useSessionSelectionStore.getState().selectedWorkspaceId,
         source: "cloud-created",
-        displayName: attempt.request.displayName ?? attempt.branchName,
+        displayName: request.displayName ?? attempt.branchName,
         repoLabel,
-        baseBranchName: attempt.request.baseBranch ?? null,
-        request: { kind: "cloud", input: attempt.request },
+        baseBranchName: request.baseBranch ?? null,
+        request: { kind: "cloud", input: request },
       });
 
       if (currentEntry === null) {
@@ -195,7 +238,7 @@ export function useCreateCloudWorkspace() {
           branchName: attempt.branchName,
           attemptCount,
         });
-        const workspace = await createCloudWorkspaceMutation(attempt.request);
+        const workspace = await createCloudWorkspaceMutation(request);
         trackProductEvent("cloud_workspace_created", {
           workspace_kind: "cloud",
           status: workspace.status,
@@ -322,6 +365,7 @@ export function useCreateCloudWorkspace() {
       repoGroupKeyToExpand: options?.repoGroupKeyToExpand,
       latencyFlowId: options?.latencyFlowId,
       initialSession: options?.initialSession,
+      requiredAgentKind: options?.requiredAgentKind,
     });
   }, [runCloudWorkspaceCreateFlow]);
 
@@ -335,6 +379,7 @@ export function useCreateCloudWorkspace() {
       repoGroupKeyToExpand: options?.repoGroupKeyToExpand,
       latencyFlowId: options?.latencyFlowId,
       initialSession: options?.initialSession,
+      requiredAgentKind: options?.requiredAgentKind,
     });
   }, [runCloudWorkspaceCreateFlow]);
 
@@ -345,6 +390,7 @@ export function useCreateCloudWorkspace() {
       target: buildRepoTargetFromRequest(request),
       initialRequest: request,
       allowConflictRetry: true,
+      requiredAgentKind: request.requiredAgentKind ?? null,
     });
   }, [runCloudWorkspaceCreateFlow]);
 

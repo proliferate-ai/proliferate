@@ -9,13 +9,20 @@ import logging
 import time
 from collections.abc import Mapping
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.constants.billing import (
+    BILLING_SUBJECT_KIND_ORGANIZATION,
+    BILLING_SUBJECT_KIND_PERSONAL,
+)
 from proliferate.constants.cloud import (
     AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN,
     AGENT_GATEWAY_TOKEN_HASH_KEY_ID,
 )
+from proliferate.db.models.billing import BillingSubject
+from proliferate.db.store.billing import record_billing_notification_event
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_agent_auth.records import (
     AgentGatewayPolicyRecord,
@@ -182,8 +189,15 @@ async def forward_gateway_request(
         )
         raise
     except LiteLLMRuntimeStatusError as exc:
-        mapped = _map_litellm_error(exc)
-        if mapped.code == "credits_exhausted" and authorized is not None:
+        mapped = _map_litellm_error(
+            exc,
+            policy_kind=authorized.policy_kind if authorized is not None else None,
+        )
+        if (
+            mapped.code == "credits_exhausted"
+            and authorized is not None
+            and authorized.policy_kind == "proliferate_managed"
+        ):
             await _mark_authorized_budget_exhausted(db, authorized)
         _log_gateway_request(
             started=started,
@@ -343,6 +357,7 @@ async def authorize_gateway_request(
         agent_kind=grant.agent_kind,
         protocol_facade=grant.protocol_facade,
         policy_id=policy.id,
+        policy_kind=policy.policy_kind,
         organization_id=grant.organization_id,
         user_id=grant.user_id,
         target_id=grant.target_id,
@@ -408,6 +423,7 @@ async def _require_gateway_policy_launchable(
         customer_secret_isolation_verified=(
             settings.agent_gateway_litellm_customer_secret_isolation_verified
         ),
+        isolation_proof_ref=settings.agent_gateway_litellm_isolation_proof_ref,
     )
     if not verdict.allowed:
         raise AgentGatewayError(
@@ -497,6 +513,27 @@ async def _mark_authorized_budget_exhausted(
         last_error_code="credits_exhausted",
         last_error_message="Managed credits are exhausted.",
     )
+    subject = await _billing_subject_for_budget(db, budget)
+    if subject is not None:
+        await record_billing_notification_event(
+            db,
+            billing_subject_id=subject.id,
+            organization_id=subject.organization_id,
+            user_id=subject.user_id,
+            kind="managed_llm_budget_exhausted",
+            severity="warning",
+            source="agent_gateway",
+            external_ref=str(budget.id),
+            idempotency_key=(
+                f"agent_gateway_budget:{budget.id}:"
+                f"{budget.entitlement_period_key or 'current'}:exhausted"
+            ),
+            payload_json={
+                "owner_scope": budget.owner_scope,
+                "included_budget_usd": budget.included_budget_usd,
+            },
+            occurred_at=utcnow(),
+        )
     if budget.owner_scope != "personal":
         return
     entitlement = await store.get_free_credit_entitlement_for_budget(
@@ -518,6 +555,38 @@ async def _mark_authorized_budget_exhausted(
         last_error_code="credits_exhausted",
         last_error_message="Managed credits are exhausted.",
     )
+
+
+async def _billing_subject_for_budget(
+    db: AsyncSession,
+    budget: object,
+) -> BillingSubject | None:
+    owner_scope = getattr(budget, "owner_scope", None)
+    if owner_scope == "organization":
+        organization_id = getattr(budget, "organization_id", None)
+        if organization_id is None:
+            return None
+        return (
+            await db.execute(
+                select(BillingSubject).where(
+                    BillingSubject.kind == BILLING_SUBJECT_KIND_ORGANIZATION,
+                    BillingSubject.organization_id == organization_id,
+                )
+            )
+        ).scalar_one_or_none()
+    if owner_scope == "personal":
+        owner_user_id = getattr(budget, "owner_user_id", None)
+        if owner_user_id is None:
+            return None
+        return (
+            await db.execute(
+                select(BillingSubject).where(
+                    BillingSubject.kind == BILLING_SUBJECT_KIND_PERSONAL,
+                    BillingSubject.user_id == owner_user_id,
+                )
+            )
+        ).scalar_one_or_none()
+    return None
 
 
 def _json_body(body: bytes) -> dict[str, object]:
@@ -613,9 +682,19 @@ def _privacy_hash_id(scope: str, value: object) -> str:
     return _privacy_hash(f"{scope}:{value}") or ""
 
 
-def _map_litellm_error(error: LiteLLMRuntimeStatusError) -> AgentGatewayError:
+def _map_litellm_error(
+    error: LiteLLMRuntimeStatusError,
+    *,
+    policy_kind: str | None = None,
+) -> AgentGatewayError:
     body_text = error.body.decode("utf-8", errors="replace").lower()
     if "budget" in body_text or "max_budget" in body_text or "credit" in body_text:
+        if policy_kind not in {None, "proliferate_managed"}:
+            return AgentGatewayError(
+                "Provider quota is exhausted.",
+                code="provider_quota_exhausted",
+                status_code=402,
+            )
         return AgentGatewayError(
             "Managed credits are exhausted.",
             code="credits_exhausted",

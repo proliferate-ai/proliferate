@@ -2,6 +2,7 @@ import type {
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { billingBlockPresentation } from "@proliferate/product-model/billing/presentation";
 import {
   CLOUD_STATUS_ACTION_COPY,
   CLOUD_STATUS_COMPACT_COPY,
@@ -90,6 +91,14 @@ export function titleForStartBlockReason(
   if (blockReason === "concurrency_limit") {
     return "Sandbox limit reached";
   }
+  if (
+    blockReason === "compute_credits_exhausted"
+    || blockReason === "llm_credits_exhausted"
+    || blockReason === "agent_gateway_disabled"
+    || blockReason === "managed_credit_agent_not_configured"
+  ) {
+    return billingBlockPresentation(blockReason).title;
+  }
   return "Cloud usage is paused";
 }
 
@@ -99,6 +108,11 @@ export function descriptionForStartBlockReason(
   switch (normalizeStartBlockReason(reason)) {
     case "concurrency_limit":
       return CONCURRENCY_BLOCK_DESCRIPTION;
+    case "compute_credits_exhausted":
+    case "llm_credits_exhausted":
+    case "agent_gateway_disabled":
+    case "managed_credit_agent_not_configured":
+      return billingBlockPresentation(reason).description;
     case "credits_exhausted":
       return CREDITS_EXHAUSTED_DESCRIPTION;
     case "overage_disabled":

@@ -279,7 +279,7 @@ export function OrganizationPane() {
               <form onSubmit={(event) => { void handleCreateTeamCheckout(event); }}>
                 <SettingsCardRow
                   label="Create a Team"
-                  description="Start Team checkout to unlock members, shared cloud work, org billing, Slack work, and shared sandbox setup."
+                  description="Start Team checkout to unlock members, shared cloud work, Team billing, Slack work, and shared sandbox setup."
                 >
                   <div className="flex w-full max-w-md flex-col gap-2 sm:flex-row sm:justify-end">
                     <Input

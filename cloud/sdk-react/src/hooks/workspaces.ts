@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import {
   createCloudWorkspace,
+  launchCloudWorkspacePreflight,
   listCloudWorkspaces,
   getWorkspaceSnapshot,
   type CloudWorkspaceSummary,
@@ -14,6 +15,8 @@ import {
   type CloudWorkspaceSnapshot,
   type CloudWorkspaceListSelection,
   type CloudWorkspaceListScope,
+  type CloudWorkspaceLaunchPreflightRequest,
+  type CloudWorkspaceLaunchPreflightResponse,
   type CreateCloudWorkspaceRequest,
 } from "@proliferate/cloud-sdk";
 import {
@@ -111,6 +114,17 @@ export function useCreateCloudWorkspace(options?: {
         queryKey: [...cloudRootKey(), "workspaces"],
       });
     },
+  });
+}
+
+export function useCloudWorkspaceLaunchPreflight() {
+  const client = useCloudClient();
+  return useMutation<
+    CloudWorkspaceLaunchPreflightResponse,
+    Error,
+    CloudWorkspaceLaunchPreflightRequest
+  >({
+    mutationFn: (input) => launchCloudWorkspacePreflight(input, client),
   });
 }
 

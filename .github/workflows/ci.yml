@@ -192,3 +192,6 @@ jobs:
 
       - name: Test product model
         run: pnpm --filter @proliferate/product-model test
+
+      - name: Test product UI
+        run: pnpm --filter @proliferate/product-ui test

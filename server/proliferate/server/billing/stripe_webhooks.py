@@ -28,16 +28,13 @@ from proliferate.db.store.billing import (
     get_billing_subject_for_stripe_reference,
     get_billing_subscription_by_stripe_subscription_id,
     load_billing_subscription_by_id,
-    mark_seat_adjustment_failed,
-    mark_seat_adjustment_grant_issued,
-    mark_seat_adjustment_stripe_confirmed,
     mark_webhook_event_failed_by_id,
     mark_webhook_event_processed_by_id,
     prepare_initial_org_seat_reconcile,
+    record_billing_notification_event,
     upsert_stripe_subscription_record,
 )
 from proliferate.integrations.billing import stripe as stripe_billing
-from proliferate.server.billing.domain.accounting import stripe_status_is_terminal
 from proliferate.server.billing.domain.pricing import (
     monthly_subscription_price_ids,
     overage_subscription_price_ids,
@@ -106,6 +103,7 @@ class StripeSignature:
 @dataclass(frozen=True)
 class SubscriptionSyncResult:
     record: BillingSubscription | None
+    previous: BillingSubscription | None = None
     notifications: tuple[BillingSlackNotification, ...] = ()
 
 
@@ -184,18 +182,28 @@ async def _dispatch_stripe_event(event: dict[str, Any]) -> tuple[BillingSlackNot
             stripe_object,
             event_type=event_type,
         )
+        await _record_subscription_billing_event(stripe_object, event=event)
         return result.notifications
     elif event_type == "customer.subscription.deleted":
         result = await _sync_subscription_for_billing_notifications(
             stripe_object,
             event_type=event_type,
         )
-        await _apply_payment_hold_for_subscription(stripe_object)
+        if _subscription_deleted_requires_payment_hold(
+            previous=result.previous,
+            stripe_object=stripe_object,
+        ):
+            await _apply_payment_hold_for_subscription(stripe_object)
+        await _record_subscription_billing_event(stripe_object, event=event)
         return result.notifications
     elif event_type == "invoice.paid":
-        return await _handle_invoice_paid(stripe_object)
+        return await _handle_invoice_paid(stripe_object, event=event)
     elif event_type == "invoice.payment_failed":
-        await _handle_invoice_payment_failed(stripe_object)
+        await _handle_invoice_payment_failed(stripe_object, event=event)
+    elif event_type == "invoice.upcoming":
+        await _handle_invoice_upcoming(stripe_object, event=event)
+    elif event_type == "customer.subscription.trial_will_end":
+        await _handle_subscription_trial_will_end(stripe_object, event=event)
     return ()
 
 
@@ -338,7 +346,7 @@ async def _sync_subscription_for_billing_notifications(
     )
     record = await _sync_subscription(subscription)
     if record is None:
-        return SubscriptionSyncResult(record=None)
+        return SubscriptionSyncResult(record=None, previous=previous)
     events = _billing_slack_events_for_subscription_transition(
         event_type=event_type,
         previous=previous,
@@ -350,7 +358,40 @@ async def _sync_subscription_for_billing_notifications(
         if notification is None:
             continue
         notifications.append(notification)
-    return SubscriptionSyncResult(record=record, notifications=tuple(notifications))
+    return SubscriptionSyncResult(
+        record=record,
+        previous=previous,
+        notifications=tuple(notifications),
+    )
+
+
+async def _record_subscription_billing_event(
+    subscription: dict[str, Any],
+    *,
+    event: dict[str, Any],
+) -> None:
+    subject = await _subject_from_object(subscription)
+    if subject is None:
+        return
+    event_type = event.get("type")
+    if event_type == "customer.subscription.deleted":
+        kind = "subscription_deleted"
+        severity = "warning"
+    else:
+        kind = "subscription_updated"
+        severity = "info"
+    await _record_billing_event_for_subject(
+        subject,
+        event=event,
+        kind=kind,
+        severity=severity,
+        external_ref=_id_from_expandable(subscription.get("id")),
+        payload={
+            "stripe_event_type": str(event_type),
+            "subscription_status": str(subscription.get("status") or ""),
+        },
+        stripe_object=subscription,
+    )
 
 
 def _billing_slack_events_for_subscription_transition(
@@ -426,36 +467,32 @@ def _subscription_has_cancel_intent(subscription: BillingSubscription | None) ->
     )
 
 
+def _subscription_deleted_requires_payment_hold(
+    *,
+    previous: BillingSubscription | None,
+    stripe_object: dict[str, Any],
+) -> bool:
+    status = str(stripe_object.get("status") or "").lower()
+    previous_status = str(previous.status if previous is not None else "").lower()
+    cancellation_details = stripe_object.get("cancellation_details")
+    cancellation_reason = (
+        str(cancellation_details.get("reason") or "").lower()
+        if isinstance(cancellation_details, dict)
+        else ""
+    )
+    payment_failure_statuses = {"past_due", "unpaid", "incomplete_expired"}
+    payment_failure_reasons = {"payment_failed", "failed_payment", "failed_invoice"}
+    if status in payment_failure_statuses or previous_status in payment_failure_statuses:
+        return True
+    return cancellation_reason in payment_failure_reasons
+
+
 async def _reconcile_initial_org_subscription_seats(
     record: BillingSubscription,
 ) -> BillingSubscription:
-    adjustment = await prepare_initial_org_seat_reconcile(
+    await prepare_initial_org_seat_reconcile(
         billing_subscription_id=record.id,
     )
-    if adjustment is None:
-        reloaded = await load_billing_subscription_by_id(record.id)
-        return reloaded or record
-    try:
-        await stripe_billing.update_subscription_item_quantity(
-            subscription_item_id=adjustment.monthly_subscription_item_id,
-            quantity=adjustment.target_quantity,
-            idempotency_key=f"initial-seat-reconcile:{adjustment.id}:seats:{adjustment.target_quantity}",
-        )
-        await mark_seat_adjustment_stripe_confirmed(adjustment_id=adjustment.id)
-        await mark_seat_adjustment_grant_issued(adjustment_id=adjustment.id)
-    except stripe_billing.StripeBillingError as error:
-        await mark_seat_adjustment_failed(
-            adjustment_id=adjustment.id,
-            error=error.message,
-            terminal=stripe_status_is_terminal(error.status_code),
-        )
-        raise
-    except Exception as error:
-        await mark_seat_adjustment_failed(
-            adjustment_id=adjustment.id,
-            error=f"{type(error).__name__}: {error}",
-        )
-        raise
     reloaded = await load_billing_subscription_by_id(record.id)
     return reloaded or record
 
@@ -478,7 +515,11 @@ def _subscription_item_details(
     )
 
 
-async def _handle_invoice_paid(invoice: dict[str, Any]) -> tuple[BillingSlackNotification, ...]:
+async def _handle_invoice_paid(
+    invoice: dict[str, Any],
+    *,
+    event: dict[str, Any] | None = None,
+) -> tuple[BillingSlackNotification, ...]:
     invoice_id = invoice.get("id")
     if not isinstance(invoice_id, str):
         return ()
@@ -531,10 +572,24 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> tuple[BillingSlackNot
             top_up_existing=True,
         )
     await clear_payment_failed_holds(billing_subject_id=subject.id)
+    if event is not None:
+        await _record_billing_event_for_subject(
+            subject,
+            event=event,
+            kind="invoice_paid",
+            severity="info",
+            external_ref=invoice_id,
+            payload={"subscription_id": subscription_id or ""},
+            stripe_object=invoice,
+        )
     return notifications
 
 
-async def _handle_invoice_payment_failed(invoice: dict[str, Any]) -> None:
+async def _handle_invoice_payment_failed(
+    invoice: dict[str, Any],
+    *,
+    event: dict[str, Any] | None = None,
+) -> None:
     subject = await _subject_from_object(invoice)
     if subject is None:
         lines = _line_items_from_object(invoice)
@@ -553,6 +608,160 @@ async def _handle_invoice_payment_failed(invoice: dict[str, Any]) -> None:
         source=PAYMENT_HOLD_SOURCE,
         source_ref=_id_from_expandable(invoice.get("id")),
     )
+    if event is not None:
+        await _record_billing_event_for_subject(
+            subject,
+            event=event,
+            kind="invoice_payment_failed",
+            severity="error",
+            external_ref=_id_from_expandable(invoice.get("id")),
+            payload={
+                "subscription_id": _invoice_subscription_id(
+                    invoice,
+                    _line_items_from_object(invoice),
+                )
+                or ""
+            },
+            stripe_object=invoice,
+        )
+
+
+async def _handle_invoice_upcoming(
+    invoice: dict[str, Any],
+    *,
+    event: dict[str, Any],
+) -> None:
+    subject = await _subject_from_object(invoice)
+    if subject is None:
+        lines = _line_items_from_object(invoice)
+        subscription_id = _invoice_subscription_id(invoice, lines)
+        if subscription_id:
+            subscription = await stripe_billing.retrieve_subscription(subscription_id)
+            subject = await _subject_from_object(subscription)
+    if subject is None:
+        return
+    await _record_billing_event_for_subject(
+        subject,
+        event=event,
+        kind="invoice_upcoming",
+        severity="info",
+        external_ref=_id_from_expandable(invoice.get("id")),
+        payload={},
+        stripe_object=invoice,
+    )
+
+
+async def _handle_subscription_trial_will_end(
+    subscription: dict[str, Any],
+    *,
+    event: dict[str, Any],
+) -> None:
+    subject = await _subject_from_object(subscription)
+    if subject is None:
+        return
+    await _record_billing_event_for_subject(
+        subject,
+        event=event,
+        kind="trial_ending",
+        severity="warning",
+        external_ref=_id_from_expandable(subscription.get("id")),
+        payload={"subscription_status": str(subscription.get("status") or "")},
+        stripe_object=subscription,
+    )
+
+
+async def _record_billing_event_for_subject(
+    subject: BillingSubject,
+    *,
+    event: dict[str, Any],
+    kind: str,
+    severity: str,
+    external_ref: str | None,
+    payload: dict[str, object],
+    stripe_object: dict[str, Any],
+) -> None:
+    idempotency_key = _billing_event_idempotency_key(
+        event=event,
+        kind=kind,
+        stripe_object=stripe_object,
+        external_ref=external_ref,
+    )
+    if idempotency_key is None:
+        return
+    occurred_at = _datetime_from_timestamp(event.get("created")) or datetime.now(UTC)
+    async with db_engine.async_session_factory() as db, db.begin():
+        await record_billing_notification_event(
+            db,
+            billing_subject_id=subject.id,
+            organization_id=subject.organization_id,
+            user_id=subject.user_id,
+            kind=kind,
+            severity=severity,
+            source="stripe",
+            external_ref=external_ref,
+            idempotency_key=idempotency_key,
+            payload_json=payload,
+            occurred_at=occurred_at,
+        )
+
+
+def _billing_event_idempotency_key(
+    *,
+    event: dict[str, Any],
+    kind: str,
+    stripe_object: dict[str, Any],
+    external_ref: str | None,
+) -> str | None:
+    event_type = event.get("type")
+    if event_type == "invoice.upcoming":
+        customer_id = _id_from_expandable(stripe_object.get("customer")) or "unknown_customer"
+        subscription_id = (
+            _invoice_subscription_id(stripe_object, _line_items_from_object(stripe_object))
+            or "unknown_subscription"
+        )
+        period_start, period_end = _invoice_period_bounds(stripe_object)
+        return (
+            "stripe:invoice.upcoming:"
+            f"{customer_id}:{subscription_id}:{period_start}:{period_end}"
+        )
+    if event_type == "customer.subscription.trial_will_end":
+        subscription_id = _id_from_expandable(stripe_object.get("id"))
+        if subscription_id is None:
+            return None
+        trial_end = stripe_object.get("trial_end") or "unknown_trial_end"
+        return f"stripe:customer.subscription.trial_will_end:{subscription_id}:{trial_end}"
+    if event_type in {
+        "customer.subscription.created",
+        "customer.subscription.updated",
+        "customer.subscription.deleted",
+    }:
+        subscription_id = _id_from_expandable(stripe_object.get("id"))
+        if subscription_id is None:
+            return None
+        return f"stripe:{event_type}:{subscription_id}"
+    if event_type in {"invoice.paid", "invoice.payment_failed"}:
+        invoice_id = external_ref or _id_from_expandable(stripe_object.get("id"))
+        if invoice_id is None:
+            return None
+        return f"stripe:{event_type}:{invoice_id}"
+    event_id = event.get("id")
+    if not isinstance(event_id, str):
+        return None
+    return f"stripe:{event_type or kind}:{event_id}"
+
+
+def _invoice_period_bounds(invoice: dict[str, Any]) -> tuple[str, str]:
+    period_start = invoice.get("period_start")
+    period_end = invoice.get("period_end")
+    for line in _line_items_from_object(invoice):
+        period = line.get("period") if isinstance(line, dict) else None
+        if not isinstance(period, dict):
+            continue
+        period_start = period_start or period.get("start")
+        period_end = period_end or period.get("end")
+        if period_start is not None and period_end is not None:
+            break
+    return (str(period_start or "unknown_start"), str(period_end or "unknown_end"))
 
 
 async def _apply_payment_hold_for_subscription(subscription: dict[str, Any]) -> None:

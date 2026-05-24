@@ -67,7 +67,14 @@ export type HomeLaunchTarget =
   | { kind: "cowork" }
   | { kind: "local"; sourceRoot: string; existingWorkspaceId: string | null }
   | { kind: "worktree"; repoRootId: string; sourceWorkspaceId: string | null; baseBranch: string }
-  | { kind: "cloud"; gitOwner: string; gitRepoName: string; baseBranch: string };
+  | {
+    kind: "cloud";
+    gitOwner: string;
+    gitRepoName: string;
+    baseBranch: string;
+    ownerScope?: "personal" | "organization";
+    organizationId?: string | null;
+  };
 
 export function resolveHomeModelAvailabilityState(input: {
   isLoading: boolean;

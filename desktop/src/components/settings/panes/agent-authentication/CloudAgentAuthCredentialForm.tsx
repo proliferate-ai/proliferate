@@ -64,7 +64,6 @@ export function CloudAgentAuthCredentialForm({
   const [baseUrl, setBaseUrl] = useState("");
   const [roleArn, setRoleArn] = useState("");
   const [region, setRegion] = useState("us-east-1");
-  const [externalId, setExternalId] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const selectedOrganizationCanOwnCredential = adminOrganizations.some(
     (organization) => organization.id === selectedOrganizationId,
@@ -82,7 +81,7 @@ export function CloudAgentAuthCredentialForm({
     && (ownerScope === "personal" || Boolean(credentialOrganizationId))
     && agentAuthGatewayCreatePayloadReady(
       providerKind,
-      { apiKey, baseUrl, roleArn, region, externalId },
+      { apiKey, baseUrl, roleArn, region, externalId: "" },
     );
 
   useEffect(() => {
@@ -113,7 +112,7 @@ export function CloudAgentAuthCredentialForm({
       ownerScope,
       organizationId: credentialOrganizationId,
       displayName,
-      values: { apiKey, baseUrl, roleArn, region, externalId },
+      values: { apiKey, baseUrl, roleArn, region, externalId: "" },
     });
     setFeedback(null);
     try {
@@ -122,7 +121,6 @@ export function CloudAgentAuthCredentialForm({
       setApiKey("");
       setBaseUrl("");
       setRoleArn("");
-      setExternalId("");
       setFeedback(`${result.credential.displayName} saved.`);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Could not save credential.");
@@ -311,16 +309,6 @@ export function CloudAgentAuthCredentialForm({
                   placeholder="us-east-1"
                   onChange={(event: ChangeEvent<HTMLInputElement>) =>
                     setRegion(event.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="agent-auth-external-id">External ID</Label>
-                <Input
-                  id="agent-auth-external-id"
-                  value={externalId}
-                  placeholder="proliferate-..."
-                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    setExternalId(event.target.value)}
                 />
               </div>
             </div>

@@ -152,6 +152,7 @@ export interface CreateCloudWorkspaceRequest {
   displayName?: string | null;
   ownerScope: "personal" | "organization";
   organizationId?: string | null;
+  requiredAgentKind?: string | null;
 }
 
 export interface CloudMobilityRepoRef {

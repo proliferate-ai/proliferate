@@ -16,6 +16,8 @@ export interface CloudWorkspaceRepoTarget {
   gitOwner: string;
   gitRepoName: string;
   baseBranch?: string | null;
+  ownerScope?: "personal" | "organization";
+  organizationId?: string | null;
 }
 
 export type CloudWorkspaceCreateInput =
@@ -186,7 +188,10 @@ export function buildNextCloudWorkspaceAttempt(args: {
       baseBranch: args.target.baseBranch?.trim() || undefined,
       branchName,
       displayName: null,
-      ownerScope: "personal",
+      ownerScope: args.target.ownerScope ?? "personal",
+      organizationId: args.target.ownerScope === "organization"
+        ? args.target.organizationId ?? null
+        : null,
     },
     triedBranchNames: nextTriedBranchNames,
   };

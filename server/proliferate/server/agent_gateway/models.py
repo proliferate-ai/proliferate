@@ -13,6 +13,7 @@ class AuthorizedGatewayRequest:
     agent_kind: str
     protocol_facade: str
     policy_id: UUID
+    policy_kind: str
     organization_id: UUID | None
     user_id: UUID | None
     target_id: UUID

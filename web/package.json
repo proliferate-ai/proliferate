@@ -7,6 +7,7 @@
     "dev": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-model build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && vite",
     "build": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-model build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -34,6 +35,7 @@
     "@vitejs/plugin-react": "^4",
     "tailwindcss": "^4",
     "typescript": "^5.7",
-    "vite": "^6"
+    "vite": "^6",
+    "vitest": "^3.2.4"
   }
 }

@@ -6,7 +6,6 @@ import {
   type CloudOwnerSelection,
   createBillingPortalSession,
   createCloudCheckoutSession,
-  createRefillCheckoutSession,
   getCloudBillingPlan,
   updateOverageSettings,
 } from "@proliferate/cloud-sdk/client/billing";
@@ -192,19 +191,6 @@ export function useCloudBillingMutations(owner?: CloudOwnerSelection) {
     },
   });
 
-  const refillMutation = useMutation({
-    mutationFn: () => createRefillCheckoutSession(owner),
-    onError: (error) => {
-      captureTelemetryException(error, {
-        tags: {
-          action: "create_refill_checkout",
-          domain: "cloud_billing",
-          route: "settings",
-        },
-      });
-    },
-  });
-
   const overageMutation = useMutation({
     mutationFn: (input: { enabled: boolean; capCentsPerSeat?: number | null }) =>
       updateOverageSettings(input, owner),
@@ -222,11 +208,9 @@ export function useCloudBillingMutations(owner?: CloudOwnerSelection) {
   return {
     createCloudCheckout: cloudCheckoutMutation.mutateAsync,
     createBillingPortal: portalMutation.mutateAsync,
-    createRefillCheckout: refillMutation.mutateAsync,
     updateOverageEnabled: overageMutation.mutateAsync,
     creatingCloudCheckout: cloudCheckoutMutation.isPending,
     creatingBillingPortal: portalMutation.isPending,
-    creatingRefillCheckout: refillMutation.isPending,
     updatingOverage: overageMutation.isPending,
   };
 }

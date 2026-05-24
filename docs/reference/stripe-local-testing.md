@@ -101,13 +101,13 @@ Then restart `make dev PROFILE=<name>`.
 Send one local usage hit into Stripe test mode:
 
 ```bash
-node scripts/stripe-send-test-usage.mjs --seconds 180
+node scripts/stripe-send-test-usage.mjs --customer cus_... --seconds 180
 ```
 
-To send usage for an existing Stripe customer:
+To send a direct overage-cent quantity for an existing Stripe customer:
 
 ```bash
-node scripts/stripe-send-test-usage.mjs --customer cus_... --seconds 3600
+node scripts/stripe-send-test-usage.mjs --customer cus_... --cents 200
 ```
 
 The meter payload uses:
@@ -139,7 +139,7 @@ profile API port:
 
 ```bash
 stripe listen \
-  --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed \
+  --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.subscription.trial_will_end,invoice.paid,invoice.payment_failed,invoice.upcoming \
   --forward-to http://127.0.0.1:$PROLIFERATE_API_PORT/v1/billing/webhooks/stripe
 ```
 
@@ -160,9 +160,10 @@ stripe trigger checkout.session.completed
 ```
 
 Synthetic `stripe trigger` events are useful for signature/ack checks, but most
-billing handlers filter invoice/checkout line items by the configured Cloud and
-refill price IDs. Use real local Checkout when validating subscription mirror
-state, payment holds, and refill grants.
+billing handlers filter invoice/checkout line items by the configured Team and
+managed-cloud overage price IDs. Use real local Checkout when validating Team
+activation, subscription mirror state, seat adjustments, payment holds, and
+period grants.
 
 ## Useful Local Checks
 
@@ -172,7 +173,9 @@ Verify generated Stripe IDs and shape:
 make stripe-setup-test
 ```
 
-Verify webhook intake with a synthetic event:
+Verify webhook intake with a synthetic event. This only proves delivery and
+signature handling; payment recovery/blocking must be validated through a real
+test-mode subscription that uses the configured local prices:
 
 ```bash
 stripe trigger invoice.payment_failed

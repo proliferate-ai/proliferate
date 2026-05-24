@@ -35,6 +35,14 @@
       "types": "./dist/automations/schedule.d.ts",
       "import": "./dist/automations/schedule.js"
     },
+    "./billing/model": {
+      "types": "./dist/billing/model.d.ts",
+      "import": "./dist/billing/model.js"
+    },
+    "./billing/presentation": {
+      "types": "./dist/billing/presentation.d.ts",
+      "import": "./dist/billing/presentation.js"
+    },
     "./chats/model": {
       "types": "./dist/chats/model.d.ts",
       "import": "./dist/chats/model.js"

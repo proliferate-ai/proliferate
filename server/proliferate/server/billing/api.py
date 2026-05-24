@@ -11,6 +11,9 @@ from proliferate.auth.dependencies import current_active_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.billing.models import (
+    AccountCreditsEnsureResponse,
+    AccountCreditsOverview,
+    BillingEventsResponse,
     BillingOverview,
     BillingOwnerSelection,
     BillingServiceError,
@@ -21,22 +24,34 @@ from proliferate.server.billing.models import (
     OverageSettingsResponse,
     PlanInfo,
     StripeWebhookAck,
+    TeamBillingEnvelope,
     TeamCheckoutRequest,
     TeamCheckoutResponse,
+    TeamOverageSettingsRequest,
+    account_credits_ensure_response,
+    account_credits_overview_response,
+    billing_events_response,
+    team_billing_envelope_response,
 )
 from proliferate.server.billing.service import (
     cancel_current_team_checkout,
     create_cloud_checkout_session,
     create_customer_portal_session,
     create_refill_checkout_session,
+    create_team_billing_portal_session,
     create_team_checkout_session,
+    ensure_account_credits,
+    get_account_credits_overview,
     get_billing_overview,
     get_billing_overview_for_owner,
     get_cloud_plan,
     get_cloud_plan_for_owner,
     get_current_plan,
     get_current_team_checkout,
+    get_team_billing_overview,
+    list_team_billing_events,
     update_overage_settings,
+    update_team_overage_settings,
 )
 from proliferate.server.billing.stripe_webhooks import handle_stripe_webhook
 
@@ -101,6 +116,36 @@ async def get_overview(
         ) from error
 
 
+@router.get("/account-credits", response_model=AccountCreditsOverview)
+async def get_account_credits_endpoint(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> AccountCreditsOverview:
+    try:
+        return account_credits_overview_response(
+            await get_account_credits_overview(db, user),
+        )
+    except BillingServiceError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code, "message": error.message},
+        ) from error
+
+
+@router.post("/account-credits/ensure", response_model=AccountCreditsEnsureResponse)
+async def ensure_account_credits_endpoint(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session, use_cache=False),
+) -> AccountCreditsEnsureResponse:
+    try:
+        return account_credits_ensure_response(await ensure_account_credits(db, user))
+    except BillingServiceError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code, "message": error.message},
+        ) from error
+
+
 @router.post("/cloud-checkout", response_model=BillingUrlResponse)
 async def create_cloud_checkout(
     request: BillingOwnerSelection | None = None,
@@ -133,6 +178,77 @@ async def create_team_checkout(
             team_name=request.team_name,
             invite_emails=[str(email) for email in request.invite_emails],
         )
+    except BillingServiceError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code, "message": error.message},
+        ) from error
+
+
+@router.get("/team", response_model=TeamBillingEnvelope)
+async def get_team_billing_endpoint(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> TeamBillingEnvelope:
+    try:
+        return team_billing_envelope_response(await get_team_billing_overview(db, user))
+    except BillingServiceError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code, "message": error.message},
+        ) from error
+
+
+@router.post("/team/checkout", response_model=TeamCheckoutResponse)
+async def create_team_checkout_facade_endpoint(
+    request: TeamCheckoutRequest,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session, use_cache=False),
+) -> TeamCheckoutResponse:
+    return await create_team_checkout(request, user, db)
+
+
+@router.post("/team/customer-portal", response_model=BillingUrlResponse)
+async def create_team_customer_portal_endpoint(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session, use_cache=False),
+) -> BillingUrlResponse:
+    try:
+        return await create_team_billing_portal_session(db, user)
+    except BillingServiceError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code, "message": error.message},
+        ) from error
+
+
+@router.patch("/team/overage", response_model=OverageSettingsResponse)
+async def update_team_overage_settings_endpoint(
+    request: TeamOverageSettingsRequest,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> OverageSettingsResponse:
+    try:
+        return await update_team_overage_settings(
+            db,
+            user,
+            enabled=request.enabled,
+            cap_cents_per_seat=request.cap_cents_per_seat,
+        )
+    except BillingServiceError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code, "message": error.message},
+        ) from error
+
+
+@router.get("/team/events", response_model=BillingEventsResponse)
+async def list_team_billing_events_endpoint(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> BillingEventsResponse:
+    try:
+        return billing_events_response(await list_team_billing_events(db, user))
     except BillingServiceError as error:
         raise HTTPException(
             status_code=error.status_code,

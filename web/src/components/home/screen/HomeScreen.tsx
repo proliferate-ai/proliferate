@@ -2,11 +2,15 @@ import { Bot, Cloud, GitBranch, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  useAgentAuthMutations,
+  useAccountCreditsActions,
   useCloudAgentCatalog,
   useCloudRepoConfigs,
+  useCloudWorkspaceLaunchPreflight,
   useCreateCloudWorkspace,
+  useOrganizationCloudRepoConfigs,
+  useTeamBilling,
 } from "@proliferate/cloud-sdk-react";
+import { billingBlockPresentation } from "@proliferate/product-model/billing/presentation";
 import {
   buildCloudLaunchComposerControls,
   buildLaunchSessionConfigUpdates,
@@ -40,6 +44,8 @@ interface RepoOption {
   id: string;
   gitOwner: string;
   gitRepoName: string;
+  ownerScope: "personal" | "organization";
+  organizationId: string | null;
   label: string;
   description: string;
 }
@@ -67,16 +73,31 @@ export function HomeScreen() {
   });
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pendingPrompt, setPendingPrompt] = useState<HomePendingPrompt | null>(null);
+  const teamBilling = useTeamBilling();
+  const teamOrganizationId = teamBilling.data?.team?.organizationId ?? null;
   const repoConfigs = useCloudRepoConfigs();
+  const teamRepoConfigs = useOrganizationCloudRepoConfigs(
+    teamOrganizationId,
+    Boolean(teamOrganizationId),
+  );
   const agentCatalog = useCloudAgentCatalog();
   const createWorkspace = useCreateCloudWorkspace();
-  const agentAuthMutations = useAgentAuthMutations();
+  const accountCreditActions = useAccountCreditsActions();
+  const launchPreflight = useCloudWorkspaceLaunchPreflight();
   const repoOptions = useMemo(
-    () => buildRepoOptions(repoConfigs.data?.configs ?? [], webEnv.defaultCloudRepo),
-    [repoConfigs.data?.configs],
+    () => buildRepoOptions({
+      personalConfigs: repoConfigs.data?.configs ?? [],
+      teamConfigs: teamRepoConfigs.data?.configs ?? [],
+      teamOrganizationId,
+      defaultRepo: webEnv.defaultCloudRepo,
+    }),
+    [repoConfigs.data?.configs, teamOrganizationId, teamRepoConfigs.data?.configs],
   );
   const selectedRepo = useMemo(
-    () => repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null,
+    () => repoOptions.find((repo) => repo.id === repoId)
+      ?? repoOptions.find((repo) => repo.id.endsWith(`:${repoId}`))
+      ?? repoOptions[0]
+      ?? null,
     [repoId, repoOptions],
   );
   const resolvedLaunchSelection = useMemo(
@@ -137,8 +158,9 @@ export function HomeScreen() {
   }
 
   function handleRepoSelected(nextRepoId: string) {
-    setRepoId(nextRepoId);
-    writeLastRepoId(nextRepoId);
+    const nextOptionId = nextRepoId.includes(":") ? nextRepoId : repoOptionId("personal", nextRepoId);
+    setRepoId(nextOptionId);
+    writeLastRepoId(nextOptionId);
     void repoConfigs.refetch();
   }
 
@@ -163,22 +185,30 @@ export function HomeScreen() {
         agentKind: resolvedLaunchSelection.agentKind,
         modelId: resolvedLaunchSelection.modelId,
         modeId: resolvedLaunchSelection.modeId,
+        ownerScope: selectedRepo.ownerScope,
+        organizationId: selectedRepo.organizationId,
         sessionConfigUpdates: buildLaunchSessionConfigUpdates({
           catalog: agentCatalog.data,
           selection: resolvedLaunchSelection,
         }),
         createdAt: Date.now(),
       };
-      const freeCredits = await agentAuthMutations.ensureFreeCredits({});
-      if (
-        freeCredits.status !== "not_entitled"
-        && freeCredits.status !== "gateway_disabled"
-        && !freeCredits.launchEnabled
-      ) {
-        throw new Error(
-          freeCredits.lastErrorMessage
-            ?? "Cloud agent credits are not ready yet. Please retry in a moment.",
+      if (selectedRepo.ownerScope === "personal") {
+        await accountCreditActions.ensureAccountCredits();
+      }
+      const preflight = await launchPreflight.mutateAsync({
+        ownerScope: selectedRepo.ownerScope,
+        organizationId: selectedRepo.organizationId,
+        targetKind: selectedRepo.ownerScope === "organization" ? "team_cloud" : "personal_cloud",
+        requiredAgentKind: resolvedLaunchSelection.agentKind,
+        requiredManagedResources: ["compute", "llm", "gateway"],
+      });
+      if (!preflight.launchAllowed) {
+        const block = billingBlockPresentation(
+          preflight.blockedReason,
+          preflight.blockedResource ?? null,
         );
+        throw new Error(`${block.title}: ${block.description}`);
       }
       const workspace = await createWorkspace.mutateAsync({
         gitProvider: "github",
@@ -186,7 +216,8 @@ export function HomeScreen() {
         gitRepoName: selectedRepo.gitRepoName,
         branchName: buildBranchName(text),
         displayName: buildWorkspaceDisplayName(text),
-        ownerScope: "personal",
+        ownerScope: selectedRepo.ownerScope,
+        organizationId: selectedRepo.organizationId,
         requiredAgentKind: resolvedLaunchSelection.agentKind,
       });
       savePendingHomePrompt(workspace.id, workspacePendingPrompt);
@@ -205,7 +236,8 @@ export function HomeScreen() {
   }
 
   const submitting = createWorkspace.isPending
-    || agentAuthMutations.isEnsuringFreeCredits
+    || accountCreditActions.ensuringAccountCredits
+    || launchPreflight.isPending
     || submitInFlightRef.current;
   const transcriptRows = useMemo(
     () => buildPendingPromptRows(pendingPrompt),
@@ -247,7 +279,11 @@ export function HomeScreen() {
         placeholder={HOME_PLACEHOLDER}
         canSubmit={Boolean(draft.trim()) && Boolean(selectedRepo) && !submitting}
         submitting={submitting}
-        target={buildTargetPicker(repoId, repoOptions, repoConfigs.isLoading)}
+        target={buildTargetPicker(
+          selectedRepo?.id ?? repoId,
+          repoOptions,
+          repoConfigs.isLoading || teamRepoConfigs.isLoading,
+        )}
         model={buildModelPicker(resolvedLaunchSelection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID)}
         mode={buildModePicker()}
         extraComposerControls={launchComposerControls}
@@ -392,45 +428,92 @@ function buildModePicker(): PickerView {
 }
 
 function buildRepoOptions(
-  configs: readonly {
-    gitOwner: string;
-    gitRepoName: string;
-    configured: boolean;
-  }[],
-  defaultRepo: string | null,
+  args: {
+    personalConfigs: readonly {
+      gitOwner: string;
+      gitRepoName: string;
+      configured: boolean;
+    }[];
+    teamConfigs: readonly {
+      gitOwner: string;
+      gitRepoName: string;
+      configured: boolean;
+    }[];
+    teamOrganizationId: string | null;
+    defaultRepo: string | null;
+  },
 ): RepoOption[] {
   const options = new Map<string, RepoOption>();
-  for (const config of configs) {
-    if (!config.configured) {
-      continue;
-    }
-    const id = formatGitRepoId({
-      gitOwner: config.gitOwner,
-      gitRepoName: config.gitRepoName,
-    });
-    options.set(id, {
-      id,
-      gitOwner: config.gitOwner,
-      gitRepoName: config.gitRepoName,
-      label: id,
-      description: "Configured cloud repo",
+  addRepoOptions({
+    options,
+    configs: args.personalConfigs,
+    ownerScope: "personal",
+    organizationId: null,
+    description: "Personal Cloud environment",
+  });
+  if (args.teamOrganizationId) {
+    addRepoOptions({
+      options,
+      configs: args.teamConfigs,
+      ownerScope: "organization",
+      organizationId: args.teamOrganizationId,
+      description: "Team Cloud environment",
     });
   }
 
-  const normalizedDefault = normalizeGitRepoId(defaultRepo);
-  if (normalizedDefault && !options.has(normalizedDefault)) {
+  const normalizedDefault = normalizeGitRepoId(args.defaultRepo);
+  const defaultId = normalizedDefault ? repoOptionId("personal", normalizedDefault) : null;
+  if (normalizedDefault && defaultId && !options.has(defaultId)) {
     const parsed = parseGitRepoId(normalizedDefault);
     if (parsed) {
-      options.set(normalizedDefault, {
-        id: normalizedDefault,
+      options.set(defaultId, {
+        id: defaultId,
         gitOwner: parsed.gitOwner,
         gitRepoName: parsed.gitRepoName,
+        ownerScope: "personal",
+        organizationId: null,
         label: normalizedDefault,
         description: "Development default",
       });
     }
   }
   return Array.from(options.values());
+}
+
+function addRepoOptions(args: {
+  options: Map<string, RepoOption>;
+  configs: readonly {
+    gitOwner: string;
+    gitRepoName: string;
+    configured: boolean;
+  }[];
+  ownerScope: "personal" | "organization";
+  organizationId: string | null;
+  description: string;
+}) {
+  for (const config of args.configs) {
+    if (!config.configured) {
+      continue;
+    }
+    const repoId = formatGitRepoId({
+      gitOwner: config.gitOwner,
+      gitRepoName: config.gitRepoName,
+    });
+    const id = repoOptionId(args.ownerScope, repoId);
+    args.options.set(id, {
+      id,
+      gitOwner: config.gitOwner,
+      gitRepoName: config.gitRepoName,
+      ownerScope: args.ownerScope,
+      organizationId: args.organizationId,
+      label: args.ownerScope === "organization" ? `Team: ${repoId}` : repoId,
+      description: args.description,
+    });
+  }
+}
+
+function repoOptionId(ownerScope: "personal" | "organization", repoId: string): string {
+  return `${ownerScope}:${repoId}`;
 }
 
 function buildBranchName(prompt: string): string {

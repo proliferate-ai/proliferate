@@ -33,9 +33,13 @@ def cloud_capabilities() -> CloudCapabilitiesResponse:
     managed_credits_organization_enabled = gateway_enabled and default_managed_budget is not None
     topology = settings.agent_gateway_litellm_topology.strip().lower() or "oss_shared"
     route_isolation = _route_isolation_label(topology)
+    isolation_proof_ref = settings.agent_gateway_litellm_isolation_proof_ref
     live_proof_status = (
         "passed"
-        if settings.agent_gateway_litellm_customer_secret_isolation_verified
+        if (
+            settings.agent_gateway_litellm_customer_secret_isolation_verified
+            and isolation_proof_ref.strip()
+        )
         else "not_run"
     )
     route_isolation_ready = gateway_route_isolation_ready(
@@ -43,6 +47,7 @@ def cloud_capabilities() -> CloudCapabilitiesResponse:
         customer_secret_isolation_verified=(
             settings.agent_gateway_litellm_customer_secret_isolation_verified
         ),
+        isolation_proof_ref=isolation_proof_ref,
     )
     org_byok_enabled = (
         gateway_enabled

@@ -55,12 +55,29 @@ def _allowed_start_authorization() -> SandboxStartAuthorization:
     )
 
 
+def _billing_snapshot_from_authorization(
+    authorization: SandboxStartAuthorization,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        billing_subject_id=authorization.billing_subject_id,
+        plan="free",
+        payment_healthy=authorization.allowed,
+        remaining_seconds=authorization.remaining_seconds,
+        start_blocked=authorization.start_blocked,
+        start_block_reason=authorization.start_block_reason,
+    )
+
+
 @pytest.mark.asyncio
-async def test_org_cloud_workspace_create_fails_before_personal_helpers(
+async def test_org_cloud_workspace_create_uses_org_profile_and_managed_creator(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user = SimpleNamespace(id=uuid4())
     organization_id = uuid4()
+    profile_id = uuid4()
+    target_id = uuid4()
+    workspace_id = uuid4()
+    calls: dict[str, object] = {}
 
     async def _resolve_owner_context(_user, owner_selection, *, db):
         assert db is not None
@@ -76,34 +93,101 @@ async def test_org_cloud_workspace_create_fails_before_personal_helpers(
             billing_subject_id=uuid4(),
         )
 
-    async def _unexpected(*_args, **_kwargs) -> None:
-        raise AssertionError("org cloud create must fail before personal cloud helpers")
+    async def _ensure_org_profile(db, *, user, organization_id):
+        calls["ensure_org_profile"] = (db, user.id, organization_id)
+        return SimpleNamespace(id=profile_id, primary_target_id=target_id)
 
-    monkeypatch.setattr(workspace_service, "resolve_owner_context", _resolve_owner_context)
-    monkeypatch.setattr(workspace_service, "get_linked_github_account", _unexpected)
-    monkeypatch.setattr(workspace_service, "get_github_repo_branches", _unexpected)
-    monkeypatch.setattr(workspace_service, "load_repo_config_value", _unexpected)
-    monkeypatch.setattr(workspace_service, "_load_personal_agent_auth_agent_kinds", _unexpected)
-    monkeypatch.setattr(workspace_service, "create_cloud_workspace_for_user", _unexpected)
-
-    with pytest.raises(CloudApiError) as exc_info:
-        await workspace_service.create_cloud_workspace(
-            user,
-            db=object(),  # type: ignore[arg-type]
-            git_provider="github",
-            git_owner="acme",
-            git_repo_name="rocket",
-            base_branch="main",
-            branch_name="feature/cloud",
-            display_name=None,
-            owner_selection=workspace_service.OwnerSelection(
-                owner_scope="organization",
-                organization_id=organization_id,
-            ),
+    async def _resolve_managed_create(_user, **kwargs):
+        calls["resolve_managed_create"] = (_user.id, kwargs)
+        return workspace_service.ResolvedCloudWorkspaceCreate(
+            git_provider=kwargs["git_provider"],
+            git_owner=kwargs["git_owner"],
+            git_repo_name=kwargs["git_repo_name"],
+            git_branch=kwargs["branch_name"],
+            git_base_branch=kwargs["base_branch"],
+            display_name=kwargs["display_name"],
+            active_sandbox_count=0,
+            selected_agent_kinds=(),
+            cloud_repo_limit=10,
         )
 
-    assert exc_info.value.code == "org_cloud_not_ready"
-    assert exc_info.value.status_code == 409
+    async def _create_managed_workspace(db, **kwargs):
+        calls["create_managed_workspace"] = (db, kwargs)
+        return SimpleNamespace(id=workspace_id)
+
+    async def _build_workspace_detail(workspace):
+        calls["build_workspace_detail"] = workspace.id
+        return SimpleNamespace(id=workspace.id)
+
+    async def _unexpected(*_args, **_kwargs) -> None:
+        raise AssertionError("org cloud create must not use personal cloud helpers")
+
+    class _Db:
+        async def commit(self) -> None:
+            calls["commit"] = True
+
+        async def refresh(self, workspace) -> None:
+            calls["refresh"] = workspace.id
+
+    monkeypatch.setattr(workspace_service, "resolve_owner_context", _resolve_owner_context)
+    monkeypatch.setattr(
+        workspace_service,
+        "ensure_organization_sandbox_profile",
+        _ensure_org_profile,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "_resolve_new_managed_cloud_workspace_create",
+        _resolve_managed_create,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "create_managed_cloud_workspace_for_profile",
+        _create_managed_workspace,
+    )
+    monkeypatch.setattr(workspace_service, "_build_workspace_detail", _build_workspace_detail)
+    monkeypatch.setattr(
+        workspace_service,
+        "schedule_workspace_provision",
+        lambda _workspace_id: None,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "get_configured_sandbox_provider",
+        lambda: SimpleNamespace(template_version="test-template"),
+    )
+    monkeypatch.setattr(workspace_service, "_resolve_new_cloud_workspace_create", _unexpected)
+    monkeypatch.setattr(workspace_service, "create_cloud_workspace_for_user", _unexpected)
+
+    db = _Db()
+    result = await workspace_service.create_cloud_workspace(
+        user,
+        db=db,  # type: ignore[arg-type]
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name="rocket",
+        base_branch="main",
+        branch_name="feature/cloud",
+        display_name=None,
+        owner_selection=workspace_service.OwnerSelection(
+            owner_scope="organization",
+            organization_id=organization_id,
+        ),
+    )
+
+    assert result.id == workspace_id
+    assert calls["ensure_org_profile"] == (db, user.id, organization_id)
+    resolved_user_id, resolved_kwargs = calls["resolve_managed_create"]  # type: ignore[misc]
+    assert resolved_user_id == user.id
+    assert resolved_kwargs["sandbox_profile_id"] == profile_id
+    assert resolved_kwargs["target_id"] == target_id
+    _, create_kwargs = calls["create_managed_workspace"]  # type: ignore[misc]
+    assert create_kwargs["sandbox_profile_id"] == profile_id
+    assert create_kwargs["target_id"] == target_id
+    assert create_kwargs["created_by_user_id"] == user.id
+    assert create_kwargs["template_version"] == "test-template"
+    assert calls["commit"] is True
+    assert calls["refresh"] == workspace_id
 
 
 @pytest.mark.asyncio
@@ -242,6 +326,108 @@ async def test_automation_workspace_requires_managed_target_and_profile(
 
     assert exc_info.value.code == "target_required"
     assert exc_info.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_launch_preflight_reports_compute_billing_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    billing_subject_id = uuid4()
+    authorization = _denied_start_authorization(
+        blocked_reason=WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED
+    )
+
+    async def _resolve_owner_context(_user, owner_selection, *, db):
+        assert owner_selection.owner_scope == "personal"
+        assert db is not None
+        return OwnerContext(
+            owner_scope="personal",
+            actor_user_id=user.id,
+            owner_user_id=user.id,
+            organization_id=None,
+            membership_id=None,
+            membership_role=None,
+            billing_subject_id=billing_subject_id,
+        )
+
+    async def _authorization(**_kwargs) -> SandboxStartAuthorization:
+        return authorization
+
+    async def _snapshot(_billing_subject_id):
+        assert _billing_subject_id == authorization.billing_subject_id
+        return _billing_snapshot_from_authorization(authorization)
+
+    monkeypatch.setattr(workspace_service, "resolve_owner_context", _resolve_owner_context)
+    monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
+    monkeypatch.setattr(workspace_service, "get_billing_snapshot_for_subject", _snapshot)
+
+    result = await workspace_service.launch_cloud_workspace_preflight(
+        object(),  # type: ignore[arg-type]
+        user,  # type: ignore[arg-type]
+        workspace_service.CloudWorkspaceLaunchPreflightRequest(),
+    )
+
+    assert result.launch_allowed is False
+    assert result.blocked_reason == "compute_credits_exhausted"
+    assert result.blocked_resource == "compute"
+    assert result.billing.billing_subject_id == str(authorization.billing_subject_id)
+
+
+@pytest.mark.asyncio
+async def test_launch_preflight_reports_missing_personal_agent_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    billing_subject_id = uuid4()
+    authorization = _allowed_start_authorization()
+
+    async def _resolve_owner_context(_user, owner_selection, *, db):
+        assert owner_selection.owner_scope == "personal"
+        assert db is not None
+        return OwnerContext(
+            owner_scope="personal",
+            actor_user_id=user.id,
+            owner_user_id=user.id,
+            organization_id=None,
+            membership_id=None,
+            membership_role=None,
+            billing_subject_id=billing_subject_id,
+        )
+
+    async def _authorization(**_kwargs) -> SandboxStartAuthorization:
+        return authorization
+
+    async def _snapshot(_billing_subject_id):
+        assert _billing_subject_id == authorization.billing_subject_id
+        return _billing_snapshot_from_authorization(authorization)
+
+    async def _agent_kinds(_user_id):
+        assert _user_id == user.id
+        return ()
+
+    monkeypatch.setattr(workspace_service, "resolve_owner_context", _resolve_owner_context)
+    monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
+    monkeypatch.setattr(workspace_service, "get_billing_snapshot_for_subject", _snapshot)
+    monkeypatch.setattr(
+        workspace_service,
+        "_load_personal_agent_auth_agent_kinds",
+        _agent_kinds,
+    )
+
+    result = await workspace_service.launch_cloud_workspace_preflight(
+        object(),  # type: ignore[arg-type]
+        user,  # type: ignore[arg-type]
+        workspace_service.CloudWorkspaceLaunchPreflightRequest(
+            requiredManagedResources=["llm"],
+            requiredAgentKind="codex",
+        ),
+    )
+
+    assert result.launch_allowed is False
+    assert result.blocked_reason == "managed_credit_agent_not_configured"
+    assert result.blocked_resource == "llm"
+    assert result.billing.managed_llm_status == "agent_auth_missing"
 
 
 @pytest.mark.asyncio

@@ -9,6 +9,8 @@ export interface PendingHomePrompt {
   agentKind?: string | null;
   modelId: string | null;
   modeId: string | null;
+  ownerScope?: "personal" | "organization";
+  organizationId?: string | null;
   sessionConfigUpdates?: PendingHomePromptSessionConfigUpdate[];
   createdAt: number;
   status?: "pending" | "failed";
@@ -22,11 +24,15 @@ export function savePendingHomePrompt(
   workspaceId: string,
   prompt: PendingHomePrompt,
 ): void {
-  memoryPendingHomePrompts.set(workspaceId, prompt);
+  const normalized = normalizePendingHomePrompt(prompt);
+  if (!normalized) {
+    return;
+  }
+  memoryPendingHomePrompts.set(workspaceId, normalized);
   try {
     window.sessionStorage.setItem(
       pendingHomePromptKey(workspaceId),
-      JSON.stringify(prompt),
+      JSON.stringify(normalized),
     );
   } catch {
     // The in-memory copy still carries the prompt across same-tab navigation.
@@ -49,20 +55,7 @@ export function loadPendingHomePrompt(workspaceId: string): PendingHomePrompt | 
   }
   try {
     const parsed = JSON.parse(raw) as Partial<PendingHomePrompt>;
-    if (typeof parsed.id !== "string" || typeof parsed.text !== "string") {
-      return null;
-    }
-    return {
-      id: parsed.id,
-      text: parsed.text,
-      agentKind: typeof parsed.agentKind === "string" ? parsed.agentKind : null,
-      modelId: typeof parsed.modelId === "string" ? parsed.modelId : null,
-      modeId: typeof parsed.modeId === "string" ? parsed.modeId : null,
-      sessionConfigUpdates: parseSessionConfigUpdates(parsed.sessionConfigUpdates),
-      createdAt: typeof parsed.createdAt === "number" ? parsed.createdAt : Date.now(),
-      status: parsed.status === "failed" ? "failed" : "pending",
-      errorMessage: typeof parsed.errorMessage === "string" ? parsed.errorMessage : null,
-    };
+    return normalizePendingHomePrompt(parsed);
   } catch {
     return null;
   }
@@ -79,6 +72,25 @@ export function clearPendingHomePrompt(workspaceId: string): void {
 
 function pendingHomePromptKey(workspaceId: string): string {
   return `${PENDING_HOME_PROMPT_KEY_PREFIX}${workspaceId}`;
+}
+
+function normalizePendingHomePrompt(parsed: Partial<PendingHomePrompt>): PendingHomePrompt | null {
+  if (typeof parsed.id !== "string" || typeof parsed.text !== "string") {
+    return null;
+  }
+  return {
+    id: parsed.id,
+    text: parsed.text,
+    agentKind: typeof parsed.agentKind === "string" ? parsed.agentKind : null,
+    modelId: typeof parsed.modelId === "string" ? parsed.modelId : null,
+    modeId: typeof parsed.modeId === "string" ? parsed.modeId : null,
+    ownerScope: parsed.ownerScope === "organization" ? "organization" : "personal",
+    organizationId: typeof parsed.organizationId === "string" ? parsed.organizationId : null,
+    sessionConfigUpdates: parseSessionConfigUpdates(parsed.sessionConfigUpdates),
+    createdAt: typeof parsed.createdAt === "number" ? parsed.createdAt : Date.now(),
+    status: parsed.status === "failed" ? "failed" : "pending",
+    errorMessage: typeof parsed.errorMessage === "string" ? parsed.errorMessage : null,
+  };
 }
 
 function parseSessionConfigUpdates(value: unknown): PendingHomePromptSessionConfigUpdate[] {

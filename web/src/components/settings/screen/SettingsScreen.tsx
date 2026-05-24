@@ -194,6 +194,8 @@ function OrganizationSection() {
     }
   }
 
+  const pendingCheckout = !currentTeam.data ? (checkout.data?.intent ?? null) : null;
+
   return (
     <section className="space-y-6">
       <SettingsPageHeader
@@ -205,77 +207,78 @@ function OrganizationSection() {
           <SettingsCardRow label="Action failed" description={actionError} />
         </SettingsCard>
       ) : null}
-      {checkout.data?.intent && !currentTeam.data ? (
+      {pendingCheckout ? (
         <SettingsCard>
           <SettingsCardRow
-            label={checkout.data.intent.teamName}
+            label={pendingCheckout.teamName}
             description="Team checkout is pending. Continue checkout or cancel setup."
           >
             <div className="flex gap-2">
               <ActionButton onClick={() => void continueCheckout()}>Continue</ActionButton>
               <ActionButton
                 disabled={checkoutActions.cancelingTeamCheckout}
-                onClick={() => void checkoutActions.cancelTeamCheckout(checkout.data!.intent!.id)}
+                onClick={() => void checkoutActions.cancelTeamCheckout(pendingCheckout.id)}
               >
                 Cancel
               </ActionButton>
             </div>
           </SettingsCardRow>
         </SettingsCard>
-      ) : null}
-      <SettingsCard>
-        {currentTeam.isLoading ? (
-          <SettingsCardRow label="Organization" description="Loading team..." />
-        ) : currentTeam.isError ? (
-          <SettingsCardRow
-            label="Organization"
-            description="Team could not be loaded."
-          >
-            <ActionButton onClick={() => void currentTeam.refetch()}>Retry</ActionButton>
-          </SettingsCardRow>
-        ) : currentTeam.data ? (
-          <SettingsCardRow
-            label={currentTeam.data.name}
-            description={currentTeam.data.membership
-              ? `${membershipRoleLabel(currentTeam.data.membership.role)} - ${membershipStatusLabel(currentTeam.data.membership.status)}`
-              : "Current team"}
-          >
-            <Badge tone={currentTeam.data.status === "active" ? "success" : "warning"}>
-              {currentTeam.data.status === "suspended" ? "Billing repair" : "Active"}
-            </Badge>
-          </SettingsCardRow>
-        ) : (
-          <div className="space-y-4 p-4">
-            <div className="space-y-1">
-              <h2 className="text-sm font-medium text-foreground">You are not in a team yet.</h2>
-              <p className="text-sm leading-6 text-muted-foreground">
-                Create a team to invite people, manage shared work, and use org billing.
-              </p>
+      ) : (
+        <SettingsCard>
+          {currentTeam.isLoading ? (
+            <SettingsCardRow label="Organization" description="Loading team..." />
+          ) : currentTeam.isError ? (
+            <SettingsCardRow
+              label="Organization"
+              description="Team could not be loaded."
+            >
+              <ActionButton onClick={() => void currentTeam.refetch()}>Retry</ActionButton>
+            </SettingsCardRow>
+          ) : currentTeam.data ? (
+            <SettingsCardRow
+              label={currentTeam.data.name}
+              description={currentTeam.data.membership
+                ? `${membershipRoleLabel(currentTeam.data.membership.role)} - ${membershipStatusLabel(currentTeam.data.membership.status)}`
+                : "Current team"}
+            >
+              <Badge tone={currentTeam.data.status === "active" ? "success" : "warning"}>
+                {currentTeam.data.status === "suspended" ? "Billing repair" : "Active"}
+              </Badge>
+            </SettingsCardRow>
+          ) : (
+            <div className="space-y-4 p-4">
+              <div className="space-y-1">
+                <h2 className="text-sm font-medium text-foreground">You are not in a team yet.</h2>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Create a team to invite people, manage shared work, and use Team billing.
+                </p>
+              </div>
+              <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]" onSubmit={createTeam}>
+                <input
+                  className="min-h-9 rounded-md border border-border-light bg-background px-3 text-sm"
+                  placeholder="Team name"
+                  value={teamName}
+                  onChange={(event) => setTeamName(event.currentTarget.value)}
+                />
+                <input
+                  className="min-h-9 rounded-md border border-border-light bg-background px-3 text-sm"
+                  placeholder="Invite emails, comma separated"
+                  value={inviteEmails}
+                  onChange={(event) => setInviteEmails(event.currentTarget.value)}
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!teamName.trim() || checkoutActions.creatingTeamCheckout}
+                >
+                  Create team
+                </Button>
+              </form>
             </div>
-            <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]" onSubmit={createTeam}>
-              <input
-                className="min-h-9 rounded-md border border-border-light bg-background px-3 text-sm"
-                placeholder="Team name"
-                value={teamName}
-                onChange={(event) => setTeamName(event.currentTarget.value)}
-              />
-              <input
-                className="min-h-9 rounded-md border border-border-light bg-background px-3 text-sm"
-                placeholder="Invite emails, comma separated"
-                value={inviteEmails}
-                onChange={(event) => setInviteEmails(event.currentTarget.value)}
-              />
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!teamName.trim() || checkoutActions.creatingTeamCheckout}
-              >
-                Create team
-              </Button>
-            </form>
-          </div>
-        )}
-      </SettingsCard>
+          )}
+        </SettingsCard>
+      )}
     </section>
   );
 }

@@ -111,6 +111,40 @@ class CreateCloudWorkspaceRequest(BaseModel):
     required_agent_kind: str | None = Field(default=None, alias="requiredAgentKind")
 
 
+class CloudWorkspaceLaunchPreflightRequest(BaseModel):
+    owner_scope: Literal["personal", "organization"] = Field(
+        default="personal",
+        alias="ownerScope",
+    )
+    organization_id: UUID | None = Field(default=None, alias="organizationId")
+    target_kind: str = Field(default="managed_cloud", alias="targetKind")
+    required_agent_kind: str | None = Field(default=None, alias="requiredAgentKind")
+    required_managed_resources: list[Literal["compute", "llm", "gateway"]] = Field(
+        default_factory=lambda: ["compute"],
+        alias="requiredManagedResources",
+    )
+
+
+class CloudWorkspaceLaunchPreflightBillingSummary(BaseModel):
+    owner_scope: Literal["personal", "organization"] = Field(alias="ownerScope")
+    organization_id: str | None = Field(default=None, alias="organizationId")
+    billing_subject_id: str | None = Field(default=None, alias="billingSubjectId")
+    plan: str | None = None
+    payment_healthy: bool | None = Field(default=None, alias="paymentHealthy")
+    remaining_seconds: float | None = Field(default=None, alias="remainingSeconds")
+    managed_llm_status: str | None = Field(default=None, alias="managedLlmStatus")
+
+
+class CloudWorkspaceLaunchPreflightResponse(BaseModel):
+    launch_allowed: bool = Field(alias="launchAllowed")
+    blocked_reason: str | None = Field(default=None, alias="blockedReason")
+    blocked_resource: Literal["compute", "llm", "gateway", "billing", "seat"] | None = Field(
+        default=None,
+        alias="blockedResource",
+    )
+    billing: CloudWorkspaceLaunchPreflightBillingSummary
+
+
 class UpdateCloudWorkspaceBranchRequest(BaseModel):
     branch_name: str = Field(alias="branchName")
 

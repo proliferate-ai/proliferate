@@ -22,6 +22,7 @@ from proliferate.constants.organizations import (
 from proliferate.db import engine as engine_module
 from proliferate.db.models.auth import User
 from proliferate.db.models.billing import (
+    BillingNotificationEvent,
     BillingGrant,
     BillingHold,
     BillingSeatAdjustment,
@@ -33,6 +34,7 @@ from proliferate.db.store.billing import (
     ensure_organization_billing_subject,
     ensure_personal_billing_subject,
 )
+from proliferate.server.billing import service as billing_service
 from proliferate.server.billing import stripe_webhooks
 from proliferate.server import notifications as slack_notifications
 from proliferate.server.billing.models import BillingServiceError
@@ -565,6 +567,141 @@ async def test_distinct_subscription_events_share_billing_notification_claim(
 
 
 @pytest.mark.asyncio
+async def test_invoice_upcoming_records_idempotent_billing_notification_event(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    secret = "whsec_invoice_upcoming"
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    user_id = uuid.uuid4()
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject.stripe_customer_id = "cus_invoice_upcoming"
+    await db_session.commit()
+
+    payload = json.dumps(
+        {
+            "id": "evt_invoice_upcoming_notification",
+            "type": "invoice.upcoming",
+            "created": 1_776_586_422,
+            "data": {
+                "object": {
+                    "id": "in_upcoming_notification",
+                    "customer": "cus_invoice_upcoming",
+                    "subscription": "sub_invoice_upcoming",
+                    "metadata": {"billing_subject_id": str(subject.id)},
+                }
+            },
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+    await stripe_webhooks.handle_stripe_webhook(
+        payload=payload,
+        signature_header=_stripe_signature(payload, secret=secret),
+    )
+    await stripe_webhooks.handle_stripe_webhook(
+        payload=payload,
+        signature_header=_stripe_signature(payload, secret=secret),
+    )
+
+    rows = list(
+        (
+            await db_session.execute(
+                select(BillingNotificationEvent).where(
+                    BillingNotificationEvent.idempotency_key
+                    == (
+                        "stripe:invoice.upcoming:"
+                        "cus_invoice_upcoming:sub_invoice_upcoming:unknown_start:unknown_end"
+                    )
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+    assert rows[0].kind == "invoice_upcoming"
+    assert rows[0].severity == "info"
+    assert rows[0].external_ref == "in_upcoming_notification"
+
+
+@pytest.mark.asyncio
+async def test_invoice_upcoming_without_invoice_id_uses_logical_idempotency_key(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    secret = "whsec_invoice_upcoming_null"
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    user_id = uuid.uuid4()
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject.stripe_customer_id = "cus_invoice_upcoming_null"
+    await db_session.commit()
+
+    payload = json.dumps(
+        {
+            "id": "evt_invoice_upcoming_null",
+            "type": "invoice.upcoming",
+            "created": 1_776_586_422,
+            "data": {
+                "object": {
+                    "id": None,
+                    "customer": "cus_invoice_upcoming_null",
+                    "subscription": "sub_invoice_upcoming_null",
+                    "period_start": 1_776_586_422,
+                    "period_end": 1_779_178_422,
+                    "metadata": {"billing_subject_id": str(subject.id)},
+                }
+            },
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+    await stripe_webhooks.handle_stripe_webhook(
+        payload=payload,
+        signature_header=_stripe_signature(payload, secret=secret),
+    )
+    duplicate_payload = payload.replace(
+        b"evt_invoice_upcoming_null",
+        b"evt_invoice_upcoming_retry",
+    )
+    await stripe_webhooks.handle_stripe_webhook(
+        payload=duplicate_payload,
+        signature_header=_stripe_signature(duplicate_payload, secret=secret),
+    )
+
+    rows = list(
+        (
+            await db_session.execute(
+                select(BillingNotificationEvent).where(
+                    BillingNotificationEvent.idempotency_key
+                    == (
+                        "stripe:invoice.upcoming:cus_invoice_upcoming_null:"
+                        "sub_invoice_upcoming_null:1776586422:1779178422"
+                    )
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+    assert rows[0].kind == "invoice_upcoming"
+    assert rows[0].external_ref is None
+
+
+@pytest.mark.asyncio
 async def test_payment_recovery_does_not_send_subscription_started_notification(
     db_session: AsyncSession,
     test_engine,  # type: ignore[no-untyped-def]
@@ -902,6 +1039,7 @@ async def test_subscription_sync_recognizes_explicit_legacy_cloud_price_in_pro_m
         async_sessionmaker(test_engine, expire_on_commit=False),
     )
     monkeypatch.setattr(settings, "pro_billing_enabled", True)
+    monkeypatch.setattr(settings, "cloud_billing_mode", "observe")
     monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "price_pro")
     monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "")
     monkeypatch.setattr(settings, "stripe_legacy_cloud_monthly_price_id", "price_legacy")
@@ -966,6 +1104,7 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
         async_sessionmaker(test_engine, expire_on_commit=False),
     )
     monkeypatch.setattr(settings, "pro_billing_enabled", True)
+    monkeypatch.setattr(settings, "cloud_billing_mode", "observe")
     monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "price_pro")
     monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "")
     monkeypatch.setattr(settings, "stripe_legacy_cloud_monthly_price_id", "")
@@ -1073,6 +1212,11 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
         fake_update_subscription_item_quantity,
     )
     monkeypatch.setattr(
+        billing_service.stripe_billing,
+        "update_subscription_item_quantity",
+        fake_update_subscription_item_quantity,
+    )
+    monkeypatch.setattr(
         stripe_webhooks.stripe_billing,
         "retrieve_subscription",
         fake_retrieve_subscription,
@@ -1080,9 +1224,10 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
 
     subscription_record = await stripe_webhooks._sync_subscription(subscription_payload)
     assert subscription_record is not None
-    assert subscription_record.seat_quantity == 2
+    assert subscription_record.seat_quantity == 1
 
     await stripe_webhooks._sync_subscription(subscription_payload)
+    await billing_service.process_pending_seat_adjustments()
     db_session.expire_all()
     subscription = (
         await db_session.execute(
@@ -1180,6 +1325,7 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
     await db_session.commit()
 
     await stripe_webhooks._handle_invoice_paid(invoice_payload)
+    await billing_service.process_pending_seat_adjustments()
     await stripe_webhooks._handle_invoice_paid(invoice_payload)
     db_session.expire_all()
 

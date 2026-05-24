@@ -74,6 +74,18 @@ export function cloudBillingKey(
   return [...cloudRootKey(), "billing", owner.ownerScope, owner.organizationId] as const;
 }
 
+export function accountCreditsKey() {
+  return [...cloudRootKey(), "billing", "account-credits"] as const;
+}
+
+export function teamBillingKey() {
+  return [...cloudRootKey(), "billing", "team"] as const;
+}
+
+export function teamBillingEventsKey() {
+  return [...teamBillingKey(), "events"] as const;
+}
+
 export function cloudRepoBranchesKey(gitOwner: string, gitRepoName: string) {
   return [...cloudRootKey(), "repos", gitOwner, gitRepoName, "branches"] as const;
 }

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import StrEnum
 from typing import Literal, TypeVar
 from uuid import UUID
 
@@ -47,6 +48,7 @@ from proliferate.db.models.billing import (
     BillingGrant,
     BillingGrantConsumption,
     BillingHold,
+    BillingNotificationEvent,
     BillingOverageRemainder,
     BillingSeatAdjustment,
     BillingSubject,
@@ -150,6 +152,62 @@ class InitialSeatReconcileAdjustment:
     id: UUID
     monthly_subscription_item_id: str
     target_quantity: int
+
+
+class FreeCloudAllocationEnsureOutcome(StrEnum):
+    CREATED = "created"
+    EXISTING_SAME_SUBJECT = "existing_same_subject"
+    MISSING_GITHUB_IDENTITY = "missing_github_identity"
+    GITHUB_IDENTITY_ALREADY_ALLOCATED = "github_identity_already_allocated"
+    DISABLED_BY_DEPLOYMENT = "disabled_by_deployment"
+    NOT_APPLICABLE = "not_applicable"
+
+
+@dataclass(frozen=True)
+class FreeCloudAllocationEnsureResult:
+    outcome: FreeCloudAllocationEnsureOutcome
+    billing_subject_id: UUID | None
+    allocation_id: UUID | None
+    github_provider_user_id: str | None
+    blocked_reason: str | None = None
+
+    @property
+    def usable(self) -> bool:
+        return self.outcome in {
+            FreeCloudAllocationEnsureOutcome.CREATED,
+            FreeCloudAllocationEnsureOutcome.EXISTING_SAME_SUBJECT,
+        }
+
+
+@dataclass(frozen=True)
+class FreeCloudAllocationSnapshot:
+    id: UUID
+    allocation_kind: str
+    github_provider_user_id: str
+    billing_subject_id: UUID
+    user_id: UUID
+    issued_billing_grant_id: UUID | None
+    period_key: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class BillingNotificationEventSnapshot:
+    id: UUID
+    billing_subject_id: UUID
+    organization_id: UUID | None
+    user_id: UUID | None
+    kind: str
+    severity: str
+    source: str
+    external_ref: str | None
+    idempotency_key: str
+    payload_json: dict[str, object]
+    occurred_at: datetime
+    created_at: datetime
+    updated_at: datetime
 
 
 WebhookEventClaimStatus = Literal["claimed", "already_processed", "in_progress"]
@@ -318,13 +376,43 @@ async def ensure_agent_gateway_free_credit_allocation(
     user_id: UUID,
     period_key: str,
 ) -> bool:
-    github_provider_user_id = await _linked_github_provider_user_id(db, user_id)
-    if github_provider_user_id is None:
-        return False
     subject = await ensure_personal_billing_subject(db, user_id)
-    return await _ensure_free_cloud_allocation(
+    result = await ensure_free_cloud_allocation_outcome(
         db,
         allocation_kind=FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
+        subject=subject,
+        period_key=period_key,
+    )
+    return result.usable
+
+
+async def ensure_free_cloud_allocation_outcome(
+    db: AsyncSession,
+    *,
+    allocation_kind: str,
+    subject: BillingSubject,
+    period_key: str,
+) -> FreeCloudAllocationEnsureResult:
+    if subject.user_id is None:
+        return FreeCloudAllocationEnsureResult(
+            outcome=FreeCloudAllocationEnsureOutcome.NOT_APPLICABLE,
+            billing_subject_id=subject.id,
+            allocation_id=None,
+            github_provider_user_id=None,
+            blocked_reason="allocation_not_applicable",
+        )
+    github_provider_user_id = await _linked_github_provider_user_id(db, subject.user_id)
+    if github_provider_user_id is None:
+        return FreeCloudAllocationEnsureResult(
+            outcome=FreeCloudAllocationEnsureOutcome.MISSING_GITHUB_IDENTITY,
+            billing_subject_id=subject.id,
+            allocation_id=None,
+            github_provider_user_id=None,
+            blocked_reason="missing_github_identity",
+        )
+    return await _ensure_free_cloud_allocation_with_github_outcome(
+        db,
+        allocation_kind=allocation_kind,
         subject=subject,
         github_provider_user_id=github_provider_user_id,
         period_key=period_key,
@@ -341,6 +429,10 @@ async def _linked_github_provider_user_id(db: AsyncSession, user_id: UUID) -> st
         .order_by(AuthIdentity.linked_at.desc(), AuthIdentity.created_at.desc())
         .limit(1)
     )
+
+
+async def get_linked_github_provider_user_id(db: AsyncSession, user_id: UUID) -> str | None:
+    return await _linked_github_provider_user_id(db, user_id)
 
 
 async def _load_free_trial_allocation_for_subject(
@@ -366,13 +458,14 @@ async def _ensure_free_trial_allocation(
     subject: BillingSubject,
     github_provider_user_id: str,
 ) -> bool:
-    return await _ensure_free_cloud_allocation(
+    result = await _ensure_free_cloud_allocation_with_github_outcome(
         db,
         allocation_kind=FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL,
         subject=subject,
         github_provider_user_id=github_provider_user_id,
         period_key=FREE_CLOUD_ALLOCATION_PERIOD_V2,
     )
+    return result.usable
 
 
 async def _ensure_free_cloud_allocation(
@@ -383,8 +476,32 @@ async def _ensure_free_cloud_allocation(
     github_provider_user_id: str,
     period_key: str,
 ) -> bool:
+    result = await _ensure_free_cloud_allocation_with_github_outcome(
+        db,
+        allocation_kind=allocation_kind,
+        subject=subject,
+        github_provider_user_id=github_provider_user_id,
+        period_key=period_key,
+    )
+    return result.usable
+
+
+async def _ensure_free_cloud_allocation_with_github_outcome(
+    db: AsyncSession,
+    *,
+    allocation_kind: str,
+    subject: BillingSubject,
+    github_provider_user_id: str,
+    period_key: str,
+) -> FreeCloudAllocationEnsureResult:
     if subject.user_id is None:
-        return False
+        return FreeCloudAllocationEnsureResult(
+            outcome=FreeCloudAllocationEnsureOutcome.NOT_APPLICABLE,
+            billing_subject_id=subject.id,
+            allocation_id=None,
+            github_provider_user_id=github_provider_user_id,
+            blocked_reason="allocation_not_applicable",
+        )
     now = utcnow()
     result = await db.execute(
         pg_insert(FreeCloudAllocation)
@@ -410,7 +527,12 @@ async def _ensure_free_cloud_allocation(
     )
     created_id = result.scalar_one_or_none()
     if created_id is not None:
-        return True
+        return FreeCloudAllocationEnsureResult(
+            outcome=FreeCloudAllocationEnsureOutcome.CREATED,
+            billing_subject_id=subject.id,
+            allocation_id=created_id,
+            github_provider_user_id=github_provider_user_id,
+        )
     existing = (
         await db.execute(
             select(FreeCloudAllocation)
@@ -422,7 +544,79 @@ async def _ensure_free_cloud_allocation(
             .with_for_update()
         )
     ).scalar_one_or_none()
-    return existing is not None and existing.billing_subject_id == subject.id
+    if existing is not None and existing.billing_subject_id == subject.id:
+        return FreeCloudAllocationEnsureResult(
+            outcome=FreeCloudAllocationEnsureOutcome.EXISTING_SAME_SUBJECT,
+            billing_subject_id=subject.id,
+            allocation_id=existing.id,
+            github_provider_user_id=github_provider_user_id,
+        )
+    return FreeCloudAllocationEnsureResult(
+        outcome=FreeCloudAllocationEnsureOutcome.GITHUB_IDENTITY_ALREADY_ALLOCATED,
+        billing_subject_id=subject.id,
+        allocation_id=existing.id if existing is not None else None,
+        github_provider_user_id=github_provider_user_id,
+        blocked_reason="github_identity_already_allocated",
+    )
+
+
+def _free_cloud_allocation_snapshot(row: FreeCloudAllocation) -> FreeCloudAllocationSnapshot:
+    return FreeCloudAllocationSnapshot(
+        id=row.id,
+        allocation_kind=row.allocation_kind,
+        github_provider_user_id=row.github_provider_user_id,
+        billing_subject_id=row.billing_subject_id,
+        user_id=row.user_id,
+        issued_billing_grant_id=row.issued_billing_grant_id,
+        period_key=row.period_key,
+        status=row.status,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+async def get_free_cloud_allocation_for_user(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    allocation_kind: str,
+    period_key: str,
+) -> FreeCloudAllocationSnapshot | None:
+    row = (
+        await db.execute(
+            select(FreeCloudAllocation)
+            .where(
+                FreeCloudAllocation.user_id == user_id,
+                FreeCloudAllocation.allocation_kind == allocation_kind,
+                FreeCloudAllocation.period_key == period_key,
+            )
+            .order_by(FreeCloudAllocation.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return _free_cloud_allocation_snapshot(row) if row is not None else None
+
+
+async def get_free_cloud_allocation_for_github_identity(
+    db: AsyncSession,
+    *,
+    github_provider_user_id: str,
+    allocation_kind: str,
+    period_key: str,
+) -> FreeCloudAllocationSnapshot | None:
+    row = (
+        await db.execute(
+            select(FreeCloudAllocation)
+            .where(
+                FreeCloudAllocation.github_provider_user_id == github_provider_user_id,
+                FreeCloudAllocation.allocation_kind == allocation_kind,
+                FreeCloudAllocation.period_key == period_key,
+            )
+            .order_by(FreeCloudAllocation.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return _free_cloud_allocation_snapshot(row) if row is not None else None
 
 
 async def list_cloud_sandboxes_for_subject(
@@ -1182,6 +1376,17 @@ async def mark_seat_adjustment_stripe_confirmed(*, adjustment_id: UUID) -> None:
             if subscription is not None:
                 subscription.seat_quantity = adjustment.target_quantity
                 subscription.updated_at = utcnow()
+            await _record_seat_adjustment_notification_event(
+                db,
+                adjustment,
+                kind="seat_adjustment_confirmed",
+                severity="info",
+                payload_json={
+                    "previous_quantity": adjustment.previous_quantity,
+                    "target_quantity": adjustment.target_quantity,
+                    "grant_quantity": adjustment.grant_quantity,
+                },
+            )
         await db.commit()
 
 
@@ -1212,7 +1417,43 @@ async def mark_seat_adjustment_failed(
             adjustment.status = "failed_terminal" if should_terminal else "failed_retryable"
             adjustment.last_error = error[:4000]
             adjustment.updated_at = utcnow()
+            await _record_seat_adjustment_notification_event(
+                db,
+                adjustment,
+                kind="seat_adjustment_failed",
+                severity="error" if should_terminal else "warning",
+                payload_json={
+                    "attempt_count": adjustment.attempt_count,
+                    "terminal": should_terminal,
+                    "error": adjustment.last_error,
+                    "target_quantity": adjustment.target_quantity,
+                },
+            )
         await db.commit()
+
+
+async def _record_seat_adjustment_notification_event(
+    db: AsyncSession,
+    adjustment: BillingSeatAdjustment,
+    *,
+    kind: str,
+    severity: str,
+    payload_json: dict[str, object],
+) -> None:
+    suffix = "confirmed" if kind == "seat_adjustment_confirmed" else "failed"
+    await record_billing_notification_event(
+        db,
+        billing_subject_id=adjustment.billing_subject_id,
+        organization_id=adjustment.organization_id,
+        user_id=None,
+        kind=kind,
+        severity=severity,
+        source="seat_adjustment",
+        external_ref=str(adjustment.id),
+        idempotency_key=f"seat_adjustment:{adjustment.id}:{suffix}",
+        payload_json=payload_json,
+        occurred_at=utcnow(),
+    )
 
 
 async def ensure_billing_grant_record(
@@ -2675,6 +2916,23 @@ async def get_billing_snapshot_state_for_user(
     return await _build_billing_snapshot_state_for_subject(db, subject.id)
 
 
+async def get_existing_billing_snapshot_state_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> BillingSnapshotState | None:
+    subject = (
+        await db.execute(
+            select(BillingSubject).where(
+                BillingSubject.kind == BILLING_SUBJECT_KIND_PERSONAL,
+                BillingSubject.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if subject is None:
+        return None
+    return await _build_billing_snapshot_state_for_subject(db, subject.id)
+
+
 async def get_billing_snapshot_state_for_subject(
     db: AsyncSession,
     billing_subject_id: UUID,
@@ -2802,6 +3060,101 @@ async def remember_sandbox_event_receipt(
         )
         await db.commit()
         return created
+
+
+def _billing_notification_event_snapshot(
+    row: BillingNotificationEvent,
+) -> BillingNotificationEventSnapshot:
+    payload = row.payload_json if isinstance(row.payload_json, dict) else {}
+    return BillingNotificationEventSnapshot(
+        id=row.id,
+        billing_subject_id=row.billing_subject_id,
+        organization_id=row.organization_id,
+        user_id=row.user_id,
+        kind=row.kind,
+        severity=row.severity,
+        source=row.source,
+        external_ref=row.external_ref,
+        idempotency_key=row.idempotency_key,
+        payload_json=dict(payload),
+        occurred_at=row.occurred_at,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+async def record_billing_notification_event(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    organization_id: UUID | None,
+    user_id: UUID | None,
+    kind: str,
+    severity: str,
+    source: str,
+    external_ref: str | None,
+    idempotency_key: str,
+    payload_json: dict[str, object] | None,
+    occurred_at: datetime,
+) -> BillingNotificationEventSnapshot:
+    now = utcnow()
+    result = await db.execute(
+        pg_insert(BillingNotificationEvent)
+        .values(
+            billing_subject_id=billing_subject_id,
+            organization_id=organization_id,
+            user_id=user_id,
+            kind=kind,
+            severity=severity,
+            source=source,
+            external_ref=external_ref,
+            idempotency_key=idempotency_key,
+            payload_json=dict(payload_json or {}),
+            occurred_at=coerce_utc(occurred_at) or now,
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(index_elements=[BillingNotificationEvent.idempotency_key])
+        .returning(BillingNotificationEvent.id)
+    )
+    event_id = result.scalar_one_or_none()
+    if event_id is None:
+        row = (
+            await db.execute(
+                select(BillingNotificationEvent).where(
+                    BillingNotificationEvent.idempotency_key == idempotency_key
+                )
+            )
+        ).scalar_one()
+    else:
+        row = await db.get(BillingNotificationEvent, event_id)
+        if row is None:
+            raise RuntimeError("Billing notification event disappeared after creation.")
+    return _billing_notification_event_snapshot(row)
+
+
+async def list_billing_notification_events_for_subject(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    limit: int = 50,
+) -> tuple[BillingNotificationEventSnapshot, ...]:
+    rows = (
+        (
+            await db.execute(
+                select(BillingNotificationEvent)
+                .where(BillingNotificationEvent.billing_subject_id == billing_subject_id)
+                .order_by(
+                    BillingNotificationEvent.occurred_at.desc(),
+                    BillingNotificationEvent.created_at.desc(),
+                )
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_billing_notification_event_snapshot(row) for row in rows)
 
 
 async def record_billing_decision_event(

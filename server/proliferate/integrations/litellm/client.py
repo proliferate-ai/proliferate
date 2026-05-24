@@ -10,6 +10,7 @@ import httpx
 from proliferate.config import settings
 from proliferate.integrations.litellm.errors import LiteLLMIntegrationError
 from proliferate.integrations.litellm.models import (
+    LiteLLMCredentialResult,
     LiteLLMKeyResult,
     LiteLLMModelDeploymentResult,
     LiteLLMTeamResult,
@@ -107,6 +108,105 @@ class LiteLLMAdminClient:
             team_id=team_id,
         )
 
+    async def create_credential(
+        self,
+        *,
+        credential_name: str,
+        credential_info: Mapping[str, object],
+        credential_values: Mapping[str, object],
+    ) -> LiteLLMCredentialResult:
+        """Create or replace a LiteLLM provider credential by name.
+
+        LiteLLM's credential API intentionally does not read credential values
+        back, so callers must treat this as a write-only reconcile primitive.
+        """
+
+        body = {
+            "credential_name": credential_name,
+            "credential_info": dict(credential_info),
+            "credential_values": dict(credential_values),
+        }
+        payload = await self._request_with_legacy_path_fallback(
+            "POST",
+            "/credentials",
+            "/credentials/create",
+            json=body,
+        )
+        return LiteLLMCredentialResult(
+            credential_name=str(payload.get("credential_name") or credential_name),
+        )
+
+    async def update_credential(
+        self,
+        *,
+        credential_name: str,
+        credential_info: Mapping[str, object] | None = None,
+        credential_values: Mapping[str, object] | None = None,
+    ) -> LiteLLMCredentialResult:
+        body: dict[str, object] = {}
+        if credential_info is not None:
+            body["credential_info"] = dict(credential_info)
+        if credential_values is not None:
+            body["credential_values"] = dict(credential_values)
+        payload = await self._request_with_legacy_path_fallback(
+            "PATCH",
+            f"/credentials/{credential_name}",
+            "/credentials/update",
+            json={"credential_name": credential_name, **body},
+        )
+        return LiteLLMCredentialResult(
+            credential_name=str(payload.get("credential_name") or credential_name),
+        )
+
+    async def delete_credential(self, *, credential_name: str) -> None:
+        await self._request_with_legacy_path_fallback(
+            "DELETE",
+            f"/credentials/{credential_name}",
+            "/credentials/delete",
+            json={"credential_name": credential_name},
+        )
+
+    async def update_team_metadata_model_config(
+        self,
+        *,
+        team_id: str,
+        model_config: Mapping[str, object],
+        existing_metadata: Mapping[str, object] | None = None,
+    ) -> LiteLLMTeamResult:
+        metadata = dict(existing_metadata or {})
+        metadata["model_config"] = dict(model_config)
+        payload = await self._request(
+            "POST",
+            "/team/update",
+            json={
+                "team_id": team_id,
+                "metadata": metadata,
+            },
+        )
+        return LiteLLMTeamResult(team_id=str(payload.get("team_id") or team_id))
+
+    async def reconcile_credential_routing(
+        self,
+        *,
+        team_id: str,
+        credential_name: str,
+        credential_info: Mapping[str, object],
+        credential_values: Mapping[str, object],
+        model_config: Mapping[str, object],
+        existing_metadata: Mapping[str, object] | None = None,
+    ) -> LiteLLMCredentialResult:
+        credential = await self.create_credential(
+            credential_name=credential_name,
+            credential_info=credential_info,
+            credential_values=credential_values,
+        )
+        await self.update_team_metadata_model_config(
+            team_id=team_id,
+            model_config=model_config,
+            existing_metadata=existing_metadata,
+        )
+        return credential
+
     async def _request(
         self,
         method: str,
@@ -138,6 +238,21 @@ class LiteLLMAdminClient:
         if not isinstance(payload, dict):
             raise LiteLLMIntegrationError("LiteLLM response was not a JSON object.")
         return payload
+
+    async def _request_with_legacy_path_fallback(
+        self,
+        method: str,
+        path: str,
+        fallback_path: str,
+        *,
+        json: Mapping[str, object],
+    ) -> dict[str, Any]:
+        try:
+            return await self._request(method, path, json=json)
+        except LiteLLMIntegrationError as exc:
+            if exc.status_code not in {404, 405}:
+                raise
+        return await self._request("POST", fallback_path, json=json)
 
 
 def _redact(value: str, secrets: str | tuple[str | None, ...]) -> str:

@@ -36,6 +36,31 @@ export interface BootstrapCloudWorkspaceRemoteAccessRequest {
   } | null;
 }
 
+export interface CloudWorkspaceLaunchPreflightRequest {
+  ownerScope?: "personal" | "organization";
+  organizationId?: string | null;
+  targetKind?: string;
+  requiredAgentKind?: string | null;
+  requiredManagedResources?: Array<"compute" | "llm" | "gateway">;
+}
+
+export interface CloudWorkspaceLaunchPreflightBillingSummary {
+  ownerScope: "personal" | "organization";
+  organizationId?: string | null;
+  billingSubjectId?: string | null;
+  plan?: string | null;
+  paymentHealthy?: boolean | null;
+  remainingSeconds?: number | null;
+  managedLlmStatus?: string | null;
+}
+
+export interface CloudWorkspaceLaunchPreflightResponse {
+  launchAllowed: boolean;
+  blockedReason?: string | null;
+  blockedResource?: "compute" | "llm" | "gateway" | "billing" | "seat" | null;
+  billing: CloudWorkspaceLaunchPreflightBillingSummary;
+}
+
 type CloudWorkspaceTransport = Record<string, unknown> & {
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
@@ -132,6 +157,17 @@ export async function createCloudWorkspace(
     })
   ).data!;
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
+}
+
+export async function launchCloudWorkspacePreflight(
+  input: CloudWorkspaceLaunchPreflightRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudWorkspaceLaunchPreflightResponse> {
+  return client.requestJson<CloudWorkspaceLaunchPreflightResponse>({
+    method: "POST",
+    path: "/v1/cloud/workspaces/launch-preflight",
+    body: input,
+  });
 }
 
 export async function bootstrapCloudWorkspaceRemoteAccess(

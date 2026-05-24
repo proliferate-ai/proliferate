@@ -15,6 +15,7 @@ async def assert_current_schema(
         "client_daily_activity",
         "billing_entitlement",
         "billing_grant",
+        "billing_notification_event",
         "cloud_commands",
         "cloud_mcp_connection_event",
         "cloud_mcp_connection",
@@ -273,6 +274,61 @@ async def assert_current_schema(
         }
     )
     assert "uq_billing_subject_organization_id" in billing_indexes
+
+    billing_notification_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("billing_notification_event")
+        }
+    )
+    assert {
+        "id",
+        "billing_subject_id",
+        "organization_id",
+        "user_id",
+        "kind",
+        "severity",
+        "source",
+        "external_ref",
+        "idempotency_key",
+        "payload_json",
+        "occurred_at",
+        "created_at",
+        "updated_at",
+    } <= billing_notification_columns
+    billing_notification_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints(
+                "billing_notification_event"
+            )
+        }
+    )
+    assert {
+        "ck_billing_notification_event_kind",
+        "ck_billing_notification_event_severity",
+        "ck_billing_notification_event_source",
+    } <= billing_notification_checks
+    billing_notification_uniques = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_unique_constraints(
+                "billing_notification_event"
+            )
+        }
+    )
+    assert "uq_billing_notification_event_idempotency_key" in billing_notification_uniques
+    billing_notification_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("billing_notification_event")
+        }
+    )
+    assert {
+        "ix_billing_notification_event_subject_occurred_at",
+        "ix_billing_notification_event_org_occurred_at",
+        "ix_billing_notification_event_source_external_ref",
+    } <= billing_notification_indexes
 
     runtime_checks = await conn.run_sync(
         lambda sync_conn: {
