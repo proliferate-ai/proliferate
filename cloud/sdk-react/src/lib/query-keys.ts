@@ -78,6 +78,31 @@ export function cloudRepoBranchesKey(gitOwner: string, gitRepoName: string) {
   return [...cloudRootKey(), "repos", gitOwner, gitRepoName, "branches"] as const;
 }
 
+export function cloudGitRepositoriesRootKey() {
+  return [...cloudRootKey(), "git-repositories"] as const;
+}
+
+export interface CloudGitRepositoriesKeyOptions {
+  query?: string | null;
+  cursor?: string | null;
+  limit?: number | null;
+  affiliation?: string | null;
+  visibility?: string | null;
+}
+
+export function cloudGitRepositoriesKey(
+  options: CloudGitRepositoriesKeyOptions = {},
+) {
+  return [
+    ...cloudGitRepositoriesRootKey(),
+    options.query?.trim() || null,
+    options.cursor ?? null,
+    options.limit ?? null,
+    options.affiliation ?? null,
+    options.visibility ?? null,
+  ] as const;
+}
+
 export function cloudRepoConfigsKey() {
   return [...cloudRootKey(), "repo-configs"] as const;
 }

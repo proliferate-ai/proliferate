@@ -540,7 +540,7 @@ async def save_cloud_repo_config(
     env_vars: dict[str, str],
     setup_script: str,
     run_command: str,
-    files: list[CloudRepoFileInput],
+    files: list[CloudRepoFileInput] | None,
 ) -> CloudRepoConfigValue:
     record = await _get_or_create_repo_config_record(
         db,

@@ -450,6 +450,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cloud Repositories Endpoint */
+        get: operations["list_cloud_repositories_endpoint_v1_cloud_repos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/repos/{git_owner}/{git_repo_name}/branches": {
         parameters: {
             query?: never;
@@ -4393,6 +4410,58 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** CloudGitRepositoriesResponse */
+        CloudGitRepositoriesResponse: {
+            /** Repositories */
+            repositories: components["schemas"]["CloudGitRepositorySummary"][];
+            /** Nextcursor */
+            nextCursor: string | null;
+        };
+        /** CloudGitRepositorySummary */
+        CloudGitRepositorySummary: {
+            /**
+             * Provider
+             * @default github
+             * @constant
+             */
+            provider: "github";
+            /** Gitowner */
+            gitOwner: string;
+            /** Gitreponame */
+            gitRepoName: string;
+            /** Fullname */
+            fullName: string;
+            /** Defaultbranch */
+            defaultBranch: string | null;
+            /** Private */
+            private: boolean;
+            /** Fork */
+            fork: boolean;
+            /** Archived */
+            archived: boolean;
+            /** Disabled */
+            disabled: boolean;
+            /** Htmlurl */
+            htmlUrl: string | null;
+            /** Owneravatarurl */
+            ownerAvatarUrl: string | null;
+            /** Pushedat */
+            pushedAt: string | null;
+            /** Updatedat */
+            updatedAt: string | null;
+            /** Permission */
+            permission?: string | null;
+            /**
+             * Configured
+             * @default false
+             */
+            configured: boolean;
+            /**
+             * Repoconfigstate
+             * @enum {string}
+             */
+            repoConfigState: "missing" | "disabled" | "configured";
+        };
         /** CloudMcpConnectionResponse */
         CloudMcpConnectionResponse: {
             /** Connectionid */
@@ -6259,6 +6328,16 @@ export interface components {
             defaultBranch: string;
             /** Branches */
             branches: string[];
+            /** Permission */
+            permission?: string | null;
+            /** Private */
+            private?: boolean | null;
+            /** Fork */
+            fork?: boolean | null;
+            /** Archived */
+            archived?: boolean | null;
+            /** Disabled */
+            disabled?: boolean | null;
         };
         /** RepoRef */
         RepoRef: {
@@ -6609,7 +6688,7 @@ export interface components {
              */
             runCommand: string;
             /** Files */
-            files: components["schemas"]["SaveCloudRepoConfigFile"][];
+            files?: components["schemas"]["SaveCloudRepoConfigFile"][] | null;
         };
         /** SaveOrganizationCloudRepoConfigRequest */
         SaveOrganizationCloudRepoConfigRequest: {
@@ -9388,6 +9467,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalyticsAcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_cloud_repositories_endpoint_v1_cloud_repos_get: {
+        parameters: {
+            query?: {
+                query?: string | null;
+                cursor?: string | null;
+                limit?: number;
+                affiliation?: string;
+                visibility?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudGitRepositoriesResponse"];
                 };
             };
             /** @description Validation Error */

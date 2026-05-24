@@ -6,6 +6,8 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.integrations.github import GitHubRepoBranches
+from proliferate.server.cloud.repo_config import service as repo_config_service
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 
@@ -45,7 +47,19 @@ async def _create_enrolled_target(
 async def test_target_config_materialization_command_is_secret_safe(
     client: AsyncClient,
     db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+        return GitHubRepoBranches(
+            default_branch="main",
+            branches=["main", "release"],
+        )
+
+    monkeypatch.setattr(
+        repo_config_service,
+        "get_repo_branches_for_credentials",
+        _repo_branches,
+    )
     auth = await create_user_and_login(
         client,
         db_session,

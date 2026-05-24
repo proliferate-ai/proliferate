@@ -6,7 +6,11 @@ import httpx
 import pytest
 
 from proliferate.integrations import github
-from proliferate.integrations.github import GitHubIntegrationError
+from proliferate.integrations.github import (
+    GitHubIntegrationError,
+    GitHubInvalidCursor,
+    GitHubRateLimited,
+)
 
 
 class _FakeGitHubClient:
@@ -38,6 +42,127 @@ def _github_response(status_code: int, payload: object) -> httpx.Response:
         json=payload,
         request=httpx.Request("GET", "https://api.github.com/user"),
     )
+
+
+def _github_response_with_headers(
+    status_code: int,
+    payload: object,
+    *,
+    headers: dict[str, str],
+) -> httpx.Response:
+    return httpx.Response(
+        status_code,
+        json=payload,
+        headers=headers,
+        request=httpx.Request("GET", "https://api.github.com/user/repos"),
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_github_repositories_shapes_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeGitHubClient(
+        _github_response_with_headers(
+            200,
+            [
+                {
+                    "owner": {
+                        "login": " acme ",
+                        "avatar_url": " https://avatars.example/acme ",
+                    },
+                    "name": " rocket ",
+                    "full_name": " acme/rocket ",
+                    "default_branch": " main ",
+                    "private": True,
+                    "fork": False,
+                    "archived": False,
+                    "disabled": False,
+                    "html_url": " https://github.com/acme/rocket ",
+                    "pushed_at": "2026-05-01T00:00:00Z",
+                    "updated_at": "2026-05-02T00:00:00Z",
+                    "permissions": {"pull": True, "push": True},
+                }
+            ],
+            headers={"link": '<https://api.github.com/user/repos?page=2>; rel="next"'},
+        )
+    )
+    monkeypatch.setattr(github.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    page = await github.list_github_repositories(
+        "token-1",
+        cursor=None,
+        limit=25,
+        affiliation="owner,collaborator",
+        visibility="all",
+    )
+
+    assert page.next_cursor is not None
+    assert len(page.repositories) == 1
+    repo = page.repositories[0]
+    assert repo.owner == "acme"
+    assert repo.name == "rocket"
+    assert repo.full_name == "acme/rocket"
+    assert repo.default_branch == "main"
+    assert repo.private is True
+    assert repo.permission == "push"
+    assert client.calls == [
+        (
+            "https://api.github.com/user/repos",
+            {
+                "headers": {
+                    "Authorization": "Bearer token-1",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+                "params": {
+                    "per_page": 25,
+                    "page": 1,
+                    "affiliation": "owner,collaborator",
+                    "visibility": "all",
+                    "sort": "pushed",
+                    "direction": "desc",
+                },
+            },
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_list_github_repositories_rejects_invalid_cursor() -> None:
+    with pytest.raises(GitHubInvalidCursor):
+        await github.list_github_repositories(
+            "token-1",
+            cursor="not-base64",
+            limit=25,
+            affiliation="owner",
+            visibility="all",
+        )
+
+
+@pytest.mark.asyncio
+async def test_list_github_repositories_maps_rate_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeGitHubClient(
+        httpx.Response(
+            403,
+            json={"message": "rate limited"},
+            headers={"x-ratelimit-remaining": "0", "retry-after": "30"},
+            request=httpx.Request("GET", "https://api.github.com/user/repos"),
+        )
+    )
+    monkeypatch.setattr(github.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(GitHubRateLimited) as exc_info:
+        await github.list_github_repositories(
+            "token-1",
+            cursor=None,
+            limit=25,
+            affiliation="owner",
+            visibility="all",
+        )
+    assert exc_info.value.retry_after_seconds == 30
 
 
 @pytest.mark.asyncio

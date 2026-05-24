@@ -187,15 +187,7 @@ export function resolveSettingsSelection({
     repoSourceRoot = rawRepo;
   }
 
-  if (
-    rawSection === "cloudRepo"
-    || (
-      section === "environments"
-      && rawCloudRepoOwner
-      && rawCloudRepoName
-      && !repoSourceRoot
-    )
-  ) {
+  if (rawSection === "cloudRepo") {
     const cloudRepoKey = rawCloudRepoOwner && rawCloudRepoName
       ? cloudRepositoryKey(rawCloudRepoOwner, rawCloudRepoName)
       : null;
