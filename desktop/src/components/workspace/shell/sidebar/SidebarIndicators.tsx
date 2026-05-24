@@ -7,6 +7,8 @@ import {
   Clock,
   GitMerge,
   Globe,
+  BotMessageSquare,
+  MessageSquare,
   Spinner,
 } from "@/components/ui/icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
@@ -156,8 +158,10 @@ function SidebarDetailIndicatorView({
   }
 
   const glyph = indicator.kind === "automation"
-    ? <Clock className="size-3" />
-    : <ArrowRight className="size-3" />;
+    ? <BotMessageSquare className="size-3" />
+    : indicator.kind === "agent"
+      ? <MessageSquare className="size-3" />
+      : <ArrowRight className="size-3" />;
   const action = "action" in indicator ? indicator.action ?? null : null;
 
   return (

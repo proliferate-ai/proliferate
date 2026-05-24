@@ -34,7 +34,7 @@ DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/slack/domain/policy.py 1
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/target_config/domain/policy.py 1 transitional target config policy imports product config during worker migration
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/targets/domain/policy.py 1 transitional target policy imports product config during worker migration
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/service.py 1 transitional agent auth deferred session commits materialization result
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/slack/service.py 9 transitional Slack deferred handlers own isolated transactions
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/slack/service.py 10 transitional Slack deferred handlers own isolated transactions
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/worker/service.py 1 transitional worker lease commits before command delivery
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/service.py 1 transitional workspace sync commits after deferred runtime refresh
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store owns transaction commit

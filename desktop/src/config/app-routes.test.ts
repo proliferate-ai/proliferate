@@ -6,6 +6,10 @@ describe("app routes", () => {
     expect(APP_ROUTES.plugins).toBe("/plugins");
   });
 
+  it("registers the cloud-visible workspace inventory route", () => {
+    expect(APP_ROUTES.workspaces).toBe("/workspaces");
+  });
+
   it("does not keep a named constant for the retired powers route", () => {
     expect(APP_ROUTES).not.toHaveProperty("powers");
     expect(LEGACY_APP_ROUTES.powers).toBe("/powers");

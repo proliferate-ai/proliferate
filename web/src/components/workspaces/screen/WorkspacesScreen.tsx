@@ -1,103 +1,120 @@
-import { Cloud, GitBranch, RefreshCw, Users } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 import { useCloudWorkspaces } from "@proliferate/cloud-sdk-react";
-
-import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
-import { EmptyState } from "@proliferate/ui/layout/EmptyState";
-import { Button } from "@proliferate/ui/primitives/Button";
+import {
+  buildCloudWorkspaceInventoryItems,
+  buildWorkspaceInventoryFilterOptions,
+  filterWorkspaceInventoryItems,
+  groupWorkspaceInventoryItems,
+  workspaceInventorySummaryLabel,
+  workspaceInventorySyncLabel,
+  WORKSPACE_INVENTORY_GROUP_OPTIONS,
+  type WorkspaceInventoryFilterId,
+  type WorkspaceInventoryGroupBy,
+} from "@proliferate/product-model/workspaces/inventory";
+import { WorkspacesSurface } from "@proliferate/product-ui/workspaces/WorkspacesSurface";
+import { useNavigate } from "react-router-dom";
 
 import { routes } from "../../../config/routes";
 
+const EMPTY_CLOUD_WORKSPACES: readonly CloudWorkspaceSummary[] = [];
+
 export function WorkspacesScreen() {
   const workspaces = useCloudWorkspaces({ scope: "exposed" });
+  const navigate = useNavigate();
+  const [filterId, setFilterId] = useState<WorkspaceInventoryFilterId>("all");
+  const [groupBy, setGroupBy] = useState<WorkspaceInventoryGroupBy>("source");
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [syncLabelNow, setSyncLabelNow] = useState(() => Date.now());
+  const workspaceItems = workspaces.data ?? EMPTY_CLOUD_WORKSPACES;
+  const hasResolvedWorkspaceData = workspaces.data !== undefined;
+  const backgroundRefreshFailed = Boolean(workspaces.error) && hasResolvedWorkspaceData;
+
+  const allItems = useMemo(
+    () => buildCloudWorkspaceInventoryItems(workspaceItems, { now: syncLabelNow }),
+    [syncLabelNow, workspaceItems],
+  );
+  const filterOptions = useMemo(
+    () => buildWorkspaceInventoryFilterOptions(allItems),
+    [allItems],
+  );
+  const filteredItems = useMemo(
+    () => filterWorkspaceInventoryItems(allItems, filterId),
+    [allItems, filterId],
+  );
+  const groups = useMemo(
+    () => groupWorkspaceInventoryItems(filteredItems, groupBy, collapsedGroupIds),
+    [collapsedGroupIds, filteredItems, groupBy],
+  );
+  const summaryLabel = useMemo(
+    () => workspaceInventorySummaryLabel(allItems),
+    [allItems],
+  );
+  const lastSyncedLabel = workspaceInventorySyncLabel(
+    workspaces.dataUpdatedAt,
+    syncLabelNow,
+  );
+
+  useEffect(() => {
+    setSyncLabelNow(Date.now());
+    if (!workspaces.dataUpdatedAt) {
+      return undefined;
+    }
+    const intervalId = window.setInterval(() => {
+      setSyncLabelNow(Date.now());
+    }, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [workspaces.dataUpdatedAt]);
 
   return (
-    <ProductPageShell
-      title="Cloud sandboxes"
-      description="Workspaces available to Web, Mobile, and shared cloud flows."
-      actions={
-        <Button variant="secondary" size="md" onClick={() => void workspaces.refetch()}>
-          <RefreshCw size={15} />
-          Refresh
-        </Button>
+    <WorkspacesSurface
+      groups={groups}
+      filterOptions={filterOptions}
+      selectedFilterId={filterId}
+      groupOptions={WORKSPACE_INVENTORY_GROUP_OPTIONS}
+      selectedGroupId={groupBy}
+      summaryLabel={summaryLabel}
+      lastSyncedLabel={lastSyncedLabel}
+      loading={workspaces.isLoading && !hasResolvedWorkspaceData}
+      error={Boolean(workspaces.error) && !hasResolvedWorkspaceData}
+      backgroundRefreshFailed={backgroundRefreshFailed}
+      isRefreshing={workspaces.isFetching}
+      emptyTitle={filterId === "all" ? "No cloud-visible workspaces" : "No matching workspaces"}
+      emptyDescription={
+        filterId === "all"
+          ? "Create a workspace from Home, Desktop, Slack, or an automation."
+          : "Try a different filter."
       }
-      telemetryBlocked
-    >
-      {workspaces.isLoading ? (
-        <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-          Loading workspaces
-        </div>
-      ) : workspaces.error ? (
-        <EmptyState
-          title="Could not load workspaces"
-          description="Refresh the page or sign in again."
-        />
-      ) : workspaces.data?.length ? (
-        <div className="grid gap-3">
-          {workspaces.data.map((workspace) => (
-            <Link
-              key={workspace.id}
-              to={workspace.lastSessionSummary?.sessionId
-                ? routes.chat(workspace.id, workspace.lastSessionSummary.sessionId)
-                : routes.workspace(workspace.id)}
-              className="rounded-lg border border-border bg-card p-4 text-left transition hover:border-ring/50 hover:bg-accent/30"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="flex size-8 items-center justify-center rounded-md bg-accent text-foreground">
-                      <Cloud size={15} />
-                    </span>
-                    <div className="min-w-0">
-                      <h2 className="truncate text-sm font-semibold">
-                        {workspace.displayName ?? workspace.repo.name}
-                      </h2>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {workspace.repo.owner}/{workspace.repo.name}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground">
-                    {workspace.exposureState ?? "tracked"}
-                  </span>
-                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground">
-                    {workspace.status}
-                  </span>
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1">
-                  <GitBranch size={13} />
-                  {workspace.repo.branch ?? workspace.repo.baseBranch ?? "main"}
-                </span>
-                {workspace.visibility !== "private" && (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1">
-                    <Users size={13} />
-                    {workspace.visibility === "shared_unclaimed"
-                      ? "Unclaimed"
-                      : workspace.visibility}
-                  </span>
-                )}
-                <span className="rounded-md border border-border px-2 py-1">
-                  {workspace.origin?.kind ?? "personal"}
-                </span>
-                {workspace.lastSessionSummary && (
-                  <span className="rounded-md border border-border px-2 py-1">
-                    {workspace.lastSessionSummary.title ?? workspace.lastSessionSummary.status}
-                  </span>
-                )}
-              </div>
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <EmptyState
-          title="No cloud workspaces"
-          description="Create a workspace from Home, Desktop, or the cloud setup flow."
-        />
-      )}
-    </ProductPageShell>
+      onFilterChange={(nextFilterId) => {
+        setFilterId(nextFilterId);
+        setCollapsedGroupIds(new Set());
+      }}
+      onGroupChange={(nextGroupBy) => {
+        setGroupBy(nextGroupBy);
+        setCollapsedGroupIds(new Set());
+      }}
+      onRefresh={() => void workspaces.refetch()}
+      onGroupToggle={(groupId) => {
+        setCollapsedGroupIds((current) => {
+          const next = new Set(current);
+          if (next.has(groupId)) {
+            next.delete(groupId);
+          } else {
+            next.add(groupId);
+          }
+          return next;
+        });
+      }}
+      onWorkspaceSelect={(workspaceId) => {
+        const workspace = workspaceItems.find((item) => item.id === workspaceId);
+        if (workspace?.lastSessionSummary?.sessionId) {
+          navigate(routes.chat(workspace.id, workspace.lastSessionSummary.sessionId));
+          return;
+        }
+        navigate(routes.workspace(workspaceId));
+      }}
+    />
   );
 }

@@ -34,9 +34,9 @@ from proliferate.server.cloud.targets.domain.rules import (
     validate_owner_scope,
 )
 from proliferate.server.cloud.targets.models import (
-    CloudTargetExistingEnrollmentRequest,
     CloudTargetEnrollmentRequest,
     CloudTargetEnrollmentResponse,
+    CloudTargetExistingEnrollmentRequest,
     target_detail_payload,
 )
 from proliferate.utils.time import utcnow

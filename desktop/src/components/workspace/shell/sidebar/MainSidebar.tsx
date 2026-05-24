@@ -90,6 +90,7 @@ export const MainSidebar = memo(function MainSidebar() {
 
   const isOnPlugins = location.pathname === APP_ROUTES.plugins;
   const isOnAutomations = location.pathname.startsWith(APP_ROUTES.automations);
+  const isOnWorkspaces = location.pathname === APP_ROUTES.workspaces;
   const isOnHome = location.pathname === APP_ROUTES.home;
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
@@ -170,6 +171,7 @@ export const MainSidebar = memo(function MainSidebar() {
     automations: getShortcutDisplayLabel(SHORTCUTS.goAutomations),
     support: getShortcutDisplayLabel(SHORTCUTS.openSupport),
   }), []);
+  const handleGoWorkspaces = actions.handleGoWorkspaces;
 
   return (
     <DebugProfiler id="workspace-sidebar">
@@ -190,10 +192,12 @@ export const MainSidebar = memo(function MainSidebar() {
             homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
             pluginsActive={isOnPlugins}
             automationsActive={isOnAutomations}
+            workspacesActive={isOnWorkspaces}
             supportActive={supportOpen}
             onGoHome={actions.handleGoHome}
             onGoPlugins={actions.handleGoPlugins}
             onGoAutomations={actions.handleGoAutomations}
+            onGoWorkspaces={handleGoWorkspaces}
             onOpenSupport={() => setSupportOpen(true)}
             shortcutRevealVisible={shortcutRevealVisible}
             shortcutLabels={primaryNavShortcutLabels}

@@ -14,9 +14,9 @@ from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.targets.models import (
     ArchiveCloudTargetResponse,
     CloudTargetDetail,
-    CloudTargetExistingEnrollmentRequest,
     CloudTargetEnrollmentRequest,
     CloudTargetEnrollmentResponse,
+    CloudTargetExistingEnrollmentRequest,
     CloudTargetSummary,
     target_detail_payload,
     target_summary_payload,

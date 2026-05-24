@@ -1,11 +1,16 @@
 import { useCallback } from "react";
+import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
+import { logicalWorkspaceMatchesId } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
+import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -24,6 +29,8 @@ export function useWorkspaceNavigationWorkflow() {
   );
   const mobility = useWorkspaceMobilityState();
   const { selectWorkspace } = useWorkspaceSelection();
+  const { logicalWorkspaces } = useLogicalWorkspaces();
+  const { openExternal } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
 
   const navigateToWorkspaceShell = useCallback(() => {
@@ -54,6 +61,21 @@ export function useWorkspaceNavigationWorkflow() {
   ]);
 
   const selectWorkspaceFromSurface = useCallback((workspaceId: string, source: string) => {
+    const unclaimedCloudWorkspace = logicalWorkspaces.find((workspace) =>
+      logicalWorkspaceMatchesId(workspace, workspaceId) &&
+      workspace.cloudWorkspace?.visibility === "shared_unclaimed"
+    )?.cloudWorkspace;
+    if (unclaimedCloudWorkspace) {
+      const url = webWorkspaceDeepLink(
+        unclaimedCloudWorkspace.id,
+        getProliferateWebBaseUrl(),
+      );
+      void openExternal(url).catch(() => {
+        showToast("Failed to open the web workspace.");
+      });
+      return;
+    }
+
     if (mobility.selectionLocked && workspaceId !== mobility.selectedLogicalWorkspaceId) {
       showToast("Finish the current workspace move before switching workspaces.");
       return;
@@ -74,9 +96,11 @@ export function useWorkspaceNavigationWorkflow() {
       showToast(`Failed to select workspace: ${message}`);
     });
   }, [
+    logicalWorkspaces,
     mobility.selectedLogicalWorkspaceId,
     mobility.selectionLocked,
     navigateToWorkspaceShell,
+    openExternal,
     selectWorkspace,
     showToast,
   ]);
