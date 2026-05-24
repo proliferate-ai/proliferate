@@ -75,6 +75,32 @@ describe("session-stream-state", () => {
     expect(result.state.transcript).toBe(state.transcript);
   });
 
+  it("does not advance history tail past a remaining sequence gap", () => {
+    const state = replaySessionHistory("session-1", [turnStarted(1)]);
+
+    const result = appendHistoryTail(state, [
+      assistantDelta(4, "assistant-1", "lo"),
+      assistantStarted(3, "assistant-1", "Hel"),
+    ]);
+
+    expect(result.applied).toBe(false);
+    expect(result.state).toBe(state);
+    expect(result.state.transcript.lastSeq).toBe(1);
+  });
+
+  it("applies only the contiguous history tail prefix before a gap", () => {
+    const state = replaySessionHistory("session-1", [turnStarted(1)]);
+
+    const result = appendHistoryTail(state, [
+      assistantDelta(4, "assistant-1", "lo"),
+      assistantStarted(2, "assistant-1", "Hel"),
+    ]);
+
+    expect(result.applied).toBe(true);
+    expect(result.state.events.map((event) => event.seq)).toEqual([1, 2]);
+    expect(result.state.transcript.lastSeq).toBe(2);
+  });
+
   it("applies a contiguous stream batch with one events array copy", () => {
     const state = replaySessionHistory("session-1", [turnStarted(1)]);
 
@@ -88,6 +114,21 @@ describe("session-stream-state", () => {
     expect(result.appliedEnvelopes.map((event) => event.seq)).toEqual([2, 3, 4]);
     expect(result.state.events.map((event) => event.seq)).toEqual([1, 2, 3, 4]);
     expect(result.state.events).not.toBe(state.events);
+    expect(result.state.transcript.lastSeq).toBe(4);
+  });
+
+  it("sorts stream batches by sequence before detecting gaps", () => {
+    const state = replaySessionHistory("session-1", [turnStarted(1)]);
+
+    const result = applyStreamEnvelopeBatch(state, [
+      assistantCompleted(4, "assistant-1", "Hello"),
+      assistantStarted(2, "assistant-1", "Hel"),
+      assistantDelta(3, "assistant-1", "lo"),
+    ]);
+
+    expect(result.gapEnvelope).toBeNull();
+    expect(result.appliedEnvelopes.map((event) => event.seq)).toEqual([2, 3, 4]);
+    expect(result.state.events.map((event) => event.seq)).toEqual([1, 2, 3, 4]);
     expect(result.state.transcript.lastSeq).toBe(4);
   });
 

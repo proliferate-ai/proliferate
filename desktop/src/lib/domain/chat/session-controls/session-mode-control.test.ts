@@ -7,8 +7,8 @@ describe("resolveSessionControlPresentation", () => {
     ["cursor", "plan", "plan"],
     ["cursor", "ask", "chat"],
     ["gemini", "default", "chat"],
-    ["opencode", "build", "build"],
-    ["opencode", "plan", "plan"],
+    ["opencode", "build", "opencodeBuild"],
+    ["opencode", "plan", "opencodePlan"],
   ] as const)("uses configured icons for %s %s mode", (agentKind, value, icon) => {
     expect(resolveSessionControlPresentation(agentKind, "mode", value).icon).toBe(icon);
   });

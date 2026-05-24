@@ -63,6 +63,26 @@
       "types": "./dist/automations/AutomationCreatePanel.d.ts",
       "import": "./dist/automations/AutomationCreatePanel.js"
     },
+    "./automations/AutomationCalendarView": {
+      "types": "./dist/automations/AutomationCalendarView.d.ts",
+      "import": "./dist/automations/AutomationCalendarView.js"
+    },
+    "./automations/AutomationInventoryList": {
+      "types": "./dist/automations/AutomationInventoryList.d.ts",
+      "import": "./dist/automations/AutomationInventoryList.js"
+    },
+    "./automations/AutomationRunsList": {
+      "types": "./dist/automations/AutomationRunsList.d.ts",
+      "import": "./dist/automations/AutomationRunsList.js"
+    },
+    "./automations/AutomationStatusGlyph": {
+      "types": "./dist/automations/AutomationStatusGlyph.d.ts",
+      "import": "./dist/automations/AutomationStatusGlyph.js"
+    },
+    "./automations/AutomationSurface": {
+      "types": "./dist/automations/AutomationSurface.d.ts",
+      "import": "./dist/automations/AutomationSurface.js"
+    },
     "./automations/AutomationsList": {
       "types": "./dist/automations/AutomationsList.d.ts",
       "import": "./dist/automations/AutomationsList.js"

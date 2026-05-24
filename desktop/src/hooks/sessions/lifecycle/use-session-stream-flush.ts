@@ -8,7 +8,10 @@ import {
   type StreamBatchScheduler,
 } from "@proliferate/product-model/chats/transcript/stream-batcher";
 import { applyStreamEnvelopeBatch } from "@/lib/domain/sessions/stream/stream-state";
-import { logDevSSEEvent } from "@/lib/infra/debug/session-runtime-dev-sse";
+import {
+  logDevSSEEvent,
+  logDevSessionRuntimeEvent,
+} from "@/lib/infra/debug/session-runtime-dev-sse";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   finishOrCancelMeasurementOperation,
@@ -65,6 +68,7 @@ import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 const SESSION_STREAM_EVENT_BATCH_IDLE_MS = 350;
 const SESSION_STREAM_EVENT_BATCH_MAX_DURATION_MS = 5_000;
 const SESSION_STREAM_FLUSH_MAX_PAINT_WAIT_MS = 50;
+const SESSION_STREAM_FLUSH_WATCHDOG_MS = 250;
 const STREAM_WORKSPACE_VIEWED_WRITE_INTERVAL_MS = 1_000;
 const SESSION_APPLY_MEASUREMENT_SURFACES: readonly MeasurementSurface[] = [
   "session-transcript-pane",
@@ -113,6 +117,16 @@ interface SessionStreamFlushFactoryDeps {
       isCurrent?: () => boolean;
     },
   ) => Promise<void>;
+  rehydrateSessionSlotFromHistory: (
+    sessionId: string,
+    options?: {
+      afterSeq?: number;
+      requestHeaders?: HeadersInit;
+      measurementOperationId?: MeasurementOperationId | null;
+      timeoutMs?: number;
+      isCurrent?: () => boolean;
+    },
+  ) => Promise<boolean>;
   showToast: (message: string, type?: "error" | "info") => void;
   scheduler?: SessionStreamFlushScheduler;
 }
@@ -163,6 +177,7 @@ export function useSessionStreamFlushControllerFactory({
   mountSubagentChildSession,
   persistReconciledModePreferences,
   refreshSessionSlotMeta,
+  rehydrateSessionSlotFromHistory,
   showToast,
   scheduler = animationFrameSessionStreamFlushScheduler,
 }: SessionStreamFlushFactoryDeps) {
@@ -173,12 +188,14 @@ export function useSessionStreamFlushControllerFactory({
       mountSubagentChildSession,
       persistReconciledModePreferences,
       refreshSessionSlotMeta,
+      rehydrateSessionSlotFromHistory,
       showToast,
       scheduler,
     }), [
     mountSubagentChildSession,
     persistReconciledModePreferences,
     refreshSessionSlotMeta,
+    rehydrateSessionSlotFromHistory,
     scheduler,
     sessionStreamCache,
     showToast,
@@ -191,24 +208,59 @@ export function createSessionStreamFlushController(
   const scheduler = input.scheduler ?? animationFrameSessionStreamFlushScheduler;
   let queue: SessionEventEnvelope[] = [];
   let cancelScheduledFlush: (() => void) | null = null;
+  let flushWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
   let disposed = false;
 
+  const clearFlushWatchdog = () => {
+    if (!flushWatchdogTimer) {
+      return;
+    }
+    clearTimeout(flushWatchdogTimer);
+    flushWatchdogTimer = null;
+  };
+
+  const scheduleFlushWatchdog = () => {
+    if (flushWatchdogTimer || disposed) {
+      return;
+    }
+    flushWatchdogTimer = setTimeout(() => {
+      flushWatchdogTimer = null;
+      if (cancelScheduledFlush) {
+        cancelScheduledFlush();
+        cancelScheduledFlush = null;
+      }
+      logDevSessionRuntimeEvent(input.sessionId, "stream_flush_watchdog_fired", {
+        queuedCount: queue.length,
+        firstSeq: queue[0]?.seq ?? null,
+        lastSeq: queue[queue.length - 1]?.seq ?? null,
+      });
+      flush();
+    }, SESSION_STREAM_FLUSH_WATCHDOG_MS);
+  };
+
   const scheduleFlush = () => {
-    if (cancelScheduledFlush || disposed) {
+    if (disposed) {
+      return;
+    }
+    scheduleFlushWatchdog();
+    if (cancelScheduledFlush) {
       return;
     }
     cancelScheduledFlush = scheduler.schedule(() => {
       cancelScheduledFlush = null;
+      clearFlushWatchdog();
       flush();
     });
   };
 
   const flush = () => {
     if (disposed || queue.length === 0) {
+      clearFlushWatchdog();
       return;
     }
     const envelopes = queue;
     queue = [];
+    clearFlushWatchdog();
 
     const stillCurrent = input.isStillCurrent();
     const currentStream = input.isCurrentStream();
@@ -226,8 +278,21 @@ export function createSessionStreamFlushController(
 
     const slotState = getSessionRecord(input.sessionId);
     if (!slotState) {
+      logDevSessionRuntimeEvent(input.sessionId, "stream_flush_skipped", {
+        reason: "missing_slot",
+        envelopeCount: envelopes.length,
+        firstSeq: envelopes[0]?.seq ?? null,
+        lastSeq: envelopes[envelopes.length - 1]?.seq ?? null,
+      });
       return;
     }
+
+    logDevSessionRuntimeEvent(input.sessionId, "stream_flush_started", {
+      envelopeCount: envelopes.length,
+      firstSeq: envelopes[0]?.seq ?? null,
+      lastSeq: envelopes[envelopes.length - 1]?.seq ?? null,
+      lastSeqBefore: slotState.transcript.lastSeq,
+    });
 
     const streamEventBatchOperationId = startMeasurementOperation({
       kind: "session_stream_event_batch",
@@ -290,6 +355,16 @@ export function createSessionStreamFlushController(
       lastObservedSeq,
       streamConnectionState: slotState.streamConnectionState,
       transcriptHydrated: slotState.transcriptHydrated,
+    });
+    logDevSessionRuntimeEvent(input.sessionId, "stream_flush_reduced", {
+      envelopeCount: envelopes.length,
+      appliedCount: result.appliedEnvelopes.length,
+      duplicateCount: result.duplicateEnvelopes.length,
+      gapSeq: result.gapEnvelope?.seq ?? null,
+      gapType: result.gapEnvelope?.event.type ?? null,
+      lastSeqBefore: slotState.transcript.lastSeq,
+      lastSeqAfter: result.state.transcript.lastSeq,
+      lastObservedSeq,
     });
     if (result.appliedEnvelopes.length === 0 && !result.gapEnvelope) {
       useSessionIngestStore.getState().applyStreamProgress(input.sessionId, {
@@ -435,11 +510,47 @@ export function createSessionStreamFlushController(
     });
 
     finishOrCancelMeasurementOperation(streamEventBatchOperationId, "completed");
+    logDevSessionRuntimeEvent(input.sessionId, "stream_flush_finished", {
+      lastSeqAfter: result.state.transcript.lastSeq,
+      queuedCount: queue.length,
+      shouldDisconnectForGap,
+    });
 
     if (shouldDisconnectForGap) {
+      const afterSeq = result.state.transcript.lastSeq;
+      logDevSessionRuntimeEvent(input.sessionId, "stream_gap_reconcile_started", {
+        gapSeq: result.gapEnvelope?.seq ?? null,
+        gapType: result.gapEnvelope?.event.type ?? null,
+        afterSeq,
+        skippedAfterGapCount: result.skippedAfterGapEnvelopes.length,
+        lastObservedSeq,
+      });
+      const reconcileHistoryTail = input.rehydrateSessionSlotFromHistory(input.sessionId, {
+        afterSeq,
+        requestHeaders: input.requestHeaders,
+        measurementOperationId: input.streamMeasurementOperationId,
+        timeoutMs: 5_000,
+        isCurrent: input.isStillCurrent,
+      });
+      void reconcileHistoryTail.then((applied) => {
+        const slotAfterHistory = getSessionRecord(input.sessionId);
+        logDevSessionRuntimeEvent(input.sessionId, "stream_gap_reconcile_finished", {
+          applied,
+          afterStatus: slotAfterHistory?.status ?? null,
+          afterPhase: slotAfterHistory?.executionSummary?.phase ?? null,
+          afterIsStreaming: slotAfterHistory?.transcript.isStreaming ?? null,
+          afterLastSeq: slotAfterHistory?.transcript.lastSeq ?? null,
+        });
+      }).catch((error: unknown) => {
+        logDevSessionRuntimeEvent(input.sessionId, "stream_gap_reconcile_failed", {
+          errorName: error instanceof Error ? error.name : "unknown",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }).finally(() => {
+        input.scheduleReconnect(0);
+      });
       input.clearActiveSummaryRefreshTimer();
       input.closeCurrentHandle();
-      input.scheduleReconnect(0);
     }
   };
 
@@ -456,6 +567,7 @@ export function createSessionStreamFlushController(
         cancelScheduledFlush();
         cancelScheduledFlush = null;
       }
+      clearFlushWatchdog();
       flush();
     },
     dispose() {
@@ -465,6 +577,7 @@ export function createSessionStreamFlushController(
         cancelScheduledFlush();
         cancelScheduledFlush = null;
       }
+      clearFlushWatchdog();
     },
   };
 }

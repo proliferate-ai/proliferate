@@ -23,6 +23,10 @@
       "types": "./dist/automations/model.d.ts",
       "import": "./dist/automations/model.js"
     },
+    "./automations/inventory": {
+      "types": "./dist/automations/inventory.d.ts",
+      "import": "./dist/automations/inventory.js"
+    },
     "./automations/presentation": {
       "types": "./dist/automations/presentation.d.ts",
       "import": "./dist/automations/presentation.js"

@@ -14,13 +14,13 @@ import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "@/lib/domain/telemetry/debug
 import type { PromptAttachmentSnapshot } from "@proliferate/product-model/chats/composer/prompt-attachment-snapshot";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import {
+  isPromptOutboxPlacementBusy,
   resolvePromptOutboxPlacement,
 } from "@proliferate/product-model/sessions/intents/session-intent-selectors";
 import {
   promptIntentsForSession,
   sessionIntentsForSession,
 } from "@proliferate/product-model/sessions/intents/session-intent-state";
-import { isSessionSlotBusy } from "@proliferate/product-model/sessions/activity";
 import {
   finishLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
@@ -92,7 +92,12 @@ export function useSessionIntentActions() {
       );
     }
     const outboxPlacement = resolvePromptOutboxPlacement({
-      isSessionBusy: isSessionSlotBusy(slot),
+      isSessionBusy: isPromptOutboxPlacementBusy({
+        transcript: slot?.transcript,
+        executionSummary: slot?.executionSummary,
+        status: slot?.status,
+        streamConnectionState: slot?.streamConnectionState,
+      }),
       isSessionMaterialized: Boolean(slot?.materializedSessionId),
       existingEntries: existingPromptIntents,
     });

@@ -18,22 +18,28 @@ export function useAutomationActions() {
   } = useAutomationMutations();
   const showToast = useToastStore((state) => state.show);
 
-  const pause = useCallback((automationId: string) => {
-    pauseMutation.mutate(automationId, {
-      onError: (error) => showToast(`Failed to pause automation: ${errorMessage(error)}`),
-    });
+  const pause = useCallback(async (automationId: string) => {
+    try {
+      await pauseMutation.mutateAsync(automationId);
+    } catch (error) {
+      showToast(`Failed to pause automation: ${errorMessage(error)}`);
+    }
   }, [pauseMutation, showToast]);
 
-  const resume = useCallback((automationId: string) => {
-    resumeMutation.mutate(automationId, {
-      onError: (error) => showToast(`Failed to resume automation: ${errorMessage(error)}`),
-    });
+  const resume = useCallback(async (automationId: string) => {
+    try {
+      await resumeMutation.mutateAsync(automationId);
+    } catch (error) {
+      showToast(`Failed to resume automation: ${errorMessage(error)}`);
+    }
   }, [resumeMutation, showToast]);
 
-  const runNow = useCallback((automationId: string) => {
-    runNowMutation.mutate(automationId, {
-      onError: (error) => showToast(`Failed to queue automation run: ${errorMessage(error)}`),
-    });
+  const runNow = useCallback(async (automationId: string) => {
+    try {
+      await runNowMutation.mutateAsync(automationId);
+    } catch (error) {
+      showToast(`Failed to queue automation run: ${errorMessage(error)}`);
+    }
   }, [runNowMutation, showToast]);
 
   return {

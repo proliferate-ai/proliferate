@@ -1,5 +1,7 @@
 import type {
   PendingPromptEntry,
+  SessionExecutionSummary,
+  SessionStatus,
   TranscriptState,
 } from "@anyharness/sdk";
 import {
@@ -162,6 +164,48 @@ export function resolvePromptOutboxPlacement(input: {
     return "queue";
   }
   return "transcript";
+}
+
+export function isPromptOutboxPlacementBusy(input: {
+  transcript: Pick<
+    TranscriptState,
+    "isStreaming" | "pendingInteractions" | "pendingPrompts" | "turnOrder" | "turnsById"
+  > | null | undefined;
+  executionSummary?: SessionExecutionSummary | null | undefined;
+  status?: SessionStatus | null | undefined;
+  streamConnectionState?: "disconnected" | "connecting" | "open" | "ended" | null | undefined;
+}): boolean {
+  const transcript = input.transcript;
+  const summaryPendingInteractions = input.executionSummary?.pendingInteractions ?? [];
+  if (summaryPendingInteractions.length > 0) {
+    return true;
+  }
+  if (input.executionSummary?.phase === "starting" || input.status === "starting") {
+    return true;
+  }
+  const hasPotentiallyActiveStreamConnection =
+    input.streamConnectionState === "connecting"
+    || input.streamConnectionState === "open"
+    || input.streamConnectionState === "disconnected";
+  if (
+    hasPotentiallyActiveStreamConnection
+    && (input.executionSummary?.phase === "running" || input.status === "running")
+  ) {
+    return true;
+  }
+  if (!transcript) {
+    return false;
+  }
+  if (transcript.isStreaming) {
+    return true;
+  }
+  if (transcript.pendingInteractions.length > 0 || transcript.pendingPrompts.length > 0) {
+    return true;
+  }
+
+  const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
+  const latestTurn = latestTurnId ? transcript.turnsById[latestTurnId] : null;
+  return !!latestTurn && !latestTurn.completedAt;
 }
 
 export function outboxEntryToPendingPromptEntry(entry: PromptOutboxEntry): PendingPromptEntry {

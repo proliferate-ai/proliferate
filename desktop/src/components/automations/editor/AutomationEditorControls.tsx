@@ -23,7 +23,11 @@ import {
   Brain,
   Check,
   Clock,
-  Sparkles,
+  CircleAlert,
+  ClipboardList,
+  FileText,
+  GitCommit,
+  MessageSquare,
 } from "@/components/ui/icons";
 
 interface AutomationControlOption {
@@ -54,8 +58,10 @@ interface AutomationSchedulePopoverProps {
 }
 
 interface AutomationTemplatePopoverProps {
-  onSelectTemplate: (template: { title: string; prompt: string }) => void;
+  onSelectTemplate: (template: AutomationTemplateOption) => void;
 }
+
+type AutomationTemplateOption = (typeof AUTOMATION_TEMPLATE_OPTIONS)[number];
 
 const POPOVER_CLASS = "w-72 rounded-xl border border-border bg-popover p-1 shadow-floating";
 
@@ -229,7 +235,7 @@ export function AutomationTemplatePopover({ onSelectTemplate }: AutomationTempla
           size="sm"
           className="shrink-0 bg-card/80"
         >
-          <Sparkles className="size-3.5" />
+          <ClipboardList className="size-3.5" />
           Use template
         </Button>
       )}
@@ -243,7 +249,7 @@ export function AutomationTemplatePopover({ onSelectTemplate }: AutomationTempla
             <PopoverMenuItem
               key={template.title}
               label={template.title}
-              icon={<Sparkles className="size-3.5 text-muted-foreground" />}
+              icon={automationTemplateIcon(template)}
               onClick={() => {
                 onSelectTemplate(template);
                 close();
@@ -258,6 +264,20 @@ export function AutomationTemplatePopover({ onSelectTemplate }: AutomationTempla
       )}
     </PopoverButton>
   );
+}
+
+function automationTemplateIcon(template: AutomationTemplateOption) {
+  const className = "size-3.5 text-muted-foreground";
+  switch (template.id) {
+    case "recent_commits":
+      return <GitCommit className={className} />;
+    case "ci_failures":
+      return <CircleAlert className={className} />;
+    case "release_notes":
+      return <FileText className={className} />;
+    case "standup_notes":
+      return <MessageSquare className={className} />;
+  }
 }
 
 export function reasoningIcon() {

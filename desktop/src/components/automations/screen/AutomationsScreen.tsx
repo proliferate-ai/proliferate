@@ -2,13 +2,9 @@ import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { PageContentFrame } from "@/components/ui/PageContentFrame";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { ArrowLeft, Pause, Pencil, Play, Plus, Zap } from "@/components/ui/icons";
+import { ArrowLeft, Pause, Pencil, Play, Zap } from "@/components/ui/icons";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
-import { AutomationDetailContent } from "@/components/automations/list/AutomationDetailContent";
 import { AutomationEditorModal } from "@/components/automations/editor/AutomationEditorModal";
-import { AutomationListContent } from "@/components/automations/list/AutomationListContent";
-import { AUTOMATION_PREEXECUTOR_COPY } from "@/copy/automations/automation-copy";
 import { useAutomationActions } from "@/hooks/automations/workflows/use-automation-actions";
 import {
   useAutomationDetail,
@@ -36,9 +32,19 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import {
+  buildAutomationCalendarWeek,
+  buildAutomationInventoryItems,
+  buildAutomationRunInventoryItems,
+  groupAutomationInventoryItems,
+  type AutomationSurfaceViewMode,
+} from "@proliferate/product-model/automations/inventory";
+import { AutomationSurface } from "@proliferate/product-ui/automations/AutomationSurface";
+import { AutomationRunsList } from "@proliferate/product-ui/automations/AutomationRunsList";
 
 const EMPTY_AUTOMATIONS: AutomationRecord[] = [];
 const EMPTY_AUTOMATION_RUNS: AutomationRunRecord[] = [];
+type AutomationListAction = "pause" | "resume" | "run";
 
 interface AutomationsScreenProps {
   selectedAutomationId?: string | null;
@@ -54,6 +60,12 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const [editingAutomation, setEditingAutomation] = useState<AutomationRecord | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [pendingCloudWorkspaceId, setPendingCloudWorkspaceId] = useState<string | null>(null);
+  const [pendingAutomationAction, setPendingAutomationAction] = useState<{
+    automationId: string;
+    action: AutomationListAction;
+  } | null>(null);
+  const [surfaceMode, setSurfaceMode] = useState<AutomationSurfaceViewMode>("list");
+  const [includePausedCalendar, setIncludePausedCalendar] = useState(false);
   const { activeOrganization, activeOrganizationId } = useActiveOrganization();
   const admin = useIsAdmin(activeOrganizationId);
   const canManageTeamAutomations = activeOrganizationId !== null && admin.isAdmin;
@@ -68,9 +80,19 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     organizationId: activeOrganizationId,
     enabled: teamAutomationsEnabled,
   }), [activeOrganizationId, teamAutomationsEnabled]);
-  const { data: personalAutomationsData, isLoading: personalAutomationsLoading } =
+  const {
+    data: personalAutomationsData,
+    isLoading: personalAutomationsLoading,
+    isError: personalAutomationsError,
+    refetch: refetchPersonalAutomations,
+  } =
     useAutomations(personalAutomationListOptions);
-  const { data: teamAutomationsData, isLoading: teamAutomationsLoading } =
+  const {
+    data: teamAutomationsData,
+    isLoading: teamAutomationsLoading,
+    isError: teamAutomationsError,
+    refetch: refetchTeamAutomations,
+  } =
     useAutomations(teamAutomationListOptions);
   const automations = useMemo(() => {
     const combined = [
@@ -82,6 +104,11 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     );
   }, [personalAutomationsData?.automations, teamAutomationsData?.automations]);
   const isLoading = personalAutomationsLoading || (teamAutomationsEnabled && teamAutomationsLoading);
+  const automationLoadError = personalAutomationsError || (teamAutomationsEnabled && teamAutomationsError);
+  const hasAutomationLoadError = automationLoadError && automations.length === 0;
+  const partialAutomationLoadError = automationLoadError && automations.length > 0
+    ? "Some automations could not load. The list may be incomplete."
+    : null;
   const isDetailView = selectedAutomationId !== null;
   const selectedId = isDetailView ? selectedAutomationId : null;
   const selectedFromList = useMemo(
@@ -102,6 +129,29 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     isDetailView,
   );
   const actions = useAutomationActions();
+  const automationItems = useMemo(
+    () => buildAutomationInventoryItems(automations),
+    [automations],
+  );
+  const automationGroups = useMemo(
+    () => groupAutomationInventoryItems(automationItems),
+    [automationItems],
+  );
+  const calendarDays = useMemo(
+    () => buildAutomationCalendarWeek(automations, {
+      includePaused: includePausedCalendar,
+    }),
+    [automations, includePausedCalendar],
+  );
+  const runRecords: AutomationRunRecord[] = runsData?.runs ?? EMPTY_AUTOMATION_RUNS;
+  const runItems = useMemo(
+    () => buildAutomationRunInventoryItems(runRecords, { pendingCloudWorkspaceId }),
+    [pendingCloudWorkspaceId, runRecords],
+  );
+  const runById = useMemo(
+    () => new Map(runRecords.map((run) => [run.id, run])),
+    [runRecords],
+  );
 
   const openCreate = () => {
     setEditingAutomation(null);
@@ -178,25 +228,62 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     }
   };
 
+  const handleEditAutomation = (automationId: string) => {
+    const automation = automations.find((item) => item.id === automationId);
+    if (automation) {
+      openEdit(automation);
+    }
+  };
+
+  const handleOpenRun = (runId: string) => {
+    const run = runById.get(runId);
+    if (!run) {
+      return;
+    }
+    const targetKind = run.targetKindSnapshot ?? run.cloudTargetKindSnapshot;
+    const targetId = run.targetIdSnapshot ?? run.cloudTargetIdSnapshot;
+    if (targetKind === "ssh" && targetId && run.anyharnessWorkspaceId) {
+      void handleOpenLocalWorkspace(run);
+      return;
+    }
+    if (run.cloudWorkspaceId) {
+      void handleOpenCloudWorkspace(run.cloudWorkspaceId);
+      return;
+    }
+    if (run.anyharnessWorkspaceId) {
+      void handleOpenLocalWorkspace(run);
+    }
+  };
+
+  const performAutomationListAction = async (
+    automationId: string,
+    action: AutomationListAction,
+    run: () => Promise<void>,
+  ) => {
+    if (busy || pendingAutomationAction) {
+      return;
+    }
+    setPendingAutomationAction({ automationId, action });
+    try {
+      await run();
+    } finally {
+      setPendingAutomationAction(null);
+    }
+  };
+
   const busy = actions.isCreatingAutomation
     || actions.isUpdatingAutomation
     || actions.isPausingAutomation
     || actions.isResumingAutomation
     || actions.isRunningAutomationNow;
 
-  const renderCreateButton = () => (
-    <Button onClick={openCreate}>
-      <Plus className="size-4" />
-      New automation
-    </Button>
-  );
   const renderDetailHeader = () => {
     if (!selectedAutomation) {
       return (
-        <PageHeader
-          title="Automation"
-          description="Loading automation..."
-        />
+        <div className="py-2">
+          <h2 className="text-2xl font-medium text-foreground">Automation</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Loading automation...</p>
+        </div>
       );
     }
 
@@ -213,21 +300,21 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
           <ArrowLeft className="size-4" />
           Automations
         </Button>
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <h2 className="truncate text-2xl font-medium text-foreground">
               {view.title}
             </h2>
             <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
               <span className="truncate">{view.repoLabel}</span>
-              <span aria-hidden="true">-</span>
+              <span aria-hidden="true">·</span>
               <span>{view.executionLabel}</span>
-              <span aria-hidden="true">-</span>
+              <span aria-hidden="true">·</span>
               <span>{view.statusLabel}</span>
             </div>
             <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
               <span>{view.scheduleLabel}</span>
-              <span aria-hidden="true">-</span>
+              <span aria-hidden="true">·</span>
               <span>Next {view.nextRunPlainLabel}</span>
             </div>
           </div>
@@ -277,54 +364,86 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
       </div>
     );
   };
-  const pageHeader = isDetailView
-    ? renderDetailHeader()
-    : (
-      <PageHeader
-        title="Automations"
-        description={AUTOMATION_PREEXECUTOR_COPY.pageDescription}
-        action={renderCreateButton()}
-      />
-    );
   return (
     <>
       <MainSidebarPageShell>
-        <PageContentFrame
-          stickyTitle={isDetailView ? (selectedAutomation?.title ?? "Automation") : "Automations"}
-          stickyAction={isDetailView ? undefined : renderCreateButton()}
-          header={pageHeader}
-        >
-          {isDetailView ? (
-            <AutomationDetailContent
-              automation={selectedAutomation}
-              loading={selectedDetailLoading}
-              error={selectedDetailError}
-              runs={runsData?.runs ?? EMPTY_AUTOMATION_RUNS}
-              runsLoading={runsLoading}
-              pendingCloudWorkspaceId={pendingCloudWorkspaceId}
-              onBack={() => navigate("/automations")}
-              onOpenCloudWorkspace={(cloudWorkspaceId) => {
-                void handleOpenCloudWorkspace(cloudWorkspaceId);
-              }}
-              onOpenLocalWorkspace={(run) => {
-                void handleOpenLocalWorkspace(run);
-              }}
-            />
-          ) : (
-            <div className="space-y-4">
-              <AutomationListContent
-                automations={automations}
-                loading={isLoading}
-                busy={busy}
-                onSelect={(automationId) => navigate(`/automations/${automationId}`)}
-                onEdit={openEdit}
-                onPause={(automationId) => actions.pauseAutomation(automationId)}
-                onResume={(automationId) => actions.resumeAutomation(automationId)}
-                onRunNow={(automationId) => actions.runAutomationNow(automationId)}
-              />
-            </div>
-          )}
-        </PageContentFrame>
+        {isDetailView ? (
+          <PageContentFrame
+            stickyTitle={selectedAutomation?.title ?? "Automation"}
+            header={renderDetailHeader()}
+            maxWidthClassName="max-w-none"
+          >
+            {selectedDetailError ? (
+              <section className="py-3">
+                <p className="text-sm font-medium text-foreground">Automation not found</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  It may have been deleted or you may not have access to it.
+                </p>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/automations")} className="mt-4 -ml-2">
+                  <ArrowLeft className="size-4" />
+                  Back to automations
+                </Button>
+              </section>
+            ) : (
+              <section className="min-w-0">
+                <div className="mt-1 flex h-9 w-full items-center gap-2 rounded-[10px] bg-foreground/[0.042] px-3">
+                  <span className="text-sm font-medium leading-5 text-foreground">Run history</span>
+                  <span className="text-sm tabular-nums text-muted-foreground">{runItems.length}</span>
+                </div>
+                <AutomationRunsList
+                  runs={runItems}
+                  loading={selectedDetailLoading || runsLoading}
+                  onRunSelect={handleOpenRun}
+                />
+              </section>
+            )}
+          </PageContentFrame>
+        ) : (
+          <AutomationSurface
+            mode={surfaceMode}
+            groups={automationGroups}
+            calendarDays={calendarDays}
+            includePaused={includePausedCalendar}
+            loading={isLoading}
+            error={hasAutomationLoadError}
+            actionError={partialAutomationLoadError}
+            busyAutomationId={pendingAutomationAction?.automationId ?? null}
+            busyAction={pendingAutomationAction?.action ?? null}
+            actionsDisabled={busy || pendingAutomationAction !== null}
+            onModeChange={setSurfaceMode}
+            onIncludePausedChange={setIncludePausedCalendar}
+            onNew={openCreate}
+            onRetry={() => {
+              void refetchPersonalAutomations();
+              if (teamAutomationsEnabled) {
+                void refetchTeamAutomations();
+              }
+            }}
+            onAutomationSelect={(automationId) => navigate(`/automations/${automationId}`)}
+            onEdit={handleEditAutomation}
+            onPause={(automationId) => {
+              void performAutomationListAction(
+                automationId,
+                "pause",
+                () => actions.pauseAutomation(automationId),
+              );
+            }}
+            onResume={(automationId) => {
+              void performAutomationListAction(
+                automationId,
+                "resume",
+                () => actions.resumeAutomation(automationId),
+              );
+            }}
+            onRunNow={(automationId) => {
+              void performAutomationListAction(
+                automationId,
+                "run",
+                () => actions.runAutomationNow(automationId),
+              );
+            }}
+          />
+        )}
       </MainSidebarPageShell>
 
       {editorOpen && (

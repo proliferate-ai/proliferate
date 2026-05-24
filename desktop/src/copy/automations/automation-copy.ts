@@ -1,17 +1,21 @@
 export const AUTOMATION_TEMPLATE_OPTIONS = [
   {
+    id: "recent_commits",
     title: "Check recent commits",
     prompt: "Scan recent commits since the last run, or the last 24 hours if there is no previous run. Look for likely bugs, regressions, risky migrations, and missing tests. Propose minimal fixes and call out anything that needs human review.",
   },
   {
+    id: "ci_failures",
     title: "Summarize CI failures",
     prompt: "Summarize CI failures and flaky tests from the last CI window. Group failures by likely root cause, identify the highest-impact fix first, and suggest the smallest useful next step.",
   },
   {
+    id: "release_notes",
     title: "Draft release notes",
     prompt: "Draft weekly release notes from merged PRs. Group changes by theme, include links when available, and flag rollout risks or follow-up work.",
   },
   {
+    id: "standup_notes",
     title: "Prepare standup notes",
     prompt: "Summarize yesterday's git activity for standup. Focus on shipped work, blocked work, review needs, and any risk that should be mentioned.",
   },

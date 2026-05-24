@@ -44,13 +44,17 @@ export function appendHistoryTail(
   state: SessionStreamState,
   events: SessionEventEnvelope[],
 ): { applied: boolean; state: SessionStreamState } {
+  const sortedEvents = [...events].sort((a, b) => a.seq - b.seq);
   let nextEvents: SessionEventEnvelope[] | null = null;
   let nextTranscript = state.transcript;
   let applied = false;
 
-  for (const envelope of events) {
+  for (const envelope of sortedEvents) {
     if (envelope.seq <= nextTranscript.lastSeq) {
       continue;
+    }
+    if (envelope.seq > nextTranscript.lastSeq + 1) {
+      break;
     }
     applied = true;
     nextEvents ??= [...state.events];
@@ -96,6 +100,7 @@ export function applyStreamEnvelopeBatch(
   state: SessionStreamState,
   envelopes: SessionEventEnvelope[],
 ): StreamEnvelopeBatchApplyResult {
+  const sortedEnvelopes = [...envelopes].sort((a, b) => a.seq - b.seq);
   let nextEvents: SessionEventEnvelope[] | null = null;
   let nextTranscript = state.transcript;
   const appliedEnvelopes: SessionEventEnvelope[] = [];
@@ -103,8 +108,8 @@ export function applyStreamEnvelopeBatch(
   let gapEnvelope: SessionEventEnvelope | null = null;
   let skippedAfterGapEnvelopes: SessionEventEnvelope[] = [];
 
-  for (let index = 0; index < envelopes.length; index += 1) {
-    const envelope = envelopes[index];
+  for (let index = 0; index < sortedEnvelopes.length; index += 1) {
+    const envelope = sortedEnvelopes[index];
     const lastSeq = nextTranscript.lastSeq;
     if (envelope.seq <= lastSeq) {
       duplicateEnvelopes.push(envelope);
@@ -112,7 +117,7 @@ export function applyStreamEnvelopeBatch(
     }
     if (envelope.seq > lastSeq + 1) {
       gapEnvelope = envelope;
-      skippedAfterGapEnvelopes = envelopes.slice(index + 1);
+      skippedAfterGapEnvelopes = sortedEnvelopes.slice(index + 1);
       break;
     }
 

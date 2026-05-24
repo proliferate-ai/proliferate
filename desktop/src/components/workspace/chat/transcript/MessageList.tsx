@@ -210,6 +210,7 @@ export function MessageList({
   const shouldShowDelayedLatestLiveStatus = !!latestTurn
     && latestTurnInProgress
     && !latestLiveWorkBlock
+    && transcript.isStreaming
     && sessionViewState === "working"
     && shouldAllowTurnTrailingStatus({
       turn: latestTurn,

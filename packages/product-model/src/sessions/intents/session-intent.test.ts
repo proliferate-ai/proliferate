@@ -2,6 +2,7 @@ import type {
   SessionEventEnvelope,
   SessionLiveConfigSnapshot,
 } from "@anyharness/sdk";
+import { createTranscriptState } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
 import {
   createResolveInteractionIntent,
@@ -9,8 +10,10 @@ import {
   createUpdateConfigIntent,
 } from "./session-intent-model";
 import {
+  isPromptOutboxPlacementBusy,
   pendingConfigChangesForSessionIntents,
   projectPendingPromptsWithSessionIntents,
+  resolvePromptOutboxPlacement,
   selectNextDispatchableSessionIntent,
 } from "./session-intent-selectors";
 import {
@@ -85,6 +88,54 @@ describe("session intents", () => {
       effort: { rawConfigId: "effort", value: "xhigh", status: "queued" },
       mode: { rawConfigId: "mode", value: "plan", status: "queued" },
     });
+  });
+
+  it("does not queue a prompt solely because stale session metadata says busy", () => {
+    expect(resolvePromptOutboxPlacement({
+      isSessionBusy: isPromptOutboxPlacementBusy({
+        transcript: createTranscriptState("session-1"),
+        executionSummary: { phase: "running", pendingInteractions: [] },
+        status: "running",
+        streamConnectionState: "ended",
+      }),
+      isSessionMaterialized: true,
+      existingEntries: [],
+    })).toBe("transcript");
+  });
+
+  it("queues a prompt when the transcript prompt lane is actually occupied", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.turnOrder = ["turn-1"];
+    transcript.turnsById["turn-1"] = {
+      turnId: "turn-1",
+      startedAt: "2026-05-12T00:00:00Z",
+      completedAt: null,
+      stopReason: null,
+      itemOrder: [],
+      fileBadges: [],
+    };
+
+    expect(isPromptOutboxPlacementBusy({ transcript })).toBe(true);
+    expect(resolvePromptOutboxPlacement({
+      isSessionBusy: isPromptOutboxPlacementBusy({ transcript }),
+      isSessionMaterialized: true,
+      existingEntries: [],
+    })).toBe("queue");
+  });
+
+  it("queues a prompt while a running session is waiting for the stream to catch up", () => {
+    for (const streamConnectionState of ["open", "disconnected"] as const) {
+      expect(resolvePromptOutboxPlacement({
+        isSessionBusy: isPromptOutboxPlacementBusy({
+          transcript: createTranscriptState("session-1"),
+          executionSummary: { phase: "running", pendingInteractions: [] },
+          status: "running",
+          streamConnectionState,
+        }),
+        isSessionMaterialized: true,
+        existingEntries: [],
+      })).toBe("queue");
+    }
   });
 
   it("skips cancelled and failed intents when selecting the next dispatchable intent", () => {

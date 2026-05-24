@@ -105,15 +105,22 @@ describe("session stream flush controller", () => {
     expect(getSessionRecord("session-1")?.optimisticPrompt?.text).toBe("Ship it");
   });
 
-  it("applies a contiguous prefix before a gap and reconnects from the new sequence", () => {
+  it("applies a contiguous prefix before a gap, reconciles history, and reconnects", async () => {
     const scheduled = createManualScheduler();
     const patchSpy = spyOnTranscriptPatch();
     const closeCurrentHandle = vi.fn();
     const scheduleReconnect = vi.fn();
+    let resolveRehydrate: (applied: boolean) => void = () => {};
+    const rehydrateSessionSlotFromHistory = vi.fn().mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveRehydrate = resolve;
+      }),
+    );
     const controller = createTestController({
       scheduler: scheduled.scheduler,
       closeCurrentHandle,
       scheduleReconnect,
+      rehydrateSessionSlotFromHistory,
     });
 
     controller.enqueue(assistantStarted(2, "assistant-1", "Hel"));
@@ -125,7 +132,14 @@ describe("session stream flush controller", () => {
     expect(slot.events.map((event) => event.seq)).toEqual([1, 2]);
     expect(slot.transcript.lastSeq).toBe(2);
     expect(slot.streamConnectionState).toBe("disconnected");
+    expect(rehydrateSessionSlotFromHistory).toHaveBeenCalledWith("session-1", expect.objectContaining({
+      afterSeq: 2,
+      timeoutMs: 5_000,
+    }));
     expect(closeCurrentHandle).toHaveBeenCalledTimes(1);
+    expect(scheduleReconnect).not.toHaveBeenCalled();
+    resolveRehydrate(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(scheduleReconnect).toHaveBeenCalledWith(0);
   });
 
@@ -241,12 +255,14 @@ function createTestController(options?: {
   clearActiveSummaryRefreshTimer?: () => void;
   scheduleActiveSummaryRefresh?: () => void;
   refreshSessionSlotMeta?: () => Promise<void>;
+  rehydrateSessionSlotFromHistory?: () => Promise<boolean>;
 }) {
   return createSessionStreamFlushController({
     sessionStreamCache: createTestSessionStreamCache(),
     mountSubagentChildSession: vi.fn(),
     persistReconciledModePreferences: vi.fn(),
     refreshSessionSlotMeta: options?.refreshSessionSlotMeta ?? vi.fn(),
+    rehydrateSessionSlotFromHistory: options?.rehydrateSessionSlotFromHistory ?? vi.fn().mockResolvedValue(false),
     showToast: vi.fn(),
     scheduler: options?.scheduler,
     sessionId: "session-1",

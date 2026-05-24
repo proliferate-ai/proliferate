@@ -78,8 +78,7 @@ ${shadowLines}
 @media (prefers-reduced-motion: reduce) {
   .proliferate-spinner {
     animation: none;
-    transform: rotate(45deg);
-    will-change: auto;
+    transform: rotate(22deg);
   }
 }
 `;

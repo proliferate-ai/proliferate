@@ -1,4 +1,4 @@
-import { Brain } from "@/components/ui/icons";
+import { ThinkingGlyph } from "@/components/ui/icons";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-model/chats/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
 import { ToolActionRow } from "./ToolActionRow";
@@ -17,7 +17,7 @@ function deriveHint(content?: string): string | undefined {
 export function ReasoningBlock({ content }: ReasoningBlockProps) {
   return (
     <ToolActionRow
-      icon={<Brain />}
+      icon={<ThinkingGlyph />}
       label={<span className="font-[460] text-foreground/90">Thinking</span>}
       hint={deriveHint(content)}
       status="completed"

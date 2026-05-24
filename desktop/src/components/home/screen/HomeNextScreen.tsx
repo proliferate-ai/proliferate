@@ -74,7 +74,7 @@ function HomeOnboardingCards({
           loading={card.id === "add-repository" && isAddingRepo}
           aria-label={card.title}
           onClick={() => onSelect(card)}
-          className="group flex h-24 w-full min-w-0 flex-col items-start whitespace-normal rounded-lg border border-border/60 bg-card/70 p-3 text-left transition-colors hover:border-border hover:bg-foreground/5 hover:text-foreground"
+          className="group flex h-24 w-full min-w-0 flex-col items-start whitespace-normal rounded-2xl border border-border/60 bg-card/70 p-3 text-left transition-colors hover:border-border hover:bg-foreground/5 hover:text-foreground"
         >
           <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground transition-colors group-hover:bg-foreground/10 group-hover:text-foreground">
             {resolveOnboardingIcon(card.icon)}

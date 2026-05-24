@@ -15,6 +15,8 @@ export type SessionControlIconKey =
   | "build"
   | "chat"
   | "edit"
+  | "opencodeBuild"
+  | "opencodePlan"
   | "plan"
   | "read"
   | "shieldCheck"
@@ -219,7 +221,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Build",
         description: "Default build mode.",
         tone: "success",
-        icon: "build",
+        icon: "opencodeBuild",
         isDefault: true,
       },
       {
@@ -228,7 +230,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Plan",
         description: "Plan before applying changes.",
         tone: "accent",
-        icon: "plan",
+        icon: "opencodePlan",
       },
     ],
   },
