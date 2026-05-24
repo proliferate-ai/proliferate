@@ -281,12 +281,24 @@ export function organizationsListKey() {
   return [...organizationsRootKey(), "list"] as const;
 }
 
+export function currentTeamKey() {
+  return [...organizationsRootKey(), "current"] as const;
+}
+
 export function organizationMembersKey(organizationId: string | null) {
   return [...organizationsRootKey(), organizationId, "members"] as const;
 }
 
 export function organizationInvitationsKey(organizationId: string | null) {
   return [...organizationsRootKey(), organizationId, "invitations"] as const;
+}
+
+export function currentUserOrganizationInvitationsKey() {
+  return [...organizationsRootKey(), "current-user", "invitations"] as const;
+}
+
+export function currentTeamCheckoutKey() {
+  return [...cloudRootKey(), "billing", "team-checkout", "current"] as const;
 }
 
 export function cloudTargetsKey() {

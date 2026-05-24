@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 @dataclass(frozen=True)
@@ -205,6 +205,32 @@ class StripeWebhookAck(BillingBaseModel):
 
 class BillingUrlResponse(BillingBaseModel):
     url: str
+
+
+class TeamCheckoutRequest(BillingBaseModel):
+    team_name: str = Field(alias="teamName", min_length=1, max_length=255)
+    invite_emails: list[EmailStr] = Field(default_factory=list, alias="inviteEmails")
+
+
+class TeamCheckoutResponse(BillingBaseModel):
+    url: str
+    intent_id: str = Field(alias="intentId")
+
+
+class TeamCheckoutIntentResponse(BillingBaseModel):
+    id: str
+    organization_id: str = Field(alias="organizationId")
+    team_name: str = Field(alias="teamName")
+    status: str
+    activation_status: str = Field(alias="activationStatus")
+    activation_error_code: str | None = Field(default=None, alias="activationErrorCode")
+    activation_error_message: str | None = Field(default=None, alias="activationErrorMessage")
+    checkout_url: str | None = Field(default=None, alias="checkoutUrl")
+    expires_at: str = Field(alias="expiresAt")
+
+
+class CurrentTeamCheckoutResponse(BillingBaseModel):
+    intent: TeamCheckoutIntentResponse | None = None
 
 
 class BillingOwnerSelection(BillingBaseModel):

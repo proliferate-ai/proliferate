@@ -1,5 +1,5 @@
 import { Apple, CircleUserRound, CreditCard, Github, GitBranch, LifeBuoy, UsersRound } from "lucide-react";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import type { AuthProviderName } from "@proliferate/cloud-sdk";
@@ -17,7 +17,9 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   useAuthViewer,
-  useOrganizations,
+  useCurrentTeam,
+  useCurrentTeamCheckout,
+  useTeamCheckoutActions,
 } from "@proliferate/cloud-sdk-react";
 
 import { routes } from "../../../config/routes";
@@ -26,7 +28,7 @@ import { useAuthToken } from "../../../providers/WebCloudProvider";
 import { BillingSettingsSection } from "./BillingSettingsSection";
 import { EnvironmentsSettingsSection } from "./EnvironmentsSettingsSection";
 
-type SettingsSectionId = "account" | "environments" | "teams" | "billing" | "support";
+type SettingsSectionId = "account" | "environments" | "organization" | "teams" | "billing" | "support";
 const SETTINGS_ICON_SIZE = 14;
 
 export function SettingsScreen() {
@@ -34,7 +36,11 @@ export function SettingsScreen() {
   const { token, clearToken } = useAuthToken();
   const navigate = useNavigate();
   const { sectionId } = useParams();
-  const activeSection = isSettingsSectionId(sectionId) ? sectionId : "account";
+  const activeSection = sectionId === "teams"
+    ? "organization"
+    : isSettingsSectionId(sectionId)
+      ? sectionId
+      : "account";
   const [loadingProvider, setLoadingProvider] = useState<AuthProviderName | "sign-out" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,8 +89,8 @@ export function SettingsScreen() {
                 icon: <GitBranch size={SETTINGS_ICON_SIZE} />,
               },
               {
-                id: "teams",
-                label: "Teams",
+                id: "organization",
+                label: "Organization",
                 icon: <UsersRound size={SETTINGS_ICON_SIZE} />,
               },
               {
@@ -121,8 +127,8 @@ export function SettingsScreen() {
           />
         ) : activeSection === "environments" ? (
           <EnvironmentsSettingsSection />
-        ) : activeSection === "teams" ? (
-          <TeamsSection />
+        ) : activeSection === "organization" ? (
+          <OrganizationSection />
         ) : activeSection === "billing" ? (
           <BillingSettingsSection />
         ) : (
@@ -134,11 +140,14 @@ export function SettingsScreen() {
 }
 
 function isSettingsSectionId(value: string | undefined): value is SettingsSectionId {
-  return value === "account"
+  return (
+    value === "account"
     || value === "environments"
+    || value === "organization"
     || value === "teams"
     || value === "billing"
-    || value === "support";
+    || value === "support"
+  );
 }
 
 function AccountSection({ props }: { props: AccountSettingsPaneProps }) {
@@ -153,48 +162,118 @@ function AccountSection({ props }: { props: AccountSettingsPaneProps }) {
   );
 }
 
-function TeamsSection() {
-  const organizations = useOrganizations();
-  const organizationList = organizations.data?.organizations ?? [];
+function OrganizationSection() {
+  const currentTeam = useCurrentTeam();
+  const checkout = useCurrentTeamCheckout();
+  const checkoutActions = useTeamCheckoutActions();
+  const [teamName, setTeamName] = useState("");
+  const [inviteEmails, setInviteEmails] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  async function createTeam(event: FormEvent) {
+    event.preventDefault();
+    setActionError(null);
+    try {
+      const response = await checkoutActions.createTeamCheckout({
+        teamName,
+        inviteEmails: inviteEmails
+          .split(",")
+          .map((email) => email.trim())
+          .filter(Boolean),
+      });
+      window.location.assign(response.url);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Team checkout could not start.");
+    }
+  }
+
+  async function continueCheckout() {
+    const url = checkout.data?.intent?.checkoutUrl;
+    if (url) {
+      window.location.assign(url);
+    }
+  }
 
   return (
     <section className="space-y-6">
       <SettingsPageHeader
-        title="Teams"
-        description="Review organizations available to Web cloud sessions, shared environments, billing, and team automation scopes."
+        title="Organization"
+        description="Create or join one team for shared work, members, invites, shared sandbox setup, and Team billing."
       />
-      <SettingsCard>
-        {organizations.isLoading ? (
-          <SettingsCardRow label="Organizations" description="Loading teams..." />
-        ) : organizations.isError ? (
+      {actionError ? (
+        <SettingsCard>
+          <SettingsCardRow label="Action failed" description={actionError} />
+        </SettingsCard>
+      ) : null}
+      {checkout.data?.intent && !currentTeam.data ? (
+        <SettingsCard>
           <SettingsCardRow
-            label="Organizations"
-            description="Teams could not be loaded."
+            label={checkout.data.intent.teamName}
+            description="Team checkout is pending. Continue checkout or cancel setup."
           >
-            <ActionButton onClick={() => void organizations.refetch()}>Retry</ActionButton>
-          </SettingsCardRow>
-        ) : organizationList.length === 0 ? (
-          <SettingsCardRow
-            label="No teams"
-            description="You are not a member of any Proliferate organization yet."
-          />
-        ) : (
-          organizationList.map((organization) => {
-            const membership = organization.membership;
-            return (
-              <SettingsCardRow
-                key={organization.id}
-                label={organization.name}
-                description={membership
-                  ? `${membershipRoleLabel(membership.role)} - ${membershipStatusLabel(membership.status)}`
-                  : "No active membership"}
+            <div className="flex gap-2">
+              <ActionButton onClick={() => void continueCheckout()}>Continue</ActionButton>
+              <ActionButton
+                disabled={checkoutActions.cancelingTeamCheckout}
+                onClick={() => void checkoutActions.cancelTeamCheckout(checkout.data!.intent!.id)}
               >
-                <Badge tone={membership?.status === "active" ? "success" : "neutral"}>
-                  {membership?.role ?? "viewer"}
-                </Badge>
-              </SettingsCardRow>
-            );
-          })
+                Cancel
+              </ActionButton>
+            </div>
+          </SettingsCardRow>
+        </SettingsCard>
+      ) : null}
+      <SettingsCard>
+        {currentTeam.isLoading ? (
+          <SettingsCardRow label="Organization" description="Loading team..." />
+        ) : currentTeam.isError ? (
+          <SettingsCardRow
+            label="Organization"
+            description="Team could not be loaded."
+          >
+            <ActionButton onClick={() => void currentTeam.refetch()}>Retry</ActionButton>
+          </SettingsCardRow>
+        ) : currentTeam.data ? (
+          <SettingsCardRow
+            label={currentTeam.data.name}
+            description={currentTeam.data.membership
+              ? `${membershipRoleLabel(currentTeam.data.membership.role)} - ${membershipStatusLabel(currentTeam.data.membership.status)}`
+              : "Current team"}
+          >
+            <Badge tone={currentTeam.data.status === "active" ? "success" : "warning"}>
+              {currentTeam.data.status === "suspended" ? "Billing repair" : "Active"}
+            </Badge>
+          </SettingsCardRow>
+        ) : (
+          <div className="space-y-4 p-4">
+            <div className="space-y-1">
+              <h2 className="text-sm font-medium text-foreground">You are not in a team yet.</h2>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Create a team to invite people, manage shared work, and use org billing.
+              </p>
+            </div>
+            <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]" onSubmit={createTeam}>
+              <input
+                className="min-h-9 rounded-md border border-border-light bg-background px-3 text-sm"
+                placeholder="Team name"
+                value={teamName}
+                onChange={(event) => setTeamName(event.currentTarget.value)}
+              />
+              <input
+                className="min-h-9 rounded-md border border-border-light bg-background px-3 text-sm"
+                placeholder="Invite emails, comma separated"
+                value={inviteEmails}
+                onChange={(event) => setInviteEmails(event.currentTarget.value)}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!teamName.trim() || checkoutActions.creatingTeamCheckout}
+              >
+                Create team
+              </Button>
+            </form>
+          </div>
         )}
       </SettingsCard>
     </section>

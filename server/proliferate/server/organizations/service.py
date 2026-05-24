@@ -57,7 +57,6 @@ from proliferate.server.organizations.domain.profile import (
     OrganizationProfileIssue,
     clean_organization_name,
     default_organization_name,
-    derive_logo_domain_from_email,
     organization_name_issue,
     sanitize_logo_image,
 )
@@ -252,17 +251,20 @@ async def list_organizations(
     db: AsyncSession,
     actor_user: OrganizationActor,
 ) -> OrganizationMembershipRecords:
-    records = await organization_store.list_organizations_for_user(db, actor_user.id)
-    if records:
-        return records
-    records = await organization_store.ensure_default_organization_for_user(
-        db,
-        user_id=actor_user.id,
-        name=_default_organization_name(actor_user),
-        logo_domain=derive_logo_domain_from_email(actor_user.email),
-    )
-    if records:
-        await ensure_organization_billing_subject_state(db, records[0].organization.id)
+    try:
+        records = await organization_store.list_organizations_for_user(db, actor_user.id)
+    except RuntimeError as exc:
+        raise OrganizationServiceError(
+            "multiple_active_organizations",
+            "This account has multiple active teams. Contact support to repair membership state.",
+            status_code=409,
+        ) from exc
+    if len(records) > 1:
+        raise OrganizationServiceError(
+            "multiple_active_organizations",
+            "This account has multiple active teams. Contact support to repair membership state.",
+            status_code=409,
+        )
     return records
 
 
@@ -359,6 +361,12 @@ async def update_membership(
         raise OrganizationServiceError(
             error,
             "The last organization owner cannot be removed or downgraded.",
+            status_code=409,
+        )
+    if error == "already_in_organization":
+        raise OrganizationServiceError(
+            error,
+            "This user already belongs to another team.",
             status_code=409,
         )
     if membership is None:
@@ -511,6 +519,13 @@ async def list_invitations(
     return await invitation_store.list_organization_invitations(db, organization_id)
 
 
+async def list_current_user_invitations(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+) -> list[InvitationRecord]:
+    return await invitation_store.list_pending_invitations_for_email(db, actor_user.email)
+
+
 async def revoke_invitation(
     db: AsyncSession,
     actor_user: OrganizationActor,
@@ -564,6 +579,20 @@ async def accept_invitation(
         authenticated_email=actor_user.email,
     )
     if accepted is None:
+        if error == "already_in_organization":
+            current = await organization_store.get_current_membership_for_user(db, actor_user.id)
+            extra_detail: dict[str, object] = {}
+            if current is not None:
+                extra_detail["currentOrganization"] = {
+                    "id": str(current.organization.id),
+                    "name": current.organization.name,
+                }
+            raise OrganizationServiceError(
+                "already_in_organization",
+                "You already belong to a team. Leave your current team before joining this one.",
+                status_code=409,
+                extra_detail=extra_detail,
+            )
         status_code = 403 if error == "invitation_email_mismatch" else 404
         message = (
             "This invitation was sent to a different email address."

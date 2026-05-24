@@ -31,6 +31,7 @@ from proliferate.server.organizations.service import (
     create_invitation,
     create_invitation_landing_handoff,
     get_organization,
+    list_current_user_invitations,
     list_invitations,
     list_members,
     list_organizations,
@@ -66,6 +67,17 @@ async def accept_organization_invitation_endpoint(
     record = await accept_invitation(db, user, body.invite_handoff)
     return OrganizationInvitationAcceptResponse(
         organization=organization_with_membership_response(record),
+    )
+
+
+@router.get("/invitations/current", response_model=OrganizationInvitationsResponse)
+async def list_current_user_organization_invitations_endpoint(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> OrganizationInvitationsResponse:
+    invitations = await list_current_user_invitations(db, user)
+    return OrganizationInvitationsResponse(
+        invitations=[invitation_response(invitation) for invitation in invitations],
     )
 
 

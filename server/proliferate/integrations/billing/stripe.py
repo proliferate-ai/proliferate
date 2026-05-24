@@ -37,6 +37,7 @@ class StripeBillingError(RuntimeError):
 @dataclass(frozen=True)
 class StripeUrlResponse:
     url: str
+    id: str | None = None
 
 
 def _require_secret_key() -> str:
@@ -145,6 +146,8 @@ async def create_subscription_checkout_session(
     success_url: str,
     cancel_url: str,
     idempotency_key: str,
+    purpose: str = "cloud_subscription",
+    checkout_intent_id: str | None = None,
 ) -> StripeUrlResponse:
     data = [
         ("mode", "subscription"),
@@ -156,9 +159,9 @@ async def create_subscription_checkout_session(
         ("line_items[0][price]", cloud_monthly_price_id),
         ("line_items[0][quantity]", str(max(seat_quantity, 1))),
         ("metadata[billing_subject_id]", billing_subject_id),
-        ("metadata[purpose]", "cloud_subscription"),
+        ("metadata[purpose]", purpose),
         ("subscription_data[metadata][billing_subject_id]", billing_subject_id),
-        ("subscription_data[metadata][purpose]", "cloud_subscription"),
+        ("subscription_data[metadata][purpose]", purpose),
     ]
     if organization_id:
         data.extend(
@@ -172,6 +175,16 @@ async def create_subscription_checkout_session(
             [
                 ("metadata[created_by_user_id]", created_by_user_id),
                 ("subscription_data[metadata][created_by_user_id]", created_by_user_id),
+            ]
+        )
+    if checkout_intent_id:
+        data.extend(
+            [
+                ("metadata[organization_checkout_intent_id]", checkout_intent_id),
+                (
+                    "subscription_data[metadata][organization_checkout_intent_id]",
+                    checkout_intent_id,
+                ),
             ]
         )
     if overage_price_id:
@@ -192,7 +205,8 @@ async def create_subscription_checkout_session(
             "stripe_invalid_response",
             "Stripe did not return a checkout URL.",
         )
-    return StripeUrlResponse(url=url)
+    session_id = payload.get("id")
+    return StripeUrlResponse(url=url, id=session_id if isinstance(session_id, str) else None)
 
 
 async def create_refill_checkout_session(

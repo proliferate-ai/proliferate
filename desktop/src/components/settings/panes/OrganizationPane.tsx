@@ -5,9 +5,15 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Select } from "@/components/ui/Select";
+import { Input } from "@proliferate/ui/primitives/Input";
+import {
+  cancelTeamCheckout,
+  createTeamCheckoutSession,
+  getCurrentTeamCheckout,
+} from "@proliferate/cloud-sdk/client/billing";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
@@ -21,6 +27,7 @@ import { useOrganizationInvitations } from "@/hooks/access/cloud/organizations/u
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import {
   type OrganizationInvitationRecord,
   type OrganizationMemberRecord,
@@ -32,6 +39,7 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 
 const EMPTY_MEMBERS: OrganizationMemberRecord[] = [];
 const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
+const CURRENT_TEAM_CHECKOUT_QUERY_KEY = ["cloud", "billing", "team-checkout", "current"] as const;
 
 function readLogoImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -56,8 +64,9 @@ export function OrganizationPane() {
     activeOrganizationId,
     organizations,
     organizationsQuery,
-    setActiveOrganizationId,
   } = useActiveOrganization();
+  const { openExternal } = useTauriShellActions();
+  const queryClient = useQueryClient();
   const actions = useOrganizationActions(activeOrganizationId);
   const membersQuery = useOrganizationMembers(activeOrganizationId);
   const admin = useIsAdmin(activeOrganizationId);
@@ -72,7 +81,29 @@ export function OrganizationPane() {
   const [logoImageError, setLogoImageError] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
+  const [newTeamName, setNewTeamName] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const teamCheckoutQuery = useQuery({
+    queryKey: CURRENT_TEAM_CHECKOUT_QUERY_KEY,
+    queryFn: () => getCurrentTeamCheckout(),
+    enabled: authStatus === "authenticated",
+  });
+  const createTeamCheckoutMutation = useMutation({
+    mutationFn: (teamName: string) => createTeamCheckoutSession({
+      teamName,
+      inviteEmails: [],
+    }),
+    onSuccess: async (response) => {
+      await queryClient.invalidateQueries({ queryKey: CURRENT_TEAM_CHECKOUT_QUERY_KEY });
+      await openExternal(response.url);
+    },
+  });
+  const cancelTeamCheckoutMutation = useMutation({
+    mutationFn: (intentId: string) => cancelTeamCheckout(intentId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: CURRENT_TEAM_CHECKOUT_QUERY_KEY });
+    },
+  });
 
   useEffect(() => {
     if (!initialInviteHandoff) return;
@@ -88,7 +119,6 @@ export function OrganizationPane() {
       .then((response) => {
         if (cancelled) return;
         setStatusMessage(`Joined ${response.organization.name}.`);
-        setActiveOrganizationId(response.organization.id);
       })
       .catch(() => {
         if (cancelled) return;
@@ -100,7 +130,6 @@ export function OrganizationPane() {
   }, [
     actions.acceptInvitation,
     authStatus,
-    setActiveOrganizationId,
     transientInviteHandoff,
   ]);
 
@@ -141,6 +170,16 @@ export function OrganizationPane() {
     setInviteRole("member");
   }
 
+  async function handleCreateTeamCheckout(event: FormEvent) {
+    event.preventDefault();
+    setStatusMessage(null);
+    await createTeamCheckoutMutation.mutateAsync(newTeamName.trim());
+  }
+
+  async function handleContinueTeamCheckout(url: string) {
+    await openExternal(url);
+  }
+
   function updateMemberRole(membershipId: string, role: OrganizationRole) {
     void actions.updateMembership({
       membershipId,
@@ -169,29 +208,6 @@ export function OrganizationPane() {
 
       {unauthenticatedHandoff ? (
         <OrganizationNotice>Sign in, then reopen the invitation email link to accept it.</OrganizationNotice>
-      ) : null}
-
-      {organizations.length > 0 ? (
-        <SettingsCard>
-          <SettingsCardRow
-            label="Active organization"
-            description="Choose which organization to view and manage here."
-          >
-            <div className="w-56 max-w-full">
-              <Select
-                value={activeOrganizationId ?? ""}
-                onChange={(event) => setActiveOrganizationId(event.currentTarget.value || null)}
-                aria-label="Active organization"
-              >
-                {organizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </SettingsCardRow>
-        </SettingsCard>
       ) : null}
 
       {shouldShowSignInState ? (
@@ -232,9 +248,64 @@ export function OrganizationPane() {
       {shouldShowEmptyState ? (
         <OrganizationSection title="Membership">
           <SettingsCard>
-            <div className="p-4 text-sm text-muted-foreground">
-              Organization setup is still being prepared for this account.
-            </div>
+            {teamCheckoutQuery.data?.intent?.checkoutUrl ? (
+              <SettingsCardRow
+                label={teamCheckoutQuery.data.intent.teamName}
+                description="Team checkout is pending. Continue checkout or cancel setup."
+              >
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      void handleContinueTeamCheckout(teamCheckoutQuery.data!.intent!.checkoutUrl!);
+                    }}
+                  >
+                    Continue checkout
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    loading={cancelTeamCheckoutMutation.isPending}
+                    onClick={() => {
+                      void cancelTeamCheckoutMutation.mutateAsync(teamCheckoutQuery.data!.intent!.id);
+                    }}
+                  >
+                    Cancel setup
+                  </Button>
+                </div>
+              </SettingsCardRow>
+            ) : (
+              <form onSubmit={(event) => { void handleCreateTeamCheckout(event); }}>
+                <SettingsCardRow
+                  label="Create a Team"
+                  description="Start Team checkout to unlock members, shared cloud work, org billing, Slack work, and shared sandbox setup."
+                >
+                  <div className="flex w-full max-w-md flex-col gap-2 sm:flex-row sm:justify-end">
+                    <Input
+                      value={newTeamName}
+                      onChange={(event) => setNewTeamName(event.currentTarget.value)}
+                      placeholder="Team name"
+                      aria-label="Team name"
+                    />
+                    <Button
+                      type="submit"
+                      loading={createTeamCheckoutMutation.isPending}
+                      disabled={!newTeamName.trim()}
+                    >
+                      Create Team
+                    </Button>
+                  </div>
+                </SettingsCardRow>
+                {createTeamCheckoutMutation.error ? (
+                  <div className="border-t border-border-light p-4 text-sm text-destructive">
+                    {createTeamCheckoutMutation.error instanceof Error
+                      ? createTeamCheckoutMutation.error.message
+                      : "Team checkout could not start."}
+                  </div>
+                ) : null}
+              </form>
+            )}
           </SettingsCard>
         </OrganizationSection>
       ) : null}

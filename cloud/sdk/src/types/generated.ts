@@ -89,8 +89,16 @@ export type OrganizationMembershipUpdateRequest =
   components["schemas"]["OrganizationMembershipUpdateRequest"];
 export type OrganizationInvitationAcceptRequest =
   components["schemas"]["OrganizationInvitationAcceptRequest"];
-export type OrganizationResponse = components["schemas"]["OrganizationResponse"];
-export type OrganizationListResponse = components["schemas"]["OrganizationListResponse"];
+export type OrganizationStatus = "pending_checkout" | "active" | "suspended" | "archived";
+export type OrganizationResponse = components["schemas"]["OrganizationResponse"] & {
+  status: OrganizationStatus;
+};
+export type OrganizationListResponse = Omit<
+  components["schemas"]["OrganizationListResponse"],
+  "organizations"
+> & {
+  organizations: OrganizationResponse[];
+};
 export type OrganizationMemberResponse =
   components["schemas"]["OrganizationMemberResponse"];
 export type OrganizationMembersResponse =
@@ -103,6 +111,28 @@ export type OrganizationInvitationsResponse =
   components["schemas"]["OrganizationInvitationsResponse"];
 export type OrganizationInvitationAcceptResponse =
   components["schemas"]["OrganizationInvitationAcceptResponse"];
+export interface TeamCheckoutRequest {
+  teamName: string;
+  inviteEmails?: string[];
+}
+export interface TeamCheckoutResponse {
+  url: string;
+  intentId: string;
+}
+export interface TeamCheckoutIntentResponse {
+  id: string;
+  organizationId: string;
+  teamName: string;
+  status: string;
+  activationStatus: string;
+  activationErrorCode?: string | null;
+  activationErrorMessage?: string | null;
+  checkoutUrl?: string | null;
+  expiresAt: string;
+}
+export interface CurrentTeamCheckoutResponse {
+  intent?: TeamCheckoutIntentResponse | null;
+}
 export type CloudWorkspaceSummary = Omit<
   components["schemas"]["WorkspaceSummary"],
   | "status"

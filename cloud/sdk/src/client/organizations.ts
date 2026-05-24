@@ -16,7 +16,14 @@ import type {
 export async function listOrganizations(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<OrganizationListResponse> {
-  return (await client.GET("/v1/organizations")).data!;
+  return (await client.GET("/v1/organizations")).data! as OrganizationListResponse;
+}
+
+export async function getCurrentTeam(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<OrganizationResponse | null> {
+  const response = await listOrganizations(client);
+  return response.organizations[0] ?? null;
 }
 
 export async function updateOrganization(
@@ -28,7 +35,7 @@ export async function updateOrganization(
       params: { path: { organization_id: organizationId } },
       body: input,
     })
-  ).data!;
+  ).data! as OrganizationResponse;
 }
 
 export async function listOrganizationMembers(
@@ -81,6 +88,12 @@ export async function listOrganizationInvitations(
       params: { path: { organization_id: organizationId } },
     })
   ).data!;
+}
+
+export async function listCurrentUserOrganizationInvitations(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<OrganizationInvitationsResponse> {
+  return (await (client as any).GET("/v1/organizations/invitations/current")).data!;
 }
 
 export async function createOrganizationInvitation(

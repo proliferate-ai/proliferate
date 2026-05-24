@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from base64 import b64encode
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -10,7 +11,13 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CLOUD_WORKER_TOKEN_DOMAIN
+from proliferate.constants.organizations import (
+    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_ROLE_OWNER,
+    ORGANIZATION_STATUS_ACTIVE,
+)
 from proliferate.db.models.auth import OAuthAccount, User
+from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
@@ -61,6 +68,31 @@ async def _create_user_and_get_tokens(
 
 def _headers(tokens: dict[str, str]) -> dict[str, str]:
     return {"Authorization": f"Bearer {tokens['access_token']}"}
+
+
+async def _create_organization_for_user(db_session: AsyncSession, user_id: str) -> str:
+    now = datetime.now(UTC)
+    organization = Organization(
+        name="Agent Auth Team",
+        status=ORGANIZATION_STATUS_ACTIVE,
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(organization)
+    await db_session.flush()
+    db_session.add(
+        OrganizationMembership(
+            organization_id=organization.id,
+            user_id=UUID(user_id),
+            role=ORGANIZATION_ROLE_OWNER,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.commit()
+    return str(organization.id)
 
 
 def _claude_file_payload(api_key: str) -> dict[str, object]:
@@ -711,9 +743,7 @@ async def test_managed_credits_route_uses_server_entitlement_budget(
         email="agent-auth-managed-credits@example.com",
     )
 
-    organizations = await client.get("/v1/organizations", headers=_headers(tokens))
-    assert organizations.status_code == 200
-    organization_id = organizations.json()["organizations"][0]["id"]
+    organization_id = await _create_organization_for_user(db_session, tokens["user_id"])
 
     response = await client.post(
         f"/v1/cloud/organizations/{organization_id}/agent-auth/managed-credits",
@@ -778,8 +808,7 @@ async def test_managed_credits_use_global_litellm_model_deployment(
         email="agent-auth-managed-credits-litellm@example.com",
     )
 
-    organizations = await client.get("/v1/organizations", headers=_headers(tokens))
-    organization_id = organizations.json()["organizations"][0]["id"]
+    organization_id = await _create_organization_for_user(db_session, tokens["user_id"])
 
     response = await client.post(
         f"/v1/cloud/organizations/{organization_id}/agent-auth/managed-credits",

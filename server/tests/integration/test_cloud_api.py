@@ -15,6 +15,8 @@ from proliferate.constants.billing import BILLING_MODE_OBSERVE
 from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_ROLE_MEMBER,
+    ORGANIZATION_ROLE_OWNER,
+    ORGANIZATION_STATUS_ACTIVE,
 )
 from proliferate.db.models.auth import OAuthAccount
 from proliferate.db.models.cloud.mcp import CloudMcpConnection, CloudMcpConnectionAuth
@@ -22,7 +24,7 @@ from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.cloud.worktree_policy import CloudWorktreeRetentionPolicy
-from proliferate.db.models.organizations import OrganizationMembership
+from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.cloud_mcp.auth import (
     update_connection_auth_if_version,
     upsert_connection_auth,
@@ -166,6 +168,31 @@ async def _link_secondary_account(db_session: AsyncSession, user_id: str) -> Non
     )
     db_session.add(account)
     await db_session.commit()
+
+
+async def _create_organization_for_user(db_session: AsyncSession, user_id: str) -> str:
+    now = datetime.now(UTC)
+    organization = Organization(
+        name="Cloud Test Team",
+        status=ORGANIZATION_STATUS_ACTIVE,
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(organization)
+    await db_session.flush()
+    db_session.add(
+        OrganizationMembership(
+            organization_id=organization.id,
+            user_id=uuid.UUID(user_id),
+            role=ORGANIZATION_ROLE_OWNER,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.commit()
+    return str(organization.id)
 
 
 async def _list_mcp_connections(
@@ -714,9 +741,7 @@ class TestCloudRepoConfig:
         assert record.default_branch == "release"
         assert record.run_command == "make dev"
 
-        organizations_response = await client.get("/v1/organizations", headers=headers)
-        assert organizations_response.status_code == 200
-        organization_id = organizations_response.json()["organizations"][0]["id"]
+        organization_id = await _create_organization_for_user(db_session, session["user_id"])
 
         organization_save_response = await client.put(
             (f"/v1/cloud/organizations/{organization_id}/repos/proliferate-ai/proliferate/config"),

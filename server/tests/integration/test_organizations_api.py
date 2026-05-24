@@ -2,11 +2,19 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from proliferate.auth.authorization import OwnerSelection
+from proliferate.constants.organizations import (
+    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_ROLE_OWNER,
+    ORGANIZATION_STATUS_ACTIVE,
+)
+from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.server.organizations import service as organization_service
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
@@ -55,6 +63,43 @@ def _headers(tokens: dict[str, str]) -> dict[str, str]:
     return {"Authorization": f"Bearer {tokens['access_token']}"}
 
 
+async def _create_organization_for_user(
+    *,
+    user_id: str,
+    name: str = "Acme",
+    logo_domain: str | None = "acme.dev",
+) -> dict[str, str]:
+    from proliferate.db import engine as engine_module
+
+    async with engine_module.async_session_factory() as session:
+        now = datetime.now(UTC)
+        organization = Organization(
+            name=name,
+            logo_domain=logo_domain,
+            status=ORGANIZATION_STATUS_ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(organization)
+        await session.flush()
+        membership = OrganizationMembership(
+            organization_id=organization.id,
+            user_id=uuid.UUID(user_id),
+            role=ORGANIZATION_ROLE_OWNER,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            removed_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(membership)
+        await session.commit()
+        return {
+            "organization_id": str(organization.id),
+            "membership_id": str(membership.id),
+        }
+
+
 async def _default_organization(client: AsyncClient, tokens: dict[str, str]) -> dict[str, object]:
     response = await client.get("/v1/organizations", headers=_headers(tokens))
     assert response.status_code == 200
@@ -68,7 +113,7 @@ def _token_sequence(tokens: list[str]) -> Iterator[str]:
 
 
 @pytest.mark.asyncio
-async def test_default_organization_member_list_and_last_owner_protection(
+async def test_organization_member_list_and_last_owner_protection(
     client: AsyncClient,
 ) -> None:
     owner = await _create_user_and_get_tokens(
@@ -76,6 +121,7 @@ async def test_default_organization_member_list_and_last_owner_protection(
         email="owner@acme.dev",
         display_name="Owner User",
     )
+    await _create_organization_for_user(user_id=owner["user_id"])
 
     created = await _default_organization(client, owner)
     assert created["name"] == "Acme"
@@ -119,6 +165,24 @@ async def test_default_organization_member_list_and_last_owner_protection(
 
 
 @pytest.mark.asyncio
+async def test_list_organizations_has_no_creation_side_effect(
+    client: AsyncClient,
+) -> None:
+    user = await _create_user_and_get_tokens(client, email="no-team@acme.dev")
+
+    response = await client.get("/v1/organizations", headers=_headers(user))
+
+    assert response.status_code == 200
+    assert response.json() == {"organizations": []}
+
+    from proliferate.db import engine as engine_module
+
+    async with engine_module.async_session_factory() as session:
+        organization_count = await session.scalar(select(Organization).limit(1))
+    assert organization_count is None
+
+
+@pytest.mark.asyncio
 async def test_resolve_owner_context_uses_threaded_db(
     client: AsyncClient,
 ) -> None:
@@ -127,6 +191,7 @@ async def test_resolve_owner_context_uses_threaded_db(
         email="owner@acme.dev",
         display_name="Owner User",
     )
+    await _create_organization_for_user(user_id=owner["user_id"])
     organization = await _default_organization(client, owner)
     organization_id = uuid.UUID(str(organization["id"]))
 
@@ -175,6 +240,7 @@ async def test_admin_cannot_modify_existing_owner(
     generated_tokens = _token_sequence(["raw-invite-token", "handoff-token"])
     monkeypatch.setattr(organization_service, "_new_token", lambda: next(generated_tokens))
 
+    await _create_organization_for_user(user_id=owner["user_id"])
     organization = await _default_organization(client, owner)
     organization_id = organization["id"]
     owner_membership_id = organization["membership"]["id"]
@@ -219,6 +285,7 @@ async def test_user_cannot_modify_or_remove_own_membership(
     generated_tokens = _token_sequence(["raw-invite-token", "handoff-token"])
     monkeypatch.setattr(organization_service, "_new_token", lambda: next(generated_tokens))
 
+    await _create_organization_for_user(user_id=first_owner["user_id"])
     organization = await _default_organization(client, first_owner)
     organization_id = organization["id"]
 
@@ -270,6 +337,7 @@ async def test_invitation_handoff_accepts_matching_email_and_rejects_replay(
     generated_tokens = _token_sequence(["raw-invite-token", "handoff-token"])
     monkeypatch.setattr(organization_service, "_new_token", lambda: next(generated_tokens))
 
+    await _create_organization_for_user(user_id=owner["user_id"])
     organization_id = (await _default_organization(client, owner))["id"]
 
     response = await client.post(
@@ -310,6 +378,52 @@ async def test_invitation_handoff_accepts_matching_email_and_rejects_replay(
 
 
 @pytest.mark.asyncio
+async def test_invitation_accept_conflicts_when_user_already_has_team(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner = await _create_user_and_get_tokens(client, email="owner-conflict@acme.dev")
+    invited = await _create_user_and_get_tokens(client, email="already-in-team@acme.dev")
+
+    generated_tokens = _token_sequence(["raw-invite-token", "handoff-token"])
+    monkeypatch.setattr(organization_service, "_new_token", lambda: next(generated_tokens))
+
+    await _create_organization_for_user(user_id=owner["user_id"], name="Inviting Team")
+    await _create_organization_for_user(user_id=invited["user_id"], name="Existing Team")
+    organization_id = (await _default_organization(client, owner))["id"]
+
+    response = await client.post(
+        f"/v1/organizations/{organization_id}/invitations",
+        headers=_headers(owner),
+        json={"email": "already-in-team@acme.dev", "role": "member"},
+    )
+    assert response.status_code == 201
+
+    response = await client.get(
+        "/v1/organizations/invitations/landing",
+        params={"token": "raw-invite-token"},
+    )
+    assert response.status_code == 200
+
+    response = await client.post(
+        "/v1/organizations/invitations/accept",
+        headers=_headers(invited),
+        json={"inviteHandoff": "handoff-token"},
+    )
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "already_in_organization"
+    assert detail["currentOrganization"]["name"] == "Existing Team"
+
+    response = await client.get(
+        f"/v1/organizations/{organization_id}/invitations",
+        headers=_headers(owner),
+    )
+    assert response.status_code == 200
+    assert response.json()["invitations"][0]["status"] == "pending"
+
+
+@pytest.mark.asyncio
 async def test_invitation_accept_requires_matching_authenticated_email(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -320,6 +434,7 @@ async def test_invitation_accept_requires_matching_authenticated_email(
     generated_tokens = _token_sequence(["raw-invite-token", "handoff-token"])
     monkeypatch.setattr(organization_service, "_new_token", lambda: next(generated_tokens))
 
+    await _create_organization_for_user(user_id=owner["user_id"])
     organization_id = (await _default_organization(client, owner))["id"]
 
     response = await client.post(

@@ -16,6 +16,7 @@ from proliferate.db.store.organization_records import (
 
 OrganizationRole = Literal["owner", "admin", "member"]
 OrganizationMembershipStatus = Literal["active", "removed"]
+OrganizationStatus = Literal["pending_checkout", "active", "suspended", "archived"]
 OrganizationInvitationStatus = Literal["pending", "accepted", "revoked", "expired"]
 OrganizationInvitationDeliveryStatus = Literal["pending", "sent", "failed", "skipped"]
 OwnerScope = Literal["personal", "organization"]
@@ -62,6 +63,7 @@ class OrganizationMembershipResponse(OrganizationBaseModel):
 class OrganizationResponse(OrganizationBaseModel):
     id: str
     name: str
+    status: OrganizationStatus = "active"
     logo_domain: str | None = Field(default=None, alias="logoDomain")
     logo_image: str | None = Field(default=None, alias="logoImage")
     membership: OrganizationMembershipResponse | None = None
@@ -135,6 +137,7 @@ def organization_response(
     return OrganizationResponse(
         id=str(organization.id),
         name=organization.name,
+        status=organization.status,  # type: ignore[arg-type]
         logo_domain=organization.logo_domain,
         logo_image=organization.logo_image,
         membership=membership_response(membership) if membership is not None else None,
