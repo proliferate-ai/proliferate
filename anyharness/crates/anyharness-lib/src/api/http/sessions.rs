@@ -883,10 +883,17 @@ pub async fn list_sessions(
         }
         _ => query.workspace_id.as_deref(),
     };
+    let include_dismissed = query.include_dismissed.unwrap_or(false);
     let records = state
         .session_service
-        .list_sessions(workspace_id, query.include_dismissed.unwrap_or(false))
+        .list_sessions(workspace_id, include_dismissed)
         .map_err(|e| ApiError::internal(e.to_string()))?;
+    tracing::debug!(
+        workspace_id = workspace_id.unwrap_or("<all>"),
+        include_dismissed,
+        session_count = records.len(),
+        "session.http.list.completed"
+    );
     let mut sessions = Vec::with_capacity(records.len());
     for record in &records {
         sessions.push(session_to_contract(&state, record).await?);
@@ -963,7 +970,7 @@ pub async fn list_session_events(
             "UNSUPPORTED_EVENT_HISTORY_WINDOW",
         ));
     }
-    tracing::info!(
+    tracing::debug!(
         session_id = %session_id,
         after_seq,
         before_seq,
@@ -1009,20 +1016,37 @@ pub async fn list_session_events(
         })
         .collect();
 
-    tracing::info!(
-        session_id = %session_id,
-        event_count = envelopes.len(),
-        after_seq,
-        before_seq,
-        limit,
-        turn_limit,
-        elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
-        "[workspace-latency] session.http.events.completed"
-    );
+    if envelopes.is_empty() {
+        tracing::debug!(
+            session_id = %session_id,
+            event_count = envelopes.len(),
+            after_seq,
+            before_seq,
+            limit,
+            turn_limit,
+            elapsed_ms = started.elapsed().as_millis(),
+            flow_id = latency_fields.flow_id,
+                flow_kind = latency_fields.flow_kind,
+                flow_source = latency_fields.flow_source,
+                prompt_id = latency_fields.prompt_id,
+            "[workspace-latency] session.http.events.completed"
+        );
+    } else {
+        tracing::info!(
+            session_id = %session_id,
+            event_count = envelopes.len(),
+            after_seq,
+            before_seq,
+            limit,
+            turn_limit,
+            elapsed_ms = started.elapsed().as_millis(),
+            flow_id = latency_fields.flow_id,
+                flow_kind = latency_fields.flow_kind,
+                flow_source = latency_fields.flow_source,
+                prompt_id = latency_fields.prompt_id,
+            "[workspace-latency] session.http.events.completed"
+        );
+    }
 
     Ok(Json(envelopes))
 }

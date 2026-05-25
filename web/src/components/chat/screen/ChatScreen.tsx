@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   desktopWorkspaceDeepLink,
   getCommandStatus,
@@ -90,6 +90,7 @@ const EMPTY_PENDING_INTERACTIONS: CloudPendingInteraction[] = [];
 export function ChatScreen() {
   const { workspaceId, chatId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const client = useCloudClient();
   const [draft, setDraft] = useState("");
   const [launchSelection, setLaunchSelection] = useState<CloudLaunchComposerSelection>({
@@ -123,6 +124,7 @@ export function ChatScreen() {
     () => [...(snapshot?.sessions ?? [])].sort(compareSessions),
     [snapshot?.sessions],
   );
+  const suppressSessionRedirect = shouldSuppressWorkspaceSessionRedirect(location.state);
   const session = chatId
     ? sessions.find((candidate) => candidate.sessionId === chatId) ?? null
     : null;
@@ -273,6 +275,31 @@ export function ChatScreen() {
       window.clearInterval(interval);
     };
   }, [workspace, workspaceStatus, workspaceId, workspaceQuery.refetch]);
+
+  useEffect(() => {
+    if (
+      !workspaceId
+      || chatId
+      || pendingHomePrompt
+      || directPromptDispatching
+      || suppressSessionRedirect
+    ) {
+      return;
+    }
+    const latestSession = sessions[0];
+    if (!latestSession) {
+      return;
+    }
+    navigate(routes.chat(workspaceId, latestSession.sessionId), { replace: true });
+  }, [
+    chatId,
+    directPromptDispatching,
+    navigate,
+    pendingHomePrompt,
+    sessions,
+    suppressSessionRedirect,
+    workspaceId,
+  ]);
 
   useEffect(() => {
     if (!pendingHomePrompt || !workspace) {
@@ -982,7 +1009,9 @@ export function ChatScreen() {
           id: "new-session",
           label: "New chat",
           kind: "new-session",
-          onClick: () => navigate(routes.workspace(workspace.id)),
+          onClick: () => navigate(routes.workspace(workspace.id), {
+            state: { startNewSession: true },
+          }),
         }]
         : []}
       topNotice={isUnclaimed
@@ -1036,6 +1065,15 @@ function MissingState({ title }: { title: string }) {
 
 function compareSessions(left: CloudSessionProjection, right: CloudSessionProjection): number {
   return (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
+}
+
+function shouldSuppressWorkspaceSessionRedirect(state: unknown): boolean {
+  return Boolean(
+    state
+      && typeof state === "object"
+      && "startNewSession" in state
+      && (state as { startNewSession?: unknown }).startNewSession === true,
+  );
 }
 
 function effectiveWorkspaceStatus(

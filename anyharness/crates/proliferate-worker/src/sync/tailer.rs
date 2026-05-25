@@ -93,14 +93,23 @@ async fn reconcile_projection_cursors(
         .exposures
         .first()
         .map(|snapshot| snapshot.cloud_workspace_id.as_str());
+    let exposure_count = response.exposures.len();
+    let workspace_exposure_count = response
+        .exposures
+        .iter()
+        .filter(|snapshot| snapshot.anyharness_session_id.is_none())
+        .count();
     let cursors = response
         .exposures
         .iter()
         .filter_map(projection_cursor_upsert)
         .collect::<Vec<_>>();
+    let session_cursor_count = cursors.len();
     store.reconcile_projection_cursors(&cursors)?;
     debug!(
-        active_exposure_count = cursors.len(),
+        exposure_count,
+        workspace_exposure_count,
+        session_cursor_count,
         max_revision,
         first_target_id,
         first_cloud_workspace_id,
@@ -170,6 +179,15 @@ async fn discover_workspace_sessions_for_exposure(
         .filter(|session| session.workspace_id == workspace_id)
         .filter(|session| !known_sessions.contains(&session.id))
         .count();
+    debug!(
+        exposure_id = %exposure.exposure_id,
+        cloud_workspace_id = %exposure.cloud_workspace_id,
+        workspace_id,
+        snapshot_session_count = snapshot.sessions.len(),
+        known_session_count = known_sessions.len(),
+        missing_session_count,
+        "worker checked exposed workspace for unmapped sessions"
+    );
     if missing_session_count == 0 {
         return Ok(());
     }
@@ -218,6 +236,19 @@ async fn sync_projection_cursor(
     if events.is_empty() {
         return Ok(());
     }
+    let event_count = events.len();
+    let first_seq = events.first().map(|event| event.seq);
+    let last_seq = events.last().map(|event| event.seq);
+    info!(
+        exposure_id = %cursor.exposure_id,
+        session_projection_id = %cursor.session_projection_id,
+        session_id = %cursor.anyharness_session_id,
+        last_uploaded_seq = cursor.last_uploaded_seq,
+        event_count,
+        first_seq = ?first_seq,
+        last_seq = ?last_seq,
+        "worker fetched anyharness events for projection cursor"
+    );
     if let Some(gap) = first_sequence_gap(cursor.last_uploaded_seq, &events) {
         let response = cloud
             .report_projection_gap(
@@ -253,14 +284,20 @@ async fn sync_projection_cursor(
             .map(|event| worker_event(cursor, event))
             .collect(),
     };
+    let upload_event_count = request.events.len();
     let response = cloud
         .upload_event_batch(&identity.worker_token, &request)
         .await?;
-    debug!(
+    let session_ack_count = response.session_acks.len();
+    info!(
+        exposure_id = %cursor.exposure_id,
+        session_projection_id = %cursor.session_projection_id,
+        session_id = %cursor.anyharness_session_id,
+        event_count = upload_event_count,
         accepted_events = response.accepted_events,
         duplicate_events = response.duplicate_events,
         live_only_events = response.live_only_events,
-        session_ack_count = response.session_acks.len(),
+        session_ack_count,
         "uploaded worker event batch"
     );
     for ack in response.session_acks {

@@ -23,6 +23,7 @@ from proliferate.server.cloud.backfill.models import (
     WorkerBackfillWorkspace,
     WorkerBackfillWorkspaceMapping,
 )
+from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.worker.domain.rules import compact_json
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
@@ -55,6 +56,13 @@ async def record_worker_backfill(
             status_code=401,
         )
     await require_current_managed_worker_slot(db, auth=auth, target=target)
+    log_cloud_event(
+        "cloud worker backfill received",
+        target_id=auth.target_id,
+        worker_id=auth.worker_id,
+        workspace_count=len(body.workspaces),
+        session_count=len(body.sessions),
+    )
     billing_subject = (
         await ensure_organization_billing_subject(db, target.organization_id)
         if target.owner_scope == "organization" and target.organization_id is not None
@@ -62,6 +70,8 @@ async def record_worker_backfill(
     )
     workspace_mappings: dict[str, UUID] = {}
     mapped_workspaces: list[WorkerBackfillWorkspaceMapping] = []
+    skipped_workspace_missing_mapping = 0
+    skipped_workspace_inactive_exposure = 0
     for workspace in body.workspaces:
         existing_cloud_workspace_id = await events_store.resolve_cloud_workspace_id(
             db,
@@ -69,6 +79,7 @@ async def record_worker_backfill(
             workspace_id=workspace.workspace_id,
         )
         if existing_cloud_workspace_id is None:
+            skipped_workspace_missing_mapping += 1
             continue
         exposure = await exposures_store.get_active_workspace_exposure(
             db,
@@ -80,6 +91,7 @@ async def record_worker_backfill(
             or exposure.status != "active"
             or exposure.anyharness_workspace_id != workspace.workspace_id
         ):
+            skipped_workspace_inactive_exposure += 1
             continue
         repo = _normalize_repo(workspace)
         mapped = await backfill_store.upsert_synced_workspace(
@@ -109,6 +121,8 @@ async def record_worker_backfill(
         )
 
     mapped_sessions: list[WorkerBackfillSessionMapping] = []
+    skipped_session_missing_cloud_workspace = 0
+    skipped_session_inactive_exposure = 0
     for session in body.sessions:
         cloud_workspace_id = workspace_mappings.get(session.workspace_id or "")
         if cloud_workspace_id is None:
@@ -117,18 +131,20 @@ async def record_worker_backfill(
                 target_id=auth.target_id,
                 workspace_id=session.workspace_id,
             )
-        exposure = None
-        if cloud_workspace_id is not None:
-            exposure = await exposures_store.get_active_workspace_exposure(
-                db,
-                target_id=auth.target_id,
-                cloud_workspace_id=cloud_workspace_id,
-            )
+        if cloud_workspace_id is None:
+            skipped_session_missing_cloud_workspace += 1
+            continue
+        exposure = await exposures_store.get_active_workspace_exposure(
+            db,
+            target_id=auth.target_id,
+            cloud_workspace_id=cloud_workspace_id,
+        )
         if (
             exposure is None
             or exposure.status != "active"
             or exposure.anyharness_workspace_id != session.workspace_id
         ):
+            skipped_session_inactive_exposure += 1
             continue
         projection = await events_store.upsert_session_projection(
             db,
@@ -195,6 +211,19 @@ async def record_worker_backfill(
                 ),
             )
         )
+    log_cloud_event(
+        "cloud worker backfill mapped",
+        target_id=auth.target_id,
+        worker_id=auth.worker_id,
+        received_workspace_count=len(body.workspaces),
+        mapped_workspace_count=len(mapped_workspaces),
+        skipped_workspace_missing_mapping=skipped_workspace_missing_mapping,
+        skipped_workspace_inactive_exposure=skipped_workspace_inactive_exposure,
+        received_session_count=len(body.sessions),
+        mapped_session_count=len(mapped_sessions),
+        skipped_session_missing_cloud_workspace=skipped_session_missing_cloud_workspace,
+        skipped_session_inactive_exposure=skipped_session_inactive_exposure,
+    )
     return WorkerBackfillResponse(
         mapped_workspaces=mapped_workspaces,
         mapped_sessions=mapped_sessions,

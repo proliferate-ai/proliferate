@@ -17,6 +17,7 @@ from proliferate.server.cloud.claims.access import (
     load_workspace_exposure_and_claim,
     require_workspace_view,
 )
+from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.events.domain.cursors import advance_contiguous_cursor
 from proliferate.server.cloud.events.domain.payload_policy import retained_payload
@@ -347,6 +348,18 @@ async def ingest_worker_event_batch(
     if slack_outbound_queued:
         db_engine.defer_after_commit(db, process_due_outbound_messages)
 
+    log_cloud_event(
+        "cloud worker event batch ingested",
+        target_id=auth.target_id,
+        worker_id=auth.worker_id,
+        event_count=len(body.events),
+        session_count=len(processed_by_session),
+        first_session_id=body.events[0].session_id if body.events else None,
+        accepted_events=accepted_events,
+        duplicate_events=duplicate_events,
+        live_only_events=live_only_events,
+        session_ack_count=len(session_acks),
+    )
     return WorkerEventBatchResponse(
         accepted_events=accepted_events,
         duplicate_events=duplicate_events,

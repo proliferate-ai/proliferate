@@ -127,7 +127,6 @@ async function startSessionForPrompt(args: {
   const command = await args.enqueueStartSession({
     idempotencyKey: `${args.pendingPrompt.id}:start-session`,
     targetId,
-    workspaceId: anyharnessWorkspaceId,
     cloudWorkspaceId: args.workspace.id,
     kind: "start_session",
     source: "web",

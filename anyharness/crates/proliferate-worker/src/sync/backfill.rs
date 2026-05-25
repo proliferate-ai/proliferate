@@ -40,14 +40,46 @@ pub async fn backfill_exposed_workspace(
     identity: &WorkerIdentity,
     workspace_id: Option<&str>,
 ) -> Result<BackfillResult, WorkerError> {
+    info!(
+        workspace_id = workspace_id.unwrap_or("<all>"),
+        "worker backfill starting"
+    );
     let snapshot = anyharness.backfill_snapshot(workspace_id).await?;
     let request = backfill_request(&snapshot);
+    let requested_workspace_count = request.workspaces.len();
+    let requested_session_count = request.sessions.len();
+    let chunks = backfill_chunks(request);
+    let chunk_count = chunks.len();
+    info!(
+        workspace_id = workspace_id.unwrap_or("<all>"),
+        requested_workspace_count,
+        requested_session_count,
+        chunk_count,
+        "worker backfill snapshot prepared"
+    );
     let mut mapped_workspace_count = 0;
     let mut mapped_session_count = 0;
-    for chunk in backfill_chunks(request) {
+    for (chunk_index, chunk) in chunks.into_iter().enumerate() {
+        let chunk_workspace_count = chunk.workspaces.len();
+        let chunk_session_count = chunk.sessions.len();
+        info!(
+            workspace_id = workspace_id.unwrap_or("<all>"),
+            chunk_index,
+            chunk_count,
+            chunk_workspace_count,
+            chunk_session_count,
+            "worker backfill uploading chunk"
+        );
         let response = cloud
             .upload_backfill(&identity.worker_token, &chunk)
             .await?;
+        info!(
+            workspace_id = workspace_id.unwrap_or("<all>"),
+            chunk_index,
+            mapped_workspace_count = response.mapped_workspaces.len(),
+            mapped_session_count = response.mapped_sessions.len(),
+            "worker backfill chunk mapped"
+        );
         let workspace_mappings = response
             .mapped_workspaces
             .iter()
@@ -68,8 +100,12 @@ pub async fn backfill_exposed_workspace(
         mapped_session_count += response.mapped_sessions.len();
     }
     info!(
+        workspace_id = workspace_id.unwrap_or("<all>"),
+        requested_workspace_count,
+        requested_session_count,
         mapped_workspace_count,
-        mapped_session_count, "worker backfill completed"
+        mapped_session_count,
+        "worker backfill completed"
     );
     Ok(BackfillResult {
         mapped_workspace_count,

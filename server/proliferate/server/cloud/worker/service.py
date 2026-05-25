@@ -33,6 +33,7 @@ from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
 from proliferate.server.cloud.commands import service as command_service
+from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.events.models import (
     WorkerEventBatchRequest,
@@ -904,6 +905,18 @@ async def lease_worker_command(
         now=now,
     )
     if command is not None:
+        log_cloud_event(
+            "cloud worker command leased",
+            command_id=command.id,
+            target_id=auth.target_id,
+            worker_id=auth.worker_id,
+            kind=command.kind,
+            workspace_id=command.workspace_id,
+            session_id=command.session_id,
+            cloud_workspace_id=command.cloud_workspace_id,
+            attempt_count=command.attempt_count,
+            lease_expires_at=command.lease_expires_at,
+        )
         await publish_command_status_after_commit(db, command)
         # Workers report delivery immediately after receiving a lease. The lease
         # must be committed before the HTTP response is returned, otherwise the
@@ -952,6 +965,18 @@ async def record_command_delivery(
             "Command is not leased by this worker.",
             status_code=404,
         )
+    log_cloud_event(
+        "cloud worker command delivery recorded",
+        command_id=command.id,
+        target_id=auth.target_id,
+        worker_id=auth.worker_id,
+        kind=command.kind,
+        status=command.status,
+        error_code=command.error_code,
+        workspace_id=command.workspace_id,
+        session_id=command.session_id,
+        cloud_workspace_id=command.cloud_workspace_id,
+    )
     await publish_command_status_after_commit(db, command)
     return WorkerCommandStatusResponse(
         command_id=str(command.id),
@@ -1076,6 +1101,18 @@ async def record_command_result(
             "Command is not leased by this worker.",
             status_code=404,
         )
+    log_cloud_event(
+        "cloud worker command result recorded",
+        command_id=command.id,
+        target_id=auth.target_id,
+        worker_id=auth.worker_id,
+        kind=command.kind,
+        status=command.status,
+        error_code=command.error_code,
+        workspace_id=command.workspace_id,
+        session_id=command.session_id,
+        cloud_workspace_id=command.cloud_workspace_id,
+    )
     await _record_agent_auth_state_from_command_result(
         db,
         auth=auth,

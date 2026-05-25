@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 use serde_json::Value;
+use tracing::debug;
 
 use crate::error::WorkerError;
 
@@ -93,6 +94,13 @@ impl AnyHarnessClient {
                 .collect::<std::collections::HashSet<_>>();
             sessions.retain(|session| workspace_ids.contains(session.workspace_id.as_str()));
         }
+        debug!(
+            workspace_id = workspace_id.unwrap_or("<all>"),
+            repo_root_count = repo_roots_by_id.len(),
+            workspace_count = workspaces.len(),
+            session_count = sessions.len(),
+            "anyharness backfill snapshot fetched"
+        );
         Ok(AnyHarnessBackfillSnapshot {
             workspaces,
             repo_roots_by_id,

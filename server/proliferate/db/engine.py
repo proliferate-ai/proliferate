@@ -10,7 +10,11 @@ from sqlalchemy.orm import Session
 
 from proliferate.config import settings
 
-engine = create_async_engine(settings.database_url, echo=settings.database_echo)
+engine = create_async_engine(
+    settings.database_url,
+    echo=settings.database_echo,
+    pool_pre_ping=True,
+)
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 _AFTER_COMMIT_CALLBACKS_KEY = "proliferate_after_commit_callbacks"
 _AFTER_COMMIT_LISTENERS_KEY = "proliferate_after_commit_listeners"

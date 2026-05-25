@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tracing::debug;
 
 use crate::error::WorkerError;
 
@@ -42,6 +43,18 @@ impl AnyHarnessClient {
             let body = response.text().await.unwrap_or_default();
             return Err(WorkerError::Cloud { status, body });
         }
-        Ok(response.json().await?)
+        let events = response.json::<Vec<SessionEventEnvelope>>().await?;
+        let first_seq = events.first().map(|event| event.seq);
+        let last_seq = events.last().map(|event| event.seq);
+        debug!(
+            session_id,
+            after_seq,
+            limit = ?limit,
+            event_count = events.len(),
+            first_seq = ?first_seq,
+            last_seq = ?last_seq,
+            "anyharness session events fetched"
+        );
+        Ok(events)
     }
 }

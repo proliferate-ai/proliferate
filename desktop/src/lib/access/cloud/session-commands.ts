@@ -24,7 +24,6 @@ export async function startCloudSessionCommand(
   const command = await enqueueCommand({
     idempotencyKey: input.idempotencyKey,
     targetId: input.targetId,
-    workspaceId: input.anyharnessWorkspaceId,
     cloudWorkspaceId: input.cloudWorkspaceId,
     kind: "start_session",
     source: "desktop_cloud_view",
