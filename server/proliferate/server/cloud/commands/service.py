@@ -29,6 +29,7 @@ from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.claims.access import require_workspace_interact
+from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.commands.domain.rules import (
     compact_command_json,
     validate_active_command_kind,
@@ -769,6 +770,17 @@ async def enqueue_command(
         idempotency_key=body.idempotency_key,
     )
     if existing is not None:
+        log_cloud_event(
+            "cloud command enqueue reused existing",
+            command_id=existing.id,
+            target_id=target.id,
+            kind=kind,
+            source=source,
+            workspace_id=resolved_workspace_id,
+            session_id=body.session_id,
+            cloud_workspace_id=cloud_workspace_id,
+            status=existing.status,
+        )
         await _record_pending_prompt_interaction_for_command(db, existing)
         await publish_command_status_after_commit(db, existing)
         await kick_off_command_wake_after_commit_if_required(
@@ -808,6 +820,17 @@ async def enqueue_command(
                 authorization_context_json=authorization_context_json,
             )
             await _record_pending_prompt_interaction_for_command(db, command)
+        log_cloud_event(
+            "cloud command queued",
+            command_id=command.id,
+            target_id=target.id,
+            kind=kind,
+            source=source,
+            workspace_id=resolved_workspace_id,
+            session_id=body.session_id,
+            cloud_workspace_id=cloud_workspace_id,
+            status=command.status,
+        )
         await publish_command_status_after_commit(db, command)
         await kick_off_command_wake_after_commit_if_required(
             db,

@@ -44,12 +44,63 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-async function waitForOnlineDispatchTarget(targetId: string): Promise<CloudTargetSummary> {
+interface WorkerSignalBaseline {
+  workerId: string | null;
+  readyAt: number | null;
+}
+
+function newestTimestamp(...values: Array<string | null | undefined>): number | null {
+  const timestamps = values
+    .map((value) => value ? Date.parse(value) : Number.NaN)
+    .filter(Number.isFinite);
+  return timestamps.length > 0 ? Math.max(...timestamps) : null;
+}
+
+function workerSignalTimestamp(target: CloudTargetSummary): number | null {
+  return newestTimestamp(
+    target.update?.currentVersions?.reportedAt,
+    target.statusDetail?.lastHeartbeatAt,
+    target.statusDetail?.updatedAt,
+  );
+}
+
+function workerSignalBaseline(target: CloudTargetSummary): WorkerSignalBaseline {
+  return {
+    workerId: target.update?.currentVersions?.workerId ?? null,
+    readyAt: workerSignalTimestamp(target),
+  };
+}
+
+function isFreshOnlineDispatchTarget(
+  target: CloudTargetSummary,
+  baseline: WorkerSignalBaseline | null,
+): boolean {
+  if (target.kind !== "desktop_dispatch" || target.status !== "online") {
+    return false;
+  }
+  if (baseline === null) {
+    return true;
+  }
+  const workerId = target.update?.currentVersions?.workerId ?? null;
+  if (baseline.workerId && workerId && workerId !== baseline.workerId) {
+    return true;
+  }
+  const readyAt = workerSignalTimestamp(target);
+  return readyAt !== null && (
+    baseline.readyAt === null
+    || readyAt > baseline.readyAt
+  );
+}
+
+async function waitForOnlineDispatchTarget(
+  targetId: string,
+  baseline: WorkerSignalBaseline | null = null,
+): Promise<CloudTargetSummary> {
   let last: CloudTargetSummary | null = null;
   for (let attempt = 0; attempt < 120; attempt += 1) {
     const target = await getTarget(targetId);
     last = target;
-    if (target.kind === "desktop_dispatch" && target.status === "online") {
+    if (isFreshOnlineDispatchTarget(target, baseline)) {
       return target;
     }
     await sleep(500);
@@ -112,7 +163,14 @@ export function useWorkspaceRemoteAccessActions() {
 
   const ensureDispatchTarget = useCallback(async () => {
     if (dispatchTarget) {
-      return dispatchTarget;
+      const baseline = workerSignalBaseline(dispatchTarget);
+      await ensureDesktopDispatchWorker({
+        targetId: dispatchTarget.id,
+        enrollmentToken: null,
+      });
+      const target = await waitForOnlineDispatchTarget(dispatchTarget.id, baseline);
+      void targetsQuery.refetch();
+      return target;
     }
     const runtime = await getRuntimeInfo();
     if (runtime.status !== "healthy") {

@@ -333,7 +333,6 @@ async function enqueueStartSessionWithRetryableReadiness(input: {
     return await input.args.enqueueStartSession({
       idempotencyKey: `${input.args.pendingPrompt.id}:start-session`,
       targetId: input.targetId,
-      workspaceId: input.anyharnessWorkspaceId,
       cloudWorkspaceId: input.args.workspace.id,
       kind: "start_session",
       source: "mobile",

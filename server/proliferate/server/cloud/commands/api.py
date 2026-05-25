@@ -19,6 +19,7 @@ from proliferate.server.cloud.commands.service import (
     enqueue_command_and_commit,
     get_command_status,
 )
+from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 
 router = APIRouter(prefix="/commands", tags=["cloud-commands"])
@@ -33,6 +34,17 @@ async def enqueue_command_endpoint(
     try:
         command = await enqueue_command_and_commit(db, user=user, body=body)
     except CloudApiError as error:
+        log_cloud_event(
+            "cloud command enqueue rejected",
+            error_code=error.code,
+            status_code=error.status_code,
+            target_id=body.target_id,
+            kind=body.kind,
+            source=body.source,
+            workspace_id=body.workspace_id,
+            cloud_workspace_id=body.cloud_workspace_id,
+            session_id=body.session_id,
+        )
         raise_cloud_error(error)
     return command_response_payload(command)
 
