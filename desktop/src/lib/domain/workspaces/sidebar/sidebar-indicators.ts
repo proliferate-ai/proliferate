@@ -434,7 +434,7 @@ function cloudAccessDetailIndicator(workspace: LogicalWorkspace): SidebarDetailI
 }
 
 function cloudExposureDetailIndicator(workspace: LogicalWorkspace): SidebarDetailIndicator | null {
-  const exposureState = activeCloudWorkspace(workspace)?.exposureState;
+  const exposureState = workspace.cloudWorkspace?.exposureState;
   if (!exposureState) {
     return null;
   }
@@ -501,7 +501,7 @@ function cloudExposureTone(
   switch (exposureState) {
     case "live":
     case "tracked":
-      return "success";
+      return "neutral";
     case "paused":
     case "stale":
       return "warning";

@@ -51,6 +51,7 @@ export function TurnAssistantActionRow({
           <CopyMessageButton
             content={content}
             timestampLabel={timestampLabel}
+            timestampPosition="after"
             visibilityClassName="opacity-0 group-hover/turn:opacity-100"
           />
         )}
