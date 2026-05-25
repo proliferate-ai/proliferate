@@ -102,6 +102,7 @@ export function makeCloudWorkspace(args: {
   origin?: SidebarCloudWorkspaceSummary["origin"];
   creatorContext?: SidebarCloudWorkspaceSummary["creatorContext"];
   directTargetContext?: SidebarCloudWorkspaceSummary["directTargetContext"];
+  exposureState?: SidebarCloudWorkspaceSummary["exposureState"];
   sandboxType?: SidebarCloudWorkspaceSummary["sandboxType"];
   status?: SidebarCloudWorkspaceSummary["status"];
   updatedAt?: string;
@@ -114,6 +115,7 @@ export function makeCloudWorkspace(args: {
     origin = null,
     creatorContext = null,
     directTargetContext = null,
+    exposureState,
     sandboxType,
     status = "ready",
     updatedAt = DEFAULT_UPDATED_AT,
@@ -153,6 +155,7 @@ export function makeCloudWorkspace(args: {
     postReadyStartedAt: null,
     postReadyCompletedAt: null,
     visibility: "private",
+    exposureState,
     sandboxType,
   };
 }

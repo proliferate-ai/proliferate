@@ -20,7 +20,12 @@ import {
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
 
-type GlyphTestKind = "waiting_input" | "waiting_plan" | "iterating" | "queued_prompt";
+type GlyphTestKind =
+  | "waiting_input"
+  | "waiting_plan"
+  | "iterating"
+  | "queued_prompt"
+  | "needs_review";
 
 function countElementsByType(node: ReactNode, targetType: unknown): number {
   if (Array.isArray(node)) {
@@ -72,6 +77,13 @@ describe("SidebarStatusGlyph", () => {
     const glyph = renderGlyph("queued_prompt");
 
     expect(countElementsByType(glyph, Spinner)).toBe(1);
+  });
+
+  it("uses an unread dot for needs-review work", () => {
+    const glyph = renderGlyph("needs_review");
+
+    expect(countElementsByType(glyph, Clock)).toBe(0);
+    expect(countElementsByType(glyph, "span")).toBe(1);
   });
 });
 

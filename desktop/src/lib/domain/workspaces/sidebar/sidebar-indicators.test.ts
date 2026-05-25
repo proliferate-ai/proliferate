@@ -234,6 +234,59 @@ describe("sidebar indicators", () => {
     )).toEqual(["materialization"]);
   });
 
+  it("keeps cloud exposure visible for locally running remote-access workspaces", () => {
+    const localWorkspace = makeWorkspace({
+      id: "remote-access-local-materialization",
+      repoName: "repo-a",
+      sourceRoot: "/tmp/repo-a",
+      kind: "local",
+      branch: "feature/local",
+    });
+    const cloudWorkspace = makeCloudWorkspace({
+      id: "remote-access-cloud-record",
+      repoName: "repo-a",
+      branch: "feature/local",
+      directTargetContext: {
+        targetId: "desktop-target",
+        targetKind: "desktop_dispatch",
+        anyharnessWorkspaceId: localWorkspace.id,
+      },
+      exposureState: "live",
+      sandboxType: "local",
+    });
+    const base = makeLocalLogicalWorkspace({
+      id: "remote-access-local-effective",
+      repoKey: "/tmp/repo-a",
+      repoName: "repo-a",
+      kind: "local",
+      branch: "feature/local",
+    });
+    const localEffective: LogicalWorkspace = {
+      ...base,
+      localWorkspace,
+      cloudWorkspace,
+      effectiveOwner: "local",
+      preferredMaterializationId: localWorkspace.id,
+      lifecycle: "local_active",
+    };
+
+    const groups = buildGroups({
+      logicalWorkspaces: [localEffective],
+    });
+
+    expect(groups[0]?.items[0]?.detailIndicators).toMatchObject([
+      {
+        kind: "cloud_exposure",
+        tone: "neutral",
+        tooltip: "Cloud projection live",
+      },
+      {
+        kind: "materialization",
+        variant: "local",
+      },
+    ]);
+  });
+
   it("uses cloud activity for dual rows when cloud is the effective materialization", () => {
     const localWorkspace = makeWorkspace({
       id: "dual-local-materialization",
