@@ -18,6 +18,7 @@ import {
   replaceLogicalWorkspaceBranch,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 import {
+  logicalWorkspaceCloudRuntimeMaterializationId,
   resolveLogicalWorkspaceMaterializationId,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
@@ -29,7 +30,7 @@ import {
 
 function makeMobilityWorkspace(args: {
   id?: string;
-  owner: "local" | "cloud";
+  owner: "local" | "cloud" | "personal_cloud";
   branch?: string;
   cloudWorkspaceId?: string | null;
 }): CloudMobilityWorkspaceSummary {
@@ -482,6 +483,62 @@ describe("logical workspaces", () => {
       "cloud:cloud-1",
       targetMaterializationId,
     ]);
+  });
+
+  it("keeps cloud-synced local workspaces on the local materialization", () => {
+    const localWorkspace = makeWorkspace({
+      id: "local-main",
+      branch: "main",
+    });
+    const cloudWorkspace = makeCloudWorkspace({
+      id: "cloud-main",
+      branch: "main",
+      sandboxType: "local",
+    });
+    const cloudAliasId = cloudWorkspaceSyntheticId(cloudWorkspace.id);
+
+    const logicalWorkspace = buildLogicalWorkspaces({
+      localWorkspaces: [localWorkspace],
+      repoRoots: [],
+      cloudWorkspaces: [cloudWorkspace],
+      cloudMobilityWorkspaces: [
+        makeMobilityWorkspace({
+          owner: "personal_cloud",
+          branch: "main",
+          cloudWorkspaceId: cloudWorkspace.id,
+        }),
+      ],
+      currentSelectionId: cloudAliasId,
+    })[0]!;
+
+    expect(logicalWorkspace.preferredMaterializationId).toBe(localWorkspace.id);
+    expect(logicalWorkspace.effectiveOwner).toBe("local");
+    expect(resolveLogicalWorkspaceMaterializationId(logicalWorkspace, cloudAliasId))
+      .toBe(localWorkspace.id);
+    expect(logicalWorkspaceCloudRuntimeMaterializationId(logicalWorkspace)).toBeNull();
+    expect(logicalWorkspaceRelatedIds(logicalWorkspace)).toContain(cloudAliasId);
+  });
+
+  it("does not materialize a cloud-only local sync record as a cloud runtime", () => {
+    const cloudWorkspace = makeCloudWorkspace({
+      id: "cloud-main",
+      branch: "main",
+      sandboxType: "local",
+    });
+    const cloudAliasId = cloudWorkspaceSyntheticId(cloudWorkspace.id);
+
+    const logicalWorkspace = buildLogicalWorkspaces({
+      localWorkspaces: [],
+      repoRoots: [],
+      cloudWorkspaces: [cloudWorkspace],
+      currentSelectionId: cloudAliasId,
+    })[0]!;
+
+    expect(logicalWorkspace.preferredMaterializationId).toBeNull();
+    expect(logicalWorkspace.effectiveOwner).toBe("local");
+    expect(resolveLogicalWorkspaceMaterializationId(logicalWorkspace, cloudAliasId)).toBeNull();
+    expect(logicalWorkspaceCloudRuntimeMaterializationId(logicalWorkspace)).toBeNull();
+    expect(logicalWorkspaceRelatedIds(logicalWorkspace)).toContain(cloudAliasId);
   });
 
   it("replaces the branch segment while preserving logical workspace identity", () => {

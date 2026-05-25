@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_active_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.commands.models import (
     CloudCommandResponse,
     CreateCloudCommandRequest,
@@ -19,7 +20,6 @@ from proliferate.server.cloud.commands.service import (
     enqueue_command_and_commit,
     get_command_status,
 )
-from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 
 router = APIRouter(prefix="/commands", tags=["cloud-commands"])

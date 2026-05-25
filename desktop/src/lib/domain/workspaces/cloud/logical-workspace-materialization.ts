@@ -1,5 +1,6 @@
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { targetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
+import { cloudWorkspaceUsesCloudRuntime } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 
 export function logicalWorkspaceTargetMaterializationId(
@@ -26,14 +27,23 @@ export function resolvePreferredLogicalWorkspaceMaterialization(
   currentSelectionId: string | null,
   effectiveOwnerHint: "local" | "cloud" | null,
 ): { workspaceId: string | null; owner: "local" | "cloud" } {
+  const cloudWorkspaceUsesRuntime = cloudWorkspace
+    ? cloudWorkspaceUsesCloudRuntime(cloudWorkspace)
+    : false;
   const directTargetId = cloudWorkspace
     ? logicalWorkspaceTargetMaterializationId({ cloudWorkspace })
     : null;
-  const cloudId = directTargetId ?? (cloudWorkspace
-    ? cloudWorkspaceSyntheticId(cloudWorkspace.id)
+  const managedCloudId = cloudWorkspace
+    ? cloudWorkspaceUsesRuntime
+      ? cloudWorkspaceSyntheticId(cloudWorkspace.id)
+      : null
     : mobilityWorkspace?.cloudWorkspaceId
       ? cloudWorkspaceSyntheticId(mobilityWorkspace.cloudWorkspaceId)
-      : null);
+      : null;
+  const cloudId = directTargetId ?? managedCloudId;
+  const fallbackOwner = cloudWorkspace && !cloudWorkspaceUsesRuntime
+    ? "local"
+    : "cloud";
 
   if (effectiveOwnerHint === "local" && localWorkspace) {
     return { workspaceId: localWorkspace.id, owner: "local" };
@@ -62,7 +72,7 @@ export function resolvePreferredLogicalWorkspaceMaterialization(
 
   return {
     workspaceId: cloudId,
-    owner: "cloud",
+    owner: fallbackOwner,
   };
 }
 
@@ -92,4 +102,13 @@ export function logicalWorkspaceCloudMaterializationId(
     return cloudWorkspaceSyntheticId(workspace.mobilityWorkspace.cloudWorkspaceId);
   }
   return null;
+}
+
+export function logicalWorkspaceCloudRuntimeMaterializationId(
+  workspace: Pick<LogicalWorkspace, "cloudWorkspace" | "mobilityWorkspace">,
+): string | null {
+  if (workspace.cloudWorkspace && !cloudWorkspaceUsesCloudRuntime(workspace.cloudWorkspace)) {
+    return null;
+  }
+  return logicalWorkspaceCloudMaterializationId(workspace);
 }

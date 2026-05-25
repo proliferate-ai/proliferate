@@ -3,6 +3,7 @@ import type {
   CloudMobilityWorkspaceSummary,
   CloudWorkspaceSummary,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { cloudWorkspaceUsesCloudRuntime } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
 import {
   humanizeBranchName,
   workspaceCurrentBranchName,
@@ -165,6 +166,16 @@ function effectiveOwnerFromMobilityOwner(
   }
 }
 
+function effectiveOwnerHintForWorkspace(
+  mobilityOwner: string | null | undefined,
+  cloudWorkspace: CloudWorkspaceSummary | null,
+): "local" | "cloud" | null {
+  if (cloudWorkspace && !cloudWorkspaceUsesCloudRuntime(cloudWorkspace)) {
+    return null;
+  }
+  return effectiveOwnerFromMobilityOwner(mobilityOwner);
+}
+
 export function buildLogicalWorkspaces(args: {
   localWorkspaces: Workspace[];
   repoRoots: RepoRoot[];
@@ -252,12 +263,16 @@ export function buildLogicalWorkspaces(args: {
 
   return Array.from(byId.entries())
     .map(([id, entry]) => {
+      const effectiveOwnerHint = effectiveOwnerHintForWorkspace(
+        entry.mobilityWorkspace?.owner,
+        entry.cloudWorkspace,
+      );
       const materialization = resolvePreferredLogicalWorkspaceMaterialization(
         entry.localWorkspace,
         entry.cloudWorkspace,
         entry.mobilityWorkspace,
         args.currentSelectionId ?? null,
-        effectiveOwnerFromMobilityOwner(entry.mobilityWorkspace?.owner),
+        effectiveOwnerHint,
       );
       const repoKey = entry.localWorkspace
         ? localWorkspaceGroupKey(entry.localWorkspace)
@@ -326,9 +341,7 @@ export function buildLogicalWorkspaces(args: {
         cloudWorkspace: entry.cloudWorkspace,
         mobilityWorkspace: entry.mobilityWorkspace,
         preferredMaterializationId: materialization.workspaceId,
-        effectiveOwner:
-          effectiveOwnerFromMobilityOwner(entry.mobilityWorkspace?.owner)
-          ?? materialization.owner,
+        effectiveOwner: effectiveOwnerHint ?? materialization.owner,
         lifecycle: inferLifecycle(
           entry.localWorkspace,
           entry.cloudWorkspace,

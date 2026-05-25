@@ -13,11 +13,11 @@ from proliferate.db import engine as db_engine
 from proliferate.db.store import cloud_workspaces
 from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.claims.access import (
     load_workspace_exposure_and_claim,
     require_workspace_view,
 )
-from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.events.domain.cursors import advance_contiguous_cursor
 from proliferate.server.cloud.events.domain.payload_policy import retained_payload

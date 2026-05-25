@@ -16,6 +16,7 @@ from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.backfill.models import (
     WorkerBackfillRequest,
     WorkerBackfillResponse,
@@ -23,7 +24,6 @@ from proliferate.server.cloud.backfill.models import (
     WorkerBackfillWorkspace,
     WorkerBackfillWorkspaceMapping,
 )
-from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.worker.domain.rules import compact_json
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext

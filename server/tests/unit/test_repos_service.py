@@ -357,11 +357,14 @@ class TestListCloudRepositories:
             user_id=uuid.uuid4(),
             access_token="gh-token",
         )
-        with patch(
-            "proliferate.server.cloud.repos.service.list_github_repositories",
-            new_callable=AsyncMock,
-            side_effect=GitHubRateLimited("slow down", retry_after_seconds=30),
-        ), pytest.raises(CloudApiError) as exc_info:
+        with (
+            patch(
+                "proliferate.server.cloud.repos.service.list_github_repositories",
+                new_callable=AsyncMock,
+                side_effect=GitHubRateLimited("slow down", retry_after_seconds=30),
+            ),
+            pytest.raises(CloudApiError) as exc_info,
+        ):
             await list_cloud_repositories(
                 object(),  # type: ignore[arg-type]
                 credentials,

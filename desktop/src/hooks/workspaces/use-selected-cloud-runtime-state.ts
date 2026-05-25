@@ -12,6 +12,7 @@ import {
   buildSelectedCloudRuntimeViewModel,
   type SelectedCloudRuntimeViewModel,
 } from "@/lib/domain/workspaces/cloud/cloud-runtime-state";
+import { cloudWorkspaceUsesCloudRuntime } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useCloudWorkspaceConnection } from "@/hooks/access/cloud/use-cloud-workspace-connection";
 import { useCloudWorkspaceClaimMutation } from "@/hooks/access/cloud/use-cloud-workspace-claim-mutation";
@@ -73,7 +74,10 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
   });
   const claimMutation = useCloudWorkspaceClaimMutation();
   const persistedStatus = (selectedCloudWorkspace?.status ?? null) as CloudWorkspaceStatus | null;
-  const usesDirectAttach = selectedCloudWorkspace?.visibility === "claimed";
+  const usesCloudRuntime = cloudWorkspaceUsesCloudRuntime(selectedCloudWorkspace);
+  const usesDirectAttach = selectedCloudWorkspace
+    ? selectedCloudWorkspace.visibility === "claimed" || !usesCloudRuntime
+    : false;
   const needsClaim = selectedCloudWorkspace?.visibility === "shared_unclaimed";
   const isWarm = selectedWorkspaceId !== null && hasWorkspaceBootstrappedInSession(selectedWorkspaceId);
   const connectionQuery = useCloudWorkspaceConnection(
@@ -110,9 +114,11 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
     persistedStatus,
     visibility: selectedCloudWorkspace?.visibility ?? null,
     connectionState,
-    runtimeAuth: connectionQuery.data?.runtimeAuth
-      ?? selectedCloudWorkspace?.runtime?.runtimeAuth
-      ?? null,
+    runtimeAuth: usesCloudRuntime
+      ? connectionQuery.data?.runtimeAuth
+        ?? selectedCloudWorkspace?.runtime?.runtimeAuth
+        ?? null
+      : null,
     isWarm,
   }), [
     connectionState,
@@ -121,6 +127,7 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
     persistedStatus,
     selectedCloudWorkspace?.runtime?.runtimeAuth,
     selectedCloudWorkspace?.visibility,
+    usesCloudRuntime,
   ]);
 
   return {
