@@ -45,9 +45,7 @@ def cloud_capabilities() -> CloudCapabilitiesResponse:
         ),
     )
     org_byok_enabled = (
-        gateway_enabled
-        and settings.agent_gateway_byok_enabled
-        and route_isolation_ready
+        gateway_enabled and settings.agent_gateway_byok_enabled and route_isolation_ready
     )
     personal_byok_enabled = (
         gateway_enabled

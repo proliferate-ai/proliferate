@@ -230,9 +230,10 @@ async def _handle_checkout_session_completed(
     *,
     event_id: object = None,
 ) -> None:
-    if session.get("mode") == "subscription" and _metadata(session).get(
-        "purpose"
-    ) == "team_subscription":
+    if (
+        session.get("mode") == "subscription"
+        and _metadata(session).get("purpose") == "team_subscription"
+    ):
         await activate_team_checkout_from_stripe_session(
             session=session,
             webhook_event_id=event_id if isinstance(event_id, str) else None,

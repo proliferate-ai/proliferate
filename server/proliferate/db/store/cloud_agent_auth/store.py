@@ -851,11 +851,7 @@ async def ensure_managed_budget_subject_for_owner(
             ]
         )
     row = (
-        await db.execute(
-            select(AgentGatewayBudgetSubject)
-            .where(*owner_filters)
-            .with_for_update()
-        )
+        await db.execute(select(AgentGatewayBudgetSubject).where(*owner_filters).with_for_update())
     ).scalar_one_or_none()
     now = utcnow()
     if row is None:
@@ -953,9 +949,7 @@ async def get_managed_budget_subject_for_owner(
             ]
         )
     row = (
-        await db.execute(
-            select(AgentGatewayBudgetSubject).where(*owner_filters)
-        )
+        await db.execute(select(AgentGatewayBudgetSubject).where(*owner_filters))
     ).scalar_one_or_none()
     return _budget_subject_record(row) if row is not None else None
 
@@ -1073,12 +1067,16 @@ async def get_free_credit_entitlement_for_budget(
     if period_key is not None:
         filters.append(AgentGatewayFreeCreditEntitlement.period_key == period_key)
     row = (
-        await db.execute(
-            select(AgentGatewayFreeCreditEntitlement)
-            .where(*filters)
-            .order_by(AgentGatewayFreeCreditEntitlement.updated_at.desc())
+        (
+            await db.execute(
+                select(AgentGatewayFreeCreditEntitlement)
+                .where(*filters)
+                .order_by(AgentGatewayFreeCreditEntitlement.updated_at.desc())
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     return _free_credit_entitlement_record(row) if row is not None else None
 
 

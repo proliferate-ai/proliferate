@@ -28,8 +28,8 @@ from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.server.cloud.claims.access import require_workspace_interact
 from proliferate.server.cloud._logging import log_cloud_event
+from proliferate.server.cloud.claims.access import require_workspace_interact
 from proliferate.server.cloud.commands.domain.rules import (
     compact_command_json,
     validate_active_command_kind,

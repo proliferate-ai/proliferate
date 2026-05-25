@@ -17,7 +17,7 @@ import {
   findLogicalWorkspace,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
-  logicalWorkspaceCloudMaterializationId,
+  logicalWorkspaceCloudRuntimeMaterializationId,
   logicalWorkspaceTargetMaterializationId,
   resolveLogicalWorkspaceMaterializationId,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
@@ -77,12 +77,13 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
         : [];
       const logicalWorkspace = findLogicalWorkspace(logicalWorkspaces, workspaceId);
       if (logicalWorkspace) {
-        const explicitCloudMaterializationId = logicalWorkspaceCloudMaterializationId(logicalWorkspace);
+        const explicitCloudRuntimeMaterializationId =
+          logicalWorkspaceCloudRuntimeMaterializationId(logicalWorkspace);
         const explicitTargetMaterializationId = logicalWorkspaceTargetMaterializationId(logicalWorkspace);
         const explicitLocalMaterializationId = logicalWorkspace.localWorkspace?.id ?? null;
         const materializationId = (
           (
-            workspaceId === explicitCloudMaterializationId
+            workspaceId === explicitCloudRuntimeMaterializationId
             && !explicitTargetMaterializationId
           )
           || workspaceId === explicitTargetMaterializationId
@@ -99,10 +100,10 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
         }
 
         if (
-          explicitCloudMaterializationId
-          && materializationId === explicitCloudMaterializationId
+          explicitCloudRuntimeMaterializationId
+          && materializationId === explicitCloudRuntimeMaterializationId
         ) {
-          return resolveWorkspaceConnection(runtimeUrl, explicitCloudMaterializationId);
+          return resolveWorkspaceConnection(runtimeUrl, explicitCloudRuntimeMaterializationId);
         }
 
         if (
