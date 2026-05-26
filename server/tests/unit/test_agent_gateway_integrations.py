@@ -8,7 +8,6 @@ from proliferate.integrations.bifrost.client import (
 )
 from proliferate.integrations.bifrost.client import _redact as bifrost_redact
 from proliferate.integrations.bifrost.client import bifrost_env_var
-from proliferate.integrations.litellm.client import _redact
 from proliferate.server.cloud.agent_auth import service as agent_auth_service
 from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
 
@@ -33,20 +32,6 @@ def test_bedrock_assume_role_validation_rejects_non_role_arn() -> None:
         )
 
     assert exc.value.code == "invalid_role_arn"
-
-
-def test_litellm_redaction_scrubs_master_key() -> None:
-    assert _redact("bad sk-secret-token payload", "sk-secret-token") == "bad [REDACTED] payload"
-
-
-def test_litellm_redaction_scrubs_provider_secrets() -> None:
-    assert (
-        _redact(
-            "bad sk-master payload with sk-provider-key and external-id",
-            ("sk-master", "sk-provider-key", "external-id"),
-        )
-        == "bad [REDACTED] payload with [REDACTED] and [REDACTED]"
-    )
 
 
 def test_bifrost_env_var_uses_inline_secret_shape() -> None:

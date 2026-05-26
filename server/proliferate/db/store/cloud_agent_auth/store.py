@@ -2594,7 +2594,7 @@ async def record_audit_event(
 async def try_acquire_agent_gateway_reconciler_lock(db: AsyncSession) -> bool:
     result = await db.scalar(
         text("SELECT pg_try_advisory_lock(hashtextextended(:lock_key, 0))"),
-        {"lock_key": "agent_gateway_litellm_reconciler"},
+        {"lock_key": "agent_gateway_bifrost_reconciler"},
     )
     return bool(result)
 
@@ -2602,5 +2602,5 @@ async def try_acquire_agent_gateway_reconciler_lock(db: AsyncSession) -> bool:
 async def release_agent_gateway_reconciler_lock(db: AsyncSession) -> None:
     await db.execute(
         text("SELECT pg_advisory_unlock(hashtextextended(:lock_key, 0))"),
-        {"lock_key": "agent_gateway_litellm_reconciler"},
+        {"lock_key": "agent_gateway_bifrost_reconciler"},
     )

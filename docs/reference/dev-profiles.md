@@ -12,7 +12,7 @@ make dev-list                      # list profiles and TCP-probed status
 make dev PROFILE=<name>            # full stack for this profile
 make dev PROFILE=<name> STRIPE=1   # also run Stripe webhook forwarding
 make dev PROFILE=<name> AGENT_GATEWAY=1
-                                    # also run local private LiteLLM for gateway work
+                                    # also run/reuse local Bifrost for gateway work
 make dev PROFILE=<name> AGENT_GATEWAY=bifrost
                                     # also run/reuse local Bifrost for gateway work
 make dev PROFILE=<name> AGENT_GATEWAY=bifrost AGENT_GATEWAY_TUNNEL=ngrok
@@ -68,29 +68,13 @@ those credentials are user-level local secrets, not profile state.
 
 ## Agent Gateway Local Dev
 
-`make dev PROFILE=<name> AGENT_GATEWAY=1` starts the private LiteLLM proxy from
-`server/docker-compose.yml` through the `agent-gateway` compose profile and
-exports the gateway env needed by the API process:
+`make dev PROFILE=<name> AGENT_GATEWAY=1` and
+`make dev PROFILE=<name> AGENT_GATEWAY=bifrost` start or reuse a local Bifrost
+gateway and export the API env needed for Bifrost-backed managed credits and
+personal BYOK development:
 
 ```text
 AGENT_GATEWAY_ENABLED=true
-AGENT_GATEWAY_LITELLM_BASE_URL=http://127.0.0.1:4000
-AGENT_GATEWAY_PUBLIC_BASE_URL=http://127.0.0.1:<profile-api-port>
-AGENT_GATEWAY_RECONCILER_ENABLED=true
-```
-
-The default local LiteLLM master key is `sk-local-dev-agent-gateway`. Override it
-with `AGENT_GATEWAY_LITELLM_MASTER_KEY=...` or `LOCAL_LITELLM_MASTER_KEY=...`
-when a test needs a different key. `make server-litellm-up` starts only the
-local LiteLLM stack, and `make server-litellm-down` stops it.
-
-`make dev PROFILE=<name> AGENT_GATEWAY=bifrost` starts or reuses a local
-Bifrost gateway and exports the API env needed for Bifrost-backed managed
-credits and personal BYOK development:
-
-```text
-AGENT_GATEWAY_ENABLED=true
-AGENT_GATEWAY_ROUTER=bifrost
 AGENT_GATEWAY_BIFROST_BASE_URL=http://127.0.0.1:8080
 AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL=http://127.0.0.1:8080
 AGENT_GATEWAY_RECONCILER_ENABLED=true

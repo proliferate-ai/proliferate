@@ -33,7 +33,7 @@ class EnsureOrganizationSandboxProfileRequest(BaseModel):
     pass
 
 
-class LiteLLMModelDeploymentRequest(BaseModel):
+class GatewayModelDeploymentRequest(BaseModel):
     public_model_name: str = Field(alias="publicModelName")
     provider_model: str = Field(alias="providerModel")
 

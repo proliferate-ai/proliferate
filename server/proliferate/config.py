@@ -174,10 +174,6 @@ class Settings(BaseSettings):
     cloud_mcp_google_workspace_oauth_client_id: str = ""
     cloud_mcp_google_workspace_oauth_client_secret: str = ""
     agent_gateway_enabled: bool = False
-    agent_gateway_router: str = "litellm_legacy"
-    agent_gateway_litellm_base_url: str = "http://127.0.0.1:4000"
-    agent_gateway_litellm_master_key: str = ""
-    agent_gateway_public_base_url: str = ""
     agent_gateway_bifrost_base_url: str = "http://127.0.0.1:8080"
     agent_gateway_bifrost_public_base_url: str = ""
     agent_gateway_bifrost_admin_token: str = ""
@@ -200,8 +196,6 @@ class Settings(BaseSettings):
     agent_gateway_request_timeout_seconds: float = 120.0
     agent_gateway_byok_enabled: bool = False
     agent_gateway_personal_byok_enabled: bool = False
-    agent_gateway_litellm_topology: str = "oss_shared"
-    agent_gateway_litellm_customer_secret_isolation_verified: bool = False
     agent_gateway_anthropic_byok_enabled: bool = False
     agent_gateway_openai_byok_enabled: bool = False
     agent_gateway_bedrock_byok_enabled: bool = False

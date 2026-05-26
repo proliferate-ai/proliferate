@@ -106,7 +106,7 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
             sa.CheckConstraint(
-                "router_kind IN ('litellm_legacy', 'bifrost')",
+                "router_kind IN ('bifrost')",
                 name="ck_agent_gateway_router_materialization_router_kind",
             ),
             sa.CheckConstraint(

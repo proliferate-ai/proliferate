@@ -1,4 +1,4 @@
-"""Background reconciliation for LiteLLM agent-auth mirror state."""
+"""Background reconciliation for agent-auth gateway router state."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from proliferate.db.store.cloud_agent_auth import store
 from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.server.cloud.agent_auth.service import (
     AgentGatewayReconcilePassResult,
-    reconcile_agent_gateway_litellm_mirror,
+    reconcile_agent_gateway_bifrost_router,
     reconcile_agent_gateway_runtime_grant_freshness,
 )
 from proliferate.utils.time import duration_ms
@@ -33,7 +33,7 @@ def start_agent_gateway_reconciler() -> None:
         return
     _reconciler_task = asyncio.create_task(
         _agent_gateway_reconciler_loop(),
-        name="agent-gateway-litellm-reconciler",
+        name="agent-gateway-bifrost-reconciler",
     )
 
 
@@ -51,7 +51,7 @@ async def run_agent_gateway_reconcile_pass() -> AgentGatewayReconcilePassResult:
     async with db_engine.async_session_factory() as db:
         acquired = await store.try_acquire_agent_gateway_reconciler_lock(db)
         if not acquired:
-            logger.debug("agent gateway LiteLLM reconciler skipped; lock already owned")
+            logger.debug("agent gateway Bifrost reconciler skipped; lock already owned")
             return _empty_result()
         try:
             result = await _run_reconcile_pass(db)
@@ -63,7 +63,7 @@ async def run_agent_gateway_reconcile_pass() -> AgentGatewayReconcilePassResult:
 
 async def _run_reconcile_pass(db: AsyncSession) -> AgentGatewayReconcilePassResult:
     started = time.perf_counter()
-    result = await reconcile_agent_gateway_litellm_mirror(
+    result = await reconcile_agent_gateway_bifrost_router(
         db,
         limit=settings.agent_gateway_reconciler_batch_size,
     )
@@ -72,9 +72,9 @@ async def _run_reconcile_pass(db: AsyncSession) -> AgentGatewayReconcilePassResu
         limit=settings.agent_gateway_reconciler_batch_size,
     )
     logger.info(
-        "agent gateway LiteLLM reconcile pass completed",
+        "agent gateway Bifrost reconcile pass completed",
         extra={
-            "event": "agent_gateway_litellm_reconcile",
+            "event": "agent_gateway_bifrost_reconcile",
             "budgets_checked": result.budgets_checked,
             "budgets_reconciled": result.budgets_reconciled,
             "budgets_failed": result.budgets_failed,
@@ -102,10 +102,10 @@ async def _agent_gateway_reconciler_loop() -> None:
                 exc,
                 tags={
                     "domain": "agent_auth",
-                    "action": "litellm_reconcile_loop",
+                    "action": "bifrost_reconcile_loop",
                 },
             )
-            logger.exception("agent gateway LiteLLM reconciler pass failed")
+            logger.exception("agent gateway Bifrost reconciler pass failed")
         await asyncio.sleep(max(settings.agent_gateway_reconciler_interval_seconds, 30.0))
 
 

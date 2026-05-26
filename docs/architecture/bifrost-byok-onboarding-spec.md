@@ -252,12 +252,11 @@ Local development should be explicit and reproducible:
     settings
   - `server/.env`
   - `server/.env.local`
-- `make dev PROFILE=<name> AGENT_GATEWAY=bifrost` should become the target
-  local workflow.
+- `make dev PROFILE=<name> AGENT_GATEWAY=bifrost` and
+  `make dev PROFILE=<name> AGENT_GATEWAY=1` use the target local workflow.
 - `pdev gateway` remains the concrete local QA shortcut. It should run the
   Bifrost gateway profile and pick up the first-class Makefile wiring.
-- Do not use `AGENT_GATEWAY=1` for Bifrost local validation. On this branch
-  that value starts the legacy LiteLLM gateway stack.
+- `AGENT_GATEWAY=1` is kept as a shorthand for the Bifrost workflow.
 - E2B live tests require a public Bifrost URL, because an E2B sandbox cannot
   reach the developer machine at `127.0.0.1`.
 - Local Bifrost must run with `client.enforce_auth_on_inference=true` and
@@ -463,12 +462,11 @@ Do not leak Bifrost endpoint paths into product services.
 
 ## Config And Env
 
-Retain generic product-level settings where possible. Add router-specific
-settings for Bifrost:
+Retain generic product-level settings where possible. Add Bifrost-specific
+settings:
 
 ```text
 AGENT_GATEWAY_ENABLED
-AGENT_GATEWAY_ROUTER=bifrost
 AGENT_GATEWAY_BIFROST_BASE_URL
 AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL
 AGENT_GATEWAY_BIFROST_ADMIN_TOKEN
@@ -484,13 +482,10 @@ Config migration table:
 
 | Setting | Secret | Default | Required When | Replaces / Notes |
 | --- | --- | --- | --- | --- |
-| `AGENT_GATEWAY_ROUTER` | No | `litellm_legacy` while migrating | Gateway enabled | Selects `bifrost` vs legacy paths |
-| `AGENT_GATEWAY_BIFROST_BASE_URL` | No | None | Bifrost router enabled | Private/admin Bifrost API base URL |
+| `AGENT_GATEWAY_BIFROST_BASE_URL` | No | None | Gateway enabled | Private/admin Bifrost API base URL |
 | `AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL` | No | None | Sandbox `gateway_env` materialization | Public inference URL reachable from E2B |
 | `AGENT_GATEWAY_BIFROST_ADMIN_TOKEN` | Yes | None | Hosted or protected local Bifrost | Admin API auth; never sent to sandboxes |
-| `AGENT_GATEWAY_BIFROST_REQUEST_TIMEOUT_SECONDS` | No | product default | Bifrost router enabled | Admin/control-plane HTTP timeout |
-| `AGENT_GATEWAY_PUBLIC_BASE_URL` | No | Legacy only | LiteLLM/Proliferate forwarding path | Do not use for direct Bifrost data plane |
-| `AGENT_GATEWAY_LITELLM_*` | Mixed | Legacy only | Legacy router only | Ignored by Bifrost materializer |
+| `AGENT_GATEWAY_BIFROST_REQUEST_TIMEOUT_SECONDS` | No | product default | Gateway enabled | Admin/control-plane HTTP timeout |
 
 Implementation must update `server/proliferate/config.py`,
 `docs/reference/env-secrets-matrix.md`, and `docs/reference/env-vars.yaml`.
@@ -527,9 +522,9 @@ Keep these product concepts:
 - `SandboxProfileTargetState`
 - `AgentAuthAuditEvent`
 
-Existing columns with `litellm_*` names should become legacy mirror fields.
-Do not build new Bifrost behavior on those columns. Either migrate them later
-or leave them read-only until the LiteLLM path is removed.
+Existing columns and response aliases with `litellm_*` names are compatibility
+fields. New runtime behavior is Bifrost-only; rename the storage/API surface in a
+separate migration when external compatibility allows it.
 
 ### New Router Materialization Table
 
@@ -583,9 +578,9 @@ index(router_kind, router_object_kind, router_object_id)
 Rationale:
 
 - Keeps product rows router-neutral.
-- Avoids adding `bifrost_*` columns to every existing LiteLLM-shaped table.
-- Allows Bifrost and legacy LiteLLM materializations to coexist during
-  migration.
+- Avoids adding `bifrost_*` columns to every existing compatibility table.
+- Gives Bifrost materializations an ownership-specific home outside legacy field
+  names.
 - Gives drift detection a single place to compare desired and applied state.
 - Preserves real foreign keys instead of a polymorphic `owner_kind/owner_id`
   pair.
@@ -865,7 +860,7 @@ agent_kind
 credential_kind: managed_gateway | synced_path
 credential_id
 policy_id
-router_kind: bifrost | litellm_legacy
+router_kind: bifrost
 protocol_facade: anthropic | openai
 materialization_mode: gateway_env | synced_files
 ```
@@ -1112,7 +1107,6 @@ Example local env for Proliferate:
 
 ```text
 AGENT_GATEWAY_ENABLED=true
-AGENT_GATEWAY_ROUTER=bifrost
 AGENT_GATEWAY_BIFROST_BASE_URL=http://127.0.0.1:4000
 AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL=https://<tunnel-host>
 AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED=true
@@ -1152,11 +1146,11 @@ make dev-init PROFILE=bifrost-auth
 make dev PROFILE=bifrost-auth AGENT_GATEWAY=bifrost
 ```
 
-`AGENT_GATEWAY=bifrost` starts or reuses local Bifrost, exports Bifrost router
+`AGENT_GATEWAY=bifrost` starts or reuses local Bifrost, exports Bifrost
 env, enables personal free-credit and personal BYOK dev flags, and seeds
 managed provider env from local `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` when the
-dedicated managed-provider variables are not set. `AGENT_GATEWAY=1` remains the
-legacy LiteLLM local path and must not be used for Bifrost validation.
+dedicated managed-provider variables are not set. `AGENT_GATEWAY=1` is an alias
+for the same Bifrost workflow.
 
 For public managed-sandbox/E2B validation, add the ngrok tunnel switch:
 

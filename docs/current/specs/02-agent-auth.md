@@ -20,9 +20,8 @@ In scope:
 - Per `sandbox_profile`, per agent harness, select one auth source.
 - Two runtime materialization modes:
   - `synced_files` — Worker writes native auth files into the sandbox.
-  - `gateway_env` — Worker gives AnyHarness protected env + Proliferate
-    runtime grant; sandbox calls Proliferate Gateway, which forwards to
-    private LiteLLM.
+  - `gateway_env` — Worker gives AnyHarness protected env + Bifrost virtual-key
+    auth; sandbox calls the configured Bifrost inference endpoint.
 - Rebind to spec 00's renamed `sandbox_profile_target_state` (gain the
   active-slot fence; agent-auth columns become the auth axis of that row).
 - Drop `SandboxProfile.managed_target_id` readers — derive primary target
@@ -45,10 +44,9 @@ Out of scope:
 - BYOK provider validation (Anthropic API key, OpenAI API key, Bedrock
   STS assume-role, OpenAI-compatible live probing). Deferred to a V2
   product-scope decision.
-- LiteLLM Enterprise team-scoped routing for shared BYOK.
-- Self-hosted gateway/LiteLLM lifecycle.
-- Per-request usage ledger (V1 LiteLLM is the spend authority).
-- Gemini through gateway (V1 keeps Gemini on synced auth only).
+- Self-hosted Bifrost lifecycle.
+- Additional per-request usage ledger surfaces beyond the Bifrost usage importer.
+- OpenAI-compatible BYOK provider onboarding.
 - OpenCode native sync export in the Desktop agent-auth path.
 - Subscription/billing entitlement for `included_budget_usd` (→ spec 09).
 - Settings/Admin IA layout for agent-auth UI (→ spec 03 owns placement;
@@ -85,20 +83,16 @@ Service boundary:
 
 ```text
 Proliferate Cloud control plane
-  owns credential rows, selections, budgets, LiteLLM provisioning, worker
+  owns credential rows, selections, budgets, Bifrost provisioning, worker
   commands. Source of truth.
 
-Proliferate Gateway
-  public endpoint sandboxes call. Validates runtime grant, resolves
-  policy, forwards to private LiteLLM. Anthropic + OpenAI protocol facades.
-
-Private LiteLLM
-  routes provider deployments, tracks spend, enforces team max_budget.
-  Not directly reachable from sandboxes.
+Bifrost
+  public inference endpoint sandboxes call with virtual keys. Stores provider
+  keys, enforces virtual-key policy, and records usage logs.
 ```
 
 V1 invariant: **provider secrets never enter the sandbox** in the
-`gateway_env` mode. The sandbox holds only a Proliferate runtime grant.
+`gateway_env` mode. The sandbox holds only a scoped Bifrost virtual key.
 
 V1 fail-closed: every layer (Cloud command admission, worker apply,
 AnyHarness launch, Gateway request) rejects when the selected credential
@@ -179,7 +173,7 @@ AgentAuthCredentialShare
 
 AgentGatewayBudgetSubject
   id, budget_kind='proliferate_managed', owner_scope='organization',
-  organization_id, litellm_team_id, included_budget_usd (str),
+  organization_id, litellm_team_id (compat provider-key id), included_budget_usd (str),
   budget_duration='30d', litellm_sync_status, litellm_sync_fingerprint,
   status, revision, last_provisioned_at, last_litellm_reconciled_at,
   error fields, timestamps
@@ -188,7 +182,7 @@ AgentGatewayPolicy
   id, credential_id (FK unique), policy_kind
   (proliferate_managed|org_byok|personal_byok),
   owner_scope, owner_user_id, organization_id, budget_subject_id,
-  litellm_team_id, litellm_virtual_key_id,
+  litellm_team_id (compat provider-key id), litellm_virtual_key_id,
   litellm_virtual_key_ciphertext, litellm_virtual_key_ciphertext_key_id,
   litellm_sync_status, litellm_sync_fingerprint,
   status (provisioning|ready|invalid|revoked), revision,
@@ -256,26 +250,13 @@ POST /v1/cloud/worker/agent-auth-configs/{sandbox_profile_id}/status
 `server/proliferate/server/cloud/agent_auth/service.py` covers
 ensure-profile, create-credential, share, revoke, select, issue runtime
 grant, list selections/target-states, materialization plan build, worker
-status apply, LiteLLM reconciliation
-(`reconciler.py:reconcile_agent_gateway_litellm_mirror`).
+status apply, Bifrost reconciliation and usage import
+(`reconciler.py:reconcile_agent_gateway_bifrost_router`).
 
-**Gateway**
-(`server/proliferate/server/agent_gateway/api.py` and `service.py`):
-
-```text
-GET  /agent-gateway/health
-GET  /anthropic/v1/models
-GET  /openai/v1/models
-POST /anthropic/v1/messages
-POST /anthropic/v1/messages/count_tokens
-POST /openai/v1/chat/completions
-POST /openai/v1/responses
-```
-
-`authorize_gateway_request` validates the bearer runtime grant against
-`token_hash`, expiry, revocation, policy state, model allowlist
-(`agent_gateway/domain/protocols.py:allowed_models_for_agent`), and
-LiteLLM sync state.
+**Bifrost Gateway**
+(`server/proliferate/integrations/bifrost/**` and Bifrost's own inference API):
+the control plane provisions provider keys and virtual keys, then workers
+materialize the virtual key and Bifrost public base URLs into sandbox auth env.
 
 **Worker `refresh_agent_auth_config`**
 (`anyharness/crates/proliferate-worker/src/materialization/agent_auth.rs`):
@@ -799,7 +780,7 @@ When BYOK is enabled (future PR):
 - live validation per provider (Anthropic /models, OpenAI /models,
   Bedrock STS GetCallerIdentity + test invocation, OpenAI-compatible
   base URL probing with SSRF protection)
-- LiteLLM Enterprise team-scoped routing or isolated routers per policy
+- Bifrost provider keys and runtime-scoped virtual keys per policy/selection
 - BYOK selectors enabled in CloudAgentAuthLibrary
 - runtime grant minting refuses unvalidated provider credentials
 ```
@@ -924,7 +905,7 @@ server/proliferate/server/cloud/agent_auth/service.py
 
 server/proliferate/server/cloud/agent_auth/reconciler.py
   - add grant_rotation pass (5.6)
-  - keep LiteLLM mirror reconciliation unchanged
+  - keep Bifrost router reconciliation and usage import unchanged
 
 server/proliferate/server/cloud/agent_auth/grant_rotation.py    (new)
   - reconcile_runtime_grant_freshness()
@@ -1094,8 +1075,8 @@ Chunk G  Freshness framework + Desktop sync signals
 Follow-ups (separate PRs, scope additions, not migration ceremony)
   - provider 401 detection at the gateway (feeds freshness signals)
   - OpenCode native sync via Desktop agent-auth export
-  - BYOK enablement (V2 product decision; live validation, LiteLLM
-    team-scoped routing or isolated routers)
+  - BYOK enablement (V2 product decision; live validation and Bifrost key
+    isolation)
 ```
 
 ## 8. Acceptance Criteria

@@ -176,7 +176,6 @@ class AgentGatewayProtocolFacade(StrEnum):
 
 
 class AgentGatewayRouterKind(StrEnum):
-    litellm_legacy = "litellm_legacy"
     bifrost = "bifrost"
 
 
@@ -268,8 +267,6 @@ SUPPORTED_AGENT_GATEWAY_ROUTER_MATERIALIZATION_STATUSES: tuple[str, ...] = tuple
     status.value for status in AgentGatewayRouterMaterializationStatus
 )
 
-AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN: Final = "agent-gateway-runtime-grant"
-AGENT_GATEWAY_TOKEN_HASH_KEY_ID: Final = "cloud_secret_key:v1"
 AGENT_GATEWAY_CIPHERTEXT_KEY_ID: Final = "cloud_secret_key:v1"
 AGENT_GATEWAY_BUDGET_DURATION_V1: Final = "30d"
 

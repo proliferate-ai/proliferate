@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 import ipaddress
 import json
 import secrets
@@ -25,8 +24,6 @@ from proliferate.constants.billing import BILLING_PLAN_PRO
 from proliferate.constants.cloud import (
     AGENT_GATEWAY_BUDGET_DURATION_V1,
     AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
-    AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN,
-    AGENT_GATEWAY_TOKEN_HASH_KEY_ID,
     CLAUDE_ALLOWED_AUTH_FILES,
     CODEX_ALLOWED_AUTH_FILES,
     GEMINI_ALLOWED_AUTH_FILES,
@@ -54,7 +51,6 @@ from proliferate.db.store.cloud_agent_auth.records import (
     AgentGatewayPolicyRecord,
     AgentGatewayProviderCredentialRecord,
     AgentGatewayRouterMaterializationRecord,
-    AgentGatewayRuntimeGrantRecord,
     SandboxAgentAuthSelectionRecord,
     SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
@@ -69,15 +65,14 @@ from proliferate.integrations.bifrost import (
     BifrostIntegrationError,
     bifrost_env_var,
 )
-from proliferate.integrations.litellm import LiteLLMAdminClient, LiteLLMIntegrationError
 from proliferate.server.billing.service import get_billing_snapshot_for_subject_in_session
 from proliferate.server.cloud.agent_auth.domain.byok_policy import (
     GatewayByokVerdict,
     gateway_byok_policy_verdict,
 )
 from proliferate.server.cloud.agent_auth.domain.desired_state import (
-    LiteLLMModelDeploymentPlan,
-    fingerprint_litellm_policy_state,
+    GatewayModelDeploymentPlan,
+    fingerprint_gateway_policy_state,
 )
 from proliferate.server.cloud.agent_auth.domain.policy import (
     SelectionPlan,
@@ -94,7 +89,7 @@ from proliferate.server.cloud.agent_auth.models import (
     CreateGatewayCredentialRequest,
     EnsureFreeManagedCreditsRequest,
     EnsureManagedCreditsRequest,
-    LiteLLMModelDeploymentRequest,
+    GatewayModelDeploymentRequest,
     SyncSyncedCredentialRequest,
     WorkerAgentAuthGatewayConfig,
     WorkerAgentAuthMaterializationPlan,
@@ -185,12 +180,6 @@ class SyncSyncedCredentialResult:
     credential: AgentAuthCredentialRecord
     selection: SandboxAgentAuthSelectionRecord
     changed: bool
-
-
-@dataclass(frozen=True)
-class RuntimeGrantIssueResult:
-    grant: AgentGatewayRuntimeGrantRecord
-    raw_token: str
 
 
 @dataclass(frozen=True)
@@ -498,12 +487,6 @@ async def create_gateway_credential(
         owner_user_id = actor_user_id
         organization_id = None
 
-    if body.agent_kind == "gemini" and not _gateway_uses_bifrost():
-        raise AgentAuthError(
-            "Gateway auth for Gemini requires the Bifrost router.",
-            code="gateway_not_supported_for_agent",
-            status_code=400,
-        )
     _validate_policy_owner_scope(body.policy_kind, body.owner_scope)
     _require_gateway_byok_enabled(body.provider_kind)
     _require_gateway_byok_create_allowed(body.policy_kind)
@@ -562,7 +545,7 @@ async def create_gateway_credential(
         status = "invalid"
         error_code = validation.error_code
         error_message = _safe_error_message(validation.error_message, body.payload)
-    elif _gateway_uses_bifrost():
+    else:
         policy = await store.ensure_gateway_policy(
             db,
             credential_id=credential.id,
@@ -608,22 +591,6 @@ async def create_gateway_credential(
                 provider_kind=body.provider_kind,
             ),
             existing_policy=policy,
-        )
-    else:
-        policy, sync_status, status, error_code, error_message = await _provision_policy(
-            db,
-            credential=credential,
-            policy_kind=body.policy_kind,
-            owner_scope=body.owner_scope,
-            owner_user_id=owner_user_id,
-            organization_id=organization_id,
-            budget_subject_id=None,
-            provider_kind=body.provider_kind,
-            provider_payload=body.payload,
-            model_deployments=_gateway_deployments_for_credential(
-                agent_kind=body.agent_kind,
-                provider_kind=body.provider_kind,
-            ),
         )
     if provider_credential is None:
         provider_credential = await store.upsert_provider_credential(
@@ -682,13 +649,6 @@ async def ensure_managed_credits_for_organization(
         db,
         organization_id,
     )
-    existing_budget = await store.get_managed_budget_subject(db, organization_id)
-    team_id = existing_budget.litellm_team_id if existing_budget else None
-    sync_status = "failed"
-    status = "invalid"
-    fingerprint = None
-    error_code = "litellm_not_configured"
-    error_message = "LiteLLM provisioning is not configured."
     requested_agent_kinds = _managed_credit_agent_kinds()
     managed_deployments = tuple(
         deployment
@@ -698,75 +658,36 @@ async def ensure_managed_credits_for_organization(
             provider_kind="proliferate_bedrock_pool",
         )
     )
-    if not managed_deployments:
-        error_code = "managed_credit_models_not_configured"
-        error_message = "No managed-credit model deployments are configured."
-    if (
-        not _gateway_uses_bifrost()
-        and settings.agent_gateway_enabled
-        and settings.agent_gateway_litellm_master_key
-    ):
-        try:
-            if not managed_deployments:
-                raise LiteLLMIntegrationError(error_message)
-            client = LiteLLMAdminClient()
-            team = await client.ensure_team(
-                team_alias=f"org-{organization_id}-managed-credits",
-                team_id=team_id,
-                max_budget=included_budget_usd,
-                budget_duration="30d",
-            )
-            team_id = team.team_id
-            for deployment in managed_deployments:
-                # LiteLLM OSS supports team budgets but gates team-scoped model
-                # deployments. Managed credits use Proliferate-owned Bedrock
-                # credentials, so a global deployment plus team virtual key keeps
-                # budget enforcement without mixing customer provider secrets.
-                await client.create_model_deployment(
-                    public_model_name=deployment.public_model_name,
-                    provider_model=deployment.provider_model,
-                    litellm_params=_provider_litellm_params(
-                        provider_kind="proliferate_bedrock_pool",
-                        provider_payload={},
-                        deployment=deployment,
-                    ),
-                    metadata={
-                        "organizationId": str(organization_id),
-                        "budgetKind": "proliferate_managed",
-                    },
-                )
-            sync_status = "synced"
-            status = "ready"
-            fingerprint = _deployment_fingerprint(
-                policy_kind="proliferate_managed",
-                litellm_team_id=team_id,
-                budget_subject_id=None,
-                provider_kind="proliferate_bedrock_pool",
-                deployments=managed_deployments,
-            )
-            error_code = None
-            error_message = None
-        except LiteLLMIntegrationError as exc:
-            error_code = "litellm_provisioning_failed"
-            error_message = _safe_error_message(str(exc), {})
+    initial_error_code = (
+        "managed_credit_models_not_configured"
+        if not managed_deployments
+        else "bifrost_not_configured"
+    )
+    initial_error_message = (
+        "No managed-credit model deployments are configured."
+        if not managed_deployments
+        else "Bifrost provisioning is not configured."
+    )
+    existing_budget = await store.get_managed_budget_subject(db, organization_id)
     budget = await store.ensure_managed_budget_subject(
         db,
         organization_id=organization_id,
         included_budget_usd=included_budget_usd,
-        litellm_team_id=team_id,
-        litellm_sync_status=sync_status,
-        litellm_sync_fingerprint=fingerprint,
-        status=status,
-        last_error_code=error_code,
-        last_error_message=error_message,
+        litellm_team_id=existing_budget.litellm_team_id if existing_budget else None,
+        litellm_sync_status="failed",
+        litellm_sync_fingerprint=(
+            existing_budget.litellm_sync_fingerprint if existing_budget else None
+        ),
+        status="invalid",
+        last_error_code=initial_error_code,
+        last_error_message=initial_error_message,
     )
-    if _gateway_uses_bifrost():
-        budget = await _reconcile_managed_budget_subject(db, budget=budget)
-        sync_status = budget.litellm_sync_status
-        status = budget.status
-        fingerprint = budget.litellm_sync_fingerprint
-        error_code = budget.last_error_code
-        error_message = budget.last_error_message
+    budget = await _reconcile_managed_budget_subject(db, budget=budget)
+    sync_status = budget.litellm_sync_status
+    status = budget.status
+    fingerprint = budget.litellm_sync_fingerprint
+    error_code = budget.last_error_code
+    error_message = budget.last_error_message
 
     credentials: list[AgentAuthCredentialRecord] = []
     policies: list[AgentGatewayPolicyRecord] = []
@@ -831,7 +752,7 @@ async def ensure_managed_credits_for_organization(
             {
                 "includedBudgetUsd": included_budget_usd,
                 "agentKinds": list(requested_agent_kinds),
-                "litellmSyncStatus": sync_status,
+                "gatewaySyncStatus": sync_status,
             },
             sort_keys=True,
         ),
@@ -957,7 +878,6 @@ async def ensure_free_managed_credits_for_user(
         included_budget_usd=budget_amount,
         status="provisioning",
     )
-    team_id = existing_budget.litellm_team_id if existing_budget else None
     budget_duration = _user_free_credit_budget_duration()
     managed_deployments = tuple(
         deployment
@@ -969,13 +889,13 @@ async def ensure_free_managed_credits_for_user(
     )
     sync_status = "failed"
     status = "invalid"
-    fingerprint = None
-    error_code = "litellm_not_configured"
-    error_message = "LiteLLM provisioning is not configured."
-    if existing_budget is not None and team_id:
+    fingerprint = existing_budget.litellm_sync_fingerprint if existing_budget else None
+    error_code = "bifrost_not_configured"
+    error_message = "Bifrost provisioning is not configured."
+    if existing_budget is not None and existing_budget.litellm_team_id:
         expected_fingerprint = _deployment_fingerprint(
             policy_kind="proliferate_managed",
-            litellm_team_id=team_id,
+            router_object_id=existing_budget.litellm_team_id,
             budget_subject_id=None,
             provider_kind="proliferate_bedrock_pool",
             deployments=managed_deployments,
@@ -998,52 +918,6 @@ async def ensure_free_managed_credits_for_user(
     if not managed_deployments:
         error_code = "managed_credit_models_not_configured"
         error_message = "No managed-credit model deployments are configured."
-    if (
-        managed_deployments
-        and sync_status != "synced"
-        and not _gateway_uses_bifrost()
-        and settings.agent_gateway_enabled
-        and settings.agent_gateway_litellm_master_key
-    ):
-        try:
-            client = LiteLLMAdminClient()
-            team = await client.ensure_team(
-                team_alias=f"user-{actor_user_id}-free-credits",
-                team_id=team_id,
-                max_budget=budget_amount,
-                budget_duration=budget_duration,
-            )
-            team_id = team.team_id
-            for deployment in managed_deployments:
-                await client.create_model_deployment(
-                    public_model_name=deployment.public_model_name,
-                    provider_model=deployment.provider_model,
-                    litellm_params=_provider_litellm_params(
-                        provider_kind="proliferate_bedrock_pool",
-                        provider_payload={},
-                        deployment=deployment,
-                    ),
-                    metadata={
-                        "ownerScope": "personal",
-                        "userId": str(actor_user_id),
-                        "budgetKind": "proliferate_managed",
-                        "entitlementId": str(entitlement.id),
-                    },
-                )
-            sync_status = "synced"
-            status = "ready"
-            fingerprint = _deployment_fingerprint(
-                policy_kind="proliferate_managed",
-                litellm_team_id=team_id,
-                budget_subject_id=None,
-                provider_kind="proliferate_bedrock_pool",
-                deployments=managed_deployments,
-            )
-            error_code = None
-            error_message = None
-        except LiteLLMIntegrationError as exc:
-            error_code = "litellm_provisioning_failed"
-            error_message = _safe_error_message(str(exc), {})
 
     budget = await store.ensure_managed_budget_subject_for_owner(
         db,
@@ -1054,20 +928,19 @@ async def ensure_free_managed_credits_for_user(
         budget_duration=budget_duration,
         entitlement_source=_USER_FREE_CREDIT_SOURCE,
         entitlement_period_key=period_key,
-        litellm_team_id=team_id,
+        litellm_team_id=existing_budget.litellm_team_id if existing_budget else None,
         litellm_sync_status=sync_status,
         litellm_sync_fingerprint=fingerprint,
         status=status,
         last_error_code=error_code,
         last_error_message=error_message,
     )
-    if _gateway_uses_bifrost():
-        budget = await _reconcile_managed_budget_subject(db, budget=budget)
-        sync_status = budget.litellm_sync_status
-        status = budget.status
-        fingerprint = budget.litellm_sync_fingerprint
-        error_code = budget.last_error_code
-        error_message = budget.last_error_message
+    budget = await _reconcile_managed_budget_subject(db, budget=budget)
+    sync_status = budget.litellm_sync_status
+    status = budget.status
+    fingerprint = budget.litellm_sync_fingerprint
+    error_code = budget.last_error_code
+    error_message = budget.last_error_message
     entitlement = await store.ensure_free_credit_entitlement(
         db,
         user_id=actor_user_id,
@@ -1228,7 +1101,7 @@ async def sync_managed_credit_budget_for_organization(
         return reconciled
 
 
-async def reconcile_agent_gateway_litellm_mirror(
+async def reconcile_agent_gateway_bifrost_router(
     db: AsyncSession,
     *,
     limit: int = 50,
@@ -1251,16 +1124,6 @@ async def reconcile_agent_gateway_litellm_mirror(
             policies_reconciled=0,
             policies_failed=0,
         )
-    if not _gateway_uses_bifrost() and not settings.agent_gateway_litellm_master_key:
-        return AgentGatewayReconcilePassResult(
-            budgets_checked=0,
-            budgets_reconciled=0,
-            budgets_failed=0,
-            policies_checked=0,
-            policies_reconciled=0,
-            policies_failed=0,
-        )
-
     budgets = await store.list_managed_budget_subjects_for_reconciliation(
         db,
         limit=limit,
@@ -1293,8 +1156,7 @@ async def reconcile_agent_gateway_litellm_mirror(
         else:
             policies_failed += 1
 
-    if _gateway_uses_bifrost():
-        await import_bifrost_usage_logs(db, limit=limit)
+    await import_bifrost_usage_logs(db, limit=limit)
 
     return AgentGatewayReconcilePassResult(
         budgets_checked=len(budgets),
@@ -1311,7 +1173,7 @@ async def import_bifrost_usage_logs(
     *,
     limit: int = 1000,
 ) -> int:
-    if not settings.agent_gateway_enabled or not _gateway_uses_bifrost():
+    if not settings.agent_gateway_enabled:
         return 0
     virtual_key_ids = await store.list_active_router_virtual_key_ids(
         db,
@@ -1492,8 +1354,7 @@ async def _exhaust_managed_budget_if_needed(
         last_error_code="managed_credits_exhausted",
         last_error_message="Managed credits are exhausted.",
     )
-    if _gateway_uses_bifrost():
-        await _disable_bifrost_virtual_keys_for_budget(db, budget=budget)
+    await _disable_bifrost_virtual_keys_for_budget(db, budget=budget)
     if budget.owner_scope == "personal" and budget.owner_user_id is not None:
         source = budget.entitlement_source or _USER_FREE_CREDIT_SOURCE
         period_key = budget.entitlement_period_key or _user_free_credit_period_key()
@@ -1578,8 +1439,6 @@ async def _disable_bifrost_runtime_materializations_for_selection(
     *,
     selection: SandboxAgentAuthSelectionRecord,
 ) -> None:
-    if not _gateway_uses_bifrost():
-        return
     materializations = await store.list_active_runtime_router_materializations_for_selection(
         db,
         router_kind="bifrost",
@@ -1603,8 +1462,6 @@ async def _disable_bifrost_router_materializations_for_credential(
     *,
     credential: AgentAuthCredentialRecord,
 ) -> None:
-    if not _gateway_uses_bifrost():
-        return
     policy = await store.get_gateway_policy_for_credential(db, credential.id)
     if policy is None:
         return
@@ -2052,103 +1909,6 @@ async def list_target_states(
 ) -> tuple[SandboxProfileAgentAuthTargetStateRecord, ...]:
     profile = await _require_profile_access(db, actor_user_id, sandbox_profile_id, admin=False)
     return await store.list_target_states_for_profile(db, profile.id)
-
-
-async def issue_runtime_grant_for_selection(
-    db: AsyncSession,
-    *,
-    selection: SandboxAgentAuthSelectionRecord,
-    profile: SandboxProfileRecord,
-    target_id: UUID,
-    cloud_sandbox_id: UUID | None,
-    slot_generation: int | None,
-) -> RuntimeGrantIssueResult:
-    if cloud_sandbox_id is None or slot_generation is None:
-        raise AgentAuthError(
-            "Gateway runtime grants require an active sandbox slot.",
-            code="agent_gateway_slot_required",
-            status_code=409,
-        )
-    if selection.status != "active":
-        raise AgentAuthError(
-            "Selection is not active.", code="selection_not_active", status_code=409
-        )
-    credential = await store.get_credential(db, selection.credential_id)
-    if credential is None or credential.revoked_at is not None:
-        raise AgentAuthError("Credential not found.", code="credential_not_found", status_code=404)
-    if selection.selected_revision != credential.revision:
-        raise AgentAuthError(
-            "Selection is stale.", code="selection_revision_stale", status_code=409
-        )
-    await _require_credential_ready_for_selection(db, credential)
-    policy = await store.get_gateway_policy_for_credential(db, credential.id)
-    if policy is None or policy.status != "ready" or policy.litellm_sync_status != "synced":
-        raise AgentAuthError(
-            "Gateway policy is not ready.", code="gateway_policy_not_ready", status_code=409
-        )
-    plan = selection_plan_for_credential(
-        agent_kind=selection.agent_kind,
-        credential_kind=credential.credential_kind,
-    )
-    if not isinstance(plan, SelectionPlan) or plan.protocol_facade is None:
-        raise AgentAuthError(
-            "Selection does not use gateway auth.", code="not_gateway_selection", status_code=400
-        )
-    if selection.agent_kind == "opencode" and not settings.agent_gateway_opencode_enabled:
-        raise AgentAuthError(
-            "Gateway auth for OpenCode is not enabled.",
-            code="gateway_not_supported_for_agent",
-            status_code=400,
-        )
-    if selection.agent_kind == "gemini" and not _gateway_uses_bifrost():
-        raise AgentAuthError(
-            "Gateway auth for Gemini requires the Bifrost router.",
-            code="gateway_not_supported_for_agent",
-            status_code=400,
-        )
-
-    now = utcnow()
-    await store.lock_runtime_grant_route(
-        db,
-        policy_id=policy.id,
-        target_id=target_id,
-        sandbox_profile_id=profile.id,
-        agent_kind=selection.agent_kind,
-    )
-    existing = await store.list_active_runtime_grants_for_route(
-        db,
-        policy_id=policy.id,
-        target_id=target_id,
-        sandbox_profile_id=profile.id,
-        agent_kind=selection.agent_kind,
-        now=now,
-    )
-    # The raw token is intentionally not persisted. Materialization retries get
-    # a fresh overlapping grant, but keep only the newest prior grant as a
-    # short compatibility grace token for already-configured runtimes.
-    stale_grant_ids = {grant.id for grant in existing[1:]}
-    await store.revoke_runtime_grants_by_ids(db, stale_grant_ids)
-
-    raw_token = secrets.token_urlsafe(32)
-    grant = await store.create_runtime_grant(
-        db,
-        token_hash=_hash_token(raw_token),
-        hash_key_id=AGENT_GATEWAY_TOKEN_HASH_KEY_ID,
-        policy_id=policy.id,
-        credential_id=credential.id,
-        selection_id=selection.id,
-        issued_profile_revision=profile.agent_auth_revision,
-        target_id=target_id,
-        sandbox_profile_id=profile.id,
-        cloud_sandbox_id=cloud_sandbox_id,
-        slot_generation=slot_generation,
-        organization_id=profile.organization_id,
-        user_id=profile.owner_user_id,
-        agent_kind=selection.agent_kind,
-        protocol_facade=plan.protocol_facade,
-        expires_at=now + _GATEWAY_GRANT_TTL,
-    )
-    return RuntimeGrantIssueResult(grant=grant, raw_token=raw_token)
 
 
 async def worker_agent_auth_materialization_plan(
@@ -3031,8 +2791,7 @@ async def _bifrost_budget_limit_for_runtime_key(
             last_error_code="managed_credits_exhausted",
             last_error_message="Managed credits are exhausted.",
         )
-        if _gateway_uses_bifrost():
-            await _disable_bifrost_virtual_keys_for_budget(db, budget=budget)
+        await _disable_bifrost_virtual_keys_for_budget(db, budget=budget)
         raise AgentAuthError(
             "Managed credits are exhausted.",
             code="managed_credits_exhausted",
@@ -3048,135 +2807,24 @@ async def _worker_gateway_config(
     profile: SandboxProfileRecord,
     selection: SandboxAgentAuthSelectionRecord,
 ) -> WorkerAgentAuthGatewayConfig:
-    if _gateway_uses_bifrost():
-        result = await _issue_bifrost_runtime_virtual_key_for_selection(
-            db,
-            auth=auth,
-            profile=profile,
-            selection=selection,
-        )
-        base = _bifrost_public_base_url()
-        if selection.agent_kind == "claude":
-            facade_base = f"{base}/anthropic"
-            config = WorkerAgentAuthGatewayConfig(
-                protocolFacade="anthropic",
-                baseUrls={"anthropic": facade_base},
-                runtimeGrantToken=result.virtual_key,
-                expiresAt=result.expires_at_iso,
-                protectedEnv={
-                    "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST": "1",
-                    "ANTHROPIC_BASE_URL": facade_base,
-                    "ANTHROPIC_AUTH_TOKEN": result.virtual_key,
-                },
-                supportEnv={},
-                protectedConfig={},
-                supportConfig={},
-            )
-            _reject_unallowed_selection_protected_env(
-                agent_kind=selection.agent_kind,
-                materialization_mode=selection.materialization_mode,
-                protected_env=config.protected_env,
-            )
-            return config
-        if selection.agent_kind == "codex":
-            facade_base = f"{base}/openai/v1"
-            config = WorkerAgentAuthGatewayConfig(
-                protocolFacade="openai",
-                baseUrls={"openai": facade_base},
-                runtimeGrantToken=result.virtual_key,
-                expiresAt=result.expires_at_iso,
-                protectedEnv={"CODEX_API_KEY": result.virtual_key},
-                supportEnv={},
-                protectedConfig={
-                    "codex": {
-                        "model_provider_id": "proliferate-bifrost",
-                        "model_providers": {
-                            "proliferate-bifrost": {
-                                "name": "Proliferate Bifrost",
-                                "base_url": facade_base,
-                                "env_key": "CODEX_API_KEY",
-                                "wire_api": "responses",
-                                "requires_openai_auth": False,
-                            }
-                        },
-                    }
-                },
-                supportConfig={},
-            )
-            _reject_unallowed_selection_protected_env(
-                agent_kind=selection.agent_kind,
-                materialization_mode=selection.materialization_mode,
-                protected_env=config.protected_env,
-            )
-            return config
-        if selection.agent_kind == "opencode":
-            facade_base = f"{base}/openai/v1"
-            config = WorkerAgentAuthGatewayConfig(
-                protocolFacade="openai",
-                baseUrls={"openai": facade_base},
-                runtimeGrantToken=result.virtual_key,
-                expiresAt=result.expires_at_iso,
-                protectedEnv={
-                    "OPENAI_API_KEY": result.virtual_key,
-                    "OPENAI_BASE_URL": facade_base,
-                },
-                supportEnv={},
-                protectedConfig={},
-                supportConfig={},
-            )
-            _reject_unallowed_selection_protected_env(
-                agent_kind=selection.agent_kind,
-                materialization_mode=selection.materialization_mode,
-                protected_env=config.protected_env,
-            )
-            return config
-        if selection.agent_kind == "gemini":
-            facade_base = f"{base}/genai"
-            config = WorkerAgentAuthGatewayConfig(
-                protocolFacade="genai",
-                baseUrls={"genai": facade_base},
-                runtimeGrantToken=result.virtual_key,
-                expiresAt=result.expires_at_iso,
-                protectedEnv={
-                    "GEMINI_API_KEY": result.virtual_key,
-                    "GOOGLE_GEMINI_BASE_URL": facade_base,
-                },
-                supportEnv={},
-                protectedConfig={},
-                supportConfig={},
-            )
-            _reject_unallowed_selection_protected_env(
-                agent_kind=selection.agent_kind,
-                materialization_mode=selection.materialization_mode,
-                protected_env=config.protected_env,
-            )
-            return config
-        raise AgentAuthError(
-            "Gateway auth is not supported for this agent.",
-            code="gateway_not_supported_for_agent",
-            status_code=400,
-        )
-    result = await issue_runtime_grant_for_selection(
+    result = await _issue_bifrost_runtime_virtual_key_for_selection(
         db,
-        selection=selection,
+        auth=auth,
         profile=profile,
-        target_id=auth.target_id,
-        cloud_sandbox_id=auth.cloud_sandbox_id,
-        slot_generation=auth.slot_generation,
+        selection=selection,
     )
-    base = _gateway_base_url()
+    base = _bifrost_public_base_url()
     if selection.agent_kind == "claude":
         facade_base = f"{base}/anthropic"
         config = WorkerAgentAuthGatewayConfig(
             protocolFacade="anthropic",
             baseUrls={"anthropic": facade_base},
-            runtimeGrantToken=result.raw_token,
-            expiresAt=result.grant.expires_at.isoformat(),
+            runtimeGrantToken=result.virtual_key,
+            expiresAt=result.expires_at_iso,
             protectedEnv={
                 "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST": "1",
                 "ANTHROPIC_BASE_URL": facade_base,
-                "ANTHROPIC_CUSTOM_HEADERS": f"Authorization: Bearer {result.raw_token}",
-                "ANTHROPIC_AUTH_TOKEN": "",
+                "ANTHROPIC_AUTH_TOKEN": result.virtual_key,
             },
             supportEnv={},
             protectedConfig={},
@@ -3193,16 +2841,16 @@ async def _worker_gateway_config(
         config = WorkerAgentAuthGatewayConfig(
             protocolFacade="openai",
             baseUrls={"openai": facade_base},
-            runtimeGrantToken=result.raw_token,
-            expiresAt=result.grant.expires_at.isoformat(),
-            protectedEnv={"CODEX_API_KEY": result.raw_token},
+            runtimeGrantToken=result.virtual_key,
+            expiresAt=result.expires_at_iso,
+            protectedEnv={"CODEX_API_KEY": result.virtual_key},
             supportEnv={},
             protectedConfig={
                 "codex": {
-                    "model_provider_id": "proliferate",
+                    "model_provider_id": "proliferate-bifrost",
                     "model_providers": {
-                        "proliferate": {
-                            "name": "Proliferate Gateway",
+                        "proliferate-bifrost": {
+                            "name": "Proliferate Bifrost",
                             "base_url": facade_base,
                             "env_key": "CODEX_API_KEY",
                             "wire_api": "responses",
@@ -3224,11 +2872,32 @@ async def _worker_gateway_config(
         config = WorkerAgentAuthGatewayConfig(
             protocolFacade="openai",
             baseUrls={"openai": facade_base},
-            runtimeGrantToken=result.raw_token,
-            expiresAt=result.grant.expires_at.isoformat(),
+            runtimeGrantToken=result.virtual_key,
+            expiresAt=result.expires_at_iso,
             protectedEnv={
-                "OPENAI_API_KEY": result.raw_token,
+                "OPENAI_API_KEY": result.virtual_key,
                 "OPENAI_BASE_URL": facade_base,
+            },
+            supportEnv={},
+            protectedConfig={},
+            supportConfig={},
+        )
+        _reject_unallowed_selection_protected_env(
+            agent_kind=selection.agent_kind,
+            materialization_mode=selection.materialization_mode,
+            protected_env=config.protected_env,
+        )
+        return config
+    if selection.agent_kind == "gemini":
+        facade_base = f"{base}/genai"
+        config = WorkerAgentAuthGatewayConfig(
+            protocolFacade="genai",
+            baseUrls={"genai": facade_base},
+            runtimeGrantToken=result.virtual_key,
+            expiresAt=result.expires_at_iso,
+            protectedEnv={
+                "GEMINI_API_KEY": result.virtual_key,
+                "GOOGLE_GEMINI_BASE_URL": facade_base,
             },
             supportEnv={},
             protectedConfig={},
@@ -3299,30 +2968,6 @@ def _decrypt_synced_payload(credential: AgentAuthCredentialRecord) -> dict[str, 
             status_code=409,
         )
     return payload
-
-
-def _gateway_base_url() -> str:
-    base = settings.agent_gateway_public_base_url.strip().rstrip("/")
-    if not base:
-        raise AgentAuthError(
-            "Agent gateway public base URL is not configured.",
-            code="agent_gateway_public_base_url_missing",
-            status_code=409,
-        )
-    return base
-
-
-def _agent_gateway_router_kind() -> str:
-    router = settings.agent_gateway_router.strip().lower() or "litellm_legacy"
-    if router in {"litellm", "litellm_legacy"}:
-        return "litellm_legacy"
-    if router == "bifrost":
-        return "bifrost"
-    return "litellm_legacy"
-
-
-def _gateway_uses_bifrost() -> bool:
-    return _agent_gateway_router_kind() == "bifrost"
 
 
 def _bifrost_public_base_url() -> str:
@@ -3479,7 +3124,7 @@ async def _ensure_bifrost_provider_key_for_managed_budget(
     db: AsyncSession,
     *,
     budget: AgentGatewayBudgetSubjectRecord,
-    deployments: Sequence[LiteLLMModelDeploymentRequest],
+    deployments: Sequence[GatewayModelDeploymentRequest],
 ) -> store.AgentGatewayRouterMaterializationRecord:
     key_plan = _bifrost_provider_key_plan(
         provider_kind="proliferate_bedrock_pool",
@@ -3569,7 +3214,7 @@ async def _ensure_bifrost_policy_provider_key(
     *,
     policy: AgentGatewayPolicyRecord,
     provider_credential: AgentGatewayProviderCredentialRecord,
-    deployments: Sequence[LiteLLMModelDeploymentRequest],
+    deployments: Sequence[GatewayModelDeploymentRequest],
 ) -> store.AgentGatewayRouterMaterializationRecord:
     payload = decrypt_json(provider_credential.payload_ciphertext)
     provider_payload = {str(key): str(value) for key, value in payload.items()}
@@ -3660,7 +3305,7 @@ def _bifrost_provider_key_plan(
     *,
     provider_kind: str,
     provider_payload: dict[str, str],
-    deployments: Sequence[LiteLLMModelDeploymentRequest],
+    deployments: Sequence[GatewayModelDeploymentRequest],
     object_id: str,
     display_name: str,
 ) -> dict[str, object]:
@@ -3832,7 +3477,7 @@ def _bifrost_virtual_key_fingerprint(
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _bifrost_deployments_for_managed_credits() -> tuple[LiteLLMModelDeploymentRequest, ...]:
+def _bifrost_deployments_for_managed_credits() -> tuple[GatewayModelDeploymentRequest, ...]:
     provider = _bifrost_managed_provider_name()
     if provider == "openai":
         model = "gpt-5.5"
@@ -3843,7 +3488,7 @@ def _bifrost_deployments_for_managed_credits() -> tuple[LiteLLMModelDeploymentRe
     else:
         model = "us.anthropic.claude-sonnet-4-6"
     return (
-        LiteLLMModelDeploymentRequest(
+        GatewayModelDeploymentRequest(
             publicModelName=model,
             providerModel=model,
         ),
@@ -3870,131 +3515,7 @@ async def _reconcile_managed_budget_subject(
     *,
     budget: AgentGatewayBudgetSubjectRecord,
 ) -> AgentGatewayBudgetSubjectRecord:
-    if _gateway_uses_bifrost():
-        return await _reconcile_bifrost_managed_budget_subject(db, budget=budget)
-    if budget.owner_scope == "personal":
-        entitlement_source = budget.entitlement_source or _USER_FREE_CREDIT_SOURCE
-        entitlement_period_key = budget.entitlement_period_key or _user_free_credit_period_key()
-        entitlement = await store.get_free_credit_entitlement_for_budget(
-            db,
-            budget.id,
-            source=entitlement_source,
-            period_key=entitlement_period_key,
-        )
-        included_budget_usd = (
-            _budget_amount(entitlement.included_budget_usd)
-            if entitlement is not None
-            else _user_free_credit_entitlement_budget(require_positive=False)
-        )
-        team_alias = f"user-{budget.owner_user_id}-free-credits"
-        owner_metadata = {
-            "ownerScope": "personal",
-            "userId": str(budget.owner_user_id),
-            "budgetKind": budget.budget_kind,
-        }
-        budget_duration = budget.budget_duration
-    else:
-        if budget.organization_id is None:
-            return await store.ensure_managed_budget_subject_for_owner(
-                db,
-                owner_scope=budget.owner_scope,
-                owner_user_id=budget.owner_user_id,
-                organization_id=budget.organization_id,
-                included_budget_usd=budget.included_budget_usd,
-                budget_duration=budget.budget_duration,
-                entitlement_source=budget.entitlement_source,
-                entitlement_period_key=budget.entitlement_period_key,
-                litellm_team_id=budget.litellm_team_id,
-                litellm_sync_status="failed",
-                litellm_sync_fingerprint=budget.litellm_sync_fingerprint,
-                status="invalid",
-                last_error_code="managed_budget_owner_invalid",
-                last_error_message="Managed budget subject is missing its organization.",
-            )
-        included_budget_usd = await _organization_managed_credit_entitlement_budget(
-            db,
-            budget.organization_id,
-            require_positive=False,
-        )
-        team_alias = f"org-{budget.organization_id}-managed-credits"
-        owner_metadata = {
-            "organizationId": str(budget.organization_id),
-            "budgetKind": budget.budget_kind,
-        }
-        entitlement_source = budget.entitlement_source
-        entitlement_period_key = budget.entitlement_period_key
-        budget_duration = budget.budget_duration or AGENT_GATEWAY_BUDGET_DURATION_V1
-    managed_deployments = tuple(
-        deployment
-        for agent_kind in _managed_credit_agent_kinds()
-        for deployment in _gateway_deployments_for_credential(
-            agent_kind=agent_kind,
-            provider_kind="proliferate_bedrock_pool",
-        )
-    )
-    sync_status = "failed"
-    status = "invalid"
-    fingerprint = None
-    error_code = "managed_credit_models_not_configured"
-    error_message = "No managed-credit model deployments are configured."
-    team_id = budget.litellm_team_id
-    if managed_deployments:
-        try:
-            client = LiteLLMAdminClient()
-            team = await client.ensure_team(
-                team_alias=team_alias,
-                team_id=budget.litellm_team_id,
-                max_budget=included_budget_usd,
-                budget_duration=budget_duration,
-            )
-            team_id = team.team_id
-            for deployment in managed_deployments:
-                # See ensure_managed_credits_for_organization for why managed
-                # credits intentionally use global LiteLLM deployments.
-                await client.create_model_deployment(
-                    public_model_name=deployment.public_model_name,
-                    provider_model=deployment.provider_model,
-                    litellm_params=_provider_litellm_params(
-                        provider_kind="proliferate_bedrock_pool",
-                        provider_payload={},
-                        deployment=deployment,
-                    ),
-                    metadata=owner_metadata,
-                )
-            sync_status = "synced"
-            status = (
-                "exhausted"
-                if budget.status == "exhausted" or Decimal(included_budget_usd) <= 0
-                else "ready"
-            )
-            fingerprint = _deployment_fingerprint(
-                policy_kind="proliferate_managed",
-                litellm_team_id=team_id,
-                budget_subject_id=None,
-                provider_kind="proliferate_bedrock_pool",
-                deployments=managed_deployments,
-            )
-            error_code = None
-            error_message = None
-        except LiteLLMIntegrationError as exc:
-            error_code = "litellm_provisioning_failed"
-            error_message = _safe_error_message(str(exc), {})
-    return await store.ensure_managed_budget_subject_for_owner(
-        db,
-        owner_scope=budget.owner_scope,
-        owner_user_id=budget.owner_user_id,
-        organization_id=budget.organization_id,
-        included_budget_usd=included_budget_usd,
-        budget_duration=budget_duration,
-        entitlement_source=entitlement_source,
-        entitlement_period_key=entitlement_period_key,
-        litellm_team_id=team_id,
-        litellm_sync_status=sync_status,
-        litellm_sync_fingerprint=fingerprint,
-        status=status,
-        last_error_code=error_code,
-        last_error_message=error_message,
-    )
+    return await _reconcile_bifrost_managed_budget_subject(db, budget=budget)
 
 
 async def _reconcile_gateway_policy(
@@ -4193,44 +3714,6 @@ async def _ensure_managed_policy(
     virtual_key_ciphertext_key_id = (
         existing_policy.litellm_virtual_key_ciphertext_key_id if existing_policy else None
     )
-    if _gateway_uses_bifrost():
-        return await store.ensure_gateway_policy(
-            db,
-            credential_id=credential.id,
-            policy_kind="proliferate_managed",
-            owner_scope=credential.owner_scope,
-            owner_user_id=credential.owner_user_id,
-            organization_id=credential.organization_id,
-            budget_subject_id=budget.id,
-            litellm_team_id=budget.litellm_team_id,
-            litellm_virtual_key_id=virtual_key_id,
-            litellm_virtual_key_ciphertext=virtual_key_ciphertext,
-            litellm_virtual_key_ciphertext_key_id=virtual_key_ciphertext_key_id,
-            litellm_sync_status=sync_status,
-            litellm_sync_fingerprint=fingerprint,
-            status=status,
-            last_error_code=error_code,
-            last_error_message=error_message,
-        )
-    if existing_policy is not None and existing_policy.litellm_team_id != budget.litellm_team_id:
-        virtual_key_id = None
-        virtual_key_ciphertext = None
-        virtual_key_ciphertext_key_id = None
-    if sync_status == "synced" and budget.litellm_team_id:
-        try:
-            if virtual_key_ciphertext is None:
-                key = await LiteLLMAdminClient().generate_key(
-                    team_id=budget.litellm_team_id,
-                    key_alias=f"credential-{credential.id}",
-                )
-                virtual_key_id = key.key_id
-                virtual_key_ciphertext = encrypt_text(key.key)
-                virtual_key_ciphertext_key_id = AGENT_GATEWAY_CIPHERTEXT_KEY_ID
-        except LiteLLMIntegrationError as exc:
-            sync_status = "failed"
-            status = "invalid"
-            error_code = "litellm_key_provisioning_failed"
-            error_message = _safe_error_message(str(exc), {})
     return await store.ensure_gateway_policy(
         db,
         credential_id=credential.id,
@@ -4262,12 +3745,12 @@ async def _provision_policy(
     budget_subject_id: UUID | None,
     provider_kind: str,
     provider_payload: dict[str, str],
-    model_deployments: Sequence[LiteLLMModelDeploymentRequest],
+    model_deployments: Sequence[GatewayModelDeploymentRequest],
     existing_policy: AgentGatewayPolicyRecord | None = None,
 ) -> tuple[AgentGatewayPolicyRecord, str, str, str | None, str | None]:
     sync_status = "failed"
     status = "invalid"
-    litellm_team_id = existing_policy.litellm_team_id if existing_policy else None
+    router_object_id = existing_policy.litellm_team_id if existing_policy else None
     virtual_key_id = existing_policy.litellm_virtual_key_id if existing_policy else None
     virtual_key_ciphertext = (
         existing_policy.litellm_virtual_key_ciphertext if existing_policy else None
@@ -4275,79 +3758,20 @@ async def _provision_policy(
     virtual_key_ciphertext_key_id = (
         existing_policy.litellm_virtual_key_ciphertext_key_id if existing_policy else None
     )
-    if litellm_team_id is None:
+    if router_object_id is None:
         virtual_key_id = None
         virtual_key_ciphertext = None
         virtual_key_ciphertext_key_id = None
-    error_code = "litellm_not_configured"
-    error_message = "LiteLLM provisioning is not configured."
+    error_code = "model_deployments_not_configured"
+    error_message = "No gateway model deployments are configured for this credential."
     if not model_deployments:
-        error_code = "model_deployments_not_configured"
-        error_message = "No gateway model deployments are configured for this credential."
-    fingerprint = _deployment_fingerprint(
-        policy_kind=policy_kind,
-        litellm_team_id=None,
-        budget_subject_id=str(budget_subject_id) if budget_subject_id else None,
-        provider_kind=provider_kind,
-        deployments=model_deployments,
-    )
-    if _gateway_uses_bifrost() and model_deployments:
-        policy = await store.ensure_gateway_policy(
-            db,
-            credential_id=credential.id,
+        fingerprint = _deployment_fingerprint(
             policy_kind=policy_kind,
-            owner_scope=owner_scope,
-            owner_user_id=owner_user_id,
-            organization_id=organization_id,
-            budget_subject_id=budget_subject_id,
-            litellm_team_id=litellm_team_id,
-            litellm_virtual_key_id=virtual_key_id,
-            litellm_virtual_key_ciphertext=virtual_key_ciphertext,
-            litellm_virtual_key_ciphertext_key_id=virtual_key_ciphertext_key_id,
-            litellm_sync_status="pending",
-            litellm_sync_fingerprint=fingerprint,
-            status="provisioning",
-            last_error_code=None,
-            last_error_message=None,
+            router_object_id=router_object_id,
+            budget_subject_id=str(budget_subject_id) if budget_subject_id else None,
+            provider_kind=provider_kind,
+            deployments=model_deployments,
         )
-        provider_credential = await store.get_provider_credential_for_policy(db, policy.id)
-        if provider_credential is None:
-            return await store.ensure_gateway_policy(
-                db,
-                credential_id=credential.id,
-                policy_kind=policy_kind,
-                owner_scope=owner_scope,
-                owner_user_id=owner_user_id,
-                organization_id=organization_id,
-                budget_subject_id=budget_subject_id,
-                litellm_team_id=litellm_team_id,
-                litellm_virtual_key_id=virtual_key_id,
-                litellm_virtual_key_ciphertext=virtual_key_ciphertext,
-                litellm_virtual_key_ciphertext_key_id=virtual_key_ciphertext_key_id,
-                litellm_sync_status="failed",
-                litellm_sync_fingerprint=fingerprint,
-                status="invalid",
-                last_error_code="provider_credential_missing",
-                last_error_message="Gateway provider credential is not configured.",
-            ), "failed", "invalid", "provider_credential_missing", (
-                "Gateway provider credential is not configured."
-            )
-        try:
-            materialization = await _ensure_bifrost_policy_provider_key(
-                db,
-                policy=policy,
-                provider_credential=provider_credential,
-                deployments=model_deployments,
-            )
-            sync_status = "synced"
-            status = "ready"
-            litellm_team_id = materialization.router_object_id
-            fingerprint = materialization.sync_fingerprint
-            error_code = None
-            error_message = None
-        except BifrostIntegrationError as exc:
-            error_code = "bifrost_provisioning_failed"
-            error_message = _safe_error_message(str(exc), provider_payload)
         policy = await store.ensure_gateway_policy(
             db,
             credential_id=credential.id,
@@ -4356,7 +3780,7 @@ async def _provision_policy(
             owner_user_id=owner_user_id,
             organization_id=organization_id,
             budget_subject_id=budget_subject_id,
-            litellm_team_id=litellm_team_id,
+            litellm_team_id=router_object_id,
             litellm_virtual_key_id=virtual_key_id,
             litellm_virtual_key_ciphertext=virtual_key_ciphertext,
             litellm_virtual_key_ciphertext_key_id=virtual_key_ciphertext_key_id,
@@ -4367,57 +3791,14 @@ async def _provision_policy(
             last_error_message=error_message,
         )
         return policy, sync_status, status, error_code, error_message
-    if (
-        model_deployments
-        and not _gateway_uses_bifrost()
-        and settings.agent_gateway_enabled
-        and settings.agent_gateway_litellm_master_key
-    ):
-        try:
-            client = LiteLLMAdminClient()
-            team = await client.ensure_team(
-                team_alias=f"credential-{credential.id}",
-                team_id=litellm_team_id,
-            )
-            litellm_team_id = team.team_id
-            if virtual_key_ciphertext is None:
-                key = await client.generate_key(
-                    team_id=team.team_id,
-                    key_alias=f"credential-{credential.id}",
-                )
-                virtual_key_id = key.key_id
-                virtual_key_ciphertext = encrypt_text(key.key)
-                virtual_key_ciphertext_key_id = AGENT_GATEWAY_CIPHERTEXT_KEY_ID
-            for deployment in model_deployments:
-                await client.create_model_deployment(
-                    public_model_name=deployment.public_model_name,
-                    provider_model=deployment.provider_model,
-                    team_id=team.team_id,
-                    litellm_params=_provider_litellm_params(
-                        provider_kind=provider_kind,
-                        provider_payload=provider_payload,
-                        deployment=deployment,
-                    ),
-                    metadata={
-                        "credentialId": str(credential.id),
-                        "agentKind": credential.agent_kind,
-                    },
-                )
-            sync_status = "synced"
-            status = "ready"
-            fingerprint = _deployment_fingerprint(
-                policy_kind=policy_kind,
-                litellm_team_id=litellm_team_id,
-                budget_subject_id=str(budget_subject_id) if budget_subject_id else None,
-                provider_kind=provider_kind,
-                deployments=model_deployments,
-            )
-            error_code = None
-            error_message = None
-        except LiteLLMIntegrationError as exc:
-            error_code = "litellm_provisioning_failed"
-            error_message = _safe_error_message(str(exc), provider_payload)
 
+    fingerprint = _deployment_fingerprint(
+        policy_kind=policy_kind,
+        router_object_id=router_object_id,
+        budget_subject_id=str(budget_subject_id) if budget_subject_id else None,
+        provider_kind=provider_kind,
+        deployments=model_deployments,
+    )
     policy = await store.ensure_gateway_policy(
         db,
         credential_id=credential.id,
@@ -4426,7 +3807,67 @@ async def _provision_policy(
         owner_user_id=owner_user_id,
         organization_id=organization_id,
         budget_subject_id=budget_subject_id,
-        litellm_team_id=litellm_team_id,
+        litellm_team_id=router_object_id,
+        litellm_virtual_key_id=virtual_key_id,
+        litellm_virtual_key_ciphertext=virtual_key_ciphertext,
+        litellm_virtual_key_ciphertext_key_id=virtual_key_ciphertext_key_id,
+        litellm_sync_status="pending",
+        litellm_sync_fingerprint=fingerprint,
+        status="provisioning",
+        last_error_code=None,
+        last_error_message=None,
+    )
+    provider_credential = await store.get_provider_credential_for_policy(db, policy.id)
+    if provider_credential is None:
+        return (
+            await store.ensure_gateway_policy(
+                db,
+                credential_id=credential.id,
+                policy_kind=policy_kind,
+                owner_scope=owner_scope,
+                owner_user_id=owner_user_id,
+                organization_id=organization_id,
+                budget_subject_id=budget_subject_id,
+                litellm_team_id=router_object_id,
+                litellm_virtual_key_id=virtual_key_id,
+                litellm_virtual_key_ciphertext=virtual_key_ciphertext,
+                litellm_virtual_key_ciphertext_key_id=virtual_key_ciphertext_key_id,
+                litellm_sync_status="failed",
+                litellm_sync_fingerprint=fingerprint,
+                status="invalid",
+                last_error_code="provider_credential_missing",
+                last_error_message="Gateway provider credential is not configured.",
+            ),
+            "failed",
+            "invalid",
+            "provider_credential_missing",
+            "Gateway provider credential is not configured.",
+        )
+    try:
+        materialization = await _ensure_bifrost_policy_provider_key(
+            db,
+            policy=policy,
+            provider_credential=provider_credential,
+            deployments=model_deployments,
+        )
+        sync_status = "synced"
+        status = "ready"
+        router_object_id = materialization.router_object_id
+        fingerprint = materialization.sync_fingerprint
+        error_code = None
+        error_message = None
+    except BifrostIntegrationError as exc:
+        error_code = "bifrost_provisioning_failed"
+        error_message = _safe_error_message(str(exc), provider_payload)
+    policy = await store.ensure_gateway_policy(
+        db,
+        credential_id=credential.id,
+        policy_kind=policy_kind,
+        owner_scope=owner_scope,
+        owner_user_id=owner_user_id,
+        organization_id=organization_id,
+        budget_subject_id=budget_subject_id,
+        litellm_team_id=router_object_id,
         litellm_virtual_key_id=virtual_key_id,
         litellm_virtual_key_ciphertext=virtual_key_ciphertext,
         litellm_virtual_key_ciphertext_key_id=virtual_key_ciphertext_key_id,
@@ -4439,79 +3880,50 @@ async def _provision_policy(
     return policy, sync_status, status, error_code, error_message
 
 
-def _provider_litellm_params(
-    *,
-    provider_kind: str,
-    provider_payload: dict[str, str],
-    deployment: LiteLLMModelDeploymentRequest,
-) -> dict[str, object]:
-    params: dict[str, object] = {}
-    if provider_kind == "anthropic_api_key":
-        params["api_key"] = provider_payload["apiKey"]
-        params.setdefault("custom_llm_provider", "anthropic")
-    elif provider_kind == "openai_api_key":
-        params["api_key"] = provider_payload["apiKey"]
-        params.setdefault("custom_llm_provider", "openai")
-    elif provider_kind == "gemini_api_key":
-        params["api_key"] = provider_payload["apiKey"]
-        params.setdefault("custom_llm_provider", "gemini")
-    elif provider_kind == "openai_compatible":
-        params["api_key"] = provider_payload["apiKey"]
-        params["api_base"] = provider_payload["baseUrl"]
-        params.setdefault("custom_llm_provider", "openai")
-    elif provider_kind == "bedrock_assume_role":
-        params["aws_role_name"] = provider_payload["roleArn"]
-        params["aws_external_id"] = provider_payload["externalId"]
-        params["aws_region_name"] = provider_payload["region"]
-        params.setdefault("custom_llm_provider", "bedrock")
-    elif provider_kind == "proliferate_bedrock_pool":
-        params.setdefault("custom_llm_provider", "bedrock")
-    return params
-
-
 def _gateway_deployments_for_credential(
     *,
     agent_kind: str,
     provider_kind: str,
-) -> tuple[LiteLLMModelDeploymentRequest, ...]:
-    if (
-        _gateway_uses_bifrost()
-        and provider_kind == "proliferate_bedrock_pool"
-        and agent_kind in {"claude", "codex", "opencode", "gemini"}
-    ):
+) -> tuple[GatewayModelDeploymentRequest, ...]:
+    if provider_kind == "proliferate_bedrock_pool" and agent_kind in {
+        "claude",
+        "codex",
+        "opencode",
+        "gemini",
+    }:
         return _bifrost_deployments_for_managed_credits()
     if agent_kind == "claude":
         if provider_kind in {"bedrock_assume_role", "proliferate_bedrock_pool"}:
             return (
-                LiteLLMModelDeploymentRequest(
+                GatewayModelDeploymentRequest(
                     publicModelName="us.anthropic.claude-sonnet-4-6",
                     providerModel="us.anthropic.claude-sonnet-4-6",
                 ),
             )
         if provider_kind == "anthropic_api_key":
             return (
-                LiteLLMModelDeploymentRequest(
+                GatewayModelDeploymentRequest(
                     publicModelName="us.anthropic.claude-sonnet-4-6",
                     providerModel="claude-sonnet-4-6",
                 ),
             )
     if agent_kind == "codex" and provider_kind in {"openai_api_key", "openai_compatible"}:
         return (
-            LiteLLMModelDeploymentRequest(
+            GatewayModelDeploymentRequest(
                 publicModelName="gpt-5.5",
                 providerModel="gpt-5.5",
             ),
         )
     if agent_kind == "opencode" and provider_kind in {"openai_api_key", "openai_compatible"}:
         return (
-            LiteLLMModelDeploymentRequest(
+            GatewayModelDeploymentRequest(
                 publicModelName="opencode/big-pickle",
                 providerModel="gpt-5.5",
             ),
         )
     if agent_kind == "gemini" and provider_kind == "gemini_api_key":
         return (
-            LiteLLMModelDeploymentRequest(
+            GatewayModelDeploymentRequest(
                 publicModelName="gemini-2.5-pro",
                 providerModel="gemini-2.5-pro",
             ),
@@ -4616,14 +4028,11 @@ def _gateway_byok_provider_enabled(provider_kind: str) -> bool:
     if provider_kind == "openai_api_key":
         return settings.agent_gateway_openai_byok_enabled
     if provider_kind == "gemini_api_key":
-        return _gateway_uses_bifrost() and settings.agent_gateway_gemini_byok_enabled
+        return settings.agent_gateway_gemini_byok_enabled
     if provider_kind == "bedrock_assume_role":
         return settings.agent_gateway_bedrock_byok_enabled
     if provider_kind == "openai_compatible":
-        return (
-            not _gateway_uses_bifrost()
-            and settings.agent_gateway_openai_compatible_byok_enabled
-        )
+        return False
     return False
 
 
@@ -4632,11 +4041,6 @@ def _gateway_byok_policy_verdict(policy_kind: str) -> GatewayByokVerdict:
         policy_kind=policy_kind,
         gateway_byok_enabled=settings.agent_gateway_byok_enabled,
         personal_byok_enabled=settings.agent_gateway_personal_byok_enabled,
-        litellm_topology=settings.agent_gateway_litellm_topology,
-        customer_secret_isolation_verified=(
-            settings.agent_gateway_litellm_customer_secret_isolation_verified
-        ),
-        gateway_router=_agent_gateway_router_kind(),
         bifrost_isolation_verified=settings.agent_gateway_bifrost_isolation_verified,
     )
 
@@ -4673,21 +4077,14 @@ def _validate_provider_payload(
                 raise AgentAuthError(
                     "apiKey is required.", code="missing_api_key", status_code=400
                 )
-            live_validation_delegated = _gateway_uses_bifrost()
             return _ProviderValidation(
-                status="valid" if live_validation_delegated else "unvalidated",
+                status="valid",
                 redacted_summary={
                     "providerKind": provider_kind,
                     "apiKey": _redact_secret(api_key),
                 },
-                error_code=(
-                    None if live_validation_delegated else "provider_live_validation_deferred"
-                ),
-                error_message=(
-                    None
-                    if live_validation_delegated
-                    else "Provider credentials require live validation before use."
-                ),
+                error_code=None,
+                error_message=None,
             )
         if provider_kind == "bedrock_assume_role":
             result = validate_bedrock_assume_role_payload(
@@ -4695,23 +4092,16 @@ def _validate_provider_payload(
                 external_id=payload.get("externalId", ""),
                 region=payload.get("region", ""),
             )
-            live_validation_delegated = _gateway_uses_bifrost()
             return _ProviderValidation(
-                status="valid" if live_validation_delegated else "unvalidated",
+                status="valid",
                 redacted_summary={
                     "providerKind": provider_kind,
                     "roleArn": result.role_arn,
                     "region": result.region,
                     "accountId": result.account_id,
                 },
-                error_code=(
-                    None if live_validation_delegated else "provider_live_validation_deferred"
-                ),
-                error_message=(
-                    None
-                    if live_validation_delegated
-                    else "Provider credentials require live validation before use."
-                ),
+                error_code=None,
+                error_message=None,
             )
         if provider_kind == "openai_compatible":
             base_url = _validate_openai_compatible_url(payload.get("baseUrl", ""))
@@ -4785,21 +4175,21 @@ def _validate_openai_compatible_url(raw_url: str) -> str:
 def _deployment_fingerprint(
     *,
     policy_kind: str,
-    litellm_team_id: str | None,
+    router_object_id: str | None,
     budget_subject_id: str | None,
     provider_kind: str | None,
-    deployments: Sequence[LiteLLMModelDeploymentRequest],
+    deployments: Sequence[GatewayModelDeploymentRequest],
 ) -> str:
-    return fingerprint_litellm_policy_state(
+    return fingerprint_gateway_policy_state(
         policy_kind=policy_kind,
-        litellm_team_id=litellm_team_id,
+        router_object_id=router_object_id,
         budget_subject_id=budget_subject_id,
         provider_kind=provider_kind,
         model_deployments=[
-            LiteLLMModelDeploymentPlan(
+            GatewayModelDeploymentPlan(
                 public_model_name=item.public_model_name,
                 provider_model=item.provider_model,
-                litellm_params={},
+                provider_params={},
             )
             for item in deployments
         ],
@@ -5207,14 +4597,6 @@ def _agent_auth_retry_marker(
         f"{existing_state.desired_revision}:{existing_state.updated_at.isoformat()}"
     )
     return hashlib.sha256(marker.encode("utf-8")).hexdigest()[:16]
-
-
-def _hash_token(raw_token: str) -> str:
-    return hmac.new(
-        settings.cloud_secret_key.encode("utf-8"),
-        f"{AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN}:{raw_token}".encode(),
-        hashlib.sha256,
-    ).hexdigest()
 
 
 def _clean_display_name(value: str) -> str:
