@@ -24,6 +24,7 @@ use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;
 use crate::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::workspaces::env::read_materialized_session_env;
+use crate::workspaces::managed_root::canonical_managed_worktrees_root;
 
 const BRANCH_PUBLISH_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -521,6 +522,16 @@ impl WorkspaceRuntime {
         let worktree = Path::new(&workspace.path);
         if !worktree.exists() {
             return Ok(());
+        }
+        let managed_root = canonical_managed_worktrees_root(&self.runtime_home)?;
+        let canonical_worktree = fs::canonicalize(worktree).map_err(|error| {
+            anyhow::anyhow!("canonicalizing workspace checkout path for retire: {error}")
+        })?;
+        if !canonical_worktree.starts_with(&managed_root) {
+            anyhow::bail!(
+                "refusing to remove worktree outside managed worktrees root: {}",
+                workspace.path
+            );
         }
         let output = Command::new("git")
             .args([

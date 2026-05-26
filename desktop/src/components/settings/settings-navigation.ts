@@ -5,6 +5,7 @@ import {
   CircleUser,
   ClipboardList,
   CreditCard,
+  Archive,
   FolderList,
   GitBranch,
   Keyboard,
@@ -61,6 +62,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     items: [
       { kind: "section", id: "environments", label: "Environments", icon: FolderList },
       { kind: "section", id: "worktrees", label: "Worktrees", icon: GitBranch },
+      { kind: "section", id: "archived-chats", label: "Archived chats", icon: Archive },
       {
         kind: "section",
         id: "shared-environments",

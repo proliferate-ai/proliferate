@@ -21,7 +21,10 @@ from proliferate.constants.cloud import (
     CloudTargetStatus,
     CloudTargetUpdateStatus,
     CloudWorkerStatus,
+    CloudWorkspaceCleanupState,
+    CloudWorkspaceStatus,
 )
+from proliferate.db.store import cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_claims import tokens as claim_tokens_store
 from proliferate.db.store.cloud_sandboxes import load_active_slot_for_profile_target
@@ -83,6 +86,8 @@ from proliferate.server.cloud.worker.models import (
     WorkerInventoryPayload,
     WorkerInventoryRequest,
     WorkerInventoryResponse,
+    WorkerMaterializationReportRequest,
+    WorkerMaterializationReportResponse,
     WorkerProjectionGapRequest,
     WorkerProjectionGapResponse,
     WorkerRevokedJtiEntry,
@@ -98,6 +103,7 @@ from proliferate.utils.time import utcnow
 
 _REVOKED_JTI_PAGE_SIZE = 500
 _REVOKED_JTI_CURSOR_ZERO_ID = UUID("00000000-0000-0000-0000-000000000000")
+_UNSET = object()
 
 
 def _hash_token(*, domain: str, token: str) -> str:
@@ -792,6 +798,154 @@ async def record_inventory(
     )
 
 
+def _report_cleanup_state(
+    body: WorkerMaterializationReportRequest,
+) -> str | object:
+    cleanup_status = (body.cleanup_status or "").strip().lower()
+    state = body.state.strip().lower()
+    if cleanup_status in {"completed", "complete"}:
+        return CloudWorkspaceCleanupState.complete.value
+    if cleanup_status == "blocked" or state == "prune_blocked":
+        return CloudWorkspaceCleanupState.blocked.value
+    if cleanup_status == "failed" or state == "prune_failed":
+        return CloudWorkspaceCleanupState.failed.value
+    if cleanup_status in {"pruning", "pending"} or state in {"dehydrating", "pruning"}:
+        return CloudWorkspaceCleanupState.pending.value
+    if state == "hydrated":
+        return CloudWorkspaceCleanupState.none.value
+    return _UNSET
+
+
+def _report_cleanup_error(body: WorkerMaterializationReportRequest) -> str | None | object:
+    if body.cleanup_last_error:
+        return body.cleanup_last_error
+    if body.blockers:
+        return json.dumps({"blockers": body.blockers}, separators=(",", ":"), sort_keys=True)
+    return None if (body.cleanup_status or "").lower() in {"completed", "complete"} else _UNSET
+
+
+async def record_materialization_report(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    body: WorkerMaterializationReportRequest,
+) -> WorkerMaterializationReportResponse:
+    target = await targets_store.get_target_by_id(db, auth.target_id)
+    if target is None:
+        raise CloudApiError(
+            "cloud_worker_target_missing",
+            "Worker target no longer exists.",
+            status_code=401,
+        )
+    await require_current_managed_worker_slot(db, auth=auth, target=target)
+    workspace = await cloud_workspaces.get_cloud_workspace_by_id(
+        db,
+        body.cloud_workspace_id,
+    )
+    if workspace is None:
+        raise CloudApiError(
+            "cloud_worker_workspace_missing",
+            "Cloud workspace no longer exists.",
+            status_code=404,
+        )
+    if workspace.target_id != auth.target_id:
+        raise CloudApiError(
+            "cloud_worker_workspace_target_mismatch",
+            "Cloud workspace is not attached to this worker target.",
+            status_code=409,
+        )
+
+    state = body.state.strip().lower()
+    status: str | object = _UNSET
+    status_detail: str | None | object = _UNSET
+    anyharness_workspace_id: str | None | object = _UNSET
+    cleanup_state = _report_cleanup_state(body)
+    cleanup_last_error = _report_cleanup_error(body)
+
+    if state == "hydrated":
+        if not body.anyharness_workspace_id:
+            raise CloudApiError(
+                "cloud_worker_materialization_workspace_required",
+                "Hydrated materialization reports require anyharnessWorkspaceId.",
+                status_code=400,
+            )
+        anyharness_workspace_id = body.anyharness_workspace_id
+        status = (
+            CloudWorkspaceStatus.archived.value
+            if workspace.archived_at is not None
+            else CloudWorkspaceStatus.ready.value
+        )
+        status_detail = "Archived" if workspace.archived_at is not None else "Ready"
+    elif state in {"dehydrated", "prune_blocked", "prune_failed", "dehydrating", "pruning"}:
+        if (
+            body.anyharness_workspace_id
+            and workspace.anyharness_workspace_id is not None
+            and workspace.anyharness_workspace_id != body.anyharness_workspace_id
+        ):
+            raise CloudApiError(
+                "cloud_worker_materialization_workspace_mismatch",
+                "Materialization report does not match the current AnyHarness workspace.",
+                status_code=409,
+            )
+        if body.anyharness_workspace_id:
+            anyharness_workspace_id = None if state == "dehydrated" else _UNSET
+        status = (
+            CloudWorkspaceStatus.archived.value
+            if workspace.archived_at is not None
+            else CloudWorkspaceStatus.needs_rematerialization.value
+            if state == "dehydrated"
+            else _UNSET
+        )
+        status_detail = (
+            "Archived"
+            if workspace.archived_at is not None
+            else "Worktree pruned"
+            if state == "dehydrated"
+            else _UNSET
+        )
+    else:
+        raise CloudApiError(
+            "cloud_worker_materialization_state_invalid",
+            f"Unsupported materialization state: {body.state}",
+            status_code=400,
+        )
+
+    updates: dict[str, object] = {}
+    if anyharness_workspace_id is not _UNSET:
+        updates["anyharness_workspace_id"] = anyharness_workspace_id
+    if state == "dehydrated":
+        updates["worktree_path"] = None
+    elif body.worktree_path is not None:
+        updates["worktree_path"] = body.worktree_path
+    if status is not _UNSET:
+        updates["status"] = status
+    if status_detail is not _UNSET:
+        updates["status_detail"] = status_detail
+    if cleanup_state is not _UNSET:
+        updates["cleanup_state"] = cleanup_state
+    if cleanup_last_error is not _UNSET:
+        updates["cleanup_last_error"] = cleanup_last_error
+    if state == "hydrated" and auth.slot_generation is not None:
+        updates["materialized_slot_generation"] = auth.slot_generation
+    await cloud_workspaces.update_cloud_workspace_materialization_state(
+        db,
+        workspace=workspace,
+        **updates,
+    )
+    if state == "dehydrated" and body.anyharness_workspace_id:
+        await exposures_store.clear_workspace_exposure_materialization(
+            db,
+            target_id=auth.target_id,
+            cloud_workspace_id=workspace.id,
+            anyharness_workspace_id=body.anyharness_workspace_id,
+        )
+    await db.commit()
+    return WorkerMaterializationReportResponse(
+        cloud_workspace_id=str(workspace.id),
+        updated=True,
+    )
+
+
 async def record_update_status(
     db: AsyncSession,
     *,
@@ -1143,6 +1297,12 @@ async def list_worker_exposures(
     )
     responses: list[WorkerExposureSnapshotResponse] = []
     for cursor in cursors:
+        workspace = await cloud_workspaces.get_cloud_workspace_by_id(
+            db,
+            cursor.cloud_workspace_id,
+        )
+        if workspace is None or workspace.archived_at is not None:
+            continue
         responses.append(
             WorkerExposureSnapshotResponse(
                 exposure_id=str(cursor.exposure_id),
@@ -1160,6 +1320,12 @@ async def list_worker_exposures(
         )
     for exposure in exposures:
         if not exposure.anyharness_workspace_id:
+            continue
+        workspace = await cloud_workspaces.get_cloud_workspace_by_id(
+            db,
+            exposure.cloud_workspace_id,
+        )
+        if workspace is None or workspace.archived_at is not None:
             continue
         responses.append(
             WorkerExposureSnapshotResponse(

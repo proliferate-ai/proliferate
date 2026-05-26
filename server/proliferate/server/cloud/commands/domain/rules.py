@@ -30,6 +30,11 @@ _MATERIALIZE_WORKTREE_FIELDS = {
     "origin",
     "creatorContext",
 }
+_PRUNE_WORKSPACE_WORKTREE_FIELDS = {
+    "workspaceId",
+    "cloudWorkspaceId",
+    "reason",
+}
 _CONFIGURE_GIT_IDENTITY_FIELDS = {"targetGitIdentityId", "configVersion"}
 _ENSURE_REPO_CHECKOUT_FIELDS = {"provider", "owner", "name", "path", "baseBranch"}
 _REFRESH_AGENT_AUTH_CONFIG_FIELDS = {
@@ -75,6 +80,7 @@ def validate_command_shape(
         in {
             CloudCommandKind.start_session.value,
             CloudCommandKind.backfill_exposed_workspace.value,
+            CloudCommandKind.prune_workspace_worktree.value,
         }
         and not workspace_id
     ):
@@ -138,6 +144,9 @@ def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
         _validate_optional_agent_auth_preflight_payload(kind=kind, payload=payload)
         _validate_optional_runtime_config_preflight_payload(kind=kind, payload=payload)
         return
+    if kind == CloudCommandKind.prune_workspace_worktree.value:
+        _validate_prune_workspace_worktree_payload(payload)
+        return
     if kind != CloudCommandKind.materialize_workspace.value:
         return
     mode = _required_string(
@@ -188,6 +197,18 @@ def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
         "materialize_workspace mode must be existing_path or worktree.",
         status_code=400,
     )
+
+
+def _validate_prune_workspace_worktree_payload(payload: dict[str, object]) -> None:
+    _reject_unknown_fields(
+        payload,
+        _PRUNE_WORKSPACE_WORKTREE_FIELDS,
+        code="cloud_command_prune_workspace_payload_unknown",
+        message_prefix="prune_workspace_worktree payload contains unsupported field(s): ",
+    )
+    _optional_string(payload, "workspaceId")
+    _optional_string(payload, "cloudWorkspaceId")
+    _optional_string(payload, "reason")
 
 
 def _validate_configure_git_identity_payload(payload: dict[str, object]) -> None:

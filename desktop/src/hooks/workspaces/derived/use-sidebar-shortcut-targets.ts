@@ -29,14 +29,12 @@ export function useSidebarShortcutTargets(): string[] {
     archivedWorkspaceIds,
     hiddenRepoRootIds,
     collapsedRepoGroups,
-    showArchived,
     workspaceTypes,
     workspaceLastInteracted,
   } = useWorkspaceUiStore(useShallow((state) => ({
     archivedWorkspaceIds: state.archivedWorkspaceIds,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     collapsedRepoGroups: state.collapsedRepoGroups,
-    showArchived: state.showArchived,
     workspaceTypes: state.workspaceTypes,
     workspaceLastInteracted: state.workspaceLastInteracted,
   })));
@@ -64,7 +62,7 @@ export function useSidebarShortcutTargets(): string[] {
   const groups = useMemo(() => buildSidebarGroupStates({
     repoRoots,
     logicalWorkspaces,
-    showArchived,
+    showArchived: false,
     workspaceTypes,
     archivedSet,
     hiddenRepoRootIds: hiddenRepoRootSet,
@@ -84,7 +82,6 @@ export function useSidebarShortcutTargets(): string[] {
     repoRoots,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
-    showArchived,
     workspaceLastInteracted,
     workspaceTypes,
   ]);

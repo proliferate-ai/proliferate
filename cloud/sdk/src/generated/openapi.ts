@@ -795,6 +795,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workspaces/{workspace_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Cloud Workspace Endpoint */
+        post: operations["archive_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Cloud Workspace Endpoint */
+        post: operations["restore_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Purge Cloud Workspace Endpoint */
+        post: operations["purge_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__purge_post"];
+        /** Purge Cloud Workspace Endpoint */
+        delete: operations["purge_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__purge_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workspaces/{workspace_id}/branch": {
         parameters: {
             query?: never;
@@ -2556,6 +2608,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/worker/materialization-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Materialization Report Endpoint */
+        post: operations["worker_materialization_report_endpoint_v1_cloud_worker_materialization_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/worker/update-status": {
         parameters: {
             query?: never;
@@ -2828,6 +2897,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/team-checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Team Checkout */
+        post: operations["create_team_checkout_v1_billing_team_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/team-checkout/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Current Team Checkout Endpoint */
+        get: operations["get_current_team_checkout_endpoint_v1_billing_team_checkout_current_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/team-checkout/{intent_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Current Team Checkout Endpoint */
+        post: operations["cancel_current_team_checkout_endpoint_v1_billing_team_checkout__intent_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/customer-portal": {
         parameters: {
             query?: never;
@@ -2907,6 +3027,23 @@ export interface paths {
         put?: never;
         /** Accept Organization Invitation Endpoint */
         post: operations["accept_organization_invitation_endpoint_v1_organizations_invitations_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/invitations/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Current User Organization Invitations Endpoint */
+        get: operations["list_current_user_organization_invitations_endpoint_v1_organizations_invitations_current_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5499,6 +5636,10 @@ export interface components {
              */
             enabled: boolean;
         };
+        /** CurrentTeamCheckoutResponse */
+        CurrentTeamCheckoutResponse: {
+            intent?: components["schemas"]["TeamCheckoutIntentResponse"] | null;
+        };
         /** DirectAccessTokenRequest */
         DirectAccessTokenRequest: {
             /** Targetanyharnessworkspaceid */
@@ -6136,6 +6277,12 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /**
+             * Status
+             * @default active
+             * @enum {string}
+             */
+            status: "pending_checkout" | "active" | "suspended" | "archived";
             /** Logodomain */
             logoDomain?: string | null;
             /** Logoimage */
@@ -7328,6 +7475,41 @@ export interface components {
             /** Email */
             email?: string | null;
         };
+        /** TeamCheckoutIntentResponse */
+        TeamCheckoutIntentResponse: {
+            /** Id */
+            id: string;
+            /** Organizationid */
+            organizationId: string;
+            /** Teamname */
+            teamName: string;
+            /** Status */
+            status: string;
+            /** Activationstatus */
+            activationStatus: string;
+            /** Activationerrorcode */
+            activationErrorCode?: string | null;
+            /** Activationerrormessage */
+            activationErrorMessage?: string | null;
+            /** Checkouturl */
+            checkoutUrl?: string | null;
+            /** Expiresat */
+            expiresAt: string;
+        };
+        /** TeamCheckoutRequest */
+        TeamCheckoutRequest: {
+            /** Teamname */
+            teamName: string;
+            /** Inviteemails */
+            inviteEmails?: string[];
+        };
+        /** TeamCheckoutResponse */
+        TeamCheckoutResponse: {
+            /** Url */
+            url: string;
+            /** Intentid */
+            intentId: string;
+        };
         /**
          * TokenRequest
          * @description POST body the desktop app sends to exchange an auth code for tokens.
@@ -8068,6 +8250,41 @@ export interface components {
             /** Updated */
             updated: boolean;
         };
+        /** WorkerMaterializationReportRequest */
+        WorkerMaterializationReportRequest: {
+            /**
+             * Cloudworkspaceid
+             * Format: uuid
+             */
+            cloudWorkspaceId: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
+            /** State */
+            state: string;
+            /** Cleanupstatus */
+            cleanupStatus?: string | null;
+            /** Cleanuplasterror */
+            cleanupLastError?: string | null;
+            /** Blockers */
+            blockers?: {
+                [key: string]: unknown;
+            }[];
+            /** Worktreepath */
+            worktreePath?: string | null;
+            /** Storagebytes */
+            storageBytes?: number | null;
+            /** Reclaimedbytes */
+            reclaimedBytes?: number | null;
+            /** Generation */
+            generation?: number | null;
+        };
+        /** WorkerMaterializationReportResponse */
+        WorkerMaterializationReportResponse: {
+            /** Cloudworkspaceid */
+            cloudWorkspaceId: string;
+            /** Updated */
+            updated: boolean;
+        };
         /** WorkerProjectionGapRequest */
         WorkerProjectionGapRequest: {
             /**
@@ -8296,6 +8513,25 @@ export interface components {
             /** Activeenvironmentlimit */
             activeEnvironmentLimit?: number | null;
         };
+        /** WorkspaceCloudAccessSummary */
+        WorkspaceCloudAccessSummary: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "disabled" | "enabled" | "enabling" | "error";
+            /** Exposureid */
+            exposureId?: string | null;
+            /** Exposurerevision */
+            exposureRevision?: number | null;
+            /**
+             * Projectionstate
+             * @enum {string}
+             */
+            projectionState: "untracked" | "tracked" | "live" | "paused" | "stale" | "revoked";
+            /** Commandable */
+            commandable: boolean;
+        };
         /** WorkspaceConnection */
         WorkspaceConnection: {
             /** Runtimeurl */
@@ -8350,8 +8586,18 @@ export interface components {
              * Workspacestatus
              * @enum {string}
              */
-            workspaceStatus: "pending" | "materializing" | "ready" | "archived" | "error";
+            workspaceStatus: "pending" | "materializing" | "needs_rematerialization" | "ready" | "archived" | "error";
+            /**
+             * Productlifecycle
+             * @enum {string}
+             */
+            productLifecycle: "active" | "archived" | "deleted";
             runtime: components["schemas"]["WorkspaceRuntimeSummary"];
+            executionTarget: components["schemas"]["WorkspaceExecutionTargetSummary"];
+            /** Selectedmaterializationid */
+            selectedMaterializationId?: string | null;
+            primaryMaterialization?: components["schemas"]["WorkspaceMaterializationSummary"] | null;
+            cloudAccess: components["schemas"]["WorkspaceCloudAccessSummary"];
             /** Statusdetail */
             statusDetail: string | null;
             /** Lasterror */
@@ -8431,6 +8677,20 @@ export interface components {
             /** Anyharnessworkspaceid */
             anyharnessWorkspaceId: string;
         };
+        /** WorkspaceExecutionTargetSummary */
+        WorkspaceExecutionTargetSummary: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "local_desktop" | "managed_cloud" | "ssh" | "self_hosted";
+            /** Targetid */
+            targetId?: string | null;
+            /** Label */
+            label?: string | null;
+            /** Online */
+            online?: boolean | null;
+        };
         /** WorkspaceExposureSummary */
         WorkspaceExposureSummary: {
             /** Id */
@@ -8451,6 +8711,40 @@ export interface components {
              * @enum {string}
              */
             status: "active" | "paused" | "stale" | "revoked";
+        };
+        /** WorkspaceMaterializationSummary */
+        WorkspaceMaterializationSummary: {
+            /** Id */
+            id: string;
+            /** Targetid */
+            targetId?: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
+            /** Worktreepath */
+            worktreePath?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "hydrated" | "dehydrated" | "hydrating" | "unknown" | "inconsistent";
+            /**
+             * Desiredstate
+             * @enum {string}
+             */
+            desiredState: "hydrated" | "dehydrated";
+            /**
+             * Cleanupstatus
+             * @enum {string}
+             */
+            cleanupStatus: "idle" | "pruning" | "blocked" | "failed" | "skipped" | "completed";
+            /** Cleanuplasterror */
+            cleanupLastError?: string | null;
+            /** Blockers */
+            blockers?: string[];
+            /** Generation */
+            generation: number;
+            /** Storagebytes */
+            storageBytes?: number | null;
         };
         /** WorkspaceMobilityPreflightRequest */
         WorkspaceMobilityPreflightRequest: {
@@ -8527,8 +8821,18 @@ export interface components {
              * Workspacestatus
              * @enum {string}
              */
-            workspaceStatus: "pending" | "materializing" | "ready" | "archived" | "error";
+            workspaceStatus: "pending" | "materializing" | "needs_rematerialization" | "ready" | "archived" | "error";
+            /**
+             * Productlifecycle
+             * @enum {string}
+             */
+            productLifecycle: "active" | "archived" | "deleted";
             runtime: components["schemas"]["WorkspaceRuntimeSummary"];
+            executionTarget: components["schemas"]["WorkspaceExecutionTargetSummary"];
+            /** Selectedmaterializationid */
+            selectedMaterializationId?: string | null;
+            primaryMaterialization?: components["schemas"]["WorkspaceMaterializationSummary"] | null;
+            cloudAccess: components["schemas"]["WorkspaceCloudAccessSummary"];
             /** Statusdetail */
             statusDetail: string | null;
             /** Lasterror */
@@ -10051,6 +10355,7 @@ export interface operations {
                 ownerScope?: "personal" | "organization";
                 organizationId?: string | null;
                 scope?: ("my" | "unclaimed" | "claimable" | "org-all" | "exposed") | null;
+                lifecycle?: "active" | "archived" | "all";
             };
             header?: never;
             path?: never;
@@ -10350,6 +10655,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    purge_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__purge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    purge_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__purge_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -14044,6 +14477,41 @@ export interface operations {
             };
         };
     };
+    worker_materialization_report_endpoint_v1_cloud_worker_materialization_reports_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerMaterializationReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerMaterializationReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     worker_update_status_endpoint_v1_cloud_worker_update_status_post: {
         parameters: {
             query?: never;
@@ -14575,6 +15043,90 @@ export interface operations {
             };
         };
     };
+    create_team_checkout_v1_billing_team_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamCheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamCheckoutResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_current_team_checkout_endpoint_v1_billing_team_checkout_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentTeamCheckoutResponse"];
+                };
+            };
+        };
+    };
+    cancel_current_team_checkout_endpoint_v1_billing_team_checkout__intent_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentTeamCheckoutResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_customer_portal_v1_billing_customer_portal_post: {
         parameters: {
             query?: never;
@@ -14734,6 +15286,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_current_user_organization_invitations_endpoint_v1_organizations_invitations_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationInvitationsResponse"];
                 };
             };
         };

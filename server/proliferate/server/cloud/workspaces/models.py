@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from proliferate.constants.cloud import (
     CloudAgentKind,
     CloudRuntimeEnvironmentStatus,
+    CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
 )
 from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
@@ -38,6 +39,11 @@ class WorkspaceRecord(Protocol):
     template_version: str
     runtime_generation: int
     anyharness_workspace_id: str | None
+    worktree_path: str | None
+    archived_at: datetime | None
+    cleanup_state: str
+    cleanup_last_error: str | None
+    materialized_slot_generation: int | None
     repo_post_ready_phase: str
     repo_post_ready_files_total: int
     repo_post_ready_files_applied: int
@@ -197,6 +203,46 @@ class WorkspaceDirectTargetContext(BaseModel):
     anyharness_workspace_id: str = Field(serialization_alias="anyharnessWorkspaceId")
 
 
+class WorkspaceExecutionTargetSummary(BaseModel):
+    kind: Literal["local_desktop", "managed_cloud", "ssh", "self_hosted"]
+    target_id: str | None = Field(default=None, serialization_alias="targetId")
+    label: str | None = None
+    online: bool | None = None
+
+
+class WorkspaceMaterializationSummary(BaseModel):
+    id: str
+    target_id: str | None = Field(default=None, serialization_alias="targetId")
+    anyharness_workspace_id: str | None = Field(
+        default=None,
+        serialization_alias="anyharnessWorkspaceId",
+    )
+    worktree_path: str | None = Field(default=None, serialization_alias="worktreePath")
+    state: Literal["hydrated", "dehydrated", "hydrating", "unknown", "inconsistent"]
+    desired_state: Literal["hydrated", "dehydrated"] = Field(serialization_alias="desiredState")
+    cleanup_status: Literal["idle", "pruning", "blocked", "failed", "skipped", "completed"] = (
+        Field(
+            serialization_alias="cleanupStatus",
+        )
+    )
+    cleanup_last_error: str | None = Field(default=None, serialization_alias="cleanupLastError")
+    blockers: list[str] = Field(default_factory=list)
+    generation: int
+    storage_bytes: int | None = Field(default=None, serialization_alias="storageBytes")
+
+
+class WorkspaceCloudAccessSummary(BaseModel):
+    state: Literal["disabled", "enabled", "enabling", "error"]
+    exposure_id: str | None = Field(default=None, serialization_alias="exposureId")
+    exposure_revision: int | None = Field(default=None, serialization_alias="exposureRevision")
+    projection_state: Literal["untracked", "tracked", "live", "paused", "stale", "revoked"] = (
+        Field(
+            serialization_alias="projectionState",
+        )
+    )
+    commandable: bool
+
+
 class WorkspaceExposureSummary(BaseModel):
     id: str
     visibility: Literal["private", "shared_unclaimed", "claimed", "archived"]
@@ -253,10 +299,30 @@ class WorkspaceSummary(BaseModel):
     target_id: str | None = Field(default=None, serialization_alias="targetId")
     display_name: str | None = Field(serialization_alias="displayName")
     repo: RepoRef
-    workspace_status: Literal["pending", "materializing", "ready", "archived", "error"] = Field(
-        serialization_alias="workspaceStatus",
+    workspace_status: Literal[
+        "pending",
+        "materializing",
+        "needs_rematerialization",
+        "ready",
+        "archived",
+        "error",
+    ] = Field(serialization_alias="workspaceStatus")
+    product_lifecycle: Literal["active", "archived", "deleted"] = Field(
+        serialization_alias="productLifecycle",
     )
     runtime: WorkspaceRuntimeSummary
+    execution_target: WorkspaceExecutionTargetSummary = Field(
+        serialization_alias="executionTarget",
+    )
+    selected_materialization_id: str | None = Field(
+        default=None,
+        serialization_alias="selectedMaterializationId",
+    )
+    primary_materialization: WorkspaceMaterializationSummary | None = Field(
+        default=None,
+        serialization_alias="primaryMaterialization",
+    )
+    cloud_access: WorkspaceCloudAccessSummary = Field(serialization_alias="cloudAccess")
     status_detail: str | None = Field(serialization_alias="statusDetail")
     last_error: str | None = Field(serialization_alias="lastError")
     template_version: str | None = Field(serialization_alias="templateVersion")
@@ -473,6 +539,143 @@ def sandbox_type_payload(workspace: WorkspaceRecord, target_kind: str | None) ->
     )
 
 
+def product_lifecycle_payload(workspace: WorkspaceRecord) -> str:
+    return "archived" if workspace.archived_at is not None else "active"
+
+
+def execution_target_payload(
+    workspace: WorkspaceRecord,
+    target_kind: str | None,
+    *,
+    target_label: str | None = None,
+    target_online: bool | None = None,
+) -> WorkspaceExecutionTargetSummary:
+    if target_kind in {"desktop_dispatch", "local_direct"}:
+        kind: Literal["local_desktop", "managed_cloud", "ssh", "self_hosted"] = "local_desktop"
+    elif target_kind == "ssh":
+        kind = "ssh"
+    elif target_kind == "self_hosted_cloud":
+        kind = "self_hosted"
+    else:
+        kind = "managed_cloud"
+    return WorkspaceExecutionTargetSummary(
+        kind=kind,
+        target_id=str(workspace.target_id) if workspace.target_id is not None else None,
+        label=target_label,
+        online=target_online,
+    )
+
+
+def cleanup_status_payload(workspace: WorkspaceRecord) -> str:
+    if workspace.cleanup_state == CloudWorkspaceCleanupState.pending.value:
+        return "pruning"
+    if workspace.cleanup_state == CloudWorkspaceCleanupState.blocked.value:
+        return "blocked"
+    if workspace.cleanup_state == CloudWorkspaceCleanupState.complete.value:
+        return "completed"
+    if workspace.cleanup_state == CloudWorkspaceCleanupState.failed.value:
+        return "failed"
+    return "idle"
+
+
+def materialization_state_payload(workspace: WorkspaceRecord, workspace_status: str) -> str:
+    if workspace_status == CloudWorkspaceStatus.materializing.value:
+        return "hydrating"
+    if workspace_status == CloudWorkspaceStatus.needs_rematerialization.value:
+        return "dehydrated"
+    if workspace_status == CloudWorkspaceStatus.ready.value:
+        return "hydrated" if workspace.anyharness_workspace_id else "unknown"
+    if workspace_status == CloudWorkspaceStatus.archived.value:
+        if workspace.cleanup_state == CloudWorkspaceCleanupState.complete.value:
+            return "dehydrated"
+        if workspace.anyharness_workspace_id or workspace.worktree_path:
+            return "hydrated"
+        return "dehydrated"
+    if workspace_status == CloudWorkspaceStatus.error.value:
+        return (
+            "inconsistent"
+            if workspace.anyharness_workspace_id or workspace.worktree_path
+            else "unknown"
+        )
+    return "unknown"
+
+
+def materialization_blockers_payload(workspace: WorkspaceRecord) -> list[str]:
+    if workspace.cleanup_state != CloudWorkspaceCleanupState.blocked.value:
+        return []
+    if not workspace.cleanup_last_error:
+        return []
+    try:
+        raw = json.loads(workspace.cleanup_last_error)
+    except ValueError:
+        return [workspace.cleanup_last_error]
+    if not isinstance(raw, dict):
+        return [workspace.cleanup_last_error]
+    blockers = raw.get("blockers")
+    if not isinstance(blockers, list):
+        return [workspace.cleanup_last_error]
+    messages: list[str] = []
+    for blocker in blockers:
+        if isinstance(blocker, dict):
+            message = blocker.get("message")
+            if isinstance(message, str) and message.strip():
+                messages.append(message.strip())
+        elif isinstance(blocker, str) and blocker.strip():
+            messages.append(blocker.strip())
+    return messages
+
+
+def materialization_payload(
+    workspace: WorkspaceRecord,
+    workspace_status: str,
+) -> WorkspaceMaterializationSummary | None:
+    if (
+        workspace.target_id is None
+        and not workspace.anyharness_workspace_id
+        and not workspace.worktree_path
+    ):
+        return None
+    materialization_id = (
+        f"{workspace.target_id}:{workspace.anyharness_workspace_id}"
+        if workspace.target_id is not None and workspace.anyharness_workspace_id
+        else str(workspace.id)
+    )
+    return WorkspaceMaterializationSummary(
+        id=materialization_id,
+        target_id=str(workspace.target_id) if workspace.target_id is not None else None,
+        anyharness_workspace_id=workspace.anyharness_workspace_id,
+        worktree_path=workspace.worktree_path,
+        state=materialization_state_payload(workspace, workspace_status),
+        desired_state="dehydrated" if workspace.archived_at is not None else "hydrated",
+        cleanup_status=cleanup_status_payload(workspace),
+        cleanup_last_error=workspace.cleanup_last_error,
+        blockers=materialization_blockers_payload(workspace),
+        generation=workspace.materialized_slot_generation or workspace.runtime_generation,
+        storage_bytes=None,
+    )
+
+
+def cloud_access_payload(
+    exposure: WorkspaceExposureRecord | None,
+) -> WorkspaceCloudAccessSummary:
+    projection_state = exposure_state_payload(exposure)
+    if exposure is None or exposure.status == "revoked":
+        state: Literal["disabled", "enabled", "enabling", "error"] = "disabled"
+    elif exposure.status == "active":
+        state = "enabled"
+    elif exposure.status in {"paused", "stale"}:
+        state = "error"
+    else:
+        state = "enabling"
+    return WorkspaceCloudAccessSummary(
+        state=state,
+        exposure_id=str(exposure.id) if exposure is not None else None,
+        exposure_revision=exposure.revision if exposure is not None else None,
+        projection_state=projection_state,
+        commandable=bool(exposure.commandable) if exposure is not None else False,
+    )
+
+
 def last_session_summary_payload(
     session: WorkspaceSessionSummaryRecord | None,
 ) -> LastSessionSummary | None:
@@ -538,6 +741,8 @@ def workspace_summary_payload(
     claim: WorkspaceClaimRecord | None = None,
     last_session_summary: WorkspaceSessionSummaryRecord | None = None,
     target_kind: str | None = None,
+    target_label: str | None = None,
+    target_online: bool | None = None,
 ) -> WorkspaceSummary:
     runtime_status = (
         runtime_environment.status
@@ -547,8 +752,16 @@ def workspace_summary_payload(
     if runtime_status not in {"pending", "provisioning", "running", "paused", "error", "disabled"}:
         runtime_status = CloudRuntimeEnvironmentStatus.error.value
     workspace_status = workspace.status
-    if workspace_status not in {"pending", "materializing", "ready", "archived", "error"}:
+    if workspace_status not in {
+        "pending",
+        "materializing",
+        "needs_rematerialization",
+        "ready",
+        "archived",
+        "error",
+    }:
         workspace_status = CloudWorkspaceStatus.error.value
+    materialization = materialization_payload(workspace, workspace_status)
     session_summary = last_session_summary_payload(last_session_summary)
     return WorkspaceSummary(
         id=str(workspace.id),
@@ -556,6 +769,7 @@ def workspace_summary_payload(
         display_name=workspace.display_name,
         repo=_repo_ref(workspace),
         workspace_status=workspace_status,
+        product_lifecycle=product_lifecycle_payload(workspace),
         runtime=WorkspaceRuntimeSummary(
             environment_id=(
                 str(runtime_environment.id) if runtime_environment is not None else None
@@ -570,6 +784,15 @@ def workspace_summary_payload(
             action_block_kind=action_block_kind,
             action_block_reason=action_block_reason,
         ),
+        execution_target=execution_target_payload(
+            workspace,
+            target_kind,
+            target_label=target_label,
+            target_online=target_online,
+        ),
+        selected_materialization_id=materialization.id if materialization is not None else None,
+        primary_materialization=materialization,
+        cloud_access=cloud_access_payload(exposure),
         status_detail=workspace.status_detail,
         last_error=workspace.last_error,
         template_version=workspace.template_version,
@@ -623,6 +846,8 @@ def workspace_detail_payload(
     claim: WorkspaceClaimRecord | None = None,
     last_session_summary: WorkspaceSessionSummaryRecord | None = None,
     target_kind: str | None = None,
+    target_label: str | None = None,
+    target_online: bool | None = None,
 ) -> WorkspaceDetail:
     summary = workspace_summary_payload(
         workspace,
@@ -637,6 +862,8 @@ def workspace_detail_payload(
         claim=claim,
         last_session_summary=last_session_summary,
         target_kind=target_kind,
+        target_label=target_label,
+        target_online=target_online,
     )
     return WorkspaceDetail(
         **summary.model_dump(),

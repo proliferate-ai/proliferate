@@ -24,7 +24,7 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
       { id: "rename", label: "Rename" },
       { id: "copy-workspace-location", label: "Copy workspace path", accelerator: "CmdOrCtrl+Shift+C" },
       { id: "copy-branch-name", label: "Copy branch name", accelerator: "CmdOrCtrl+Alt+C" },
-      { id: "archive", label: "Archive" },
+      { id: "archive", label: "Archive..." },
     ]);
   });
 
@@ -69,7 +69,7 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
 
     expect(items).toMatchObject([
       { id: "mark-done", label: "Delete workspace..." },
-      { id: "archive", label: "Archive" },
+      { id: "archive", label: "Archive..." },
     ]);
   });
 });

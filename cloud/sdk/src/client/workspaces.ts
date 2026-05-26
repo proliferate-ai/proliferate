@@ -18,8 +18,10 @@ export type CloudWorkspaceListScope =
   | "claimable"
   | "org-all"
   | "exposed";
+export type CloudWorkspaceLifecycleFilter = "active" | "archived" | "all";
 export type CloudWorkspaceListSelection = CloudOwnerSelection & {
   scope?: CloudWorkspaceListScope;
+  lifecycle?: CloudWorkspaceLifecycleFilter;
 };
 
 export interface BootstrapCloudWorkspaceRemoteAccessRequest {
@@ -39,6 +41,7 @@ export interface BootstrapCloudWorkspaceRemoteAccessRequest {
 type CloudWorkspaceTransport = Record<string, unknown> & {
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
+  productLifecycle?: string;
   runtime?: {
     actionBlockKind?: string | null;
     actionBlockReason?: string | null;
@@ -58,6 +61,8 @@ function normalizeCloudWorkspaceStatus(value: string | undefined): CloudWorkspac
     case "cloning_repo":
     case "starting_runtime":
       return "materializing";
+    case "needs_rematerialization":
+      return "needs_rematerialization";
     case "ready":
       return "ready";
     case "archived":
@@ -71,7 +76,11 @@ function normalizeCloudWorkspaceStatus(value: string | undefined): CloudWorkspac
 
 function normalizeCloudWorkspace<T extends CloudWorkspaceTransport>(
   workspace: T,
-): T & { status: CloudWorkspaceStatus; workspaceStatus: CloudWorkspaceStatus } {
+): T & {
+  status: CloudWorkspaceStatus;
+  workspaceStatus: CloudWorkspaceStatus;
+  productLifecycle: string;
+} {
   const status = normalizeCloudWorkspaceStatus(workspace.workspaceStatus ?? workspace.status);
   return {
     ...workspace,
@@ -79,6 +88,7 @@ function normalizeCloudWorkspace<T extends CloudWorkspaceTransport>(
     actionBlockReason: workspace.runtime?.actionBlockReason ?? workspace.actionBlockReason ?? null,
     status,
     workspaceStatus: status,
+    productLifecycle: workspace.productLifecycle ?? (status === "archived" ? "archived" : "active"),
   };
 }
 
@@ -99,6 +109,7 @@ export async function listCloudWorkspaces(
           ownerScope: owner?.ownerScope ?? "personal",
           organizationId: owner?.organizationId ?? undefined,
           scope: owner?.scope,
+          lifecycle: owner?.lifecycle,
         },
         signal: options?.signal,
       }),
@@ -153,6 +164,38 @@ export async function startCloudWorkspace(workspaceId: string): Promise<CloudWor
     })
   ).data!;
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
+}
+
+export async function archiveCloudWorkspace(
+  workspaceId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudWorkspaceDetail> {
+  const data = await client.requestJson<CloudWorkspaceTransport>({
+    method: "POST",
+    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/archive`,
+  });
+  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
+}
+
+export async function restoreCloudWorkspace(
+  workspaceId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudWorkspaceDetail> {
+  const data = await client.requestJson<CloudWorkspaceTransport>({
+    method: "POST",
+    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/restore`,
+  });
+  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
+}
+
+export async function purgeCloudWorkspace(
+  workspaceId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<void> {
+  await client.requestJson({
+    method: "POST",
+    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/purge`,
+  });
 }
 
 export async function enableCloudWorkspaceRemoteAccess(

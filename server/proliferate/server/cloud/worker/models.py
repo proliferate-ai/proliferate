@@ -112,6 +112,24 @@ class WorkerInventoryResponse(BaseModel):
     updated: bool
 
 
+class WorkerMaterializationReportRequest(BaseModel):
+    cloud_workspace_id: UUID = Field(alias="cloudWorkspaceId")
+    anyharness_workspace_id: str | None = Field(default=None, alias="anyharnessWorkspaceId")
+    state: str
+    cleanup_status: str | None = Field(default=None, alias="cleanupStatus")
+    cleanup_last_error: str | None = Field(default=None, alias="cleanupLastError")
+    blockers: list[dict[str, object]] = Field(default_factory=list)
+    worktree_path: str | None = Field(default=None, alias="worktreePath")
+    storage_bytes: int | None = Field(default=None, alias="storageBytes")
+    reclaimed_bytes: int | None = Field(default=None, alias="reclaimedBytes")
+    generation: int | None = None
+
+
+class WorkerMaterializationReportResponse(BaseModel):
+    cloud_workspace_id: str = Field(serialization_alias="cloudWorkspaceId")
+    updated: bool
+
+
 class WorkerCommandLeaseRequest(BaseModel):
     supported_kinds: list[str] = Field(default_factory=list, alias="supportedKinds")
     lease_timeout_seconds: int | None = Field(default=None, alias="leaseTimeoutSeconds")

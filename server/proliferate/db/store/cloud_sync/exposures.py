@@ -191,6 +191,35 @@ async def archive_workspace_exposure(
     return _snapshot(row)
 
 
+async def clear_workspace_exposure_materialization(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    cloud_workspace_id: UUID,
+    anyharness_workspace_id: str | None,
+) -> CloudWorkspaceExposureSnapshot | None:
+    row = await _load_active_workspace_exposure(
+        db,
+        target_id=target_id,
+        cloud_workspace_id=cloud_workspace_id,
+        lock=True,
+    )
+    if row is None:
+        return None
+    if (
+        anyharness_workspace_id is not None
+        and row.anyharness_workspace_id != anyharness_workspace_id
+    ):
+        return _snapshot(row)
+    if row.anyharness_workspace_id is not None or row.commandable:
+        row.anyharness_workspace_id = None
+        row.commandable = False
+        row.revision += 1
+        row.updated_at = utcnow()
+        await db.flush()
+    return _snapshot(row)
+
+
 async def claim_workspace_exposure(
     db: AsyncSession,
     *,

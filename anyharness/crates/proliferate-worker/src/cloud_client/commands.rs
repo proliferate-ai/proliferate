@@ -67,11 +67,35 @@ pub struct CommandResultRequest {
     pub result: Option<Value>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MaterializationReportRequest {
+    pub cloud_workspace_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anyharness_workspace_id: Option<String>,
+    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_last_error: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub blockers: Vec<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worktree_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub storage_bytes: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reclaimed_bytes: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generation: Option<i64>,
+}
+
 pub const SUPPORTED_COMMAND_KINDS: &[&str] = &[
     "start_session",
     "configure_git_identity",
     "ensure_repo_checkout",
     "materialize_workspace",
+    "prune_workspace_worktree",
     "materialize_environment",
     "refresh_agent_auth_config",
     "send_prompt",
@@ -134,6 +158,27 @@ impl CloudClient {
             .post(format!(
                 "{}/v1/cloud/worker/commands/{}/result",
                 self.base_url, command_id
+            ))
+            .header(
+                reqwest::header::AUTHORIZATION,
+                auth::bearer_header(worker_token),
+            )
+            .json(request)
+            .send()
+            .await?;
+        parse_empty_response(response).await
+    }
+
+    pub async fn report_materialization(
+        &self,
+        worker_token: &str,
+        request: &MaterializationReportRequest,
+    ) -> Result<(), WorkerError> {
+        let response = self
+            .http
+            .post(format!(
+                "{}/v1/cloud/worker/materialization-reports",
+                self.base_url
             ))
             .header(
                 reqwest::header::AUTHORIZATION,

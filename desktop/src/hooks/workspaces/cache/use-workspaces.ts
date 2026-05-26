@@ -164,7 +164,10 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
           ),
           cloudActive
             ? fallbackOnNonAbort(
-              listCloudWorkspaces({ measurementOperationId: operationId, signal }),
+              listCloudWorkspaces(
+                { measurementOperationId: operationId, signal },
+                { ownerScope: "personal", lifecycle: "all" },
+              ),
               null,
             )
           : Promise.resolve([]),

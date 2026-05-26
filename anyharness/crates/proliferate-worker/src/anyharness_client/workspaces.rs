@@ -12,6 +12,7 @@ use super::{
 };
 
 const WORKSPACE_MATERIALIZE_TIMEOUT: Duration = Duration::from_secs(120);
+const WORKSPACE_RETIRE_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
@@ -203,6 +204,38 @@ fn expand_home(path: &str) -> String {
 }
 
 impl AnyHarnessClient {
+    pub async fn retire_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> Result<AnyHarnessCommandResponse, WorkerError> {
+        let response = self
+            .authenticate(self.http().post(format!(
+                "{}/v1/workspaces/{}/retire",
+                self.base_url(),
+                workspace_id
+            )))
+            .timeout(WORKSPACE_RETIRE_TIMEOUT)
+            .send()
+            .await?;
+        parse_anyharness_response(response).await
+    }
+
+    pub async fn retry_retire_cleanup(
+        &self,
+        workspace_id: &str,
+    ) -> Result<AnyHarnessCommandResponse, WorkerError> {
+        let response = self
+            .authenticate(self.http().post(format!(
+                "{}/v1/workspaces/{}/retire/cleanup-retry",
+                self.base_url(),
+                workspace_id
+            )))
+            .timeout(WORKSPACE_RETIRE_TIMEOUT)
+            .send()
+            .await?;
+        parse_anyharness_response(response).await
+    }
+
     pub async fn materialize_workspace(
         &self,
         request: &MaterializeWorkspaceRequest,

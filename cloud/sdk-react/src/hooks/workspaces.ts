@@ -6,14 +6,18 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import {
+  archiveCloudWorkspace,
   createCloudWorkspace,
   listCloudWorkspaces,
+  purgeCloudWorkspace,
+  restoreCloudWorkspace,
   getWorkspaceSnapshot,
   type CloudWorkspaceSummary,
   type CloudWorkspaceDetail,
   type CloudWorkspaceSnapshot,
   type CloudWorkspaceListSelection,
   type CloudWorkspaceListScope,
+  type CloudWorkspaceLifecycleFilter,
   type CreateCloudWorkspaceRequest,
 } from "@proliferate/cloud-sdk";
 import {
@@ -31,6 +35,7 @@ export interface UseCloudWorkspacesOptions {
   ownerScope?: CloudOwnerScope;
   organizationId?: string | null;
   scope?: CloudWorkspaceListScope | null;
+  lifecycle?: CloudWorkspaceLifecycleFilter | null;
 }
 
 export function useCloudWorkspaces(options: UseCloudWorkspacesOptions | boolean = {}) {
@@ -45,9 +50,14 @@ export function useCloudWorkspaces(options: UseCloudWorkspacesOptions | boolean 
     ownerScope: owner.ownerScope,
     organizationId: owner.organizationId,
     scope: normalizedOptions.scope ?? undefined,
+    lifecycle: normalizedOptions.lifecycle ?? undefined,
   };
   return useQuery<CloudWorkspaceSummary[]>({
-    queryKey: cloudWorkspacesKey(owner, normalizedOptions.scope ?? null),
+    queryKey: cloudWorkspacesKey(
+      owner,
+      normalizedOptions.scope ?? null,
+      normalizedOptions.lifecycle ?? null,
+    ),
     queryFn: () => listCloudWorkspaces(undefined, selection, client),
     enabled: normalizedOptions.enabled ?? true,
   });
@@ -81,6 +91,24 @@ export function invalidateCloudWorkspaceLists(queryClient: QueryClient) {
   });
 }
 
+export function invalidateCloudWorkspaceLifecycleQueries(
+  queryClient: QueryClient,
+  workspaceId?: string | null,
+) {
+  invalidateCloudWorkspaceLists(queryClient);
+  void queryClient.invalidateQueries({
+    queryKey: [...cloudRootKey(), "workspaces"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: [...cloudRootKey(), "commands"],
+  });
+  if (workspaceId) {
+    void queryClient.invalidateQueries({
+      queryKey: cloudWorkspaceSnapshotKey(workspaceId),
+    });
+  }
+}
+
 export function useCloudWorkspaceSnapshot(workspaceId: string | null, enabled = true) {
   const client = useCloudClient();
   return useQuery<CloudWorkspaceSnapshot>({
@@ -110,6 +138,39 @@ export function useCreateCloudWorkspace(options?: {
       void queryClient.invalidateQueries({
         queryKey: [...cloudRootKey(), "workspaces"],
       });
+    },
+  });
+}
+
+export function useArchiveCloudWorkspace() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<CloudWorkspaceDetail, Error, string>({
+    mutationFn: (workspaceId) => archiveCloudWorkspace(workspaceId, client),
+    onSuccess(_data, workspaceId) {
+      invalidateCloudWorkspaceLifecycleQueries(queryClient, workspaceId);
+    },
+  });
+}
+
+export function useRestoreCloudWorkspace() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<CloudWorkspaceDetail, Error, string>({
+    mutationFn: (workspaceId) => restoreCloudWorkspace(workspaceId, client),
+    onSuccess(_data, workspaceId) {
+      invalidateCloudWorkspaceLifecycleQueries(queryClient, workspaceId);
+    },
+  });
+}
+
+export function usePurgeCloudWorkspace() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (workspaceId) => purgeCloudWorkspace(workspaceId, client),
+    onSuccess(_data, workspaceId) {
+      invalidateCloudWorkspaceLifecycleQueries(queryClient, workspaceId);
     },
   });
 }
@@ -155,12 +216,17 @@ function mergeCloudWorkspaceSummary(
     origin: primary.origin ?? secondary.origin,
     creatorContext: primary.creatorContext ?? secondary.creatorContext,
     directTargetContext: primary.directTargetContext ?? secondary.directTargetContext,
+    executionTarget: primary.executionTarget ?? secondary.executionTarget,
     exposure: primary.exposure ?? secondary.exposure,
     exposureState: primary.exposureState ?? secondary.exposureState,
+    cloudAccess: primary.cloudAccess ?? secondary.cloudAccess,
     lastActivityAt: latestIso(primary.lastActivityAt, secondary.lastActivityAt),
     lastError: primary.lastError ?? secondary.lastError,
     lastSessionSummary: primary.lastSessionSummary ?? secondary.lastSessionSummary,
+    primaryMaterialization: primary.primaryMaterialization ?? secondary.primaryMaterialization,
+    productLifecycle: primary.productLifecycle ?? secondary.productLifecycle,
     runtime: primary.runtime ?? secondary.runtime,
+    selectedMaterializationId: primary.selectedMaterializationId ?? secondary.selectedMaterializationId,
     statusDetail: primary.statusDetail ?? secondary.statusDetail,
   };
 }

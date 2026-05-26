@@ -227,7 +227,7 @@ async function reconcileAfterHotPaint(input: {
   }
 
   const result = await deps.reconcileHotWorkspace({
-    workspaceId: resolvedWorkspaceId,
+    workspaceId: connectionResult.materializedWorkspaceId ?? resolvedWorkspaceId,
     logicalWorkspaceId,
     runtimeUrl: connectionResult.runtimeUrl,
     workspaceConnection: connectionResult.workspaceConnection,

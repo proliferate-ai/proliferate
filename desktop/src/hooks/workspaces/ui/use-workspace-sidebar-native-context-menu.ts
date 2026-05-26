@@ -128,7 +128,7 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   if (!archived && canArchive) {
     items.push({
       id: "archive",
-      label: "Archive",
+      label: "Archive...",
       onSelect: onArchive,
     });
   }

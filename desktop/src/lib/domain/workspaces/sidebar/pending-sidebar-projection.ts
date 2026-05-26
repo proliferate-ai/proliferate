@@ -72,6 +72,7 @@ export function buildPendingSidebarProjection(args: {
     item: {
       id,
       localWorkspaceId: null,
+      cloudWorkspaceId: null,
       name: entry.displayName,
       defaultName: entry.displayName,
       hasDisplayNameOverride: false,

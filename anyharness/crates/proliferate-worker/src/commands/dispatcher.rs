@@ -16,7 +16,7 @@ use crate::{
         agent_auth::AgentAuthStatusRequest,
         commands::{
             CloudCommandEnvelope, CommandDeliveryRequest, CommandResultRequest,
-            LeaseCommandRequest, SUPPORTED_COMMAND_KINDS,
+            LeaseCommandRequest, MaterializationReportRequest, SUPPORTED_COMMAND_KINDS,
         },
         CloudClient,
     },
@@ -44,6 +44,7 @@ const EMPTY_LEASE_SLEEP: Duration = Duration::from_secs(2);
 const ERROR_LEASE_SLEEP: Duration = Duration::from_secs(5);
 const CONFIGURE_GIT_IDENTITY_KIND: &str = "configure_git_identity";
 const ENSURE_REPO_CHECKOUT_KIND: &str = "ensure_repo_checkout";
+const PRUNE_WORKSPACE_WORKTREE_KIND: &str = "prune_workspace_worktree";
 const MATERIALIZE_ENVIRONMENT_KIND: &str = "materialize_environment";
 const REFRESH_AGENT_AUTH_CONFIG_KIND: &str = "refresh_agent_auth_config";
 const SAFE_AGENT_AUTH_REFRESH_ERROR: &str = "Agent auth config refresh failed.";
@@ -186,6 +187,12 @@ async fn process_command(
     };
     if command.kind == "backfill_exposed_workspace" {
         return process_backfill_exposed_workspace_command(
+            cloud, identity, anyharness, store, command,
+        )
+        .await;
+    }
+    if command.kind == PRUNE_WORKSPACE_WORKTREE_KIND {
+        return process_prune_workspace_worktree_command(
             cloud, identity, anyharness, store, command,
         )
         .await;
@@ -885,6 +892,296 @@ async fn process_backfill_exposed_workspace_command(
         ),
     };
     report_command_result(cloud, identity, store, &command.command_id, &result).await
+}
+
+async fn process_prune_workspace_worktree_command(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    anyharness: &AnyHarnessClient,
+    store: &WorkerStore,
+    command: CloudCommandEnvelope,
+) -> Result<(), WorkerError> {
+    let Some(workspace_id) = command.workspace_id.clone().or_else(|| {
+        command
+            .payload
+            .get("workspaceId")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+    }) else {
+        let result = command_result_request(
+            &command,
+            "rejected",
+            Some("workspace_id_required".to_string()),
+            Some("prune_workspace_worktree requires workspaceId.".to_string()),
+            None,
+        );
+        report_command_result(cloud, identity, store, &command.command_id, &result).await?;
+        return Ok(());
+    };
+    let Some(cloud_workspace_id) = command.cloud_workspace_id.clone().or_else(|| {
+        command
+            .payload
+            .get("cloudWorkspaceId")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+    }) else {
+        let result = command_result_request(
+            &command,
+            "rejected",
+            Some("cloud_workspace_id_required".to_string()),
+            Some("prune_workspace_worktree requires cloudWorkspaceId.".to_string()),
+            None,
+        );
+        report_command_result(cloud, identity, store, &command.command_id, &result).await?;
+        return Ok(());
+    };
+
+    cloud
+        .report_command_delivery(
+            &identity.worker_token,
+            &command.command_id,
+            &command_delivery_request(&command, "delivered", None, None),
+        )
+        .await?;
+    report_materialization_state(
+        cloud,
+        identity,
+        &cloud_workspace_id,
+        Some(&workspace_id),
+        "pruning",
+        Some("pruning"),
+        None,
+        Vec::new(),
+        None,
+    )
+    .await;
+
+    let response = anyharness.retire_workspace(&workspace_id).await;
+    let result = match response {
+        Ok(mut response) if response.is_success() => {
+            if response.body.get("outcome").and_then(Value::as_str) == Some("already_retired")
+                && !response
+                    .body
+                    .get("cleanupSucceeded")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+            {
+                match anyharness.retry_retire_cleanup(&workspace_id).await {
+                    Ok(retry_response) => {
+                        response = retry_response;
+                    }
+                    Err(error) => {
+                        return report_prune_failed_and_command_result(
+                            cloud,
+                            identity,
+                            store,
+                            &command,
+                            &cloud_workspace_id,
+                            &workspace_id,
+                            Some("anyharness_retire_cleanup_retry_failed".to_string()),
+                            Some(error.to_string()),
+                            None,
+                        )
+                        .await;
+                    }
+                }
+            }
+            if !response.is_success() {
+                return report_prune_failed_and_command_result(
+                    cloud,
+                    identity,
+                    store,
+                    &command,
+                    &cloud_workspace_id,
+                    &workspace_id,
+                    Some("anyharness_retire_failed".to_string()),
+                    Some(format!("AnyHarness returned HTTP {}", response.status)),
+                    Some(json!({
+                        "anyharnessStatusCode": response.status.as_u16(),
+                        "body": response.body,
+                    })),
+                )
+                .await;
+            }
+            let outcome = response
+                .body
+                .get("outcome")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let cleanup_succeeded = response
+                .body
+                .get("cleanupSucceeded")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let cleanup_message = response
+                .body
+                .get("cleanupMessage")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            let blockers = response
+                .body
+                .get("preflight")
+                .and_then(|preflight| preflight.get("blockers"))
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            let (state, cleanup_status) = match (outcome, cleanup_succeeded) {
+                ("retired" | "already_retired", true) => ("dehydrated", "completed"),
+                ("blocked", _) => ("prune_blocked", "blocked"),
+                ("cleanup_failed", _) => ("prune_failed", "failed"),
+                _ if cleanup_succeeded => ("dehydrated", "completed"),
+                _ => ("prune_failed", "failed"),
+            };
+            let worktree_path = if state == "dehydrated" {
+                None
+            } else {
+                worktree_path_from_retire_response(&response.body)
+            };
+            report_materialization_state(
+                cloud,
+                identity,
+                &cloud_workspace_id,
+                Some(&workspace_id),
+                state,
+                Some(cleanup_status),
+                cleanup_message.as_deref(),
+                blockers.clone(),
+                worktree_path.clone(),
+            )
+            .await;
+            command_result_request(
+                &command,
+                "accepted",
+                None,
+                None,
+                Some(json!({
+                    "cloudWorkspaceId": cloud_workspace_id,
+                    "anyharnessWorkspaceId": workspace_id,
+                    "materializationState": state,
+                    "cleanupStatus": cleanup_status,
+                    "cleanupLastError": cleanup_message,
+                    "blockers": blockers,
+                    "worktreePath": worktree_path,
+                    "anyharnessStatusCode": response.status.as_u16(),
+                    "body": response.body,
+                })),
+            )
+        }
+        Ok(response) => command_result_request(
+            &command,
+            "failed_delivery",
+            Some("anyharness_retire_failed".to_string()),
+            Some(format!("AnyHarness returned HTTP {}", response.status)),
+            Some(json!({
+                "anyharnessStatusCode": response.status.as_u16(),
+                "body": response.body,
+            })),
+        ),
+        Err(error) => command_result_request(
+            &command,
+            "failed_delivery",
+            Some("anyharness_retire_failed".to_string()),
+            Some(error.to_string()),
+            None,
+        ),
+    };
+    if result.status == "failed_delivery" {
+        report_materialization_state(
+            cloud,
+            identity,
+            &cloud_workspace_id,
+            Some(&workspace_id),
+            "prune_failed",
+            Some("failed"),
+            result.error_message.as_deref(),
+            Vec::new(),
+            None,
+        )
+        .await;
+    }
+    report_command_result(cloud, identity, store, &command.command_id, &result).await
+}
+
+async fn report_materialization_state(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    cloud_workspace_id: &str,
+    anyharness_workspace_id: Option<&str>,
+    state: &str,
+    cleanup_status: Option<&str>,
+    cleanup_last_error: Option<&str>,
+    blockers: Vec<Value>,
+    worktree_path: Option<String>,
+) {
+    if let Err(error) = cloud
+        .report_materialization(
+            &identity.worker_token,
+            &MaterializationReportRequest {
+                cloud_workspace_id: cloud_workspace_id.to_string(),
+                anyharness_workspace_id: anyharness_workspace_id.map(ToOwned::to_owned),
+                state: state.to_string(),
+                cleanup_status: cleanup_status.map(ToOwned::to_owned),
+                cleanup_last_error: cleanup_last_error.map(ToOwned::to_owned),
+                blockers,
+                worktree_path,
+                storage_bytes: None,
+                reclaimed_bytes: None,
+                generation: None,
+            },
+        )
+        .await
+    {
+        warn!(
+            ?error,
+            cloud_workspace_id, state, "failed to report materialization state"
+        );
+    }
+}
+
+async fn report_prune_failed_and_command_result(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    store: &WorkerStore,
+    command: &CloudCommandEnvelope,
+    cloud_workspace_id: &str,
+    workspace_id: &str,
+    error_code: Option<String>,
+    error_message: Option<String>,
+    result: Option<Value>,
+) -> Result<(), WorkerError> {
+    report_materialization_state(
+        cloud,
+        identity,
+        cloud_workspace_id,
+        Some(workspace_id),
+        "prune_failed",
+        Some("failed"),
+        error_message.as_deref(),
+        Vec::new(),
+        None,
+    )
+    .await;
+    let request = command_result_request(
+        command,
+        "failed_delivery",
+        error_code,
+        error_message,
+        result,
+    );
+    report_command_result(cloud, identity, store, &command.command_id, &request).await
+}
+
+fn worktree_path_from_retire_response(body: &Value) -> Option<String> {
+    body.get("workspace")
+        .and_then(|workspace| workspace.get("path"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 async fn flush_pending_command_results(

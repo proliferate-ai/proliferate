@@ -627,6 +627,19 @@ pub async fn retry_retire_cleanup(
         .workspace_operation_gate
         .acquire_exclusive(&workspace_id)
         .await;
+    let preflight = build_retire_preflight(&state, &workspace_id).await?;
+    if !preflight.blockers.is_empty() {
+        return Ok(Json(WorkspaceRetireResponse {
+            workspace: workspace_to_contract(&state, workspace).await?,
+            outcome: WorkspaceRetireOutcome::Blocked,
+            preflight,
+            cleanup_attempted: false,
+            cleanup_succeeded: false,
+            cleanup_message: Some(
+                "cleanup retry blocked because workspace safety preflight failed".to_string(),
+            ),
+        }));
+    }
     if let Some(active) = state
         .workspace_runtime
         .find_active_worktree_by_path_excluding_id(&workspace.path, &workspace.id)

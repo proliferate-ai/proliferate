@@ -297,6 +297,7 @@ impl AppState {
             session_runtime.clone(),
             session_service.clone(),
             terminal_service.clone(),
+            runtime_home.clone(),
         ));
         let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
             workspace_runtime.clone(),

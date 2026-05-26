@@ -264,7 +264,7 @@ export async function runWorkspaceSelection(
       }
 
       const bootstrapResult = await deps.bootstrapWorkspace({
-        workspaceId: context.workspaceId,
+        workspaceId: connectionResult.materializedWorkspaceId ?? context.workspaceId,
         logicalWorkspaceId: context.logicalWorkspaceId,
         runtimeUrl: connectionResult.runtimeUrl,
         workspaceConnection: connectionResult.workspaceConnection,
@@ -352,7 +352,7 @@ export async function runWorkspaceSelection(
       }
 
       const bootstrapResult = await deps.bootstrapWorkspace({
-        workspaceId: context.workspaceId,
+        workspaceId: connectionResult.materializedWorkspaceId ?? context.workspaceId,
         logicalWorkspaceId: context.logicalWorkspaceId,
         runtimeUrl: connectionResult.runtimeUrl,
         workspaceConnection: connectionResult.workspaceConnection,
@@ -481,7 +481,7 @@ export async function runWorkspaceSelection(
   }
 
   const bootstrapResult = await deps.bootstrapWorkspace({
-    workspaceId: context.workspaceId,
+    workspaceId: connectionResult.materializedWorkspaceId ?? context.workspaceId,
     logicalWorkspaceId: context.logicalWorkspaceId,
     runtimeUrl: connectionResult.runtimeUrl,
     workspaceConnection: connectionResult.workspaceConnection,

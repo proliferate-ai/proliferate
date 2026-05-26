@@ -5,15 +5,13 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import {
-  cancelTeamCheckout,
-  createTeamCheckoutSession,
-  getCurrentTeamCheckout,
-} from "@proliferate/cloud-sdk/client/billing";
+  useCurrentTeamCheckout,
+  useTeamCheckoutActions,
+} from "@proliferate/cloud-sdk-react/hooks/billing";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
@@ -39,7 +37,6 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 
 const EMPTY_MEMBERS: OrganizationMemberRecord[] = [];
 const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
-const CURRENT_TEAM_CHECKOUT_QUERY_KEY = ["cloud", "billing", "team-checkout", "current"] as const;
 
 function readLogoImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -66,7 +63,6 @@ export function OrganizationPane() {
     organizationsQuery,
   } = useActiveOrganization();
   const { openExternal } = useTauriShellActions();
-  const queryClient = useQueryClient();
   const actions = useOrganizationActions(activeOrganizationId);
   const membersQuery = useOrganizationMembers(activeOrganizationId);
   const admin = useIsAdmin(activeOrganizationId);
@@ -83,27 +79,9 @@ export function OrganizationPane() {
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [newTeamName, setNewTeamName] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const teamCheckoutQuery = useQuery({
-    queryKey: CURRENT_TEAM_CHECKOUT_QUERY_KEY,
-    queryFn: () => getCurrentTeamCheckout(),
-    enabled: authStatus === "authenticated",
-  });
-  const createTeamCheckoutMutation = useMutation({
-    mutationFn: (teamName: string) => createTeamCheckoutSession({
-      teamName,
-      inviteEmails: [],
-    }),
-    onSuccess: async (response) => {
-      await queryClient.invalidateQueries({ queryKey: CURRENT_TEAM_CHECKOUT_QUERY_KEY });
-      await openExternal(response.url);
-    },
-  });
-  const cancelTeamCheckoutMutation = useMutation({
-    mutationFn: (intentId: string) => cancelTeamCheckout(intentId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: CURRENT_TEAM_CHECKOUT_QUERY_KEY });
-    },
-  });
+  const [teamCheckoutError, setTeamCheckoutError] = useState<string | null>(null);
+  const teamCheckoutQuery = useCurrentTeamCheckout(authStatus === "authenticated");
+  const teamCheckoutActions = useTeamCheckoutActions();
 
   useEffect(() => {
     if (!initialInviteHandoff) return;
@@ -173,7 +151,18 @@ export function OrganizationPane() {
   async function handleCreateTeamCheckout(event: FormEvent) {
     event.preventDefault();
     setStatusMessage(null);
-    await createTeamCheckoutMutation.mutateAsync(newTeamName.trim());
+    setTeamCheckoutError(null);
+    try {
+      const response = await teamCheckoutActions.createTeamCheckout({
+        teamName: newTeamName.trim(),
+        inviteEmails: [],
+      });
+      await openExternal(response.url);
+    } catch (error) {
+      setTeamCheckoutError(
+        error instanceof Error ? error.message : "Team checkout could not start.",
+      );
+    }
   }
 
   async function handleContinueTeamCheckout(url: string) {
@@ -266,9 +255,9 @@ export function OrganizationPane() {
                   <Button
                     type="button"
                     variant="ghost"
-                    loading={cancelTeamCheckoutMutation.isPending}
+                    loading={teamCheckoutActions.cancelingTeamCheckout}
                     onClick={() => {
-                      void cancelTeamCheckoutMutation.mutateAsync(teamCheckoutQuery.data!.intent!.id);
+                      void teamCheckoutActions.cancelTeamCheckout(teamCheckoutQuery.data!.intent!.id);
                     }}
                   >
                     Cancel setup
@@ -290,18 +279,16 @@ export function OrganizationPane() {
                     />
                     <Button
                       type="submit"
-                      loading={createTeamCheckoutMutation.isPending}
+                      loading={teamCheckoutActions.creatingTeamCheckout}
                       disabled={!newTeamName.trim()}
                     >
                       Create Team
                     </Button>
                   </div>
                 </SettingsCardRow>
-                {createTeamCheckoutMutation.error ? (
+                {teamCheckoutError ? (
                   <div className="border-t border-border-light p-4 text-sm text-destructive">
-                    {createTeamCheckoutMutation.error instanceof Error
-                      ? createTeamCheckoutMutation.error.message
-                      : "Team checkout could not start."}
+                    {teamCheckoutError}
                   </div>
                 ) : null}
               </form>

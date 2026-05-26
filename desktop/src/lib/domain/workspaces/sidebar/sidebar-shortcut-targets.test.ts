@@ -82,7 +82,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
     })).toEqual(["local-visible", "cloud-selected"]);
   });
 
-  it("keeps selected archived rows targetable when the sidebar kept them visible", () => {
+  it("keeps selected archived rows out of active sidebar shortcuts", () => {
     const groups = buildGroups({
       logicalWorkspaces: [
         makeLocalLogicalWorkspace({
@@ -106,7 +106,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(),
       repoGroupsShownMore: new Set(),
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
-    })).toEqual(["local-visible", "archived-selected"]);
+    })).toEqual(["local-visible"]);
   });
 
   it("omits collapsed repository groups and truncates groups that have not shown more", () => {

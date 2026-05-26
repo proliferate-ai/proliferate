@@ -16,6 +16,7 @@ import type {
 import { Button } from "@proliferate/ui/primitives/Button";
 
 export interface WorkspacesSurfaceProps {
+  title?: string;
   groups: readonly WorkspaceInventoryGroupView[];
   filterOptions: readonly WorkspaceInventoryFilterOption[];
   selectedFilterId: WorkspaceInventoryFilterId;
@@ -39,6 +40,7 @@ export interface WorkspacesSurfaceProps {
 }
 
 export function WorkspacesSurface({
+  title = "Workspaces",
   groups,
   filterOptions,
   selectedFilterId,
@@ -62,7 +64,7 @@ export function WorkspacesSurface({
 }: WorkspacesSurfaceProps) {
   return (
     <ProductPageShell
-      title="Workspaces"
+      title={title}
       description={summaryLabel}
       actions={
         <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">

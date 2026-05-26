@@ -5,6 +5,7 @@ import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
 import { AgentAuthenticationPane } from "@/components/settings/panes/AgentAuthenticationPane";
 import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
+import { ArchivedChatsPane } from "@/components/settings/panes/ArchivedChatsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 import { KeyboardShortcutsPane } from "@/components/settings/panes/KeyboardShortcutsPane";
@@ -151,6 +152,9 @@ function renderSettingsSection(
   }
   if (activeSection === "worktrees") {
     return <WorktreesPane />;
+  }
+  if (activeSection === "archived-chats") {
+    return <ArchivedChatsPane />;
   }
   return (
     <EnvironmentsPane

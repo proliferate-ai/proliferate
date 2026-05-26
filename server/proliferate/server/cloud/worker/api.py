@@ -27,6 +27,8 @@ from proliferate.server.cloud.worker.models import (
     WorkerHeartbeatResponse,
     WorkerInventoryRequest,
     WorkerInventoryResponse,
+    WorkerMaterializationReportRequest,
+    WorkerMaterializationReportResponse,
     WorkerProjectionGapRequest,
     WorkerProjectionGapResponse,
     WorkerRevokedJtisResponse,
@@ -44,6 +46,7 @@ from proliferate.server.cloud.worker.service import (
     record_event_batch,
     record_heartbeat,
     record_inventory,
+    record_materialization_report,
     record_projection_gap,
     record_update_status,
 )
@@ -84,6 +87,19 @@ async def worker_inventory_endpoint(
     try:
         auth = await authenticate_worker(db, authorization=authorization)
         return await record_inventory(db, auth=auth, body=body)
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.post("/materialization-reports", response_model=WorkerMaterializationReportResponse)
+async def worker_materialization_report_endpoint(
+    body: WorkerMaterializationReportRequest,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkerMaterializationReportResponse:
+    try:
+        auth = await authenticate_worker(db, authorization=authorization)
+        return await record_materialization_report(db, auth=auth, body=body)
     except CloudApiError as error:
         raise_cloud_error(error)
 

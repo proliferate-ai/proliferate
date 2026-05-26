@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { SupportDialog } from "@/components/support/SupportDialog";
+import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { SidebarFooter } from "./SidebarFooter";
 import { SidebarPrimaryNavigation } from "./SidebarPrimaryNavigation";
@@ -34,6 +35,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "@/hooks/workspaces/workflows/use-workspace-sidebar-actions";
+import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useSidebarRepoGroupState } from "@/hooks/workspaces/facade/use-sidebar-repo-group-state";
 import { useWorkspaceSidebarState } from "@/hooks/workspaces/derived/use-workspace-sidebar-state";
 import { useSessionActivityReconciler } from "@/hooks/sessions/lifecycle/use-session-activity-reconciler";
@@ -41,11 +43,19 @@ import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
 } from "@/lib/domain/settings/navigation";
+import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 import { subscribeSupportDialogRequest } from "@/lib/infra/support/support-dialog-request";
 import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
+import { useToastStore } from "@/stores/toast/toast-store";
+
+interface ArchiveConfirmationState {
+  workspaceId: string;
+  cloudWorkspaceId: string | null;
+  name: string;
+}
 
 export const MainSidebar = memo(function MainSidebar() {
   useDebugRenderCount("workspace-sidebar");
@@ -67,13 +77,9 @@ export const MainSidebar = memo(function MainSidebar() {
   useEffect(() => subscribeSupportDialogRequest(() => setSupportOpen(true)), []);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const {
-    showArchived,
-    setShowArchived,
     workspaceTypes,
     toggleSidebarWorkspaceType,
   } = useWorkspaceUiStore(useShallow((state) => ({
-    showArchived: state.showArchived,
-    setShowArchived: state.setShowArchived,
     workspaceTypes: state.workspaceTypes,
     toggleSidebarWorkspaceType: state.toggleSidebarWorkspaceType,
   })));
@@ -84,9 +90,16 @@ export const MainSidebar = memo(function MainSidebar() {
     cleanupAttentionWorkspaces,
     emptyState,
     isLoading,
-  } = useWorkspaceSidebarState({ showArchived });
+  } = useWorkspaceSidebarState({ showArchived: false });
   const navigate = useNavigate();
   const location = useLocation();
+  const showToast = useToastStore((state) => state.show);
+  const [archiveConfirmation, setArchiveConfirmation] =
+    useState<ArchiveConfirmationState | null>(null);
+  const {
+    archiveCloudWorkspace: archiveCloudWorkspaceRequest,
+    restoreCloudWorkspace: restoreCloudWorkspaceRequest,
+  } = useCloudWorkspaceActions();
 
   const isOnPlugins = location.pathname === APP_ROUTES.plugins;
   const isOnAutomations = location.pathname.startsWith(APP_ROUTES.automations);
@@ -144,6 +157,86 @@ export const MainSidebar = memo(function MainSidebar() {
     clearRepoGroupShowMore(sourceRoot);
   }, [clearRepoGroupShowMore, groups, hideRepoRoot, unarchiveWorkspaces]);
 
+  const resolveArchiveTargetForSidebarItem = useCallback((
+    workspaceId: string,
+  ): ArchiveConfirmationState => {
+    for (const group of groups) {
+      const item = group.items.find((candidate) => candidate.id === workspaceId);
+      if (item) {
+        return {
+          workspaceId,
+          cloudWorkspaceId: item.cloudWorkspaceId,
+          name: item.name,
+        };
+      }
+    }
+    return {
+      workspaceId,
+      cloudWorkspaceId: null,
+      name: "this workspace",
+    };
+  }, [groups]);
+
+  const handleArchiveWorkspace = useCallback((workspaceId: string) => {
+    setArchiveConfirmation(resolveArchiveTargetForSidebarItem(workspaceId));
+  }, [resolveArchiveTargetForSidebarItem]);
+
+  const confirmArchiveWorkspace = useCallback(() => {
+    const target = archiveConfirmation;
+    if (!target) {
+      return;
+    }
+    setArchiveConfirmation(null);
+    const shouldLeaveWorkspace = selectedLogicalWorkspaceId === target.workspaceId
+      || selectedWorkspaceId === target.workspaceId
+      || (
+        target.cloudWorkspaceId
+        ? selectedWorkspaceId === cloudWorkspaceSyntheticId(target.cloudWorkspaceId)
+        : false
+      );
+    const cloudWorkspaceId = target.cloudWorkspaceId;
+    if (!cloudWorkspaceId) {
+      archiveWorkspace(target.workspaceId);
+      if (shouldLeaveWorkspace) {
+        actions.handleGoHome();
+      }
+      return;
+    }
+    if (shouldLeaveWorkspace) {
+      actions.handleGoHome();
+    }
+    void archiveCloudWorkspaceRequest(cloudWorkspaceId)
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "Failed to archive workspace.";
+        showToast(message);
+      });
+  }, [
+    actions,
+    archiveConfirmation,
+    archiveWorkspace,
+    archiveCloudWorkspaceRequest,
+    selectedLogicalWorkspaceId,
+    selectedWorkspaceId,
+    showToast,
+  ]);
+
+  const handleUnarchiveWorkspace = useCallback((workspaceId: string) => {
+    const cloudWorkspaceId = resolveArchiveTargetForSidebarItem(workspaceId).cloudWorkspaceId;
+    if (!cloudWorkspaceId) {
+      unarchiveWorkspace(workspaceId);
+      return;
+    }
+    void restoreCloudWorkspaceRequest(cloudWorkspaceId).catch((error) => {
+      const message = error instanceof Error ? error.message : "Failed to restore workspace.";
+      showToast(message);
+    });
+  }, [
+    resolveArchiveTargetForSidebarItem,
+    restoreCloudWorkspaceRequest,
+    showToast,
+    unarchiveWorkspace,
+  ]);
+
   const handleOpenRepoSettings = useCallback((sourceRoot: string) => {
     navigate(buildSettingsHref({ section: "environments", repo: sourceRoot }));
   }, [navigate]);
@@ -160,7 +253,7 @@ export const MainSidebar = memo(function MainSidebar() {
     : cloudWorkspaceBlocked
       ? `${titleForStartBlockReason(billingPlan?.startBlockReason)}.`
       : CAPABILITY_COPY.cloudSignInTooltip;
-  const filtersActive = showArchived || !isDefaultSidebarWorkspaceTypes(workspaceTypes);
+  const filtersActive = !isDefaultSidebarWorkspaceTypes(workspaceTypes);
   const sidebarShortcutLabelById = useMemo(
     () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
     [sidebarShortcutTargetIds],
@@ -214,10 +307,8 @@ export const MainSidebar = memo(function MainSidebar() {
             hasRepoGroups={allRepoKeys.length > 0}
             allRepoGroupsCollapsed={allRepoGroupsCollapsed}
             filtersActive={filtersActive}
-            showArchived={showArchived}
             workspaceTypes={workspaceTypes}
             onToggleAllRepoGroups={handleToggleAllRepoGroups}
-            onToggleShowArchived={() => setShowArchived(!showArchived)}
             onToggleWorkspaceType={toggleSidebarWorkspaceType}
             onAddRepo={actions.handleAddRepo}
           />
@@ -245,8 +336,8 @@ export const MainSidebar = memo(function MainSidebar() {
               onWorkspaceHover={handleWorkspaceHover}
               shortcutRevealVisible={shortcutRevealVisible}
               shortcutLabelByWorkspaceId={sidebarShortcutLabelById}
-              onArchiveWorkspace={archiveWorkspace}
-              onUnarchiveWorkspace={unarchiveWorkspace}
+              onArchiveWorkspace={handleArchiveWorkspace}
+              onUnarchiveWorkspace={handleUnarchiveWorkspace}
               onRenameWorkspace={handleRenameWorkspace}
               onRemoveRepo={handleRemoveRepo}
               onOpenRepoSettings={handleOpenRepoSettings}
@@ -255,6 +346,14 @@ export const MainSidebar = memo(function MainSidebar() {
           <CoworkThreadsSection />
         </ProductSidebarScrollableContent>
       </ProductSidebarBody>
+      <ConfirmationDialog
+        open={archiveConfirmation !== null}
+        title="Archive workspace?"
+        description={`Move ${archiveConfirmation?.name ?? "this workspace"} out of the main sidebar. It will remain available in Settings -> Archived chats, and safe worktree cleanup may run in the background.`}
+        confirmLabel="Archive"
+        onClose={() => setArchiveConfirmation(null)}
+        onConfirm={confirmArchiveWorkspace}
+      />
       </ProductSidebarFrame>
     </DebugProfiler>
   );

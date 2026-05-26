@@ -122,6 +122,9 @@ start of the task, not after implementation has already started.
   - concrete implementation spec for the shared target/workspace/materialization
     launch model used by automations, Slack, web, mobile, and Desktop cloud
     surfaces
+- `docs/architecture/workspace-pruning-worktree-management-spec.md`
+  - draft implementation spec for durable workspace lifecycle, worktree pruning,
+    archive/restore UX, materialization state, and rehydration
 - `docs/architecture/target-runtime-mcp-skills-config.md`
   - proposed target model for replacing session plugin bundles with
     target-scoped MCP/skill runtime config, refresh, and lazy artifact/credential

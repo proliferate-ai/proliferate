@@ -155,7 +155,8 @@ export function buildSidebarGroupStates(args: {
       }
       const workspaceItemsWithWorkspace = groupWorkspaces.map((entry) => {
         const active = logicalWorkspaceMatchesId(entry, args.selectedLogicalWorkspaceId);
-        const archived = logicalWorkspaceRelatedIds(entry).some((id) => args.archivedSet.has(id));
+        const archived = entry.cloudWorkspace?.productLifecycle === "archived"
+          || logicalWorkspaceRelatedIds(entry).some((id) => args.archivedSet.has(id));
         const recency = resolveLogicalWorkspaceRecency(entry, args.workspaceLastInteracted);
         const activityLastInteracted = recency.displayAt;
         const lastInteracted = activityLastInteracted ?? recency.recordUpdatedAt;
@@ -197,6 +198,7 @@ export function buildSidebarGroupStates(args: {
           item: {
             id: entry.id,
             localWorkspaceId: preferredLocalWorkspace?.id ?? null,
+            cloudWorkspaceId: preferredCloudWorkspace?.id ?? null,
             name: displayNameOverride ?? defaultName,
             defaultName,
             hasDisplayNameOverride: displayNameOverride !== null,
@@ -238,10 +240,12 @@ export function buildSidebarGroupStates(args: {
       const items = pendingItem
         ? [pendingItem, ...visibleWorkspaceItems]
         : visibleWorkspaceItems;
-      const visibleItems = items.filter((item) =>
-        item.active
-        || ((args.showArchived || !item.archived) && visibleWorkspaceTypes.has(item.variant))
-      );
+      const visibleItems = items.filter((item) => {
+        if (args.showArchived) {
+          return item.archived && visibleWorkspaceTypes.has(item.variant);
+        }
+        return !item.archived && (item.active || visibleWorkspaceTypes.has(item.variant));
+      });
       const archiveHiddenItems = items.filter((item) =>
         !item.active
         && item.archived

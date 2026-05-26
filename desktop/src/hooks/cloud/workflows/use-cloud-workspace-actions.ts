@@ -3,14 +3,17 @@ import type {
   CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
 import {
+  archiveCloudWorkspace,
   deleteCloudWorkspace,
   getCloudWorkspace,
+  restoreCloudWorkspace,
   startCloudWorkspace,
   updateCloudWorkspaceBranch,
 } from "@proliferate/cloud-sdk/client/workspaces";
 import { autoSyncDetectedAgentAuthCredentialsIfNeeded } from "@/lib/access/cloud/agent-auth-recovery";
 import { syncLocalAgentAuthCredentialToCloud } from "@/lib/access/cloud/agent-auth-sync";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { useCloudWorkspaceLifecycleCache } from "@/hooks/access/cloud/use-cloud-workspace-lifecycle-cache";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useInvalidateCloudBillingState } from "@/hooks/access/cloud/use-cloud-billing";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -48,6 +51,7 @@ export function useCloudWorkspaceActions() {
   const invalidateCloudBillingState = useInvalidateCloudBillingState();
   const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const { upsertCloudWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
+  const { invalidateCloudWorkspaceLifecycle } = useCloudWorkspaceLifecycleCache();
   const { clearCachedCloudWorkspaceConnections } = useCloudWorkspaceConnectionCache();
   const clearDeferredLaunchesForWorkspace = useDeferredHomeLaunchStore((state) =>
     state.clearForWorkspace
@@ -68,6 +72,7 @@ export function useCloudWorkspaceActions() {
     },
     onSuccess: async (workspace) => {
       upsertCloudWorkspace(workspace);
+      invalidateCloudWorkspaceLifecycle(workspace.id);
       await invalidateWorkspaceCollections();
     },
   });
@@ -170,6 +175,59 @@ export function useCloudWorkspaceActions() {
     },
   });
 
+  const archiveMutation = useMutation<CloudWorkspaceDetail, Error, string>({
+    meta: {
+      telemetryHandled: true,
+    },
+    mutationFn: async (workspaceId) => {
+      const cloudWorkspaceId = workspaceId.startsWith("cloud:")
+        ? workspaceId.slice("cloud:".length)
+        : workspaceId;
+      const workspace = await archiveCloudWorkspace(cloudWorkspaceId);
+      await clearCachedCloudWorkspaceConnections(cloudWorkspaceId);
+      return workspace;
+    },
+    onSuccess: async (workspace) => {
+      upsertCloudWorkspace(workspace);
+      invalidateCloudWorkspaceLifecycle(workspace.id);
+      await invalidateWorkspaceCollections();
+    },
+    onError: (error) => {
+      captureTelemetryException(error, {
+        tags: {
+          action: "archive_cloud_workspace",
+          domain: "cloud_workspace",
+          workspace_kind: "cloud",
+        },
+      });
+    },
+  });
+
+  const restoreMutation = useMutation<CloudWorkspaceDetail, Error, string>({
+    meta: {
+      telemetryHandled: true,
+    },
+    mutationFn: async (workspaceId) => {
+      const cloudWorkspaceId = workspaceId.startsWith("cloud:")
+        ? workspaceId.slice("cloud:".length)
+        : workspaceId;
+      return restoreCloudWorkspace(cloudWorkspaceId);
+    },
+    onSuccess: async (workspace) => {
+      upsertCloudWorkspace(workspace);
+      await invalidateWorkspaceCollections();
+    },
+    onError: (error) => {
+      captureTelemetryException(error, {
+        tags: {
+          action: "restore_cloud_workspace",
+          domain: "cloud_workspace",
+          workspace_kind: "cloud",
+        },
+      });
+    },
+  });
+
   const syncBranchMutation = useMutation<CloudWorkspaceDetail, Error, {
     workspaceId: string;
     branchName: string;
@@ -193,6 +251,10 @@ export function useCloudWorkspaceActions() {
     isStartingCloudWorkspace: startMutation.isPending,
     syncCloudWorkspaceBranch: syncBranchMutation.mutateAsync,
     isSyncingCloudWorkspaceBranch: syncBranchMutation.isPending,
+    archiveCloudWorkspace: archiveMutation.mutateAsync,
+    isArchivingCloudWorkspace: archiveMutation.isPending,
+    restoreCloudWorkspace: restoreMutation.mutateAsync,
+    isRestoringCloudWorkspace: restoreMutation.isPending,
     deleteCloudWorkspace: deleteMutation.mutateAsync,
     isDeletingCloudWorkspace: deleteMutation.isPending,
   };

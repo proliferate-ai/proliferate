@@ -27,6 +27,31 @@ export type CloudWorkspaceSandboxType =
   | "managed_shared"
   | "self_hosted";
 
+export type CloudWorkspaceProductLifecycle = "active" | "archived" | "deleted";
+export type CloudWorkspaceExecutionTargetKind =
+  | "local_desktop"
+  | "managed_cloud"
+  | "ssh"
+  | "self_hosted";
+export type CloudWorkspaceMaterializationState =
+  | "hydrated"
+  | "dehydrated"
+  | "hydrating"
+  | "unknown"
+  | "inconsistent";
+export type CloudWorkspaceCleanupStatus =
+  | "idle"
+  | "pruning"
+  | "blocked"
+  | "failed"
+  | "skipped"
+  | "completed";
+export type CloudWorkspaceCloudAccessState =
+  | "disabled"
+  | "enabled"
+  | "enabling"
+  | "error";
+
 export type CloudRuntimeStatus =
   | "pending"
   | "provisioning"
@@ -102,6 +127,35 @@ export interface CloudWorkspaceDirectTargetContext {
   anyharnessWorkspaceId: string;
 }
 
+export interface CloudWorkspaceExecutionTargetSummary {
+  kind: CloudWorkspaceExecutionTargetKind;
+  targetId?: string | null;
+  label?: string | null;
+  online?: boolean | null;
+}
+
+export interface CloudWorkspaceMaterializationSummary {
+  id: string;
+  targetId?: string | null;
+  anyharnessWorkspaceId?: string | null;
+  worktreePath?: string | null;
+  state: CloudWorkspaceMaterializationState;
+  desiredState: "hydrated" | "dehydrated";
+  cleanupStatus: CloudWorkspaceCleanupStatus;
+  cleanupLastError?: string | null;
+  blockers?: string[];
+  generation: number;
+  storageBytes?: number | null;
+}
+
+export interface CloudWorkspaceCloudAccessSummary {
+  state: CloudWorkspaceCloudAccessState;
+  exposureId?: string | null;
+  exposureRevision?: number | null;
+  projectionState: CloudWorkspaceExposureState;
+  commandable: boolean;
+}
+
 export interface CloudWorkspaceSummary {
   id: string;
   targetId?: string | null;
@@ -109,7 +163,12 @@ export interface CloudWorkspaceSummary {
   repo: CloudWorkspaceRepoRef;
   status: CloudWorkspaceStatus;
   workspaceStatus: CloudWorkspaceStatus;
+  productLifecycle?: CloudWorkspaceProductLifecycle;
   runtime?: CloudWorkspaceRuntimeSummary;
+  executionTarget?: CloudWorkspaceExecutionTargetSummary;
+  selectedMaterializationId?: string | null;
+  primaryMaterialization?: CloudWorkspaceMaterializationSummary | null;
+  cloudAccess?: CloudWorkspaceCloudAccessSummary;
   statusDetail: string | null;
   lastError: string | null;
   templateVersion: string | null;

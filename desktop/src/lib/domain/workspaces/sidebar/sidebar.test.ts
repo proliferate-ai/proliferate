@@ -202,7 +202,7 @@ describe("sidebar workspace filters", () => {
     expect(groups[0]?.items[1]?.active).toBe(true);
   });
 
-  it("keeps the selected logical workspace visible when it is archived", () => {
+  it("keeps archived workspaces out of the active sidebar even when selected", () => {
     const groups = buildGroups({
       logicalWorkspaces: [
         makeLocalLogicalWorkspace({
@@ -223,12 +223,7 @@ describe("sidebar workspace filters", () => {
     });
 
     expect(groups).toHaveLength(1);
-    expect(groups[0]?.items.map((item) => item.id)).toEqual([
-      "local-visible",
-      "archived-selected",
-    ]);
-    expect(groups[0]?.items[1]?.archived).toBe(true);
-    expect(groups[0]?.items[1]?.active).toBe(true);
+    expect(groups[0]?.items.map((item) => item.id)).toEqual(["local-visible"]);
   });
 
   it("composes archived visibility with workspace-type filtering", () => {
@@ -257,7 +252,7 @@ describe("sidebar workspace filters", () => {
       workspaceTypes: ["worktree"],
       archivedIds: ["worktree-archived"],
     });
-    const visibleArchivedGroups = buildGroups({
+    const archivedOnlyGroups = buildGroups({
       logicalWorkspaces,
       showArchived: true,
       workspaceTypes: ["worktree"],
@@ -265,8 +260,8 @@ describe("sidebar workspace filters", () => {
     });
 
     expect(hiddenArchivedGroups).toHaveLength(0);
-    expect(visibleArchivedGroups).toHaveLength(1);
-    expect(visibleArchivedGroups[0]?.items.map((item) => item.id)).toEqual(["worktree-archived"]);
+    expect(archivedOnlyGroups).toHaveLength(1);
+    expect(archivedOnlyGroups[0]?.items.map((item) => item.id)).toEqual(["worktree-archived"]);
   });
 
   it("preserves the full repo workspace id list even when visible items are filtered", () => {
