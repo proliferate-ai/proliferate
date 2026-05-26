@@ -117,6 +117,330 @@ agent-auth, sandbox profile, and Bifrost-materialization records.
 | `AgentGatewayLlmUsageEvent` | Imported Bifrost usage log | Idempotently links Bifrost log ids to Proliferate budget/policy/materialization records. |
 | `AgentGatewayUsageImportCursor` | Incremental Bifrost log import cursor | Lets the usage importer resume without double-charging. |
 
+The practical write/read order is:
+
+| Flow | Rows touched |
+| --- | --- |
+| Team upgrade starts | Create `organization`, `billing_subject`, and `organization_checkout_intent`; keep the organization in `pending_checkout`. |
+| Team upgrade completes | Update `organization_checkout_intent`, activate `organization`, create `organization_membership`, upsert `billing_subscription`, and create `organization_invitation` rows for staged invites. |
+| Team billing changes | Use `billing_seat_adjustment`, `billing_hold`, `billing_entitlement`, `billing_overage_remainder`, and `webhook_event_receipt` rows to make Stripe side effects idempotent and inspectable. |
+| Personal cloud credit starts | Ensure personal `billing_subject`, `sandbox_profile`, `agent_gateway_budget_subject`, and `agent_gateway_free_credit_entitlement` rows. |
+| Cloud runtime usage accrues | Write `usage_segment`, `billing_grant_consumption`, `billing_usage_cursor`, and `billing_usage_export` rows for runtime-hour billing. |
+| BYOK or managed auth is configured | Write or update `agent_auth_credential`, `agent_gateway_policy`, `agent_gateway_provider_credential`, `sandbox_agent_auth_selection`, `sandbox_profile_agent_auth_revision`, and `agent_auth_audit_event`. |
+| Bifrost runtime auth is materialized | Write `agent_gateway_router_materialization`, update `sandbox_profile_target_state`, and retain `agent_gateway_runtime_grant` only for compatibility paths. |
+| Bifrost usage is imported | Write `agent_gateway_llm_usage_event` and advance `agent_gateway_usage_import_cursor`. |
+
+<details>
+<summary>Field-level DB row inventory</summary>
+
+The inventory below spells out each concrete row/table used by the Team
+checkout, billing, sandbox profile, agent-auth, Bifrost materialization, and
+usage-import flows. Field names are the persisted ORM column names. Fields with
+`litellm_*` names are compatibility storage/API names; the runtime router is
+Bifrost-only.
+
+#### `organization`
+
+Row: team shell, including the pending shell created before Stripe activation.
+
+Fields: `id`, `name`, `logo_domain`, `logo_image`, `status`, `created_at`,
+`updated_at`.
+
+#### `organization_membership`
+
+Row: one user membership in one active team.
+
+Fields: `id`, `organization_id`, `user_id`, `role`, `status`, `joined_at`,
+`removed_at`, `created_at`, `updated_at`.
+
+#### `organization_checkout_intent`
+
+Row: resumable Stripe Checkout attempt for creating or upgrading to a Team.
+
+Fields: `id`, `organization_id`, `created_by_user_id`, `billing_subject_id`,
+`team_name`, `status`, `activation_status`, `activation_error_code`,
+`activation_error_message`, `last_webhook_event_id`,
+`stripe_checkout_session_id`, `stripe_customer_id`, `stripe_subscription_id`,
+`idempotency_key`, `invite_emails_json`, `checkout_url`, `expires_at`,
+`completed_at`, `failed_at`, `cancelled_at`, `created_at`, `updated_at`.
+
+#### `organization_invitation`
+
+Row: staged or delivered invite into the newly activated Team.
+
+Fields: `id`, `organization_id`, `email`, `role`, `status`, `token_hash`,
+`handoff_token_hash`, `handoff_expires_at`, `delivery_status`,
+`delivery_error`, `delivered_at`, `invited_by_user_id`, `accepted_by_user_id`,
+`expires_at`, `accepted_at`, `revoked_at`, `expired_at`, `created_at`,
+`updated_at`.
+
+#### `billing_subject`
+
+Row: budget/accounting owner, either personal or organization.
+
+Fields: `id`, `kind`, `user_id`, `organization_id`, `stripe_customer_id`,
+`overage_enabled`, `overage_cap_cents_per_seat`,
+`overage_preference_set_at`, `created_at`, `updated_at`.
+
+#### `billing_subscription`
+
+Row: Stripe subscription mirror for a billing subject.
+
+Fields: `id`, `billing_subject_id`, `stripe_subscription_id`,
+`stripe_customer_id`, `status`, `cancel_at_period_end`, `canceled_at`,
+`current_period_start`, `current_period_end`, `cloud_monthly_price_id`,
+`overage_price_id`, `seat_quantity`, `monthly_subscription_item_id`,
+`metered_subscription_item_id`, `latest_invoice_id`, `latest_invoice_status`,
+`hosted_invoice_url`, `created_at`, `updated_at`.
+
+#### `billing_hold`
+
+Row: billing block or caution attached to a billing subject.
+
+Fields: `id`, `billing_subject_id`, `kind`, `status`, `source`, `source_ref`,
+`created_at`, `resolved_at`, `updated_at`.
+
+#### `billing_decision_event`
+
+Row: audit trail for a billing gate decision before or during launch.
+
+Fields: `id`, `billing_subject_id`, `actor_user_id`, `workspace_id`,
+`decision_type`, `mode`, `would_block_start`, `would_pause_active`, `reason`,
+`active_sandbox_count`, `remaining_seconds`, `created_at`.
+
+#### `billing_grant`
+
+Row: free or purchased runtime-hour grant for a billing subject.
+
+Fields: `id`, `user_id`, `billing_subject_id`, `grant_type`,
+`hours_granted`, `remaining_seconds`, `effective_at`, `expires_at`,
+`source_ref`, `created_at`, `updated_at`.
+
+#### `free_cloud_allocation`
+
+Row: dedupe guard for account-level free cloud allocation.
+
+Fields: `id`, `allocation_kind`, `github_provider_user_id`,
+`billing_subject_id`, `user_id`, `issued_billing_grant_id`, `period_key`,
+`status`, `created_at`, `updated_at`.
+
+#### `billing_grant_consumption`
+
+Row: debit from a grant for a specific runtime usage segment.
+
+Fields: `id`, `billing_subject_id`, `billing_grant_id`, `usage_segment_id`,
+`accounted_from`, `accounted_until`, `seconds`, `source`, `created_at`.
+
+#### `billing_usage_cursor`
+
+Row: per-usage-segment cursor so runtime billing resumes without double debit.
+
+Fields: `id`, `billing_subject_id`, `usage_segment_id`, `accounted_until`,
+`created_at`, `updated_at`.
+
+#### `billing_usage_export`
+
+Row: idempotent export of billable runtime usage to Stripe metering.
+
+Fields: `id`, `billing_subject_id`, `billing_subscription_id`,
+`usage_segment_id`, `period_start`, `period_end`, `accounted_from`,
+`accounted_until`, `quantity_seconds`, `meter_quantity_cents`,
+`cap_cents_snapshot`, `cap_used_cents_snapshot`, `writeoff_reason`,
+`idempotency_key`, `stripe_meter_event_identifier`, `status`, `error`,
+`created_at`, `updated_at`.
+
+#### `billing_entitlement`
+
+Row: entitlement attached to a billing subject.
+
+Fields: `id`, `user_id`, `billing_subject_id`, `kind`, `effective_at`,
+`expires_at`, `note`, `created_at`, `updated_at`.
+
+#### `billing_seat_adjustment`
+
+Row: idempotent Stripe/team seat-count adjustment and related grant issuance.
+
+Fields: `id`, `billing_subject_id`, `billing_subscription_id`,
+`organization_id`, `membership_id`, `stripe_subscription_id`,
+`monthly_subscription_item_id`, `previous_quantity`, `target_quantity`,
+`grant_quantity`, `attempt_count`, `period_start`, `effective_at`,
+`source_ref`, `status`, `stripe_confirmed_at`, `grant_issued_at`,
+`last_error`, `created_at`, `updated_at`.
+
+#### `billing_overage_remainder`
+
+Row: fractional overage accounting remainder for a billing period.
+
+Fields: `id`, `billing_subject_id`, `billing_subscription_id`, `period_start`,
+`fractional_cents`, `created_at`, `updated_at`.
+
+#### `usage_segment`
+
+Row: one sandbox runtime usage interval.
+
+Fields: `id`, `user_id`, `billing_subject_id`, `runtime_environment_id`,
+`workspace_id`, `sandbox_id`, `external_sandbox_id`,
+`sandbox_execution_id`, `started_at`, `ended_at`, `is_billable`,
+`opened_by`, `closed_by`, `created_at`, `updated_at`.
+
+#### `webhook_event_receipt`
+
+Row: idempotency receipt for external webhook processing.
+
+Fields: `id`, `event_id`, `provider`, `event_type`, `external_sandbox_id`,
+`status`, `attempt_count`, `processing_lease_expires_at`, `last_error`,
+`received_at`, `processed_at`, `updated_at`.
+
+#### `sandbox_profile`
+
+Row: personal or organization sandbox configuration root.
+
+Fields: `id`, `owner_scope`, `owner_user_id`, `organization_id`,
+`billing_subject_id`, `created_by_user_id`, `desired_agent_auth_revision`,
+`status`, `created_at`, `updated_at`, `archived_at`, `deleted_at`.
+
+#### `sandbox_profile_agent_auth_revision`
+
+Row: monotonic revision marker for sandbox auth changes.
+
+Fields: `id`, `sandbox_profile_id`, `revision`, `reason`, `force_restart`,
+`created_by_user_id`, `created_at`.
+
+#### `agent_auth_credential`
+
+Row: encrypted system, personal, or organization provider credential.
+
+Fields: `id`, `owner_scope`, `owner_user_id`, `organization_id`,
+`created_by_user_id`, `agent_kind`, `credential_kind`, `display_name`,
+`redacted_summary_json`, `status`, `revision`, `payload_ciphertext`,
+`payload_ciphertext_key_id`, `created_at`, `updated_at`, `revoked_at`.
+
+#### `agent_auth_credential_share`
+
+Row: personal credential share boundary for organization use.
+
+Fields: `id`, `credential_id`, `owner_user_id`, `organization_id`,
+`share_scope`, `shared_by_user_id`, `status`, `allowed_agent_kind`,
+`created_at`, `revoked_at`, `revoked_by_user_id`.
+
+#### `agent_gateway_budget_subject`
+
+Row: managed LLM credit budget subject for Bifrost-backed auth.
+
+Fields: `id`, `budget_kind`, `owner_scope`, `owner_user_id`,
+`organization_id`, `litellm_team_id`, `included_budget_usd`,
+`budget_duration`, `entitlement_source`, `entitlement_period_key`,
+`litellm_sync_status`, `litellm_sync_fingerprint`, `status`, `revision`,
+`last_provisioned_at`, `last_litellm_reconciled_at`, `last_error_code`,
+`last_error_message`, `created_at`, `updated_at`.
+
+#### `agent_gateway_free_credit_entitlement`
+
+Row: personal managed LLM credit entitlement.
+
+Fields: `id`, `user_id`, `budget_subject_id`, `source`, `period_key`,
+`included_budget_usd`, `status`, `activated_at`, `exhausted_at`,
+`revoked_at`, `last_error_code`, `last_error_message`, `created_at`,
+`updated_at`.
+
+#### `agent_gateway_policy`
+
+Row: product policy connecting a credential to a managed-credit or BYOK mode.
+
+Fields: `id`, `credential_id`, `policy_kind`, `owner_scope`, `owner_user_id`,
+`organization_id`, `budget_subject_id`, `litellm_team_id`,
+`litellm_virtual_key_id`, `litellm_virtual_key_ciphertext`,
+`litellm_virtual_key_ciphertext_key_id`, `litellm_sync_status`,
+`litellm_sync_fingerprint`, `status`, `revision`, `last_provisioned_at`,
+`last_litellm_reconciled_at`, `last_error_code`, `last_error_message`,
+`created_at`, `updated_at`.
+
+#### `agent_gateway_provider_credential`
+
+Row: provider-specific encrypted payload and validation state for a policy.
+
+Fields: `id`, `policy_id`, `provider_kind`, `payload_ciphertext`,
+`payload_ciphertext_key_id`, `redacted_summary_json`, `validation_status`,
+`validated_at`, `validation_error_code`, `validation_error_message`,
+`revision`, `created_at`, `updated_at`.
+
+#### `sandbox_agent_auth_selection`
+
+Row: chosen auth method for one agent harness on one sandbox profile.
+
+Fields: `id`, `sandbox_profile_id`, `owner_scope`, `agent_kind`,
+`credential_id`, `credential_share_id`, `materialization_mode`,
+`selected_revision`, `status`, `last_error_code`, `last_error_message`,
+`created_at`, `updated_at`.
+
+#### `sandbox_profile_target_state`
+
+Row: target-specific application state for auth and runtime config.
+
+Fields: `id`, `sandbox_profile_id`, `target_id`, `active_sandbox_id`,
+`slot_generation`, `desired_agent_auth_revision`,
+`applied_agent_auth_revision`, `agent_auth_status`,
+`agent_auth_force_restart_required`, `last_agent_auth_command_id`,
+`last_agent_auth_worker_id`, `last_agent_auth_attempted_at`,
+`last_agent_auth_applied_at`, `last_agent_auth_error_code`,
+`last_agent_auth_error_message`, `pending_agent_auth_cleanup_json`,
+`applied_runtime_config_sequence`, `applied_runtime_config_revision_id`,
+`runtime_config_status`, `last_runtime_config_command_id`,
+`last_runtime_config_worker_id`, `last_runtime_config_attempted_at`,
+`last_runtime_config_applied_at`, `last_runtime_config_error_code`,
+`last_runtime_config_error_message`, `created_at`, `updated_at`.
+
+#### `agent_gateway_runtime_grant`
+
+Row: historical runtime-scoped token grant retained for compatibility paths.
+
+Fields: `id`, `token_hash`, `hash_key_id`, `policy_id`, `credential_id`,
+`selection_id`, `issued_profile_revision`, `target_id`,
+`sandbox_profile_id`, `cloud_sandbox_id`, `slot_generation`,
+`organization_id`, `user_id`, `agent_kind`, `protocol_facade`,
+`expires_at`, `revoked_at`, `last_used_at`, `created_at`.
+
+#### `agent_gateway_router_materialization`
+
+Row: durable Bifrost provider-key or virtual-key materialization mapping.
+
+Fields: `id`, `router_kind`, `router_object_kind`, `object_scope`,
+`policy_id`, `provider_credential_id`, `budget_subject_id`, `selection_id`,
+`sandbox_profile_id`, `target_id`, `cloud_sandbox_id`, `slot_generation`,
+`agent_kind`, `protocol_facade`, `router_object_id`,
+`router_object_secret_ciphertext`, `router_object_secret_ciphertext_key_id`,
+`sync_status`, `sync_fingerprint`, `status`, `last_reconciled_at`,
+`last_error_code`, `last_error_message`, `created_at`, `updated_at`.
+
+#### `agent_gateway_llm_usage_event`
+
+Row: imported Bifrost usage/cost log.
+
+Fields: `id`, `router_kind`, `router_log_id`, `router_virtual_key_id`,
+`router_provider_key_id`, `materialization_id`, `policy_id`,
+`budget_subject_id`, `owner_scope`, `owner_user_id`, `organization_id`,
+`agent_kind`, `protocol_facade`, `provider`, `model`, `status`, `cost_usd`,
+`prompt_tokens`, `completion_tokens`, `total_tokens`, `occurred_at`,
+`imported_at`, `raw_usage_json`.
+
+#### `agent_gateway_usage_import_cursor`
+
+Row: Bifrost usage importer checkpoint.
+
+Fields: `id`, `router_kind`, `last_seen_at`, `last_seen_router_log_id`,
+`updated_at`.
+
+#### `agent_auth_audit_event`
+
+Row: audit event for auth credential, policy, selection, and materialization
+operations.
+
+Fields: `id`, `action`, `actor_user_id`, `owner_scope`, `owner_user_id`,
+`organization_id`, `credential_id`, `sandbox_profile_id`, `target_id`,
+`metadata_json`, `created_at`.
+
+</details>
+
 ### Intended UX Flow
 
 The primary UX is not "configure a gateway." It is "choose how my cloud
