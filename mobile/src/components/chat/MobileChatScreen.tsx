@@ -47,6 +47,7 @@ import {
   latestCloudTranscriptSeq,
   type CloudChatTranscriptRowView,
 } from "@proliferate/product-model/chats/cloud/transcript-view";
+import { cloudCommandReadiness } from "@proliferate/product-model/workspaces/cloud-work-inventory";
 
 import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileStatusDot } from "../primitives/MobileStatusDot";
@@ -64,6 +65,7 @@ import {
 } from "../../lib/access/cloud/pending-mobile-prompt-store";
 import {
   dispatchPendingMobilePrompt,
+  ensureMobileWorkspaceReadyForCloudCommands,
   rearmRetryablePendingMobilePrompt,
   RetryablePendingPromptDispatchError,
   shouldRetryPendingMobilePromptFailure,
@@ -668,6 +670,15 @@ export function MobileChatScreen({
     if (!text || !workspace) {
       return;
     }
+    if (isUnclaimed) {
+      setPendingPromptStatus("Claim this workspace before sending prompts from mobile.");
+      return;
+    }
+    const readiness = cloudCommandReadiness(workspace);
+    if (!readiness.commandable) {
+      setPendingPromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
+      return;
+    }
     if (!session) {
       if (!ownerUserId) {
         setPendingPromptStatus("Account is still loading. Try again in a moment.");
@@ -719,6 +730,14 @@ export function MobileChatScreen({
     setDraft("");
     setPendingPromptStatus(null);
     try {
+      await ensureMobileWorkspaceReadyForCloudCommands({
+        client,
+        workspace,
+        idempotencyKey: `${optimisticPrompt.id}:target-config`,
+        setLatestCommandId,
+        onStatus: setPendingPromptStatus,
+        shouldContinue: () => sessionPromptDispatchingRef.current,
+      });
       const command = await enqueuePrompt.mutateAsync({
         idempotencyKey: optimisticPrompt.id,
         targetId: session.targetId,
@@ -755,6 +774,15 @@ export function MobileChatScreen({
     if (!workspace || !session) {
       return;
     }
+    if (isUnclaimed) {
+      setPendingPromptStatus("Claim this workspace before changing session settings.");
+      return;
+    }
+    const readiness = cloudCommandReadiness(workspace);
+    if (!readiness.commandable) {
+      setPendingPromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
+      return;
+    }
     const mutationId = pendingConfigMutationIdRef.current + 1;
     pendingConfigMutationIdRef.current = mutationId;
     const changeKey = pendingConfigChangeKey(session.sessionId, rawConfigId);
@@ -769,6 +797,14 @@ export function MobileChatScreen({
       },
     }));
     try {
+      await ensureMobileWorkspaceReadyForCloudCommands({
+        client,
+        workspace,
+        idempotencyKey: `mobile:${workspace.id}:${session.sessionId}:config:${rawConfigId}:${mutationId}:target-config`,
+        setLatestCommandId,
+        onStatus: setPendingPromptStatus,
+        shouldContinue: () => true,
+      });
       const command = await enqueueConfig.mutateAsync({
         idempotencyKey: `mobile:${workspace.id}:${session.sessionId}:config:${rawConfigId}:${value}:${mutationId}`,
         targetId: session.targetId,
@@ -852,8 +888,12 @@ export function MobileChatScreen({
   }
 
   const isUnclaimed = workspace?.visibility === "shared_unclaimed" && !claimedLocally;
+  const commandReadiness = workspace ? cloudCommandReadiness(workspace) : null;
   const workspaceCommandReady =
-    workspaceStatus === "ready" && Boolean(workspace?.targetId) && Boolean(workspace?.anyharnessWorkspaceId);
+    workspaceStatus === "ready"
+    && Boolean(workspace?.targetId)
+    && Boolean(workspace?.anyharnessWorkspaceId)
+    && commandReadiness?.commandable === true;
   const promptSubmitting =
     enqueuePrompt.isPending
     || directPromptDispatching
@@ -863,7 +903,7 @@ export function MobileChatScreen({
     draft.trim()
       && !isUnclaimed
       && !promptSubmitting
-      && (session ? true : workspaceCommandReady),
+      && workspaceCommandReady,
   );
   const title = newSessionMode
     ? "New session"
@@ -873,7 +913,8 @@ export function MobileChatScreen({
   const commandMessage =
     pendingPromptStatus ??
     commandStatus.data?.errorMessage ??
-    (commandStatus.data?.status ? `Command ${commandStatus.data.status}` : null);
+    (commandStatus.data?.status ? `Command ${commandStatus.data.status}` : null) ??
+    (!workspaceCommandReady && workspaceStatus === "ready" ? commandReadiness?.message ?? null : null);
   const emptyTitle = !session
     ? newSessionMode ? "New session" : "No active session yet."
     : sessionEventsQuery.isLoading && transcriptView.source === "empty"

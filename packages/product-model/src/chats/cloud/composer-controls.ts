@@ -8,11 +8,20 @@ import type {
   CloudAgentCatalogResponse,
   CloudSessionProjection,
 } from "@proliferate/cloud-sdk";
+import {
+  inferSessionControlPresentation,
+  isConfiguredSessionControlKey,
+  launchControlToConfiguredSessionControlValues,
+  resolveSessionControlPresentation,
+  type ConfiguredSessionControlKey,
+  type SessionControlIconKey,
+} from "../session-controls/presentation";
 
 export interface CloudChatComposerControlOptionView {
   id: string;
   label: string;
   description?: string | null;
+  icon?: SessionControlIconKey | null;
   selected?: boolean;
   disabled?: boolean;
 }
@@ -28,7 +37,7 @@ export interface CloudChatComposerControlView {
   key?: string | null;
   label: string;
   detail?: string | null;
-  icon?: "bot" | "brain" | "cloud" | "settings";
+  icon?: "bot" | "brain" | "settings" | SessionControlIconKey;
   placement?: "leading" | "trailing";
   disabled?: boolean;
   active?: boolean;
@@ -119,7 +128,9 @@ export function buildCloudChatComposerControls(input: {
   return controls.map((control) =>
     buildSessionConfigComposerControl({
       sessionId: input.session!.sessionId,
+      agentKind: input.session!.sourceAgentKind ?? null,
       control,
+      catalog: input.launchCatalog ?? null,
       placement: control.rawConfigId === leadingModeControl?.rawConfigId ? "leading" : "trailing",
       pendingConfigChanges: input.pendingConfigChanges,
       onSelect: input.onSessionConfigSelect,
@@ -284,7 +295,7 @@ function fallbackLaunchComposerControls(input: {
       id: "launch-model",
       key: "model",
       label: "Model",
-      icon: "bot",
+      icon: "claude",
       placement: "trailing",
       active: true,
       groups: [
@@ -304,7 +315,7 @@ function fallbackLaunchComposerControls(input: {
       key: "mode",
       label: "Cloud task",
       detail: "Mode",
-      icon: "cloud",
+      icon: "sparkles",
       placement: "leading",
       disabled: true,
       active: true,
@@ -371,12 +382,15 @@ function buildLaunchConfigControl(input: {
     ?? input.control.values[0]
     ?? null;
   const placement = input.control.apply?.createField === "modeId" ? "leading" : "trailing";
+  const configuredValues = launchControlToConfiguredSessionControlValues(input.agent.kind, input.control);
+  const selectedConfiguredValue = configuredValues.find((option) => option.value === selectedValue) ?? null;
+  const isConfiguredControl = isConfiguredSessionControlKey(input.control.key);
   return {
     id: `launch-control:${input.control.key}`,
     key: input.control.key,
     label: controlDisplayLabel(input.control.key, input.control.label),
-    detail: selectedOption?.label ?? null,
-    icon: launchControlIcon(input.control, placement),
+    detail: selectedConfiguredValue?.shortLabel ?? selectedOption?.label ?? null,
+    icon: selectedConfiguredValue?.icon ?? launchControlIcon(input.control, placement),
     placement,
     active: isLaunchControlActive(input.control, selectedOption?.value ?? selectedValue),
     groups: [
@@ -385,13 +399,21 @@ function buildLaunchConfigControl(input: {
         label: input.control.label,
         options: input.control.values
           .filter(isLaunchVisibleControlValue)
-          .map((option) => ({
-            id: option.value,
-            label: option.label,
-            description: option.description ?? null,
-            selected: option.value === selectedValue,
-            disabled: option.value === selectedValue,
-          })),
+          .map((option) => {
+            const configured = configuredValues.find((value) => value.value === option.value) ?? null;
+            return {
+              id: option.value,
+              label: isConfiguredControl
+                ? configured?.shortLabel ?? configured?.label ?? option.label
+                : option.label,
+              description: isConfiguredControl ? null : option.description ?? null,
+              icon: configured?.icon ?? (isConfiguredControl
+                ? inferSessionControlPresentation(option.value).icon
+                : null),
+              selected: option.value === selectedValue,
+              disabled: option.value === selectedValue,
+            };
+          }),
       },
     ],
     onSelect: (value) => input.onSelect({ controlKey: input.control.key, value }),
@@ -479,7 +501,7 @@ function launchControlIcon(
       return "brain";
     case "mode":
     case "collaboration_mode":
-      return placement === "leading" ? "cloud" : "settings";
+      return placement === "leading" ? "sparkles" : "settings";
     default:
       return "settings";
   }
@@ -516,7 +538,9 @@ function parseLaunchAgentModelOptionId(
 
 function buildSessionConfigComposerControl(input: {
   sessionId: string;
+  agentKind: string | null;
   control: NormalizedSessionControl;
+  catalog?: CloudAgentCatalogResponse | null;
   placement: "leading" | "trailing";
   pendingConfigChanges: Record<string, PendingConfigChange>;
   onSelect: (rawConfigId: string, value: string) => void;
@@ -528,35 +552,141 @@ function buildSessionConfigComposerControl(input: {
   const selectedOption = input.control.values.find((option) => option.value === selectedValue)
     ?? input.control.values[0]
     ?? null;
+  const agentKind = input.agentKind ?? agentKindForSessionConfig(input.control);
+  const controlKey = isConfiguredSessionControlKey(input.control.key) ? input.control.key : null;
+  const selectedPresentation = controlKey
+    ? resolveSessionControlPresentation(agentKind, controlKey, selectedValue)
+    : null;
+  const groups = input.control.key === "model"
+    ? sessionModelGroupsFromCatalog({
+      agentKind,
+      catalog: input.catalog ?? null,
+      selectedLabel: selectedOption?.label ?? null,
+      selectedValue,
+    }) ?? sessionControlGroups({
+      agentKind,
+      control: input.control,
+      controlKey,
+      selectedValue,
+    })
+    : sessionControlGroups({
+      agentKind,
+      control: input.control,
+      controlKey,
+      selectedValue,
+    });
+
   return {
     id: input.control.rawConfigId,
     key: input.control.key,
     label: controlLabel(input.control),
-    detail: selectedOption?.label ?? null,
-    icon: controlIcon(input.control, input.placement),
+    detail: selectedPresentation?.shortLabel ?? selectedOption?.label ?? null,
+    icon: selectedPresentation?.icon ?? controlIcon(input.control, input.placement),
     placement: input.placement,
     disabled: !input.control.settable,
     active: isActiveControl(input.control, selectedOption?.value ?? selectedValue),
     pendingState: pendingChange?.status ?? null,
-    groups: [
-      {
-        id: input.control.rawConfigId,
-        label: controlLabel(input.control),
-        options: input.control.values.map((option) => ({
-          id: option.value,
-          label: option.label,
-          description: option.description,
-          selected: option.value === selectedValue,
-          disabled: !input.control.settable || option.value === selectedValue,
-        })),
-      },
-    ],
+    groups,
     onSelect: (value) => {
       if (value !== selectedValue) {
         input.onSelect(input.control.rawConfigId, value);
       }
     },
   };
+}
+
+function sessionControlGroups(input: {
+  agentKind: string | null;
+  control: NormalizedSessionControl;
+  controlKey: ConfiguredSessionControlKey | null;
+  selectedValue: string | null;
+}): CloudChatComposerControlGroupView[] {
+  return [
+    {
+      id: input.control.rawConfigId,
+      label: controlLabel(input.control),
+      options: input.control.values.map((option) => {
+        const presentation = input.controlKey
+          ? resolveSessionControlPresentation(input.agentKind, input.controlKey, option.value)
+          : null;
+        return {
+          id: option.value,
+          label: presentation?.shortLabel ?? option.label,
+          description: input.controlKey ? null : option.description,
+          icon: presentation?.icon ?? (input.controlKey
+            ? inferSessionControlPresentation(option.value).icon
+            : null),
+          selected: option.value === input.selectedValue,
+          disabled: !input.control.settable || option.value === input.selectedValue,
+        };
+      }),
+    },
+  ];
+}
+
+function sessionModelGroupsFromCatalog(input: {
+  agentKind: string | null;
+  catalog: CloudAgentCatalogResponse | null;
+  selectedLabel: string | null;
+  selectedValue: string | null;
+}): CloudChatComposerControlGroupView[] | null {
+  const agents = input.catalog?.agents ?? [];
+  const groups = agents.flatMap((agent) => {
+    const options = agent.session.models
+      .filter(isLaunchVisibleModel)
+      .map((model) => ({
+        id: model.id,
+        label: model.displayName,
+        description: model.description ?? null,
+        selected: agent.kind === input.agentKind && modelMatchesSelectedValue({
+          displayName: model.displayName,
+          id: model.id,
+          selectedLabel: input.selectedLabel,
+          selectedValue: input.selectedValue,
+        }),
+      }));
+    return options.length > 0
+      ? [{
+        id: agent.kind,
+        label: agent.displayName,
+        options,
+      }]
+      : [];
+  });
+
+  return groups.length > 0 ? groups : null;
+}
+
+function modelMatchesSelectedValue(input: {
+  displayName: string;
+  id: string;
+  selectedLabel: string | null;
+  selectedValue: string | null;
+}): boolean {
+  const selectedCandidates = [
+    input.selectedValue,
+    input.selectedLabel,
+  ].filter((value): value is string => Boolean(value));
+  return selectedCandidates.some((candidate) => {
+    if (candidate === input.id || candidate === input.displayName) {
+      return true;
+    }
+    const normalizedCandidate = normalizeModelIdentity(candidate);
+    const normalizedId = normalizeModelIdentity(input.id);
+    const normalizedDisplay = normalizeModelIdentity(input.displayName);
+    return normalizedCandidate === normalizedId
+      || normalizedCandidate === normalizedDisplay
+      || normalizedCandidate.includes(normalizedDisplay)
+      || normalizedDisplay.includes(normalizedCandidate)
+      || normalizedId.includes(normalizedCandidate);
+  });
+}
+
+function normalizeModelIdentity(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\b(us|anthropic|claude|model|id)\b/g, "")
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 function controlLabel(control: NormalizedSessionControl): string {
@@ -590,13 +720,19 @@ function controlIcon(
     case "reasoning":
       return "brain";
     case "model":
-      return "bot";
+      return "claude";
     case "collaboration_mode":
     case "mode":
-      return placement === "leading" ? "cloud" : "settings";
+      return placement === "leading" ? "sparkles" : "settings";
     default:
       return "settings";
   }
+}
+
+function agentKindForSessionConfig(control: NormalizedSessionControl): string | null {
+  const source = control.rawConfigId || control.key;
+  const separator = source.indexOf(".");
+  return separator > 0 ? source.slice(0, separator) : null;
 }
 
 function isLeadingModeControl(control: NormalizedSessionControl): boolean {

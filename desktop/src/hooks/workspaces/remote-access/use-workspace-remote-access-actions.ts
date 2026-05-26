@@ -13,9 +13,25 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import { getTarget, type CloudTargetSummary } from "@proliferate/cloud-sdk";
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message.trim()
-    ? error.message
-    : "Remote access update failed.";
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+  if (typeof error === "string" && error.trim()) {
+    return error.trim();
+  }
+  if (error && typeof error === "object") {
+    for (const key of ["message", "detail", "error"] as const) {
+      const value = (error as Partial<Record<typeof key, unknown>>)[key];
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+  return "Remote access update failed.";
+}
+
+function needsFreshWorkerEnrollment(error: unknown): boolean {
+  return errorMessage(error).includes("needs a fresh enrollment token");
 }
 
 function remoteAccessEnabled(exposureState: string | null | undefined): boolean {
@@ -116,7 +132,12 @@ export function useWorkspaceRemoteAccessActions() {
   const mobility = useWorkspaceMobilityState();
   const showToast = useToastStore((state) => state.show);
   const targetsQuery = useCloudTargets();
-  const { createTargetEnrollment, isCreatingTargetEnrollment } = useCloudTargetMutations();
+  const {
+    createExistingTargetEnrollment,
+    createTargetEnrollment,
+    isCreatingExistingTargetEnrollment,
+    isCreatingTargetEnrollment,
+  } = useCloudTargetMutations();
   const bootstrapMutation = useBootstrapCloudWorkspaceRemoteAccess();
   const enableMutation = useEnableCloudWorkspaceRemoteAccess();
   const disableMutation = useDisableCloudWorkspaceRemoteAccess();
@@ -141,6 +162,7 @@ export function useWorkspaceRemoteAccessActions() {
     || enableMutation.isPending
     || disableMutation.isPending
     || isCreatingTargetEnrollment
+    || isCreatingExistingTargetEnrollment
   );
   const disabled = (
     isPending
@@ -164,10 +186,24 @@ export function useWorkspaceRemoteAccessActions() {
   const ensureDispatchTarget = useCallback(async () => {
     if (dispatchTarget) {
       const baseline = workerSignalBaseline(dispatchTarget);
-      await ensureDesktopDispatchWorker({
-        targetId: dispatchTarget.id,
-        enrollmentToken: null,
-      });
+      try {
+        await ensureDesktopDispatchWorker({
+          targetId: dispatchTarget.id,
+          enrollmentToken: null,
+        });
+      } catch (error) {
+        if (!needsFreshWorkerEnrollment(error)) {
+          throw error;
+        }
+        const enrollment = await createExistingTargetEnrollment({
+          targetId: dispatchTarget.id,
+          body: {},
+        });
+        await ensureDesktopDispatchWorker({
+          targetId: enrollment.target.id,
+          enrollmentToken: enrollment.enrollmentToken,
+        });
+      }
       const target = await waitForOnlineDispatchTarget(dispatchTarget.id, baseline);
       void targetsQuery.refetch();
       return target;
@@ -190,22 +226,38 @@ export function useWorkspaceRemoteAccessActions() {
     const target = await waitForOnlineDispatchTarget(enrollment.target.id);
     void targetsQuery.refetch();
     return target;
-  }, [createTargetEnrollment, dispatchTarget, targetsQuery]);
+  }, [createExistingTargetEnrollment, createTargetEnrollment, dispatchTarget, targetsQuery]);
 
   const ensureWorkspaceSyncWorker = useCallback(async () => {
     if (
       cloudWorkspace?.sandboxType === "local"
       && cloudWorkspace.targetId
     ) {
-      await ensureDesktopDispatchWorker({
-        targetId: cloudWorkspace.targetId,
-        enrollmentToken: null,
-      });
-      await waitForOnlineDispatchTarget(cloudWorkspace.targetId);
+      const existingTarget = await getTarget(cloudWorkspace.targetId);
+      const baseline = workerSignalBaseline(existingTarget);
+      try {
+        await ensureDesktopDispatchWorker({
+          targetId: cloudWorkspace.targetId,
+          enrollmentToken: null,
+        });
+      } catch (error) {
+        if (!needsFreshWorkerEnrollment(error)) {
+          throw error;
+        }
+        const enrollment = await createExistingTargetEnrollment({
+          targetId: cloudWorkspace.targetId,
+          body: {},
+        });
+        await ensureDesktopDispatchWorker({
+          targetId: enrollment.target.id,
+          enrollmentToken: enrollment.enrollmentToken,
+        });
+      }
+      await waitForOnlineDispatchTarget(cloudWorkspace.targetId, baseline);
       void targetsQuery.refetch();
       return;
     }
-  }, [cloudWorkspace, targetsQuery]);
+  }, [cloudWorkspace, createExistingTargetEnrollment, targetsQuery]);
 
   const handleClick = useCallback(async () => {
     if (disabled) {
@@ -241,6 +293,7 @@ export function useWorkspaceRemoteAccessActions() {
         showToast("Remote access enabled.");
       }
     } catch (error) {
+      console.error("Remote access update failed", error);
       showToast(errorMessage(error));
     }
   }, [

@@ -10,6 +10,7 @@ from proliferate.auth.authorization import OwnerSelection
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.workspaces.models import (
     BootstrapWorkspaceRemoteAccessRequest,
@@ -104,6 +105,13 @@ async def bootstrap_workspace_remote_access_endpoint(
     try:
         return await bootstrap_workspace_remote_access(db, user, body)
     except CloudApiError as error:
+        log_cloud_event(
+            "cloud remote access bootstrap rejected",
+            error_code=error.code,
+            status_code=error.status_code,
+            target_id=body.target_id,
+            anyharness_workspace_id=body.anyharness_workspace_id,
+        )
         raise_cloud_error(error)
 
 

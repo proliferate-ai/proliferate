@@ -62,6 +62,8 @@ export function WorkspacesSurface({
   onGroupToggle,
   onWorkspaceSelect,
 }: WorkspacesSurfaceProps) {
+  const [groupPanelOpen, setGroupPanelOpen] = useState(false);
+
   return (
     <ProductPageShell
       title={title}
@@ -106,25 +108,31 @@ export function WorkspacesSurface({
               />
             )}
           </ToolbarPopoverButton>
-          <ToolbarPopoverButton
+          <ToolbarIconButton
             ariaLabel={`Group workspaces by ${selectedGroupLabel(groupOptions, selectedGroupId)}`}
             title={`Group by ${selectedGroupLabel(groupOptions, selectedGroupId)}`}
-            icon={<SlidersHorizontal className="size-3.5" aria-hidden />}
+            pressed={groupPanelOpen}
+            expanded={groupPanelOpen}
+            onClick={() => setGroupPanelOpen((open) => !open)}
           >
-            {(close) => (
-              <MenuOptionList
-                ariaLabel="Workspace grouping"
-                options={groupOptions}
-                selectedId={selectedGroupId}
-                onSelect={(groupBy) => {
-                  onGroupChange(groupBy);
-                  close();
-                }}
-              />
-            )}
-          </ToolbarPopoverButton>
+            <SlidersHorizontal className="size-3.5" aria-hidden />
+          </ToolbarIconButton>
         </div>
       </div>
+
+      {groupPanelOpen ? (
+        <div className="mb-2 rounded-[10px] border border-border/55 bg-foreground/[0.025] p-1">
+          <MenuOptionList
+            ariaLabel="Workspace grouping"
+            options={groupOptions}
+            selectedId={selectedGroupId}
+            onSelect={(groupBy) => {
+              onGroupChange(groupBy);
+              setGroupPanelOpen(false);
+            }}
+          />
+        </div>
+      ) : null}
 
       {backgroundRefreshFailed ? (
         <ProductNotice

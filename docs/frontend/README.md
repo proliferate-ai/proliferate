@@ -78,6 +78,9 @@ Specs:
   classification.
 - [specs/web-desktop-parity.md](specs/web-desktop-parity.md) for Web matching
   Desktop chat/workspace UX through shared product-ui/product-model surfaces.
+- [specs/web-cloud-local-parity.md](specs/web-cloud-local-parity.md) for Web
+  cloud/local workspace identity, recents/sidebar, session switching, settings
+  modal migration, and mobile cloud UI alignment.
 - [specs/mobile-cloud-client.md](specs/mobile-cloud-client.md) for the mobile
   cloud client, native chat parity, workspace/session flows, automations, and
   settings.

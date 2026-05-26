@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
-  Copy,
   Loader2,
   Terminal,
   User,
@@ -25,6 +24,8 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { AssistantMessage } from "./transcript/AssistantMessage";
+import { CopyMessageButton } from "./transcript/CopyMessageButton";
 
 const STREAM_FLUSH_MS = 32;
 const MIN_STREAM_STEP = 20;
@@ -47,6 +48,7 @@ export interface CloudChatTranscriptRowView {
   detail?: string | null;
   status?: string | null;
   streaming?: boolean;
+  children?: CloudChatTranscriptRowView[];
 }
 
 export interface CloudChatTranscriptProps {
@@ -117,7 +119,7 @@ function CloudChatTranscriptRow({ row }: { row: CloudChatTranscriptRowView }) {
           {row.title ? (
             <div className="mb-1 text-xs font-medium text-muted-foreground">{row.title}</div>
           ) : null}
-          <CloudChatAssistantMessage
+          <AssistantMessage
             content={row.body ?? ""}
             isStreaming={row.streaming}
           />
@@ -145,6 +147,9 @@ function CloudChatTranscriptRow({ row }: { row: CloudChatTranscriptRowView }) {
   }
 
   if (row.kind === "system") {
+    if ((row.title ?? "").toLowerCase() === "work history") {
+      return <CloudChatWorkHistoryRow row={row} />;
+    }
     return <CloudChatSystemRow row={row} />;
   }
 
@@ -216,13 +221,15 @@ function CloudChatToolRow({ row }: { row: CloudChatTranscriptRowView }) {
 function CloudChatToolGroupRow({ row }: { row: CloudChatTranscriptRowView }) {
   const [expanded, setExpanded] = useState(false);
   const body = row.body?.trim() ?? "";
+  const children = row.children ?? [];
   const label = row.title ?? row.detail ?? "Work history";
+  const hasExpandedContent = body.length > 0 || children.length > 0;
 
   return (
     <article className="py-1">
       <CloudTurnSeparator
         label={label}
-        interactive={body.length > 0}
+        interactive={hasExpandedContent}
         expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
       />
@@ -231,25 +238,92 @@ function CloudChatToolGroupRow({ row }: { row: CloudChatTranscriptRowView }) {
           {row.status}
         </div>
       ) : null}
-      {expanded && body ? (
-        <div className="mt-2">
-          <CloudTranscriptDetailsPanel>
-            <div className="max-h-72 overflow-auto px-3 py-2.5" data-telemetry-mask>
-              <CloudChatMarkdownRenderer
-                content={body}
-                className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-muted-foreground"
-              />
-            </div>
-          </CloudTranscriptDetailsPanel>
+      {expanded && hasExpandedContent ? (
+        <div className="mt-2 space-y-1.5">
+          {body ? (
+            <CloudTranscriptDetailsPanel>
+              <div className="max-h-72 overflow-auto px-3 py-2.5" data-telemetry-mask>
+                <CloudChatMarkdownRenderer
+                  content={body}
+                  className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-muted-foreground"
+                />
+              </div>
+            </CloudTranscriptDetailsPanel>
+          ) : null}
+          {children.map((child) => (
+            <CloudChatHistoryChildRow key={child.id} row={child} />
+          ))}
         </div>
       ) : null}
     </article>
   );
 }
 
+function CloudChatWorkHistoryRow({ row }: { row: CloudChatTranscriptRowView }) {
+  const [expanded, setExpanded] = useState(false);
+  const children = row.children ?? [];
+  const summary = row.detail ?? row.body ?? row.title ?? "Work history";
+  const hasExpandedContent = children.length > 0 || Boolean(row.body?.trim());
+
+  if (children.length <= 1 && !row.body?.trim()) {
+    return <>{children.map((child) => <CloudChatHistoryChildRow key={child.id} row={child} />)}</>;
+  }
+
+  return (
+    <article className="py-1">
+      <CloudTurnSeparator
+        label={summary}
+        interactive={hasExpandedContent}
+        expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      />
+      {expanded && hasExpandedContent ? (
+        <div className="mt-2 space-y-1.5">
+          {row.body?.trim() ? (
+            <CloudTranscriptDetailsPanel>
+              <div className="max-h-72 overflow-auto px-3 py-2.5" data-telemetry-mask>
+                <CloudChatMarkdownRenderer
+                  content={row.body}
+                  className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-muted-foreground"
+                />
+              </div>
+            </CloudTranscriptDetailsPanel>
+          ) : null}
+          {children.map((child) => (
+            <CloudChatHistoryChildRow key={child.id} row={child} />
+          ))}
+          <CloudTurnSeparator label="Final message" />
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function CloudChatHistoryChildRow({ row }: { row: CloudChatTranscriptRowView }) {
+  if (row.kind === "tool_group") {
+    const status = resolveActionStatus(row);
+    const statusLabel = row.status && row.status !== "completed" ? row.status : null;
+    return (
+      <article className="flex justify-start">
+        <CloudTranscriptActionRow
+          icon={<Wrench size={12} />}
+          label={row.title ?? "Tool activity"}
+          hint={row.detail}
+          status={status}
+          statusLabel={statusLabel}
+        />
+      </article>
+    );
+  }
+
+  return <CloudChatTranscriptRow row={row} />;
+}
+
 function CloudChatSystemRow({ row }: { row: CloudChatTranscriptRowView }) {
   const [expanded, setExpanded] = useState(false);
   const body = row.body ?? row.detail ?? "";
+  const children = row.children ?? [];
+  const hasExpandedContent = body.length > 0 || children.length > 0;
 
   return (
     <article className="py-1.5">
@@ -257,7 +331,12 @@ function CloudChatSystemRow({ row }: { row: CloudChatTranscriptRowView }) {
         type="button"
         variant="ghost"
         data-chat-transcript-ignore
-        onClick={() => setExpanded((value) => !value)}
+        disabled={!hasExpandedContent}
+        onClick={() => {
+          if (hasExpandedContent) {
+            setExpanded((value) => !value);
+          }
+        }}
         className="flex h-auto w-full justify-start gap-2 rounded-none bg-transparent px-3 py-1.5 text-left font-sans text-xs text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
         aria-expanded={expanded}
       >
@@ -269,12 +348,23 @@ function CloudChatSystemRow({ row }: { row: CloudChatTranscriptRowView }) {
         />
         <span>{row.title ?? "System message"}</span>
       </Button>
-      {expanded && body ? (
-        <div
-          className="mt-1 whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 font-sans text-[12px] leading-[1.65] text-muted-foreground select-text"
-          data-telemetry-mask
-        >
-          {body}
+      {expanded && hasExpandedContent ? (
+        <div className="mt-1 space-y-1.5">
+          {body ? (
+            <div
+              className="whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 font-sans text-[12px] leading-[1.65] text-muted-foreground select-text"
+              data-telemetry-mask
+            >
+              {body}
+            </div>
+          ) : null}
+          {children.length > 0 ? (
+            <div className="space-y-1.5">
+              {children.map((child) => (
+                <CloudChatTranscriptRow key={child.id} row={child} />
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </article>
@@ -590,7 +680,6 @@ function CloudChatUserMessage({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [needsToggle, setNeedsToggle] = useState(false);
-  const [copied, setCopied] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
   const hasContent = content.trim().length > 0;
 
@@ -603,20 +692,6 @@ function CloudChatUserMessage({
     if (!el) return;
     setNeedsToggle(el.scrollHeight > el.clientHeight);
   }, [content, hasContent]);
-
-  function copyMessage() {
-    if (!content) {
-      return;
-    }
-    void writeClipboardText(content)
-      .then((copiedSuccessfully) => {
-        if (!copiedSuccessfully) {
-          return;
-        }
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1600);
-      });
-  }
 
   return (
     <article className="group/msg flex justify-end" data-chat-user-message>
@@ -657,18 +732,13 @@ function CloudChatUserMessage({
           </div>
         ) : null}
         {hasContent ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            data-chat-transcript-ignore
-            aria-label="Copy message"
-            onClick={copyMessage}
-            className="h-6 gap-1 px-1.5 py-0 text-[11px] text-muted-foreground opacity-0 hover:bg-transparent hover:text-foreground group-hover/msg:opacity-100"
-          >
-            <Copy size={12} />
-            {copied ? "Copied" : "Copy"}
-          </Button>
+          <div className="pr-1 pt-0.5">
+            <CopyMessageButton
+              content={content}
+              timestampLabel={null}
+              visibilityClassName="opacity-0 group-hover/msg:opacity-100"
+            />
+          </div>
         ) : null}
       </div>
     </article>

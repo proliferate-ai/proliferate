@@ -1,59 +1,89 @@
 import {
   Blocks,
-  Bot,
   CalendarClock,
+  Check,
   CircleAlert,
   Cloud,
-  CloudOff,
   House,
   Hash,
   LifeBuoy,
+  ListFilter,
   LoaderCircle,
   MessageSquare,
   Plus,
-  Radio,
   Settings,
-  Terminal,
-  Users,
+  Smartphone,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { useCloudWorkspaceSnapshot, useCloudWorkspaces } from "@proliferate/cloud-sdk-react";
+import {
+  useCloudWorkspaceSnapshot,
+  useVisibleCloudWorkspaces,
+} from "@proliferate/cloud-sdk-react";
+import {
+  buildRecentWorkItems,
+  type RecentWorkItemView,
+  type RecentWorkRuntimeLocation,
+  type RecentWorkSourceKind,
+} from "@proliferate/product-model/workspaces/cloud-work-inventory";
+import { PopoverMenuItem } from "@proliferate/product-ui/popover/PopoverMenuItem";
 import type {
   SidebarActionEvent,
-  SidebarChatRowView,
   SidebarNavItemView,
   SidebarSectionMessageView,
   SidebarWorkspaceGroupView,
 } from "@proliferate/product-ui/sidebar/ProductSidebar";
-import { ProductSidebar } from "@proliferate/product-ui/sidebar/ProductSidebar";
+import {
+  ProductSidebar,
+  SidebarActionButton,
+} from "@proliferate/product-ui/sidebar/ProductSidebar";
 
 import { routes } from "../../../config/routes";
 import {
-  buildCloudSidebarSessionModels,
-  buildCloudSidebarWorkspaceGroups,
   mergeCloudSidebarWorkspaces,
   parseCloudSidebarRoute,
-  type CloudSidebarSessionModel,
-  type CloudSidebarWorkspace,
-  type CloudSidebarWorkspaceModel,
   type CloudSidebarRouteState,
 } from "../../../lib/domain/sidebar/cloud-sidebar-model";
 
 const EMPTY_ACTIVE_WORKSPACE_SESSIONS = [] as const;
+const RECENT_ROW_LIMIT = 16;
+
+type SourceFilter = RecentWorkSourceKind | "all";
+type RuntimeFilter = RecentWorkRuntimeLocation | "all";
+
+const SOURCE_FILTERS: readonly { id: SourceFilter; label: string }[] = [
+  { id: "all", label: "All sources" },
+  { id: "desktop_exposed", label: "Desktop" },
+  { id: "cloud_sandbox", label: "Cloud sandbox" },
+  { id: "web", label: "Web" },
+  { id: "mobile", label: "Mobile" },
+  { id: "personal_automation", label: "Personal automation" },
+  { id: "team_automation", label: "Team automation" },
+  { id: "slack", label: "Slack" },
+  { id: "api", label: "API" },
+];
+
+const RUNTIME_FILTERS: readonly { id: RuntimeFilter; label: string }[] = [
+  { id: "all", label: "All runtimes" },
+  { id: "local_desktop", label: "Local Desktop" },
+  { id: "cloud_sandbox", label: "Cloud runtime" },
+  { id: "ssh_remote", label: "SSH remote" },
+  { id: "offline", label: "Offline" },
+  { id: "unknown", label: "Unknown" },
+];
 
 export function WebSidebarController() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [collapsedGroupIds, setCollapsedGroupIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [runtimeFilter, setRuntimeFilter] = useState<RuntimeFilter>("all");
+  const [recentFilterOpen, setRecentFilterOpen] = useState(false);
   const routeState = useMemo(
     () => parseCloudSidebarRoute(location.pathname),
     [location.pathname],
   );
-  const workspaces = useCloudWorkspaces({ scope: "exposed" });
+  const workspaces = useVisibleCloudWorkspaces();
   const activeWorkspaceSnapshot = useCloudWorkspaceSnapshot(
     routeState.workspaceId,
     Boolean(routeState.workspaceId),
@@ -86,44 +116,73 @@ export function WebSidebarController() {
       workspaces.isLoading,
     ],
   );
-  const workspaceGroups = useMemo(
-    () => buildWorkspaceGroups({
-      workspaces: cloudWorkspaces,
-      routeState,
-      collapsedGroupIds,
-    }),
-    [cloudWorkspaces, collapsedGroupIds, routeState],
-  );
-  const sessionModels = useMemo(
-    () => buildCloudSidebarSessionModels({
-      workspaces: cloudWorkspaces,
+  const recentItems = useMemo(
+    () => buildRecentWorkItems(cloudWorkspaces, {
       activeWorkspaceSessions,
-      route: routeState,
+      nowMs: Date.now(),
     }),
-    [activeWorkspaceSessions, cloudWorkspaces, routeState],
+    [activeWorkspaceSessions, cloudWorkspaces],
   );
-  const chatRows = useMemo(
-    () => buildChatRows(sessionModels),
-    [sessionModels],
+  const visibleRecentItems = useMemo(
+    () => recentItems.filter((item) =>
+      (sourceFilter === "all" || item.sourceKind === sourceFilter) &&
+      (runtimeFilter === "all" || item.runtimeLocation === runtimeFilter)
+    ).slice(0, RECENT_ROW_LIMIT),
+    [recentItems, runtimeFilter, sourceFilter],
   );
-  const chatWorkspaceBySessionId = useMemo(() => {
-    const lookup = new Map<string, string>();
-    for (const session of sessionModels) {
-      lookup.set(session.id, session.workspaceId);
+  const workspaceGroups = useMemo(
+    () => buildRecentWorkspaceGroups({
+      items: visibleRecentItems,
+      routeState,
+    }),
+    [routeState, visibleRecentItems],
+  );
+  const recentItemByRowId = useMemo(() => {
+    const lookup = new Map<string, RecentWorkItemView>();
+    for (const item of recentItems) {
+      lookup.set(item.id, item);
     }
     return lookup;
-  }, [sessionModels]);
+  }, [recentItems]);
   const latestSessionByWorkspaceId = useMemo(() => {
     const lookup = new Map<string, string>();
+    for (const item of recentItems) {
+      if (item.rowKind === "session" && item.sessionId) {
+        lookup.set(item.workspaceId, item.sessionId);
+      }
+    }
     for (const workspace of cloudWorkspaces) {
       const sessionId = workspace.lastSessionSummary?.sessionId;
-      if (sessionId) {
+      if (sessionId && !lookup.has(workspace.id)) {
         lookup.set(workspace.id, sessionId);
       }
     }
     return lookup;
-  }, [cloudWorkspaces]);
-
+  }, [cloudWorkspaces, recentItems]);
+  const activeFilterCount = [
+    sourceFilter !== "all",
+    runtimeFilter !== "all",
+  ].filter(Boolean).length;
+  const filterAction = (
+    <RecentFilterPopover
+      open={recentFilterOpen}
+      activeFilterCount={activeFilterCount}
+      onToggle={() => setRecentFilterOpen((open) => !open)}
+      onClose={() => setRecentFilterOpen(false)}
+      sourceFilter={sourceFilter}
+      runtimeFilter={runtimeFilter}
+      onSourceFilterChange={setSourceFilter}
+      onRuntimeFilterChange={setRuntimeFilter}
+      onClear={() => {
+        setSourceFilter("all");
+        setRuntimeFilter("all");
+      }}
+      onOpenAll={() => {
+        setRecentFilterOpen(false);
+        navigate(routes.workspaces);
+      }}
+    />
+  );
   function navigateByNavId(id: string) {
     switch (id) {
       case "home":
@@ -146,29 +205,41 @@ export function WebSidebarController() {
     }
   }
 
-  function handleWorkspaceSelect(workspaceId: string) {
-    const sessionId = latestSessionByWorkspaceId.get(workspaceId);
-    navigate(sessionId ? routes.chat(workspaceId, sessionId) : routes.workspace(workspaceId));
+  function handleWorkspaceSelect(rowId: string) {
+    const item = recentItemByRowId.get(rowId);
+    if (!item) {
+      const sessionId = latestSessionByWorkspaceId.get(rowId);
+      navigate(sessionId ? routes.chat(rowId, sessionId) : routes.workspace(rowId));
+      return;
+    }
+    switch (item.openTarget.kind) {
+      case "session":
+        navigate(routes.chat(item.openTarget.workspaceId, item.openTarget.sessionId));
+        return;
+      case "workspace": {
+        const sessionId = latestSessionByWorkspaceId.get(item.openTarget.workspaceId);
+        navigate(
+          sessionId
+            ? routes.chat(item.openTarget.workspaceId, sessionId)
+            : routes.workspace(item.openTarget.workspaceId),
+        );
+        return;
+      }
+      case "pending-session":
+        navigate(routes.workspace(item.openTarget.workspaceId));
+        return;
+    }
   }
 
   function handleChatSelect(sessionId: string) {
-    const workspaceId = chatWorkspaceBySessionId.get(sessionId);
-    if (!workspaceId) {
-      return;
+    const sessionItem = recentItems.find((item) => item.sessionId === sessionId);
+    if (sessionItem?.sessionId) {
+      navigate(routes.chat(sessionItem.workspaceId, sessionItem.sessionId));
     }
-    navigate(routes.chat(workspaceId, sessionId));
   }
 
-  function handleGroupToggle(groupId: string) {
-    setCollapsedGroupIds((current) => {
-      const next = new Set(current);
-      if (next.has(groupId)) {
-        next.delete(groupId);
-      } else {
-        next.add(groupId);
-      }
-      return next;
-    });
+  function handleGroupToggle(_groupId: string) {
+    return;
   }
 
   function handleAction(event: SidebarActionEvent) {
@@ -177,7 +248,9 @@ export function WebSidebarController() {
       return;
     }
     if (event.scope === "footer" && event.actionId === "settings") {
-      navigate(routes.settings);
+      navigate(routes.settings, {
+        state: { backgroundLocation: location },
+      });
       return;
     }
     if (
@@ -191,10 +264,17 @@ export function WebSidebarController() {
       }
       return;
     }
+    if (event.scope === "workspace" && event.actionId === "open-workspace" && event.itemId) {
+      const item = recentItemByRowId.get(event.itemId);
+      if (item) {
+        navigate(routes.workspace(item.workspaceId));
+      }
+      return;
+    }
     if (event.scope === "chat" && event.actionId === "open-workspace" && event.itemId) {
-      const workspaceId = chatWorkspaceBySessionId.get(event.itemId);
-      if (workspaceId) {
-        navigate(routes.workspace(workspaceId));
+      const item = recentItems.find((candidate) => candidate.sessionId === event.itemId);
+      if (item) {
+        navigate(routes.workspace(item.workspaceId));
       }
     }
   }
@@ -211,8 +291,9 @@ export function WebSidebarController() {
         }}
         navItems={navItems}
         workspaceGroups={workspaceGroups}
+        workspaceSectionLabel="Recents"
+        workspaceSectionActions={filterAction}
         workspaceSectionMessage={workspaceSectionMessage}
-        chatRows={chatRows}
         footerActions={[
           {
             id: "settings",
@@ -268,132 +349,256 @@ function buildNavItems(
   ];
 }
 
-function buildWorkspaceGroups(input: {
-  workspaces: readonly CloudSidebarWorkspace[];
+function buildRecentWorkspaceGroups(input: {
+  items: readonly RecentWorkItemView[];
   routeState: CloudSidebarRouteState;
-  collapsedGroupIds: ReadonlySet<string>;
 }): SidebarWorkspaceGroupView[] {
-  return buildCloudSidebarWorkspaceGroups({
-    workspaces: input.workspaces,
-    route: input.routeState,
-    collapsedGroupIds: input.collapsedGroupIds,
-  }).map((group) => ({
-    id: group.id,
-    label: group.label,
-    count: group.count,
-    collapsed: group.collapsed,
-    icon: workspaceGroupIcon(group.sourceKind),
-    expandedIcon: workspaceGroupIcon(group.sourceKind),
-    rows: group.workspaces.map((workspace) => ({
-      id: workspace.id,
-      label: workspace.label,
-      subtitle: workspace.subtitle,
-      active: workspace.active,
-      archived: workspace.archived,
-      status: workspaceStatusIcon(workspace),
-      detail: <WorkspaceDetailIndicators workspace={workspace} />,
-      trailingLabel: workspace.trailingLabel,
-      actions: workspace.lastSessionId
-        ? [
-          {
-            id: "open-latest-session",
-            label: "Open latest session",
-            icon: <MessageSquare className="size-3.5" />,
-          },
-        ]
+  return [{
+    id: "recents",
+    label: "Recent work",
+    count: input.items.length,
+    collapsed: false,
+    icon: <MessageSquare className="size-4" />,
+    expandedIcon: <MessageSquare className="size-4" />,
+    rows: input.items.map((item) => ({
+      id: item.id,
+      label: recentRowTitle(item),
+      subtitle: null,
+      active: recentRowIsActive(item, input.routeState),
+      archived: item.state === "done",
+      status: <RecentSourceIndicator item={item} />,
+      detail: null,
+      trailingLabel: item.lastActivityLabel,
+      actions: item.rowKind === "session"
+        ? [{
+          id: "open-workspace",
+          label: "Open workspace",
+          icon: <Cloud className="size-3.5" />,
+        }]
         : [],
     })),
     actions: [],
-  }));
+  }];
 }
 
-function workspaceGroupIcon(sourceKind: "chat" | "slack" | "automation" | "api" | "agent") {
-  switch (sourceKind) {
+function recentRowTitle(item: RecentWorkItemView): string {
+  if (item.rowKind !== "session") {
+    return item.title;
+  }
+  return cleanRecentSessionTitle(item.title) ?? "Chat session";
+}
+
+function cleanRecentSessionTitle(title: string | null | undefined): string | null {
+  const value = title?.trim();
+  if (!value) {
+    return null;
+  }
+  const normalized = value.toLowerCase();
+  if (
+    normalized === "invalid input"
+    || normalized === "unclear input"
+    || normalized === "stray keystroke"
+    || normalized === "single character input"
+  ) {
+    return null;
+  }
+  return value;
+}
+
+function recentRowIsActive(
+  item: RecentWorkItemView,
+  route: CloudSidebarRouteState,
+): boolean {
+  if (item.rowKind === "session") {
+    return route.workspaceId === item.workspaceId && route.sessionId === item.sessionId;
+  }
+  return route.workspaceId === item.workspaceId && !route.sessionId;
+}
+
+function RecentSourceIndicator({ item }: { item: RecentWorkItemView }) {
+  const icon = sourceIcon(item.sourceKind);
+  return (
+    <span
+      className="flex size-4 items-center justify-center text-sidebar-muted-foreground"
+      title={sourceIndicatorLabel(item)}
+      aria-label={sourceIndicatorLabel(item)}
+    >
+      {icon}
+    </span>
+  );
+}
+
+function sourceIcon(source: RecentWorkSourceKind): ReactNode {
+  switch (source) {
+    case "web":
+    case "mobile":
+      return <Smartphone className="size-3.5" />;
     case "slack":
-      return <Hash className="size-4" />;
-    case "automation":
-      return <CalendarClock className="size-4" />;
+      return <Hash className="size-3.5" />;
+    case "personal_automation":
+    case "team_automation":
+      return <CalendarClock className="size-3.5" />;
+    case "desktop_exposed":
+    case "cloud_sandbox":
     case "api":
-      return <Terminal className="size-4" />;
-    case "agent":
-      return <Bot className="size-4" />;
-    case "chat":
-    default:
-      return <MessageSquare className="size-4" />;
+    case "unknown":
+      return <Cloud className="size-3.5" />;
   }
 }
 
-function buildChatRows(
-  sessions: CloudSidebarSessionModel[],
-): SidebarChatRowView[] {
-  return sessions.map((session) => ({
-    id: session.id,
-    label: session.label,
-    subtitle: session.subtitle,
-    active: session.active,
-    status: <MessageSquare className="size-3.5" />,
-    detail: session.sourceAgentKind ? (
-      <span
-        className="rounded-sm border border-sidebar-border px-1 text-[10px] uppercase leading-4 text-sidebar-muted-foreground"
-        title={`Agent: ${session.sourceAgentKind}`}
-      >
-        {session.sourceAgentKind.slice(0, 2)}
-      </span>
-    ) : null,
-    trailingLabel: session.statusLabel,
-    actions: [
-      {
-        id: "open-workspace",
-        label: "Open workspace",
-        icon: <Cloud className="size-3.5" />,
-      },
-    ],
-  }));
+function sourceIndicatorLabel(item: RecentWorkItemView): string {
+  switch (item.sourceKind) {
+    case "web":
+    case "mobile":
+      return "Mobile dispatch";
+    case "slack":
+      return "Slack";
+    case "personal_automation":
+    case "team_automation":
+      return "Automation";
+    case "desktop_exposed":
+    case "cloud_sandbox":
+    case "api":
+    case "unknown":
+      return item.ownership === "unclaimed"
+        ? "Cloud workspace, unclaimed"
+        : "Cloud workspace";
+  }
 }
 
-function WorkspaceDetailIndicators({
-  workspace,
+function RecentFilterPopover({
+  open,
+  activeFilterCount,
+  onToggle,
+  onClose,
+  sourceFilter,
+  runtimeFilter,
+  onSourceFilterChange,
+  onRuntimeFilterChange,
+  onClear,
+  onOpenAll,
 }: {
-  workspace: CloudSidebarWorkspaceModel;
+  open: boolean;
+  activeFilterCount: number;
+  onToggle: () => void;
+  onClose: () => void;
+  sourceFilter: SourceFilter;
+  runtimeFilter: RuntimeFilter;
+  onSourceFilterChange: (filter: SourceFilter) => void;
+  onRuntimeFilterChange: (filter: RuntimeFilter) => void;
+  onClear: () => void;
+  onOpenAll: () => void;
 }) {
-  const labels = [
-    workspace.visibilityLabel,
-    workspace.exposureLabel,
-    workspace.runtimeLabel,
-  ].filter(Boolean);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && rootRef.current?.contains(target)) {
+        return;
+      }
+      onClose();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose, open]);
 
   return (
-    <div className="flex min-w-0 items-center justify-end gap-1">
-      {workspace.exposureLabel === "Live" ? (
-        <Radio className="size-3 text-success" aria-label="Live exposure" />
-      ) : null}
-      <Users className="size-3.5" aria-label={workspace.visibilityLabel} />
-      <span
-        className="max-w-[54px] truncate text-[10px] uppercase leading-4 text-sidebar-muted-foreground"
-        title={labels.join(" - ")}
+    <div ref={rootRef} className="relative">
+      <SidebarActionButton
+        title="Filter recents"
+        active={open || activeFilterCount > 0}
+        variant="section"
+        onClick={onToggle}
       >
-        {workspace.visibilityLabel}
-      </span>
+        <ListFilter className="size-3" />
+        {activeFilterCount ? (
+          <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-sidebar-foreground" />
+        ) : null}
+      </SidebarActionButton>
+      {open ? (
+        <div className="absolute right-0 top-full z-40 mt-2 max-h-[min(28rem,calc(100vh-12rem))] w-56 overflow-y-auto rounded-xl bg-popover/95 p-1 text-popover-foreground shadow-popover ring-[0.5px] ring-popover-ring backdrop-blur-sm">
+          <FilterMenuSection label="Source">
+            {SOURCE_FILTERS.map((option) => (
+              <FilterMenuOption
+                key={option.id}
+                active={sourceFilter === option.id}
+                label={option.label}
+                onClick={() => onSourceFilterChange(option.id)}
+              />
+            ))}
+          </FilterMenuSection>
+          <div className="my-1 h-px bg-border" />
+          <FilterMenuSection label="Runtime">
+            {RUNTIME_FILTERS.map((option) => (
+              <FilterMenuOption
+                key={option.id}
+                active={runtimeFilter === option.id}
+                label={option.label}
+                onClick={() => onRuntimeFilterChange(option.id)}
+              />
+            ))}
+          </FilterMenuSection>
+          <div className="my-1 h-px bg-border" />
+          <PopoverMenuItem
+            variant="sidebar"
+            label="Clear filters"
+            disabled={activeFilterCount === 0}
+            onClick={onClear}
+          />
+          <PopoverMenuItem
+            variant="sidebar"
+            label="Open workspaces"
+            onClick={onOpenAll}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function workspaceStatusIcon(workspace: CloudSidebarWorkspaceModel) {
-  if (workspace.statusKind === "archived") {
-    return (
-      <CloudOff
-        className="size-3.5 text-sidebar-muted-foreground"
-        aria-label={workspace.statusLabel}
-      />
-    );
-  }
-  if (workspace.statusKind === "blocked") {
-    return <span className="size-2 rounded-full bg-destructive" aria-label="Needs attention" />;
-  }
-  if (workspace.statusKind === "ready") {
-    return <span className="size-2 rounded-full bg-success" aria-label="Ready" />;
-  }
-  return <span className="size-2 rounded-full bg-warning" aria-label={workspace.statusLabel} />;
+function FilterMenuSection({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-0.5">
+      <div className="px-2 py-1 text-[10px] font-semibold uppercase leading-3 text-muted-foreground/70">
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function FilterMenuOption({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <PopoverMenuItem
+      aria-pressed={active}
+      onClick={onClick}
+      variant="sidebar"
+      label={label}
+      trailing={active ? <Check className="size-3.5 text-foreground/60" /> : null}
+      className={active ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""}
+    />
+  );
 }
 
 function buildWorkspaceSectionMessage(input: {

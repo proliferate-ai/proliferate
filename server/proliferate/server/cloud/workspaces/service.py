@@ -386,6 +386,7 @@ async def _workspace_summaries_for_request(
         latest_sessions = await events_store.list_session_projections_for_workspace(
             db,
             cloud_workspace_id=workspace.id,
+            target_id=workspace.target_id,
             limit=1,
         )
         target = (
@@ -797,6 +798,7 @@ async def _build_workspace_detail_for_request(
     latest_sessions = await events_store.list_session_projections_for_workspace(
         db,
         cloud_workspace_id=workspace.id,
+        target_id=workspace.target_id,
         limit=1,
     )
     target = (
@@ -864,6 +866,7 @@ async def _build_workspace_detail(
         latest_sessions = await events_store.list_session_projections_for_workspace(
             db,
             cloud_workspace_id=workspace.id,
+            target_id=workspace.target_id,
             limit=1,
         )
         target = (

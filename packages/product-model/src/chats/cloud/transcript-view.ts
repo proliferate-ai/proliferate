@@ -46,6 +46,7 @@ export interface CloudChatTranscriptRowView {
   detail?: string | null;
   status?: string | null;
   streaming?: boolean;
+  children?: CloudChatTranscriptRowView[];
   firstSeq?: number | null;
   lastSeq?: number | null;
   sourceRequestId?: string | null;
@@ -273,11 +274,18 @@ function buildRowsFromTurnRow(
           formatCount(summary.toolCalls, "tool call"),
           formatCount(summary.subagents, "delegated session"),
         ].filter((value): value is string => Boolean(value));
+        const historyRows: CloudChatTranscriptRowView[] = [];
+        for (const historyBlock of row.renderPresentation.displayBlocks) {
+          if (blockBelongsToCompletedHistory(historyBlock, completedHistoryRootIds)) {
+            appendDisplayBlockRows(historyBlock, row, transcript, historyRows);
+          }
+        }
         rows.push({
           id: `${row.key}:completed-history`,
           kind: "system",
           title: "Work history",
           detail: fragments.join(", "),
+          children: historyRows,
         });
         hasRenderedCompletedHistory = true;
       }
@@ -289,27 +297,42 @@ function buildRowsFromTurnRow(
       || block.kind === "inline_tools"
       || block.kind === "subagent_creations"
     ) {
-      if (block.kind === "collapsed_actions") {
-        const summary = summarizeCollapsedActions(block.itemIds, transcript);
-        rows.push({
-          id: `${row.key}:${block.blockId}`,
-          kind: "tool_group",
-          title: formatCollapsedActionsSummary(summary),
-          detail: formatCount(block.itemIds.length, "action") ?? undefined,
-          status: resolveGroupStatus(block.itemIds, transcript),
-        });
-        continue;
-      }
-      for (const itemId of block.itemIds) {
-        appendItemRows(itemId, row, transcript, rows);
-      }
+      appendDisplayBlockRows(block, row, transcript, rows);
       continue;
     }
 
-    appendItemRows(block.itemId, row, transcript, rows);
+    appendDisplayBlockRows(block, row, transcript, rows);
   }
 
   return rows;
+}
+
+function appendDisplayBlockRows(
+  block: Extract<TranscriptVirtualRow, { kind: "turn" }>["renderPresentation"]["displayBlocks"][number],
+  row: Extract<TranscriptVirtualRow, { kind: "turn" }>,
+  transcript: TranscriptState,
+  rows: CloudChatTranscriptRowView[],
+): void {
+  if (block.kind === "collapsed_actions") {
+    const summary = summarizeCollapsedActions(block.itemIds, transcript);
+    rows.push({
+      id: `${row.key}:${block.blockId}`,
+      kind: "tool_group",
+      title: formatCollapsedActionsSummary(summary),
+      detail: formatCount(block.itemIds.length, "action") ?? undefined,
+      status: resolveGroupStatus(block.itemIds, transcript),
+    });
+    return;
+  }
+
+  if (block.kind === "inline_tools" || block.kind === "subagent_creations") {
+    for (const itemId of block.itemIds) {
+      appendItemRows(itemId, row, transcript, rows);
+    }
+    return;
+  }
+
+  appendItemRows(block.itemId, row, transcript, rows);
 }
 
 function appendItemRows(

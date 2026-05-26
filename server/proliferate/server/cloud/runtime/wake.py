@@ -153,6 +153,25 @@ async def _resume_target_runtime_environment(
             ).scalar_one_or_none()
             if environment is None:
                 return False
+        elif environment.active_sandbox_id is None:
+            runtime_access = await targets_store.load_active_runtime_access_for_target(
+                db,
+                target_id=target_id,
+            )
+            if runtime_access is None or runtime_access.active_sandbox_id is None:
+                return False
+            environment.active_sandbox_id = runtime_access.active_sandbox_id
+            environment.runtime_url = runtime_access.anyharness_base_url or environment.runtime_url
+            environment.runtime_token_ciphertext = (
+                runtime_access.runtime_token_ciphertext
+                or environment.runtime_token_ciphertext
+            )
+            environment.anyharness_data_key_ciphertext = (
+                runtime_access.anyharness_data_key_ciphertext
+                or environment.anyharness_data_key_ciphertext
+            )
+            await db.flush()
+            await db.commit()
 
         if environment.target_id != target_id or not environment.runtime_token_ciphertext:
             return False

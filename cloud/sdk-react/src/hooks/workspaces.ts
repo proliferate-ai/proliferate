@@ -76,6 +76,7 @@ export function useVisibleCloudWorkspaces(enabled = true) {
     mine,
     exposed,
     error: mine.error ?? exposed.error,
+    dataUpdatedAt: Math.max(mine.dataUpdatedAt, exposed.dataUpdatedAt),
     isError: mine.isError || exposed.isError,
     isFetching: mine.isFetching || exposed.isFetching,
     isLoading: mine.isLoading || exposed.isLoading,

@@ -1,17 +1,17 @@
 import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 
+import type {
+  RecentWorkCloudAccessState,
+  RecentWorkCommandability,
+  RecentWorkRuntimeLocation,
+  RecentWorkSourceKind,
+} from "./cloud-work-inventory";
 import {
   cloudWorkspaceInventoryItem,
   sortedCloudWorkspaces,
 } from "./inventory-cloud";
 
-export type WorkspaceInventorySourceKind =
-  | "chat"
-  | "slack"
-  | "automation"
-  | "api"
-  | "system"
-  | "other";
+export type WorkspaceInventorySourceKind = RecentWorkSourceKind;
 
 export type WorkspaceInventoryLocationKind =
   | "worktree"
@@ -42,12 +42,15 @@ export type WorkspaceInventoryFilterId =
   | "all"
   | "mine"
   | "unclaimed"
-  | "attention";
+  | "attention"
+  | `source:${WorkspaceInventorySourceKind}`
+  | `runtime:${RecentWorkRuntimeLocation}`;
 
 export type WorkspaceInventoryGroupBy =
   | "ownership"
   | "source"
-  | "status";
+  | "status"
+  | "runtime";
 
 export interface WorkspaceInventoryItemView {
   id: string;
@@ -59,6 +62,12 @@ export interface WorkspaceInventoryItemView {
   sourceLabel: string;
   locationKind: WorkspaceInventoryLocationKind;
   locationLabel: string;
+  runtimeLocation: RecentWorkRuntimeLocation;
+  runtimeLocationLabel: string;
+  cloudAccessState: RecentWorkCloudAccessState;
+  cloudAccessLabel: string;
+  commandability: RecentWorkCommandability;
+  commandabilityLabel: string;
   scopeLabel?: string | null;
   statusKind: WorkspaceInventoryStatusKind;
   statusLabel: string;
@@ -97,12 +106,23 @@ export interface BuildCloudWorkspaceInventoryOptions {
 }
 
 const SOURCE_ORDER: Record<WorkspaceInventorySourceKind, number> = {
-  chat: 0,
-  slack: 1,
-  automation: 2,
-  api: 3,
-  system: 4,
-  other: 5,
+  desktop_exposed: 0,
+  cloud_sandbox: 1,
+  web: 2,
+  mobile: 3,
+  personal_automation: 4,
+  team_automation: 5,
+  slack: 6,
+  api: 7,
+  unknown: 8,
+};
+
+const RUNTIME_ORDER: Record<RecentWorkRuntimeLocation, number> = {
+  local_desktop: 0,
+  cloud_sandbox: 1,
+  ssh_remote: 2,
+  offline: 3,
+  unknown: 4,
 };
 
 const STATUS_ORDER: WorkspaceInventoryStatusKind[] = [
@@ -124,6 +144,7 @@ const STATUS_GROUP_LABELS: Record<WorkspaceInventoryStatusKind, string> = {
 export const WORKSPACE_INVENTORY_GROUP_OPTIONS: readonly WorkspaceInventoryGroupOption[] = [
   { id: "ownership", label: "Ownership" },
   { id: "source", label: "Source" },
+  { id: "runtime", label: "Runtime" },
   { id: "status", label: "Status" },
 ];
 
@@ -140,7 +161,7 @@ export function buildCloudWorkspaceInventoryItems(
 export function buildWorkspaceInventoryFilterOptions(
   items: readonly WorkspaceInventoryItemView[],
 ): WorkspaceInventoryFilterOption[] {
-  return [
+  const base: WorkspaceInventoryFilterOption[] = [
     { id: "all", label: "All", count: items.length },
     {
       id: "mine",
@@ -158,6 +179,9 @@ export function buildWorkspaceInventoryFilterOptions(
       count: items.filter(workspaceNeedsAttention).length,
     },
   ];
+  const sourceOptions = sourceFilterOptions(items);
+  const runtimeOptions = runtimeFilterOptions(items);
+  return [...base, ...sourceOptions, ...runtimeOptions];
 }
 
 export function filterWorkspaceInventoryItems(
@@ -173,6 +197,16 @@ export function filterWorkspaceInventoryItems(
       return items.filter(workspaceNeedsAttention);
     case "all":
       return [...items];
+    default:
+      if (filterId.startsWith("source:")) {
+        const sourceKind = filterId.slice("source:".length) as WorkspaceInventorySourceKind;
+        return items.filter((item) => item.sourceKind === sourceKind);
+      }
+      if (filterId.startsWith("runtime:")) {
+        const runtimeLocation = filterId.slice("runtime:".length) as RecentWorkRuntimeLocation;
+        return items.filter((item) => item.runtimeLocation === runtimeLocation);
+      }
+      return [...items];
   }
 }
 
@@ -186,7 +220,9 @@ export function groupWorkspaceInventoryItems(
       ? groupInventoryByOwnership(items)
       : groupBy === "status"
         ? groupInventoryByStatus(items)
-        : groupInventoryBySource(items);
+        : groupBy === "runtime"
+          ? groupInventoryByRuntime(items)
+          : groupInventoryBySource(items);
   return groups.map((group) => ({
     ...group,
     collapsed: collapsedGroupIds.has(group.id),
@@ -297,6 +333,37 @@ export function groupInventoryBySource(
     }));
 }
 
+export function groupInventoryByRuntime(
+  items: readonly WorkspaceInventoryItemView[],
+): WorkspaceInventoryGroupView[] {
+  const groups = new Map<
+    RecentWorkRuntimeLocation,
+    { label: string; order: number; items: WorkspaceInventoryItemView[] }
+  >();
+  for (const item of items) {
+    const existing = groups.get(item.runtimeLocation);
+    if (existing) {
+      existing.items.push(item);
+    } else {
+      groups.set(item.runtimeLocation, {
+        label: item.runtimeLocationLabel,
+        order: RUNTIME_ORDER[item.runtimeLocation],
+        items: [item],
+      });
+    }
+  }
+  return Array.from(groups.entries())
+    .sort(([, left], [, right]) => left.order - right.order)
+    .map(([kind, { label, items: groupItems }]) => ({
+      id: kind,
+      label,
+      count: groupItems.length,
+      statusKind: kind === "offline" ? "blocked" : undefined,
+      attention: kind === "offline",
+      items: groupItems,
+    }));
+}
+
 export function buildCloudWorkspaceInventoryGroups(
   workspaces: readonly CloudWorkspaceSummary[],
   groupBy: WorkspaceInventoryGroupBy = "source",
@@ -354,19 +421,65 @@ function workspaceNeedsAttention(item: WorkspaceInventoryItemView): boolean {
 
 function groupLabelForSource(kind: WorkspaceInventorySourceKind): string {
   switch (kind) {
-    case "chat":
-      return "Chat";
+    case "desktop_exposed":
+      return "Desktop";
+    case "cloud_sandbox":
+      return "Cloud sandbox";
+    case "web":
+      return "Web";
+    case "mobile":
+      return "Mobile";
+    case "personal_automation":
+      return "Personal automations";
+    case "team_automation":
+      return "Team automations";
     case "slack":
       return "Slack";
-    case "automation":
-      return "Automations";
     case "api":
       return "API";
-    case "system":
-      return "System";
-    case "other":
-      return "Other";
+    case "unknown":
+      return "Unknown source";
   }
+}
+
+function sourceFilterOptions(
+  items: readonly WorkspaceInventoryItemView[],
+): WorkspaceInventoryFilterOption[] {
+  const counts = new Map<WorkspaceInventorySourceKind, { label: string; count: number }>();
+  for (const item of items) {
+    const current = counts.get(item.sourceKind);
+    counts.set(item.sourceKind, {
+      label: item.sourceLabel,
+      count: (current?.count ?? 0) + 1,
+    });
+  }
+  return Array.from(counts.entries())
+    .sort(([leftKind], [rightKind]) => SOURCE_ORDER[leftKind] - SOURCE_ORDER[rightKind])
+    .map(([kind, value]) => ({
+      id: `source:${kind}` as const,
+      label: value.label,
+      count: value.count,
+    }));
+}
+
+function runtimeFilterOptions(
+  items: readonly WorkspaceInventoryItemView[],
+): WorkspaceInventoryFilterOption[] {
+  const counts = new Map<RecentWorkRuntimeLocation, { label: string; count: number }>();
+  for (const item of items) {
+    const current = counts.get(item.runtimeLocation);
+    counts.set(item.runtimeLocation, {
+      label: item.runtimeLocationLabel,
+      count: (current?.count ?? 0) + 1,
+    });
+  }
+  return Array.from(counts.entries())
+    .sort(([leftKind], [rightKind]) => RUNTIME_ORDER[leftKind] - RUNTIME_ORDER[rightKind])
+    .map(([kind, value]) => ({
+      id: `runtime:${kind}` as const,
+      label: value.label,
+      count: value.count,
+    }));
 }
 
 function itemOwnershipKind(

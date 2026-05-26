@@ -1,4 +1,6 @@
 import type {
+  CloudWorkspaceDetail,
+  CloudSessionProjection,
   CloudWorkspaceLastSessionSummary,
   CloudWorkspaceSummary,
 } from "@proliferate/cloud-sdk";
@@ -29,6 +31,14 @@ export interface CloudWorkItemView {
   subtitle: string;
   source: CloudWorkSource;
   sourceLabel: string;
+  sourceKind: RecentWorkSourceKind;
+  semanticSourceLabel: string;
+  runtimeLocation: RecentWorkRuntimeLocation;
+  runtimeLocationLabel: string;
+  cloudAccessState: RecentWorkCloudAccessState;
+  cloudAccessLabel: string;
+  commandability: RecentWorkCommandability;
+  commandabilityLabel: string;
   ownerKind: CloudWorkOwnerKind;
   ownerLabel: string;
   status: CloudWorkStatusFilter;
@@ -52,9 +62,102 @@ export interface CloudWorkGroupView {
   items: CloudWorkItemView[];
 }
 
+export type RecentWorkRowKind = "workspace" | "session" | "pending-session";
+
+export type RecentWorkSourceKind =
+  | "desktop_exposed"
+  | "cloud_sandbox"
+  | "web"
+  | "mobile"
+  | "personal_automation"
+  | "team_automation"
+  | "slack"
+  | "api"
+  | "unknown";
+
+export type RecentWorkRuntimeLocation =
+  | "local_desktop"
+  | "cloud_sandbox"
+  | "ssh_remote"
+  | "offline"
+  | "unknown";
+
+export type RecentWorkCloudAccessState = "enabled" | "not_enabled" | "unknown";
+
+export type RecentWorkCommandability =
+  | "commandable"
+  | "not_commandable"
+  | "stale"
+  | "unknown";
+
+export type RecentWorkOwnership = "mine" | "team" | "unclaimed" | "unknown";
+
+export type RecentWorkState =
+  | "idle"
+  | "running"
+  | "review"
+  | "blocked"
+  | "done"
+  | "pending"
+  | "unknown";
+
+export type RecentWorkOpenTarget =
+  | { kind: "workspace"; workspaceId: string }
+  | { kind: "session"; workspaceId: string; sessionId: string }
+  | { kind: "pending-session"; workspaceId: string; pendingSessionKey: string };
+
+export interface RecentWorkItemView {
+  id: string;
+  rowKind: RecentWorkRowKind;
+  workspaceId: string;
+  sessionId: string | null;
+  pendingSessionKey?: string;
+  openTarget: RecentWorkOpenTarget;
+  title: string;
+  subtitle?: string;
+  repoLabel?: string;
+  branchLabel?: string;
+  sourceKind: RecentWorkSourceKind;
+  sourceLabel: string;
+  runtimeLocation: RecentWorkRuntimeLocation;
+  runtimeLabel: string;
+  cloudAccessState: RecentWorkCloudAccessState;
+  cloudAccessLabel: string;
+  commandability: RecentWorkCommandability;
+  commandabilityLabel: string;
+  ownership: RecentWorkOwnership;
+  ownershipLabel: string;
+  lastActivityAt: string | null;
+  lastActivityMs: number;
+  lastActivityLabel: string;
+  state: RecentWorkState;
+  stateLabel: string;
+  searchText: string;
+}
+
+export type CloudCommandReadinessState =
+  | "ready"
+  | "claim_required"
+  | "workspace_not_ready"
+  | "runtime_offline"
+  | "runtime_unavailable"
+  | "commandability_unknown";
+
+export interface CloudCommandReadinessView {
+  state: CloudCommandReadinessState;
+  commandable: boolean;
+  message: string | null;
+}
+
 export interface BuildCloudWorkInventoryOptions {
   nowMs?: number;
   filters?: CloudWorkFilters;
+}
+
+export interface BuildRecentWorkItemsOptions {
+  activeWorkspaceSessions?: readonly CloudSessionProjection[];
+  nowMs?: number;
+  limit?: number;
 }
 
 export const CLOUD_WORK_SOURCE_ORDER: readonly CloudWorkSource[] = [
@@ -101,6 +204,52 @@ export function buildCloudWorkInventory(
   });
 }
 
+export function buildRecentWorkItems(
+  workspaces: readonly CloudWorkspaceSummary[],
+  options: BuildRecentWorkItemsOptions = {},
+): RecentWorkItemView[] {
+  const nowMs = options.nowMs ?? Date.now();
+  const workspaceRows = dedupeCloudWorkspaces(workspaces);
+  const workspaceById = new Map(workspaceRows.map((workspace) => [workspace.id, workspace]));
+  const rows = new Map<string, RecentWorkItemView>();
+  const workspacesWithSessionRows = new Set<string>();
+
+  for (const workspace of workspaceRows) {
+    const summary = workspace.lastSessionSummary;
+    if (!summary?.sessionId) {
+      continue;
+    }
+    rows.set(
+      recentSessionRowId(workspace.id, summary.sessionId),
+      recentWorkItemForSessionSummary(workspace, summary, { nowMs }),
+    );
+    workspacesWithSessionRows.add(workspace.id);
+  }
+
+  for (const session of options.activeWorkspaceSessions ?? []) {
+    const workspaceId = session.cloudWorkspaceId ?? "";
+    const workspace = workspaceById.get(workspaceId);
+    if (!workspace) {
+      continue;
+    }
+    rows.set(
+      recentSessionRowId(workspace.id, session.sessionId),
+      recentWorkItemForSessionProjection(workspace, session, { nowMs }),
+    );
+    workspacesWithSessionRows.add(workspace.id);
+  }
+
+  for (const workspace of workspaceRows) {
+    if (workspacesWithSessionRows.has(workspace.id)) {
+      continue;
+    }
+    rows.set(recentWorkspaceRowId(workspace.id), recentWorkItemForWorkspace(workspace, { nowMs }));
+  }
+
+  const sorted = [...rows.values()].sort(compareRecentWorkItems);
+  return typeof options.limit === "number" ? sorted.slice(0, options.limit) : sorted;
+}
+
 export function dedupeCloudWorkspaces(
   workspaces: readonly CloudWorkspaceSummary[],
 ): CloudWorkspaceSummary[] {
@@ -125,6 +274,10 @@ export function cloudWorkItemForWorkspace(
   const title = workspace.displayName ?? workspace.lastSessionSummary?.title ?? workspace.repo.name;
   const sessionTitle = workspace.lastSessionSummary?.title ?? null;
   const source = cloudWorkSourceForWorkspace(workspace);
+  const sourceKind = recentWorkSourceForWorkspace(workspace);
+  const runtimeLocation = recentWorkRuntimeLocationForWorkspace(workspace);
+  const cloudAccessState = recentWorkCloudAccessState(workspace);
+  const commandability = recentWorkCommandability(workspace);
   const status = cloudWorkStatusForWorkspace(workspace);
   const ownerKind = cloudWorkOwnerKind(workspace);
   const lastActivityMs = cloudWorkLastActivityMs(workspace);
@@ -135,6 +288,14 @@ export function cloudWorkItemForWorkspace(
     subtitle: [repoLabel, branchLabel].filter(Boolean).join(" - "),
     source,
     sourceLabel: SOURCE_LABELS[source],
+    sourceKind,
+    semanticSourceLabel: recentWorkSourceLabel(sourceKind),
+    runtimeLocation,
+    runtimeLocationLabel: recentWorkRuntimeLabel(runtimeLocation),
+    cloudAccessState,
+    cloudAccessLabel: recentWorkCloudAccessLabel(cloudAccessState),
+    commandability,
+    commandabilityLabel: recentWorkCommandabilityLabel(commandability),
     ownerKind,
     ownerLabel: cloudWorkOwnerLabel(workspace),
     status,
@@ -178,6 +339,238 @@ export function cloudWorkSourceForWorkspace(
   }
   return "chats";
 }
+
+export function recentWorkSourceForWorkspace(
+  workspace: Pick<
+    CloudWorkspaceSummary,
+    "origin" | "creatorContext" | "sandboxType" | "visibility" | "claimSourceKind"
+  >,
+): RecentWorkSourceKind {
+  if (workspace.claimSourceKind === "slack" || workspace.origin?.entrypoint === "slack") {
+    return "slack";
+  }
+  if (workspace.claimSourceKind === "api" || workspace.origin?.entrypoint === "api" || workspace.origin?.kind === "api") {
+    return "api";
+  }
+  if (workspace.creatorContext?.kind === "automation" || workspace.claimSourceKind === "automation") {
+    return workspace.visibility === "shared_unclaimed" || workspace.visibility === "claimed" || workspace.sandboxType === "managed_shared"
+      ? "team_automation"
+      : "personal_automation";
+  }
+  if (workspace.sandboxType === "local" || workspace.origin?.entrypoint === "desktop") {
+    return "desktop_exposed";
+  }
+  if (workspace.origin?.entrypoint === "mobile") {
+    return "mobile";
+  }
+  if (workspace.origin?.entrypoint === "web" || workspace.origin?.entrypoint === "cowork") {
+    return "web";
+  }
+  if (workspace.sandboxType === "managed_personal" || workspace.sandboxType === "managed_shared") {
+    return "cloud_sandbox";
+  }
+  return "unknown";
+}
+
+export function recentWorkRuntimeLocationForWorkspace(
+  workspace: Pick<CloudWorkspaceSummary, "sandboxType" | "runtime" | "exposureState">,
+): RecentWorkRuntimeLocation {
+  if (workspace.exposureState === "stale" || workspace.exposureState === "paused" || workspace.exposureState === "revoked") {
+    return "offline";
+  }
+  if (workspace.runtime?.status === "disabled" || workspace.runtime?.status === "error") {
+    return "offline";
+  }
+  switch (workspace.sandboxType) {
+    case "local":
+      return "local_desktop";
+    case "managed_personal":
+    case "managed_shared":
+      return "cloud_sandbox";
+    case "ssh":
+    case "self_hosted":
+      return "ssh_remote";
+    case undefined:
+      return "unknown";
+  }
+}
+
+export function recentWorkCloudAccessState(
+  workspace: Pick<CloudWorkspaceSummary, "exposure" | "exposureState" | "sandboxType">,
+): RecentWorkCloudAccessState {
+  if (workspace.exposure) {
+    return "enabled";
+  }
+  if (workspace.sandboxType === "managed_personal" || workspace.sandboxType === "managed_shared") {
+    return "enabled";
+  }
+  switch (workspace.exposureState) {
+    case "live":
+    case "tracked":
+    case "paused":
+    case "stale":
+    case "revoked":
+      return "enabled";
+    case "untracked":
+      return "not_enabled";
+    case undefined:
+      return "unknown";
+  }
+}
+
+export function recentWorkCommandability(
+  workspace: Pick<
+    CloudWorkspaceSummary,
+    | "exposure"
+    | "exposureState"
+    | "runtime"
+    | "sandboxType"
+    | "targetId"
+    | "visibility"
+    | "workspaceStatus"
+    | "status"
+  >,
+): RecentWorkCommandability {
+  if (workspace.visibility === "shared_unclaimed") {
+    return "not_commandable";
+  }
+  if (
+    workspace.workspaceStatus === "error" ||
+    workspace.status === "error" ||
+    workspace.runtime?.status === "error" ||
+    workspace.runtime?.status === "disabled"
+  ) {
+    return "not_commandable";
+  }
+  if (
+    workspace.exposureState === "stale" ||
+    workspace.exposureState === "paused" ||
+    workspace.exposureState === "revoked"
+  ) {
+    return "stale";
+  }
+  if (
+    workspace.exposure?.commandable === true &&
+    workspace.exposure.status === "active" &&
+    (workspace.exposureState === "live" || workspace.exposureState === "tracked")
+  ) {
+    return "commandable";
+  }
+  if (workspace.sandboxType === "managed_personal" || workspace.sandboxType === "managed_shared") {
+    return workspace.targetId
+      && workspace.runtime?.status === "running"
+      && (workspace.workspaceStatus === "ready" || workspace.status === "ready")
+      ? "commandable"
+      : "not_commandable";
+  }
+  if (
+    workspace.sandboxType === "local" ||
+    workspace.sandboxType === "ssh" ||
+    workspace.sandboxType === "self_hosted"
+  ) {
+    return "not_commandable";
+  }
+  return "unknown";
+}
+
+export function cloudCommandReadiness(
+  workspace: CloudWorkspaceCommandFacts,
+): CloudCommandReadinessView {
+  if (workspace.visibility === "shared_unclaimed") {
+    return {
+      state: "claim_required",
+      commandable: false,
+      message: "Claim this shared workspace before sending prompts or changing session settings.",
+    };
+  }
+  if (
+    workspace.workspaceStatus === "error" ||
+    workspace.status === "error" ||
+    workspace.runtime?.status === "error" ||
+    workspace.runtime?.status === "disabled"
+  ) {
+    return {
+      state: "runtime_unavailable",
+      commandable: false,
+      message: workspace.lastError
+        ?? workspace.statusDetail
+        ?? "This workspace cannot accept cloud commands right now.",
+    };
+  }
+  if (workspace.workspaceStatus !== "ready" && workspace.status !== "ready") {
+    return {
+      state: "workspace_not_ready",
+      commandable: false,
+      message: workspace.statusDetail ?? "Workspace runtime is not ready yet. Try again when setup finishes.",
+    };
+  }
+  const runtimeLocation = recentWorkRuntimeLocationForWorkspace(workspace);
+  if (runtimeLocation === "offline" || recentWorkCommandability(workspace) === "stale") {
+    return {
+      state: "runtime_offline",
+      commandable: false,
+      message: "This is the same workspace, but its Desktop/remote runtime is offline. Open Desktop and enable remote access before sending commands from Web or Mobile.",
+    };
+  }
+  if (workspace.sandboxType === "managed_personal" || workspace.sandboxType === "managed_shared") {
+    if (workspace.runtime?.status !== "running") {
+      return {
+        state: "workspace_not_ready",
+        commandable: false,
+        message: "Cloud runtime is still starting. Try again when it is running.",
+      };
+    }
+    if (!workspace.targetId || !workspace.anyharnessWorkspaceId) {
+      return {
+        state: "runtime_unavailable",
+        commandable: false,
+        message: "Workspace is ready but missing runtime command routing.",
+      };
+    }
+    return {
+      state: "ready",
+      commandable: true,
+      message: null,
+    };
+  }
+  const activeExposureCommandable =
+    workspace.exposure?.commandable === true &&
+    workspace.exposure.status === "active" &&
+    (workspace.exposureState === "live" || workspace.exposureState === "tracked");
+  if (activeExposureCommandable) {
+    return {
+      state: "ready",
+      commandable: true,
+      message: null,
+    };
+  }
+  if (recentWorkCommandability(workspace) === "unknown") {
+    return {
+      state: "commandability_unknown",
+      commandable: false,
+      message: "This workspace does not yet report a commandable runtime. Refresh after the target comes online.",
+    };
+  }
+  return {
+    state: "runtime_unavailable",
+    commandable: false,
+    message: "This workspace cannot accept cloud commands right now.",
+  };
+}
+
+type CloudWorkspaceCommandFacts = Pick<
+  CloudWorkspaceSummary,
+    | "exposure"
+    | "exposureState"
+    | "runtime"
+    | "sandboxType"
+    | "targetId"
+    | "visibility"
+    | "workspaceStatus"
+    | "status"
+  > &
+  Partial<Pick<CloudWorkspaceSummary, "lastError" | "statusDetail">> &
+  Partial<Pick<CloudWorkspaceDetail, "anyharnessWorkspaceId">>;
 
 export function cloudWorkStatusForWorkspace(
   workspace: Pick<
@@ -276,6 +669,321 @@ function matchesSearch(item: CloudWorkItemView, query: string): boolean {
     || item.subtitle.toLowerCase().includes(query);
 }
 
+function recentWorkItemForWorkspace(
+  workspace: CloudWorkspaceSummary,
+  options: { nowMs: number },
+): RecentWorkItemView {
+  const base = recentWorkBase(workspace, { nowMs: options.nowMs, rowActivityAt: cloudWorkLastActivityIso(workspace) });
+  return {
+    ...base,
+    id: recentWorkspaceRowId(workspace.id),
+    rowKind: "workspace",
+    workspaceId: workspace.id,
+    sessionId: null,
+    openTarget: { kind: "workspace", workspaceId: workspace.id },
+    title: workspace.displayName ?? workspace.repo.name,
+    subtitle: "Workspace",
+    state: workspaceState(workspace),
+    stateLabel: recentWorkStateLabel(workspaceState(workspace)),
+    searchText: recentSearchText(base, [workspace.displayName, workspace.repo.name, "workspace"]),
+  };
+}
+
+function recentWorkItemForSessionSummary(
+  workspace: CloudWorkspaceSummary,
+  summary: CloudWorkspaceLastSessionSummary,
+  options: { nowMs: number },
+): RecentWorkItemView {
+  const base = recentWorkBase(workspace, { nowMs: options.nowMs, rowActivityAt: summary.lastEventAt ?? cloudWorkLastActivityIso(workspace) });
+  const state = sessionState(summary.status, workspace);
+  return {
+    ...base,
+    id: recentSessionRowId(workspace.id, summary.sessionId),
+    rowKind: "session",
+    workspaceId: workspace.id,
+    sessionId: summary.sessionId,
+    openTarget: { kind: "session", workspaceId: workspace.id, sessionId: summary.sessionId },
+    title: summary.title ?? summary.preview ?? workspace.displayName ?? workspace.repo.name,
+    subtitle: `${workspace.displayName ?? workspace.repo.name} session`,
+    state,
+    stateLabel: recentWorkStateLabel(state),
+    searchText: recentSearchText(base, [summary.title, summary.preview, workspace.displayName, workspace.repo.name, "session"]),
+  };
+}
+
+function recentWorkItemForSessionProjection(
+  workspace: CloudWorkspaceSummary,
+  session: CloudSessionProjection,
+  options: { nowMs: number },
+): RecentWorkItemView {
+  const base = recentWorkBase(workspace, { nowMs: options.nowMs, rowActivityAt: session.lastEventAt ?? session.startedAt ?? cloudWorkLastActivityIso(workspace) });
+  const state = sessionState(session.status, workspace);
+  return {
+    ...base,
+    id: recentSessionRowId(workspace.id, session.sessionId),
+    rowKind: "session",
+    workspaceId: workspace.id,
+    sessionId: session.sessionId,
+    openTarget: { kind: "session", workspaceId: workspace.id, sessionId: session.sessionId },
+    title: session.title ?? workspace.displayName ?? workspace.repo.name,
+    subtitle: `${workspace.displayName ?? workspace.repo.name} session`,
+    state,
+    stateLabel: recentWorkStateLabel(state),
+    searchText: recentSearchText(base, [session.title, session.sourceAgentKind, workspace.displayName, workspace.repo.name, "session"]),
+  };
+}
+
+function recentWorkBase(
+  workspace: CloudWorkspaceSummary,
+  options: { nowMs: number; rowActivityAt: string | null },
+): Omit<
+  RecentWorkItemView,
+  | "id"
+  | "rowKind"
+  | "workspaceId"
+  | "sessionId"
+  | "pendingSessionKey"
+  | "openTarget"
+  | "title"
+  | "subtitle"
+  | "state"
+  | "stateLabel"
+  | "searchText"
+> {
+  const sourceKind = recentWorkSourceForWorkspace(workspace);
+  const runtimeLocation = recentWorkRuntimeLocationForWorkspace(workspace);
+  const cloudAccessState = recentWorkCloudAccessState(workspace);
+  const commandability = recentWorkCommandability(workspace);
+  const ownership = recentWorkOwnership(workspace);
+  const lastActivityMs = parseTime(options.rowActivityAt);
+  return {
+    repoLabel: `${workspace.repo.owner}/${workspace.repo.name}`,
+    branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
+    sourceKind,
+    sourceLabel: recentWorkSourceLabel(sourceKind),
+    runtimeLocation,
+    runtimeLabel: recentWorkRuntimeLabel(runtimeLocation),
+    cloudAccessState,
+    cloudAccessLabel: recentWorkCloudAccessLabel(cloudAccessState),
+    commandability,
+    commandabilityLabel: recentWorkCommandabilityLabel(commandability),
+    ownership,
+    ownershipLabel: recentWorkOwnershipLabel(ownership),
+    lastActivityAt: options.rowActivityAt,
+    lastActivityMs,
+    lastActivityLabel: relativeTimeLabel(lastActivityMs, options.nowMs),
+  };
+}
+
+function compareRecentWorkItems(left: RecentWorkItemView, right: RecentWorkItemView): number {
+  const recencyDelta = right.lastActivityMs - left.lastActivityMs;
+  if (recencyDelta !== 0) {
+    return recencyDelta;
+  }
+  const kindDelta = recentRowKindRank(left.rowKind) - recentRowKindRank(right.rowKind);
+  if (kindDelta !== 0) {
+    return kindDelta;
+  }
+  return left.title.localeCompare(right.title);
+}
+
+function recentRowKindRank(kind: RecentWorkRowKind): number {
+  switch (kind) {
+    case "pending-session":
+      return 0;
+    case "session":
+      return 1;
+    case "workspace":
+      return 2;
+  }
+}
+
+function recentSearchText(
+  base: Pick<
+    RecentWorkItemView,
+    | "repoLabel"
+    | "branchLabel"
+    | "sourceLabel"
+    | "runtimeLabel"
+    | "cloudAccessLabel"
+    | "commandabilityLabel"
+    | "ownershipLabel"
+  >,
+  values: readonly (string | null | undefined)[],
+): string {
+  return [
+    ...values,
+    base.repoLabel,
+    base.branchLabel,
+    base.sourceLabel,
+    base.runtimeLabel,
+    base.cloudAccessLabel,
+    base.commandabilityLabel,
+    base.ownershipLabel,
+  ].filter(Boolean).join(" ");
+}
+
+function recentWorkspaceRowId(workspaceId: string): string {
+  return `workspace:${workspaceId}`;
+}
+
+function recentSessionRowId(workspaceId: string, sessionId: string): string {
+  return `session:${workspaceId}:${sessionId}`;
+}
+
+export function recentWorkSourceLabel(source: RecentWorkSourceKind): string {
+  switch (source) {
+    case "desktop_exposed":
+      return "Desktop";
+    case "cloud_sandbox":
+      return "Cloud sandbox";
+    case "web":
+      return "Web";
+    case "mobile":
+      return "Mobile";
+    case "personal_automation":
+      return "Personal automation";
+    case "team_automation":
+      return "Team automation";
+    case "slack":
+      return "Slack";
+    case "api":
+      return "API";
+    case "unknown":
+      return "Unknown";
+  }
+}
+
+export function recentWorkRuntimeLabel(runtimeLocation: RecentWorkRuntimeLocation): string {
+  switch (runtimeLocation) {
+    case "local_desktop":
+      return "Local Desktop";
+    case "cloud_sandbox":
+      return "Cloud runtime";
+    case "ssh_remote":
+      return "SSH remote";
+    case "offline":
+      return "Offline";
+    case "unknown":
+      return "Unknown runtime";
+  }
+}
+
+export function recentWorkCloudAccessLabel(state: RecentWorkCloudAccessState): string {
+  switch (state) {
+    case "enabled":
+      return "Cloud access enabled";
+    case "not_enabled":
+      return "Cloud access off";
+    case "unknown":
+      return "Cloud access unknown";
+  }
+}
+
+export function recentWorkCommandabilityLabel(commandability: RecentWorkCommandability): string {
+  switch (commandability) {
+    case "commandable":
+      return "Ready for commands";
+    case "not_commandable":
+      return "Commands unavailable";
+    case "stale":
+      return "Runtime offline";
+    case "unknown":
+      return "Command status unknown";
+  }
+}
+
+function recentWorkOwnership(workspace: Pick<CloudWorkspaceSummary, "visibility" | "sandboxType">): RecentWorkOwnership {
+  if (workspace.visibility === "shared_unclaimed") {
+    return "unclaimed";
+  }
+  if (workspace.visibility === "claimed" || workspace.sandboxType === "managed_shared") {
+    return "team";
+  }
+  if (workspace.visibility === "private") {
+    return "mine";
+  }
+  return "unknown";
+}
+
+function recentWorkOwnershipLabel(ownership: RecentWorkOwnership): string {
+  switch (ownership) {
+    case "mine":
+      return "Mine";
+    case "team":
+      return "Team";
+    case "unclaimed":
+      return "Unclaimed";
+    case "unknown":
+      return "Unknown owner";
+  }
+}
+
+function workspaceState(workspace: CloudWorkspaceSummary): RecentWorkState {
+  if (
+    workspace.workspaceStatus === "error" ||
+    workspace.status === "error" ||
+    workspace.actionBlockKind ||
+    workspace.actionBlockReason ||
+    workspace.exposureState === "stale"
+  ) {
+    return "blocked";
+  }
+  if (
+    workspace.workspaceStatus === "pending" ||
+    workspace.workspaceStatus === "materializing" ||
+    workspace.workspaceStatus === "needs_rematerialization"
+  ) {
+    return "pending";
+  }
+  if (workspace.workspaceStatus === "archived" || workspace.status === "archived") {
+    return "done";
+  }
+  return "idle";
+}
+
+function sessionState(status: string | null | undefined, workspace: CloudWorkspaceSummary): RecentWorkState {
+  const normalized = status?.toLowerCase().replace(/[\s-]+/gu, "_") ?? "";
+  switch (normalized) {
+    case "running":
+    case "queued":
+      return "running";
+    case "review":
+    case "ready_for_review":
+      return "review";
+    case "ended":
+    case "done":
+    case "completed":
+      return "done";
+    case "error":
+    case "failed":
+      return "blocked";
+    case "idle":
+      return workspaceState(workspace) === "blocked" ? "blocked" : "idle";
+    default:
+      return workspaceState(workspace);
+  }
+}
+
+function recentWorkStateLabel(state: RecentWorkState): string {
+  switch (state) {
+    case "idle":
+      return "Idle";
+    case "running":
+      return "Running";
+    case "review":
+      return "Review";
+    case "blocked":
+      return "Blocked";
+    case "done":
+      return "Done";
+    case "pending":
+      return "Pending";
+    case "unknown":
+      return "Unknown";
+  }
+}
+
 function cloudWorkOwnerLabel(workspace: Pick<CloudWorkspaceSummary, "visibility">): string {
   switch (cloudWorkOwnerKind(workspace)) {
     case "private":
@@ -315,10 +1023,17 @@ function cloudWorkRuntimeLabel(workspace: Pick<CloudWorkspaceSummary, "sandboxTy
 function cloudWorkLastActivityMs(
   workspace: Pick<CloudWorkspaceSummary, "lastActivityAt" | "updatedAt" | "createdAt" | "lastSessionSummary">,
 ): number {
-  return parseTime(workspace.lastSessionSummary?.lastEventAt)
-    || parseTime(workspace.lastActivityAt)
-    || parseTime(workspace.updatedAt)
-    || parseTime(workspace.createdAt);
+  return parseTime(cloudWorkLastActivityIso(workspace));
+}
+
+function cloudWorkLastActivityIso(
+  workspace: Pick<CloudWorkspaceSummary, "lastActivityAt" | "updatedAt" | "createdAt" | "lastSessionSummary">,
+): string | null {
+  return workspace.lastSessionSummary?.lastEventAt
+    ?? workspace.lastActivityAt
+    ?? workspace.updatedAt
+    ?? workspace.createdAt
+    ?? null;
 }
 
 function parseTime(value?: string | null): number {

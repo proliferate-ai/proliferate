@@ -384,6 +384,7 @@ async def _get_workspace_snapshot(
     sessions = await events_store.list_session_projections_for_workspace(
         db,
         cloud_workspace_id=UUID(workspace.id),
+        target_id=UUID(workspace.target_id) if workspace.target_id is not None else None,
     )
     return CloudWorkspaceSnapshotResponse(
         workspace=workspace,

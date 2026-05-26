@@ -100,6 +100,9 @@ export interface ProductSidebarProps {
   chatRows?: SidebarChatRowView[];
   account?: SidebarAccountView | null;
   footerActions?: SidebarActionView[];
+  workspaceSectionLabel?: string;
+  workspaceSectionActions?: ReactNode;
+  workspaceSectionPanel?: ReactNode;
   workspaceSectionMessage?: SidebarSectionMessageView | null;
   shortcutRevealVisible?: boolean;
   onNavSelect: (id: string) => void;
@@ -120,6 +123,9 @@ export function ProductSidebar({
   chatRows = [],
   account = null,
   footerActions = [],
+  workspaceSectionLabel = "Repositories",
+  workspaceSectionActions = null,
+  workspaceSectionPanel = null,
   workspaceSectionMessage = null,
   shortcutRevealVisible = false,
   onNavSelect,
@@ -158,6 +164,9 @@ export function ProductSidebar({
 
         <ProductSidebarScrollableContent>
           <ProductSidebarRepositoriesSection
+            label={workspaceSectionLabel}
+            actions={workspaceSectionActions}
+            panel={workspaceSectionPanel}
             groups={workspaceGroups}
             message={workspaceSectionMessage}
             onGroupToggle={onGroupToggle}
@@ -399,6 +408,9 @@ function ProductSidebarThreadSection({
 }
 
 function ProductSidebarRepositoriesSection({
+  label,
+  actions,
+  panel,
   groups,
   message,
   onGroupToggle,
@@ -406,6 +418,9 @@ function ProductSidebarRepositoriesSection({
   onAction,
   shortcutRevealVisible,
 }: {
+  label: string;
+  actions?: ReactNode;
+  panel?: ReactNode;
   groups: SidebarWorkspaceGroupView[];
   message?: SidebarSectionMessageView | null;
   onGroupToggle: (id: string) => void;
@@ -415,7 +430,12 @@ function ProductSidebarRepositoriesSection({
 }) {
   return (
     <section>
-      <ProductSidebarSectionHeader label="Repositories" />
+      <ProductSidebarSectionHeader label={label} actions={actions} />
+      {panel ? (
+        <div className="px-2 pb-1">
+          {panel}
+        </div>
+      ) : null}
       <div className="flex flex-col gap-px">
         {groups.length > 0 ? groups.map((group) => (
           <WorkspaceGroup
@@ -474,9 +494,9 @@ export function ProductSidebarSectionHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="pl-2 pt-3 pb-1 text-base leading-5 text-sidebar-muted-foreground opacity-75">
+    <div className="pl-2 pt-3 pb-1 text-base leading-5 text-sidebar-muted-foreground">
       <div className="flex items-center justify-between gap-2">
-        <span>{label}</span>
+        <span className="opacity-75">{label}</span>
         {actions ? (
           <div className="flex shrink-0 items-center gap-1">
             {actions}

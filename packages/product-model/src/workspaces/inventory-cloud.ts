@@ -1,25 +1,30 @@
 import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 
+import {
+  recentWorkCloudAccessLabel,
+  recentWorkCloudAccessState,
+  recentWorkCommandability,
+  recentWorkCommandabilityLabel,
+  recentWorkRuntimeLabel,
+  recentWorkRuntimeLocationForWorkspace,
+  recentWorkSourceForWorkspace,
+  recentWorkSourceLabel,
+} from "./cloud-work-inventory";
 import type {
   WorkspaceInventoryItemView,
   WorkspaceInventoryLocationKind,
   WorkspaceInventoryOwnershipKind,
-  WorkspaceInventorySourceKind,
   WorkspaceInventoryStatusKind,
 } from "./inventory";
-
-type WorkspaceSourceModel = {
-  kind: WorkspaceInventorySourceKind;
-  label: string;
-};
-
-const AUTOMATION_BRANCH_PATTERN = /^automation\/.+-[a-f0-9]{12,16}$/iu;
 
 export function cloudWorkspaceInventoryItem(
   workspace: CloudWorkspaceSummary,
   now: number,
 ): WorkspaceInventoryItemView {
-  const sourceModel = workspaceSource(workspace);
+  const sourceKind = recentWorkSourceForWorkspace(workspace);
+  const runtimeLocation = recentWorkRuntimeLocationForWorkspace(workspace);
+  const cloudAccessState = recentWorkCloudAccessState(workspace);
+  const commandability = recentWorkCommandability(workspace);
   const sessionLabel =
     nonEmptyText(workspace.lastSessionSummary?.title) ??
     nonEmptyText(workspace.lastSessionSummary?.preview);
@@ -29,10 +34,16 @@ export function cloudWorkspaceInventoryItem(
     title: workspaceDisplayLabel(workspace),
     repoLabel: repoLabel(workspace),
     branchLabel: workspaceBranchLabel(workspace),
-    sourceKind: sourceModel.kind,
-    sourceLabel: sourceModel.label,
+    sourceKind,
+    sourceLabel: recentWorkSourceLabel(sourceKind),
     locationKind: workspaceLocationKind(workspace),
     locationLabel: workspaceLocationLabel(workspace),
+    runtimeLocation,
+    runtimeLocationLabel: recentWorkRuntimeLabel(runtimeLocation),
+    cloudAccessState,
+    cloudAccessLabel: recentWorkCloudAccessLabel(cloudAccessState),
+    commandability,
+    commandabilityLabel: recentWorkCommandabilityLabel(commandability),
     scopeLabel: workspaceScopeLabel(workspace),
     statusKind: workspaceStatusKind(workspace),
     statusLabel: workspaceStatusLabel(workspace),
@@ -66,84 +77,6 @@ export function sortedCloudWorkspaces(
     }
     return left.id.localeCompare(right.id);
   });
-}
-
-function workspaceSource(workspace: CloudWorkspaceSummary): WorkspaceSourceModel {
-  const entrypoint = nonEmptyText(workspace.origin?.entrypoint);
-  const kind = nonEmptyText(workspace.origin?.kind);
-  const creatorKind = nonEmptyText(workspace.creatorContext?.kind);
-  const claimSourceKind = nonEmptyText(workspace.claimSourceKind);
-
-  if (entrypoint === "slack" || claimSourceKind === "slack") {
-    return source("slack", "Slack");
-  }
-  if (
-    creatorKind === "automation" ||
-    isLegacyAutomationWorkspace(workspace, kind, entrypoint) ||
-    claimSourceKind === "automation"
-  ) {
-    return source("automation", "Automation");
-  }
-  if (entrypoint === "api" || kind === "api" || claimSourceKind === "api") {
-    return source("api", "API");
-  }
-  if (
-    kind === "human" ||
-    kind === "cowork" ||
-    entrypoint === "web" ||
-    entrypoint === "desktop" ||
-    entrypoint === "mobile" ||
-    entrypoint === "cowork"
-  ) {
-    return source("chat", sourceEntrypointLabel(entrypoint));
-  }
-  if (kind === "system" || entrypoint === "cloud") {
-    return source("system", "Cloud");
-  }
-  return source("other", "Other");
-}
-
-function source(
-  kind: WorkspaceInventorySourceKind,
-  label: string,
-): WorkspaceSourceModel {
-  return {
-    kind,
-    label,
-  };
-}
-
-function isLegacyAutomationWorkspace(
-  workspace: CloudWorkspaceSummary,
-  kind: string | null,
-  entrypoint: string | null,
-): boolean {
-  return (
-    kind === "system" &&
-    entrypoint === "cloud" &&
-    AUTOMATION_BRANCH_PATTERN.test(workspaceBranchLabel(workspace))
-  );
-}
-
-function sourceEntrypointLabel(entrypoint: string | null): string {
-  switch (entrypoint) {
-    case "desktop":
-      return "Desktop";
-    case "web":
-      return "Web";
-    case "mobile":
-      return "Mobile";
-    case "cloud":
-      return "Cloud";
-    case "cowork":
-      return "Chat";
-    case "local_runtime":
-      return "Local runtime";
-    case null:
-      return "Chat";
-    default:
-      return formatSourceToken(entrypoint);
-  }
 }
 
 function workspaceLocationKind(
@@ -420,14 +353,4 @@ function nonEmptyText(value: string | null | undefined): string | null {
 
 function normalizedStatusToken(value: string | null | undefined): string {
   return nonEmptyText(value)?.toLowerCase().replace(/[\s-]+/gu, "_") ?? "";
-}
-
-function formatSourceToken(value: string): string {
-  return (
-    value
-      .split(/[_\s-]+/u)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ") || "Other"
-  );
 }

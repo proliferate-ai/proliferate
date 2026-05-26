@@ -664,9 +664,10 @@ async def _resolve_cloud_workspace_id_for_target(
             "Workspace not found.",
             status_code=404,
         )
+    requires_managed_slot = _target_requires_cloud_workspace(target)
     if (
         workspace.target_id != target.id
-        or workspace.sandbox_profile_id != target.sandbox_profile_id
+        or (requires_managed_slot and workspace.sandbox_profile_id != target.sandbox_profile_id)
         or workspace.owner_scope != target.owner_scope
         or workspace.owner_user_id != target.owner_user_id
         or workspace.organization_id != target.organization_id

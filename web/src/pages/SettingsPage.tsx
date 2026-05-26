@@ -1,5 +1,5 @@
-import { SettingsScreen } from "../components/settings/screen/SettingsScreen";
+import { SettingsModalPage } from "./SettingsModalPage";
 
 export function SettingsPage() {
-  return <SettingsScreen />;
+  return <SettingsModalPage />;
 }

@@ -4,9 +4,12 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.billing import ensure_personal_billing_subject
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from tests.e2e.cloud.helpers.auth import create_user_and_login
@@ -461,3 +464,55 @@ class TestCloudBackfillApi:
             read_only_lease.json()["command"]["commandId"] == read_only_created.json()["commandId"]
         )
         assert read_only_lease.json()["command"]["workspaceId"] == "read-only-workspace"
+
+    @pytest.mark.asyncio
+    async def test_backfill_command_accepts_profile_tagged_desktop_dispatch_target(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-backfill-profile-tagged-desktop",
+        )
+        target_id, _worker_headers = await _create_enrolled_target(
+            client,
+            db_session,
+            auth,
+            suffix="profile-tagged-desktop",
+        )
+        profile = await agent_auth_store.ensure_personal_sandbox_profile(
+            db_session,
+            user_id=UUID(auth.user_id),
+            created_by_user_id=UUID(auth.user_id),
+        )
+        target = (
+            await db_session.execute(
+                select(CloudTarget).where(CloudTarget.id == UUID(target_id))
+            )
+        ).scalar_one()
+        target.sandbox_profile_id = profile.id
+        target.profile_target_role = "none"
+        cloud_workspace_id = await _seed_exposed_workspace(
+            db_session,
+            auth=auth,
+            target_id=target_id,
+            anyharness_workspace_id="profile-tagged-local-workspace",
+        )
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "backfill-profile-tagged-desktop",
+                "targetId": target_id,
+                "workspaceId": "profile-tagged-local-workspace",
+                "cloudWorkspaceId": cloud_workspace_id,
+                "kind": "backfill_exposed_workspace",
+                "payload": {},
+                "source": "desktop_cloud_view",
+            },
+        )
+
+        assert created.status_code == 200

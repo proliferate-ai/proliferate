@@ -7,6 +7,7 @@ import {
   useCloudRepoConfigs,
   useCreateCloudWorkspace,
 } from "@proliferate/cloud-sdk-react";
+import type { AgentAuthAgentKind } from "@proliferate/cloud-sdk";
 import {
   buildCloudLaunchComposerControls,
   buildLaunchSessionConfigUpdates,
@@ -169,7 +170,10 @@ export function HomeScreen() {
         }),
         createdAt: Date.now(),
       };
-      const freeCredits = await agentAuthMutations.ensureFreeCredits({});
+      const freeCredits = await agentAuthMutations.ensureFreeCredits({
+        agentKind: normalizeAgentAuthAgentKind(resolvedLaunchSelection.agentKind),
+        modelId: resolvedLaunchSelection.modelId,
+      });
       if (
         freeCredits.status !== "not_entitled"
         && freeCredits.status !== "gateway_disabled"
@@ -321,6 +325,15 @@ function waitForNextPaint(): Promise<void> {
       });
     });
   });
+}
+
+function normalizeAgentAuthAgentKind(agentKind: string): AgentAuthAgentKind | null {
+  return agentKind === "claude"
+    || agentKind === "codex"
+    || agentKind === "opencode"
+    || agentKind === "gemini"
+    ? agentKind
+    : null;
 }
 
 function buildTargetPicker(

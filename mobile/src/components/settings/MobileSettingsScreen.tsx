@@ -5,6 +5,7 @@ import {
   useCloudRepoConfigs,
   useOrganizations,
 } from "@proliferate/cloud-sdk-react";
+import { mobileCloudSettingsSections } from "@proliferate/product-model/settings/cloud-settings";
 
 import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileListRow } from "../primitives/MobileListRow";
@@ -52,6 +53,7 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
       : colors.warning;
   const configuredRepos = (repoConfigs.data?.configs ?? []).filter((repo) => repo.configured);
   const organizationRows = organizations.data?.organizations ?? [];
+  const sectionLabels = mobileSectionLabels();
 
   return (
     <MobileScreen contentStyle={styles.screenContent}>
@@ -69,7 +71,7 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
         </View>
       </View>
 
-      <Section label="Account">
+      <Section label={sectionLabels.account}>
         <MobileListRow
           leading={<RowIcon name="github" tint={colors.fg} />}
           title="GitHub"
@@ -102,12 +104,7 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
         />
       </Section>
 
-      <Section label="Cloud">
-        <MobileListRow
-          leading={<RowIcon name="cloud" tint={colors.faint} />}
-          title="Personal plan"
-          subtitle={billingSummary(billing.data, billing.isLoading, billing.isError)}
-        />
+      <Section label={sectionLabels.environments}>
         <MobileListRow
           leading={<RowIcon name="git-branch" tint={colors.faint} />}
           title="Configured repositories"
@@ -123,7 +120,7 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
         />
       </Section>
 
-      <Section label="Teams">
+      <Section label={sectionLabels.organization}>
         {organizations.isError ? (
           <MobileListRow
             leading={<RowIcon name="users" tint={colors.warning} />}
@@ -156,6 +153,14 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
         )}
       </Section>
 
+      <Section label={sectionLabels.billing}>
+        <MobileListRow
+          leading={<RowIcon name="cloud" tint={colors.faint} />}
+          title="Personal plan"
+          subtitle={billingSummary(billing.data, billing.isLoading, billing.isError)}
+        />
+      </Section>
+
       <Section label="Configure on web or desktop">
         <MobileListRow
           leading={<RowIcon name="settings" tint={colors.faint} />}
@@ -179,6 +184,18 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
       <Text style={styles.footer}>Proliferate Mobile · build 0.1.0</Text>
     </MobileScreen>
   );
+}
+
+function mobileSectionLabels(): Record<"account" | "environments" | "organization" | "billing", string> {
+  const labels = new Map(
+    mobileCloudSettingsSections().map((section) => [section.id, section.label]),
+  );
+  return {
+    account: labels.get("account") ?? "Account",
+    environments: labels.get("environments") ?? "Environments",
+    organization: labels.get("organization") ?? "Organization",
+    billing: labels.get("billing") ?? "Billing",
+  };
 }
 
 function billingSummary(

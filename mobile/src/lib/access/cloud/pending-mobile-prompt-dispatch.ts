@@ -1,6 +1,8 @@
 import {
+  ensureFreeManagedCredits,
   getCommandStatus,
   getWorkspaceSnapshot,
+  materializeTargetConfig,
   type CloudCommandEnvelope,
   type CloudCommandResponse,
   type CloudSessionProjection,
@@ -8,6 +10,9 @@ import {
   ProliferateClientError,
   type ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
+import {
+  cloudCommandReadiness,
+} from "@proliferate/product-model/workspaces/cloud-work-inventory";
 
 import type { MobilePendingPrompt } from "../../../navigation/navigation-model";
 
@@ -37,6 +42,8 @@ const RETRYABLE_READINESS_ERROR_CODES = new Set([
   "cloud_command_runtime_config_missing",
   "cloud_command_runtime_config_not_ready",
   "cloud_command_agent_auth_not_ready",
+  "runtime_config_not_ready",
+  "agent_auth_not_ready",
 ]);
 
 const RETRYABLE_FAILURE_PATTERNS = [
@@ -119,6 +126,14 @@ async function startSessionForPrompt(args: {
   if (!targetId || !anyharnessWorkspaceId) {
     throw new Error("Workspace is ready but missing runtime command routing.");
   }
+  await ensureMobileWorkspaceReadyForCloudCommands({
+    client: args.client,
+    workspace: args.workspace,
+    idempotencyKey: `${args.pendingPrompt.id}:target-config`,
+    setLatestCommandId: args.setLatestCommandId,
+    onStatus: args.onStatus,
+    shouldContinue: args.shouldContinue,
+  });
   const agentKind = resolveAgentKind(args.workspace);
   const modelId = agentKind === "codex" ? args.modelId : null;
   const modeId = args.pendingPrompt.modeId;
@@ -147,6 +162,91 @@ async function startSessionForPrompt(args: {
     existingSessionIds,
     shouldContinue: args.shouldContinue,
   });
+}
+
+export async function ensureMobileWorkspaceReadyForCloudCommands(args: {
+  client: ProliferateCloudClient;
+  workspace: CloudWorkspaceDetail;
+  idempotencyKey: string;
+  setLatestCommandId: (commandId: string) => void;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<void> {
+  const readiness = cloudCommandReadiness(args.workspace);
+  if (!readiness.commandable) {
+    throw new Error(readiness.message ?? "This workspace cannot accept cloud commands right now.");
+  }
+  if (args.workspace.sandboxType === "managed_personal") {
+    await ensurePersonalManagedAgentAuthReady({
+      client: args.client,
+      onStatus: args.onStatus,
+    });
+  }
+  assertStillCurrent(args.shouldContinue);
+  await ensureManagedWorkspaceTargetConfigReady(args);
+}
+
+async function ensurePersonalManagedAgentAuthReady(args: {
+  client: ProliferateCloudClient;
+  onStatus: (status: string) => void;
+}): Promise<void> {
+  args.onStatus("Checking cloud agent credits.");
+  const result = await ensureFreeManagedCredits({}, args.client);
+  if (!result.launchEnabled) {
+    throw new Error(
+      result.lastErrorMessage
+      ?? (result.status === "gateway_disabled"
+        ? "Cloud agent launch is disabled for this account."
+        : "Cloud agent credits are not ready yet. Please retry in a moment."),
+    );
+  }
+}
+
+async function ensureManagedWorkspaceTargetConfigReady(args: {
+  client: ProliferateCloudClient;
+  workspace: CloudWorkspaceDetail;
+  idempotencyKey: string;
+  setLatestCommandId: (commandId: string) => void;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<void> {
+  if (!shouldMaterializeManagedTargetConfig(args.workspace)) {
+    return;
+  }
+  const targetId = args.workspace.targetId;
+  if (!targetId) {
+    throw new Error("Workspace is ready but missing runtime command routing.");
+  }
+  const repo = args.workspace.repo;
+  args.onStatus("Preparing managed target configuration.");
+  const response = await materializeTargetConfig(
+    targetId,
+    {
+      ownerScope: "personal",
+      gitProvider: "github",
+      gitOwner: repo.owner,
+      gitRepoName: repo.name,
+      includeGitCredentials: true,
+      source: "mobile",
+      idempotencyKey: args.idempotencyKey,
+    },
+    args.client,
+  );
+  const command = response.command as CloudCommandResponse;
+  args.setLatestCommandId(command.commandId);
+  args.onStatus("Applying managed target configuration.");
+  await waitForCommandAccepted(command, args.client, args.shouldContinue);
+}
+
+function shouldMaterializeManagedTargetConfig(workspace: CloudWorkspaceDetail): boolean {
+  if (workspace.sandboxType !== "managed_personal") {
+    return false;
+  }
+  const runtimeAuth = workspace.runtime?.runtimeAuth;
+  if (!runtimeAuth) {
+    return false;
+  }
+  return runtimeAuth.targetCurrent !== true || runtimeAuth.configCurrent !== true;
 }
 
 function resolveAgentKind(workspace: CloudWorkspaceDetail): string {

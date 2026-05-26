@@ -45,7 +45,8 @@ describe("WorkspaceInventory", () => {
     expect(screen.getByRole("region", { name: "Team workspaces" })).toBeTruthy();
     expect(screen.getAllByText("Slack").length).toBeGreaterThan(0);
     expect(screen.getByText("Investigate worker claim")).toBeTruthy();
-    expect(screen.getByText("proliferate-ai/proliferate")).toBeTruthy();
+    expect(screen.getByText(/proliferate-ai\/proliferate/u)).toBeTruthy();
+    expect(screen.getByText(/Ready for commands/u)).toBeTruthy();
     expect(screen.getByText("fix/claim-null")).toBeTruthy();
   });
 
@@ -67,8 +68,8 @@ describe("WorkspaceInventory", () => {
                 title: "Nightly skill index rebuild",
                 repoLabel: "proliferate-ai/proliferate",
                 branchLabel: "main",
-                sourceKind: "automation",
-                sourceLabel: "Automation",
+                sourceKind: "personal_automation",
+                sourceLabel: "Personal automation",
                 locationKind: "managed_personal",
                 locationLabel: "Personal cloud",
                 statusKind: "working",
@@ -97,9 +98,8 @@ describe("WorkspaceInventory", () => {
     expect(onGroupToggle).toHaveBeenCalledWith("automation");
 
     const workspaceButton = screen.getByRole("button", { name: /Nightly skill index rebuild/u });
-    expect(workspaceButton.querySelector("svg")?.getAttribute("style")).toContain(
-      "--color-status-in-progress",
-    );
+    expect(workspaceButton.getAttribute("aria-label")).toContain("status Running");
+    expect(workspaceButton.getAttribute("aria-label")).toContain("runtime Cloud runtime");
 
     fireEvent.click(workspaceButton);
     expect(onWorkspaceSelect).toHaveBeenCalledWith("workspace-2");
@@ -149,10 +149,16 @@ function workspaceItem(
     title: "Workspace",
     repoLabel: "proliferate-ai/proliferate",
     branchLabel: "main",
-    sourceKind: "chat",
-    sourceLabel: "Chat",
+    sourceKind: "web",
+    sourceLabel: "Web",
     locationKind: "cloud",
     locationLabel: "Cloud",
+    runtimeLocation: "cloud_sandbox",
+    runtimeLocationLabel: "Cloud runtime",
+    cloudAccessState: "enabled",
+    cloudAccessLabel: "Cloud access enabled",
+    commandability: "commandable",
+    commandabilityLabel: "Ready for commands",
     statusKind: "waiting",
     statusLabel: "Waiting",
     ...overrides,

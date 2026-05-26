@@ -3,11 +3,17 @@ import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 
 import {
   buildCloudWorkInventory,
+  buildRecentWorkItems,
   cloudWorkItemForWorkspace,
+  cloudCommandReadiness,
+  recentWorkCloudAccessState,
   cloudWorkSourceForWorkspace,
   cloudWorkStatusForWorkspace,
   dedupeCloudWorkspaces,
   filterCloudWorkItems,
+  recentWorkCommandability,
+  recentWorkRuntimeLocationForWorkspace,
+  recentWorkSourceForWorkspace,
 } from "./cloud-work-inventory";
 
 const NOW = Date.parse("2026-05-23T12:00:00Z");
@@ -179,6 +185,139 @@ describe("cloud work inventory", () => {
     ];
 
     expect(filterCloudWorkItems(items, { search: "sentry" }).map((item) => item.id)).toEqual(["workspace"]);
+  });
+
+  it("builds mixed recent session and workspace rows with explicit runtime facts", () => {
+    const rows = buildRecentWorkItems([
+      workspace({
+        id: "desktop",
+        displayName: "Bramble",
+        sandboxType: "local",
+        origin: { kind: "human", entrypoint: "desktop" },
+        exposure: {
+          id: "exposure",
+          visibility: "private",
+          claimedByUserId: null,
+          defaultProjectionLevel: "summary",
+          commandable: true,
+          status: "active",
+        },
+        exposureState: "live",
+        lastSessionSummary: {
+          targetId: "target",
+          workspaceId: "runtime",
+          sessionId: "session",
+          title: "Fix cloud UI",
+          status: "running",
+          lastEventAt: "2026-05-23T11:58:00Z",
+        },
+      }),
+      workspace({
+        id: "empty",
+        displayName: "Empty cloud workspace",
+        sandboxType: "managed_personal",
+        origin: { kind: "human", entrypoint: "web" },
+        targetId: "cloud-target",
+        lastActivityAt: "2026-05-23T11:00:00Z",
+      }),
+    ], { nowMs: NOW });
+
+    expect(rows.map((row) => row.id)).toEqual([
+      "session:desktop:session",
+      "workspace:empty",
+    ]);
+    expect(rows[0]).toMatchObject({
+      rowKind: "session",
+      workspaceId: "desktop",
+      sessionId: "session",
+      title: "Fix cloud UI",
+      sourceKind: "desktop_exposed",
+      runtimeLocation: "local_desktop",
+      cloudAccessState: "enabled",
+      commandability: "commandable",
+      state: "running",
+      lastActivityLabel: "2m",
+    });
+    expect(rows[1]).toMatchObject({
+      rowKind: "workspace",
+      workspaceId: "empty",
+      sessionId: null,
+      sourceKind: "web",
+      runtimeLocation: "cloud_sandbox",
+      commandability: "commandable",
+      state: "idle",
+    });
+  });
+
+  it("distinguishes cloud access from cloud runtime", () => {
+    const localWorkspace = workspace({
+      sandboxType: "local",
+      exposureState: "stale",
+      exposure: {
+        id: "exposure",
+        visibility: "private",
+        claimedByUserId: null,
+        defaultProjectionLevel: "summary",
+        commandable: false,
+        status: "stale",
+      },
+    });
+
+    expect(recentWorkSourceForWorkspace(localWorkspace)).toBe("desktop_exposed");
+    expect(recentWorkRuntimeLocationForWorkspace(localWorkspace)).toBe("offline");
+    expect(recentWorkCommandability(localWorkspace)).toBe("stale");
+  });
+
+  it("treats managed cloud work as cloud-accessible without desktop exposure", () => {
+    const managedWorkspace = workspace({
+      sandboxType: "managed_personal",
+      exposure: null,
+      exposureState: "untracked",
+    });
+
+    expect(recentWorkCloudAccessState(managedWorkspace)).toBe("enabled");
+  });
+
+  it("requires claim and durable runtime routing before cloud commands", () => {
+    expect(cloudCommandReadiness(workspace({
+      visibility: "shared_unclaimed",
+    })).state).toBe("claim_required");
+
+    expect(cloudCommandReadiness(workspace({
+      sandboxType: "managed_personal",
+      targetId: "target",
+      runtime: runtime("running"),
+    })).state).toBe("runtime_unavailable");
+
+    expect(cloudCommandReadiness({
+      ...workspace({
+        sandboxType: "managed_personal",
+        targetId: "target",
+        runtime: runtime("running"),
+      }),
+      anyharnessWorkspaceId: "runtime-workspace",
+    }).state).toBe("ready");
+
+    expect(cloudCommandReadiness({
+      ...workspace({
+        sandboxType: "managed_personal",
+        targetId: "target",
+        runtime: runtime("provisioning"),
+      }),
+      anyharnessWorkspaceId: "runtime-workspace",
+    }).state).toBe("workspace_not_ready");
+  });
+
+  it("surfaces workspace provisioning errors before generic not-ready copy", () => {
+    const readiness = cloudCommandReadiness(workspace({
+      workspaceStatus: "error",
+      status: "error",
+      statusDetail: "Connecting to repo runtime",
+      lastError: "Managed cloud worker enrollment requires CLOUD_WORKER_BASE_URL to be a public URL reachable from the sandbox.",
+    }));
+
+    expect(readiness.state).toBe("runtime_unavailable");
+    expect(readiness.message).toContain("CLOUD_WORKER_BASE_URL");
   });
 });
 

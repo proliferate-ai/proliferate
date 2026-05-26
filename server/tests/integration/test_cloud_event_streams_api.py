@@ -405,6 +405,24 @@ class TestCloudEventStreamsApi:
         )
         assert uploaded.status_code == 200
 
+        stale_target_id, _stale_worker_headers = await create_enrolled_target(
+            client,
+            db_session,
+            auth,
+            suffix="workspace-stream-stale",
+        )
+        await projections_store.upsert_session_projection_metadata(
+            db_session,
+            target_id=UUID(stale_target_id),
+            session_id="session-stale-target",
+            exposure_id=None,
+            cloud_workspace_id=UUID(cloud_workspace_id),
+            workspace_id="workspace-live",
+            projection_level="live",
+            commandable=True,
+        )
+        await db_session.commit()
+
         workspace_snapshot_response = await client.get(
             f"/v1/cloud/workspaces/{cloud_workspace_id}/snapshot",
             headers=auth.headers,
@@ -412,13 +430,18 @@ class TestCloudEventStreamsApi:
         assert workspace_snapshot_response.status_code == 200
         workspace_snapshot = workspace_snapshot_response.json()
         assert workspace_snapshot["workspace"]["id"] == cloud_workspace_id
-        assert workspace_snapshot["sessions"][0]["sessionId"] == "session-live"
+        assert [session["sessionId"] for session in workspace_snapshot["sessions"]] == [
+            "session-live"
+        ]
 
         workspace = await get_cloud_workspace_detail(
             db_session,
             UUID(auth.user_id),
             UUID(cloud_workspace_id),
         )
+        assert workspace.last_session_summary is not None
+        assert workspace.last_session_summary.target_id == target_id
+        assert workspace.last_session_summary.session_id == "session-live"
         workspace_stream = cast(
             "AsyncGenerator[str, None]",
             stream_workspace_events(workspace=workspace, after_seq=1),
@@ -428,7 +451,9 @@ class TestCloudEventStreamsApi:
             assert sse_event(workspace_snapshot_frame) == "snapshot"
             workspace_snapshot = sse_data(workspace_snapshot_frame)
             assert mapping(workspace_snapshot["workspace"])["id"] == cloud_workspace_id
-            assert mapping(workspace_snapshot["sessions"][0])["sessionId"] == "session-live"
+            assert [
+                mapping(session)["sessionId"] for session in workspace_snapshot["sessions"]
+            ] == ["session-live"]
 
             workspace_patch_task: asyncio.Task[str] = asyncio.create_task(
                 next_stream_frame(workspace_stream)
