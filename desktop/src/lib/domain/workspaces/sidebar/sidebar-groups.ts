@@ -241,10 +241,13 @@ export function buildSidebarGroupStates(args: {
         ? [pendingItem, ...visibleWorkspaceItems]
         : visibleWorkspaceItems;
       const visibleItems = items.filter((item) => {
+        if (item.active) {
+          return true;
+        }
         if (args.showArchived) {
           return item.archived && visibleWorkspaceTypes.has(item.variant);
         }
-        return !item.archived && (item.active || visibleWorkspaceTypes.has(item.variant));
+        return !item.archived && visibleWorkspaceTypes.has(item.variant);
       });
       const archiveHiddenItems = items.filter((item) =>
         !item.active
