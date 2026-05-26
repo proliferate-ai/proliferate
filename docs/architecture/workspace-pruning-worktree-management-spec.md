@@ -78,7 +78,7 @@ When the user archives a workspace:
 
 ```text
 1. The workspace immediately leaves the active workspace list.
-2. The workspace appears in an Archived area.
+2. The workspace appears in the Archived chats settings page.
 3. The workspace record, sessions, transcript, repo identity, branch/ref,
    cloud refs, and ownership remain durable.
 4. The system attempts to prune the worktree.
@@ -88,7 +88,7 @@ If the worktree is safe to remove, the checkout is deleted and the workspace is
 archived + dehydrated.
 
 If the worktree is not safe to remove, the workspace still remains archived, but
-the Archived area shows a cleanup attention state with the blocker. Examples:
+Archived chats shows a cleanup attention state with the blocker. Examples:
 
 - uncommitted changes
 - conflicts
@@ -452,7 +452,7 @@ deleted
 `archived`
 
 - Hidden from normal active lists.
-- Shown in Archived.
+- Shown in Settings -> Archived chats.
 - Does not receive new prompts unless restored first.
 - Can still have cleanup attention if its worktree could not yet be pruned.
 
@@ -514,7 +514,7 @@ completed
 `blocked`
 
 - Cleanup was not safe. Store structured blockers and show attention in the
-  Archived area or workspace details.
+  Archived chats settings page or workspace details.
 
 `failed`
 
@@ -1022,7 +1022,7 @@ queued or pending, not lose text while hydration runs.
 ```text
 1. User clicks Archive.
 2. Cloud marks product_lifecycle=archived.
-3. Workspace leaves active lists and appears in Archived.
+3. Workspace leaves active lists and appears in Archived chats under Settings.
 4. A prune intent is created for the relevant materialization.
 5. Worker/AnyHarness attempts safe prune.
 6. Archived item shows either clean archived state, cleanup blocker, or cleanup
@@ -1035,7 +1035,7 @@ attention.
 ### 5. Restore Archived Workspace
 
 ```text
-1. User opens Archived and clicks Restore.
+1. User opens Settings -> Archived chats and clicks Unarchive.
 2. Cloud checks active uniqueness for the repo/branch/owner scope.
 3. Cloud marks product_lifecycle=active or returns a structured conflict.
 4. Workspace returns to active lists.
@@ -1079,9 +1079,9 @@ asked for destruction.
 | active + dehydrated | Active list | Normal name; runtime controls say "restore worktree" | transcript, archive, hydrate | files/terminal/prompt until hydration starts | subtle storage/restorable dot |
 | active + hydrating | Active list | "Restoring workspace..." | transcript, cancel if supported | destructive prune | spinner/progress |
 | active + pruning | Active list | "Cleaning up worktree..." | transcript | files/terminal/prompt until result | cleanup progress |
-| archived + dehydrated | Archived area | Normal name, archived | restore, purge | prompt/terminal | archived icon plus restorable |
-| archived + cleanup blocked | Archived area | "Cleanup needs attention" | restore, view blockers, retry prune, purge | prompt until restore | attention badge |
-| archived + cleanup failed | Archived area | "Cleanup failed" | retry cleanup, restore, purge | prompt until restore | attention badge |
+| archived + dehydrated | Archived chats settings page | Normal name, archived | unarchive, purge | prompt/terminal | archived icon plus restorable |
+| archived + cleanup blocked | Archived chats settings page | "Cleanup needs attention" | unarchive, view blockers, retry prune, purge | prompt until restore | attention badge |
+| archived + cleanup failed | Archived chats settings page | "Cleanup failed" | retry cleanup, unarchive, purge | prompt until restore | attention badge |
 
 ## Sidebar And Runtime Target Contract
 
@@ -1110,7 +1110,8 @@ UI rules:
 - Cloud access enabled should remain visible as an access indicator.
 - Cloud access enabled must not use the same icon/copy as managed cloud runtime.
 - Active/dehydrated workspaces stay in the active list.
-- Archived workspaces move to the Archived area, not a mere filter.
+- Archived workspaces move to the Archived chats settings page, not a mere
+  filter or top-level daily navigation item.
 - Local preference ids can provide optimistic latency hiding, but must reconcile
   to durable product lifecycle.
 

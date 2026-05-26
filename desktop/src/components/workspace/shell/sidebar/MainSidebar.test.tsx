@@ -180,7 +180,6 @@ vi.mock("@/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({
     handleGoHome: vi.fn(),
     handleGoPlugins: vi.fn(),
     handleGoWorkspaces: vi.fn(),
-    handleGoArchived: vi.fn(),
     handleMarkWorkspaceDone: vi.fn(),
     handleRetryWorkspaceCleanup: vi.fn(),
     handleSelectWorkspace: vi.fn(),

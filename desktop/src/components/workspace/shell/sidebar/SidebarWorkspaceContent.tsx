@@ -176,7 +176,7 @@ export function SidebarWorkspaceContent({
         {group.items.length === 0 ? (
           <p className="px-3 py-2 text-xs text-sidebar-muted-foreground">
             {hasArchivedHiddenItems
-              ? "Archived chats are available from Archived."
+              ? "Archived chats are available in Settings."
               : "This repository has no workspaces yet."}
           </p>
         ) : (

@@ -43,6 +43,7 @@ import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
 } from "@/lib/domain/settings/navigation";
+import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
@@ -103,7 +104,6 @@ export const MainSidebar = memo(function MainSidebar() {
   const isOnPlugins = location.pathname === APP_ROUTES.plugins;
   const isOnAutomations = location.pathname.startsWith(APP_ROUTES.automations);
   const isOnWorkspaces = location.pathname === APP_ROUTES.workspaces;
-  const isOnArchived = location.pathname === APP_ROUTES.archivedWorkspaces;
   const isOnHome = location.pathname === APP_ROUTES.home;
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
@@ -187,19 +187,38 @@ export const MainSidebar = memo(function MainSidebar() {
       return;
     }
     setArchiveConfirmation(null);
+    const shouldLeaveWorkspace = selectedLogicalWorkspaceId === target.workspaceId
+      || selectedWorkspaceId === target.workspaceId
+      || (
+        target.cloudWorkspaceId
+        ? selectedWorkspaceId === cloudWorkspaceSyntheticId(target.cloudWorkspaceId)
+        : false
+      );
     const cloudWorkspaceId = target.cloudWorkspaceId;
     if (!cloudWorkspaceId) {
       archiveWorkspace(target.workspaceId);
+      if (shouldLeaveWorkspace) {
+        actions.handleGoHome();
+      }
       return;
     }
-    void archiveCloudWorkspaceRequest(cloudWorkspaceId).catch((error) => {
-      const message = error instanceof Error ? error.message : "Failed to archive workspace.";
-      showToast(message);
-    });
+    void archiveCloudWorkspaceRequest(cloudWorkspaceId)
+      .then(() => {
+        if (shouldLeaveWorkspace) {
+          actions.handleGoHome();
+        }
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "Failed to archive workspace.";
+        showToast(message);
+      });
   }, [
+    actions,
     archiveConfirmation,
     archiveWorkspace,
     archiveCloudWorkspaceRequest,
+    selectedLogicalWorkspaceId,
+    selectedWorkspaceId,
     showToast,
   ]);
 
@@ -269,13 +288,11 @@ export const MainSidebar = memo(function MainSidebar() {
             pluginsActive={isOnPlugins}
             automationsActive={isOnAutomations}
             workspacesActive={isOnWorkspaces}
-            archivedActive={isOnArchived}
             supportActive={supportOpen}
             onGoHome={actions.handleGoHome}
             onGoPlugins={actions.handleGoPlugins}
             onGoAutomations={actions.handleGoAutomations}
             onGoWorkspaces={handleGoWorkspaces}
-            onGoArchived={actions.handleGoArchived}
             onOpenSupport={() => setSupportOpen(true)}
             shortcutRevealVisible={shortcutRevealVisible}
             shortcutLabels={primaryNavShortcutLabels}
@@ -334,7 +351,7 @@ export const MainSidebar = memo(function MainSidebar() {
       <ConfirmationDialog
         open={archiveConfirmation !== null}
         title="Archive workspace?"
-        description={`Move ${archiveConfirmation?.name ?? "this workspace"} out of the main sidebar. It will remain available from Archived chats, and safe worktree cleanup may run in the background.`}
+        description={`Move ${archiveConfirmation?.name ?? "this workspace"} out of the main sidebar. It will remain available in Settings -> Archived chats, and safe worktree cleanup may run in the background.`}
         confirmLabel="Archive"
         onClose={() => setArchiveConfirmation(null)}
         onConfirm={confirmArchiveWorkspace}

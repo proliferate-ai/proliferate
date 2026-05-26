@@ -252,6 +252,18 @@ describe("settings navigation", () => {
     });
   });
 
+  it("resolves the archived chats settings section", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "archived-chats",
+      repositories: [],
+    })).toEqual({
+      activeSection: "archived-chats",
+      activeRepoSourceRoot: null,
+      focus: {},
+      inviteHandoff: null,
+    });
+  });
+
   it("preserves organization invite handoff only on the organization section", () => {
     expect(resolveSettingsSelection({
       rawSection: "organization",
