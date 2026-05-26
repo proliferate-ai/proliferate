@@ -55,6 +55,7 @@ export const SIDEBAR_REPO_GROUP_ITEM_LIMIT = 6;
 export interface SidebarWorkspaceItemState {
   id: string;
   localWorkspaceId: string | null;
+  cloudWorkspaceId: string | null;
   name: string;
   /**
    * The label we would render if the user had not set a display name override.

@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes";
 import { AutomationDetailPage } from "@/pages/AutomationDetailPage";
 import { AutomationsPage } from "@/pages/AutomationsPage";
+import { ArchivedWorkspacesPage } from "@/pages/ArchivedWorkspacesPage";
 import { CloudWorkspacesPage } from "@/pages/CloudWorkspacesPage";
 import { MainPage } from "@/pages/MainPage";
 import { PluginsPage } from "@/pages/PluginsPage";
@@ -64,6 +65,7 @@ export function AuthenticatedAppHost({
           <Route path="automations" element={<AutomationsPage />} />
           <Route path="automations/:automationId" element={<AutomationDetailPage />} />
           <Route path="workspaces" element={<CloudWorkspacesPage />} />
+          <Route path="workspaces/archived" element={<ArchivedWorkspacesPage />} />
           <Route path="*" element={<Navigate to={APP_ROUTES.home} replace />} />
         </Routes>
       )}

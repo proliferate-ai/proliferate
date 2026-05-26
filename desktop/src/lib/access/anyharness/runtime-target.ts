@@ -75,6 +75,20 @@ export async function resolveRuntimeTargetForWorkspace(
     throw new Error("Claim this workspace before opening it directly in Desktop.");
   }
 
+  const localTargetWorkspaceId = localDesktopCloudWorkspaceRuntimeId(cloudWorkspace);
+  if (localTargetWorkspaceId) {
+    return {
+      location: "local",
+      baseUrl: runtimeUrl,
+      anyharnessWorkspaceId: localTargetWorkspaceId,
+      runtimeGeneration: cloudWorkspace.runtime?.generation ?? 0,
+      cloudWorkspaceId: cloudWorkspace.id,
+      targetId: localDesktopCloudWorkspaceTargetId(cloudWorkspace) ?? undefined,
+      allowedAgentKinds: cloudWorkspace.allowedAgentKinds.filter(isCloudAgentRuntimeKind),
+      readyAgentKinds: cloudWorkspace.readyAgentKinds.filter(isCloudAgentRuntimeKind),
+    };
+  }
+
   if (cloudWorkspace.visibility === "claimed") {
     const token = await issueCloudWorkspaceDirectAccessToken(
       cloudWorkspace.id,
@@ -109,6 +123,33 @@ export async function resolveRuntimeTargetForWorkspace(
     allowedAgentKinds: connection.allowedAgentKinds.filter(isCloudAgentRuntimeKind),
     readyAgentKinds: connection.readyAgentKinds.filter(isCloudAgentRuntimeKind),
   };
+}
+
+function localDesktopCloudWorkspaceRuntimeId(
+  workspace: CloudWorkspaceDetail,
+): string | null {
+  const executionKind = workspace.executionTarget?.kind ?? null;
+  const directTargetKind = workspace.directTargetContext?.targetKind ?? null;
+  const localDesktopTarget = executionKind === "local_desktop"
+    || workspace.sandboxType === "local"
+    || directTargetKind === "desktop_dispatch"
+    || directTargetKind === "local_direct";
+  if (!localDesktopTarget) {
+    return null;
+  }
+  return workspace.anyharnessWorkspaceId
+    ?? workspace.primaryMaterialization?.anyharnessWorkspaceId
+    ?? workspace.directTargetContext?.anyharnessWorkspaceId
+    ?? null;
+}
+
+function localDesktopCloudWorkspaceTargetId(
+  workspace: CloudWorkspaceCommandMetadata,
+): string | null {
+  return workspace.executionTarget?.targetId
+    ?? workspace.directTargetContext?.targetId
+    ?? workspace.targetId
+    ?? null;
 }
 
 function isCloudAgentRuntimeKind(value: string): value is AgentAuthAgentKind {

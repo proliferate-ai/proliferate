@@ -154,6 +154,13 @@ async def _resolve_command_workspace(
             target=target,
             body=body,
         )
+    if kind == CloudCommandKind.prune_workspace_worktree.value:
+        return await _resolve_prune_workspace_worktree_command(
+            db,
+            user=user,
+            target=target,
+            body=body,
+        )
     if kind == CloudCommandKind.start_session.value and _target_requires_cloud_workspace(target):
         if body.cloud_workspace_id is None and not body.workspace_id:
             raise CloudApiError(
@@ -481,6 +488,80 @@ async def _resolve_backfill_exposed_workspace_command(
     return exposure.anyharness_workspace_id, payload, cloud_workspace_id
 
 
+async def _resolve_prune_workspace_worktree_command(
+    db: AsyncSession,
+    *,
+    user: User,
+    target: targets_store.CloudTargetSnapshot,
+    body: CreateCloudCommandRequest,
+) -> tuple[str | None, dict[str, object], str | None]:
+    if body.cloud_workspace_id is None:
+        raise CloudApiError(
+            "cloud_command_cloud_workspace_required",
+            "prune_workspace_worktree commands require cloudWorkspaceId.",
+            status_code=400,
+        )
+    if not body.workspace_id:
+        raise CloudApiError(
+            "cloud_command_workspace_required",
+            "prune_workspace_worktree commands require workspaceId.",
+            status_code=400,
+        )
+    workspace = await cloud_workspaces.get_cloud_workspace_by_id(db, body.cloud_workspace_id)
+    if workspace is None:
+        raise CloudApiError(
+            "cloud_command_workspace_not_found",
+            "Workspace not found.",
+            status_code=404,
+        )
+    if (
+        workspace.target_id != target.id
+        or workspace.sandbox_profile_id != target.sandbox_profile_id
+        or workspace.owner_scope != target.owner_scope
+        or workspace.owner_user_id != target.owner_user_id
+        or workspace.organization_id != target.organization_id
+    ):
+        raise CloudApiError(
+            "cloud_command_workspace_target_mismatch",
+            "Workspace is not attached to the requested target.",
+            status_code=409,
+        )
+    if workspace.anyharness_workspace_id != body.workspace_id:
+        raise CloudApiError(
+            "cloud_command_workspace_target_mismatch",
+            "Prune workspace id does not match the Cloud workspace materialization.",
+            status_code=409,
+        )
+    exposure = await exposures_store.get_active_workspace_exposure(
+        db,
+        target_id=target.id,
+        cloud_workspace_id=workspace.id,
+    )
+    if (
+        exposure is not None
+        and exposure.anyharness_workspace_id is not None
+        and exposure.anyharness_workspace_id != body.workspace_id
+    ):
+        raise CloudApiError(
+            "cloud_command_workspace_target_mismatch",
+            "Prune workspace id does not match the active exposure.",
+            status_code=409,
+        )
+    await require_workspace_interact(
+        db,
+        actor_user_id=user.id,
+        owner_scope=workspace.owner_scope,
+        owner_user_id=workspace.owner_user_id,
+        organization_id=workspace.organization_id,
+        workspace_archived=workspace.archived_at is not None,
+        exposure=exposure,
+    )
+    payload = dict(body.payload)
+    payload["workspaceId"] = body.workspace_id
+    payload["cloudWorkspaceId"] = str(workspace.id)
+    return body.workspace_id, payload, str(workspace.id)
+
+
 async def _resolve_projected_session_command_workspace(
     db: AsyncSession,
     *,
@@ -652,6 +733,11 @@ def _command_has_managed_cloud_workspace(
         return False
     if kind == CloudCommandKind.start_session.value:
         return body.cloud_workspace_id is not None or body.workspace_id is not None
+    if kind in {
+        CloudCommandKind.backfill_exposed_workspace.value,
+        CloudCommandKind.prune_workspace_worktree.value,
+    }:
+        return body.cloud_workspace_id is not None
     if kind in _PROJECTED_SESSION_COMMAND_KINDS:
         return body.cloud_workspace_id is not None
     return False

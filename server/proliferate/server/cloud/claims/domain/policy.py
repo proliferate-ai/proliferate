@@ -109,8 +109,8 @@ def can_archive_cloud_workspace(
     has_active_organization_membership: bool,
     is_organization_admin: bool,
 ) -> PolicyVerdict:
-    if workspace_archived:
-        return _NOT_FOUND
+    # Archive/restore/purge lifecycle calls are retry-safe, so archived rows
+    # still flow through the same ownership and claim checks.
     if owner_scope == "personal":
         return PolicyAllowed() if owner_user_id == actor_user_id else _NOT_FOUND
     if owner_scope != "organization" or organization_id is None:

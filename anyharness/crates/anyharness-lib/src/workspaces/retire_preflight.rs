@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyharness_contract::v1::{
@@ -10,6 +11,7 @@ use crate::sessions::service::SessionService;
 use crate::terminals::model::TerminalStatus;
 use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
+use crate::workspaces::managed_root::canonical_managed_worktrees_root;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};
 use crate::workspaces::runtime::WorkspaceRuntime;
@@ -48,6 +50,7 @@ pub struct RetirePreflightChecker {
     session_runtime: Arc<SessionRuntime>,
     session_service: Arc<SessionService>,
     terminal_service: Arc<TerminalService>,
+    runtime_home: PathBuf,
 }
 
 impl RetirePreflightChecker {
@@ -58,6 +61,7 @@ impl RetirePreflightChecker {
         session_runtime: Arc<SessionRuntime>,
         session_service: Arc<SessionService>,
         terminal_service: Arc<TerminalService>,
+        runtime_home: PathBuf,
     ) -> Self {
         Self {
             workspace_runtime,
@@ -66,6 +70,7 @@ impl RetirePreflightChecker {
             session_runtime,
             session_service,
             terminal_service,
+            runtime_home,
         }
     }
 
@@ -87,7 +92,7 @@ impl RetirePreflightChecker {
         mode: RetirePreflightMode,
     ) -> anyhow::Result<RetirePreflightResult> {
         let mut blockers = Vec::new();
-        let materialized = std::path::Path::new(&workspace.path).exists();
+        let materialized = Path::new(&workspace.path).exists();
         let mut head_oid = None;
         let mut base_ref = None;
         let mut base_oid = None;
@@ -106,6 +111,9 @@ impl RetirePreflightChecker {
                 WorkspaceRetireBlockerCode::UnsupportedWorkspace,
                 message,
             ));
+        }
+        if mode != RetirePreflightMode::Purge && workspace.kind == "worktree" && materialized {
+            self.add_managed_root_blocker(&workspace, &mut blockers)?;
         }
 
         match mode {
@@ -395,6 +403,27 @@ impl RetirePreflightChecker {
                 path: None,
                 paths: None,
                 operation: None,
+            });
+        }
+        Ok(())
+    }
+
+    fn add_managed_root_blocker(
+        &self,
+        workspace: &WorkspaceRecord,
+        blockers: &mut Vec<WorkspaceRetireBlocker>,
+    ) -> anyhow::Result<()> {
+        let managed_root = canonical_managed_worktrees_root(&self.runtime_home)?;
+        let workspace_path = std::fs::canonicalize(&workspace.path).map_err(|error| {
+            anyhow::anyhow!("canonicalizing workspace checkout path for retire: {error}")
+        })?;
+        if !workspace_path.starts_with(&managed_root) {
+            blockers.push(WorkspaceRetireBlocker {
+                path: Some(workspace.path.clone()),
+                ..retire_blocker(
+                    WorkspaceRetireBlockerCode::UnsupportedWorkspace,
+                    "Workspace checkout is outside the managed worktrees root.",
+                )
             });
         }
         Ok(())

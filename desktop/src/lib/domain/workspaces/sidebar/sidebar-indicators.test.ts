@@ -278,7 +278,7 @@ describe("sidebar indicators", () => {
       {
         kind: "cloud_exposure",
         tone: "neutral",
-        tooltip: "Cloud projection live",
+        tooltip: "Cloud access enabled · live",
       },
       {
         kind: "materialization",

@@ -286,6 +286,7 @@ class CloudWorkspaceStatus(StrEnum):
 class CloudWorkspaceCleanupState(StrEnum):
     none = "none"
     pending = "pending"
+    blocked = "blocked"
     complete = "complete"
     failed = "failed"
 
@@ -458,6 +459,7 @@ class CloudCommandKind(StrEnum):
     configure_git_identity = "configure_git_identity"
     ensure_repo_checkout = "ensure_repo_checkout"
     materialize_workspace = "materialize_workspace"
+    prune_workspace_worktree = "prune_workspace_worktree"
     materialize_environment = "materialize_environment"
     refresh_agent_auth_config = "refresh_agent_auth_config"
     send_prompt = "send_prompt"
@@ -503,6 +505,7 @@ ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.configure_git_identity.value,
     CloudCommandKind.ensure_repo_checkout.value,
     CloudCommandKind.materialize_workspace.value,
+    CloudCommandKind.prune_workspace_worktree.value,
     CloudCommandKind.materialize_environment.value,
     CloudCommandKind.refresh_agent_auth_config.value,
     CloudCommandKind.send_prompt.value,

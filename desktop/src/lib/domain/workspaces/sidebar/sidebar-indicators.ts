@@ -516,18 +516,18 @@ function cloudExposureTone(
 function cloudExposureTooltip(exposureState: CloudWorkspaceExposureState): string {
   switch (exposureState) {
     case "live":
-      return "Cloud projection live";
+      return "Cloud access enabled · live";
     case "tracked":
-      return "Tracked by Cloud";
+      return "Cloud access enabled";
     case "paused":
-      return "Cloud projection paused";
+      return "Cloud access paused";
     case "stale":
-      return "Cloud projection stale";
+      return "Cloud access stale";
     case "revoked":
-      return "Cloud projection revoked";
+      return "Cloud access revoked";
     case "untracked":
     default:
-      return "Not tracked by Cloud";
+      return "Cloud access disabled";
   }
 }
 

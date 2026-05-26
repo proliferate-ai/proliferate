@@ -180,11 +180,33 @@ vi.mock("@/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({
     handleGoHome: vi.fn(),
     handleGoPlugins: vi.fn(),
     handleGoWorkspaces: vi.fn(),
+    handleGoArchived: vi.fn(),
     handleMarkWorkspaceDone: vi.fn(),
     handleRetryWorkspaceCleanup: vi.fn(),
     handleSelectWorkspace: vi.fn(),
     handleSidebarIndicatorAction: vi.fn(),
   }),
+}));
+
+vi.mock("@/hooks/cloud/workflows/use-cloud-workspace-actions", () => ({
+  useCloudWorkspaceActions: () => ({
+    archiveCloudWorkspace: vi.fn(),
+    restoreCloudWorkspace: vi.fn(),
+  }),
+}));
+
+vi.mock("@/hooks/workspaces/cache/use-workspace-collections-invalidation", () => ({
+  useWorkspaceCollectionsInvalidation: () => vi.fn(),
+}));
+
+vi.mock("@/stores/sessions/harness-connection-store", () => ({
+  useHarnessConnectionStore: (selector: (state: { runtimeUrl: string }) => unknown) =>
+    selector({ runtimeUrl: "http://127.0.0.1:8482" }),
+}));
+
+vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
+  archiveCloudWorkspace: vi.fn(),
+  restoreCloudWorkspace: vi.fn(),
 }));
 
 vi.mock("@/hooks/workspaces/facade/use-sidebar-repo-group-state", () => ({

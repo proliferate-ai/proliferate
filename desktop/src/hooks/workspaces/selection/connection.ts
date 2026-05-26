@@ -21,6 +21,9 @@ export async function resolveSelectionConnection(
 ): Promise<WorkspaceConnectionResult> {
   const runtimeReadyStartedAt = startLatencyTimer();
   const targetWorkspace = parseTargetWorkspaceSyntheticId(context.workspaceId);
+  const localWorkspaceId = cloudReadiness.kind === "local"
+    ? cloudReadiness.runtimeWorkspaceId ?? context.workspaceId
+    : context.workspaceId;
   const desktopRuntimeUrl = cloudReadiness.kind === "local" && !targetWorkspace
     ? await ensureRuntimeReady()
     : useHarnessConnectionStore.getState().runtimeUrl;
@@ -32,7 +35,7 @@ export async function resolveSelectionConnection(
 
   const connectionStartedAt = startLatencyTimer();
   const workspaceConnection = cloudReadiness.kind === "local"
-    ? await resolveWorkspaceConnection(desktopRuntimeUrl, context.workspaceId)
+    ? await resolveWorkspaceConnection(desktopRuntimeUrl, localWorkspaceId)
     : await deps.cache.refreshCloudWorkspaceConnection(cloudReadiness.cloudWorkspaceId)
       .then((connection) => ({
         runtimeUrl: connection.runtimeUrl,
@@ -48,5 +51,6 @@ export async function resolveSelectionConnection(
   return {
     runtimeUrl: desktopRuntimeUrl,
     workspaceConnection,
+    materializedWorkspaceId: cloudReadiness.kind === "local" ? localWorkspaceId : context.workspaceId,
   };
 }

@@ -174,12 +174,14 @@ export function cloudWorkspacesListRootKey() {
 export function cloudWorkspacesKey(
   owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
   scope: string | null = null,
+  lifecycle: string | null = null,
 ) {
   return [
     ...cloudWorkspacesListRootKey(),
     owner.ownerScope,
     owner.organizationId,
     scope,
+    lifecycle,
   ] as const;
 }
 

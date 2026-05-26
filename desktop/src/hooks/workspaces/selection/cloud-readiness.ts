@@ -52,5 +52,28 @@ export async function resolveCloudWorkspaceReadiness(
     };
   }
 
+  const localRuntimeWorkspaceId = localDesktopCloudWorkspaceRuntimeId(cloudWorkspace);
+  if (localRuntimeWorkspaceId) {
+    return { kind: "local", runtimeWorkspaceId: localRuntimeWorkspaceId };
+  }
+
   return { kind: "cloud-ready", cloudWorkspaceId };
+}
+
+function localDesktopCloudWorkspaceRuntimeId(
+  workspace: CloudWorkspaceDetail,
+): string | null {
+  const executionKind = workspace.executionTarget?.kind ?? null;
+  const directTargetKind = workspace.directTargetContext?.targetKind ?? null;
+  const localDesktopTarget = executionKind === "local_desktop"
+    || workspace.sandboxType === "local"
+    || directTargetKind === "desktop_dispatch"
+    || directTargetKind === "local_direct";
+  if (!localDesktopTarget) {
+    return null;
+  }
+  return workspace.anyharnessWorkspaceId
+    ?? workspace.primaryMaterialization?.anyharnessWorkspaceId
+    ?? workspace.directTargetContext?.anyharnessWorkspaceId
+    ?? null;
 }

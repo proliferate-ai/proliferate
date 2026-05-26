@@ -290,7 +290,7 @@ export function WorkspaceItem({
               {onArchive && !archived && (
                 <PopoverMenuItem
                   icon={<Archive className="size-3.5 shrink-0 text-muted-foreground" />}
-                  label="Archive"
+                  label="Archive..."
                   variant="sidebar"
                   onClick={() => { close(); handleArchiveCommand(); }}
                 />

@@ -3,9 +3,11 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import NoReturn
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import OwnerSelection
@@ -25,6 +27,7 @@ from proliferate.constants.cloud import (
     CloudCommandSource,
     CloudTargetKind,
     CloudTargetStatus,
+    CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
 )
 from proliferate.db import engine as db_engine
@@ -60,6 +63,7 @@ from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
+    archive_cloud_workspace_record,
     create_cloud_workspace_for_user,
     delete_cloud_workspace_records_for_workspace,
     get_cloud_workspace_by_id,
@@ -75,6 +79,8 @@ from proliferate.db.store.cloud_workspaces import (
     mark_workspace_error_by_id,
     persist_workspace_destroy_state,
     persist_workspace_stop_state,
+    purge_cloud_workspace_record,
+    restore_cloud_workspace_record,
     save_workspace,
     update_sandbox_status,
     update_workspace_branch,
@@ -203,6 +209,24 @@ def _direct_target_context_for_automation_run(
     )
 
 
+def _direct_target_context_for_workspace(
+    workspace: CloudWorkspace,
+    target_kind: str | None,
+) -> WorkspaceDirectTargetContext | None:
+    if (
+        workspace.target_id is None
+        or target_kind is None
+        or target_kind == CloudTargetKind.managed_cloud.value
+        or not workspace.anyharness_workspace_id
+    ):
+        return None
+    return WorkspaceDirectTargetContext(
+        target_id=str(workspace.target_id),
+        target_kind=target_kind,
+        anyharness_workspace_id=workspace.anyharness_workspace_id,
+    )
+
+
 @dataclass(frozen=True)
 class ResolvedCloudWorkspaceCreate:
     git_provider: str
@@ -251,6 +275,7 @@ async def list_cloud_workspaces_for_user(
     user: User | None = None,
     owner_selection: OwnerSelection | None = None,
     scope: str | None = None,
+    lifecycle: str = "active",
 ) -> list[WorkspaceSummary]:
     list_scope = scope or (
         "unclaimed"
@@ -288,11 +313,13 @@ async def list_cloud_workspaces_for_user(
             workspaces = await list_organization_workspaces_for_admin_audit(
                 db,
                 organization_id=owner_context.organization_id,
+                lifecycle=lifecycle,
             )
         else:
             workspaces = await list_unclaimed_organization_workspaces(
                 db,
                 organization_id=owner_context.organization_id,
+                lifecycle=lifecycle,
             )
         return await _workspace_summaries_for_request(db, user_id=user_id, workspaces=workspaces)
 
@@ -306,6 +333,7 @@ async def list_cloud_workspaces_for_user(
             db,
             user_id=user_id,
             organization_id=organization_id,
+            lifecycle=lifecycle,
         )
         return await _workspace_summaries_for_request(db, user_id=user_id, workspaces=workspaces)
 
@@ -316,10 +344,11 @@ async def list_cloud_workspaces_for_user(
             status_code=400,
         )
 
-    workspaces = await list_cloud_workspaces_store(db, user_id)
+    workspaces = await list_cloud_workspaces_store(db, user_id, lifecycle=lifecycle)
     claimed_workspaces = await list_claimed_organization_workspaces_for_user(
         db,
         user_id=user_id,
+        lifecycle=lifecycle,
     )
     workspaces = sorted(
         [*workspaces, *claimed_workspaces],
@@ -373,6 +402,12 @@ async def _workspace_summaries_for_request(
             billing = await get_billing_snapshot_for_subject(billing_subject_id)
             snapshots_by_subject[billing_subject_id] = billing
         action_block_kind, action_block_reason = _workspace_action_block(workspace, billing)
+        direct_target_context = _direct_target_context_for_workspace(
+            workspace,
+            target.kind if target is not None else None,
+        ) or _direct_target_context_for_automation_run(
+            automation_runs_by_workspace.get(workspace.id)
+        )
         summaries.append(
             workspace_summary_payload(
                 workspace,
@@ -384,13 +419,15 @@ async def _workspace_summaries_for_request(
                 creator_context=_creator_context_for_automation_run(
                     automation_runs_by_workspace.get(workspace.id)
                 ),
-                direct_target_context=_direct_target_context_for_automation_run(
-                    automation_runs_by_workspace.get(workspace.id)
-                ),
+                direct_target_context=direct_target_context,
                 exposure=exposure,
                 claim=claim,
                 last_session_summary=latest_sessions[0] if latest_sessions else None,
                 target_kind=target.kind if target is not None else None,
+                target_label=target.display_name if target is not None else None,
+                target_online=(
+                    target.status == CloudTargetStatus.online.value if target is not None else None
+                ),
             )
         )
     return summaries
@@ -776,6 +813,10 @@ async def _build_workspace_detail_for_request(
         user_id=workspace.user_id,
         cloud_workspace_ids=[workspace.id],
     )
+    direct_target_context = _direct_target_context_for_workspace(
+        workspace,
+        target.kind if target is not None else None,
+    ) or _direct_target_context_for_automation_run(automation_runs_by_workspace.get(workspace.id))
     return workspace_detail_payload(
         workspace,
         ready_agent_kind_values,
@@ -787,13 +828,15 @@ async def _build_workspace_detail_for_request(
         creator_context=_creator_context_for_automation_run(
             automation_runs_by_workspace.get(workspace.id)
         ),
-        direct_target_context=_direct_target_context_for_automation_run(
-            automation_runs_by_workspace.get(workspace.id)
-        ),
+        direct_target_context=direct_target_context,
         exposure=exposure,
         claim=claim,
         last_session_summary=latest_sessions[0] if latest_sessions else None,
         target_kind=target.kind if target is not None else None,
+        target_label=target.display_name if target is not None else None,
+        target_online=(
+            target.status == CloudTargetStatus.online.value if target is not None else None
+        ),
     )
 
 
@@ -837,6 +880,10 @@ async def _build_workspace_detail(
         user_id=workspace.user_id,
         cloud_workspace_ids=[workspace.id],
     )
+    direct_target_context = _direct_target_context_for_workspace(
+        workspace,
+        target.kind if target is not None else None,
+    ) or _direct_target_context_for_automation_run(automation_runs_by_workspace.get(workspace.id))
     return workspace_detail_payload(
         workspace,
         ready_agent_kind_values,
@@ -848,13 +895,15 @@ async def _build_workspace_detail(
         creator_context=_creator_context_for_automation_run(
             automation_runs_by_workspace.get(workspace.id)
         ),
-        direct_target_context=_direct_target_context_for_automation_run(
-            automation_runs_by_workspace.get(workspace.id)
-        ),
+        direct_target_context=direct_target_context,
         exposure=exposure,
         claim=claim,
         last_session_summary=latest_sessions[0] if latest_sessions else None,
         target_kind=target.kind if target is not None else None,
+        target_label=target.display_name if target is not None else None,
+        target_online=(
+            target.status == CloudTargetStatus.online.value if target is not None else None
+        ),
     )
 
 
@@ -1639,6 +1688,109 @@ async def stop_cloud_workspace(
     await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_archived")
     workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
     return await _build_workspace_detail(workspace)
+
+
+async def archive_cloud_workspace(
+    db: AsyncSession,
+    user_id: UUID,
+    workspace_id: UUID,
+) -> WorkspaceDetail:
+    workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
+    prune_error = None
+    if workspace.archived_at is None:
+        prune_error = await _enqueue_archive_prune_command(
+            db, user_id=user_id, workspace=workspace
+        )
+    await archive_cloud_workspace_record(db, workspace=workspace)
+    if prune_error is not None:
+        workspace.cleanup_state = CloudWorkspaceCleanupState.failed.value
+        workspace.cleanup_last_error = prune_error
+    detail = await _build_workspace_detail_for_request(db, workspace)
+    await db.commit()
+    return detail
+
+
+async def _enqueue_archive_prune_command(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    workspace: CloudWorkspace,
+) -> str | None:
+    if workspace.target_id is None or not workspace.anyharness_workspace_id:
+        return None
+    try:
+        await enqueue_command(
+            db,
+            user=SimpleNamespace(id=user_id),
+            body=CreateCloudCommandRequest.model_validate(
+                {
+                    "idempotencyKey": (
+                        f"archive-prune:{workspace.id}:{workspace.anyharness_workspace_id}"
+                    ),
+                    "targetId": workspace.target_id,
+                    "workspaceId": workspace.anyharness_workspace_id,
+                    "cloudWorkspaceId": workspace.id,
+                    "kind": CloudCommandKind.prune_workspace_worktree.value,
+                    "payload": {
+                        "workspaceId": workspace.anyharness_workspace_id,
+                        "cloudWorkspaceId": str(workspace.id),
+                        "reason": "archive",
+                    },
+                    "source": CloudCommandSource.api.value,
+                }
+            ),
+        )
+    except CloudApiError as exc:
+        log_cloud_event(
+            "cloud workspace archive prune enqueue failed",
+            workspace_id=workspace.id,
+            target_id=workspace.target_id,
+            anyharness_workspace_id=workspace.anyharness_workspace_id,
+            error_code=exc.code,
+        )
+        return exc.message
+    return None
+
+
+async def restore_cloud_workspace(
+    db: AsyncSession,
+    user_id: UUID,
+    workspace_id: UUID,
+) -> WorkspaceDetail:
+    workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
+    if workspace.archived_at is None:
+        return await _build_workspace_detail_for_request(db, workspace)
+    try:
+        await restore_cloud_workspace_record(db, workspace=workspace)
+        detail = await _build_workspace_detail_for_request(db, workspace)
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise CloudApiError(
+            "workspace_restore_conflict",
+            "Another active workspace already exists for this repo and branch.",
+            status_code=409,
+        ) from exc
+    return detail
+
+
+async def purge_cloud_workspace(
+    db: AsyncSession,
+    user_id: UUID,
+    workspace_id: UUID,
+) -> None:
+    if await get_cloud_workspace_by_id(db, workspace_id) is None:
+        return
+    workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
+    if workspace.owner_scope != "personal":
+        raise CloudApiError(
+            "workspace_purge_unsupported",
+            "Only personal cloud workspaces can be purged from this surface.",
+            status_code=409,
+        )
+    await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_purged")
+    await purge_cloud_workspace_record(db, workspace=workspace)
+    await db.commit()
 
 
 async def delete_cloud_workspace(

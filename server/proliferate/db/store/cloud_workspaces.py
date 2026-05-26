@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Final
+from typing import Final, Literal
 from uuid import UUID
 
-from sqlalchemy import func, select, text
+from sqlalchemy import Select, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.billing import ACTIVE_SANDBOX_STATUSES
@@ -41,6 +41,8 @@ from proliferate.db.store.cloud_sandboxes import ACTIVE_SLOT_STATUSES
 from proliferate.utils.time import utcnow
 
 _UNSET: Final = object()
+
+CloudWorkspaceLifecycle = Literal["active", "archived", "all"]
 
 
 class CloudRepoLimitExceededError(RuntimeError):
@@ -99,56 +101,63 @@ async def _enforce_cloud_repo_limit(
         )
 
 
-async def list_cloud_workspaces(db: AsyncSession, user_id: UUID) -> list[CloudWorkspace]:
-    return list(
-        (
-            await db.execute(
-                select(CloudWorkspace)
-                .where(
-                    CloudWorkspace.owner_scope == "personal",
-                    CloudWorkspace.owner_user_id == user_id,
-                    CloudWorkspace.archived_at.is_(None),
-                )
-                .order_by(CloudWorkspace.updated_at.desc())
-            )
+def _apply_workspace_lifecycle_filter(
+    statement: Select[tuple[CloudWorkspace]],
+    lifecycle: CloudWorkspaceLifecycle,
+) -> Select[tuple[CloudWorkspace]]:
+    if lifecycle == "active":
+        return statement.where(CloudWorkspace.archived_at.is_(None))
+    if lifecycle == "archived":
+        return statement.where(CloudWorkspace.archived_at.is_not(None))
+    return statement
+
+
+async def list_cloud_workspaces(
+    db: AsyncSession,
+    user_id: UUID,
+    *,
+    lifecycle: CloudWorkspaceLifecycle = "active",
+) -> list[CloudWorkspace]:
+    statement = (
+        select(CloudWorkspace)
+        .where(
+            CloudWorkspace.owner_scope == "personal",
+            CloudWorkspace.owner_user_id == user_id,
         )
-        .scalars()
-        .all()
+        .order_by(CloudWorkspace.updated_at.desc())
     )
+    statement = _apply_workspace_lifecycle_filter(statement, lifecycle)
+    return list((await db.execute(statement)).scalars().all())
 
 
 async def list_claimed_organization_workspaces_for_user(
     db: AsyncSession,
     *,
     user_id: UUID,
+    lifecycle: CloudWorkspaceLifecycle = "active",
 ) -> list[CloudWorkspace]:
-    return list(
-        (
-            await db.execute(
-                select(CloudWorkspace)
-                .join(
-                    CloudWorkspaceExposure,
-                    CloudWorkspaceExposure.cloud_workspace_id == CloudWorkspace.id,
-                )
-                .join(
-                    OrganizationMembership,
-                    OrganizationMembership.organization_id == CloudWorkspace.organization_id,
-                )
-                .where(
-                    CloudWorkspace.owner_scope == "organization",
-                    CloudWorkspaceExposure.visibility == "claimed",
-                    CloudWorkspaceExposure.claimed_by_user_id == user_id,
-                    OrganizationMembership.user_id == user_id,
-                    OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-                    CloudWorkspace.archived_at.is_(None),
-                    CloudWorkspaceExposure.archived_at.is_(None),
-                )
-                .order_by(CloudWorkspace.updated_at.desc())
-            )
+    statement = (
+        select(CloudWorkspace)
+        .join(
+            CloudWorkspaceExposure,
+            CloudWorkspaceExposure.cloud_workspace_id == CloudWorkspace.id,
         )
-        .scalars()
-        .all()
+        .join(
+            OrganizationMembership,
+            OrganizationMembership.organization_id == CloudWorkspace.organization_id,
+        )
+        .where(
+            CloudWorkspace.owner_scope == "organization",
+            CloudWorkspaceExposure.visibility == "claimed",
+            CloudWorkspaceExposure.claimed_by_user_id == user_id,
+            OrganizationMembership.user_id == user_id,
+            OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            CloudWorkspaceExposure.archived_at.is_(None),
+        )
+        .order_by(CloudWorkspace.updated_at.desc())
     )
+    statement = _apply_workspace_lifecycle_filter(statement, lifecycle)
+    return list((await db.execute(statement)).scalars().all())
 
 
 async def list_exposed_cloud_workspaces_for_user(
@@ -156,6 +165,7 @@ async def list_exposed_cloud_workspaces_for_user(
     *,
     user_id: UUID,
     organization_id: UUID | None = None,
+    lifecycle: CloudWorkspaceLifecycle = "active",
 ) -> list[CloudWorkspace]:
     personal_query = (
         select(CloudWorkspace)
@@ -166,7 +176,6 @@ async def list_exposed_cloud_workspaces_for_user(
         .where(
             CloudWorkspace.owner_scope == "personal",
             CloudWorkspace.owner_user_id == user_id,
-            CloudWorkspace.archived_at.is_(None),
             CloudWorkspaceExposure.owner_scope == "personal",
             CloudWorkspaceExposure.owner_user_id == user_id,
             CloudWorkspaceExposure.archived_at.is_(None),
@@ -174,6 +183,7 @@ async def list_exposed_cloud_workspaces_for_user(
         )
         .order_by(CloudWorkspace.updated_at.desc())
     )
+    personal_query = _apply_workspace_lifecycle_filter(personal_query, lifecycle)
     if organization_id is not None:
         personal_rows: list[CloudWorkspace] = []
     else:
@@ -193,7 +203,6 @@ async def list_exposed_cloud_workspaces_for_user(
             CloudWorkspace.owner_scope == "organization",
             OrganizationMembership.user_id == user_id,
             OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-            CloudWorkspace.archived_at.is_(None),
             CloudWorkspaceExposure.owner_scope == "organization",
             CloudWorkspaceExposure.archived_at.is_(None),
             CloudWorkspaceExposure.status == "active",
@@ -209,6 +218,7 @@ async def list_exposed_cloud_workspaces_for_user(
         )
         .order_by(CloudWorkspace.updated_at.desc())
     )
+    organization_query = _apply_workspace_lifecycle_filter(organization_query, lifecycle)
     if organization_id is not None:
         organization_query = organization_query.where(
             CloudWorkspace.organization_id == organization_id,
@@ -225,49 +235,42 @@ async def list_unclaimed_organization_workspaces(
     db: AsyncSession,
     *,
     organization_id: UUID,
+    lifecycle: CloudWorkspaceLifecycle = "active",
 ) -> list[CloudWorkspace]:
-    return list(
-        (
-            await db.execute(
-                select(CloudWorkspace)
-                .join(
-                    CloudWorkspaceExposure,
-                    CloudWorkspaceExposure.cloud_workspace_id == CloudWorkspace.id,
-                )
-                .where(
-                    CloudWorkspace.owner_scope == "organization",
-                    CloudWorkspace.organization_id == organization_id,
-                    CloudWorkspaceExposure.visibility == "shared_unclaimed",
-                    CloudWorkspace.archived_at.is_(None),
-                    CloudWorkspaceExposure.archived_at.is_(None),
-                )
-                .order_by(CloudWorkspace.created_at.desc())
-            )
+    statement = (
+        select(CloudWorkspace)
+        .join(
+            CloudWorkspaceExposure,
+            CloudWorkspaceExposure.cloud_workspace_id == CloudWorkspace.id,
         )
-        .scalars()
-        .all()
+        .where(
+            CloudWorkspace.owner_scope == "organization",
+            CloudWorkspace.organization_id == organization_id,
+            CloudWorkspaceExposure.visibility == "shared_unclaimed",
+            CloudWorkspaceExposure.archived_at.is_(None),
+        )
+        .order_by(CloudWorkspace.created_at.desc())
     )
+    statement = _apply_workspace_lifecycle_filter(statement, lifecycle)
+    return list((await db.execute(statement)).scalars().all())
 
 
 async def list_organization_workspaces_for_admin_audit(
     db: AsyncSession,
     *,
     organization_id: UUID,
+    lifecycle: CloudWorkspaceLifecycle = "all",
 ) -> list[CloudWorkspace]:
-    return list(
-        (
-            await db.execute(
-                select(CloudWorkspace)
-                .where(
-                    CloudWorkspace.owner_scope == "organization",
-                    CloudWorkspace.organization_id == organization_id,
-                )
-                .order_by(CloudWorkspace.updated_at.desc())
-            )
+    statement = (
+        select(CloudWorkspace)
+        .where(
+            CloudWorkspace.owner_scope == "organization",
+            CloudWorkspace.organization_id == organization_id,
         )
-        .scalars()
-        .all()
+        .order_by(CloudWorkspace.updated_at.desc())
     )
+    statement = _apply_workspace_lifecycle_filter(statement, lifecycle)
+    return list((await db.execute(statement)).scalars().all())
 
 
 async def get_cloud_workspace_for_user(
@@ -565,14 +568,90 @@ async def archive_cloud_workspace_record(
     workspace: CloudWorkspace,
 ) -> CloudWorkspace:
     now = utcnow()
+    was_archived = workspace.archived_at is not None
     workspace.archive_requested_at = workspace.archive_requested_at or now
     workspace.archived_at = workspace.archived_at or now
     workspace.status = CloudWorkspaceStatus.archived.value
     workspace.status_detail = "Archived"
-    workspace.cleanup_state = CloudWorkspaceCleanupState.pending.value
+    if not was_archived or workspace.cleanup_state == CloudWorkspaceCleanupState.none.value:
+        workspace.cleanup_state = (
+            CloudWorkspaceCleanupState.pending.value
+            if workspace.target_id is not None and workspace.anyharness_workspace_id
+            else CloudWorkspaceCleanupState.complete.value
+        )
     workspace.updated_at = now
     await db.flush()
     return workspace
+
+
+async def restore_cloud_workspace_record(
+    db: AsyncSession,
+    *,
+    workspace: CloudWorkspace,
+) -> CloudWorkspace:
+    now = utcnow()
+    workspace.archive_requested_at = None
+    workspace.archived_at = None
+    workspace.cleanup_state = CloudWorkspaceCleanupState.none.value
+    workspace.cleanup_last_error = None
+    workspace.status = (
+        CloudWorkspaceStatus.ready.value
+        if workspace.anyharness_workspace_id
+        else CloudWorkspaceStatus.needs_rematerialization.value
+    )
+    workspace.status_detail = (
+        "Ready" if workspace.status == CloudWorkspaceStatus.ready.value else "Restore pending"
+    )
+    workspace.updated_at = now
+    await db.flush()
+    return workspace
+
+
+async def update_cloud_workspace_materialization_state(
+    db: AsyncSession,
+    *,
+    workspace: CloudWorkspace,
+    anyharness_workspace_id: str | None | object = _UNSET,
+    worktree_path: str | None | object = _UNSET,
+    status: CloudWorkspaceStatus | str | object = _UNSET,
+    status_detail: str | None | object = _UNSET,
+    cleanup_state: CloudWorkspaceCleanupState | str | object = _UNSET,
+    cleanup_last_error: str | None | object = _UNSET,
+    materialized_slot_generation: int | None | object = _UNSET,
+) -> CloudWorkspace:
+    now = utcnow()
+    if anyharness_workspace_id is not _UNSET:
+        workspace.anyharness_workspace_id = anyharness_workspace_id
+        if anyharness_workspace_id:
+            workspace.ready_at = workspace.ready_at or now
+    if worktree_path is not _UNSET:
+        workspace.worktree_path = worktree_path
+    if status is not _UNSET:
+        workspace.status = status.value if hasattr(status, "value") else str(status)
+    if status_detail is not _UNSET:
+        workspace.status_detail = status_detail
+    if cleanup_state is not _UNSET:
+        workspace.cleanup_state = (
+            cleanup_state.value if hasattr(cleanup_state, "value") else str(cleanup_state)
+        )
+    if cleanup_last_error is not _UNSET:
+        workspace.cleanup_last_error = (
+            cleanup_last_error[:2000] if isinstance(cleanup_last_error, str) else None
+        )
+    if materialized_slot_generation is not _UNSET:
+        workspace.materialized_slot_generation = materialized_slot_generation
+    workspace.updated_at = now
+    await db.flush()
+    return workspace
+
+
+async def purge_cloud_workspace_record(
+    db: AsyncSession,
+    *,
+    workspace: CloudWorkspace,
+) -> None:
+    await db.delete(workspace)
+    await db.flush()
 
 
 async def archive_cloud_workspace_record_by_id(

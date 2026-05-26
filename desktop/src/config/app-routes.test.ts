@@ -10,6 +10,10 @@ describe("app routes", () => {
     expect(APP_ROUTES.workspaces).toBe("/workspaces");
   });
 
+  it("registers the archived workspace inventory route", () => {
+    expect(APP_ROUTES.archivedWorkspaces).toBe("/workspaces/archived");
+  });
+
   it("does not keep a named constant for the retired powers route", () => {
     expect(APP_ROUTES).not.toHaveProperty("powers");
     expect(LEGACY_APP_ROUTES.powers).toBe("/powers");

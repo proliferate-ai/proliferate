@@ -1,4 +1,5 @@
 import {
+  Archive,
   Blocks,
   CalendarClock,
   Grid,
@@ -15,6 +16,7 @@ interface SidebarPrimaryNavigationProps {
   pluginsActive: boolean;
   automationsActive: boolean;
   workspacesActive: boolean;
+  archivedActive: boolean;
   supportActive: boolean;
   shortcutRevealVisible: boolean;
   shortcutLabels: {
@@ -27,6 +29,7 @@ interface SidebarPrimaryNavigationProps {
   onGoPlugins: () => void;
   onGoAutomations: () => void;
   onGoWorkspaces: () => void;
+  onGoArchived: () => void;
   onOpenSupport: () => void;
 }
 
@@ -35,6 +38,7 @@ export function SidebarPrimaryNavigation({
   pluginsActive,
   automationsActive,
   workspacesActive,
+  archivedActive,
   supportActive,
   shortcutRevealVisible,
   shortcutLabels,
@@ -42,6 +46,7 @@ export function SidebarPrimaryNavigation({
   onGoPlugins,
   onGoAutomations,
   onGoWorkspaces,
+  onGoArchived,
   onOpenSupport,
 }: SidebarPrimaryNavigationProps) {
   const navItems: SidebarNavItemView[] = [
@@ -64,6 +69,12 @@ export function SidebarPrimaryNavigation({
       active: workspacesActive,
       icon: <Grid className="size-4" />,
       label: "Workspaces",
+    },
+    {
+      id: "archived",
+      active: archivedActive,
+      icon: <Archive className="size-4" />,
+      label: "Archived",
     },
     {
       id: "automations",
@@ -91,6 +102,9 @@ export function SidebarPrimaryNavigation({
         break;
       case "workspaces":
         onGoWorkspaces();
+        break;
+      case "archived":
+        onGoArchived();
         break;
       case "automations":
         onGoAutomations();

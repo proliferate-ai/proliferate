@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
+import type { CloudWorkspaceLifecycleFilter, CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
 import {
   buildCloudWorkspaceInventoryItems,
@@ -25,10 +25,25 @@ import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_WORKSPACES: readonly CloudWorkspaceSummary[] = [];
 
-export function CloudWorkspacesScreen() {
-  const workspaces = useCloudExposedWorkspaces();
+interface CloudWorkspacesScreenProps {
+  lifecycle?: CloudWorkspaceLifecycleFilter;
+  title?: string;
+  emptyTitle?: string;
+  emptyDescription?: string;
+}
+
+export function CloudWorkspacesScreen({
+  lifecycle = "active",
+  title = "Workspaces",
+  emptyTitle,
+  emptyDescription,
+}: CloudWorkspacesScreenProps = {}) {
+  const workspaces = useCloudExposedWorkspaces({ lifecycle });
   const { openExternal } = useTauriShellActions();
-  const { refreshCloudWorkspace } = useCloudWorkspaceActions();
+  const {
+    refreshCloudWorkspace,
+    restoreCloudWorkspace,
+  } = useCloudWorkspaceActions();
   const { selectWorkspaceFromSurface } = useWorkspaceNavigationWorkflow();
   const showToast = useToastStore((state) => state.show);
   const [filterId, setFilterId] = useState<WorkspaceInventoryFilterId>("all");
@@ -84,7 +99,9 @@ export function CloudWorkspacesScreen() {
 
     void (async () => {
       try {
-        const workspace = await refreshCloudWorkspace(workspaceId);
+        const workspace = lifecycle === "archived"
+          ? await restoreCloudWorkspace(workspaceId)
+          : await refreshCloudWorkspace(workspaceId);
         selectWorkspaceFromSurface(
           cloudWorkspaceSyntheticId(workspace.id),
           "workspaces",
@@ -97,6 +114,8 @@ export function CloudWorkspacesScreen() {
   }, [
     openExternal,
     refreshCloudWorkspace,
+    restoreCloudWorkspace,
+    lifecycle,
     selectWorkspaceFromSurface,
     showToast,
     workspaceItems,
@@ -105,6 +124,7 @@ export function CloudWorkspacesScreen() {
   return (
     <MainSidebarPageShell>
       <WorkspacesSurface
+        title={title}
         groups={groups}
         filterOptions={filterOptions}
         selectedFilterId={filterId}
@@ -117,10 +137,14 @@ export function CloudWorkspacesScreen() {
         backgroundRefreshFailed={backgroundRefreshFailed}
         isRefreshing={workspaces.isFetching}
         externalOpenWorkspaceIds={externalOpenWorkspaceIds}
-        emptyTitle={filterId === "all" ? "No cloud-visible workspaces" : "No matching workspaces"}
+        emptyTitle={
+          filterId === "all"
+            ? emptyTitle ?? "No cloud-visible workspaces"
+            : "No matching workspaces"
+        }
         emptyDescription={
           filterId === "all"
-            ? "Workspaces from Desktop, Web, Slack, or automations appear here."
+            ? emptyDescription ?? "Workspaces from Desktop, Web, Slack, or automations appear here."
             : "Try a different filter."
         }
         onFilterChange={(nextFilterId) => {

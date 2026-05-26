@@ -1,5 +1,4 @@
 import {
-  Archive,
   Check,
   CollapseAll,
   ExpandAll,
@@ -27,10 +26,8 @@ interface SidebarRepositoriesHeaderProps {
   hasRepoGroups: boolean;
   allRepoGroupsCollapsed: boolean;
   filtersActive: boolean;
-  showArchived: boolean;
   workspaceTypes: SidebarWorkspaceVariant[];
   onToggleAllRepoGroups: () => void;
-  onToggleShowArchived: () => void;
   onToggleWorkspaceType: (variant: SidebarWorkspaceVariant) => void;
   onAddRepo: () => void;
 }
@@ -39,10 +36,8 @@ export function SidebarRepositoriesHeader({
   hasRepoGroups,
   allRepoGroupsCollapsed,
   filtersActive,
-  showArchived,
   workspaceTypes,
   onToggleAllRepoGroups,
-  onToggleShowArchived,
   onToggleWorkspaceType,
   onAddRepo,
 }: SidebarRepositoriesHeaderProps) {
@@ -77,14 +72,6 @@ export function SidebarRepositoriesHeader({
           >
             {() => (
               <>
-                <PopoverMenuItem
-                  onClick={onToggleShowArchived}
-                  variant="sidebar"
-                  icon={<Archive className="size-3.5 text-muted-foreground" />}
-                  label="Archived workspaces"
-                  trailing={showArchived ? <Check className="size-3.5 text-foreground/60" /> : null}
-                />
-                <div className="my-1 h-px bg-border" />
                 {SIDEBAR_WORKSPACE_TYPE_OPTIONS.map(({ label, variant }) => {
                   const selected = workspaceTypes.includes(variant);
                   const disabled = selected && workspaceTypes.length === 1;

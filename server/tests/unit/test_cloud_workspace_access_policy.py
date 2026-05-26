@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from proliferate.auth.authorization import PolicyAllowed, PolicyDenied
 from proliferate.server.cloud.claims.domain.policy import (
+    can_archive_cloud_workspace,
     can_claim_cloud_workspace,
     can_interact_cloud_workspace,
     can_request_direct_attach_token,
@@ -130,6 +131,42 @@ def test_claimed_workspace_interaction_is_claimer_only() -> None:
     assert isinstance(nonclaimer_interact, PolicyDenied)
     assert nonclaimer_interact.code == "claim_held_by_other"
     assert nonclaimer_interact.status_code == 403
+
+
+def test_archive_policy_allows_repeated_archive_for_owner() -> None:
+    user_id = uuid4()
+
+    verdict = can_archive_cloud_workspace(
+        actor_user_id=user_id,
+        owner_scope="personal",
+        owner_user_id=user_id,
+        organization_id=None,
+        exposure_visibility=None,
+        exposure_claimed_by_user_id=None,
+        workspace_archived=True,
+        has_active_organization_membership=False,
+        is_organization_admin=False,
+    )
+
+    assert isinstance(verdict, PolicyAllowed)
+
+
+def test_archive_policy_allows_repeated_archive_for_claim_owner() -> None:
+    claimer_id = uuid4()
+
+    verdict = can_archive_cloud_workspace(
+        actor_user_id=claimer_id,
+        owner_scope="organization",
+        owner_user_id=None,
+        organization_id=uuid4(),
+        exposure_visibility="claimed",
+        exposure_claimed_by_user_id=claimer_id,
+        workspace_archived=True,
+        has_active_organization_membership=True,
+        is_organization_admin=False,
+    )
+
+    assert isinstance(verdict, PolicyAllowed)
 
 
 def test_can_claim_requires_shared_unclaimed_membership_and_no_existing_claim() -> None:

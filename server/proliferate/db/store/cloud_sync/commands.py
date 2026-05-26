@@ -10,7 +10,12 @@ from uuid import UUID
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
+from proliferate.constants.cloud import (
+    CloudCommandKind,
+    CloudCommandStatus,
+    CloudWorkspaceCleanupState,
+    CloudWorkspaceStatus,
+)
 from proliferate.db.models.cloud.agent_auth import SandboxProfile, SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
@@ -955,6 +960,16 @@ async def record_command_result(
             slot_generation=row.leased_slot_generation,
             now=now,
         )
+    if row.kind == CloudCommandKind.prune_workspace_worktree.value and effective_status in {
+        CloudCommandStatus.accepted.value,
+        CloudCommandStatus.accepted_but_queued.value,
+    }:
+        await _record_pruned_cloud_workspace(
+            db,
+            row=row,
+            result_json=result_json,
+            now=now,
+        )
     if row.kind == CloudCommandKind.start_session.value and effective_status in {
         CloudCommandStatus.accepted.value,
         CloudCommandStatus.accepted_but_queued.value,
@@ -1113,6 +1128,170 @@ async def _record_materialized_cloud_workspace(
                 exposure.revision += 1
                 exposure.updated_at = now
     await db.flush()
+
+
+async def _record_pruned_cloud_workspace(
+    db: AsyncSession,
+    *,
+    row: CloudCommand,
+    result_json: str | None,
+    now: datetime,
+) -> None:
+    if row.cloud_workspace_id is None:
+        _mark_command_rejected(
+            row,
+            code="cloud_workspace_required",
+            message="prune_workspace_worktree command is missing Cloud workspace.",
+            now=now,
+        )
+        await db.flush()
+        return
+    result = _result_dict(result_json)
+    if result is None:
+        _mark_command_rejected(
+            row,
+            code="invalid_prune_workspace_result",
+            message="prune_workspace_worktree result is missing materialization state.",
+            now=now,
+        )
+        await db.flush()
+        return
+    workspace = await db.get(CloudWorkspace, row.cloud_workspace_id)
+    if workspace is None or workspace.target_id != row.target_id:
+        _mark_command_rejected(
+            row,
+            code="cloud_workspace_not_found",
+            message="prune_workspace_worktree result does not match a Cloud workspace.",
+            now=now,
+        )
+        await db.flush()
+        return
+
+    expected_workspace_id = (
+        _result_string(result, "anyharnessWorkspaceId")
+        or _result_body_workspace_id(result)
+        or row.workspace_id
+    )
+    if (
+        expected_workspace_id
+        and workspace.anyharness_workspace_id is not None
+        and workspace.anyharness_workspace_id != expected_workspace_id
+    ):
+        row.status = CloudCommandStatus.superseded.value
+        row.error_code = "stale_materialization"
+        row.error_message = "Prune result does not match the current workspace materialization."
+        row.accepted_at = None
+        row.rejected_at = now
+        row.updated_at = now
+        await db.flush()
+        return
+
+    state = (_result_string(result, "materializationState") or "").lower()
+    cleanup_status = (_result_string(result, "cleanupStatus") or "").lower()
+    cleanup_error = _prune_cleanup_error(result)
+    if state == "dehydrated" or cleanup_status in {"completed", "complete"}:
+        workspace.anyharness_workspace_id = None
+        workspace.worktree_path = None
+        workspace.status = (
+            CloudWorkspaceStatus.archived.value
+            if workspace.archived_at is not None
+            else CloudWorkspaceStatus.needs_rematerialization.value
+        )
+        workspace.status_detail = (
+            "Archived" if workspace.archived_at is not None else "Worktree pruned"
+        )
+        workspace.cleanup_state = CloudWorkspaceCleanupState.complete.value
+        workspace.cleanup_last_error = None
+        workspace.updated_at = now
+        if workspace.target_id is not None:
+            exposure = await _load_active_workspace_exposure(
+                db,
+                target_id=workspace.target_id,
+                cloud_workspace_id=workspace.id,
+            )
+            if exposure is not None and (
+                expected_workspace_id is None
+                or exposure.anyharness_workspace_id == expected_workspace_id
+            ):
+                changed = False
+                if exposure.anyharness_workspace_id is not None:
+                    exposure.anyharness_workspace_id = None
+                    changed = True
+                if exposure.commandable:
+                    exposure.commandable = False
+                    changed = True
+                if changed:
+                    exposure.revision += 1
+                    exposure.updated_at = now
+    elif state == "prune_blocked" or cleanup_status == "blocked":
+        workspace.cleanup_state = CloudWorkspaceCleanupState.blocked.value
+        workspace.cleanup_last_error = cleanup_error
+        workspace.status_detail = "Archive cleanup blocked"
+        workspace.updated_at = now
+    elif state == "prune_failed" or cleanup_status == "failed":
+        workspace.cleanup_state = CloudWorkspaceCleanupState.failed.value
+        workspace.cleanup_last_error = cleanup_error or "Worktree cleanup failed."
+        workspace.status_detail = "Archive cleanup failed"
+        workspace.updated_at = now
+    else:
+        _mark_command_rejected(
+            row,
+            code="invalid_prune_workspace_result",
+            message="prune_workspace_worktree result has an unsupported materialization state.",
+            now=now,
+        )
+    await db.flush()
+
+
+def _mark_command_rejected(
+    row: CloudCommand,
+    *,
+    code: str,
+    message: str,
+    now: datetime,
+) -> None:
+    row.status = CloudCommandStatus.rejected.value
+    row.error_code = code
+    row.error_message = message
+    row.accepted_at = None
+    row.rejected_at = now
+    row.updated_at = now
+
+
+def _result_dict(result_json: str | None) -> dict[str, object] | None:
+    try:
+        result = json.loads(result_json or "{}")
+    except ValueError:
+        return None
+    return result if isinstance(result, dict) else None
+
+
+def _result_string(result: dict[str, object], key: str) -> str | None:
+    value = result.get(key)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
+
+
+def _result_body_workspace_id(result: dict[str, object]) -> str | None:
+    body = result.get("body")
+    if not isinstance(body, dict):
+        return None
+    workspace = body.get("workspace")
+    if not isinstance(workspace, dict):
+        return None
+    value = workspace.get("id")
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _prune_cleanup_error(result: dict[str, object]) -> str | None:
+    message = _result_string(result, "cleanupLastError")
+    if message is not None:
+        return message[:2000]
+    blockers = result.get("blockers")
+    if isinstance(blockers, list) and blockers:
+        return json.dumps({"blockers": blockers}, separators=(",", ":"), sort_keys=True)[:2000]
+    return None
 
 
 async def _record_started_cloud_session_projection(

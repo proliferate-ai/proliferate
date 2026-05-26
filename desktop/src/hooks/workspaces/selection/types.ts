@@ -69,7 +69,7 @@ export interface WorkspaceSelectionDeps {
 }
 
 export type CloudReadinessResult =
-  | { kind: "local" }
+  | { kind: "local"; runtimeWorkspaceId?: string | null }
   | { kind: "cloud-ready"; cloudWorkspaceId: string }
   | { kind: "cloud-pending"; cloudWorkspaceId: string; status: string }
   | { kind: "cloud-missing"; cloudWorkspaceId: string }
@@ -83,4 +83,5 @@ export type ReadyCloudReadinessResult = Extract<
 export interface WorkspaceConnectionResult {
   runtimeUrl: string;
   workspaceConnection: AnyHarnessResolvedConnection;
+  materializedWorkspaceId?: string | null;
 }
