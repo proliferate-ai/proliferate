@@ -124,7 +124,17 @@ async def _resolve_command_workspace(
                 "Workspace is not exposed for Cloud materialization.",
                 status_code=409,
             )
-        if not exposure.commandable:
+        workspace = await cloud_workspaces.get_cloud_workspace_by_id(
+            db,
+            UUID(cloud_workspace_id),
+        )
+        can_rematerialize_pruned_workspace = (
+            workspace is not None
+            and workspace.archived_at is None
+            and workspace.anyharness_workspace_id is None
+            and workspace.status == CloudWorkspaceStatus.needs_rematerialization.value
+        )
+        if not exposure.commandable and not can_rematerialize_pruned_workspace:
             raise CloudApiError(
                 "cloud_command_exposure_not_commandable",
                 "Workspace exposure is read-only.",

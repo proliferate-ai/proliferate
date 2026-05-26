@@ -38,6 +38,32 @@ ACTIVE_SLOT_STATUSES: tuple[str, ...] = (
     "blocked",
 )
 
+WORKSPACE_LIFECYCLE_GUARDED_COMMAND_KINDS: frozenset[str] = frozenset(
+    (
+        CloudCommandKind.start_session.value,
+        CloudCommandKind.send_prompt.value,
+        CloudCommandKind.resolve_interaction.value,
+        CloudCommandKind.update_session_config.value,
+        CloudCommandKind.cancel_turn.value,
+        CloudCommandKind.close_session.value,
+        CloudCommandKind.materialize_workspace.value,
+        CloudCommandKind.backfill_exposed_workspace.value,
+        CloudCommandKind.prune_workspace_worktree.value,
+    )
+)
+
+ARCHIVE_SUPERSEDED_COMMAND_KINDS: frozenset[str] = frozenset(
+    WORKSPACE_LIFECYCLE_GUARDED_COMMAND_KINDS
+    - {
+        CloudCommandKind.prune_workspace_worktree.value,
+    }
+)
+
+SUPERSEDABLE_COMMAND_STATUSES: tuple[str, ...] = (
+    CloudCommandStatus.queued.value,
+    CloudCommandStatus.leased.value,
+)
+
 
 @dataclass(frozen=True)
 class CloudCommandSnapshot:
@@ -299,6 +325,46 @@ async def expire_stale_queued_commands(
     return tuple(_snapshot(row) for row in rows)
 
 
+async def supersede_workspace_commands(
+    db: AsyncSession,
+    *,
+    cloud_workspace_id: UUID,
+    reason_code: str,
+    reason_message: str,
+    command_kinds: frozenset[str] | tuple[str, ...] | None = ARCHIVE_SUPERSEDED_COMMAND_KINDS,
+    now: datetime | None = None,
+) -> tuple[CloudCommandSnapshot, ...]:
+    """Terminally supersede queued/leased commands for a workspace lifecycle change."""
+
+    marked_at = now or utcnow()
+    query = (
+        select(CloudCommand)
+        .where(CloudCommand.cloud_workspace_id == cloud_workspace_id)
+        .where(CloudCommand.status.in_(SUPERSEDABLE_COMMAND_STATUSES))
+    )
+    if command_kinds is not None:
+        query = query.where(CloudCommand.kind.in_(tuple(command_kinds)))
+    rows = list(
+        (
+            await db.execute(
+                query.with_for_update().order_by(
+                    CloudCommand.created_at.asc(), CloudCommand.id.asc()
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for row in rows:
+        row.status = CloudCommandStatus.superseded.value
+        row.error_code = reason_code
+        row.error_message = reason_message
+        row.lease_expires_at = None
+        row.updated_at = marked_at
+    await db.flush()
+    return tuple(_snapshot(row) for row in rows)
+
+
 async def lease_next_command(
     db: AsyncSession,
     *,
@@ -386,6 +452,17 @@ async def lease_next_command(
             row.updated_at = now
             await db.flush()
             continue
+        lifecycle_error = await _workspace_lifecycle_lease_blocker(db, row)
+        if lifecycle_error is not None:
+            status, code, message = lifecycle_error
+            row.status = status
+            row.error_code = code
+            row.error_message = message
+            if status == CloudCommandStatus.rejected.value:
+                row.rejected_at = now
+            row.updated_at = now
+            await db.flush()
+            continue
         exposure_error = await _exposure_lease_blocker(db, row)
         if exposure_error is not None:
             status, code, message = exposure_error
@@ -432,6 +509,37 @@ async def lease_next_command(
         row.updated_at = now
         await db.flush()
         return _snapshot(row)
+    return None
+
+
+async def _workspace_lifecycle_lease_blocker(
+    db: AsyncSession,
+    row: CloudCommand,
+) -> tuple[str, str, str] | None:
+    if row.cloud_workspace_id is None or row.kind not in WORKSPACE_LIFECYCLE_GUARDED_COMMAND_KINDS:
+        return None
+    workspace = await db.get(CloudWorkspace, row.cloud_workspace_id)
+    if workspace is None:
+        return (
+            CloudCommandStatus.superseded.value,
+            "cloud_workspace_missing",
+            "Workspace command was superseded because the Cloud workspace no longer exists.",
+        )
+    if workspace.target_id != row.target_id:
+        return (
+            CloudCommandStatus.superseded.value,
+            "cloud_workspace_target_mismatch",
+            "Workspace command target no longer matches the Cloud workspace.",
+        )
+    if (
+        workspace.archived_at is not None
+        and row.kind != CloudCommandKind.prune_workspace_worktree.value
+    ):
+        return (
+            CloudCommandStatus.superseded.value,
+            "cloud_workspace_archived",
+            "Workspace command was superseded because the Cloud workspace is archived.",
+        )
     return None
 
 
@@ -587,7 +695,14 @@ async def _exposure_lease_blocker(
             f"{row.kind} command does not reference an active exposure.",
         )
     if row.kind == CloudCommandKind.materialize_workspace.value:
-        if not exposure.commandable:
+        workspace = await db.get(CloudWorkspace, row.cloud_workspace_id)
+        can_rematerialize_pruned_workspace = (
+            workspace is not None
+            and workspace.archived_at is None
+            and workspace.anyharness_workspace_id is None
+            and workspace.status == CloudWorkspaceStatus.needs_rematerialization.value
+        )
+        if not exposure.commandable and not can_rematerialize_pruned_workspace:
             return (
                 CloudCommandStatus.rejected.value,
                 "cloud_exposure_not_commandable",
@@ -1089,7 +1204,17 @@ async def _cloud_workspace_matches_command(db: AsyncSession, row: CloudCommand) 
             target_id=row.target_id,
             cloud_workspace_id=workspace.id,
         )
-        return exposure is not None and exposure.status == "active" and exposure.commandable
+        can_rematerialize_pruned_workspace = (
+            row.kind == CloudCommandKind.materialize_workspace.value
+            and workspace.archived_at is None
+            and workspace.anyharness_workspace_id is None
+            and workspace.status == CloudWorkspaceStatus.needs_rematerialization.value
+        )
+        return (
+            exposure is not None
+            and exposure.status == "active"
+            and (exposure.commandable or can_rematerialize_pruned_workspace)
+        )
     return True
 
 
@@ -1123,6 +1248,9 @@ async def _record_materialized_cloud_workspace(
                 changed = True
             if exposure.origin != workspace.origin:
                 exposure.origin = workspace.origin
+                changed = True
+            if workspace.archived_at is None and not exposure.commandable:
+                exposure.commandable = True
                 changed = True
             if changed:
                 exposure.revision += 1

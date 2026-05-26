@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
@@ -10,6 +10,7 @@ import {
   startCloudWorkspace,
   updateCloudWorkspaceBranch,
 } from "@proliferate/cloud-sdk/client/workspaces";
+import { invalidateCloudWorkspaceLifecycleQueries } from "@proliferate/cloud-sdk-react/hooks/workspaces";
 import { autoSyncDetectedAgentAuthCredentialsIfNeeded } from "@/lib/access/cloud/agent-auth-recovery";
 import { syncLocalAgentAuthCredentialToCloud } from "@/lib/access/cloud/agent-auth-sync";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
@@ -44,6 +45,7 @@ function resolveCloudWorkspaceRuntimeId(workspaceId: string): string {
 }
 
 export function useCloudWorkspaceActions() {
+  const queryClient = useQueryClient();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
@@ -70,6 +72,7 @@ export function useCloudWorkspaceActions() {
     },
     onSuccess: async (workspace) => {
       upsertCloudWorkspace(workspace);
+      invalidateCloudWorkspaceLifecycleQueries(queryClient, workspace.id);
       await invalidateWorkspaceCollections();
     },
   });
@@ -186,6 +189,7 @@ export function useCloudWorkspaceActions() {
     },
     onSuccess: async (workspace) => {
       upsertCloudWorkspace(workspace);
+      invalidateCloudWorkspaceLifecycleQueries(queryClient, workspace.id);
       await invalidateWorkspaceCollections();
     },
     onError: (error) => {

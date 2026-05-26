@@ -975,39 +975,35 @@ async fn process_prune_workspace_worktree_command(
                         response = retry_response;
                     }
                     Err(error) => {
-                        return report_command_result(
+                        return report_prune_failed_and_command_result(
                             cloud,
                             identity,
                             store,
-                            &command.command_id,
-                            &command_result_request(
-                                &command,
-                                "failed_delivery",
-                                Some("anyharness_retire_cleanup_retry_failed".to_string()),
-                                Some(error.to_string()),
-                                None,
-                            ),
+                            &command,
+                            &cloud_workspace_id,
+                            &workspace_id,
+                            Some("anyharness_retire_cleanup_retry_failed".to_string()),
+                            Some(error.to_string()),
+                            None,
                         )
                         .await;
                     }
                 }
             }
             if !response.is_success() {
-                return report_command_result(
+                return report_prune_failed_and_command_result(
                     cloud,
                     identity,
                     store,
-                    &command.command_id,
-                    &command_result_request(
-                        &command,
-                        "failed_delivery",
-                        Some("anyharness_retire_failed".to_string()),
-                        Some(format!("AnyHarness returned HTTP {}", response.status)),
-                        Some(json!({
-                            "anyharnessStatusCode": response.status.as_u16(),
-                            "body": response.body,
-                        })),
-                    ),
+                    &command,
+                    &cloud_workspace_id,
+                    &workspace_id,
+                    Some("anyharness_retire_failed".to_string()),
+                    Some(format!("AnyHarness returned HTTP {}", response.status)),
+                    Some(json!({
+                        "anyharnessStatusCode": response.status.as_u16(),
+                        "body": response.body,
+                    })),
                 )
                 .await;
             }
@@ -1093,6 +1089,20 @@ async fn process_prune_workspace_worktree_command(
             None,
         ),
     };
+    if result.status == "failed_delivery" {
+        report_materialization_state(
+            cloud,
+            identity,
+            &cloud_workspace_id,
+            Some(&workspace_id),
+            "prune_failed",
+            Some("failed"),
+            result.error_message.as_deref(),
+            Vec::new(),
+            None,
+        )
+        .await;
+    }
     report_command_result(cloud, identity, store, &command.command_id, &result).await
 }
 
@@ -1130,6 +1140,39 @@ async fn report_materialization_state(
             cloud_workspace_id, state, "failed to report materialization state"
         );
     }
+}
+
+async fn report_prune_failed_and_command_result(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    store: &WorkerStore,
+    command: &CloudCommandEnvelope,
+    cloud_workspace_id: &str,
+    workspace_id: &str,
+    error_code: Option<String>,
+    error_message: Option<String>,
+    result: Option<Value>,
+) -> Result<(), WorkerError> {
+    report_materialization_state(
+        cloud,
+        identity,
+        cloud_workspace_id,
+        Some(workspace_id),
+        "prune_failed",
+        Some("failed"),
+        error_message.as_deref(),
+        Vec::new(),
+        None,
+    )
+    .await;
+    let request = command_result_request(
+        command,
+        "failed_delivery",
+        error_code,
+        error_message,
+        result,
+    );
+    report_command_result(cloud, identity, store, &command.command_id, &request).await
 }
 
 fn worktree_path_from_retire_response(body: &Value) -> Option<String> {

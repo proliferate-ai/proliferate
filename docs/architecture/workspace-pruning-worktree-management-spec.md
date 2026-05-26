@@ -816,10 +816,16 @@ GET    /v1/cloud/workspaces?lifecycle=active|archived|all
 POST   /v1/cloud/workspaces/{workspace_id}/archive
 POST   /v1/cloud/workspaces/{workspace_id}/restore
 POST   /v1/cloud/workspaces/{workspace_id}/purge
+POST   /v1/cloud/worker/materialization-reports
+```
+
+Future materialization APIs, after the identity-preserving hydrate contract is
+implemented:
+
+```text
 POST   /v1/cloud/workspaces/{workspace_id}/materializations/{id}/prune
 POST   /v1/cloud/workspaces/{workspace_id}/materializations/{id}/hydrate
 POST   /v1/cloud/workspaces/{workspace_id}/materializations/{id}/clean-caches
-POST   /v1/cloud/worker/materialization-reports
 ```
 
 API requirements:
@@ -1199,18 +1205,15 @@ Always:
 
 Automated tests:
 
-- Cloud workspace service unit tests for active/archived/deleted lifecycle,
-  restore conflicts, idempotent archive/restore/purge, and compatibility
-  `archived_at` behavior.
-- Cloud materialization service tests for state transitions, stale generation
-  reports, target offline, command expiry, and cleanup blocker persistence.
-- API/SDK tests for response shape and query invalidation.
-- Worker command/report tests for supported command kinds and unknown command
-  rejection.
-- AnyHarness tests proving active dehydration does not use retired-workspace
-  mutation-blocking semantics.
-- Dirty-work fixture proving auto-prune and archive cleanup preserve user work
-  and surface blockers.
+- Implemented V1 tests cover Cloud active/archived lifecycle, restore
+  conflicts, archive/purge command superseding, response lifecycle fields,
+  Desktop archive/restore query invalidation, worker prune command reporting,
+  and AnyHarness retire cleanup safety.
+- Follow-up materialization tests must cover stale generation reports, target
+  offline transitions, command expiry, cache cleanup, and identity-preserving
+  hydrate once those contracts move out of the future-materialization phase.
+- Dirty-work fixtures must continue proving archive cleanup preserves user work
+  and surfaces blockers.
 
 Manual profile QA:
 
@@ -1225,10 +1228,10 @@ Manual profile QA:
   explains the blocker.
 - Restore an archived workspace and confirm the same Cloud workspace id/history
   returns to Active.
-- Select a dehydrated workspace and confirm transcript loads without checkout
-  hydration until a file/terminal/prompt action.
-- Send a prompt while dehydrated and confirm the prompt is visibly queued during
-  hydration.
+- Future hydrate QA: select a dehydrated active workspace and confirm transcript
+  loads without checkout hydration until a file/terminal/prompt action.
+- Future hydrate QA: send a prompt while dehydrated and confirm the prompt is
+  visibly queued during hydration.
 
 ## Implementation Plan
 

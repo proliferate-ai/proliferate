@@ -12,10 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.cloud import (
     CLOUD_WORKER_TOKEN_DOMAIN,
     CloudCommandKind,
+    CloudCommandStatus,
     CloudWorkspaceStatus,
 )
 from proliferate.db.models.cloud.agent_auth import SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
+from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
 from proliferate.db.models.cloud.sync import CloudPendingInteraction
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
@@ -679,6 +681,192 @@ class TestCloudCommandsApi:
         assert exposure is not None
         assert exposure.anyharness_workspace_id is None
         assert exposure.commandable is False
+
+    @pytest.mark.asyncio
+    async def test_archive_supersedes_pending_workspace_commands(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-archive-supersede",
+        )
+        target_id, worker_headers = await _create_enrolled_target(
+            client,
+            db_session,
+            auth,
+            suffix="archive-supersede",
+        )
+        cloud_workspace_id = await _create_ready_cloud_workspace(
+            db_session,
+            auth,
+            target_id=target_id,
+            anyharness_workspace_id="workspace-archive-supersede",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=UUID(target_id),
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-archive-supersede",
+        )
+        await db_session.commit()
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "archive-supersedes-start-session",
+                "targetId": target_id,
+                "workspaceId": cloud_workspace_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "kind": CloudCommandKind.start_session.value,
+                "payload": {
+                    "agentKind": "codex",
+                },
+            },
+        )
+        assert created.status_code == 200, created.text
+        command_id = created.json()["commandId"]
+
+        archived = await client.post(
+            f"/v1/cloud/workspaces/{cloud_workspace_id}/archive",
+            headers=auth.headers,
+        )
+        assert archived.status_code == 200, archived.text
+        assert archived.json()["productLifecycle"] == "archived"
+
+        status = await client.get(
+            f"/v1/cloud/commands/{command_id}",
+            headers=auth.headers,
+        )
+        assert status.status_code == 200
+        payload = status.json()
+        assert payload["status"] == CloudCommandStatus.superseded.value
+        assert payload["errorCode"] == "cloud_workspace_archived"
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": [CloudCommandKind.start_session.value],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert lease.status_code == 200
+        assert lease.json()["command"] is None
+
+    @pytest.mark.asyncio
+    async def test_managed_materialize_restores_commandable_exposure_after_prune(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-rematerialize",
+        )
+        target_id, worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="rematerialize",
+        )
+        target_uuid = UUID(target_id)
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="rematerialize",
+        )
+        workspace = await cloud_workspaces.get_cloud_workspace_by_id(
+            db_session,
+            UUID(cloud_workspace_id),
+        )
+        assert workspace is not None
+        workspace.anyharness_workspace_id = None
+        workspace.status = CloudWorkspaceStatus.needs_rematerialization.value
+        exposure = (
+            await db_session.execute(
+                select(CloudWorkspaceExposure).where(
+                    CloudWorkspaceExposure.target_id == target_uuid,
+                    CloudWorkspaceExposure.cloud_workspace_id == UUID(cloud_workspace_id),
+                    CloudWorkspaceExposure.archived_at.is_(None),
+                )
+            )
+        ).scalar_one()
+        assert exposure is not None
+        exposure.anyharness_workspace_id = None
+        exposure.commandable = False
+        await db_session.commit()
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "rematerialize-pruned-workspace",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "kind": CloudCommandKind.materialize_workspace.value,
+                "payload": {
+                    "mode": "worktree",
+                    "repoRootId": "repo-root-1",
+                    "targetPath": "/workspace/proliferate-rematerialized",
+                    "newBranchName": "command-rematerialize",
+                    "baseBranch": "main",
+                },
+            },
+        )
+        assert created.status_code == 200, created.text
+        command_id = created.json()["commandId"]
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": [CloudCommandKind.materialize_workspace.value],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert lease.status_code == 200
+        leased = lease.json()["command"]
+        assert leased["commandId"] == command_id
+
+        accepted = await client.post(
+            f"/v1/cloud/worker/commands/{command_id}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": leased["leaseId"],
+                "slotGeneration": leased["slotGeneration"],
+                "cloudWorkspaceId": cloud_workspace_id,
+                "status": "accepted",
+                "result": {
+                    "mode": "worktree",
+                    "anyharnessWorkspaceId": "anyharness-managed-rematerialized",
+                    "repoRootId": "repo-root-1",
+                    "path": "/workspace/proliferate-rematerialized",
+                    "kind": "worktree",
+                    "currentBranch": "command-rematerialize",
+                    "originalBranch": "main",
+                },
+            },
+        )
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["status"] == "accepted"
+
+        db_session.expire_all()
+        exposure = await exposures_store.get_active_workspace_exposure(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=UUID(cloud_workspace_id),
+        )
+        assert exposure is not None
+        assert exposure.anyharness_workspace_id == "anyharness-managed-rematerialized"
+        assert exposure.commandable is True
 
     @pytest.mark.asyncio
     async def test_start_session_command_requires_workspace_not_session(

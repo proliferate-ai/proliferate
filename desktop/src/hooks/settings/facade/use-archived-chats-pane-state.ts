@@ -98,7 +98,11 @@ function archivedChatRowView(
 ): ArchivedChatRowView {
   const materialization = workspace.cloudWorkspace?.primaryMaterialization ?? null;
   const cleanupStatus = materialization?.cleanupStatus ?? "idle";
-  const cleanupLabel = cleanupStatusLabel(cleanupStatus, materialization?.cleanupLastError);
+  const cleanupLabel = cleanupStatusLabel(
+    cleanupStatus,
+    materialization?.cleanupLastError,
+    materialization?.blockers,
+  );
   return {
     id: workspace.id,
     title: workspace.displayName,
@@ -146,12 +150,21 @@ function locationLabelForWorkspace(workspace: LogicalWorkspace): string {
   }
 }
 
-function cleanupStatusLabel(status: string, lastError: string | null | undefined): string {
+function cleanupStatusLabel(
+  status: string,
+  lastError: string | null | undefined,
+  blockers: readonly string[] | null | undefined,
+): string {
+  const firstBlocker = blockers?.find((blocker) => blocker.trim().length > 0);
   if (status === "blocked") {
-    return lastError ? `Cleanup blocked: ${lastError}` : "Cleanup blocked";
+    return firstBlocker
+      ? `Cleanup needs attention: ${firstBlocker}`
+      : lastError ? `Cleanup blocked: ${lastError}` : "Cleanup blocked";
   }
   if (status === "failed") {
-    return lastError ? `Cleanup failed: ${lastError}` : "Cleanup failed";
+    return firstBlocker
+      ? `Cleanup needs attention: ${firstBlocker}`
+      : lastError ? `Cleanup failed: ${lastError}` : "Cleanup failed";
   }
   if (status === "pruning") {
     return "Cleaning up worktree";

@@ -58,6 +58,7 @@ from proliferate.db.store.cloud_runtime_environments import (
     load_runtime_environment_for_workspace,
 )
 from proliferate.db.store.cloud_sync import backfill as backfill_store
+from proliferate.db.store.cloud_sync import commands as command_store
 from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -1698,6 +1699,15 @@ async def archive_cloud_workspace(
     workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
     prune_error = None
     if workspace.archived_at is None:
+        await command_store.supersede_workspace_commands(
+            db,
+            cloud_workspace_id=workspace.id,
+            reason_code="cloud_workspace_archived",
+            reason_message=(
+                "Workspace command was superseded because the Cloud workspace was archived."
+            ),
+        )
+        await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_archived")
         prune_error = await _enqueue_archive_prune_command(
             db, user_id=user_id, workspace=workspace
         )
@@ -1789,6 +1799,13 @@ async def purge_cloud_workspace(
             status_code=409,
         )
     await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_purged")
+    await command_store.supersede_workspace_commands(
+        db,
+        cloud_workspace_id=workspace.id,
+        reason_code="cloud_workspace_purged",
+        reason_message="Workspace command was superseded because the Cloud workspace was purged.",
+        command_kinds=None,
+    )
     await purge_cloud_workspace_record(db, workspace=workspace)
     await db.commit()
 

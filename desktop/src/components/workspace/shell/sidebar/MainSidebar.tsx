@@ -202,12 +202,10 @@ export const MainSidebar = memo(function MainSidebar() {
       }
       return;
     }
+    if (shouldLeaveWorkspace) {
+      actions.handleGoHome();
+    }
     void archiveCloudWorkspaceRequest(cloudWorkspaceId)
-      .then(() => {
-        if (shouldLeaveWorkspace) {
-          actions.handleGoHome();
-        }
-      })
       .catch((error) => {
         const message = error instanceof Error ? error.message : "Failed to archive workspace.";
         showToast(message);
