@@ -20,6 +20,8 @@ export type SessionControlIconKey =
   | "chat"
   | "claude"
   | "edit"
+  | "gemini"
+  | "openai"
   | "opencodeBuild"
   | "opencodePlan"
   | "plan"

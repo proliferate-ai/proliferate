@@ -94,6 +94,7 @@ export interface ProductSidebarProps {
   brand?: ReactNode;
   title?: string;
   showHeader?: boolean;
+  headerLeadingAction?: SidebarActionView | null;
   headerAction?: SidebarActionView | null;
   navItems: SidebarNavItemView[];
   workspaceGroups: SidebarWorkspaceGroupView[];
@@ -117,6 +118,7 @@ export function ProductSidebar({
   brand,
   title,
   showHeader,
+  headerLeadingAction = null,
   headerAction = null,
   navItems,
   workspaceGroups,
@@ -151,6 +153,7 @@ export function ProductSidebar({
         <ProductSidebarHeader
           brand={brand}
           title={title}
+          headerLeadingAction={headerLeadingAction}
           headerAction={headerAction}
           onAction={onAction}
         />
@@ -307,16 +310,26 @@ export function ProductSidebarPrimaryNavigation({
 function ProductSidebarHeader({
   brand,
   title,
+  headerLeadingAction,
   headerAction,
   onAction,
 }: {
   brand?: ReactNode;
   title?: string;
+  headerLeadingAction?: SidebarActionView | null;
   headerAction?: SidebarActionView | null;
   onAction: (event: SidebarActionEvent) => void;
 }) {
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 px-3">
+    <div className="flex h-12 shrink-0 items-center gap-2 px-3">
+      {headerLeadingAction ? (
+        <SidebarActionIconButton
+          action={headerLeadingAction}
+          scope="header"
+          onAction={onAction}
+          alwaysVisible
+        />
+      ) : null}
       {brand ? (
         <div className="flex size-6 shrink-0 items-center justify-center rounded-md text-sidebar-foreground">
           {brand}

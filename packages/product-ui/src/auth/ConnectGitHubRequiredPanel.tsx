@@ -34,6 +34,7 @@ export function ConnectGitHubRequiredPanel({
         icon={actionIcon}
         loading={loading}
         disabled={loading}
+        variant="primary"
         onClick={onConnect}
       >
         {actionLabel}

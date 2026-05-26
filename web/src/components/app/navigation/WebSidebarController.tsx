@@ -10,6 +10,7 @@ import {
   ListFilter,
   LoaderCircle,
   MessageSquare,
+  PanelLeftClose,
   Plus,
   Settings,
   Smartphone,
@@ -73,7 +74,11 @@ const RUNTIME_FILTERS: readonly { id: RuntimeFilter; label: string }[] = [
   { id: "unknown", label: "Unknown" },
 ];
 
-export function WebSidebarController() {
+export function WebSidebarController({
+  onToggleSidebar,
+}: {
+  onToggleSidebar?: () => void;
+}) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
@@ -247,6 +252,10 @@ export function WebSidebarController() {
       navigate(routes.home);
       return;
     }
+    if (event.scope === "header" && event.actionId === "toggle-sidebar") {
+      onToggleSidebar?.();
+      return;
+    }
     if (event.scope === "footer" && event.actionId === "settings") {
       navigate(routes.settings, {
         state: { backgroundLocation: location },
@@ -284,6 +293,11 @@ export function WebSidebarController() {
       <ProductSidebar
         showHeader
         title="Proliferate"
+        headerLeadingAction={onToggleSidebar ? {
+          id: "toggle-sidebar",
+          label: "Hide sidebar",
+          icon: <PanelLeftClose className="size-3.5" />,
+        } : null}
         headerAction={{
           id: "new-chat",
           label: "New chat",

@@ -1,7 +1,11 @@
-import { Github } from "lucide-react";
 import { useState } from "react";
 
+import {
+  AUTH_REQUIRED_GITHUB_COPY,
+  authProviderPresentation,
+} from "@proliferate/product-model/auth/presentation";
 import { ConnectGitHubRequiredPanel } from "@proliferate/product-ui/auth/ConnectGitHubRequiredPanel";
+import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { ProliferateMark } from "@proliferate/product-ui/brand/ProliferateMark";
 
 import { startWebAuthFlow } from "../../../lib/access/cloud/auth/web-auth-flow";
@@ -37,21 +41,11 @@ export function ConnectGitHubScreen() {
   return (
     <ConnectGitHubRequiredPanel
       mark={<ProliferateMark size={32} />}
-      title="Connect GitHub"
-      subtitle={
-        <>
-          Proliferate runs cloud sessions on your behalf. Linking GitHub gives
-          agents the access they need to read and modify your repos.
-        </>
-      }
-      footer={
-        <span className="block text-faint">
-          We only request the permissions needed to materialize sandboxes and
-          push branches.
-        </span>
-      }
-      actionIcon={<Github size={18} />}
-      actionLabel="Continue with GitHub"
+      title={AUTH_REQUIRED_GITHUB_COPY.title}
+      subtitle={AUTH_REQUIRED_GITHUB_COPY.subtitle}
+      footer={<span className="block text-faint">{AUTH_REQUIRED_GITHUB_COPY.footer}</span>}
+      actionIcon={<ProviderBrandIcon provider="github" />}
+      actionLabel={authProviderPresentation("github").actionLabel}
       loading={loading}
       error={error}
       onConnect={() => void connectGitHub()}

@@ -342,11 +342,12 @@ function buildLaunchAgentModelControl(input: {
   selectedModelId: string | null;
   onSelect: (agentKind: string, modelId: string) => void;
 }): CloudChatComposerControlView {
+  const selectedAgentIcon = agentModelIcon(input.selectedAgentKind);
   return {
     id: "launch-agent-model",
     key: "model",
     label: "Agent",
-    icon: "bot",
+    icon: selectedAgentIcon,
     placement: "trailing",
     active: true,
     groups: input.agents.map((agent) => ({
@@ -358,6 +359,7 @@ function buildLaunchAgentModelControl(input: {
           id: launchAgentModelOptionId(agent.kind, model.id),
           label: `${agent.displayName} · ${model.displayName}`,
           description: model.description ?? agent.description ?? null,
+          icon: agentModelIcon(agent.kind),
           selected: agent.kind === input.selectedAgentKind && model.id === input.selectedModelId,
         })),
     })).filter((group) => group.options.length > 0),
@@ -368,6 +370,21 @@ function buildLaunchAgentModelControl(input: {
       }
     },
   };
+}
+
+function agentModelIcon(agentKind: string): SessionControlIconKey {
+  switch (agentKind) {
+    case "claude":
+      return "claude";
+    case "codex":
+      return "openai";
+    case "gemini":
+      return "gemini";
+    case "opencode":
+      return "opencodeBuild";
+    default:
+      return "chat";
+  }
 }
 
 function buildLaunchConfigControl(input: {

@@ -23,13 +23,17 @@ export function AuthLayout({
       className={twMerge("flex min-h-screen items-center justify-center bg-background px-6 py-10 text-foreground", className)}
       {...props}
     >
-      <div className="flex w-full max-w-sm flex-col items-center">
-        {mark && <div className="mb-6">{mark}</div>}
-        <h1 className="text-center text-xl font-semibold tracking-normal">{title}</h1>
-        {subtitle && <p className="mt-2 text-center text-sm leading-5 text-muted-foreground">{subtitle}</p>}
-        <div className="mt-9 flex w-full flex-col gap-3">{children}</div>
-        {footer && <div className="mt-6 text-center text-xs leading-5 text-faint">{footer}</div>}
-      </div>
+      <main className="w-full max-w-md space-y-8">
+        <div className="space-y-5">
+          {mark ? <div className="flex size-12 items-center justify-start">{mark}</div> : null}
+          <div className="space-y-2.5">
+            <h1 className="text-3xl font-semibold leading-tight text-foreground">{title}</h1>
+            {subtitle ? <p className="text-sm leading-6 text-muted-foreground">{subtitle}</p> : null}
+          </div>
+        </div>
+        <div className="space-y-4">{children}</div>
+        {footer ? <div className="text-xs leading-5 text-faint">{footer}</div> : null}
+      </main>
     </div>
   );
 }

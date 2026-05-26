@@ -1,9 +1,14 @@
-import { Apple, Github, KeyRound } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { useState } from "react";
 
 import type { AuthProviderName } from "@proliferate/cloud-sdk";
+import {
+  AUTH_PROVIDER_ORDER,
+  AUTH_SIGN_IN_COPY,
+  authProviderPresentation,
+} from "@proliferate/product-model/auth/presentation";
 import { AuthStartPanel } from "@proliferate/product-ui/auth/AuthStartPanel";
-import { GoogleGlyph } from "@proliferate/product-ui/auth/GoogleGlyph";
+import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { ProliferateMark } from "@proliferate/product-ui/brand/ProliferateMark";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
@@ -36,42 +41,19 @@ export function AuthScreen() {
   return (
     <AuthStartPanel
       mark={<ProliferateMark size={36} />}
-      title={<span className="text-2xl tracking-tight">Proliferate</span>}
-      subtitle="Run and orchestrate coding agents."
-      footer={
-        <span className="block text-faint">
-          By continuing you agree to the Proliferate
-          <br />
-          Terms and Privacy Policy.
-        </span>
-      }
-      providers={[
-        {
-          id: "github",
-          label: "Continue with GitHub",
-          icon: <Github size={18} />,
-          loading: loadingProvider === "github",
-          disabled: Boolean(loadingProvider),
-          onClick: () => void signIn("github"),
-        },
-        {
-          id: "apple",
-          label: "Continue with Apple",
-          icon: <Apple size={18} />,
-          loading: loadingProvider === "apple",
-          disabled: Boolean(loadingProvider),
-          onClick: () => void signIn("apple"),
-        },
-        {
-          id: "google",
-          label: "Continue with Google",
-          icon: <GoogleGlyph className="text-[17px]" />,
-          loading: loadingProvider === "google",
-          disabled: Boolean(loadingProvider),
-          onClick: () => void signIn("google"),
-        },
-      ]}
-      note="GitHub is required for cloud workspaces and automations. You can link it after signing in with Apple or Google."
+      title={AUTH_SIGN_IN_COPY.title}
+      subtitle={AUTH_SIGN_IN_COPY.subtitle}
+      footer={<span className="block text-faint">{AUTH_SIGN_IN_COPY.footer}</span>}
+      providers={AUTH_PROVIDER_ORDER.map((provider) => ({
+        id: provider,
+        label: authProviderPresentation(provider).actionLabel,
+        icon: providerIcon(provider),
+        loading: loadingProvider === provider,
+        disabled: Boolean(loadingProvider),
+        primary: provider === "github",
+        onClick: () => void signIn(provider),
+      }))}
+      note={AUTH_SIGN_IN_COPY.note}
       error={error}
       devAccess={webEnv.devAccessTokenLogin ? (
         <div className="mt-2 border-t border-border pt-4">
@@ -124,4 +106,8 @@ export function AuthScreen() {
       ) : null}
     />
   );
+}
+
+function providerIcon(provider: AuthProviderName) {
+  return <ProviderBrandIcon provider={provider} />;
 }

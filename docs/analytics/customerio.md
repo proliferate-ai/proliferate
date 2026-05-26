@@ -15,9 +15,12 @@ email so Customer.io can own any follow-up journeys or communication.
 
 ## Workflows
 - Desktop GitHub auth success
-  - trigger: successful `GET /auth/desktop/github/callback` flow, after GitHub
-    OAuth succeeds, the user is active, and the desktop auth code is created
-  - code path: `server/proliferate/auth/desktop/service.py`
+  - trigger: successful desktop GitHub auth completion after GitHub OAuth
+    succeeds, the user is active, and the desktop auth code is created. Current
+    clients use shared `GET /auth/github/callback` with a desktop challenge;
+    `GET /auth/desktop/github/callback` remains legacy compatibility.
+  - code path: `server/proliferate/auth/identity/service.py` for the shared
+    flow; `server/proliferate/auth/desktop/service.py` for the legacy callback
   - sends:
     - `identify_customerio_user(...)`
       - distinct id: `str(user.id)`

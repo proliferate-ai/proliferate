@@ -55,7 +55,7 @@
 
 - name: CORS_ALLOW_ORIGINS
   secret: false
-  default: "http://localhost:1420,...,tauri://localhost"
+  default: "desktop, web, mobile-web, Metro, and tauri local origins"
   description: Comma-separated browser/webview origins allowed to call the API
   tags: [local-dev, self-hosted, production]
 
@@ -126,13 +126,13 @@
 - name: GITHUB_OAUTH_CLIENT_ID
   secret: true
   default: ""
-  description: GitHub OAuth client ID for desktop sign-in
+  description: GitHub OAuth client ID for the shared /auth/github/callback sign-in flow
   tags: [local-dev, self-hosted, production]
 
 - name: GITHUB_OAUTH_CLIENT_SECRET
   secret: true
   default: ""
-  description: GitHub OAuth client secret
+  description: GitHub OAuth client secret for the shared /auth/github/callback sign-in flow
   tags: [local-dev, self-hosted, production]
 
 # ═══════════════════════════════════════════════════════════════════════

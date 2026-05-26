@@ -22,6 +22,7 @@ export function AuthErrorPage() {
       }
       statusLabel="Auth error"
       brandMark={<ProliferateMark size={32} />}
+      brandLabel={null}
       primaryAction={{
         label: "Try again",
         icon: <RefreshCw size={15} />,

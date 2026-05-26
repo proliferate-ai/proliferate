@@ -1,4 +1,4 @@
-import { Apple, CircleUserRound, CreditCard, Github, GitBranch, LifeBuoy, UsersRound } from "lucide-react";
+import { CircleUserRound, CreditCard, GitBranch, LifeBuoy, UsersRound } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
@@ -13,7 +13,7 @@ import type {
   AccountSettingsPaneProps,
 } from "@proliferate/product-ui/account/AccountSettingsPane";
 import { AccountSettingsPane } from "@proliferate/product-ui/account/AccountSettingsPane";
-import { GoogleGlyph } from "@proliferate/product-ui/auth/GoogleGlyph";
+import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
 import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
@@ -383,21 +383,21 @@ function buildAccountSettingsProps({
         ? undefined
         : {
             label: "Connect GitHub",
-            icon: <Github size={13} />,
+            icon: <ProviderBrandIcon provider="github" className="size-[13px]" />,
             loading: loadingProvider === "github",
             disabled: Boolean(loadingProvider),
             onClick: connectGitHub,
           },
       connectGoogle: {
         label: "Add Google",
-        icon: <GoogleGlyph className="text-[13px]" />,
+        icon: <ProviderBrandIcon provider="google" className="size-[13px]" />,
         loading: loadingProvider === "google",
         disabled: Boolean(loadingProvider) || !providerEnabled(providerAvailability, "google"),
         onClick: connectGoogle,
       },
       connectApple: {
         label: "Add Apple",
-        icon: <Apple size={13} />,
+        icon: <ProviderBrandIcon provider="apple" className="size-[13px]" />,
         loading: loadingProvider === "apple",
         disabled: Boolean(loadingProvider) || !providerEnabled(providerAvailability, "apple"),
         onClick: connectApple,

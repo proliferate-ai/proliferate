@@ -43,6 +43,10 @@
       "types": "./dist/auth/GoogleGlyph.d.ts",
       "import": "./dist/auth/GoogleGlyph.js"
     },
+    "./auth/ProviderBrandIcon": {
+      "types": "./dist/auth/ProviderBrandIcon.d.ts",
+      "import": "./dist/auth/ProviderBrandIcon.js"
+    },
     "./auth/LegalLinks": {
       "types": "./dist/auth/LegalLinks.d.ts",
       "import": "./dist/auth/LegalLinks.js"
