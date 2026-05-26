@@ -87,6 +87,140 @@ Out of scope:
 - Long-term HA topology for Bifrost. V1 requires an operator-run hosted
   deployment and local-dev profile support.
 
+## Broad Questions To Answer
+
+This section is the reviewer-facing map for the implementation. The deeper
+scenario sections below remain the operational detail.
+
+### DB Models
+
+The implementation is intentionally split between billing, organization,
+agent-auth, sandbox profile, and Bifrost-materialization records.
+
+| Model | Owns | Important notes |
+| --- | --- | --- |
+| `Organization` | Team shell and status | Team checkout creates a `pending_checkout` organization first, then Stripe activation marks it `active`. |
+| `OrganizationMembership` | Active team membership and role | One active membership per user is enforced, so team creation must fail clearly if the creator already belongs to a team. |
+| `OrganizationCheckoutIntent` | In-progress Team upgrade checkout | Stores pending organization, creator, Stripe ids, checkout URL, activation state, expiry, invite emails, and idempotency key. |
+| `BillingSubject` and billing grant rows | Cloud and managed-credit budget ownership | Personal account credits and organization/team budgets stay separate. Free LLM credits must not require creating a team. |
+| `SandboxProfile` | Personal or organization sandbox config | Holds owner scope, billing subject, desired agent-auth revision, and lifecycle status for the sandbox profile. |
+| `SandboxProfileAgentAuthRevision` | Audit point for auth config changes | Bumped when auth choices change so runtime materialization can decide whether sandboxes need new env. |
+| `SandboxAgentAuthSelection` | Chosen auth method per agent harness | Connects Claude/Codex/Gemini to managed credit, synced local auth, or BYOK provider credentials. |
+| `AgentAuthCredential` | Encrypted personal, organization, or system credential | Stores provider payload ciphertext and redacted metadata. Raw provider secrets are never sent to sandboxes. |
+| `AgentAuthCredentialShare` | Share boundary for personal credentials | Allows future personal-to-organization sharing without copying raw secrets. |
+| `AgentGatewayProviderCredential` | Provider-specific Bifrost source materialization state | Tracks provider kind, validation status, Bifrost key id, sync status, and model metadata. |
+| `AgentGatewayPolicy` | Product policy for how a credential can be used | Connects selections to managed credit or BYOK, model allow-lists, sync status, and Bifrost virtual-key id. |
+| `AgentGatewayBudgetSubject` | LLM budget owner | Represents personal or organization LLM spend subject and current credit status. |
+| `AgentGatewayFreeCreditEntitlement` | One-time or period-based free LLM credit | Deduped by allocation guard, especially GitHub provider user id. |
+| `AgentGatewayRuntimeGrant` | Runtime-scoped auth grant | Historical grant shape remains for compatibility, but active Bifrost runtime auth is materialized through virtual keys. |
+| `AgentGatewayRouterMaterialization` | Bifrost provider-key or virtual-key object mapping | `router_kind` is Bifrost-only. Existing `litellm*` API/DB aliases are compatibility names and do not imply a LiteLLM runtime. |
+| `AgentGatewayLlmUsageEvent` | Imported Bifrost usage log | Idempotently links Bifrost log ids to Proliferate budget/policy/materialization records. |
+| `AgentGatewayUsageImportCursor` | Incremental Bifrost log import cursor | Lets the usage importer resume without double-charging. |
+
+### Intended UX Flow
+
+The primary UX is not "configure a gateway." It is "choose how my cloud
+sandbox pays for agent LLM calls."
+
+1. A new user signs in and can start a personal cloud workspace using
+   Proliferate managed credit without entering a provider key.
+2. When a user wants Team features, the Create Team form first opens an
+   upgrade gate dialog. The dialog explains the Team benefits, then the user
+   confirms to start Stripe Checkout.
+3. Stripe Checkout returns to the correct surface. Desktop return links go
+   through the desktop handoff path; web return links stay in the web app.
+4. After Stripe confirms payment, Proliferate activates the pending
+   organization, creates the owner membership, applies team billing, and sends
+   staged invitations.
+5. Organization admins configure shared sandbox auth in settings. Members can
+   use shared auth but cannot view raw provider secrets.
+6. Sandbox launch applies only Bifrost base URL and virtual key env to the
+   target. The raw Anthropic/OpenAI/Gemini/Bedrock secret remains in
+   Proliferate/Bifrost control-plane storage.
+7. Usage import reconciles Bifrost logs back into Proliferate credit, billing,
+   and usage surfaces.
+
+### Specific Workflow Questions End To End
+
+| Workflow question | Expected answer |
+| --- | --- |
+| What happens when a user creates a Team? | The UI opens the reusable upgrade gate, then creates an `OrganizationCheckoutIntent`, a pending organization, and a Stripe Checkout session. No active membership is granted until Stripe activation completes. |
+| What happens if the user already has pending checkout? | Settings shows the current intent with Continue checkout and Cancel setup actions instead of creating a duplicate intent. |
+| What happens when Stripe succeeds? | The webhook loads the intent by Stripe session/subscription metadata, locks it, validates creator/team state, marks it activating, creates membership and billing state, marks it completed, and sends invitations. |
+| What happens if the desktop receives a checkout success URL? | The web return handoff routes back into Desktop rather than leaving the user on a web login screen. |
+| How does a new personal cloud workspace get LLM auth? | The server ensures a personal sandbox profile, chooses managed credit by default, materializes or reuses Bifrost objects, and gives the sandbox only Bifrost URL plus virtual key. |
+| How does organization BYOK get into a sandbox? | An admin saves a provider credential, policy materialization creates the Bifrost provider key, runtime selection creates a Bifrost virtual key scoped to that provider/model set, and sandbox env receives the virtual key. |
+| How is Bedrock different? | Bedrock payloads use AWS configuration and IAM/credential material instead of a single API key, but the sandbox still receives only the Bifrost-facing virtual key. |
+| How is Codex/Claude/Gemini routed? | Each harness receives the env shape it supports: a Bifrost-compatible base URL plus key, with provider/model restrictions encoded in Bifrost. |
+| How is usage charged? | Bifrost logs are imported by cursor, matched to router materialization and budget subject, then written as `AgentGatewayLlmUsageEvent` rows for entitlement debit and billing display. |
+| What happens when credit is exhausted? | New managed-credit launches are blocked before work is scheduled, the Bifrost virtual key is disabled or replaced, and the UI points the user toward BYOK or Team upgrade. |
+| What happens when a credential is revoked or rotated? | Proliferate updates credential/policy state, disables affected Bifrost objects, bumps sandbox auth revision, and requires new runtime materialization for future launches. |
+
+### Primitives Involved
+
+- **Owner scope**: `personal`, `organization`, or `system`; every credential,
+  budget, and sandbox profile must be scoped.
+- **Billing subject**: the budget entity for cloud runtime hours and managed LLM
+  credit.
+- **Team checkout intent**: a resumable pending Team upgrade record tied to
+  Stripe Checkout.
+- **Upgrade gate dialog**: reusable UI primitive that explains benefits before
+  a gated action starts checkout.
+- **Agent harness**: Claude, Codex, Gemini, or another configured runtime
+  agent that needs LLM auth.
+- **Agent auth credential**: encrypted provider material owned by a user,
+  organization, or system.
+- **Agent auth selection**: the sandbox profile choice of auth mode per agent
+  harness.
+- **Bifrost provider key**: Bifrost-side provider credential, created from a
+  Proliferate managed key or BYOK payload.
+- **Bifrost virtual key**: sandbox-facing key that restricts provider keys,
+  models, and usage metadata.
+- **Router materialization**: Proliferate's durable mapping from product policy
+  to the Bifrost provider-key or virtual-key object.
+- **Runtime grant/env materialization**: target-side application of Bifrost URL
+  and virtual key into E2B/AnyHarness sandbox env.
+- **Usage import cursor**: durable checkpoint for Bifrost log ingestion.
+
+### Failure Modes
+
+| Failure mode | Product behavior | Control-plane behavior |
+| --- | --- | --- |
+| User closes upgrade dialog | No checkout intent is created. | No DB write beyond local UI state. |
+| Stripe checkout creation fails | Dialog or form shows the error and allows retry. | No active organization or membership is created. |
+| Pending checkout expires | UI offers a fresh checkout path. | Intent moves to expired or is ignored by current-intent lookup. |
+| Stripe webhook arrives twice | User sees one activated team. | Idempotency and Stripe ids prevent duplicate activation. |
+| Creator joins another team before webhook | Checkout activation fails with a business-state error. | Pending organization remains non-active and intent records the failure. |
+| Bifrost admin API is unavailable | Auth setup or launch reports gateway provisioning unavailable. | Policy/materialization stays pending or failed with retryable status. |
+| Provider credential is invalid | UI shows not ready or validation failed. | Provider credential/policy does not become ready for runtime selection. |
+| Bifrost virtual key creation succeeds but key value is missing | Launch fails before sandbox receives incomplete auth. | Materialization is marked failed and can be retried. |
+| Sandbox starts but auth env cannot be applied | Workspace needs attention and launch is blocked or retried. | Runtime materialization error is surfaced on workspace/provision state. |
+| Bifrost usage import loses position | Import resumes from cursor and idempotent log ids. | Duplicate `AgentGatewayLlmUsageEvent` rows are avoided. |
+| Managed credit is exhausted mid-run | Existing process may fail provider calls; next launch is blocked cleanly. | Budget subject and virtual key state are updated on reconciliation. |
+| BYOK credential is revoked while workspaces exist | Future launches stop using it; running workspaces may need restart. | Related Bifrost objects are disabled and sandbox auth revision is bumped. |
+
+### Background Concepts Involved
+
+- **Bifrost is the data plane**: agent requests go directly to Bifrost and then
+  to the provider. Proliferate does not proxy token streams in the hot path.
+- **Proliferate is the control plane**: users, teams, billing, entitlements,
+  sandbox profiles, auth selections, and usage ledgers live in Proliferate.
+- **Managed credit and BYOK are different product promises**: managed credit
+  spends Proliferate-owned provider budget; BYOK spends a user or team's own
+  provider credential.
+- **Personal and Team billing must not be conflated**: account onboarding
+  credits are personal; Team entitlements are organization-owned and require an
+  active team.
+- **Sandbox isolation depends on virtual keys**: sandboxes never need raw
+  provider secrets if Bifrost virtual keys carry provider and model
+  restrictions.
+- **Compatibility names remain**: some persisted fields and generated API
+  aliases still use `litellm*` names for migration compatibility. The runtime
+  router implementation is Bifrost-only.
+- **End-to-end validation crosses systems**: a correct flow has visible UI
+  state, Proliferate DB/API records, Bifrost provider/virtual-key records, E2B
+  sandbox env, and imported usage rows.
+
 ## End State UX
 
 The UI should make one product promise:
