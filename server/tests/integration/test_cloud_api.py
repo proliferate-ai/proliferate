@@ -939,7 +939,16 @@ class TestCloudRepoConfig:
         self,
         client: AsyncClient,
         db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release"],
+            )
+
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
+
         session = await _register_and_login(client, "cloud-repo-config-race@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         payload = {
