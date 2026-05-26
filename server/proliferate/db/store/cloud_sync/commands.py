@@ -23,6 +23,7 @@ from proliferate.db.models.cloud.runtime_config import (
     SandboxProfileRuntimeConfigCurrent,
     SandboxProfileRuntimeConfigRevision,
 )
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.sync import CloudSessionProjection
 from proliferate.db.models.cloud.targets import CloudTarget, CloudWorker
@@ -525,7 +526,7 @@ async def _workspace_lifecycle_lease_blocker(
             "cloud_workspace_missing",
             "Workspace command was superseded because the Cloud workspace no longer exists.",
         )
-    if workspace.target_id != row.target_id:
+    if not await _workspace_matches_command_target(db, workspace=workspace, row=row):
         return (
             CloudCommandStatus.superseded.value,
             "cloud_workspace_target_mismatch",
@@ -1191,8 +1192,8 @@ async def _cloud_workspace_matches_command(db: AsyncSession, row: CloudCommand) 
     workspace = await db.get(CloudWorkspace, row.cloud_workspace_id)
     if (
         workspace is None
-        or workspace.target_id != row.target_id
         or workspace.archived_at is not None
+        or not await _workspace_matches_command_target(db, workspace=workspace, row=row)
     ):
         return False
     target = await db.get(CloudTarget, row.target_id)
@@ -1258,6 +1259,23 @@ async def _record_materialized_cloud_workspace(
     await db.flush()
 
 
+async def _workspace_matches_command_target(
+    db: AsyncSession,
+    *,
+    workspace: CloudWorkspace,
+    row: CloudCommand,
+) -> bool:
+    if workspace.target_id is not None:
+        return workspace.target_id == row.target_id
+    if workspace.runtime_environment_id is None:
+        return False
+    runtime_environment = await db.get(
+        CloudRuntimeEnvironment,
+        workspace.runtime_environment_id,
+    )
+    return runtime_environment is not None and runtime_environment.target_id == row.target_id
+
+
 async def _record_pruned_cloud_workspace(
     db: AsyncSession,
     *,
@@ -1285,7 +1303,11 @@ async def _record_pruned_cloud_workspace(
         await db.flush()
         return
     workspace = await db.get(CloudWorkspace, row.cloud_workspace_id)
-    if workspace is None or workspace.target_id != row.target_id:
+    if workspace is None or not await _workspace_matches_command_target(
+        db,
+        workspace=workspace,
+        row=row,
+    ):
         _mark_command_rejected(
             row,
             code="cloud_workspace_not_found",
