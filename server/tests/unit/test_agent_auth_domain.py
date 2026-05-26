@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from proliferate.auth.authorization import PolicyDenied, PolicyAllowed
+from proliferate.auth.authorization import PolicyAllowed
 from proliferate.server.cloud.agent_auth.domain.policy import (
     SelectionPlan,
     can_select_credential_for_profile,
@@ -29,8 +29,7 @@ def test_gateway_selection_plan_maps_agent_protocols() -> None:
         agent_kind="gemini",
         credential_kind="managed_gateway",
     )
-    assert isinstance(gemini, PolicyDenied)
-    assert gemini.code == "gateway_not_supported_for_agent"
+    assert gemini == SelectionPlan(materialization_mode="gateway_env", protocol_facade="genai")
 
 
 def test_org_profile_allows_personal_synced_credential_without_share() -> None:
@@ -76,6 +75,11 @@ def test_protected_env_allowlist_is_agent_and_mode_scoped() -> None:
         agent_kind="opencode",
         materialization_mode="gateway_env",
         keys={"OPENAI_API_KEY", "OPENAI_BASE_URL"},
+    )
+    reject_unallowed_protected_env(
+        agent_kind="gemini",
+        materialization_mode="gateway_env",
+        keys={"GEMINI_API_KEY", "GOOGLE_GEMINI_BASE_URL"},
     )
     try:
         reject_unallowed_protected_env(

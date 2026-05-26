@@ -1358,13 +1358,30 @@ fn command_result(
                 })),
             )
         }
-        Err(error) => command_result_request(
-            command,
-            "failed_delivery",
-            Some("anyharness_delivery_failed".to_string()),
-            Some(error.to_string()),
-            None,
+        Err(error) => {
+            let (error_code, error_message) = anyharness_delivery_error(&error);
+            command_result_request(
+                command,
+                "failed_delivery",
+                Some(error_code.to_string()),
+                Some(error_message),
+                None,
+            )
+        }
+    }
+}
+
+fn anyharness_delivery_error(error: &WorkerError) -> (&'static str, String) {
+    match error {
+        WorkerError::Http(source) if source.is_timeout() => (
+            "anyharness_delivery_timeout",
+            "AnyHarness request timed out while delivering command.".to_string(),
         ),
+        WorkerError::Http(source) => (
+            "anyharness_delivery_failed",
+            format!("AnyHarness request failed: {source}"),
+        ),
+        _ => ("anyharness_delivery_failed", error.to_string()),
     }
 }
 

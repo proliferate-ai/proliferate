@@ -287,6 +287,7 @@ function AppRuntime() {
           <InstrumentedRoutes>
             <Route path="/index.html" element={<Navigate to="/" replace />} />
             <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
+            <Route path="/settings/billing" element={<SettingsCloudRedirect />} />
             <Route element={<PublicOnlyRoute />}>
               <Route path="/login" element={<LoginPage />} />
             </Route>

@@ -56,6 +56,7 @@ class CreateGatewayCredentialRequest(BaseModel):
     provider_kind: Literal[
         "anthropic_api_key",
         "openai_api_key",
+        "gemini_api_key",
         "bedrock_assume_role",
         "openai_compatible",
     ] = Field(alias="providerKind")

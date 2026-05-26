@@ -8,10 +8,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import {
-  useCurrentTeamCheckout,
-  useTeamCheckoutActions,
-} from "@proliferate/cloud-sdk-react/hooks/billing";
+import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
@@ -24,8 +21,13 @@ import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-o
 import { useOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-organization-invitations";
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
+import {
+  useCurrentTeamCheckout,
+  useTeamCheckoutActions,
+} from "@/hooks/access/cloud/billing/use-team-checkout";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { TEAM_UPGRADE_GATE_COPY } from "@/copy/billing/upgrade-gate-copy";
 import {
   type OrganizationInvitationRecord,
   type OrganizationMemberRecord,
@@ -78,8 +80,8 @@ export function OrganizationPane() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [newTeamName, setNewTeamName] = useState("");
+  const [teamUpgradeGateOpen, setTeamUpgradeGateOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [teamCheckoutError, setTeamCheckoutError] = useState<string | null>(null);
   const teamCheckoutQuery = useCurrentTeamCheckout(authStatus === "authenticated");
   const teamCheckoutActions = useTeamCheckoutActions();
 
@@ -150,18 +152,26 @@ export function OrganizationPane() {
 
   async function handleCreateTeamCheckout(event: FormEvent) {
     event.preventDefault();
+    if (!newTeamName.trim()) {
+      return;
+    }
     setStatusMessage(null);
-    setTeamCheckoutError(null);
+    teamCheckoutActions.resetCreateTeamCheckout();
+    setTeamUpgradeGateOpen(true);
+  }
+
+  async function confirmCreateTeamCheckout() {
+    const teamName = newTeamName.trim();
+    if (!teamName) {
+      return;
+    }
+    setStatusMessage(null);
     try {
-      const response = await teamCheckoutActions.createTeamCheckout({
-        teamName: newTeamName.trim(),
-        inviteEmails: [],
-      });
+      const response = await teamCheckoutActions.createTeamCheckout(teamName);
+      setTeamUpgradeGateOpen(false);
       await openExternal(response.url);
-    } catch (error) {
-      setTeamCheckoutError(
-        error instanceof Error ? error.message : "Team checkout could not start.",
-      );
+    } catch {
+      // React Query exposes the error through createTeamCheckoutError for the dialog.
     }
   }
 
@@ -268,7 +278,7 @@ export function OrganizationPane() {
               <form onSubmit={(event) => { void handleCreateTeamCheckout(event); }}>
                 <SettingsCardRow
                   label="Create a Team"
-                  description="Start Team checkout to unlock members, shared cloud work, org billing, Slack work, and shared sandbox setup."
+                  description="Choose a Team name, review what Team unlocks, then continue to checkout."
                 >
                   <div className="flex w-full max-w-md flex-col gap-2 sm:flex-row sm:justify-end">
                     <Input
@@ -286,9 +296,11 @@ export function OrganizationPane() {
                     </Button>
                   </div>
                 </SettingsCardRow>
-                {teamCheckoutError ? (
+                {teamCheckoutActions.createTeamCheckoutError && !teamUpgradeGateOpen ? (
                   <div className="border-t border-border-light p-4 text-sm text-destructive">
-                    {teamCheckoutError}
+                    {teamCheckoutActions.createTeamCheckoutError instanceof Error
+                      ? teamCheckoutActions.createTeamCheckoutError.message
+                      : "Team checkout could not start."}
                   </div>
                 ) : null}
               </form>
@@ -296,6 +308,25 @@ export function OrganizationPane() {
           </SettingsCard>
         </OrganizationSection>
       ) : null}
+
+      <UpgradeGateDialog
+        open={teamUpgradeGateOpen}
+        copy={TEAM_UPGRADE_GATE_COPY}
+        contextLabel="Team"
+        contextValue={newTeamName.trim()}
+        loading={teamCheckoutActions.creatingTeamCheckout}
+        error={
+          teamCheckoutActions.createTeamCheckoutError instanceof Error
+            ? teamCheckoutActions.createTeamCheckoutError.message
+            : teamCheckoutActions.createTeamCheckoutError
+              ? "Team checkout could not start."
+              : null
+        }
+        onClose={() => setTeamUpgradeGateOpen(false)}
+        onConfirm={() => {
+          void confirmCreateTeamCheckout();
+        }}
+      />
 
       {activeOrganization ? (
         <>

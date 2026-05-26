@@ -9,6 +9,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+BillingReturnSurface = Literal["desktop", "web"]
+
 
 @dataclass(frozen=True)
 class BillingSnapshot:
@@ -210,6 +212,7 @@ class BillingUrlResponse(BillingBaseModel):
 class TeamCheckoutRequest(BillingBaseModel):
     team_name: str = Field(alias="teamName", min_length=1, max_length=255)
     invite_emails: list[EmailStr] = Field(default_factory=list, alias="inviteEmails")
+    return_surface: BillingReturnSurface = Field(default="web", alias="returnSurface")
 
 
 class TeamCheckoutResponse(BillingBaseModel):
@@ -239,6 +242,7 @@ class BillingOwnerSelection(BillingBaseModel):
         alias="ownerScope",
     )
     organization_id: UUID | None = Field(default=None, alias="organizationId")
+    return_surface: BillingReturnSurface = Field(default="web", alias="returnSurface")
 
 
 class OverageSettingsRequest(BillingBaseModel):

@@ -112,6 +112,7 @@ async def create_cloud_checkout(
             db,
             user,
             _owner_selection_from_body(request),
+            return_surface=request.return_surface if request else "web",
         )
     except BillingServiceError as error:
         raise HTTPException(
@@ -132,6 +133,7 @@ async def create_team_checkout(
             user,
             team_name=request.team_name,
             invite_emails=[str(email) for email in request.invite_emails],
+            return_surface=request.return_surface,
         )
     except BillingServiceError as error:
         raise HTTPException(
@@ -183,6 +185,7 @@ async def create_customer_portal(
             db,
             user,
             _owner_selection_from_body(request),
+            return_surface=request.return_surface if request else "web",
         )
     except BillingServiceError as error:
         raise HTTPException(
@@ -202,6 +205,7 @@ async def create_refill_checkout(
             db,
             user,
             _owner_selection_from_body(request),
+            return_surface=request.return_surface if request else "web",
         )
     except BillingServiceError as error:
         raise HTTPException(

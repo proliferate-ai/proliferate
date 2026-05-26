@@ -119,6 +119,7 @@ markers = [
     "e2b: tests specific to the E2B provider",
     "daytona: tests specific to the Daytona provider",
     "live_webhook: tests that require a real externally reachable E2B webhook target",
+    "live_bifrost: tests that require a live Bifrost deployment and provider credentials",
 ]
 
 [tool.hatch.build.targets.wheel]

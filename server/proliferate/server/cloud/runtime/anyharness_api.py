@@ -36,6 +36,21 @@ def _ready_cloud_agents_from_summaries(
     return sorted(set(ready))
 
 
+def _auth_overlay_ready_agent_kinds(
+    agent_summaries: Sequence[RemoteAgentSummary],
+    auth_overlay_agent_kinds: Sequence[str],
+) -> list[str]:
+    """Agents whose binaries are present and only need launch-time auth overlay."""
+    auth_overlay_kinds = set(auth_overlay_agent_kinds)
+    ready: list[str] = []
+    for item in agent_summaries:
+        if item.kind not in SUPPORTED_CLOUD_AGENTS or item.kind not in auth_overlay_kinds:
+            continue
+        if item.readiness in {"login_required", "credentials_required"}:
+            ready.append(item.kind)
+    return sorted(set(ready))
+
+
 def _install_required_agent_kinds(
     agent_summaries: Sequence[RemoteAgentSummary],
     required_agent_kinds: Sequence[str],
@@ -282,6 +297,7 @@ async def reconcile_remote_agents(
     *,
     workspace_id: UUID | None = None,
     required_agent_kinds: Sequence[str],
+    auth_overlay_agent_kinds: Sequence[str] = (),
 ) -> list[str]:
     reconcile_started = time.perf_counter()
     log_cloud_event(
@@ -303,12 +319,17 @@ async def reconcile_remote_agents(
         initial_summaries,
         required_agent_kinds,
     )
+    agent_kinds_ready_from_auth_overlay = _auth_overlay_ready_agent_kinds(
+        initial_summaries,
+        auth_overlay_agent_kinds,
+    )
     log_cloud_event(
         "cloud runtime reconcile assessed",
         workspace_id=workspace_id,
         runtime_url=runtime_url,
         required_agents=",".join(required_agent_kinds) or "none",
         ready_from_template=",".join(agent_kinds_ready_from_template) or "none",
+        ready_from_auth_overlay=",".join(agent_kinds_ready_from_auth_overlay) or "none",
         install_required=",".join(agent_kinds_to_install) or "none",
         agents=_agent_readiness_summary(initial_summaries),
     )
@@ -331,7 +352,10 @@ async def reconcile_remote_agents(
         if agent_kinds_to_install
         else initial_summaries
     )
-    ready_agent_kinds = _ready_cloud_agents_from_summaries(agent_summaries)
+    ready_agent_kinds = sorted(
+        set(_ready_cloud_agents_from_summaries(agent_summaries))
+        | set(_auth_overlay_ready_agent_kinds(agent_summaries, auth_overlay_agent_kinds))
+    )
     log_cloud_event(
         "cloud runtime reconcile finished",
         workspace_id=workspace_id,
@@ -341,6 +365,10 @@ async def reconcile_remote_agents(
         agents=_agent_readiness_summary(agent_summaries),
         prepared_agents=_agent_readiness_summary(install_summaries),
         ready_from_template=",".join(agent_kinds_ready_from_template) or "none",
+        ready_from_auth_overlay=",".join(
+            _auth_overlay_ready_agent_kinds(agent_summaries, auth_overlay_agent_kinds)
+        )
+        or "none",
         install_required=",".join(agent_kinds_to_install) or "none",
         installed_count=len(install_summaries),
     )

@@ -97,6 +97,10 @@ start of the task, not after implementation has already started.
 - `docs/architecture/agent-llm-auth-gateway-spec.md`
   - centralized agent LLM auth gateway, LiteLLM routing/budget enforcement,
     runtime grants, synced-path cutover, and sandbox agent-auth selections
+- `docs/architecture/bifrost-byok-onboarding-spec.md`
+  - Bifrost-backed agent LLM data plane, managed onboarding credits, BYOK
+    materialization, E2B sandbox auth application, usage import, and local
+    AWS/E2B/Bifrost validation
 - `docs/architecture/shared-sandbox-config-admin-ui-spec.md`
   - personal/shared sandbox profile configuration, admin UI ownership, public
     MCP/skill publication, and shared sandbox consumption of agent auth

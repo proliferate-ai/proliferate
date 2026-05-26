@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from base64 import b64encode
 from datetime import UTC, datetime
+from decimal import Decimal
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -21,8 +22,15 @@ from proliferate.db.models.organizations import Organization, OrganizationMember
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
+from proliferate.integrations.bifrost import (
+    BifrostLogEntry,
+    BifrostLogSearchResult,
+    BifrostProviderKeyResult,
+    BifrostVirtualKeyResult,
+)
 from proliferate.server.cloud.agent_auth import service as agent_auth_service
 from proliferate.server.cloud.worker import service as worker_service
+from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 from proliferate.utils.crypto import decrypt_text, encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
 from tests.helpers.desktop_auth import mint_desktop_token_payload
@@ -140,6 +148,103 @@ def _enable_anthropic_gateway_byok(monkeypatch: pytest.MonkeyPatch) -> None:
         "agent_gateway_anthropic_byok_enabled",
         True,
     )
+
+
+class _FakeBifrostAdminClient:
+    def __init__(self) -> None:
+        self.provider_keys: list[dict[str, object]] = []
+        self.virtual_keys: list[dict[str, object]] = []
+        self.updated_virtual_keys: list[dict[str, object]] = []
+        self.disabled_provider_keys: list[dict[str, str]] = []
+        self.disabled_virtual_keys: list[str] = []
+        self.logs = BifrostLogSearchResult(logs=(), total_count=0)
+        self.log_pages: dict[int, BifrostLogSearchResult] = {}
+        self.log_calls: list[dict[str, object]] = []
+
+    async def upsert_provider_key(self, **kwargs: object) -> BifrostProviderKeyResult:
+        self.provider_keys.append(dict(kwargs))
+        return BifrostProviderKeyResult(
+            key_id=str(kwargs["key_id"]),
+            provider=str(kwargs["provider"]),
+            name=str(kwargs["name"]),
+        )
+
+    async def create_virtual_key(self, **kwargs: object) -> BifrostVirtualKeyResult:
+        index = len(self.virtual_keys) + 1
+        self.virtual_keys.append(dict(kwargs))
+        return BifrostVirtualKeyResult(
+            virtual_key_id=f"vk-bifrost-runtime-{index}",
+            virtual_key=f"sk-bf-runtime-{index}",
+            name=str(kwargs["name"]),
+            is_active=True,
+        )
+
+    async def update_virtual_key(self, **kwargs: object) -> BifrostVirtualKeyResult:
+        self.updated_virtual_keys.append(dict(kwargs))
+        return BifrostVirtualKeyResult(
+            virtual_key_id=str(kwargs["virtual_key_id"]),
+            virtual_key=None,
+            name=str(kwargs["name"]),
+            is_active=bool(kwargs.get("is_active", True)),
+        )
+
+    async def disable_virtual_key(self, virtual_key_id: str) -> None:
+        self.disabled_virtual_keys.append(virtual_key_id)
+
+    async def disable_provider_key(self, *, provider: str, key_id: str) -> None:
+        self.disabled_provider_keys.append({"provider": provider, "key_id": key_id})
+
+    async def list_logs(self, **kwargs: object) -> BifrostLogSearchResult:
+        self.log_calls.append(dict(kwargs))
+        offset = int(kwargs.get("offset") or 0)
+        return self.log_pages.get(offset, self.logs)
+
+
+def _enable_bifrost_gateway(monkeypatch: pytest.MonkeyPatch) -> _FakeBifrostAdminClient:
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_router",
+        "bifrost",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_bifrost_base_url",
+        "https://bifrost-admin.test",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_bifrost_isolation_verified",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_bifrost_public_base_url",
+        "https://bifrost.test",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_managed_anthropic_api_key",
+        "sk-ant-managed-test",
+    )
+    fake_bifrost = _FakeBifrostAdminClient()
+    monkeypatch.setattr(agent_auth_service, "BifrostAdminClient", lambda: fake_bifrost)
+    return fake_bifrost
+
+
+def test_bifrost_public_url_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_bifrost_gateway(monkeypatch)
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_bifrost_public_base_url",
+        "",
+    )
+
+    with pytest.raises(agent_auth_service.AgentAuthError) as exc:
+        agent_auth_service._bifrost_public_base_url()
+
+    assert exc.value.code == "bifrost_public_base_url_missing"
 
 
 async def _create_enrolled_target(
@@ -1014,6 +1119,613 @@ async def test_free_managed_credits_provision_personal_budget_and_selection(
     assert exhausted.json()["status"] == "exhausted"
     assert exhausted.json()["launchEnabled"] is False
     assert fake_litellm.team_updates == 1
+
+
+@pytest.mark.asyncio
+async def test_free_managed_credits_use_bifrost_provider_key_materialization(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_bifrost = _enable_bifrost_gateway(monkeypatch)
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_user_free_credit_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_user_free_credit_usd",
+        "5.00",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_managed_credit_agent_kinds",
+        "claude,gemini",
+    )
+
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-free-credits-bifrost@example.com",
+    )
+
+    response = await client.post(
+        "/v1/cloud/agent-auth/free-credits/ensure",
+        headers=_headers(tokens),
+        json={},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["launchEnabled"] is True
+    assert body["budgetSubject"]["litellmSyncStatus"] == "synced"
+    assert body["budgetSubject"]["litellmTeamId"].startswith("proliferate-managed-")
+    assert {item["agentKind"] for item in body["readyAgentModels"]} == {"claude", "gemini"}
+    assert {credential["agentKind"] for credential in body["credentials"]} == {
+        "claude",
+        "gemini",
+    }
+    assert len(fake_bifrost.provider_keys) == 1
+    provider_key = fake_bifrost.provider_keys[0]
+    assert provider_key["provider"] == "anthropic"
+    assert provider_key["key_id"] == body["budgetSubject"]["litellmTeamId"]
+    assert "sk-ant-managed-test" not in str(body)
+
+    repeat = await client.post(
+        "/v1/cloud/agent-auth/free-credits/ensure",
+        headers=_headers(tokens),
+        json={},
+    )
+
+    assert repeat.status_code == 200
+    assert repeat.json()["status"] == "ready"
+    assert len(fake_bifrost.provider_keys) == 1
+
+
+@pytest.mark.asyncio
+async def test_bifrost_worker_materialization_uses_direct_virtual_key_env(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_bifrost = _enable_bifrost_gateway(monkeypatch)
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_user_free_credit_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_user_free_credit_usd",
+        "5.00",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_managed_credit_agent_kinds",
+        "claude,gemini",
+    )
+
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-worker-materialization-bifrost@example.com",
+    )
+    ensure = await client.post(
+        "/v1/cloud/agent-auth/free-credits/ensure",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert ensure.status_code == 200
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert profile_response.status_code == 200
+    profile = await store.get_active_personal_sandbox_profile_for_user(
+        db_session,
+        UUID(tokens["user_id"]),
+    )
+    assert profile is not None
+    assert profile.primary_target_id is not None
+    actor_user_id = UUID(tokens["user_id"])
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=profile.primary_target_id,
+    )
+    await agent_auth_service.request_agent_auth_refresh_for_profile_target(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=profile.primary_target_id,
+        actor_user_id=actor_user_id,
+        reason="test_bifrost_worker_materialization",
+        force_restart=False,
+    )
+    worker_token = f"agent-auth-bifrost-materialization-{uuid.uuid4()}"
+    await worker_auth_store.create_worker(
+        db_session,
+        target_id=profile.primary_target_id,
+        cloud_sandbox_id=slot.id,
+        slot_generation=slot.slot_generation,
+        token_hash=worker_service._hash_token(
+            domain=CLOUD_WORKER_TOKEN_DOMAIN,
+            token=worker_token,
+        ),
+        machine_fingerprint="agent-auth-bifrost-materialization",
+        hostname="agent-auth-bifrost-materialization",
+        worker_version="0.1.0",
+        anyharness_version="0.1.0",
+        supervisor_version=None,
+        now=utcnow(),
+    )
+    await db_session.commit()
+    worker_headers = {"Authorization": f"Bearer {worker_token}"}
+
+    lease = await client.post(
+        "/v1/cloud/worker/commands/lease",
+        headers=worker_headers,
+        json={"supportedKinds": ["refresh_agent_auth_config"], "leaseTimeoutSeconds": 30},
+    )
+    assert lease.status_code == 200
+    command = lease.json()["command"]
+    materializing = await client.post(
+        f"/v1/cloud/worker/agent-auth-configs/{profile.id}/status",
+        headers=worker_headers,
+        json={
+            "status": "materializing",
+            "commandId": command["commandId"],
+            "revision": command["payload"]["revision"],
+            "leaseId": command["leaseId"],
+        },
+    )
+    assert materializing.status_code == 200
+
+    materialization = await client.get(
+        f"/v1/cloud/worker/agent-auth-configs/{profile.id}/materialization",
+        headers=worker_headers,
+        params={
+            "command_id": command["commandId"],
+            "revision": command["payload"]["revision"],
+            "lease_id": command["leaseId"],
+        },
+    )
+
+    assert materialization.status_code == 200
+    plan = materialization.json()
+    selections = {item["agentKind"]: item for item in plan["selections"]}
+    claude = selections["claude"]["gateway"]
+    assert claude["baseUrls"]["anthropic"] == "https://bifrost.test/anthropic"
+    assert claude["runtimeGrantToken"] == "sk-bf-runtime-1"
+    assert claude["protectedEnv"]["ANTHROPIC_AUTH_TOKEN"] == "sk-bf-runtime-1"
+    assert "ANTHROPIC_CUSTOM_HEADERS" not in claude["protectedEnv"]
+    gemini = selections["gemini"]["gateway"]
+    assert gemini["protocolFacade"] == "genai"
+    assert gemini["baseUrls"]["genai"] == "https://bifrost.test/genai"
+    assert gemini["runtimeGrantToken"] == "sk-bf-runtime-2"
+    assert gemini["protectedEnv"] == {
+        "GEMINI_API_KEY": "sk-bf-runtime-2",
+        "GOOGLE_GEMINI_BASE_URL": "https://bifrost.test/genai",
+    }
+    assert len(fake_bifrost.virtual_keys) == 2
+    for virtual_key in fake_bifrost.virtual_keys:
+        provider_configs = virtual_key["provider_configs"]
+        assert isinstance(provider_configs, list)
+        assert provider_configs[0]["key_ids"] == [ensure.json()["budgetSubject"]["litellmTeamId"]]
+        assert provider_configs[0]["allowed_models"] != ["*"]
+        assert provider_configs[0]["budgets"][0]["max_limit"] == 5.0
+
+
+@pytest.mark.asyncio
+async def test_bifrost_usage_import_debits_and_disables_exhausted_managed_credit(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_bifrost = _enable_bifrost_gateway(monkeypatch)
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_user_free_credit_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_user_free_credit_usd",
+        "0.01",
+    )
+
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-bifrost-usage@example.com",
+    )
+    ensure = await client.post(
+        "/v1/cloud/agent-auth/free-credits/ensure",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert ensure.status_code == 200
+    actor_user_id = UUID(tokens["user_id"])
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert profile_response.status_code == 200
+    profile = await store.get_active_personal_sandbox_profile_for_user(db_session, actor_user_id)
+    assert profile is not None and profile.primary_target_id is not None
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=profile.primary_target_id,
+    )
+    selection = (await store.list_selections_for_profile(db_session, profile.id))[0]
+    await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
+        db_session,
+        auth=WorkerAuthContext(
+            target_id=profile.primary_target_id,
+            worker_id=uuid.uuid4(),
+            cloud_sandbox_id=slot.id,
+            slot_generation=slot.slot_generation,
+        ),
+        profile=profile,
+        selection=selection,
+    )
+    await db_session.commit()
+
+    fake_bifrost.logs = BifrostLogSearchResult(
+        logs=(
+            BifrostLogEntry(
+                log_id="log-bifrost-exhausted",
+                timestamp=utcnow(),
+                provider="anthropic",
+                model="claude-sonnet-4-6",
+                status="success",
+                cost=Decimal("0.02"),
+                selected_key_id=ensure.json()["budgetSubject"]["litellmTeamId"],
+                virtual_key_id="vk-bifrost-runtime-1",
+                token_usage={"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12},
+                raw={"id": "log-bifrost-exhausted"},
+            ),
+        ),
+        total_count=1,
+    )
+
+    imported = await agent_auth_service.import_bifrost_usage_logs(db_session)
+    await db_session.commit()
+
+    assert imported == 1
+    budget = await store.get_user_managed_budget_subject(db_session, actor_user_id)
+    assert budget is not None
+    assert budget.status == "exhausted"
+    entitlement = await store.get_free_credit_entitlement(
+        db_session,
+        user_id=actor_user_id,
+        source="signup_free_credit",
+        period_key="registration",
+    )
+    assert entitlement is not None
+    assert entitlement.status == "exhausted"
+    assert fake_bifrost.disabled_virtual_keys == ["vk-bifrost-runtime-1"]
+    materialization = await store.get_router_materialization_by_object_id(
+        db_session,
+        router_kind="bifrost",
+        router_object_kind="virtual_key",
+        router_object_id="vk-bifrost-runtime-1",
+    )
+    assert materialization is not None
+    assert materialization.status == "disabled"
+
+
+@pytest.mark.asyncio
+async def test_bifrost_usage_import_paginates_and_flags_missing_managed_cost(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_bifrost = _enable_bifrost_gateway(monkeypatch)
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_user_free_credit_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_user_free_credit_usd",
+        "5.00",
+    )
+
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-bifrost-usage-pagination@example.com",
+    )
+    ensure = await client.post(
+        "/v1/cloud/agent-auth/free-credits/ensure",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert ensure.status_code == 200
+    actor_user_id = UUID(tokens["user_id"])
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert profile_response.status_code == 200
+    profile = await store.get_active_personal_sandbox_profile_for_user(db_session, actor_user_id)
+    assert profile is not None and profile.primary_target_id is not None
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=profile.primary_target_id,
+    )
+    selection = (await store.list_selections_for_profile(db_session, profile.id))[0]
+    await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
+        db_session,
+        auth=WorkerAuthContext(
+            target_id=profile.primary_target_id,
+            worker_id=uuid.uuid4(),
+            cloud_sandbox_id=slot.id,
+            slot_generation=slot.slot_generation,
+        ),
+        profile=profile,
+        selection=selection,
+    )
+    await db_session.commit()
+
+    fake_bifrost.log_pages = {
+        0: BifrostLogSearchResult(
+            logs=(
+                BifrostLogEntry(
+                    log_id="log-bifrost-costed",
+                    timestamp=utcnow(),
+                    provider="anthropic",
+                    model="claude-sonnet-4-6",
+                    status="success",
+                    cost=Decimal("0.001"),
+                    selected_key_id=ensure.json()["budgetSubject"]["litellmTeamId"],
+                    virtual_key_id="vk-bifrost-runtime-1",
+                    token_usage={"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                    raw={"id": "log-bifrost-costed"},
+                ),
+            ),
+            total_count=2,
+        ),
+        1: BifrostLogSearchResult(
+            logs=(
+                BifrostLogEntry(
+                    log_id="log-bifrost-missing-cost",
+                    timestamp=utcnow(),
+                    provider="anthropic",
+                    model="claude-sonnet-4-6",
+                    status="success",
+                    cost=None,
+                    selected_key_id=ensure.json()["budgetSubject"]["litellmTeamId"],
+                    virtual_key_id="vk-bifrost-runtime-1",
+                    token_usage={"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                    raw={"id": "log-bifrost-missing-cost"},
+                ),
+            ),
+            total_count=2,
+        ),
+    }
+
+    imported = await agent_auth_service.import_bifrost_usage_logs(db_session, limit=1)
+    await db_session.commit()
+
+    assert imported == 2
+    assert [call["offset"] for call in fake_bifrost.log_calls] == [0, 1]
+    budget = await store.get_user_managed_budget_subject(db_session, actor_user_id)
+    assert budget is not None
+    assert budget.status == "invalid"
+    assert budget.last_error_code == "managed_usage_cost_missing"
+    assert fake_bifrost.disabled_virtual_keys == ["vk-bifrost-runtime-1"]
+
+
+@pytest.mark.asyncio
+async def test_bifrost_revoke_byok_disables_provider_key_and_runtime_virtual_key(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_anthropic_gateway_byok(monkeypatch)
+    fake_bifrost = _enable_bifrost_gateway(monkeypatch)
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-bifrost-revoke-byok@example.com",
+    )
+    actor_user_id = UUID(tokens["user_id"])
+
+    credential_response = await client.post(
+        "/v1/cloud/agent-auth/credentials/gateway",
+        headers=_headers(tokens),
+        json={
+            "ownerScope": "personal",
+            "agentKind": "claude",
+            "displayName": "Personal Anthropic Bifrost BYOK",
+            "policyKind": "personal_byok",
+            "providerKind": "anthropic_api_key",
+            "payload": {"apiKey": "sk-ant-byok-test"},
+        },
+    )
+    assert credential_response.status_code == 200
+    credential = credential_response.json()["credential"]
+    assert credential["status"] == "ready"
+    provider_key_id = credential_response.json()["policy"]["litellmTeamId"]
+
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert profile_response.status_code == 200
+    profile = await store.get_active_personal_sandbox_profile_for_user(db_session, actor_user_id)
+    assert profile is not None and profile.primary_target_id is not None
+    select_response = await client.put(
+        f"/v1/cloud/sandbox-profiles/{profile.id}/agent-auth-selections/claude",
+        headers=_headers(tokens),
+        json={"credentialId": credential["id"]},
+    )
+    assert select_response.status_code == 200
+    selection = (await store.list_selections_for_profile(db_session, profile.id))[0]
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=profile.primary_target_id,
+    )
+    await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
+        db_session,
+        auth=WorkerAuthContext(
+            target_id=profile.primary_target_id,
+            worker_id=uuid.uuid4(),
+            cloud_sandbox_id=slot.id,
+            slot_generation=slot.slot_generation,
+        ),
+        profile=profile,
+        selection=selection,
+    )
+    await db_session.commit()
+
+    revoke_response = await client.delete(
+        f"/v1/cloud/agent-auth/credentials/{credential['id']}",
+        headers=_headers(tokens),
+    )
+
+    assert revoke_response.status_code == 200
+    assert fake_bifrost.disabled_provider_keys == [
+        {"provider": "anthropic", "key_id": provider_key_id}
+    ]
+    assert fake_bifrost.disabled_virtual_keys == ["vk-bifrost-runtime-1"]
+    provider_materialization = await store.get_router_materialization_by_object_id(
+        db_session,
+        router_kind="bifrost",
+        router_object_kind="provider_key",
+        router_object_id=provider_key_id,
+    )
+    assert provider_materialization is not None
+    assert provider_materialization.status == "disabled"
+    virtual_materialization = await store.get_router_materialization_by_object_id(
+        db_session,
+        router_kind="bifrost",
+        router_object_kind="virtual_key",
+        router_object_id="vk-bifrost-runtime-1",
+    )
+    assert virtual_materialization is not None
+    assert virtual_materialization.status == "disabled"
+
+
+@pytest.mark.asyncio
+async def test_bifrost_selection_change_disables_old_runtime_virtual_key(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_anthropic_gateway_byok(monkeypatch)
+    fake_bifrost = _enable_bifrost_gateway(monkeypatch)
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-bifrost-selection-switch@example.com",
+    )
+    actor_user_id = UUID(tokens["user_id"])
+
+    first_response = await client.post(
+        "/v1/cloud/agent-auth/credentials/gateway",
+        headers=_headers(tokens),
+        json={
+            "ownerScope": "personal",
+            "agentKind": "claude",
+            "displayName": "First Anthropic Bifrost BYOK",
+            "policyKind": "personal_byok",
+            "providerKind": "anthropic_api_key",
+            "payload": {"apiKey": "sk-ant-byok-first"},
+        },
+    )
+    assert first_response.status_code == 200
+    second_response = await client.post(
+        "/v1/cloud/agent-auth/credentials/gateway",
+        headers=_headers(tokens),
+        json={
+            "ownerScope": "personal",
+            "agentKind": "claude",
+            "displayName": "Second Anthropic Bifrost BYOK",
+            "policyKind": "personal_byok",
+            "providerKind": "anthropic_api_key",
+            "payload": {"apiKey": "sk-ant-byok-second"},
+        },
+    )
+    assert second_response.status_code == 200
+    first_credential = first_response.json()["credential"]
+    second_credential = second_response.json()["credential"]
+
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert profile_response.status_code == 200
+    profile = await store.get_active_personal_sandbox_profile_for_user(db_session, actor_user_id)
+    assert profile is not None and profile.primary_target_id is not None
+
+    select_first = await client.put(
+        f"/v1/cloud/sandbox-profiles/{profile.id}/agent-auth-selections/claude",
+        headers=_headers(tokens),
+        json={"credentialId": first_credential["id"]},
+    )
+    assert select_first.status_code == 200
+    selection = (await store.list_selections_for_profile(db_session, profile.id))[0]
+    slot = await ensure_profile_slot(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=profile.primary_target_id,
+    )
+    await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
+        db_session,
+        auth=WorkerAuthContext(
+            target_id=profile.primary_target_id,
+            worker_id=uuid.uuid4(),
+            cloud_sandbox_id=slot.id,
+            slot_generation=slot.slot_generation,
+        ),
+        profile=profile,
+        selection=selection,
+    )
+    await db_session.commit()
+
+    select_second = await client.put(
+        f"/v1/cloud/sandbox-profiles/{profile.id}/agent-auth-selections/claude",
+        headers=_headers(tokens),
+        json={"credentialId": second_credential["id"]},
+    )
+    assert select_second.status_code == 200
+    assert fake_bifrost.disabled_virtual_keys == ["vk-bifrost-runtime-1"]
+
+    selection = (await store.list_selections_for_profile(db_session, profile.id))[0]
+    await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
+        db_session,
+        auth=WorkerAuthContext(
+            target_id=profile.primary_target_id,
+            worker_id=uuid.uuid4(),
+            cloud_sandbox_id=slot.id,
+            slot_generation=slot.slot_generation,
+        ),
+        profile=profile,
+        selection=selection,
+    )
+    await db_session.commit()
+
+    name_prefix = (
+        f"proliferate-claude-{selection.id.hex[:12]}-"
+        f"{slot.id.hex[:12]}-{slot.slot_generation}-"
+    )
+    assert all(item["name"].startswith(name_prefix) for item in fake_bifrost.virtual_keys)
+    assert fake_bifrost.virtual_keys[0]["name"] != fake_bifrost.virtual_keys[1]["name"]
+    assert fake_bifrost.updated_virtual_keys == []
+    allowed_models = [
+        item["provider_configs"][0]["allowed_models"] for item in fake_bifrost.virtual_keys
+    ]
+    assert allowed_models == [["claude-sonnet-4-6"], ["claude-sonnet-4-6"]]
+    assert len(fake_bifrost.virtual_keys) == 2
 
 
 @pytest.mark.asyncio

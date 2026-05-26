@@ -13,6 +13,14 @@ export interface CloudOwnerSelection {
   organizationId?: string | null;
 }
 
+export type BillingReturnSurface = "desktop" | "web";
+
+export interface BillingCheckoutReturnOptions {
+  returnSurface?: BillingReturnSurface;
+}
+
+export type TeamCheckoutSessionRequest = TeamCheckoutRequest & BillingCheckoutReturnOptions;
+
 function ownerQuery(owner?: CloudOwnerSelection) {
   return {
     ownerScope: owner?.ownerScope ?? "personal",
@@ -20,10 +28,11 @@ function ownerQuery(owner?: CloudOwnerSelection) {
   };
 }
 
-function ownerBody(owner?: CloudOwnerSelection) {
+function ownerBody(owner?: CloudOwnerSelection, options?: BillingCheckoutReturnOptions) {
   return {
     ownerScope: owner?.ownerScope ?? "personal",
     organizationId: owner?.organizationId ?? null,
+    returnSurface: options?.returnSurface ?? "web",
   };
 }
 
@@ -41,16 +50,17 @@ export async function getCloudBillingPlan(
 export async function createCloudCheckoutSession(
   owner?: CloudOwnerSelection,
   client: ProliferateCloudClient = getProliferateClient(),
+  returnOptions?: BillingCheckoutReturnOptions,
 ): Promise<BillingUrlResponse> {
   return (
     await client.POST("/v1/billing/cloud-checkout", {
-      body: ownerBody(owner),
+      body: ownerBody(owner, returnOptions),
     })
   ).data!;
 }
 
 export async function createTeamCheckoutSession(
-  input: TeamCheckoutRequest,
+  input: TeamCheckoutSessionRequest,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<TeamCheckoutResponse> {
   return (
@@ -80,10 +90,11 @@ export async function cancelTeamCheckout(
 export async function createBillingPortalSession(
   owner?: CloudOwnerSelection,
   client: ProliferateCloudClient = getProliferateClient(),
+  returnOptions?: BillingCheckoutReturnOptions,
 ): Promise<BillingUrlResponse> {
   return (
     await client.POST("/v1/billing/customer-portal", {
-      body: ownerBody(owner),
+      body: ownerBody(owner, returnOptions),
     })
   ).data!;
 }
@@ -91,10 +102,11 @@ export async function createBillingPortalSession(
 export async function createRefillCheckoutSession(
   owner?: CloudOwnerSelection,
   client: ProliferateCloudClient = getProliferateClient(),
+  returnOptions?: BillingCheckoutReturnOptions,
 ): Promise<BillingUrlResponse> {
   return (
     await client.POST("/v1/billing/refill-checkout", {
-      body: ownerBody(owner),
+      body: ownerBody(owner, returnOptions),
     })
   ).data!;
 }

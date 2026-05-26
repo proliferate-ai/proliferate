@@ -19,6 +19,8 @@ def gateway_byok_policy_verdict(
     personal_byok_enabled: bool,
     litellm_topology: str,
     customer_secret_isolation_verified: bool,
+    gateway_router: str = "litellm_legacy",
+    bifrost_isolation_verified: bool = False,
 ) -> GatewayByokVerdict:
     if not gateway_byok_enabled:
         return GatewayByokVerdict(
@@ -33,22 +35,28 @@ def gateway_byok_policy_verdict(
             message="Personal BYOK is not enabled for cloud use.",
         )
     if policy_kind in {"personal_byok", "org_byok"} and not gateway_route_isolation_ready(
+        gateway_router=gateway_router,
         litellm_topology=litellm_topology,
         customer_secret_isolation_verified=customer_secret_isolation_verified,
+        bifrost_isolation_verified=bifrost_isolation_verified,
     ):
         return GatewayByokVerdict(
             allowed=False,
             code="gateway_byok_route_isolation_unverified",
-            message="Gateway BYOK requires verified LiteLLM route isolation.",
+            message="Gateway BYOK requires verified router secret isolation.",
         )
     return GatewayByokVerdict(allowed=True, code=None, message=None)
 
 
 def gateway_route_isolation_ready(
     *,
+    gateway_router: str = "litellm_legacy",
     litellm_topology: str,
     customer_secret_isolation_verified: bool,
+    bifrost_isolation_verified: bool = False,
 ) -> bool:
+    if gateway_router.strip().lower() == "bifrost":
+        return bifrost_isolation_verified
     topology = litellm_topology.strip().lower()
     if topology not in {"enterprise_shared", "isolated_router"}:
         return False

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-05-13.1",
-  "generatedAt": "2026-05-13T18:00:00Z",
+  "catalogVersion": "2026-05-26.1",
+  "generatedAt": "2026-05-26T06:25:25Z",
   "compatibility": {
     "minRuntimeVersion": "0.1.0",
     "maxRuntimeVersion": null,
@@ -45,6 +45,7 @@
         },
         "auth": {
           "envVars": [
+            "ANTHROPIC_AUTH_TOKEN",
             "ANTHROPIC_API_KEY"
           ],
           "login": {

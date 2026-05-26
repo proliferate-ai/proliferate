@@ -18,6 +18,7 @@ import {
   agentAuthCredentialOwnerLabel,
   agentAuthCredentialStatusLabel,
   agentAuthCredentialStatusTone,
+  agentAuthManagedCreditsCapabilityLabel,
   credentialSummaryDetails,
   isProliferateManagedCreditsCredential,
 } from "@/lib/domain/agent-auth/agent-auth-presentation";
@@ -29,12 +30,14 @@ export function AuthenticationMethodsSection({
   personalCredentials,
   rescanning,
   revokingCredentialId,
+  ensuringFreeCredits,
   syncingLocalProvider,
   organizations,
   selectedOrganizationId,
   onSelectedOrganizationChange,
   onRescan,
   onRevokeCredential,
+  onEnsureFreeCredits,
   onSyncLocalCredential,
 }: {
   capabilities: AgentGatewayCapabilities | null;
@@ -43,16 +46,22 @@ export function AuthenticationMethodsSection({
   personalCredentials: AgentAuthCredential[];
   rescanning: boolean;
   revokingCredentialId: string | null;
+  ensuringFreeCredits: boolean;
   syncingLocalProvider: AgentAuthProvider | null;
   organizations: CloudAgentAuthCredentialFormProps["organizations"];
   selectedOrganizationId: string | null;
   onSelectedOrganizationChange: (organizationId: string | null) => void;
   onRescan: () => void;
   onRevokeCredential: (credential: AgentAuthCredential) => void;
+  onEnsureFreeCredits: () => void;
   onSyncLocalCredential: (provider: AgentAuthProvider) => void;
 }) {
   const [credentialToRevoke, setCredentialToRevoke] = useState<AgentAuthCredential | null>(null);
   const [addingCredential, setAddingCredential] = useState(false);
+  const managedCreditCredentials = personalCredentials.filter(isProliferateManagedCreditsCredential);
+  const userManagedCredentials = personalCredentials.filter(
+    (credential) => !isProliferateManagedCreditsCredential(credential),
+  );
   return (
     <section className="space-y-3">
       <div className="space-y-1">
@@ -84,11 +93,17 @@ export function AuthenticationMethodsSection({
             />
           );
         })}
-        {personalCredentials.length === 0 ? (
+        <ManagedFreeCreditsMethodRow
+          capabilities={capabilities}
+          credentials={managedCreditCredentials}
+          ensuring={ensuringFreeCredits}
+          onEnsureFreeCredits={onEnsureFreeCredits}
+        />
+        {userManagedCredentials.length === 0 ? (
           <div className="border-t border-border-light px-4 py-3 text-xs text-muted-foreground">
-            No synced or cloud credentials have been saved yet.
+            No synced or BYOK credentials have been saved yet.
           </div>
-        ) : personalCredentials.map((credential) => (
+        ) : userManagedCredentials.map((credential) => (
           <CredentialMethodRow
             key={credential.id}
             capabilities={capabilities}
@@ -109,7 +124,7 @@ export function AuthenticationMethodsSection({
           <span className="min-w-0 flex-1">
             <span className="block font-medium text-foreground">Add credential</span>
             <span className="block text-xs leading-4 text-muted-foreground">
-              Add an API key, OpenAI-compatible gateway, or Bedrock role for a harness.
+              Add Anthropic, OpenAI, Gemini, or Bedrock credentials for a harness.
             </span>
           </span>
           <span className="text-xs text-muted-foreground">
@@ -144,6 +159,58 @@ export function AuthenticationMethodsSection({
         }}
       />
     </section>
+  );
+}
+
+function ManagedFreeCreditsMethodRow({
+  capabilities,
+  credentials,
+  ensuring,
+  onEnsureFreeCredits,
+}: {
+  capabilities: AgentGatewayCapabilities | null;
+  credentials: AgentAuthCredential[];
+  ensuring: boolean;
+  onEnsureFreeCredits: () => void;
+}) {
+  const enabled = capabilities?.enabled === true && capabilities.managedCreditsPersonalEnabled;
+  const harnessLabel = managedCreditHarnessLabel(capabilities, credentials);
+  const ready = credentials.length > 0;
+  const statusLabel = !capabilities
+    ? "Checking"
+    : ready ? "Ready" : enabled ? "Available" : "Unavailable";
+  const statusTone = ready ? "success" : "neutral";
+  return (
+    <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_8rem] items-center gap-3 border-b border-border-light px-4 py-3">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium text-foreground">
+          Proliferate Default Free credits
+        </div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+          Managed gateway credit
+        </div>
+      </div>
+      <div className="min-w-0 text-xs text-muted-foreground">
+        {harnessLabel}
+      </div>
+      <div className="min-w-0 truncate text-xs text-muted-foreground">
+        {agentAuthManagedCreditsCapabilityLabel(capabilities, "personal")}
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <Badge tone={statusTone}>{statusLabel}</Badge>
+        {enabled && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            loading={ensuring}
+            onClick={() => onEnsureFreeCredits()}
+          >
+            {ready ? "Refresh" : "Enable"}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -285,4 +352,18 @@ function providerForAgentKind(agentKind: AgentAuthAgentKind): AgentAuthProvider 
     return agentKind;
   }
   return null;
+}
+
+function managedCreditHarnessLabel(
+  capabilities: AgentGatewayCapabilities | null,
+  credentials: AgentAuthCredential[],
+): string {
+  const credentialAgentKinds = credentials.map((credential) => credential.agentKind);
+  const configuredAgentKinds = capabilities?.managedCreditAgentKinds ?? [];
+  const agentKinds = AGENT_AUTH_AGENT_ORDER.filter((agentKind) =>
+    credentialAgentKinds.includes(agentKind) || configuredAgentKinds.includes(agentKind));
+  if (agentKinds.length === 0) {
+    return "Configured harnesses";
+  }
+  return agentKinds.map(agentAuthAgentLabel).join(", ");
 }

@@ -15,6 +15,13 @@ STRIPE_FORWARD_TO ?= http://127.0.0.1:8000/v1/billing/webhooks/stripe
 STRIPE_SNAPSHOT_EVENTS ?= checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed
 AGENT_GATEWAY ?= 0
 LOCAL_LITELLM_MASTER_KEY ?= sk-local-dev-agent-gateway
+LOCAL_BIFROST_BASE_URL ?= http://127.0.0.1:8080
+BIFROST_APP_DIR ?= $(HOME)/.proliferate-local/bifrost
+BIFROST_LOG_LEVEL ?= info
+AGENT_GATEWAY_TUNNEL ?= 0
+CLOUD_WORKER_TUNNEL ?= 0
+AGENT_GATEWAY_FREE_CREDIT_USD ?= 5
+AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS ?= claude,codex
 AWS_REGION ?= us-east-1
 PROD_CLUSTER ?= proliferate-prod
 PROD_SERVICE ?= proliferate-prod-server
@@ -33,6 +40,8 @@ DESKTOP_RELEASE_REF ?= $(shell git branch --show-current 2>/dev/null)
 DESKTOP_RELEASE_TARGET_OS ?= macos
 DESKTOP_RELEASE_TAG ?= desktop-v$(shell node -p "require('./desktop/package.json').version" 2>/dev/null)
 SERVER_ENV_SOURCE = set -a; \
+	[ ! -f .env ] || . .env; \
+	[ ! -f .env.local ] || . .env.local; \
 	[ ! -f server/.env ] || . server/.env; \
 	[ ! -f server/.env.local ] || . server/.env.local; \
 	set +a;
@@ -126,10 +135,69 @@ dev: sdk-build server-db-ready
 	export API_BASE_URL="http://127.0.0.1:$$PROLIFERATE_API_PORT"; \
 	export FRONTEND_BASE_URL="$${FRONTEND_BASE_URL:-http://127.0.0.1:$$PROLIFERATE_HOSTED_WEB_PORT}"; \
 	export CORS_ALLOW_ORIGINS="http://localhost:$$PROLIFERATE_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_WEB_PORT,http://localhost:$$PROLIFERATE_HOSTED_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_HOSTED_WEB_PORT,http://localhost:$$PROLIFERATE_MOBILE_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_MOBILE_WEB_PORT,http://tauri.localhost,tauri://localhost"; \
-	export STRIPE_CHECKOUT_SUCCESS_URL="$$FRONTEND_BASE_URL/settings/billing?checkout=success"; \
-	export STRIPE_CHECKOUT_CANCEL_URL="$$FRONTEND_BASE_URL/settings/billing?checkout=cancel"; \
-	export STRIPE_CUSTOMER_PORTAL_RETURN_URL="$$FRONTEND_BASE_URL/settings/billing"; \
+	export STRIPE_CHECKOUT_SUCCESS_URL="$$FRONTEND_BASE_URL/settings/cloud?checkout=success"; \
+	export STRIPE_CHECKOUT_CANCEL_URL="$$FRONTEND_BASE_URL/settings/cloud?checkout=cancel"; \
+	export STRIPE_CUSTOMER_PORTAL_RETURN_URL="$$FRONTEND_BASE_URL/settings/cloud"; \
 	export STRIPE_FORWARD_TO="http://127.0.0.1:$$PROLIFERATE_API_PORT/v1/billing/webhooks/stripe"; \
+	agent_gateway_mode="$(AGENT_GATEWAY)"; \
+	agent_gateway_tunnel_mode="$(AGENT_GATEWAY_TUNNEL)"; \
+	cloud_worker_tunnel_mode="$(CLOUD_WORKER_TUNNEL)"; \
+	if [ "$$cloud_worker_tunnel_mode" = "0" ] && { [ "$$agent_gateway_tunnel_mode" = "ngrok" ] || [ "$$agent_gateway_tunnel_mode" = "1" ]; }; then \
+		cloud_worker_tunnel_mode=ngrok; \
+	fi; \
+	if [ "$$cloud_worker_tunnel_mode" = "ngrok" ] || [ "$$cloud_worker_tunnel_mode" = "1" ]; then \
+		if ! command -v ngrok >/dev/null 2>&1; then \
+			echo "ngrok is required for CLOUD_WORKER_TUNNEL=ngrok."; \
+			exit 1; \
+		fi; \
+		if [ "$$agent_gateway_mode" = "bifrost" ] && { [ "$$agent_gateway_tunnel_mode" = "ngrok" ] || [ "$$agent_gateway_tunnel_mode" = "1" ]; }; then \
+			export AGENT_GATEWAY_BIFROST_BASE_URL="$${AGENT_GATEWAY_BIFROST_BASE_URL:-$(LOCAL_BIFROST_BASE_URL)}"; \
+			bifrost_port=$$(node -e 'const u = new URL(process.env.AGENT_GATEWAY_BIFROST_BASE_URL); console.log(u.port || (u.protocol === "https:" ? "443" : "80"));'); \
+			public_mux_port=$$((PROLIFERATE_API_PORT + 3000)); \
+			if curl -fsS "http://127.0.0.1:$$public_mux_port/__proliferate_mux_health" >/dev/null 2>&1; then \
+				echo "Using existing public tunnel mux on :$$public_mux_port"; \
+			else \
+				echo "Starting public tunnel mux :$$public_mux_port (API :$$PROLIFERATE_API_PORT, Bifrost :$$bifrost_port)"; \
+				node scripts/dev-public-tunnel-mux.mjs \
+					--listen-port "$$public_mux_port" \
+					--api-base-url "http://127.0.0.1:$$PROLIFERATE_API_PORT" \
+					--bifrost-base-url "$$AGENT_GATEWAY_BIFROST_BASE_URL" \
+					> "/tmp/proliferate-public-mux-$$PROLIFERATE_DEV_PROFILE.log" 2>&1 & \
+				for attempt in $$(seq 1 80); do \
+					curl -fsS "http://127.0.0.1:$$public_mux_port/__proliferate_mux_health" >/dev/null 2>&1 && break; \
+					if [ "$$attempt" = "80" ]; then \
+						echo "Public tunnel mux did not become healthy on :$$public_mux_port"; \
+						exit 1; \
+					fi; \
+					sleep 0.25; \
+				done; \
+			fi; \
+			cloud_worker_ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$public_mux_port" 2>/dev/null || true); \
+			if [ -z "$$cloud_worker_ngrok_url" ]; then \
+				echo "Starting ngrok tunnel for public API/Bifrost mux :$$public_mux_port"; \
+				ngrok http "$$public_mux_port" --log=stdout --log-format=json > "/tmp/proliferate-public-mux-$$PROLIFERATE_DEV_PROFILE-ngrok.log" 2>&1 & \
+				cloud_worker_ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$public_mux_port" --wait-ms 45000); \
+			else \
+				echo "Using existing ngrok tunnel for public API/Bifrost mux: $$cloud_worker_ngrok_url"; \
+			fi; \
+			export AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL="$${AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL:-$$cloud_worker_ngrok_url}"; \
+		else \
+			cloud_worker_ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$PROLIFERATE_API_PORT" 2>/dev/null || true); \
+			if [ -z "$$cloud_worker_ngrok_url" ]; then \
+				echo "Starting ngrok tunnel for Cloud worker callbacks :$$PROLIFERATE_API_PORT"; \
+				ngrok http "$$PROLIFERATE_API_PORT" --log=stdout --log-format=json > "/tmp/proliferate-cloud-worker-$$PROLIFERATE_DEV_PROFILE-ngrok.log" 2>&1 & \
+				cloud_worker_ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$PROLIFERATE_API_PORT" --wait-ms 45000); \
+			else \
+				echo "Using existing ngrok tunnel for Cloud worker callbacks: $$cloud_worker_ngrok_url"; \
+			fi; \
+		fi; \
+		export CLOUD_WORKER_BASE_URL="$${CLOUD_WORKER_BASE_URL:-$$cloud_worker_ngrok_url}"; \
+		export CLOUD_MCP_OAUTH_CALLBACK_BASE_URL="$${CLOUD_MCP_OAUTH_CALLBACK_BASE_URL:-$$cloud_worker_ngrok_url}"; \
+		echo "Cloud worker public callback URL: $$CLOUD_WORKER_BASE_URL"; \
+	elif [ "$$cloud_worker_tunnel_mode" != "0" ]; then \
+		echo "Unsupported CLOUD_WORKER_TUNNEL=$$cloud_worker_tunnel_mode. Use 0, 1, or ngrok."; \
+		exit 1; \
+	fi; \
 	if [ "$$use_profile_db" = "1" ]; then \
 		LOCAL_PGHOST="$(LOCAL_PGHOST)" \
 		LOCAL_PGPORT="$(LOCAL_PGPORT)" \
@@ -138,14 +206,86 @@ dev: sdk-build server-db-ready
 		USE_EXISTING_POSTGRES="$(USE_EXISTING_POSTGRES)" \
 		node scripts/dev.mjs ensure-db --db-name "$$PROLIFERATE_DEV_DB_NAME"; \
 	fi; \
-	if [ "$(AGENT_GATEWAY)" = "1" ]; then \
+	if [ "$$agent_gateway_mode" = "1" ] || [ "$$agent_gateway_mode" = "litellm" ] || [ "$$agent_gateway_mode" = "litellm_legacy" ]; then \
 		export AGENT_GATEWAY_ENABLED=true; \
+		export AGENT_GATEWAY_ROUTER=litellm_legacy; \
 		export AGENT_GATEWAY_LITELLM_MASTER_KEY="$${AGENT_GATEWAY_LITELLM_MASTER_KEY:-$(LOCAL_LITELLM_MASTER_KEY)}"; \
 		export AGENT_GATEWAY_LITELLM_BASE_URL="$${AGENT_GATEWAY_LITELLM_BASE_URL:-http://127.0.0.1:4000}"; \
 		export AGENT_GATEWAY_PUBLIC_BASE_URL="$${AGENT_GATEWAY_PUBLIC_BASE_URL:-http://127.0.0.1:$$PROLIFERATE_API_PORT}"; \
 		export AGENT_GATEWAY_RECONCILER_ENABLED="$${AGENT_GATEWAY_RECONCILER_ENABLED:-true}"; \
 		AGENT_GATEWAY_LITELLM_MASTER_KEY="$$AGENT_GATEWAY_LITELLM_MASTER_KEY" \
 			docker compose -f server/docker-compose.yml --profile agent-gateway up -d litellm; \
+	elif [ "$$agent_gateway_mode" = "bifrost" ]; then \
+		export AGENT_GATEWAY_ENABLED=true; \
+		export AGENT_GATEWAY_ROUTER=bifrost; \
+		export AGENT_GATEWAY_BIFROST_BASE_URL="$${AGENT_GATEWAY_BIFROST_BASE_URL:-$(LOCAL_BIFROST_BASE_URL)}"; \
+		export AGENT_GATEWAY_RECONCILER_ENABLED="$${AGENT_GATEWAY_RECONCILER_ENABLED:-true}"; \
+		export AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED="$${AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED:-true}"; \
+		export AGENT_GATEWAY_USER_FREE_CREDIT_USD="$${AGENT_GATEWAY_USER_FREE_CREDIT_USD:-$(AGENT_GATEWAY_FREE_CREDIT_USD)}"; \
+		export AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS="$${AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS:-$(AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS)}"; \
+		export AGENT_GATEWAY_BYOK_ENABLED="$${AGENT_GATEWAY_BYOK_ENABLED:-true}"; \
+		export AGENT_GATEWAY_PERSONAL_BYOK_ENABLED="$${AGENT_GATEWAY_PERSONAL_BYOK_ENABLED:-true}"; \
+		export AGENT_GATEWAY_BIFROST_ISOLATION_VERIFIED="$${AGENT_GATEWAY_BIFROST_ISOLATION_VERIFIED:-true}"; \
+		export AGENT_GATEWAY_ANTHROPIC_BYOK_ENABLED="$${AGENT_GATEWAY_ANTHROPIC_BYOK_ENABLED:-true}"; \
+		export AGENT_GATEWAY_OPENAI_BYOK_ENABLED="$${AGENT_GATEWAY_OPENAI_BYOK_ENABLED:-true}"; \
+		export AGENT_GATEWAY_BEDROCK_BYOK_ENABLED="$${AGENT_GATEWAY_BEDROCK_BYOK_ENABLED:-true}"; \
+		export AGENT_GATEWAY_GEMINI_BYOK_ENABLED="$${AGENT_GATEWAY_GEMINI_BYOK_ENABLED:-true}"; \
+		if [ -z "$${AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY:-}" ] && [ -n "$${ANTHROPIC_API_KEY:-}" ]; then \
+			export AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY="$$ANTHROPIC_API_KEY"; \
+		fi; \
+		if [ -z "$${AGENT_GATEWAY_MANAGED_OPENAI_API_KEY:-}" ] && [ -n "$${OPENAI_API_KEY:-}" ]; then \
+			export AGENT_GATEWAY_MANAGED_OPENAI_API_KEY="$$OPENAI_API_KEY"; \
+		fi; \
+		bifrost_port=$$(node -e 'const u = new URL(process.env.AGENT_GATEWAY_BIFROST_BASE_URL); console.log(u.port || (u.protocol === "https:" ? "443" : "80"));'); \
+		bifrost_host=$$(node -e 'const u = new URL(process.env.AGENT_GATEWAY_BIFROST_BASE_URL); console.log(u.hostname);'); \
+		if [ "$$bifrost_host" = "127.0.0.1" ] || [ "$$bifrost_host" = "localhost" ]; then \
+			node scripts/dev-bifrost-ensure-config.mjs \
+				--base-url "$$AGENT_GATEWAY_BIFROST_BASE_URL" \
+				--app-dir "$(BIFROST_APP_DIR)"; \
+		fi; \
+		if curl -fsS "$$AGENT_GATEWAY_BIFROST_BASE_URL/health" >/dev/null 2>&1; then \
+			echo "Using existing Bifrost at $$AGENT_GATEWAY_BIFROST_BASE_URL"; \
+		elif [ "$$bifrost_host" = "127.0.0.1" ] || [ "$$bifrost_host" = "localhost" ]; then \
+			echo "Starting local Bifrost at $$AGENT_GATEWAY_BIFROST_BASE_URL"; \
+			mkdir -p "$(BIFROST_APP_DIR)"; \
+			BIFROST_HOST=127.0.0.1 npx -y @maximhq/bifrost -port "$$bifrost_port" -app-dir "$(BIFROST_APP_DIR)" -log-level "$(BIFROST_LOG_LEVEL)" & \
+			for attempt in $$(seq 1 80); do \
+				curl -fsS "$$AGENT_GATEWAY_BIFROST_BASE_URL/health" >/dev/null 2>&1 && break; \
+				if [ "$$attempt" = "80" ]; then \
+					echo "Bifrost did not become healthy at $$AGENT_GATEWAY_BIFROST_BASE_URL"; \
+					exit 1; \
+				fi; \
+				sleep 0.5; \
+			done; \
+		else \
+			echo "Bifrost is not reachable at $$AGENT_GATEWAY_BIFROST_BASE_URL"; \
+			exit 1; \
+		fi; \
+		if [ "$$agent_gateway_tunnel_mode" = "ngrok" ] || [ "$$agent_gateway_tunnel_mode" = "1" ]; then \
+			if ! command -v ngrok >/dev/null 2>&1; then \
+				echo "ngrok is required for AGENT_GATEWAY_TUNNEL=ngrok."; \
+				exit 1; \
+			fi; \
+			if [ -n "$${AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL:-}" ]; then \
+				echo "Using public Bifrost URL from mux: $$AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL"; \
+			else \
+				ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$bifrost_port" 2>/dev/null || true); \
+				if [ -z "$$ngrok_url" ]; then \
+					echo "Starting ngrok tunnel for Bifrost :$$bifrost_port"; \
+					ngrok http "$$bifrost_port" --log=stdout --log-format=json > /tmp/proliferate-bifrost-ngrok.log 2>&1 & \
+					ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$bifrost_port" --wait-ms 45000); \
+				else \
+					echo "Using existing ngrok tunnel for Bifrost: $$ngrok_url"; \
+				fi; \
+				export AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL="$${AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL:-$$ngrok_url}"; \
+			fi; \
+		else \
+			export AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL="$${AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL:-$$AGENT_GATEWAY_BIFROST_BASE_URL}"; \
+		fi; \
+		echo "Agent gateway Bifrost enabled: admin $$AGENT_GATEWAY_BIFROST_BASE_URL, public $$AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL"; \
+	elif [ "$$agent_gateway_mode" != "0" ]; then \
+		echo "Unsupported AGENT_GATEWAY=$$agent_gateway_mode. Use 0, 1, litellm_legacy, or bifrost."; \
+		exit 1; \
 	fi; \
 	(cd server && DATABASE_URL="$$DATABASE_URL" .venv/bin/alembic upgrade head); \
 	stripe_listener_ready=0; \

@@ -37,7 +37,10 @@ async def assert_current_schema(
         "agent_gateway_free_credit_entitlement",
         "agent_gateway_policy",
         "agent_gateway_provider_credential",
+        "agent_gateway_llm_usage_event",
+        "agent_gateway_router_materialization",
         "agent_gateway_runtime_grant",
+        "agent_gateway_usage_import_cursor",
         "sandbox_agent_auth_selection",
         "sandbox_profile",
         "sandbox_profile_agent_auth_revision",
@@ -680,6 +683,70 @@ async def assert_current_schema(
         "uq_agent_gateway_free_credit_entitlement_user_period_source",
         "ix_agent_gateway_free_credit_entitlement_budget_subject",
     } <= free_credit_indexes
+
+    router_materialization_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes(
+                "agent_gateway_router_materialization"
+            )
+        }
+    )
+    assert {
+        "uq_agent_gateway_router_materialization_runtime",
+        "uq_agent_gateway_router_materialization_policy_object",
+        "uq_agent_gateway_router_materialization_budget_object",
+        "ix_agent_gateway_router_materialization_object_id",
+    } <= router_materialization_indexes
+
+    router_materialization_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints(
+                "agent_gateway_router_materialization"
+            )
+        }
+    )
+    assert {
+        "ck_agent_gateway_router_materialization_router_kind",
+        "ck_agent_gateway_router_materialization_object_kind",
+        "ck_agent_gateway_router_materialization_object_scope",
+        "ck_agent_gateway_router_materialization_sync_status",
+        "ck_agent_gateway_router_materialization_status",
+    } <= router_materialization_checks
+
+    usage_event_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            row[0]
+            for row in sync_conn.exec_driver_sql(
+                "SELECT indexname FROM pg_indexes "
+                "WHERE schemaname = current_schema() "
+                "AND tablename = 'agent_gateway_llm_usage_event'"
+            )
+        }
+    )
+    expected_usage_event_indexes = {
+        "uq_agent_gateway_llm_usage_event_router_log",
+        "ix_agent_gateway_llm_usage_event_budget_subject",
+        "ix_agent_gateway_llm_usage_event_router_virtual_key",
+    }
+    missing_usage_event_indexes = expected_usage_event_indexes - usage_event_indexes
+    assert not missing_usage_event_indexes, (
+        f"missing usage indexes {sorted(missing_usage_event_indexes)} "
+        f"from {sorted(usage_event_indexes)}"
+    )
+
+    usage_cursor_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            row[0]
+            for row in sync_conn.exec_driver_sql(
+                "SELECT indexname FROM pg_indexes "
+                "WHERE schemaname = current_schema() "
+                "AND tablename = 'agent_gateway_usage_import_cursor'"
+            )
+        }
+    )
+    assert "uq_agent_gateway_usage_import_cursor_router" in usage_cursor_indexes
 
     client_daily_activity_indexes = await conn.run_sync(
         lambda sync_conn: {

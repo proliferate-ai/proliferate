@@ -3803,6 +3803,8 @@ export interface components {
             anthropicApiKey: boolean;
             /** Openaiapikey */
             openaiApiKey: boolean;
+            /** Geminiapikey */
+            geminiApiKey: boolean;
             /** Bedrockassumerole */
             bedrockAssumeRole: boolean;
             /** Openaicompatible */
@@ -4493,6 +4495,12 @@ export interface components {
             ownerScope: "personal" | "organization";
             /** Organizationid */
             organizationId?: string | null;
+            /**
+             * Returnsurface
+             * @default web
+             * @enum {string}
+             */
+            returnSurface: "desktop" | "web";
         };
         /** BillingUrlResponse */
         BillingUrlResponse: {
@@ -5603,7 +5611,7 @@ export interface components {
              * Providerkind
              * @enum {string}
              */
-            providerKind: "anthropic_api_key" | "openai_api_key" | "bedrock_assume_role" | "openai_compatible";
+            providerKind: "anthropic_api_key" | "openai_api_key" | "gemini_api_key" | "bedrock_assume_role" | "openai_compatible";
             /** Payload */
             payload: {
                 [key: string]: string;
@@ -7502,6 +7510,12 @@ export interface components {
             teamName: string;
             /** Inviteemails */
             inviteEmails?: string[];
+            /**
+             * Returnsurface
+             * @default web
+             * @enum {string}
+             */
+            returnSurface: "desktop" | "web";
         };
         /** TeamCheckoutResponse */
         TeamCheckoutResponse: {

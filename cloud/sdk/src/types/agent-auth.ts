@@ -7,6 +7,7 @@ export type AgentAuthCredentialKind = "managed_gateway" | "synced_path";
 export type AgentGatewayProviderKind =
   | "anthropic_api_key"
   | "openai_api_key"
+  | "gemini_api_key"
   | "bedrock_assume_role"
   | "openai_compatible";
 
@@ -76,6 +77,11 @@ export interface CreateOpenAiCompatibleCredentialInput
   extends AgentAuthCredentialOwnerInput {
   agentKind: Extract<AgentAuthAgentKind, "codex" | "opencode">;
   baseUrl: string;
+  apiKey: string;
+}
+
+export interface CreateGeminiApiKeyCredentialInput
+  extends AgentAuthCredentialOwnerInput {
   apiKey: string;
 }
 

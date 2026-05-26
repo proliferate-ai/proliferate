@@ -44,6 +44,10 @@ pub(in crate::live::sessions) fn should_advertise_codex_mcp_elicitation(
         && resolved_agent.agent_process.source.as_deref() == Some("override")
 }
 
+pub(in crate::live::sessions) fn should_attempt_advertised_auth(source_agent_kind: &str) -> bool {
+    source_agent_kind != AgentKind::Codex.as_str()
+}
+
 pub(in crate::live::sessions) async fn initialize_connection(
     conn: &acp::ClientSideConnection,
     source_agent_kind: &str,
@@ -85,7 +89,16 @@ pub(in crate::live::sessions) async fn initialize_connection(
         }
     };
 
-    authenticate_if_advertised(conn, &init_response, session_id, workspace_id).await;
+    if should_attempt_advertised_auth(source_agent_kind) {
+        authenticate_if_advertised(conn, &init_response, session_id, workspace_id).await;
+    } else if !init_response.auth_methods.is_empty() {
+        tracing::info!(
+            session_id = %session_id,
+            workspace_id = %workspace_id,
+            auth_method_count = init_response.auth_methods.len(),
+            "Codex auth is provided by configured model provider credentials; skipping advertised ACP authenticate"
+        );
+    }
     Ok(init_response)
 }
 
@@ -283,6 +296,17 @@ mod tests {
             capability_bool(&capabilities, "codex", "requestUserInput"),
             None
         );
+    }
+
+    #[test]
+    fn advertised_auth_is_skipped_for_codex() {
+        assert!(!should_attempt_advertised_auth(AgentKind::Codex.as_str()));
+    }
+
+    #[test]
+    fn advertised_auth_is_preserved_for_non_codex_agents() {
+        assert!(should_attempt_advertised_auth(AgentKind::Claude.as_str()));
+        assert!(should_attempt_advertised_auth(AgentKind::Gemini.as_str()));
     }
 
     fn resolved_agent_with_source(kind: AgentKind, source: &str) -> ResolvedAgent {

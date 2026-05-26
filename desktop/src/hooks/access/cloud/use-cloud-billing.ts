@@ -10,6 +10,7 @@ import {
   getCloudBillingPlan,
   updateOverageSettings,
 } from "@proliferate/cloud-sdk/client/billing";
+import { desktopBillingReturnOptions } from "@/lib/access/cloud/billing-return";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -167,7 +168,11 @@ export function useInvalidateCloudBillingState(owner?: CloudOwnerSelection) {
 
 export function useCloudBillingMutations(owner?: CloudOwnerSelection) {
   const cloudCheckoutMutation = useMutation({
-    mutationFn: () => createCloudCheckoutSession(owner),
+    mutationFn: () => createCloudCheckoutSession(
+      owner,
+      undefined,
+      desktopBillingReturnOptions(),
+    ),
     onError: (error) => {
       captureTelemetryException(error, {
         tags: {
@@ -180,7 +185,11 @@ export function useCloudBillingMutations(owner?: CloudOwnerSelection) {
   });
 
   const portalMutation = useMutation({
-    mutationFn: () => createBillingPortalSession(owner),
+    mutationFn: () => createBillingPortalSession(
+      owner,
+      undefined,
+      desktopBillingReturnOptions(),
+    ),
     onError: (error) => {
       captureTelemetryException(error, {
         tags: {
@@ -193,7 +202,11 @@ export function useCloudBillingMutations(owner?: CloudOwnerSelection) {
   });
 
   const refillMutation = useMutation({
-    mutationFn: () => createRefillCheckoutSession(owner),
+    mutationFn: () => createRefillCheckoutSession(
+      owner,
+      undefined,
+      desktopBillingReturnOptions(),
+    ),
     onError: (error) => {
       captureTelemetryException(error, {
         tags: {

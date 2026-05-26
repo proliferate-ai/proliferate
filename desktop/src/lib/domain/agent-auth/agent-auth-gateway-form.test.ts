@@ -22,6 +22,7 @@ const capabilities = {
   byokProviders: {
     anthropicApiKey: true,
     openaiApiKey: true,
+    geminiApiKey: false,
     bedrockAssumeRole: true,
     openaiCompatible: true,
   },
@@ -36,6 +37,7 @@ describe("agentAuthGatewayProviderOptionsForCapabilities", () => {
         byokProviders: {
           anthropicApiKey: false,
           openaiApiKey: true,
+          geminiApiKey: false,
           bedrockAssumeRole: false,
           openaiCompatible: true,
         },
@@ -54,7 +56,7 @@ describe("agentAuthGatewayProviderOptionsForCapabilities", () => {
 });
 
 describe("preferredAgentAuthGatewayProviderForAgent", () => {
-  it("maps Claude to Anthropic first and Codex to OpenAI first", () => {
+  it("maps Claude to Anthropic first, Codex to OpenAI first, and Gemini to Gemini", () => {
     const options = agentAuthGatewayProviderOptionsForCapabilities(capabilities);
 
     expect(preferredAgentAuthGatewayProviderForAgent("claude", options, capabilities)).toBe(
@@ -64,6 +66,16 @@ describe("preferredAgentAuthGatewayProviderForAgent", () => {
       "openai_api_key",
     );
     expect(preferredAgentAuthGatewayProviderForAgent("gemini", options, capabilities)).toBeNull();
+    const geminiCapabilities = {
+      ...capabilities,
+      byokProviders: { ...capabilities.byokProviders, geminiApiKey: true },
+    };
+    const geminiOptions = agentAuthGatewayProviderOptionsForCapabilities(geminiCapabilities);
+    expect(preferredAgentAuthGatewayProviderForAgent(
+      "gemini",
+      geminiOptions,
+      geminiCapabilities,
+    )).toBe("gemini_api_key");
   });
 
   it("requires the OpenCode gateway capability", () => {
@@ -132,6 +144,33 @@ describe("buildAgentAuthGatewayCredentialRequest", () => {
         region: "us-east-1",
         externalId: "external-id",
       },
+    });
+  });
+
+  it("builds Gemini API keys as Gemini BYOK", () => {
+    expect(
+      buildAgentAuthGatewayCredentialRequest({
+        providerKind: "gemini_api_key",
+        agentKind: "codex",
+        ownerScope: "personal",
+        organizationId: null,
+        displayName: " Gemini ",
+        values: {
+          apiKey: " gemini-key ",
+          baseUrl: "",
+          roleArn: "",
+          region: "",
+          externalId: "",
+        },
+      }),
+    ).toMatchObject({
+      ownerScope: "personal",
+      organizationId: null,
+      agentKind: "gemini",
+      displayName: "Gemini",
+      policyKind: "personal_byok",
+      providerKind: "gemini_api_key",
+      payload: { apiKey: "gemini-key" },
     });
   });
 });

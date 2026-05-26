@@ -684,6 +684,22 @@ mod tests {
     }
 
     #[test]
+    fn bundled_claude_descriptor_accepts_gateway_auth_token_env() {
+        let registry = built_in_registry();
+        let claude = registry
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Claude)
+            .expect("missing Claude descriptor");
+        let mut env = BTreeMap::new();
+        env.insert("ANTHROPIC_AUTH_TOKEN".to_string(), "token".to_string());
+
+        assert_eq!(
+            detect_credentials_with_env(&claude.auth, Path::new("/tmp/empty-home"), &env),
+            CredentialState::Ready
+        );
+    }
+
+    #[test]
     fn env_ready_agents_do_not_require_native_cli_for_readiness() {
         let native = Some(not_found_artifact(
             ArtifactRole::NativeCli,

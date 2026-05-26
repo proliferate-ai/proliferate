@@ -36,6 +36,8 @@ async def invalidate_applied_on_slot_replacement(
     *,
     sandbox_profile_id: UUID,
     target_id: UUID,
+    replaced_sandbox_id: UUID | None = None,
+    replaced_slot_generation: int | None = None,
 ) -> None:
     now = utcnow()
     state = await load_state_for_profile_target(
@@ -43,7 +45,15 @@ async def invalidate_applied_on_slot_replacement(
         sandbox_profile_id=sandbox_profile_id,
         target_id=target_id,
     )
-    if state is not None:
+    slot_matches_state = (
+        replaced_sandbox_id is None
+        or (
+            state is not None
+            and state.active_sandbox_id == replaced_sandbox_id
+            and state.slot_generation == replaced_slot_generation
+        )
+    )
+    if state is not None and slot_matches_state:
         state.active_sandbox_id = None
         state.slot_generation = None
         state.applied_agent_auth_revision = None
@@ -59,6 +69,14 @@ async def invalidate_applied_on_slot_replacement(
                     AgentGatewayRuntimeGrant.sandbox_profile_id == sandbox_profile_id,
                     AgentGatewayRuntimeGrant.target_id == target_id,
                     AgentGatewayRuntimeGrant.revoked_at.is_(None),
+                    *(
+                        (
+                            AgentGatewayRuntimeGrant.cloud_sandbox_id == replaced_sandbox_id,
+                            AgentGatewayRuntimeGrant.slot_generation == replaced_slot_generation,
+                        )
+                        if replaced_sandbox_id is not None
+                        else ()
+                    ),
                 )
             )
         )
@@ -74,6 +92,11 @@ async def invalidate_applied_on_slot_replacement(
                     CloudWorkspace.sandbox_profile_id == sandbox_profile_id,
                     CloudWorkspace.target_id == target_id,
                     CloudWorkspace.archived_at.is_(None),
+                    *(
+                        (CloudWorkspace.materialized_slot_generation == replaced_slot_generation,)
+                        if replaced_sandbox_id is not None
+                        else ()
+                    ),
                 )
             )
         )

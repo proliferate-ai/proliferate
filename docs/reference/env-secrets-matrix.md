@@ -133,22 +133,41 @@ lives in `server/proliferate/constants/billing.py`. It is not env-overridable.
 
 | Variable | Secret | Required | Used for |
 | --- | --- | --- | --- |
-| `AGENT_GATEWAY_ENABLED` | No | No | Enables Proliferate gateway routes and LiteLLM provisioning paths |
-| `AGENT_GATEWAY_LITELLM_BASE_URL` | No | When gateway is enabled | Private LiteLLM proxy base URL |
-| `AGENT_GATEWAY_LITELLM_MASTER_KEY` | Yes | When provisioning gateway credentials or managed credits | LiteLLM admin key for teams, virtual keys, and model deployments |
-| `AGENT_GATEWAY_PUBLIC_BASE_URL` | No | When sandbox gateway auth is materialized | Public Proliferate gateway base URL written into sandbox auth config |
-| `AGENT_GATEWAY_DEFAULT_MANAGED_BUDGET_USD` | No | Only for managed credits | Organization managed-credit entitlement; `0` disables managed credits |
+| `AGENT_GATEWAY_ENABLED` | No | No | Enables managed LLM auth, BYOK policy provisioning, and the selected router |
+| `AGENT_GATEWAY_ROUTER` | No | No | Selects `litellm_legacy` or direct `bifrost` routing |
+| `AGENT_GATEWAY_LITELLM_BASE_URL` | No | When legacy router is enabled | Private LiteLLM proxy base URL |
+| `AGENT_GATEWAY_LITELLM_MASTER_KEY` | Yes | When legacy provisioning is enabled | LiteLLM admin key for teams, virtual keys, and model deployments |
+| `AGENT_GATEWAY_PUBLIC_BASE_URL` | No | Legacy router only | Public Proliferate gateway base URL written into sandbox auth config |
+| `AGENT_GATEWAY_BIFROST_BASE_URL` | No | When `AGENT_GATEWAY_ROUTER=bifrost` | Private Bifrost management API base URL for provider keys, virtual keys, and logs |
+| `AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL` | No | When `AGENT_GATEWAY_ROUTER=bifrost` | Public Bifrost inference base URL written into managed sandbox auth config |
+| `AGENT_GATEWAY_BIFROST_ADMIN_TOKEN` | Yes | When Bifrost admin API is protected | Optional Bifrost management API bearer token; never sent to sandboxes |
+| `AGENT_GATEWAY_BIFROST_REQUEST_TIMEOUT_SECONDS` | No | No | Bifrost management API timeout |
+| `AGENT_GATEWAY_BIFROST_ISOLATION_VERIFIED` | No | BYOK with Bifrost | Operator proof flag that Bifrost virtual keys isolate BYOK credentials safely |
+| `AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY` | Yes | Managed credits via Anthropic-backed Bifrost | Proliferate-owned Anthropic provider key materialized into Bifrost |
+| `AGENT_GATEWAY_MANAGED_OPENAI_API_KEY` | Yes | Managed credits via OpenAI-backed Bifrost | Proliferate-owned OpenAI provider key materialized into Bifrost |
+| `AGENT_GATEWAY_MANAGED_GEMINI_API_KEY` | Yes | Managed credits via Gemini-backed Bifrost | Proliferate-owned Gemini provider key materialized into Bifrost |
+| `AGENT_GATEWAY_MANAGED_BEDROCK_REGION` | No | Managed credits via Bedrock-backed Bifrost | AWS Bedrock region for Proliferate-owned managed credits |
+| `AGENT_GATEWAY_MANAGED_BEDROCK_ROLE_ARN` | No | Managed credits via Bedrock-backed Bifrost | AWS Bedrock role ARN for Proliferate-owned managed credits |
+| `AGENT_GATEWAY_MANAGED_BEDROCK_EXTERNAL_ID` | Yes | No | Optional ExternalId for the managed-credit Bedrock role |
+| `AGENT_GATEWAY_MANAGED_BUDGET_FREE_USD` | No | Only for organization managed credits | Included organization managed-credit budget for free-plan organizations |
+| `AGENT_GATEWAY_MANAGED_BUDGET_PRO_USD` | No | Only for organization managed credits | Included organization managed-credit budget for Pro organizations |
+| `AGENT_GATEWAY_MANAGED_BUDGET_UNLIMITED_USD` | No | Only for organization managed credits | Included organization managed-credit budget for unlimited-plan organizations |
+| `AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED` | No | No | Enables personal onboarding managed-credit grants for GitHub-linked users |
+| `AGENT_GATEWAY_USER_FREE_CREDIT_USD` | No | Only for personal managed credits | Personal free managed-credit amount |
+| `AGENT_GATEWAY_USER_FREE_CREDIT_PERIOD` | No | Only for personal managed credits | Free-credit period key mode: registration or monthly |
+| `AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS` | No | Only for managed credits | Comma-separated agent kinds eligible for Proliferate managed credits |
 | `AGENT_GATEWAY_MAX_REQUEST_BYTES` | No | No | Maximum gateway request body size |
-| `AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS` | No | No | Timeout for gateway forwarding to LiteLLM |
-| `AGENT_GATEWAY_BYOK_ENABLED` | No | No | Enables user/org provider credentials through the gateway; hosted-cloud V1 leaves this disabled |
+| `AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS` | No | Legacy router only | Timeout for legacy gateway forwarding |
+| `AGENT_GATEWAY_BYOK_ENABLED` | No | No | Enables user/org provider credentials through the selected router; hosted-cloud V1 leaves this disabled |
 | `AGENT_GATEWAY_ANTHROPIC_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables Anthropic API key credentials through the gateway |
 | `AGENT_GATEWAY_OPENAI_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables OpenAI API key credentials through the gateway |
 | `AGENT_GATEWAY_BEDROCK_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables AWS Bedrock AssumeRole credentials through the gateway |
+| `AGENT_GATEWAY_GEMINI_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` and Bifrost | Enables Gemini API key credentials through Bifrost |
 | `AGENT_GATEWAY_OPENAI_COMPATIBLE_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables OpenAI-compatible provider credentials through the gateway |
 | `AGENT_GATEWAY_OPENCODE_ENABLED` | No | No | Enables the experimental OpenCode gateway route |
-| `AGENT_GATEWAY_RECONCILER_ENABLED` | No | No | Starts the background LiteLLM mirror reconciler |
+| `AGENT_GATEWAY_RECONCILER_ENABLED` | No | No | Starts the background router reconciler and Bifrost usage importer |
 | `AGENT_GATEWAY_RECONCILER_INTERVAL_SECONDS` | No | No | Delay between reconciliation passes |
-| `AGENT_GATEWAY_RECONCILER_BATCH_SIZE` | No | No | Maximum unsynced, drifted, or failed policy and budget rows checked by one reconciliation pass |
+| `AGENT_GATEWAY_RECONCILER_BATCH_SIZE` | No | No | Maximum unsynced, drifted, failed policy, budget, or usage rows checked by one reconciliation pass |
 | `LITELLM_IMAGE` | No | No | Docker image used by self-hosted and local Compose for the private LiteLLM proxy |
 | `LITELLM_POSTGRES_DB` | No | Only when bundled LiteLLM is enabled | Private LiteLLM Postgres database name |
 | `LITELLM_POSTGRES_USER` | No | Only when bundled LiteLLM is enabled | Private LiteLLM Postgres username |

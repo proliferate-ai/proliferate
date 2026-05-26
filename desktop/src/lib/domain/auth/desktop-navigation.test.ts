@@ -33,6 +33,18 @@ describe("desktopNavigationTarget", () => {
     );
   });
 
+  it("routes billing deep links to billing settings", () => {
+    expect(desktopNavigationTarget("proliferate://billing/success")).toBe(
+      "/settings?checkout=success&section=billing",
+    );
+    expect(desktopNavigationTarget("proliferate-local://billing/cancel")).toBe(
+      "/settings?checkout=cancel&section=billing",
+    );
+    expect(desktopNavigationTarget("proliferate://settings/billing?checkout=success")).toBe(
+      "/settings?checkout=success&section=billing",
+    );
+  });
+
   it("routes organization invitation handoff links to the flat organization settings section", () => {
     expect(
       desktopNavigationTarget("proliferate://settings/organization?inviteHandoff=abc123"),

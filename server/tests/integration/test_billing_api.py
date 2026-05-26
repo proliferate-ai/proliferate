@@ -391,14 +391,18 @@ class TestBillingApi:
         )
         await db_session.commit()
 
-        response = await client.post("/v1/billing/cloud-checkout", headers=headers)
+        response = await client.post(
+            "/v1/billing/cloud-checkout",
+            headers=headers,
+            json={"returnSurface": "desktop"},
+        )
 
         assert response.status_code == 200
         assert response.json() == {"url": "https://portal.test/active"}
         portal = captured["portal"]
         assert isinstance(portal, dict)
         assert portal["stripe_customer_id"] == "cus_checkout_portal"
-        assert portal["return_url"] == "https://app.test/portal"
+        assert portal["return_url"] == "https://app.test/portal?returnSurface=desktop"
         assert portal["idempotency_key"].startswith(f"portal:active-cloud:{subject.id}:")
 
     @pytest.mark.asyncio
@@ -418,7 +422,7 @@ class TestBillingApi:
             "stripe_customer_portal_return_url",
             "https://app.test/portal",
         )
-        captured: dict[str, object] = {}
+        captured: dict[str, object] = {"checkout_calls": []}
 
         async def fake_validate_pro_subscription_price_configuration() -> None:
             captured["validated"] = True
@@ -431,9 +435,13 @@ class TestBillingApi:
             **kwargs: object,
         ) -> stripe_billing.StripeUrlResponse:
             captured["checkout"] = kwargs
+            checkout_calls = captured["checkout_calls"]
+            assert isinstance(checkout_calls, list)
+            checkout_calls.append(kwargs)
+            attempt = len(checkout_calls)
             return stripe_billing.StripeUrlResponse(
-                url="https://checkout.test/team",
-                id="cs_team_checkout",
+                url=f"https://checkout.test/team-{attempt}",
+                id=f"cs_team_checkout_{attempt}",
             )
 
         monkeypatch.setattr(
@@ -459,7 +467,7 @@ class TestBillingApi:
 
         assert response.status_code == 200
         body = response.json()
-        assert body["url"] == "https://checkout.test/team"
+        assert body["url"] == "https://checkout.test/team-1"
         assert body["intentId"]
         assert captured["validated"] is True
         checkout = captured["checkout"]
@@ -475,8 +483,8 @@ class TestBillingApi:
         intent = await db_session.get(OrganizationCheckoutIntent, uuid.UUID(body["intentId"]))
         assert intent is not None
         assert intent.status == ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING
-        assert intent.checkout_url == "https://checkout.test/team"
-        assert intent.stripe_checkout_session_id == "cs_team_checkout"
+        assert intent.checkout_url == "https://checkout.test/team-1"
+        assert intent.stripe_checkout_session_id == "cs_team_checkout_1"
         organization = await db_session.get(Organization, intent.organization_id)
         assert organization is not None
         assert organization.status == ORGANIZATION_STATUS_PENDING_CHECKOUT
@@ -499,7 +507,19 @@ class TestBillingApi:
             json={"teamName": "Acme Research"},
         )
         assert reused.status_code == 200
-        assert reused.json() == body
+        reused_body = reused.json()
+        assert reused_body["intentId"] == body["intentId"]
+        assert reused_body["url"] == "https://checkout.test/team-2"
+        checkout_calls = captured["checkout_calls"]
+        assert isinstance(checkout_calls, list)
+        assert len(checkout_calls) == 2
+        assert checkout_calls[0]["idempotency_key"] != checkout_calls[1]["idempotency_key"]
+
+        db_session.expire_all()
+        intent = await db_session.get(OrganizationCheckoutIntent, uuid.UUID(body["intentId"]))
+        assert intent is not None
+        assert intent.checkout_url == "https://checkout.test/team-2"
+        assert intent.stripe_checkout_session_id == "cs_team_checkout_2"
 
     @pytest.mark.asyncio
     async def test_team_checkout_activation_creates_team_and_shared_sandbox(
@@ -844,6 +864,7 @@ class TestBillingApi:
             json={
                 "ownerScope": "organization",
                 "organizationId": str(organization.id),
+                "returnSurface": "desktop",
             },
         )
 
@@ -858,6 +879,8 @@ class TestBillingApi:
         assert checkout["cloud_monthly_price_id"] == "price_pro"
         assert checkout["overage_price_id"] == "price_overage"
         assert checkout["seat_quantity"] == 2
+        assert checkout["success_url"] == "https://app.test/success?returnSurface=desktop"
+        assert checkout["cancel_url"] == "https://app.test/cancel?returnSurface=desktop"
         assert checkout["idempotency_key"].startswith(f"cloud-checkout:org:{subject.id}:seats:2:")
         customer = captured["customer"]
         assert isinstance(customer, dict)
