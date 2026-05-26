@@ -482,6 +482,64 @@ async def test_purge_cloud_workspace_is_idempotent_when_record_is_missing(
 
 
 @pytest.mark.asyncio
+async def test_purge_cloud_workspace_requires_archived_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid4()
+    workspace_id = uuid4()
+    workspace = SimpleNamespace(
+        id=workspace_id,
+        owner_scope="personal",
+        archived_at=None,
+    )
+
+    async def _get_cloud_workspace_by_id(_db, _workspace_id):
+        assert _workspace_id == workspace_id
+        return workspace
+
+    async def _cloud_workspace_user_can_archive_with_db(_db, _user_id, _workspace_id):
+        assert _user_id == user_id
+        assert _workspace_id == workspace_id
+        return workspace
+
+    async def _unexpected(*_args, **_kwargs):
+        raise AssertionError("active workspace purge must stop before destructive work")
+
+    db = SimpleNamespace(commit=_unexpected)
+    monkeypatch.setattr(
+        workspace_service,
+        "get_cloud_workspace_by_id",
+        _get_cloud_workspace_by_id,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "cloud_workspace_user_can_archive_with_db",
+        _cloud_workspace_user_can_archive_with_db,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "_revoke_claim_tokens_for_workspace",
+        _unexpected,
+    )
+    monkeypatch.setattr(
+        workspace_service.command_store,
+        "supersede_workspace_commands",
+        _unexpected,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "purge_cloud_workspace_record",
+        _unexpected,
+    )
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await workspace_service.purge_cloud_workspace(db, user_id, workspace_id)
+
+    assert exc_info.value.code == "workspace_purge_requires_archive"
+    assert exc_info.value.status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_destroy_workspace_runtime_skips_shared_profile_slot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
