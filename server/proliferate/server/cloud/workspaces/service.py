@@ -1798,6 +1798,12 @@ async def purge_cloud_workspace(
             "Only personal cloud workspaces can be purged from this surface.",
             status_code=409,
         )
+    if workspace.archived_at is None:
+        raise CloudApiError(
+            "workspace_purge_requires_archive",
+            "Archive this Cloud workspace before purging it.",
+            status_code=409,
+        )
     await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_purged")
     await command_store.supersede_workspace_commands(
         db,

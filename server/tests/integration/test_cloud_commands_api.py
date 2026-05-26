@@ -683,6 +683,106 @@ class TestCloudCommandsApi:
         assert exposure.commandable is False
 
     @pytest.mark.asyncio
+    async def test_worker_prune_command_result_supersedes_stale_materialization_without_rejection(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-prune-stale",
+        )
+        target_id, worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="prune-stale",
+        )
+        target_uuid = UUID(target_id)
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="prune-stale",
+        )
+        await db_session.commit()
+
+        current_workspace_id = "anyharness-managed-prune-stale"
+        stale_workspace_id = "anyharness-managed-prune-stale-old"
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "prune-worktree-stale-materialization",
+                "targetId": target_id,
+                "workspaceId": current_workspace_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "kind": CloudCommandKind.prune_workspace_worktree.value,
+                "payload": {
+                    "workspaceId": current_workspace_id,
+                    "cloudWorkspaceId": cloud_workspace_id,
+                    "reason": "test",
+                },
+            },
+        )
+        assert created.status_code == 200, created.text
+        command_id = created.json()["commandId"]
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": [CloudCommandKind.prune_workspace_worktree.value],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert lease.status_code == 200
+        leased = lease.json()["command"]
+        assert leased["commandId"] == command_id
+
+        result = await client.post(
+            f"/v1/cloud/worker/commands/{command_id}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": leased["leaseId"],
+                "slotGeneration": leased["slotGeneration"],
+                "status": "accepted",
+                "result": {
+                    "cloudWorkspaceId": cloud_workspace_id,
+                    "anyharnessWorkspaceId": stale_workspace_id,
+                    "materializationState": "dehydrated",
+                    "cleanupStatus": "completed",
+                    "anyharnessStatusCode": 200,
+                    "body": {
+                        "workspace": {"id": stale_workspace_id},
+                    },
+                },
+            },
+        )
+        assert result.status_code == 200, result.text
+        payload = result.json()
+        assert payload["status"] == CloudCommandStatus.superseded.value
+
+        row = (
+            await db_session.execute(
+                select(CloudCommand).where(CloudCommand.id == UUID(command_id))
+            )
+        ).scalar_one()
+        assert row.status == CloudCommandStatus.superseded.value
+        assert row.error_code == "stale_materialization"
+        assert row.accepted_at is None
+        assert row.rejected_at is None
+
+        workspace = await cloud_workspaces.get_cloud_workspace_by_id(
+            db_session,
+            UUID(cloud_workspace_id),
+        )
+        assert workspace is not None
+        assert workspace.anyharness_workspace_id == current_workspace_id
+
+    @pytest.mark.asyncio
     async def test_archive_supersedes_pending_workspace_commands(
         self,
         client: AsyncClient,

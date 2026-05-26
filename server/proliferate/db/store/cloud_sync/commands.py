@@ -1309,7 +1309,7 @@ async def _record_pruned_cloud_workspace(
         row.error_code = "stale_materialization"
         row.error_message = "Prune result does not match the current workspace materialization."
         row.accepted_at = None
-        row.rejected_at = now
+        row.rejected_at = None
         row.updated_at = now
         await db.flush()
         return
