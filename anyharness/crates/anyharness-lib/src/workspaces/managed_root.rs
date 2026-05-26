@@ -36,3 +36,11 @@ pub fn canonical_managed_worktrees_root(runtime_home: &Path) -> anyhow::Result<P
         .ok_or_else(|| anyhow::anyhow!("managed worktrees root has no final path component"))?;
     Ok(canonical_parent.join(file_name))
 }
+
+pub fn is_managed_worktree_path(runtime_home: &Path, checkout_path: &Path) -> anyhow::Result<bool> {
+    let managed_root = canonical_managed_worktrees_root(runtime_home)?;
+    let checkout_path = std::fs::canonicalize(checkout_path).map_err(|error| {
+        anyhow::anyhow!("canonicalizing workspace checkout path for retire: {error}")
+    })?;
+    Ok(checkout_path.starts_with(managed_root))
+}

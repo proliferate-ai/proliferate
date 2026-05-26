@@ -11,7 +11,7 @@ use crate::sessions::service::SessionService;
 use crate::terminals::model::TerminalStatus;
 use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
-use crate::workspaces::managed_root::canonical_managed_worktrees_root;
+use crate::workspaces::managed_root::is_managed_worktree_path;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};
 use crate::workspaces::runtime::WorkspaceRuntime;
@@ -194,18 +194,10 @@ impl RetirePreflightChecker {
                 ));
             }
             if mode != RetirePreflightMode::Purge && status.conflicted {
-                blockers.push(WorkspaceRetireBlocker {
-                    code: WorkspaceRetireBlockerCode::ConflictedFiles,
-                    message: "Working tree has conflicted files.".to_string(),
-                    severity: WorkspaceRetireBlockerSeverity::Blocking,
-                    retryable: true,
-                    session_id: None,
-                    terminal_id: None,
-                    command_run_id: None,
-                    path: None,
-                    paths: None,
-                    operation: None,
-                });
+                blockers.push(retire_blocker(
+                    WorkspaceRetireBlockerCode::ConflictedFiles,
+                    "Working tree has conflicted files.",
+                ));
             }
             if mode != RetirePreflightMode::Purge
                 && status.operation != crate::adapters::git::types::GitOperation::None
@@ -413,19 +405,16 @@ impl RetirePreflightChecker {
         workspace: &WorkspaceRecord,
         blockers: &mut Vec<WorkspaceRetireBlocker>,
     ) -> anyhow::Result<()> {
-        let managed_root = canonical_managed_worktrees_root(&self.runtime_home)?;
-        let workspace_path = std::fs::canonicalize(&workspace.path).map_err(|error| {
-            anyhow::anyhow!("canonicalizing workspace checkout path for retire: {error}")
-        })?;
-        if !workspace_path.starts_with(&managed_root) {
-            blockers.push(WorkspaceRetireBlocker {
-                path: Some(workspace.path.clone()),
-                ..retire_blocker(
-                    WorkspaceRetireBlockerCode::UnsupportedWorkspace,
-                    "Workspace checkout is outside the managed worktrees root.",
-                )
-            });
+        if is_managed_worktree_path(&self.runtime_home, Path::new(&workspace.path))? {
+            return Ok(());
         }
+        blockers.push(WorkspaceRetireBlocker {
+            path: Some(workspace.path.clone()),
+            ..retire_blocker(
+                WorkspaceRetireBlockerCode::UnsupportedWorkspace,
+                "Workspace checkout is outside the managed worktrees root.",
+            )
+        });
         Ok(())
     }
 

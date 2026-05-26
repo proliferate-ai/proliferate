@@ -107,3 +107,5 @@ server/proliferate/server/cloud/agent_auth/service.py
 server/tests/integration/test_cloud_agent_auth_api.py
 server/tests/unit/test_cloud_runtime_ensure_running.py
 server/tests/integration/test_sandbox_profile_foundation.py
+server/proliferate/server/agent_gateway/service.py
+server/proliferate/server/organizations/service.py
