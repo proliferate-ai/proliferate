@@ -302,6 +302,7 @@ describe("automation inventory", () => {
       run("dispatched", { id: "run-ssh", anyharnessWorkspaceId: "aw-1", cloudTargetKindSnapshot: "ssh" }),
       run("failed", { lastErrorMessage: "Boom" }),
       run("cancelled"),
+      run("queued_elsewhere" as AutomationRunInventoryRecord["status"], { id: "run-unknown" }),
     ]);
 
     expect(items.map((item) => [item.statusLabel, item.statusKind, item.openState, item.targetLabel])).toEqual([
@@ -312,6 +313,7 @@ describe("automation inventory", () => {
       ["Session started", "done", "openable", "SSH target"],
       ["Failed", "blocked", "none", "Personal cloud"],
       ["Cancelled", "done", "none", "Personal cloud"],
+      ["Status unavailable", "waiting", "none", "Personal cloud"],
     ]);
   });
 

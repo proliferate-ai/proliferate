@@ -16,6 +16,8 @@ export interface PendingHomePrompt {
 }
 
 const PENDING_HOME_PROMPT_KEY_PREFIX = "proliferate.web.pendingHomePrompt:";
+const MAX_PENDING_HOME_PROMPT_AGE_MS = 6 * 60 * 60 * 1000;
+const MAX_FAILED_HOME_PROMPT_AGE_MS = 10 * 60 * 1000;
 const memoryPendingHomePrompts = new Map<string, PendingHomePrompt>();
 
 export function savePendingHomePrompt(
@@ -36,6 +38,10 @@ export function savePendingHomePrompt(
 export function loadPendingHomePrompt(workspaceId: string): PendingHomePrompt | null {
   const memoryPrompt = memoryPendingHomePrompts.get(workspaceId);
   if (memoryPrompt) {
+    if (!isFreshPrompt(memoryPrompt)) {
+      clearPendingHomePrompt(workspaceId);
+      return null;
+    }
     return memoryPrompt;
   }
   let raw: string | null = null;
@@ -52,7 +58,7 @@ export function loadPendingHomePrompt(workspaceId: string): PendingHomePrompt | 
     if (typeof parsed.id !== "string" || typeof parsed.text !== "string") {
       return null;
     }
-    return {
+    const prompt: PendingHomePrompt = {
       id: parsed.id,
       text: parsed.text,
       agentKind: typeof parsed.agentKind === "string" ? parsed.agentKind : null,
@@ -63,6 +69,12 @@ export function loadPendingHomePrompt(workspaceId: string): PendingHomePrompt | 
       status: parsed.status === "failed" ? "failed" : "pending",
       errorMessage: typeof parsed.errorMessage === "string" ? parsed.errorMessage : null,
     };
+    if (!isFreshPrompt(prompt)) {
+      clearPendingHomePrompt(workspaceId);
+      return null;
+    }
+    memoryPendingHomePrompts.set(workspaceId, prompt);
+    return prompt;
   } catch {
     return null;
   }
@@ -79,6 +91,13 @@ export function clearPendingHomePrompt(workspaceId: string): void {
 
 function pendingHomePromptKey(workspaceId: string): string {
   return `${PENDING_HOME_PROMPT_KEY_PREFIX}${workspaceId}`;
+}
+
+function isFreshPrompt(prompt: PendingHomePrompt): boolean {
+  const maxAgeMs = prompt.status === "failed"
+    ? MAX_FAILED_HOME_PROMPT_AGE_MS
+    : MAX_PENDING_HOME_PROMPT_AGE_MS;
+  return Date.now() - prompt.createdAt < maxAgeMs;
 }
 
 function parseSessionConfigUpdates(value: unknown): PendingHomePromptSessionConfigUpdate[] {

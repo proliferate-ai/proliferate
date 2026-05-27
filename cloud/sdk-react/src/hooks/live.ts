@@ -255,7 +255,12 @@ export function useWorkspaceLive(
               setState((current) => {
                 const snapshot = reduceWorkspaceSnapshot(current.snapshot, event);
                 if (snapshot) {
-                  queryClient.setQueryData(cloudWorkspaceSnapshotKey(workspaceId), snapshot);
+                  queryClient.setQueryData<CloudWorkspaceSnapshot>(
+                    cloudWorkspaceSnapshotKey(workspaceId),
+                    (cached) => cached
+                      ? { ...cached, sessions: snapshot.sessions }
+                      : snapshot,
+                  );
                 }
                 return {
                   client,
@@ -266,6 +271,17 @@ export function useWorkspaceLive(
                   error: undefined,
                 };
               });
+              return;
+            }
+            if (isCloudCommandStatusPatch(event)) {
+              queryClient.setQueryData(cloudCommandKey(event.command.commandId), event.command);
+              setState((current) => ({
+                ...current,
+                client,
+                liveKey,
+                isConnected: true,
+                error: undefined,
+              }));
             }
           },
           onError(error) {

@@ -86,6 +86,7 @@ export type CloudSessionLiveEvent =
 export type CloudWorkspaceLiveEvent =
   | CloudWorkspaceSnapshot
   | CloudWorkspaceProjectionPatch
+  | CloudCommandStatusPatch
   | CloudLiveHeartbeat;
 
 export type CloudTargetLiveEvent =

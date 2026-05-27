@@ -571,7 +571,7 @@ function automationRunStatusLabel(run: AutomationRunInventoryRecord): string {
     case "cancelled":
       return "Cancelled";
     default:
-      return `Unknown status: ${run.status}`;
+      return "Status unavailable";
   }
 }
 

@@ -18,7 +18,7 @@ from proliferate.constants.cloud import (
 from proliferate.db.models.cloud.agent_auth import SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
-from proliferate.db.models.cloud.sync import CloudPendingInteraction
+from proliferate.db.models.cloud.sync import CloudPendingInteraction, CloudSessionProjection
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
@@ -2435,6 +2435,113 @@ class TestCloudCommandsApi:
         assert cursors[0].exposure_id == exposure.id
         assert cursors[0].anyharness_workspace_id == "workspace-exposure-cursor"
         assert cursors[0].anyharness_session_id == "session-exposure-cursor"
+        session_projection = (
+            await db_session.execute(
+                select(CloudSessionProjection).where(
+                    CloudSessionProjection.session_id == "session-exposure-cursor",
+                )
+            )
+        ).scalar_one()
+        assert session_projection.source_agent_kind == "claude"
+
+        codex_start = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-start-session-exposure-cursor-codex",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "kind": "start_session",
+                "payload": {"agentKind": "codex"},
+            },
+        )
+        assert codex_start.status_code == 200
+        codex_start_id = codex_start.json()["commandId"]
+        codex_start_lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["start_session", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert codex_start_lease.status_code == 200
+        leased_codex_start = codex_start_lease.json()["command"]
+        assert leased_codex_start["commandId"] == codex_start_id
+        codex_start_result = await client.post(
+            f"/v1/cloud/worker/commands/{codex_start_id}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": leased_codex_start["leaseId"],
+                "slotGeneration": leased_codex_start["slotGeneration"],
+                "cloudWorkspaceId": cloud_workspace_id,
+                "status": "accepted",
+                "result": {"body": {"sessionId": "session-exposure-cursor-codex"}},
+            },
+        )
+        assert codex_start_result.status_code == 200
+        session_projections = (
+            (
+                await db_session.execute(
+                    select(CloudSessionProjection).where(
+                        CloudSessionProjection.cloud_workspace_id == UUID(cloud_workspace_id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        projection_agents = {
+            projection.session_id: projection.source_agent_kind
+            for projection in session_projections
+        }
+        assert projection_agents["session-exposure-cursor"] == "claude"
+        assert projection_agents["session-exposure-cursor-codex"] == "codex"
+
+        invalid_start = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-start-session-exposure-cursor-invalid-agent",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "kind": "start_session",
+                "payload": {"agentKind": "not-a-supported-agent-kind" * 8},
+            },
+        )
+        assert invalid_start.status_code == 200
+        invalid_start_id = invalid_start.json()["commandId"]
+        invalid_start_lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["start_session", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert invalid_start_lease.status_code == 200
+        leased_invalid_start = invalid_start_lease.json()["command"]
+        assert leased_invalid_start["commandId"] == invalid_start_id
+        invalid_start_result = await client.post(
+            f"/v1/cloud/worker/commands/{invalid_start_id}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": leased_invalid_start["leaseId"],
+                "slotGeneration": leased_invalid_start["slotGeneration"],
+                "cloudWorkspaceId": cloud_workspace_id,
+                "status": "accepted",
+                "result": {"body": {"sessionId": "session-exposure-cursor-invalid-agent"}},
+            },
+        )
+        assert invalid_start_result.status_code == 200
+        invalid_agent_projection = (
+            await db_session.execute(
+                select(CloudSessionProjection).where(
+                    CloudSessionProjection.session_id == "session-exposure-cursor-invalid-agent",
+                )
+            )
+        ).scalar_one()
+        assert invalid_agent_projection.source_agent_kind is None
 
         revoked_cloud_workspace_id = await _create_ready_managed_cloud_workspace(
             db_session,

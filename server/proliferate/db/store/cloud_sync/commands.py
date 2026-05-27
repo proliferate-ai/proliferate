@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import (
+    SUPPORTED_CLOUD_AGENTS,
     CloudCommandKind,
     CloudCommandStatus,
     CloudWorkspaceCleanupState,
@@ -1463,6 +1464,7 @@ async def _record_started_cloud_session_projection(
     )
     if exposure is None or exposure.status != "active" or not exposure.anyharness_workspace_id:
         return
+    source_agent_kind = _start_session_agent_kind(row.payload_json)
     projection = (
         await db.execute(
             select(CloudSessionProjection)
@@ -1479,6 +1481,7 @@ async def _record_started_cloud_session_projection(
             cloud_workspace_id=row.cloud_workspace_id,
             workspace_id=row.workspace_id,
             session_id=session_id,
+            source_agent_kind=source_agent_kind,
             status="running",
             projection_level=(
                 exposure.default_projection_level if exposure is not None else "live"
@@ -1494,12 +1497,27 @@ async def _record_started_cloud_session_projection(
         projection.exposure_id = exposure.id if exposure is not None else projection.exposure_id
         projection.cloud_workspace_id = row.cloud_workspace_id
         projection.workspace_id = row.workspace_id
+        projection.source_agent_kind = source_agent_kind or projection.source_agent_kind
         projection.status = projection.status or "running"
         if exposure is not None:
             projection.projection_level = exposure.default_projection_level
             projection.commandable = exposure.commandable
         projection.updated_at = now
     await db.flush()
+
+
+def _start_session_agent_kind(payload_json: str | None) -> str | None:
+    try:
+        payload = json.loads(payload_json or "{}")
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    value = payload.get("agentKind")
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized if normalized in SUPPORTED_CLOUD_AGENTS else None
 
 
 async def _load_active_workspace_exposure(

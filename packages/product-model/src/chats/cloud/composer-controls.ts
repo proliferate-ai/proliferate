@@ -65,6 +65,7 @@ export type PendingConfigChange = {
 
 export const DEFAULT_DIRECT_PROMPT_MODEL_ID = "us.anthropic.claude-sonnet-4-6";
 export const DEFAULT_DIRECT_PROMPT_AGENT_KIND = "claude";
+export const DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS = ["claude", "codex"] as const;
 
 const CLOUD_MODEL_OPTIONS = [
   {
@@ -111,6 +112,7 @@ export function buildCloudChatComposerControls(input: {
   liveConfig: SessionLiveConfigSnapshot | null;
   pendingConfigChanges: Record<string, PendingConfigChange>;
   launchCatalog?: CloudAgentCatalogResponse | null;
+  launchableAgentKinds?: readonly string[] | null;
   launchSelection?: CloudLaunchComposerSelection;
   launchModelId: string;
   onLaunchAgentModelSelect?: (agentKind: string, modelId: string) => void;
@@ -122,6 +124,7 @@ export function buildCloudChatComposerControls(input: {
   if (!input.session) {
     return buildCloudLaunchComposerControls({
       catalog: input.launchCatalog,
+      launchableAgentKinds: input.launchableAgentKinds,
       selection: input.launchSelection ?? {
         agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
         modelId: input.launchModelId,
@@ -143,6 +146,7 @@ export function buildCloudChatComposerControls(input: {
       agentKind: input.session!.sourceAgentKind ?? null,
       control,
       catalog: input.launchCatalog ?? null,
+      launchableAgentKinds: input.launchableAgentKinds,
       placement: control.rawConfigId === leadingModeControl?.rawConfigId ? "leading" : "trailing",
       pendingConfigChanges: input.pendingConfigChanges,
       onSelect: input.onSessionConfigSelect,
@@ -153,11 +157,15 @@ export function buildCloudChatComposerControls(input: {
 
 export function buildCloudLaunchComposerControls(input: {
   catalog?: CloudAgentCatalogResponse | null;
+  launchableAgentKinds?: readonly string[] | null;
   selection: CloudLaunchComposerSelection;
   onAgentModelSelect: (agentKind: string, modelId: string) => void;
   onControlSelect: (selection: CloudLaunchComposerControlSelection) => void;
 }): CloudChatComposerControlView[] {
-  const catalogAgents = input.catalog?.agents ?? [];
+  const catalogAgents = launchableCatalogAgents({
+    agents: input.catalog?.agents ?? [],
+    launchableAgentKinds: input.launchableAgentKinds,
+  });
   if (catalogAgents.length === 0) {
     return fallbackLaunchComposerControls({
       modelId: input.selection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID,
@@ -189,9 +197,13 @@ export function buildCloudLaunchComposerControls(input: {
 
 export function resolveCloudLaunchSelection(input: {
   catalog?: CloudAgentCatalogResponse | null;
+  launchableAgentKinds?: readonly string[] | null;
   selection: CloudLaunchComposerSelection;
 }): CloudLaunchComposerSelection {
-  const agents = input.catalog?.agents ?? [];
+  const agents = launchableCatalogAgents({
+    agents: input.catalog?.agents ?? [],
+    launchableAgentKinds: input.launchableAgentKinds,
+  });
   const agent = selectLaunchAgent(agents, input.selection.agentKind);
   if (!agent) {
     return {
@@ -221,9 +233,16 @@ export function resolveCloudLaunchSelection(input: {
 
 export function buildLaunchSessionConfigUpdates(input: {
   catalog?: CloudAgentCatalogResponse | null;
+  launchableAgentKinds?: readonly string[] | null;
   selection: CloudLaunchComposerSelection;
 }): LaunchSessionConfigUpdate[] {
-  const agent = selectLaunchAgent(input.catalog?.agents ?? [], input.selection.agentKind);
+  const agent = selectLaunchAgent(
+    launchableCatalogAgents({
+      agents: input.catalog?.agents ?? [],
+      launchableAgentKinds: input.launchableAgentKinds,
+    }),
+    input.selection.agentKind,
+  );
   if (!agent) {
     return [];
   }
@@ -238,9 +257,16 @@ export function buildLaunchSessionConfigUpdates(input: {
 
 export function buildLaunchRunConfigControlValues(input: {
   catalog?: CloudAgentCatalogResponse | null;
+  launchableAgentKinds?: readonly string[] | null;
   selection: CloudLaunchComposerSelection;
 }): Record<string, string> {
-  const agent = selectLaunchAgent(input.catalog?.agents ?? [], input.selection.agentKind);
+  const agent = selectLaunchAgent(
+    launchableCatalogAgents({
+      agents: input.catalog?.agents ?? [],
+      launchableAgentKinds: input.launchableAgentKinds,
+    }),
+    input.selection.agentKind,
+  );
   if (!agent) {
     return {};
   }
@@ -566,6 +592,22 @@ function selectLaunchAgent(
     ?? null;
 }
 
+function launchableCatalogAgents(input: {
+  agents: readonly CloudAgentCatalogAgent[];
+  launchableAgentKinds?: readonly string[] | null;
+  includeAgentKind?: string | null;
+}): CloudAgentCatalogAgent[] {
+  const launchableKinds = input.launchableAgentKinds?.filter(Boolean) ?? [];
+  if (launchableKinds.length === 0) {
+    return [...input.agents];
+  }
+  const allowed = new Set(launchableKinds);
+  if (input.includeAgentKind) {
+    allowed.add(input.includeAgentKind);
+  }
+  return input.agents.filter((agent) => allowed.has(agent.kind));
+}
+
 function selectLaunchModel(
   agent: CloudAgentCatalogAgent,
   modelId: string | null | undefined,
@@ -677,6 +719,7 @@ function buildSessionConfigComposerControl(input: {
   agentKind: string | null;
   control: NormalizedSessionControl;
   catalog?: CloudAgentCatalogResponse | null;
+  launchableAgentKinds?: readonly string[] | null;
   placement: "leading" | "trailing";
   pendingConfigChanges: Record<string, PendingConfigChange>;
   onSelect: (rawConfigId: string, value: string) => void;
@@ -698,6 +741,7 @@ function buildSessionConfigComposerControl(input: {
     ? sessionModelGroupsFromCatalog({
       agentKind,
       catalog: input.catalog ?? null,
+      launchableAgentKinds: input.launchableAgentKinds,
       selectedLabel: selectedOption?.label ?? null,
       selectedValue,
     }) ?? sessionControlGroups({
@@ -779,10 +823,15 @@ function sessionControlGroups(input: {
 function sessionModelGroupsFromCatalog(input: {
   agentKind: string | null;
   catalog: CloudAgentCatalogResponse | null;
+  launchableAgentKinds?: readonly string[] | null;
   selectedLabel: string | null;
   selectedValue: string | null;
 }): CloudChatComposerControlGroupView[] | null {
-  const agents = input.catalog?.agents ?? [];
+  const agents = launchableCatalogAgents({
+    agents: input.catalog?.agents ?? [],
+    launchableAgentKinds: input.launchableAgentKinds,
+    includeAgentKind: input.agentKind,
+  });
   const groups = agents.flatMap((agent) => {
     const options = agent.session.models
       .filter(isLaunchVisibleModel)

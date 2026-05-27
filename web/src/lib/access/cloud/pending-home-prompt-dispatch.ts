@@ -73,18 +73,12 @@ export async function dispatchPendingHomePrompt(args: {
   });
   assertStillCurrent(args.shouldContinue);
   args.onStatus("Sending queued prompt.");
-  const command = await args.enqueuePrompt({
-    idempotencyKey: `${args.pendingPrompt.id}:send`,
-    targetId: session.targetId,
-    workspaceId: session.workspaceId,
-    cloudWorkspaceId: args.workspace.id,
-    sessionId: session.sessionId,
-    kind: "send_prompt",
-    source: "web",
-    payload: {
-      text: args.pendingPrompt.text,
-      promptId: args.pendingPrompt.id,
-    },
+  const command = await enqueuePromptWithRetry({
+    workspace: args.workspace,
+    session,
+    pendingPrompt: args.pendingPrompt,
+    enqueuePrompt: args.enqueuePrompt,
+    shouldContinue: args.shouldContinue,
   });
   args.setLatestCommandId(command.commandId);
   if (isRejectedCommandStatus(command.status)) {
@@ -93,6 +87,47 @@ export async function dispatchPendingHomePrompt(args: {
   args.onStatus("Queued prompt; waiting for transcript.");
   return {
     sessionId: session.sessionId,
+    sendCommandId: command.commandId,
+  };
+}
+
+export async function resumePendingHomePromptInSession(args: {
+  client: ProliferateCloudClient;
+  workspace: CloudWorkspaceDetail;
+  session: CloudSessionProjection;
+  pendingPrompt: PendingHomePrompt;
+  enqueueConfig: EnqueueCloudCommand<UpdateSessionConfigPayload>;
+  enqueuePrompt: EnqueueCloudCommand<SendPromptPayload>;
+  setLatestCommandId: (commandId: string) => void;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<PendingHomePromptDispatchResult> {
+  await applyPendingSessionConfigUpdates({
+    client: args.client,
+    workspace: args.workspace,
+    session: args.session,
+    pendingPrompt: args.pendingPrompt,
+    enqueueConfig: args.enqueueConfig,
+    setLatestCommandId: args.setLatestCommandId,
+    onStatus: args.onStatus,
+    shouldContinue: args.shouldContinue,
+  });
+  assertStillCurrent(args.shouldContinue);
+  args.onStatus("Sending queued prompt.");
+  const command = await enqueuePromptWithRetry({
+    workspace: args.workspace,
+    session: args.session,
+    pendingPrompt: args.pendingPrompt,
+    enqueuePrompt: args.enqueuePrompt,
+    shouldContinue: args.shouldContinue,
+  });
+  args.setLatestCommandId(command.commandId);
+  if (isRejectedCommandStatus(command.status)) {
+    assertCommandAccepted(command);
+  }
+  args.onStatus("Queued prompt; waiting for transcript.");
+  return {
+    sessionId: args.session.sessionId,
     sendCommandId: command.commandId,
   };
 }
@@ -131,7 +166,7 @@ async function startSessionForPrompt(args: {
     client: args.client,
     workspaceId: workspace.id,
     targetId,
-  });
+  }).catch(() => new Set<string>());
   const command = await args.enqueueStartSession({
     idempotencyKey: `${args.pendingPrompt.id}:start-session`,
     targetId,
@@ -335,6 +370,63 @@ function normalizeAgentAuthAgentKind(agentKind: string): AgentAuthAgentKind | nu
     || agentKind === "gemini"
     ? agentKind
     : null;
+}
+
+async function enqueuePromptWithRetry(args: {
+  workspace: CloudWorkspaceDetail;
+  session: CloudSessionProjection;
+  pendingPrompt: PendingHomePrompt;
+  enqueuePrompt: EnqueueCloudCommand<SendPromptPayload>;
+  shouldContinue: () => boolean;
+}): Promise<CloudCommandResponse> {
+  const envelope: CloudCommandEnvelope<SendPromptPayload> = {
+    idempotencyKey: `${args.pendingPrompt.id}:send`,
+    targetId: args.session.targetId,
+    workspaceId: args.session.workspaceId,
+    cloudWorkspaceId: args.workspace.id,
+    sessionId: args.session.sessionId,
+    kind: "send_prompt",
+    source: "web",
+    payload: {
+      text: args.pendingPrompt.text,
+      promptId: args.pendingPrompt.id,
+    },
+  };
+  return enqueuePromptCommandWithRetry({
+    envelope,
+    enqueuePrompt: args.enqueuePrompt,
+    shouldContinue: args.shouldContinue,
+  });
+}
+
+export async function enqueuePromptCommandWithRetry(args: {
+  envelope: CloudCommandEnvelope<SendPromptPayload>;
+  enqueuePrompt: EnqueueCloudCommand<SendPromptPayload>;
+  shouldContinue: () => boolean;
+}): Promise<CloudCommandResponse> {
+  let lastError: unknown = null;
+  for (const delayMs of [0, 750, 1500]) {
+    assertStillCurrent(args.shouldContinue);
+    if (delayMs > 0) {
+      await sleep(delayMs);
+      assertStillCurrent(args.shouldContinue);
+    }
+    try {
+      return await args.enqueuePrompt(args.envelope);
+    } catch (error) {
+      lastError = error;
+      if (!isRecoverableCloudDispatchError(error)) {
+        throw error;
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Prompt could not be sent.");
+}
+
+export function isRecoverableCloudDispatchError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /\b(failed to fetch|network|load failed|connection|aborted|timeout|timed out)\b/i
+    .test(message);
 }
 
 async function waitForCommandTerminal(

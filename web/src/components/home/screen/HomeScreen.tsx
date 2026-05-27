@@ -2,7 +2,14 @@ import { Bot, Cloud, GitBranch, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  listCloudWorkspaces,
+  type CloudWorkspaceDetail,
+  type CreateCloudWorkspaceRequest,
+  type ProliferateCloudClient,
+} from "@proliferate/cloud-sdk";
+import {
   useCloudAgentCatalog,
+  useCloudCapabilities,
   useCloudClient,
   useCloudRepoConfigs,
   useCreateCloudWorkspace,
@@ -10,6 +17,7 @@ import {
 import {
   buildCloudLaunchComposerControls,
   buildLaunchSessionConfigUpdates,
+  DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS,
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,
   DEFAULT_DIRECT_PROMPT_MODEL_ID,
   resolveCloudLaunchSelection,
@@ -32,6 +40,7 @@ import type { CloudChatTranscriptRowView } from "@proliferate/product-ui/chat/Cl
 import { webEnv } from "../../../config/env";
 import { routes } from "../../../config/routes";
 import { ensurePersonalAgentAuthLaunchReady } from "../../../lib/access/cloud/agent-auth-launch-readiness";
+import { isRecoverableCloudDispatchError } from "../../../lib/access/cloud/pending-home-prompt-dispatch";
 import { savePendingHomePrompt } from "../../../lib/access/cloud/pending-home-prompt-store";
 import { AddCloudEnvironmentDialogController } from "../../environments/screen/AddCloudEnvironmentDialogController";
 
@@ -71,6 +80,7 @@ export function HomeScreen() {
   const [pendingPrompt, setPendingPrompt] = useState<HomePendingPrompt | null>(null);
   const repoConfigs = useCloudRepoConfigs();
   const agentCatalog = useCloudAgentCatalog();
+  const cloudCapabilities = useCloudCapabilities();
   const createWorkspace = useCreateCloudWorkspace();
   const repoOptions = useMemo(
     () => buildRepoOptions(repoConfigs.data?.configs ?? [], webEnv.defaultCloudRepo),
@@ -80,16 +90,25 @@ export function HomeScreen() {
     () => repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null,
     [repoId, repoOptions],
   );
+  const launchableAgentKinds = useMemo(() => {
+    const managedCreditKinds = cloudCapabilities.data?.agentGateway.managedCreditAgentKinds
+      ?? DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS;
+    return managedCreditKinds.length > 0
+      ? managedCreditKinds
+      : [DEFAULT_DIRECT_PROMPT_AGENT_KIND];
+  }, [cloudCapabilities.data?.agentGateway.managedCreditAgentKinds]);
   const resolvedLaunchSelection = useMemo(
     () => resolveCloudLaunchSelection({
       catalog: agentCatalog.data,
+      launchableAgentKinds,
       selection: launchSelection,
     }),
-    [agentCatalog.data, launchSelection],
+    [agentCatalog.data, launchSelection, launchableAgentKinds],
   );
   const launchComposerControls = useMemo(
     () => buildCloudLaunchComposerControls({
       catalog: agentCatalog.data,
+      launchableAgentKinds,
       selection: resolvedLaunchSelection,
       onAgentModelSelect: (agentKind, modelId) => {
         setLaunchSelection((current) => ({
@@ -114,7 +133,7 @@ export function HomeScreen() {
         });
       },
     }),
-    [agentCatalog.data, resolvedLaunchSelection],
+    [agentCatalog.data, launchableAgentKinds, resolvedLaunchSelection],
   );
 
   useEffect(() => {
@@ -166,6 +185,7 @@ export function HomeScreen() {
         modeId: resolvedLaunchSelection.modeId,
         sessionConfigUpdates: buildLaunchSessionConfigUpdates({
           catalog: agentCatalog.data,
+          launchableAgentKinds,
           selection: resolvedLaunchSelection,
         }),
         createdAt: Date.now(),
@@ -176,7 +196,7 @@ export function HomeScreen() {
         modelId: resolvedLaunchSelection.modelId,
         allowUnavailableFreeCredits: true,
       });
-      const workspace = await createWorkspace.mutateAsync({
+      const workspaceRequest: CreateCloudWorkspaceRequest = {
         gitProvider: "github",
         gitOwner: selectedRepo.gitOwner,
         gitRepoName: selectedRepo.gitRepoName,
@@ -184,6 +204,11 @@ export function HomeScreen() {
         displayName: buildWorkspaceDisplayName(text),
         ownerScope: "personal",
         requiredAgentKind: resolvedLaunchSelection.agentKind,
+      };
+      const workspace = await createCloudWorkspaceWithTransientRecovery({
+        client,
+        request: workspaceRequest,
+        createWorkspace: createWorkspace.mutateAsync,
       });
       savePendingHomePrompt(workspace.id, workspacePendingPrompt);
       navigate(routes.workspace(workspace.id));
@@ -316,6 +341,61 @@ function waitForNextPaint(): Promise<void> {
       });
     });
   });
+}
+
+async function createCloudWorkspaceWithTransientRecovery(args: {
+  client: ProliferateCloudClient;
+  request: CreateCloudWorkspaceRequest;
+  createWorkspace: (request: CreateCloudWorkspaceRequest) => Promise<CloudWorkspaceDetail>;
+}): Promise<Pick<CloudWorkspaceDetail, "id">> {
+  let lastError: unknown = null;
+  for (const delayMs of [0, 750, 1500]) {
+    if (delayMs > 0) {
+      await sleep(delayMs);
+    }
+    try {
+      return await args.createWorkspace(args.request);
+    } catch (error) {
+      lastError = error;
+      const recovered = await recoverCreatedWorkspaceByBranch(args).catch(() => null);
+      if (recovered) {
+        return recovered;
+      }
+      if (!isRecoverableCloudDispatchError(error) && !isDuplicateBranchError(error)) {
+        throw error;
+      }
+    }
+  }
+  const recovered = await recoverCreatedWorkspaceByBranch(args).catch(() => null);
+  if (recovered) {
+    return recovered;
+  }
+  throw lastError instanceof Error ? lastError : new Error("Could not create workspace.");
+}
+
+async function recoverCreatedWorkspaceByBranch(args: {
+  client: ProliferateCloudClient;
+  request: CreateCloudWorkspaceRequest;
+}): Promise<Pick<CloudWorkspaceDetail, "id"> | null> {
+  const workspaces = await listCloudWorkspaces(
+    undefined,
+    { ownerScope: args.request.ownerScope ?? "personal", scope: "my" },
+    args.client,
+  );
+  return workspaces.find((workspace) =>
+    workspace.repo.owner === args.request.gitOwner
+    && workspace.repo.name === args.request.gitRepoName
+    && workspace.repo.branch === args.request.branchName
+  ) ?? null;
+}
+
+function isDuplicateBranchError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /\bcloud_branch_already_exists\b|\bbranch\b.*\balready exists\b/i.test(message);
+}
+
+function sleep(delayMs: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
 }
 
 function normalizeAgentAuthAgentKind(agentKind: string) {
