@@ -18,7 +18,7 @@
     },
     "ios": {
       "bundleIdentifier": "ai.proliferate.mobile",
-      "buildNumber": "4",
+      "buildNumber": "7",
       "supportsTablet": true,
       "usesAppleSignIn": true,
       "associatedDomains": [
