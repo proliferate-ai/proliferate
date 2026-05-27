@@ -476,6 +476,7 @@ export function recentWorkCommandability(
 export function cloudCommandReadiness(
   workspace: CloudWorkspaceCommandFacts,
 ): CloudCommandReadinessView {
+  const statusDetail = commandStatusDetailMessage(workspace.statusDetail);
   if (workspace.visibility === "shared_unclaimed") {
     return {
       state: "claim_required",
@@ -493,7 +494,7 @@ export function cloudCommandReadiness(
       state: "runtime_unavailable",
       commandable: false,
       message: workspace.lastError
-        ?? workspace.statusDetail
+        ?? statusDetail
         ?? "This workspace cannot accept cloud commands right now.",
     };
   }
@@ -501,7 +502,7 @@ export function cloudCommandReadiness(
     return {
       state: "workspace_not_ready",
       commandable: false,
-      message: workspace.statusDetail ?? "Workspace runtime is not ready yet. Try again when setup finishes.",
+      message: statusDetail ?? "Workspace runtime is not ready yet. Try again when setup finishes.",
     };
   }
   const runtimeLocation = recentWorkRuntimeLocationForWorkspace(workspace);
@@ -556,6 +557,14 @@ export function cloudCommandReadiness(
     commandable: false,
     message: "This workspace cannot accept cloud commands right now.",
   };
+}
+
+function commandStatusDetailMessage(statusDetail: string | null | undefined): string | null {
+  const trimmed = statusDetail?.trim();
+  if (!trimmed || /^ready$/i.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
 }
 
 type CloudWorkspaceCommandFacts = Pick<

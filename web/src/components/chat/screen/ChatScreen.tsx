@@ -117,6 +117,7 @@ export function ChatScreen() {
   const [pendingHomePromptStatus, setPendingHomePromptStatus] = useState<string | null>(null);
   const pendingHomePromptDispatchRunRef = useRef<PendingHomePromptDispatchRun | null>(null);
   const pendingConfigMutationIdRef = useRef(0);
+  const mountedRef = useRef(true);
   const workspaceQuery = useCloudWorkspaceSnapshot(workspaceId ?? null, Boolean(workspaceId));
   const agentCatalog = useCloudAgentCatalog();
   const workspaceLive = useWorkspaceLive(workspaceId ?? null, { enabled: Boolean(workspaceId) });
@@ -231,6 +232,7 @@ export function ChatScreen() {
     }),
     [agentCatalog.data, launchSelection],
   );
+  const sessionModelId = session && liveConfig ? getLiveConfigControlValue(liveConfig, "model") : null;
   const composerControls = buildCloudChatComposerControls({
     session,
     liveConfig,
@@ -281,6 +283,16 @@ export function ChatScreen() {
       }
     },
   });
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (pendingHomePromptDispatchRunRef.current) {
+        pendingHomePromptDispatchRunRef.current.active = false;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     setPendingHomePrompt(workspaceId ? loadPendingHomePrompt(workspaceId) : null);
@@ -359,7 +371,8 @@ export function ChatScreen() {
 
     const run: PendingHomePromptDispatchRun = { key: runKey, active: true, started: false };
     pendingHomePromptDispatchRunRef.current = run;
-    const isCurrentRun = () => pendingHomePromptDispatchRunRef.current === run && run.active;
+    const isCurrentRun = () =>
+      mountedRef.current && pendingHomePromptDispatchRunRef.current === run && run.active;
     const setCurrentStatus = (status: string) => {
       if (isCurrentRun()) {
         setPendingHomePromptStatus(status);
@@ -758,7 +771,7 @@ export function ChatScreen() {
           enqueuePrompt: enqueuePrompt.mutateAsync,
           setLatestCommandId,
           onStatus: setPendingHomePromptStatus,
-          shouldContinue: () => true,
+          shouldContinue: () => mountedRef.current,
         });
         setOptimisticPrompts((current) =>
           current.map((prompt) =>
@@ -820,11 +833,11 @@ export function ChatScreen() {
         client,
         workspace,
         agentKind: session.sourceAgentKind ?? resolvedLaunchSelection.agentKind,
-        modelId: resolvedLaunchSelection.modelId,
+        modelId: sessionModelId,
         idempotencyKey: `${optimisticPrompt.id}:target-config`,
         setLatestCommandId,
         onStatus: setPendingHomePromptStatus,
-        shouldContinue: () => true,
+        shouldContinue: () => mountedRef.current,
       });
       const command = await enqueuePrompt.mutateAsync({
         idempotencyKey: optimisticPrompt.id,
@@ -836,6 +849,9 @@ export function ChatScreen() {
         source: "web",
         payload: { text, promptId: optimisticPrompt.id },
       });
+      if (!mountedRef.current) {
+        return;
+      }
       setLatestCommandId(command.commandId);
       if (isRejectedCommandStatus(command.status)) {
         throw new Error(command.errorMessage || promptCommandFailureMessage(command.status));
@@ -851,6 +867,9 @@ export function ChatScreen() {
       void transcriptQuery.refetch();
       void sessionEventsQuery.refetch();
     } catch (error) {
+      if (!mountedRef.current) {
+        return;
+      }
       setOptimisticPrompts((current) =>
         current.map((prompt) =>
           prompt.id === optimisticPrompt.id ? { ...prompt, status: "failed" } : prompt
@@ -894,11 +913,11 @@ export function ChatScreen() {
         client,
         workspace,
         agentKind: session.sourceAgentKind ?? resolvedLaunchSelection.agentKind,
-        modelId: resolvedLaunchSelection.modelId,
+        modelId: sessionModelId,
         idempotencyKey: `web:${workspace.id}:${session.sessionId}:config:${rawConfigId}:${mutationId}:target-config`,
         setLatestCommandId,
         onStatus: setPendingHomePromptStatus,
-        shouldContinue: () => true,
+        shouldContinue: () => mountedRef.current,
       });
       const command = await enqueueConfig.mutateAsync({
         idempotencyKey: `web:${workspace.id}:${session.sessionId}:config:${rawConfigId}:${value}:${mutationId}`,
@@ -911,6 +930,9 @@ export function ChatScreen() {
         observedEventSeq: session.lastEventSeq ?? null,
         payload: { configId: rawConfigId, value },
       });
+      if (!mountedRef.current) {
+        return;
+      }
       setLatestCommandId(command.commandId);
       setPendingConfigChanges((current) => {
         const existing = current[changeKey];
@@ -923,6 +945,9 @@ export function ChatScreen() {
         };
       });
     } catch (error) {
+      if (!mountedRef.current) {
+        return;
+      }
       setPendingConfigChanges((current) => {
         const existing = current[changeKey];
         if (!existing || existing.mutationId !== mutationId) {

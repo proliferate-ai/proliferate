@@ -319,6 +319,18 @@ describe("cloud work inventory", () => {
     expect(readiness.state).toBe("runtime_unavailable");
     expect(readiness.message).toContain("CLOUD_WORKER_BASE_URL");
   });
+
+  it("does not surface ready status detail as an error message", () => {
+    const readiness = cloudCommandReadiness(workspace({
+      workspaceStatus: "materializing",
+      status: "materializing",
+      statusDetail: "Ready",
+      runtime: runtime("provisioning"),
+    }));
+
+    expect(readiness.state).toBe("workspace_not_ready");
+    expect(readiness.message).toBe("Workspace runtime is not ready yet. Try again when setup finishes.");
+  });
 });
 
 type RuntimeSummary = NonNullable<CloudWorkspaceSummary["runtime"]>;

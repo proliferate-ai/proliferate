@@ -24,7 +24,7 @@ export async function ensurePersonalAgentAuthLaunchReady(args: {
   allowUnavailableFreeCredits?: boolean;
   onStatus?: (status: string) => void;
 }): Promise<PersonalAgentAuthLaunchReadiness> {
-  if (args.agentKind && await hasReadyNonManagedPersonalSelection(args.client, args.agentKind)) {
+  if (args.agentKind && await hasReadyPersonalSelection(args.client, args.agentKind)) {
     args.onStatus?.("Using selected cloud agent credential.");
     return { source: "selected_credential" };
   }
@@ -45,7 +45,7 @@ export async function ensurePersonalAgentAuthLaunchReady(args: {
   return { source: "free_credits", result };
 }
 
-async function hasReadyNonManagedPersonalSelection(
+async function hasReadyPersonalSelection(
   client: ProliferateCloudClient,
   agentKind: AgentAuthAgentKind,
 ): Promise<boolean> {
@@ -61,7 +61,7 @@ async function hasReadyNonManagedPersonalSelection(
     return false;
   }
   const credential = credentials.find((candidate) => candidate.id === selection.credentialId);
-  return credential?.status === "ready" && credential.credentialKind !== "managed_gateway";
+  return credential?.status === "ready";
 }
 
 function freeCreditFailureCanFallThrough(
