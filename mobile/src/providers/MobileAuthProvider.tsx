@@ -202,39 +202,55 @@ export function useMobileAuth() {
 }
 
 async function bootstrapSession(): Promise<AuthSessionResponse | null> {
+  console.log("[DEV-AUTH] bootstrap start, __DEV__=", typeof __DEV__ !== "undefined" && __DEV__, "platform=", Platform.OS, "apiBaseUrl=", mobileEnv.apiBaseUrl, "hasDevToken=", Boolean(mobileEnv.devRefreshToken));
   const mobileWebAuthSession = await completeMobileWebOAuthFlow();
   if (mobileWebAuthSession) {
+    console.log("[DEV-AUTH] using mobileWebAuthSession");
     return mobileWebAuthSession;
   }
 
   const devRefreshTokenFromLocation = readDevWebRefreshTokenFromLocation();
-  if (await getSecureMobileStorageItem(SIGNED_OUT_KEY)) {
+  const signedOut = await getSecureMobileStorageItem(SIGNED_OUT_KEY);
+  console.log("[DEV-AUTH] signedOutKey=", Boolean(signedOut), "devRefreshTokenFromLocation=", Boolean(devRefreshTokenFromLocation));
+  if (signedOut) {
     if (devRefreshTokenFromLocation) {
       await deleteSecureMobileStorageItem(SIGNED_OUT_KEY).catch(() => undefined);
     } else {
+      console.log("[DEV-AUTH] returning null because signedOutKey is set");
       await clearStoredSession().catch(() => undefined);
       return null;
     }
   }
   const devRefreshToken = devRefreshTokenFromLocation ?? mobileEnv.devRefreshToken;
+  console.log("[DEV-AUTH] devRefreshToken set?", Boolean(devRefreshToken), "isDevRuntime=", isDevRuntime());
   if (devRefreshTokenFromLocation) {
     await deleteSecureMobileStorageItem(SIGNED_OUT_KEY).catch(() => undefined);
   } else if (devRefreshToken && !isDevRuntime()) {
+    console.log("[DEV-AUTH] clearing because devRefreshToken set but not dev runtime");
     await clearStoredSession().catch(() => undefined);
     return null;
   }
   const refreshToken = devRefreshToken ?? (await getSecureMobileStorageItem(REFRESH_TOKEN_KEY));
   if (!refreshToken) {
+    console.log("[DEV-AUTH] no refresh token, returning null");
     return null;
   }
+  console.log("[DEV-AUTH] calling refreshMobileSession with token len=", refreshToken.length);
   const client = createMobileCloudClient(mobileEnv.apiBaseUrl, null);
-  return refreshMobileSession(
-    {
-      refreshToken,
-      grantType: "refresh_token",
-    },
-    client,
-  );
+  try {
+    const result = await refreshMobileSession(
+      {
+        refreshToken,
+        grantType: "refresh_token",
+      },
+      client,
+    );
+    console.log("[DEV-AUTH] refreshMobileSession success, user=", result?.user?.email);
+    return result;
+  } catch (err) {
+    console.log("[DEV-AUTH] refreshMobileSession FAILED:", err instanceof Error ? err.message : String(err));
+    throw err;
+  }
 }
 
 function isDevRuntime(): boolean {

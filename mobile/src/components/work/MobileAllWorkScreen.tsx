@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -11,41 +10,56 @@ import {
 } from "react-native";
 import type {
   CloudWorkOwnerFilter,
-  CloudWorkSource,
+  CloudWorkSort,
   CloudWorkStatusFilter,
+  RecentWorkRuntimeLocation,
   RecentWorkSourceKind,
 } from "@proliferate/product-model/workspaces/cloud-work-inventory";
+import { useClaimCloudWorkspace } from "@proliferate/cloud-sdk-react";
 
 import { useMobileWorkInventory, type MobileWorkItem } from "../../hooks/work/derived/use-mobile-work-inventory";
+import { mobileIconForRuntimeLocation, mobileIconForWorkSourceKind } from "../../lib/domain/work/mobile-work-presentation";
 import type { MobileCloudChat } from "../../navigation/navigation-model";
 import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
-import { MobileListRow } from "../primitives/MobileListRow";
 import {
   MobileEmptyState,
   MobileScreen,
-  MobileSectionLabel,
 } from "../primitives/MobileLayout";
-import { MobileTextInput } from "../primitives/MobileTextInput";
 import { colors, radius, spacing } from "../../styles/tokens";
 
-interface MobileAllWorkScreenProps {
+interface MobileWorkspacesScreenProps {
   onOpenChat: (chat: MobileCloudChat) => void;
+  onOpenDrawer: () => void;
+  onNewChat: () => void;
 }
 
-type SourceFilter = CloudWorkSource | "all";
+type SourceFilter = RecentWorkSourceKind | "all";
+type RuntimeFilter = RecentWorkRuntimeLocation | "all";
 type StatusFilter = CloudWorkStatusFilter | "all";
+type FilterPanel = "source" | "runtime" | "ownership" | "status" | "repo" | "sort";
 
 const SOURCE_OPTIONS: readonly { id: SourceFilter; label: string; icon: MobileIconName }[] = [
   { id: "all", label: "All sources", icon: "workspaces" },
-  { id: "chats", label: "Chats", icon: "sessions" },
+  { id: "cloud_sandbox", label: "Cloud", icon: "cloud" },
+  { id: "desktop_exposed", label: "Desktop", icon: "monitor" },
+  { id: "mobile", label: "Mobile", icon: "smartphone" },
   { id: "slack", label: "Slack", icon: "slack" },
-  { id: "automation", label: "Automations", icon: "calendar-clock" },
+  { id: "personal_automation", label: "Automation", icon: "calendar-clock" },
+  { id: "team_automation", label: "Team automation", icon: "calendar-clock" },
   { id: "api", label: "API", icon: "cloud" },
 ];
 
+const RUNTIME_OPTIONS: readonly { id: RuntimeFilter; label: string; icon: MobileIconName }[] = [
+  { id: "all", label: "All runtimes", icon: "workspaces" },
+  { id: "cloud_sandbox", label: "Cloud runtime", icon: "cloud" },
+  { id: "local_desktop", label: "Desktop Mac", icon: "monitor" },
+  { id: "ssh_remote", label: "SSH", icon: "external" },
+  { id: "offline", label: "Offline", icon: "lock" },
+];
+
 const OWNER_OPTIONS: readonly { id: CloudWorkOwnerFilter; label: string }[] = [
-  { id: "all", label: "All work" },
-  { id: "private", label: "Private" },
+  { id: "all", label: "All ownership" },
+  { id: "private", label: "Mine" },
   { id: "unclaimed", label: "Unclaimed" },
   { id: "claimed", label: "Claimed" },
   { id: "shared", label: "Shared" },
@@ -53,31 +67,78 @@ const OWNER_OPTIONS: readonly { id: CloudWorkOwnerFilter; label: string }[] = [
 
 const STATUS_OPTIONS: readonly { id: StatusFilter; label: string }[] = [
   { id: "all", label: "All status" },
-  { id: "active", label: "Active" },
-  { id: "blocked", label: "Blocked" },
+  { id: "active", label: "Live" },
+  { id: "running", label: "Running" },
+  { id: "blocked", label: "Needs input" },
   { id: "ready", label: "Ready" },
   { id: "error", label: "Error" },
+  { id: "archived", label: "Archived" },
 ];
 
-export function MobileAllWorkScreen({ onOpenChat }: MobileAllWorkScreenProps) {
-  const [search, setSearch] = useState("");
+const SORT_OPTIONS: readonly { id: CloudWorkSort; label: string }[] = [
+  { id: "recent", label: "Recent" },
+  { id: "created", label: "Created" },
+  { id: "name", label: "Name" },
+  { id: "repo", label: "Repo" },
+  { id: "status", label: "Status" },
+];
+
+export function MobileWorkspacesScreen({
+  onOpenChat,
+  onOpenDrawer,
+  onNewChat,
+}: MobileWorkspacesScreenProps) {
   const [source, setSource] = useState<SourceFilter>("all");
+  const [runtime, setRuntime] = useState<RuntimeFilter>("all");
   const [ownership, setOwnership] = useState<CloudWorkOwnerFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const [repo, setRepo] = useState("all");
+  const [sort, setSort] = useState<CloudWorkSort>("recent");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [claimingWorkspaceId, setClaimingWorkspaceId] = useState<string | null>(null);
+  const claimWorkspace = useClaimCloudWorkspace();
   const filters = useMemo(() => ({
-    search,
     ownership,
-    sources: source === "all" ? undefined : new Set<CloudWorkSource>([source]),
+    semanticSources: source === "all" ? undefined : new Set<RecentWorkSourceKind>([source]),
+    runtimeLocations: runtime === "all" ? undefined : new Set<RecentWorkRuntimeLocation>([runtime]),
     statuses: status === "all" ? undefined : new Set<CloudWorkStatusFilter>([status]),
-  }), [ownership, search, source, status]);
+    repoLabels: repo === "all" ? undefined : new Set<string>([repo]),
+    sort,
+    needsAttention: attentionOnly,
+  }), [attentionOnly, ownership, repo, runtime, sort, source, status]);
+  const allInventory = useMobileWorkInventory();
   const inventory = useMobileWorkInventory(filters);
+  const repoOptions = useMemo(() => {
+    return [...new Set(allInventory.items.map((item) => item.view.repoLabel))]
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right));
+  }, [allInventory.items]);
   const activeFilterCount = [
     source !== "all",
+    runtime !== "all",
     ownership !== "all",
     status !== "all",
-    Boolean(search.trim()),
+    repo !== "all",
+    sort !== "recent",
+    attentionOnly,
   ].filter(Boolean).length;
+  const attentionCount = allInventory.items.filter((item) =>
+    item.view.status === "blocked" || item.view.unclaimed
+  ).length;
+  const readyCount = allInventory.items.filter((item) => item.view.status === "ready").length;
+
+  async function claimListWorkspace(item: MobileWorkItem) {
+    if (!item.view.unclaimed || claimingWorkspaceId) {
+      return;
+    }
+    setClaimingWorkspaceId(item.workspace.id);
+    try {
+      await claimWorkspace.mutateAsync({ workspaceId: item.workspace.id });
+    } finally {
+      setClaimingWorkspaceId(null);
+    }
+  }
 
   return (
     <MobileScreen
@@ -93,62 +154,100 @@ export function MobileAllWorkScreen({ onOpenChat }: MobileAllWorkScreenProps) {
         />
       }
     >
-      <View style={styles.toolbar}>
-        <View style={styles.searchBox}>
-          <MobileIcon name="search" size={15} color={colors.faint} />
-          <MobileTextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search work"
-            style={styles.searchInput}
-          />
-        </View>
+      <View style={styles.header}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Filter work"
-          onPress={() => setFilterOpen(true)}
-          style={({ pressed }) => [styles.filterButton, pressed && styles.pressed]}
+          accessibilityLabel="Open navigation"
+          onPress={onOpenDrawer}
+          style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
         >
-          <MobileIcon name="filter" size={16} color={colors.fg} />
-          {activeFilterCount ? <Text style={styles.filterCount}>{activeFilterCount}</Text> : null}
+          <MobileIcon name="menu" size={20} color={colors.fg} />
+        </Pressable>
+        <Text style={styles.title}>Workspaces</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="New chat"
+          onPress={onNewChat}
+          style={({ pressed }) => [styles.headerButton, styles.headerButtonRaised, pressed && styles.pressed]}
+        >
+          <MobileIcon name="plus" size={20} color={colors.fg} />
         </Pressable>
       </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.pills}
+      >
+        <SummaryPill label={`All ${allInventory.items.length}`} selected={activeFilterCount === 0} onPress={() => {
+          setSource("all");
+          setRuntime("all");
+          setOwnership("all");
+          setStatus("all");
+          setRepo("all");
+          setSort("recent");
+          setAttentionOnly(false);
+        }} />
+        <SummaryPill
+          label={`Needs input ${attentionCount}`}
+          selected={attentionOnly}
+          onPress={() => {
+            setAttentionOnly(!attentionOnly);
+            setStatus("all");
+            setOwnership("all");
+          }}
+        />
+        <SummaryPill
+          label={`Ready ${readyCount}`}
+          selected={status === "ready" && !attentionOnly}
+          onPress={() => {
+            setAttentionOnly(false);
+            setStatus(status === "ready" ? "all" : "ready");
+          }}
+        />
+        <SummaryPill
+          label={activeFilterCount ? `Filters ${activeFilterCount}` : "Filter"}
+          icon="filter"
+          selected={activeFilterCount > 0}
+          onPress={() => setFilterOpen(true)}
+        />
+      </ScrollView>
 
       {inventory.error && inventory.items.length > 0 ? (
         <View style={styles.partialWarning}>
           <MobileIcon name="cloud" size={13} color={colors.warning} />
           <Text style={styles.partialWarningText}>
-            Some work could not refresh. Showing the work that loaded.
+            Some workspaces could not refresh. Showing the workspaces that loaded.
           </Text>
         </View>
       ) : null}
 
       {inventory.isLoading ? (
-        <MobileEmptyState title="Loading work" body="Fetching your visible cloud work." />
+        <MobileEmptyState title="Loading workspaces" body="Fetching visible cloud workspaces." />
       ) : inventory.error && inventory.items.length === 0 ? (
-        <MobileEmptyState title="Could not load work" body="Pull to refresh or sign in again." />
+        <MobileEmptyState title="Could not load workspaces" body="Pull to refresh or sign in again." />
       ) : inventory.items.length === 0 ? (
         <MobileEmptyState
-          title="No matching work"
-          body="Try clearing filters, or start a new cloud chat from Home."
+          title="No matching workspaces"
+          body="Adjust filters or start a new chat."
         />
       ) : (
         <View style={styles.groups}>
           {inventory.groups.map((group) => (
             <View key={group.view.id} style={styles.group}>
               <View style={styles.sectionHeader}>
-                <View style={styles.sectionTitle}>
-                  <SourceGlyph source={group.view.id} />
-                  <MobileSectionLabel>{group.view.label}</MobileSectionLabel>
-                </View>
-                <Text style={styles.sectionCount}>{group.items.length}</Text>
+                <Text style={styles.sectionTitle}>{group.view.label}</Text>
               </View>
-              <View style={styles.list}>
+              <View style={styles.cards}>
                 {group.items.map((item) => (
-                  <WorkRow
+                  <WorkspaceCard
                     key={item.view.id}
                     item={item}
+                    claiming={claimingWorkspaceId === item.workspace.id}
                     onPress={() => onOpenChat(item.chat)}
+                    onClaim={() => {
+                      void claimListWorkspace(item);
+                    }}
                   />
                 ))}
               </View>
@@ -160,16 +259,32 @@ export function MobileAllWorkScreen({ onOpenChat }: MobileAllWorkScreenProps) {
       <FilterSheet
         visible={filterOpen}
         source={source}
+        runtime={runtime}
         ownership={ownership}
         status={status}
+        repo={repo}
+        sort={sort}
+        repoOptions={repoOptions}
         onSource={setSource}
-        onOwnership={setOwnership}
-        onStatus={setStatus}
+        onRuntime={setRuntime}
+        onOwnership={(value) => {
+          setAttentionOnly(false);
+          setOwnership(value);
+        }}
+        onStatus={(value) => {
+          setAttentionOnly(false);
+          setStatus(value);
+        }}
+        onRepo={setRepo}
+        onSort={setSort}
         onClear={() => {
           setSource("all");
+          setRuntime("all");
           setOwnership("all");
           setStatus("all");
-          setSearch("");
+          setRepo("all");
+          setSort("recent");
+          setAttentionOnly(false);
         }}
         onClose={() => setFilterOpen(false)}
       />
@@ -177,107 +292,178 @@ export function MobileAllWorkScreen({ onOpenChat }: MobileAllWorkScreenProps) {
   );
 }
 
-function WorkRow({ item, onPress }: { item: MobileWorkItem; onPress: () => void }) {
+function SummaryPill({
+  label,
+  icon,
+  selected,
+  onPress,
+}: {
+  label: string;
+  icon?: MobileIconName;
+  selected: boolean;
+  onPress: () => void;
+}) {
   return (
-    <MobileListRow
-      leading={
-        <View style={styles.iconBox}>
-          <SourceGlyph source={item.view.sourceKind} />
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.summaryPill,
+        selected && styles.summaryPillSelected,
+        pressed && styles.pressed,
+      ]}
+    >
+      {icon ? <MobileIcon name={icon} size={14} color={selected ? colors.fg : colors.faint} /> : null}
+      <Text style={[styles.summaryPillText, selected && styles.summaryPillTextSelected]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function WorkspaceCard({
+  item,
+  claiming,
+  onPress,
+  onClaim,
+}: {
+  item: MobileWorkItem;
+  claiming: boolean;
+  onPress: () => void;
+  onClaim: () => void;
+}) {
+  const detailText = workspaceDetailText(item);
+  const blocked = item.view.status === "blocked" || item.view.status === "error";
+  const active = item.view.status === "active" || item.view.status === "running";
+  const unclaimed = item.view.unclaimed;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+    >
+      <View style={styles.cardTop}>
+        <View style={styles.iconTile}>
+          <MobileIcon
+            name={mobileIconForWorkSourceKind(item.view.sourceKind)}
+            size={21}
+            color={item.view.sourceKind === "slack" ? colors.success : colors.fg}
+          />
+          <View
+            style={[
+              styles.stateDot,
+              active && styles.stateDotActive,
+              blocked && styles.stateDotBlocked,
+              unclaimed && styles.stateDotUnclaimed,
+            ]}
+          />
         </View>
-      }
-      title={item.view.title}
-      subtitle={`${item.view.repoLabel} - ${item.view.branchLabel} - ${item.view.runtimeLocationLabel}`}
-      trailing={
-        <View style={styles.trailing}>
-          <Text style={styles.last}>{item.view.lastActivityLabel}</Text>
-          <View style={[
-            styles.statusPill,
-            item.view.status === "blocked" && styles.statusBlocked,
-            item.view.status === "active" && styles.statusActive,
-            item.view.unclaimed && styles.statusUnclaimed,
-          ]}>
-            {item.view.unclaimed ? (
-              <MobileIcon name="hand" size={10} color={colors.success} />
-            ) : null}
-            <Text style={[
-              styles.statusText,
-              item.view.status === "blocked" && styles.statusTextBlocked,
-              item.view.status === "active" && styles.statusTextActive,
-              item.view.unclaimed && styles.statusTextUnclaimed,
-            ]}>
-              {item.view.unclaimed ? "Claim" : item.view.commandabilityLabel}
+        <View style={styles.cardTitleBlock}>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle} numberOfLines={1}>{item.view.title}</Text>
+            <Text style={styles.cardTime}>{item.view.lastActivityLabel}</Text>
+          </View>
+          <View style={styles.cardMetaRow}>
+            <MobileIcon
+              name={mobileIconForRuntimeLocation(item.view.runtimeLocation)}
+              size={13}
+              color={colors.faint}
+            />
+            <Text style={styles.cardMeta} numberOfLines={1}>
+              {item.view.repoLabel} · {item.view.branchLabel}
             </Text>
           </View>
         </View>
-      }
-      showChevron
-      onPress={onPress}
-    />
+      </View>
+      {detailText ? (
+        <View style={styles.promptBlock}>
+          <Text style={styles.promptText} numberOfLines={2}>
+            {detailText}
+          </Text>
+        </View>
+      ) : null}
+      {unclaimed ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Claim workspace"
+          accessibilityState={{ disabled: claiming }}
+          disabled={claiming}
+          onPress={onClaim}
+          style={({ pressed }) => [
+            styles.claimButton,
+            claiming && styles.claimButtonDisabled,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={styles.claimButtonText}>{claiming ? "Claiming" : "Claim workspace"}</Text>
+        </Pressable>
+      ) : null}
+    </Pressable>
   );
 }
 
-function SourceGlyph({ source }: { source: CloudWorkSource | RecentWorkSourceKind }) {
-  const option = SOURCE_OPTIONS.find((candidate) => candidate.id === source);
-  const semanticIcon = semanticSourceIcon(source);
-  return (
-    <MobileIcon
-      name={option?.icon ?? semanticIcon}
-      size={16}
-      color={source === "slack" ? colors.success : colors.mutedForeground}
-    />
-  );
-}
-
-function semanticSourceIcon(source: CloudWorkSource | RecentWorkSourceKind): MobileIconName {
-  switch (source) {
-    case "desktop_exposed":
-      return "folder";
-    case "cloud_sandbox":
-      return "cloud";
-    case "web":
-      return "workspaces";
-    case "mobile":
-      return "smartphone";
-    case "personal_automation":
-    case "team_automation":
-      return "calendar-clock";
-    case "slack":
-      return "slack";
-    case "api":
-      return "cloud";
-    case "chats":
-      return "sessions";
-    case "automation":
-      return "calendar-clock";
-    case "unknown":
-    default:
-      return "workspaces";
+function workspaceDetailText(item: MobileWorkItem): string | null {
+  if (item.view.unclaimed) {
+    return "Unclaimed workspace";
   }
+  if (item.view.status === "blocked" || item.view.status === "error") {
+    return item.view.statusLabel;
+  }
+  if (item.view.commandability !== "commandable") {
+    return item.view.commandabilityLabel;
+  }
+  return null;
 }
 
 function FilterSheet({
   visible,
   source,
+  runtime,
   ownership,
   status,
+  repo,
+  sort,
+  repoOptions,
   onSource,
+  onRuntime,
   onOwnership,
   onStatus,
+  onRepo,
+  onSort,
   onClear,
   onClose,
 }: {
   visible: boolean;
   source: SourceFilter;
+  runtime: RuntimeFilter;
   ownership: CloudWorkOwnerFilter;
   status: StatusFilter;
+  repo: string;
+  sort: CloudWorkSort;
+  repoOptions: readonly string[];
   onSource: (value: SourceFilter) => void;
+  onRuntime: (value: RuntimeFilter) => void;
   onOwnership: (value: CloudWorkOwnerFilter) => void;
   onStatus: (value: StatusFilter) => void;
+  onRepo: (value: string) => void;
+  onSort: (value: CloudWorkSort) => void;
   onClear: () => void;
   onClose: () => void;
 }) {
+  const [panel, setPanel] = useState<FilterPanel | null>(null);
+
+  useEffect(() => {
+    if (!visible) {
+      setPanel(null);
+    }
+  }, [visible]);
+
+  const panelTitle = panel ? filterPanelTitle(panel) : "Filter workspaces";
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.sheetLayer}>
         <Pressable
           accessibilityRole="button"
@@ -287,7 +473,22 @@ function FilterSheet({
         />
         <View style={styles.sheet}>
           <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Filter work</Text>
+            {panel ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Back to filters"
+                onPress={() => setPanel(null)}
+                style={({ pressed }) => [styles.sheetHeaderIcon, pressed && styles.pressed]}
+              >
+                <MobileIcon name="chevron-left" size={18} color={colors.fg} />
+              </Pressable>
+            ) : (
+              <View style={styles.sheetHeaderIcon} />
+            )}
+            <View style={styles.sheetTitleArea}>
+              <Text style={styles.sheetTitle}>{panelTitle}</Text>
+              {!panel ? <Text style={styles.sheetSubtitle}>Choose what to show and how to sort it.</Text> : null}
+            </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Clear filters"
@@ -298,18 +499,47 @@ function FilterSheet({
             </Pressable>
           </View>
           <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetScrollContent}>
-            <FilterGroup title="Owner">
-              {OWNER_OPTIONS.map((option) => (
-                <FilterChoice
-                  key={option.id}
-                  label={option.label}
-                  selected={ownership === option.id}
-                  onPress={() => onOwnership(option.id)}
+            {!panel ? (
+              <>
+                <FilterSummaryRow
+                  icon="workspaces"
+                  title="Source"
+                  value={optionLabel(SOURCE_OPTIONS, source)}
+                  onPress={() => setPanel("source")}
                 />
-              ))}
-            </FilterGroup>
-            <FilterGroup title="Source">
-              {SOURCE_OPTIONS.map((option) => (
+                <FilterSummaryRow
+                  icon="cloud"
+                  title="Runtime"
+                  value={optionLabel(RUNTIME_OPTIONS, runtime)}
+                  onPress={() => setPanel("runtime")}
+                />
+                <FilterSummaryRow
+                  icon="users"
+                  title="Ownership"
+                  value={optionLabel(OWNER_OPTIONS, ownership)}
+                  onPress={() => setPanel("ownership")}
+                />
+                <FilterSummaryRow
+                  icon="filter"
+                  title="Status"
+                  value={optionLabel(STATUS_OPTIONS, status)}
+                  onPress={() => setPanel("status")}
+                />
+                <FilterSummaryRow
+                  icon="folder"
+                  title="Repo"
+                  value={repo === "all" ? "All repos" : repo}
+                  onPress={() => setPanel("repo")}
+                />
+                <FilterSummaryRow
+                  icon="controls"
+                  title="Sort"
+                  value={optionLabel(SORT_OPTIONS, sort)}
+                  onPress={() => setPanel("sort")}
+                />
+              </>
+            ) : null}
+            {panel === "source" ? SOURCE_OPTIONS.map((option) => (
                 <FilterChoice
                   key={option.id}
                   label={option.label}
@@ -317,18 +547,58 @@ function FilterSheet({
                   selected={source === option.id}
                   onPress={() => onSource(option.id)}
                 />
-              ))}
-            </FilterGroup>
-            <FilterGroup title="Status">
-              {STATUS_OPTIONS.map((option) => (
+              )) : null}
+            {panel === "runtime" ? RUNTIME_OPTIONS.map((option) => (
+                <FilterChoice
+                  key={option.id}
+                  label={option.label}
+                  icon={option.icon}
+                  selected={runtime === option.id}
+                  onPress={() => onRuntime(option.id)}
+                />
+              )) : null}
+            {panel === "ownership" ? OWNER_OPTIONS.map((option) => (
+                <FilterChoice
+                  key={option.id}
+                  label={option.label}
+                  selected={ownership === option.id}
+                  onPress={() => onOwnership(option.id)}
+                />
+              )) : null}
+            {panel === "status" ? STATUS_OPTIONS.map((option) => (
                 <FilterChoice
                   key={option.id}
                   label={option.label}
                   selected={status === option.id}
                   onPress={() => onStatus(option.id)}
                 />
-              ))}
-            </FilterGroup>
+              )) : null}
+            {panel === "repo" ? (
+              <>
+                <FilterChoice
+                  label="All repos"
+                  selected={repo === "all"}
+                  onPress={() => onRepo("all")}
+                />
+                {repoOptions.map((option) => (
+                  <FilterChoice
+                    key={option}
+                    label={option}
+                    icon="folder"
+                    selected={repo === option}
+                    onPress={() => onRepo(option)}
+                  />
+                ))}
+              </>
+            ) : null}
+            {panel === "sort" ? SORT_OPTIONS.map((option) => (
+                <FilterChoice
+                  key={option.id}
+                  label={option.label}
+                  selected={sort === option.id}
+                  onPress={() => onSort(option.id)}
+                />
+              )) : null}
           </ScrollView>
         </View>
       </View>
@@ -336,13 +606,57 @@ function FilterSheet({
   );
 }
 
-function FilterGroup({ title, children }: { title: string; children: ReactNode }) {
+function FilterSummaryRow({
+  icon,
+  title,
+  value,
+  onPress,
+}: {
+  icon: MobileIconName;
+  title: string;
+  value: string;
+  onPress: () => void;
+}) {
   return (
-    <View style={styles.filterGroup}>
-      <MobileSectionLabel>{title}</MobileSectionLabel>
-      <View style={styles.choiceGrid}>{children}</View>
-    </View>
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.filterSummaryRow, pressed && styles.pressed]}
+    >
+      <View style={styles.filterSummaryIcon}>
+        <MobileIcon name={icon} size={17} color={colors.fg} />
+      </View>
+      <View style={styles.filterSummaryText}>
+        <Text style={styles.filterSummaryTitle}>{title}</Text>
+        <Text style={styles.filterSummaryValue} numberOfLines={1}>{value}</Text>
+      </View>
+      <MobileIcon name="chevron-right" size={17} color={colors.faint} />
+    </Pressable>
   );
+}
+
+function filterPanelTitle(panel: FilterPanel): string {
+  switch (panel) {
+    case "source":
+      return "Source";
+    case "runtime":
+      return "Runtime";
+    case "ownership":
+      return "Ownership";
+    case "status":
+      return "Status";
+    case "repo":
+      return "Repo";
+    case "sort":
+      return "Sort";
+  }
+}
+
+function optionLabel<T extends string>(
+  options: readonly { id: T; label: string }[],
+  value: T,
+): string {
+  return options.find((option) => option.id === value)?.label ?? value;
 }
 
 function FilterChoice({
@@ -369,6 +683,7 @@ function FilterChoice({
     >
       {icon ? <MobileIcon name={icon} size={14} color={selected ? colors.fg : colors.faint} /> : null}
       <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{label}</Text>
+      {selected ? <MobileIcon name="check" size={15} color={colors.fg} /> : null}
     </Pressable>
   );
 }
@@ -378,61 +693,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingTop: 0,
   },
-  toolbar: {
+  header: {
+    minHeight: 58,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing[4],
+  },
+  headerButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.full,
+  },
+  headerButtonRaised: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  title: {
+    color: colors.fg,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  pills: {
     gap: spacing[2],
     paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
+    paddingBottom: spacing[4],
   },
-  searchBox: {
-    flex: 1,
-    minHeight: 40,
+  summaryPill: {
+    minHeight: 38,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing[2],
-    borderRadius: radius.md,
+    gap: 6,
+    borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.card,
     paddingHorizontal: spacing[3],
   },
-  searchInput: {
-    flex: 1,
-    minHeight: 36,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    backgroundColor: "transparent",
-    borderWidth: 0,
+  summaryPillSelected: {
+    backgroundColor: colors.accent,
+    borderColor: colors.borderHeavy,
   },
-  filterButton: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+  summaryPillText: {
+    color: colors.faint,
+    fontSize: 14,
+    fontWeight: "600",
   },
-  filterCount: {
-    position: "absolute",
-    top: 5,
-    right: 5,
-    minWidth: 15,
-    height: 15,
-    borderRadius: 8,
-    overflow: "hidden",
-    backgroundColor: colors.fg,
-    color: colors.background,
-    fontSize: 10,
-    fontWeight: "700",
-    textAlign: "center",
-    lineHeight: 15,
+  summaryPillTextSelected: {
+    color: colors.fg,
   },
   groups: {
+    gap: spacing[6],
+    paddingHorizontal: spacing[4],
     paddingBottom: spacing[8],
   },
   partialWarning: {
@@ -440,10 +755,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing[2],
     marginHorizontal: spacing[4],
-    marginTop: spacing[3],
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.warningSubtle,
+    marginTop: spacing[2],
+    marginBottom: spacing[3],
+    borderRadius: radius.lg,
     backgroundColor: colors.warningSubtle,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
@@ -455,80 +769,127 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   group: {
-    gap: spacing[1],
+    gap: spacing[3],
   },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[1],
   },
   sectionTitle: {
+    color: colors.faint,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  cards: {
+    gap: spacing[2],
+  },
+  card: {
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+    gap: spacing[3],
+  },
+  cardPressed: {
+    opacity: 0.82,
+    backgroundColor: colors.accent,
+  },
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+  },
+  iconTile: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.full,
+    backgroundColor: colors.background,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  stateDot: {
+    position: "absolute",
+    right: 4,
+    bottom: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.borderHeavy,
+  },
+  stateDotActive: {
+    backgroundColor: colors.info,
+  },
+  stateDotBlocked: {
+    backgroundColor: colors.destructive,
+  },
+  stateDotUnclaimed: {
+    backgroundColor: colors.success,
+  },
+  cardTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 5,
+  },
+  cardTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[2],
   },
-  sectionCount: {
-    color: colors.faint,
-    fontSize: 11.5,
+  cardTitle: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.fg,
+    fontSize: 16,
     fontWeight: "600",
   },
-  list: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
-  },
-  iconBox: {
-    width: 38,
-    height: 38,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  trailing: {
-    alignItems: "flex-end",
-    gap: 4,
-  },
-  last: {
+  cardTime: {
     color: colors.faint,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "500",
   },
-  statusPill: {
+  cardMetaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    borderRadius: radius.full,
-    backgroundColor: colors.accent,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    gap: 6,
   },
-  statusActive: {
-    backgroundColor: colors.infoSubtle,
-  },
-  statusBlocked: {
-    backgroundColor: colors.destructiveSubtle,
-  },
-  statusUnclaimed: {
-    backgroundColor: colors.successSubtle,
-  },
-  statusText: {
+  cardMeta: {
+    flex: 1,
+    minWidth: 0,
     color: colors.faint,
-    fontSize: 10.5,
-    fontWeight: "700",
+    fontSize: 13.5,
+    lineHeight: 18,
   },
-  statusTextActive: {
-    color: colors.info,
+  promptBlock: {
+    borderRadius: 18,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
   },
-  statusTextBlocked: {
-    color: colors.destructive,
+  promptText: {
+    color: colors.mutedForeground,
+    fontSize: 13,
+    lineHeight: 18,
   },
-  statusTextUnclaimed: {
-    color: colors.success,
+  claimButton: {
+    minHeight: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.full,
+    backgroundColor: colors.fg,
+    paddingHorizontal: spacing[4],
+  },
+  claimButtonDisabled: {
+    opacity: 0.62,
+  },
+  claimButtonText: {
+    color: colors.background,
+    fontSize: 13,
+    fontWeight: "600",
   },
   sheetLayer: {
     flex: 1,
@@ -539,7 +900,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.overlayStrong,
   },
   sheet: {
-    maxHeight: "82%",
+    maxHeight: "84%",
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -561,11 +922,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: spacing[2],
+  },
+  sheetHeaderIcon: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.full,
+  },
+  sheetTitleArea: {
+    flex: 1,
+    minWidth: 0,
   },
   sheetTitle: {
     color: colors.fg,
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 17,
+    fontWeight: "600",
+  },
+  sheetSubtitle: {
+    color: colors.faint,
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
   },
   clearButton: {
     borderRadius: radius.md,
@@ -577,32 +956,50 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
-  filterGroup: {
-    gap: spacing[2],
-  },
-  choiceGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing[2],
-  },
-  choice: {
-    minHeight: 34,
+  filterSummaryRow: {
+    minHeight: 58,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing[1],
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    gap: spacing[3],
+    borderRadius: 18,
+    paddingHorizontal: spacing[3],
+  },
+  filterSummaryIcon: {
+    width: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterSummaryText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  filterSummaryTitle: {
+    color: colors.fg,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  filterSummaryValue: {
+    color: colors.faint,
+    fontSize: 13,
+    lineHeight: 17,
+  },
+  choice: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    borderRadius: 16,
     paddingHorizontal: spacing[3],
   },
   choiceSelected: {
-    borderColor: colors.fg,
     backgroundColor: colors.accent,
   },
   choiceText: {
+    flex: 1,
+    minWidth: 0,
     color: colors.faint,
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: "600",
   },
   choiceTextSelected: {

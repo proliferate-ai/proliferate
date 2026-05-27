@@ -9,14 +9,21 @@ export type CloudWorkSource = "chats" | "slack" | "automation" | "api";
 
 export type CloudWorkOwnerFilter = "all" | "private" | "shared" | "claimed" | "unclaimed";
 
-export type CloudWorkStatusFilter = "active" | "blocked" | "ready" | "archived" | "error";
+export type CloudWorkStatusFilter = "active" | "running" | "blocked" | "ready" | "archived" | "error";
+
+export type CloudWorkSort = "recent" | "created" | "name" | "repo" | "status";
 
 export type CloudWorkOwnerKind = "private" | "claimed" | "unclaimed" | "archived";
 
 export interface CloudWorkFilters {
   ownership?: CloudWorkOwnerFilter;
   sources?: ReadonlySet<CloudWorkSource>;
+  semanticSources?: ReadonlySet<RecentWorkSourceKind>;
+  runtimeLocations?: ReadonlySet<RecentWorkRuntimeLocation>;
   statuses?: ReadonlySet<CloudWorkStatusFilter>;
+  repoLabels?: ReadonlySet<string>;
+  sort?: CloudWorkSort;
+  needsAttention?: boolean;
   search?: string | null;
 }
 
@@ -48,6 +55,7 @@ export interface CloudWorkItemView {
   runtimeLabel: string;
   lastActivityLabel: string;
   lastActivityMs: number;
+  createdAtMs: number;
   unclaimed: boolean;
   defaultSessionId: string | null;
   sessionCount: number;
@@ -58,6 +66,14 @@ export interface CloudWorkItemView {
 
 export interface CloudWorkGroupView {
   id: CloudWorkSource;
+  label: string;
+  items: CloudWorkItemView[];
+}
+
+export type CloudWorkRecencyGroupId = "today" | "this_week" | "last_week" | "earlier";
+
+export interface CloudWorkRecencyGroupView {
+  id: CloudWorkRecencyGroupId;
   label: string;
   items: CloudWorkItemView[];
 }
@@ -176,6 +192,7 @@ const SOURCE_LABELS: Record<CloudWorkSource, string> = {
 
 const STATUS_LABELS: Record<CloudWorkStatusFilter, string> = {
   active: "Active",
+  running: "Running",
   blocked: "Blocked",
   ready: "Ready",
   archived: "Archived",
@@ -190,7 +207,7 @@ export function buildCloudWorkInventory(
   const items = filterCloudWorkItems(
     dedupeCloudWorkspaces(workspaces).map((workspace) => cloudWorkItemForWorkspace(workspace, { nowMs })),
     options.filters,
-  ).sort(compareCloudWorkItems);
+  ).sort(compareCloudWorkItemsForSort(options.filters?.sort));
   return CLOUD_WORK_SOURCE_ORDER.flatMap((source) => {
     const sourceItems = items.filter((item) => item.source === source);
     if (sourceItems.length === 0) {
@@ -201,6 +218,40 @@ export function buildCloudWorkInventory(
       label: SOURCE_LABELS[source],
       items: sourceItems,
     }];
+  });
+}
+
+export function buildCloudWorkRecencyInventory(
+  workspaces: readonly CloudWorkspaceSummary[],
+  options: BuildCloudWorkInventoryOptions = {},
+): CloudWorkRecencyGroupView[] {
+  const nowMs = options.nowMs ?? Date.now();
+  const items = filterCloudWorkItems(
+    dedupeCloudWorkspaces(workspaces).map((workspace) => cloudWorkItemForWorkspace(workspace, { nowMs })),
+    options.filters,
+  ).sort(compareCloudWorkItemsForSort(options.filters?.sort));
+  return groupCloudWorkItemsByRecency(items, { nowMs });
+}
+
+export function groupCloudWorkItemsByRecency(
+  items: readonly CloudWorkItemView[],
+  options: { nowMs?: number } = {},
+): CloudWorkRecencyGroupView[] {
+  const nowMs = options.nowMs ?? Date.now();
+  const buckets: Record<CloudWorkRecencyGroupId, CloudWorkItemView[]> = {
+    today: [],
+    this_week: [],
+    last_week: [],
+    earlier: [],
+  };
+  for (const item of items) {
+    buckets[recencyGroupForTime(item.lastActivityMs, nowMs)].push(item);
+  }
+  return RECENCY_GROUPS.flatMap((group) => {
+    const groupItems = buckets[group.id];
+    return groupItems.length > 0
+      ? [{ id: group.id, label: group.label, items: groupItems }]
+      : [];
   });
 }
 
@@ -281,6 +332,7 @@ export function cloudWorkItemForWorkspace(
   const status = cloudWorkStatusForWorkspace(workspace);
   const ownerKind = cloudWorkOwnerKind(workspace);
   const lastActivityMs = cloudWorkLastActivityMs(workspace);
+  const createdAtMs = parseTime(workspace.createdAt) || lastActivityMs;
   const defaultSessionId = selectDefaultCloudWorkSession(workspace);
   return {
     id: workspace.id,
@@ -305,6 +357,7 @@ export function cloudWorkItemForWorkspace(
     runtimeLabel: cloudWorkRuntimeLabel(workspace),
     lastActivityLabel: relativeTimeLabel(lastActivityMs, options.nowMs ?? Date.now()),
     lastActivityMs,
+    createdAtMs,
     unclaimed: workspace.visibility === "shared_unclaimed",
     defaultSessionId,
     sessionCount: workspace.lastSessionSummary ? 1 : 0,
@@ -357,11 +410,11 @@ export function recentWorkSourceForWorkspace(
       ? "team_automation"
       : "personal_automation";
   }
-  if (workspace.sandboxType === "local" || workspace.origin?.entrypoint === "desktop") {
-    return "desktop_exposed";
-  }
   if (workspace.origin?.entrypoint === "mobile") {
     return "mobile";
+  }
+  if (workspace.sandboxType === "local" || workspace.origin?.entrypoint === "desktop") {
+    return "desktop_exposed";
   }
   if (workspace.origin?.entrypoint === "web" || workspace.origin?.entrypoint === "cowork") {
     return "web";
@@ -602,13 +655,15 @@ export function cloudWorkStatusForWorkspace(
   if (workspace.actionBlockKind || workspace.actionBlockReason) {
     return "blocked";
   }
+  if (workspace.lastSessionSummary?.status === "running") {
+    return "running";
+  }
   if (
     workspace.workspaceStatus === "pending"
     || workspace.workspaceStatus === "materializing"
     || workspace.workspaceStatus === "needs_rematerialization"
     || workspace.runtime?.status === "pending"
     || workspace.runtime?.status === "provisioning"
-    || workspace.lastSessionSummary?.status === "running"
   ) {
     return "active";
   }
@@ -633,6 +688,29 @@ export function compareCloudWorkItems(left: CloudWorkItemView, right: CloudWorkI
   return left.title.localeCompare(right.title);
 }
 
+export function compareCloudWorkItemsForSort(sort: CloudWorkSort = "recent") {
+  return (left: CloudWorkItemView, right: CloudWorkItemView): number => {
+    switch (sort) {
+      case "created":
+        return right.createdAtMs - left.createdAtMs
+          || compareCloudWorkItems(left, right);
+      case "name":
+        return left.title.localeCompare(right.title)
+          || compareCloudWorkItems(left, right);
+      case "repo":
+        return left.repoLabel.localeCompare(right.repoLabel)
+          || left.title.localeCompare(right.title)
+          || compareCloudWorkItems(left, right);
+      case "status":
+        return statusRank(left.status) - statusRank(right.status)
+          || compareCloudWorkItems(left, right);
+      case "recent":
+      default:
+        return compareCloudWorkItems(left, right);
+    }
+  };
+}
+
 export function filterCloudWorkItems(
   items: readonly CloudWorkItemView[],
   filters?: CloudWorkFilters,
@@ -648,7 +726,19 @@ export function filterCloudWorkItems(
     if (filters.sources?.size && !filters.sources.has(item.source)) {
       return false;
     }
+    if (filters.semanticSources?.size && !filters.semanticSources.has(item.sourceKind)) {
+      return false;
+    }
+    if (filters.runtimeLocations?.size && !filters.runtimeLocations.has(item.runtimeLocation)) {
+      return false;
+    }
     if (filters.statuses?.size && !filters.statuses.has(item.status)) {
+      return false;
+    }
+    if (filters.repoLabels?.size && !filters.repoLabels.has(item.repoLabel)) {
+      return false;
+    }
+    if (filters.needsAttention && item.status !== "blocked" && !item.unclaimed) {
       return false;
     }
     if (query && !matchesSearch(item, query)) {
@@ -656,6 +746,28 @@ export function filterCloudWorkItems(
     }
     return true;
   });
+}
+
+const RECENCY_GROUPS = [
+  { id: "today", label: "Today" },
+  { id: "this_week", label: "This week" },
+  { id: "last_week", label: "Last week" },
+  { id: "earlier", label: "Earlier" },
+] as const satisfies readonly { id: CloudWorkRecencyGroupId; label: string }[];
+
+function recencyGroupForTime(timeMs: number, nowMs: number): CloudWorkRecencyGroupId {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const ageMs = Math.max(0, nowMs - timeMs);
+  if (ageMs < dayMs) {
+    return "today";
+  }
+  if (ageMs < 7 * dayMs) {
+    return "this_week";
+  }
+  if (ageMs < 14 * dayMs) {
+    return "last_week";
+  }
+  return "earlier";
 }
 
 function matchesOwnerFilter(item: CloudWorkItemView, filter: CloudWorkOwnerFilter): boolean {
@@ -1072,14 +1184,16 @@ function statusRank(status: CloudWorkStatusFilter): number {
   switch (status) {
     case "blocked":
       return 0;
-    case "active":
+    case "running":
       return 1;
-    case "ready":
+    case "active":
       return 2;
-    case "error":
+    case "ready":
       return 3;
-    case "archived":
+    case "error":
       return 4;
+    case "archived":
+      return 5;
   }
 }
 

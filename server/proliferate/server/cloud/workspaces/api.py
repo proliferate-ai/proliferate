@@ -20,7 +20,6 @@ from proliferate.server.cloud.workspaces.models import (
     UpdateCloudWorkspaceDisplayNameRequest,
     WorkspaceConnection,
     WorkspaceDetail,
-    WorkspaceTargetLaunchResponse,
     WorkspaceSummary,
     WorkspaceTargetLaunchResponse,
 )

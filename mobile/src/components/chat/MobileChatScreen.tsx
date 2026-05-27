@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as Clipboard from "expo-clipboard";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   FlatList,
@@ -7,7 +8,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -18,6 +18,7 @@ import type {
   CloudSessionEvent,
   CloudSessionProjection,
   CloudTranscriptItem,
+  CloudWorkspaceDetail,
 } from "@proliferate/cloud-sdk";
 import {
   useClaimCloudWorkspace,
@@ -33,6 +34,7 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudChatComposerControls,
+  DEFAULT_DIRECT_PROMPT_AGENT_KIND,
   DEFAULT_DIRECT_PROMPT_MODEL_ID,
   getLiveConfigControlValue,
   pendingConfigChangeKey,
@@ -49,7 +51,7 @@ import {
 } from "@proliferate/product-model/chats/cloud/transcript-view";
 import { cloudCommandReadiness } from "@proliferate/product-model/workspaces/cloud-work-inventory";
 
-import { MobileIcon } from "../primitives/MobileIcon";
+import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileStatusDot } from "../primitives/MobileStatusDot";
 import { MobileTextInput } from "../primitives/MobileTextInput";
 import { MobileTopBar, MobileTopBarIconButton } from "../primitives/MobileTopBar";
@@ -125,9 +127,8 @@ export function MobileChatScreen({
   const [pendingConfigChanges, setPendingConfigChanges] = useState<
     Record<string, PendingConfigChange>
   >({});
-  const [activeControl, setActiveControl] = useState<CloudChatComposerControlView | null>(null);
-  const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
+  const [toolDetailRow, setToolDetailRow] = useState<CloudChatTranscriptRowView | null>(null);
   const [claimedLocally, setClaimedLocally] = useState(false);
   const directPromptDispatchingRef = useRef(false);
   const sessionPromptDispatchingRef = useRef(false);
@@ -142,16 +143,17 @@ export function MobileChatScreen({
     [workspaceLive.snapshot?.sessions, workspaceQuery.data?.sessions],
   );
   const fallbackSession = useMemo(() => sessionProjectionFromChat(chat), [chat]);
+  const singleInferredSession = !chat.sessionId && sessions.length === 1 ? sessions[0] ?? null : null;
   const selectedSession = selectedSessionId
     ? sessions.find((candidate) => candidate.sessionId === selectedSessionId)
       ?? (fallbackSession?.sessionId === selectedSessionId ? fallbackSession : null)
     : chat.sessionId
       ? sessions.find((candidate) => candidate.sessionId === chat.sessionId)
         ?? fallbackSession
-        ?? sessions[0]
         ?? null
-      : sessions[0] ?? null;
+      : singleInferredSession;
   const session = newSessionMode ? null : selectedSession;
+  const sessionChoiceRequired = !newSessionMode && !session && !chat.sessionId && sessions.length > 1;
   const activeSessionId = session?.sessionId ?? selectedSessionId;
   const targetId = session?.targetId ?? workspace?.targetId ?? chat.targetId;
   const workspaceStatus = workspace ? effectiveWorkspaceStatus(workspace) : chat.status;
@@ -550,6 +552,7 @@ export function MobileChatScreen({
       pendingPrompt,
       modelId: pendingPrompt.modelId,
       enqueueStartSession: enqueueStartSession.mutateAsync,
+      enqueueConfig: enqueueConfig.mutateAsync,
       enqueuePrompt: enqueuePrompt.mutateAsync,
       setLatestCommandId: (commandId) => {
         if (isCurrentRun()) {
@@ -691,6 +694,7 @@ export function MobileChatScreen({
       const prompt: MobilePendingPrompt = {
         id: `mobile-chat:${workspace.id}:${Date.now().toString(36)}`,
         text,
+        agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
         modelId: draftModelId,
         modeId: null,
         createdAt: Date.now(),
@@ -733,6 +737,8 @@ export function MobileChatScreen({
       await ensureMobileWorkspaceReadyForCloudCommands({
         client,
         workspace,
+        agentKind: resolveAgentKind(workspace),
+        modelId: draftModelId,
         idempotencyKey: `${optimisticPrompt.id}:target-config`,
         setLatestCommandId,
         onStatus: setPendingPromptStatus,
@@ -746,7 +752,7 @@ export function MobileChatScreen({
         sessionId: session.sessionId,
         kind: "send_prompt",
         source: "mobile",
-        payload: { text },
+        payload: { text, promptId: optimisticPrompt.id },
       });
       setLatestCommandId(command.commandId);
       setOptimisticPrompts((current) =>
@@ -800,6 +806,8 @@ export function MobileChatScreen({
       await ensureMobileWorkspaceReadyForCloudCommands({
         client,
         workspace,
+        agentKind: resolveAgentKind(workspace),
+        modelId: null,
         idempotencyKey: `mobile:${workspace.id}:${session.sessionId}:config:${rawConfigId}:${mutationId}:target-config`,
         setLatestCommandId,
         onStatus: setPendingPromptStatus,
@@ -872,7 +880,6 @@ export function MobileChatScreen({
     setDraft("");
     setPendingPromptStatus(null);
     setPendingPromptFailed(false);
-    setSessionPickerOpen(false);
     setActionSheetOpen(false);
   }
 
@@ -882,7 +889,6 @@ export function MobileChatScreen({
     setDraft("");
     setPendingPromptStatus(null);
     setPendingPromptFailed(false);
-    setSessionPickerOpen(false);
     setActionSheetOpen(false);
     onSessionSelected?.(sessionId);
   }
@@ -903,12 +909,15 @@ export function MobileChatScreen({
     draft.trim()
       && !isUnclaimed
       && !promptSubmitting
+      && !sessionChoiceRequired
       && workspaceCommandReady,
   );
   const title = newSessionMode
     ? "New session"
     : session?.title ?? workspace?.displayName ?? chat.title;
-  const subtitle = `${workspace?.displayName ?? chat.workspaceName} - ${workspace?.repo.owner ?? chat.repoLabel}`;
+  const subtitle = workspace?.repo
+    ? `${workspace.repo.owner}/${workspace.repo.name}`
+    : chat.repoLabel;
   const branchLabel = workspace?.repo.branch ?? workspace?.repo.baseBranch ?? chat.branchLabel;
   const commandMessage =
     pendingPromptStatus ??
@@ -916,23 +925,26 @@ export function MobileChatScreen({
     (commandStatus.data?.status ? `Command ${commandStatus.data.status}` : null) ??
     (!workspaceCommandReady && workspaceStatus === "ready" ? commandReadiness?.message ?? null : null);
   const emptyTitle = !session
-    ? newSessionMode ? "New session" : "No active session yet."
+    ? sessionChoiceRequired ? "Choose a session" : newSessionMode ? "New session" : "No active session yet."
     : sessionEventsQuery.isLoading && transcriptView.source === "empty"
       ? "Loading transcript"
       : "Waiting for the first projected transcript event.";
   const composerPlaceholder = isUnclaimed
     ? "Claim this workspace to reply"
+    : sessionChoiceRequired
+      ? "Choose a session or start a new one"
     : session
       ? "Message this session"
       : workspaceCommandReady
         ? "Start a session with a message"
         : "Waiting for workspace";
+  const composerControlSummary = summarizeComposerControls(composerControls);
 
   return (
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.select({ ios: "padding", default: undefined })}
-      keyboardVerticalOffset={80}
+      keyboardVerticalOffset={0}
     >
       <View style={styles.headerWrapper}>
         <MobileTopBar
@@ -942,16 +954,6 @@ export function MobileChatScreen({
           trailing={
             <View style={styles.headerStatus}>
               <MobileStatusDot status={mobileStatus(session?.status ?? workspaceStatus)} />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Open sessions"
-                onPress={() => setSessionPickerOpen(true)}
-                style={({ pressed }) => [styles.sessionChip, pressed && styles.sessionChipPressed]}
-              >
-                <Text style={styles.sessionChipText} numberOfLines={1}>
-                  {newSessionMode ? "New session" : session ? shortSessionLabel(session.sessionId) : "Sessions"}
-                </Text>
-              </Pressable>
               <MobileTopBarIconButton
                 name="more"
                 accessibilityLabel="Workspace actions"
@@ -993,13 +995,15 @@ export function MobileChatScreen({
         keyboardShouldPersistTaps="handled"
         data={visibleTranscriptRows}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <MessageRow row={item} />}
+        renderItem={({ item }) => <MessageRow row={item} onToolPress={setToolDetailRow} />}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{emptyTitle}</Text>
             <Text style={styles.emptyBody}>
               {!session
-                ? "Send a prompt below to start a projected session."
+                ? sessionChoiceRequired
+                  ? "Open the workspace menu to switch sessions or start a new one."
+                  : "Send a prompt below to start a projected session."
                 : "Transcript projection will appear here."}
             </Text>
           </View>
@@ -1014,30 +1018,27 @@ export function MobileChatScreen({
       />
 
       <View style={styles.composer}>
-        {composerControls.length > 0 ? (
-          <View style={styles.controlRow}>
-            {composerControls.map((control) => (
-              <Pressable
-                key={control.id}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: control.disabled }}
-                disabled={control.disabled}
-                onPress={() => setActiveControl(control)}
-                style={({ pressed }) => [
-                  styles.controlButton,
-                  control.pendingState && styles.controlButtonPending,
-                  control.disabled && styles.controlButtonDisabled,
-                  pressed && styles.controlButtonPressed,
-                ]}
-              >
-                <Text style={styles.controlButtonText} numberOfLines={1}>
-                  {control.detail ?? control.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-        <View style={styles.inputRow}>
+        <View style={styles.composerCard}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open chat settings"
+            onPress={() => setActionSheetOpen(true)}
+            style={({ pressed }) => [
+              styles.configPill,
+              composerControlSummary.pending && styles.configPillPending,
+              pressed && styles.configPillPressed,
+            ]}
+          >
+            <MobileIcon
+              name={composerControlSummary.icon}
+              size={11}
+              color={colors.faint}
+            />
+            <Text style={styles.configPillText} numberOfLines={1}>
+              {composerControlSummary.label}
+            </Text>
+            <MobileIcon name="chevron-down" size={10} color={colors.faint} />
+          </Pressable>
           <MobileTextInput
             multiline
             value={draft}
@@ -1045,227 +1046,165 @@ export function MobileChatScreen({
             placeholder={composerPlaceholder}
             style={styles.composerInput}
           />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Send"
-            accessibilityState={{ disabled: !canSubmit }}
-            disabled={!canSubmit}
-            onPress={() => void submitPrompt()}
-            style={({ pressed }) => [
-              styles.send,
-              !canSubmit && styles.sendDisabled,
-              pressed && styles.sendPressed,
-            ]}
-          >
-            <MobileIcon name="send" size={16} color={canSubmit ? colors.background : colors.faint} />
-          </Pressable>
+          <View style={styles.composerFooter}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send"
+              accessibilityState={{ disabled: !canSubmit }}
+              disabled={!canSubmit}
+              onPress={() => void submitPrompt()}
+              style={({ pressed }) => [
+                styles.send,
+                !canSubmit && styles.sendDisabled,
+                pressed && styles.sendPressed,
+              ]}
+            >
+              <MobileIcon name="send" size={18} color={canSubmit ? colors.background : colors.faint} />
+            </Pressable>
+          </View>
         </View>
       </View>
 
-      <SessionPickerSheet
-        visible={sessionPickerOpen}
-        sessions={sessions}
-        activeSessionId={session?.sessionId ?? null}
-        newSessionMode={newSessionMode}
-        unclaimed={isUnclaimed}
-        onSelectSession={selectSession}
-        onStartNewSession={startNewSession}
-        onClose={() => setSessionPickerOpen(false)}
-      />
       <MobileWorkspaceActionSheet
         visible={actionSheetOpen}
         branchLabel={branchLabel}
-        visibilityLabel={workspace?.visibility ?? chat.visibility}
-        liveLabel={sessionLive.isConnected ? "Live" : "Snapshot"}
-        transcriptLabel={transcriptView.source === "events" ? "Events" : transcriptView.source}
         unclaimed={isUnclaimed}
         claimPending={claimWorkspace.isPending}
+        promptSubmitting={promptSubmitting}
+        sessions={sessions}
+        activeSessionId={session?.sessionId ?? null}
+        newSessionMode={newSessionMode}
+        composerControls={composerControls}
         onClaim={claimChat}
         onNewSession={startNewSession}
-        onOpenSessions={() => setSessionPickerOpen(true)}
-        onShareBranch={() => void shareBranch(branchLabel)}
+        onSelectSession={selectSession}
+        onCopyBranch={() => void copyBranchToClipboard(branchLabel)}
         onClose={() => setActionSheetOpen(false)}
       />
-      <ControlSheet control={activeControl} onClose={() => setActiveControl(null)} />
+      <ToolDetailSheet row={toolDetailRow} onClose={() => setToolDetailRow(null)} />
     </KeyboardAvoidingView>
   );
 }
 
-function ControlSheet({
-  control,
-  onClose,
+function MessageRow({
+  row,
+  onToolPress,
 }: {
-  control: CloudChatComposerControlView | null;
-  onClose: () => void;
+  row: CloudChatTranscriptRowView;
+  onToolPress: (row: CloudChatTranscriptRowView) => void;
 }) {
-  return (
-    <Modal visible={Boolean(control)} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.sheetLayer}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close control options"
-          style={styles.sheetScrim}
-          onPress={onClose}
-        />
-        <View style={styles.sheet}>
-          <Text style={styles.sheetTitle}>{control?.label}</Text>
-          <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetScrollContent}>
-            {control?.groups.map((group) => (
-              <View key={group.id} style={styles.sheetGroup}>
-                {group.label ? <Text style={styles.sheetGroupLabel}>{group.label}</Text> : null}
-                {group.options.map((option) => (
-                  <Pressable
-                    key={option.id}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: option.selected, disabled: option.disabled }}
-                    disabled={option.disabled}
-                    onPress={() => {
-                      control.onSelect?.(option.id);
-                      onClose();
-                    }}
-                    style={({ pressed }) => [
-                      styles.sheetOption,
-                      option.selected && styles.sheetOptionSelected,
-                      option.disabled && styles.sheetOptionDisabled,
-                      pressed && styles.sheetOptionPressed,
-                    ]}
-                  >
-                    <View style={styles.sheetOptionText}>
-                      <Text style={styles.sheetOptionLabel}>{option.label}</Text>
-                      {option.description ? (
-                        <Text style={styles.sheetOptionDescription}>{option.description}</Text>
-                      ) : null}
-                    </View>
-                    {option.selected ? <MobileIcon name="check" size={16} color={colors.success} /> : null}
-                  </Pressable>
-                ))}
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function SessionPickerSheet({
-  visible,
-  sessions,
-  activeSessionId,
-  newSessionMode,
-  unclaimed,
-  onSelectSession,
-  onStartNewSession,
-  onClose,
-}: {
-  visible: boolean;
-  sessions: readonly CloudSessionProjection[];
-  activeSessionId: string | null;
-  newSessionMode: boolean;
-  unclaimed: boolean;
-  onSelectSession: (sessionId: string) => void;
-  onStartNewSession: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.sheetLayer}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close sessions"
-          style={styles.sheetScrim}
-          onPress={onClose}
-        />
-        <View style={styles.sheet}>
-          <Text style={styles.sheetTitle}>Workspace sessions</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ selected: newSessionMode, disabled: unclaimed }}
-            disabled={unclaimed}
-            onPress={onStartNewSession}
-            style={({ pressed }) => [
-              styles.sheetOption,
-              newSessionMode && styles.sheetOptionSelected,
-              unclaimed && styles.sheetOptionDisabled,
-              pressed && styles.sheetOptionPressed,
-            ]}
-          >
-            <MobileIcon name="plus" size={16} color={colors.faint} />
-            <View style={styles.sheetOptionText}>
-              <Text style={styles.sheetOptionLabel}>New session</Text>
-              <Text style={styles.sheetOptionDescription}>
-                {unclaimed
-                  ? "Claim this workspace before starting a session."
-                  : "Start a separate chat in this workspace."}
-              </Text>
-            </View>
-            {newSessionMode ? <MobileIcon name="check" size={16} color={colors.success} /> : null}
-          </Pressable>
-          <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetScrollContent}>
-            <View style={styles.sheetGroup}>
-              <Text style={styles.sheetGroupLabel}>Existing sessions</Text>
-              {sessions.length === 0 ? (
-                <Text style={styles.sheetEmptyText}>No projected sessions yet.</Text>
-              ) : (
-                sessions.map((candidate, index) => {
-                  const selected = candidate.sessionId === activeSessionId && !newSessionMode;
-                  return (
-                    <Pressable
-                      key={candidate.sessionId}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      onPress={() => onSelectSession(candidate.sessionId)}
-                      style={({ pressed }) => [
-                        styles.sheetOption,
-                        selected && styles.sheetOptionSelected,
-                        pressed && styles.sheetOptionPressed,
-                      ]}
-                    >
-                      <MobileStatusDot status={mobileStatus(candidate.status)} />
-                      <View style={styles.sheetOptionText}>
-                        <Text style={styles.sheetOptionLabel} numberOfLines={1}>
-                          {sessionDisplayTitle(candidate, index)}
-                        </Text>
-                        <Text style={styles.sheetOptionDescription} numberOfLines={1}>
-                          {sessionDisplaySubtitle(candidate)}
-                        </Text>
-                      </View>
-                      {selected ? <MobileIcon name="check" size={16} color={colors.success} /> : null}
-                    </Pressable>
-                  );
-                })
-              )}
-            </View>
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function MessageRow({ row }: { row: CloudChatTranscriptRowView }) {
-  const isAssistant = row.kind === "assistant";
-  const isSystem = row.kind === "system" || row.kind === "tool" || row.kind === "tool_group";
+  if (row.kind === "tool" || row.kind === "tool_group") {
+    return <ToolRow row={row} onPress={() => onToolPress(row)} />;
+  }
   const isUser = row.kind === "user";
-  return (
-    <View
-      style={[
-        styles.message,
-        isAssistant && styles.messageAssistant,
-        isSystem && styles.messageSystem,
-        isUser && styles.messageUser,
-      ]}
-    >
-      <View style={styles.messageHeader}>
-        <Text style={styles.messageRole}>{messageLabel(row)}</Text>
-        {row.status ? <Text style={styles.messageStatus}>{row.status}</Text> : null}
+  const isSystem = row.kind === "system";
+  if (isUser) {
+    return (
+      <View style={styles.userRow}>
+        <View style={styles.userBubble}>
+          {row.body ? <Text style={styles.userBubbleText}>{row.body}</Text> : null}
+          {row.status && row.status !== "Queued" ? (
+            <Text style={styles.userBubbleStatus}>{row.status}</Text>
+          ) : null}
+        </View>
       </View>
-      {row.title ? <Text style={styles.messageTitle}>{row.title}</Text> : null}
-      {row.body ? <Text style={styles.messageBody}>{row.body}</Text> : null}
-      {row.detail ? <Text style={styles.messageDetail}>{row.detail}</Text> : null}
+    );
+  }
+  return (
+    <View style={[styles.assistantRow, isSystem && styles.systemRow]}>
+      {row.title ? <Text style={styles.assistantTitle}>{row.title}</Text> : null}
+      {row.body ? <Text style={styles.assistantBody}>{row.body}</Text> : null}
+      {row.detail ? <Text style={styles.assistantDetail}>{row.detail}</Text> : null}
       {row.streaming ? <Text style={styles.streamingText}>Working...</Text> : null}
     </View>
   );
+}
+
+function ToolRow({ row, onPress }: { row: CloudChatTranscriptRowView; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={row.title ? `Open ${row.title}` : "Open tool details"}
+      onPress={onPress}
+      style={({ pressed }) => [styles.toolCard, pressed && styles.toolCardPressed]}
+    >
+      <View style={styles.toolIcon}>
+        <MobileIcon name="settings" size={15} color={colors.faint} />
+      </View>
+      <View style={styles.toolText}>
+        <Text style={styles.toolTitle} numberOfLines={1}>
+          {row.title ?? row.body ?? "Tool call"}
+        </Text>
+        <Text style={styles.toolSubtitle} numberOfLines={1}>
+          {toolSummary(row)}
+        </Text>
+      </View>
+      <MobileIcon name="chevron-right" size={15} color={colors.faint} />
+    </Pressable>
+  );
+}
+
+function ToolDetailSheet({
+  row,
+  onClose,
+}: {
+  row: CloudChatTranscriptRowView | null;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={Boolean(row)} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.toolSheetLayer}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close tool details"
+          style={styles.toolSheetScrim}
+          onPress={onClose}
+        />
+        <View style={styles.toolSheet}>
+          <View style={styles.toolSheetHeader}>
+            <Text style={styles.toolSheetTitle} numberOfLines={1}>
+              {row?.title ?? "Tool call"}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              onPress={onClose}
+              style={({ pressed }) => [styles.toolSheetClose, pressed && styles.sendPressed]}
+            >
+              <MobileIcon name="close" size={17} color={colors.fg} />
+            </Pressable>
+          </View>
+          <ScrollView
+            style={styles.toolSheetScroll}
+            contentContainerStyle={styles.toolSheetContent}
+          >
+            {row?.status ? <Text style={styles.toolSheetMeta}>{row.status}</Text> : null}
+            {row?.body ? <Text style={styles.toolSheetBody}>{row.body}</Text> : null}
+            {row?.detail ? <Text style={styles.toolSheetDetail}>{row.detail}</Text> : null}
+            {row?.children?.length ? (
+              <View style={styles.toolChildren}>
+                {row.children.map((child) => (
+                  <View key={child.id} style={styles.toolChild}>
+                    <Text style={styles.toolChildTitle}>{child.title ?? messageLabel(child)}</Text>
+                    {child.body ? <Text style={styles.toolChildBody}>{child.body}</Text> : null}
+                    {child.detail ? <Text style={styles.toolChildDetail}>{child.detail}</Text> : null}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function toolSummary(row: CloudChatTranscriptRowView): string {
+  const count = row.children?.length ?? 0;
+  if (count > 0) {
+    return `${count} ${count === 1 ? "tool call" : "tool calls"}${row.status ? ` · ${row.status}` : ""}`;
+  }
+  return row.status ?? row.detail ?? "Tap for details";
 }
 
 function messageLabel(row: CloudChatTranscriptRowView): string {
@@ -1604,8 +1543,104 @@ function promptCommandFailureMessage(status: CloudCommandStatus): string {
   }
 }
 
-async function shareBranch(branchLabel: string): Promise<void> {
-  await Share.share({ message: branchLabel });
+function resolveAgentKind(workspace: CloudWorkspaceDetail): string {
+  if (workspace.readyAgentKinds?.includes("codex")) {
+    return "codex";
+  }
+  return workspace.readyAgentKinds?.[0] ?? workspace.allowedAgentKinds?.[0] ?? "codex";
+}
+
+async function copyBranchToClipboard(branchLabel: string): Promise<void> {
+  await Clipboard.setStringAsync(branchLabel);
+}
+
+function summarizeComposerControls(
+  controls: readonly CloudChatComposerControlView[],
+): { label: string; icon: MobileIconName; pending: boolean } {
+  const modelControl = controls.find((control) => control.key === "model") ?? null;
+  const modeControl =
+    controls.find((control) =>
+      control.key === "mode" || control.key === "collaboration_mode"
+    )
+    ?? controls.find((control) => control.placement === "leading")
+    ?? null;
+  const primaryControl = modelControl ?? modeControl ?? controls[0] ?? null;
+  const primaryLabel =
+    composerControlValueLabel(primaryControl)
+    ?? primaryControl?.label
+    ?? "Chat settings";
+  const secondaryLabel = modeControl && modeControl !== primaryControl
+    ? composerControlValueLabel(modeControl)
+    : null;
+  const label = secondaryLabel && secondaryLabel !== primaryLabel
+    ? `${primaryLabel} · ${secondaryLabel}`
+    : primaryLabel;
+
+  return {
+    label,
+    icon: composerControlIcon(primaryControl),
+    pending: controls.some((control) => Boolean(control.pendingState)),
+  };
+}
+
+function composerControlValueLabel(control: CloudChatComposerControlView | null): string | null {
+  if (!control) {
+    return null;
+  }
+  const selected = selectedComposerOptionLabel(control);
+  const detail = control.detail?.trim();
+  const value = detail && detail !== control.label && detail.toLowerCase() !== "mode"
+    ? normalizeComposerLabel(detail)
+    : selected;
+  if (!value) {
+    return null;
+  }
+  return control.pendingState ? `Updating ${value}` : value;
+}
+
+function selectedComposerOptionLabel(control: CloudChatComposerControlView): string | null {
+  for (const group of control.groups) {
+    const selected = group.options.find((option) => option.selected);
+    if (selected) {
+      return normalizeComposerLabel(selected.label);
+    }
+  }
+  return null;
+}
+
+function normalizeComposerLabel(label: string): string {
+  return label
+    .replace(/^Claude\s*·\s*/i, "")
+    .replace(/^Claude\s+(?=Sonnet|Haiku|Opus)/i, "")
+    .replace(/^OpenAI\s*·\s*/i, "")
+    .replace(/^Gemini\s*·\s*/i, "")
+    .replace(/^Codex\s*·\s*/i, "");
+}
+
+function composerControlIcon(control: CloudChatComposerControlView | null): MobileIconName {
+  switch (control?.icon) {
+    case "brain":
+      return "brain";
+    case "sparkles":
+    case "zap":
+      return "sparkles";
+    case "openai":
+      return "openai";
+    case "claude":
+      return "claude";
+    case "gemini":
+      return "gemini";
+    case "shieldCheck":
+      return "shield";
+    case "chat":
+      return "sessions";
+    case "opencodeBuild":
+    case "bot":
+      return "sparkles";
+    case "settings":
+    default:
+      return "controls";
+  }
 }
 
 const styles = StyleSheet.create({
@@ -1621,25 +1656,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing[2],
     paddingRight: spacing[1],
-  },
-  sessionChip: {
-    maxWidth: 96,
-    minHeight: 30,
-    justifyContent: "center",
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingHorizontal: spacing[2],
-  },
-  sessionChipPressed: {
-    opacity: 0.72,
-    backgroundColor: colors.accent,
-  },
-  sessionChipText: {
-    color: colors.fg,
-    fontSize: 11,
-    fontWeight: "700",
   },
   list: {
     flex: 1,
@@ -1688,7 +1704,7 @@ const styles = StyleSheet.create({
   claimButtonText: {
     color: colors.background,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   controlNote: {
     marginTop: spacing[2],
@@ -1720,59 +1736,49 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  message: {
-    padding: spacing[3],
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-  },
-  messageAssistant: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-  },
-  messageSystem: {
-    backgroundColor: "transparent",
-    borderColor: colors.borderLight,
-    borderStyle: "dashed",
-  },
-  messageUser: {
-    marginLeft: spacing[5],
-  },
-  messageHeader: {
+  userRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing[2],
-    marginBottom: 6,
+    justifyContent: "flex-end",
+    paddingLeft: spacing[6],
   },
-  messageRole: {
-    color: colors.faint,
-    fontSize: 10.5,
-    fontWeight: "600",
-    letterSpacing: 0,
-    textTransform: "uppercase",
+  userBubble: {
+    maxWidth: "92%",
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    gap: 4,
   },
-  messageStatus: {
-    color: colors.faint,
-    fontSize: 10.5,
-  },
-  messageTitle: {
+  userBubbleText: {
     color: colors.fg,
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 5,
-  },
-  messageBody: {
-    color: colors.fg,
-    fontSize: 14.5,
+    fontSize: 15,
     lineHeight: 21,
   },
-  messageDetail: {
-    marginTop: 6,
+  userBubbleStatus: {
     color: colors.faint,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11,
+  },
+  assistantRow: {
+    paddingRight: spacing[4],
+    gap: 4,
+  },
+  systemRow: {
+    opacity: 0.7,
+  },
+  assistantTitle: {
+    color: colors.fg,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  assistantBody: {
+    color: colors.fg,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  assistantDetail: {
+    color: colors.faint,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   streamingText: {
     marginTop: 8,
@@ -1780,61 +1786,187 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontStyle: "italic",
   },
-  composer: {
-    gap: spacing[2],
+  toolCard: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
+    backgroundColor: colors.card,
     paddingHorizontal: spacing[3],
-    paddingTop: spacing[2],
-    paddingBottom: spacing[4],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
+    paddingVertical: spacing[2],
+  },
+  toolCardPressed: {
+    opacity: 0.82,
+    backgroundColor: colors.accent,
+  },
+  toolIcon: {
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.full,
     backgroundColor: colors.background,
   },
-  controlRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing[2],
+  toolText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
-  controlButton: {
-    minHeight: 30,
-    maxWidth: 140,
-    justifyContent: "center",
-    borderRadius: radius.md,
+  toolTitle: {
+    color: colors.fg,
+    fontSize: 13.5,
+    fontWeight: "600",
+  },
+  toolSubtitle: {
+    color: colors.faint,
+    fontSize: 11.5,
+  },
+  toolSheetLayer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+  },
+  toolSheetScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.overlayStrong,
+  },
+  toolSheet: {
+    maxHeight: "78%",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.card,
-    paddingHorizontal: spacing[2],
+    paddingTop: spacing[2],
+    paddingHorizontal: spacing[4],
+    paddingBottom: spacing[5],
   },
-  controlButtonPending: {
-    borderColor: colors.info,
+  toolSheetHeader: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
   },
-  controlButtonDisabled: {
-    opacity: 0.5,
-  },
-  controlButtonPressed: {
-    opacity: 0.8,
-  },
-  controlButtonText: {
-    color: colors.mutedForeground,
-    fontSize: 12,
+  toolSheetTitle: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.fg,
+    fontSize: 16,
     fontWeight: "600",
   },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
+  toolSheetClose: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.full,
+  },
+  toolSheetScroll: {
+    minHeight: 0,
+  },
+  toolSheetContent: {
+    gap: spacing[3],
+    paddingBottom: spacing[4],
+  },
+  toolSheetMeta: {
+    color: colors.faint,
+    fontSize: 12,
+    fontWeight: "600",
+    textTransform: "uppercase",
+  },
+  toolSheetBody: {
+    color: colors.fg,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  toolSheetDetail: {
+    color: colors.faint,
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  toolChildren: {
+    gap: spacing[2],
+  },
+  toolChild: {
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+    padding: spacing[3],
+    gap: spacing[1],
+  },
+  toolChildTitle: {
+    color: colors.fg,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  toolChildBody: {
+    color: colors.fg,
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  toolChildDetail: {
+    color: colors.faint,
+    fontSize: 11.5,
+    lineHeight: 16,
+  },
+  composer: {
+    paddingHorizontal: spacing[3],
+    paddingTop: spacing[2],
+    paddingBottom: spacing[3],
+    backgroundColor: colors.background,
+  },
+  composerCard: {
+    borderRadius: 28,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[3],
+    paddingBottom: spacing[3],
     gap: spacing[2],
   },
   composerInput: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 140,
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing[3],
-    paddingVertical: 10,
-    fontSize: 15,
-    lineHeight: 22,
+    minHeight: 23,
+    maxHeight: 200,
+    borderWidth: 0,
+    backgroundColor: "transparent",
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    color: colors.fg,
+    fontSize: 17,
+    lineHeight: 23,
+  },
+  composerFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  configPill: {
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: "70%",
+    minHeight: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "center",
+    borderRadius: radius.full,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+  },
+  configPillPending: {
+    backgroundColor: colors.accent,
+  },
+  configPillPressed: {
+    opacity: 0.82,
+  },
+  configPillText: {
+    minWidth: 0,
+    color: colors.faint,
+    fontSize: 11.5,
+    fontWeight: "500",
   },
   send: {
     width: 40,
@@ -1849,83 +1981,5 @@ const styles = StyleSheet.create({
   },
   sendPressed: {
     opacity: 0.85,
-  },
-  sheetLayer: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  sheetScrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlayStrong,
-  },
-  sheet: {
-    maxHeight: "72%",
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    backgroundColor: colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    padding: spacing[4],
-    gap: spacing[3],
-  },
-  sheetTitle: {
-    color: colors.fg,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  sheetGroup: {
-    gap: spacing[1],
-  },
-  sheetScroll: {
-    minHeight: 0,
-  },
-  sheetScrollContent: {
-    paddingBottom: spacing[1],
-  },
-  sheetGroupLabel: {
-    color: colors.faint,
-    fontSize: 11,
-    fontWeight: "600",
-    textTransform: "uppercase",
-  },
-  sheetOption: {
-    minHeight: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-    borderRadius: radius.md,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-  },
-  sheetOptionSelected: {
-    backgroundColor: colors.accent,
-  },
-  sheetOptionDisabled: {
-    opacity: 0.5,
-  },
-  sheetOptionPressed: {
-    backgroundColor: colors.card,
-  },
-  sheetOptionText: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  sheetOptionLabel: {
-    color: colors.fg,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  sheetOptionDescription: {
-    color: colors.faint,
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  sheetEmptyText: {
-    color: colors.faint,
-    fontSize: 13,
-    lineHeight: 18,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
   },
 });
