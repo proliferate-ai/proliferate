@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import timedelta
 from uuid import UUID
@@ -10,12 +11,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.cloud import CLOUD_TARGET_HEARTBEAT_STALE_SECONDS
+from proliferate.constants.cloud import CLOUD_TARGET_HEARTBEAT_STALE_SECONDS, CloudCommandKind
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_sandbox_profiles import load_sandbox_profile_by_id
 from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.server.billing.service import authorize_sandbox_start_for_billing_subject
@@ -86,6 +88,7 @@ async def run_managed_slot_wake_job(target_id: UUID, command_id: UUID | None = N
                 now=utcnow(),
             )
             for command in commands:
+                await _fail_pending_prompt_interaction_for_command(db, command)
                 await publish_command_status_after_commit(db, command)
             await db.commit()
             logger.info(
@@ -103,8 +106,51 @@ async def run_managed_slot_wake_job(target_id: UUID, command_id: UUID | None = N
     resumed = await _resume_target_runtime_environment(target_id, command_id=command_id)
     if resumed:
         return
-
     await perform_proliferate_owned_e2b_resume({"target_id": str(target_id)})
+
+
+async def _fail_pending_prompt_interaction_for_command(
+    db: AsyncSession,
+    command: commands_store.CloudCommandSnapshot,
+) -> None:
+    if command.kind != CloudCommandKind.send_prompt.value or command.session_id is None:
+        return
+    try:
+        payload = json.loads(command.payload_json or "{}")
+    except ValueError:
+        return
+    if not isinstance(payload, dict):
+        return
+    prompt_id = _str_or_none(payload.get("promptId"))
+    if not prompt_id:
+        return
+    await events_store.fail_existing_pending_interaction(
+        db,
+        target_id=command.target_id,
+        session_id=command.session_id,
+        request_id=prompt_id,
+        occurred_at=utcnow().isoformat(),
+        description=command.error_message or "Prompt could not be delivered.",
+        payload_json=_compact_json(
+            {
+                **payload,
+                "commandId": str(command.id),
+                "errorCode": command.error_code,
+                "errorMessage": command.error_message,
+                "status": command.status,
+            }
+        ),
+    )
+
+
+def _str_or_none(value: object) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _compact_json(value: dict[str, object]) -> str:
+    return json.dumps(value, separators=(",", ":"), sort_keys=True)
 
 
 async def _resume_target_runtime_environment(

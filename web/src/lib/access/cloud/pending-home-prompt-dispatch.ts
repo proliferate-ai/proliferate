@@ -192,6 +192,7 @@ async function startSessionForPrompt(args: {
     targetId,
     fallbackWorkspaceId: anyharnessWorkspaceId,
     existingSessionIds,
+    expectedAgentKind: agentKind,
     shouldContinue: args.shouldContinue,
   });
 }
@@ -215,7 +216,12 @@ export async function prepareManagedWorkspaceForCloudCommands(args: {
       onStatus: args.onStatus,
     });
     assertStillCurrent(args.shouldContinue);
-    workspace = (await getWorkspaceSnapshot(workspace.id, args.client)).workspace;
+    workspace = await waitForManagedAgentAuthCurrent({
+      client: args.client,
+      workspaceId: workspace.id,
+      onStatus: args.onStatus,
+      shouldContinue: args.shouldContinue,
+    });
   }
   assertWorkspaceCanAcceptCloudCommands(workspace);
   await ensureManagedWorkspaceTargetConfigReady({
@@ -227,6 +233,37 @@ export async function prepareManagedWorkspaceForCloudCommands(args: {
     shouldContinue: args.shouldContinue,
   });
   return workspace;
+}
+
+async function waitForManagedAgentAuthCurrent(args: {
+  client: ProliferateCloudClient;
+  workspaceId: string;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<CloudWorkspaceDetail> {
+  const deadline = Date.now() + 120_000;
+  let delayMs = 500;
+  let latest = (await getWorkspaceSnapshot(args.workspaceId, args.client)).workspace;
+  while (true) {
+    assertStillCurrent(args.shouldContinue);
+    const runtimeAuth = latest.runtime?.runtimeAuth;
+    if (runtimeAuth?.targetCurrent === true) {
+      return latest;
+    }
+    if (runtimeAuth?.status === "apply_failed" || runtimeAuth?.status === "missing_credentials") {
+      throw new Error(
+        runtimeAuth.lastError
+          ?? "Cloud agent credentials are not ready for this workspace.",
+      );
+    }
+    args.onStatus("Applying cloud agent credentials.");
+    if (Date.now() >= deadline) {
+      throw new Error("Timed out waiting for cloud agent credentials to apply.");
+    }
+    await sleep(delayMs);
+    delayMs = nextPollDelay(delayMs);
+    latest = (await getWorkspaceSnapshot(args.workspaceId, args.client)).workspace;
+  }
 }
 
 async function ensurePersonalManagedAgentAuthReady(args: {
@@ -502,6 +539,7 @@ async function waitForStartedSession(args: {
   targetId: string;
   fallbackWorkspaceId: string;
   existingSessionIds: Set<string>;
+  expectedAgentKind: string | null;
   shouldContinue: () => boolean;
 }): Promise<CloudSessionProjection> {
   const deadline = Date.now() + 240_000;
@@ -524,6 +562,8 @@ async function waitForStartedSession(args: {
       targetId: args.targetId,
       expectedSessionId,
       existingSessionIds: args.existingSessionIds,
+      expectedAgentKind: args.expectedAgentKind,
+      startedAfter: latestCommand.createdAt,
       shouldContinue: args.shouldContinue,
     });
     if (session) {
@@ -591,6 +631,8 @@ async function findStartedSession(args: {
   targetId: string;
   expectedSessionId: string | null;
   existingSessionIds: Set<string>;
+  expectedAgentKind: string | null;
+  startedAfter: string | null | undefined;
   shouldContinue: () => boolean;
 }): Promise<CloudSessionProjection | null> {
   assertStillCurrent(args.shouldContinue);
@@ -606,10 +648,34 @@ async function findStartedSession(args: {
     }
     return sessionsForTarget
       .filter((candidate) => !args.existingSessionIds.has(candidate.sessionId))
+      .filter((candidate) => sessionMatchesExpectedAgent(candidate, args.expectedAgentKind))
+      .filter((candidate) => sessionStartedAfter(candidate, args.startedAfter))
       .sort(compareSessionFreshness)[0] ?? null;
   } catch {
     return null;
   }
+}
+
+function sessionMatchesExpectedAgent(
+  session: CloudSessionProjection,
+  expectedAgentKind: string | null,
+): boolean {
+  return !expectedAgentKind || session.sourceAgentKind === expectedAgentKind;
+}
+
+function sessionStartedAfter(
+  session: CloudSessionProjection,
+  startedAfter: string | null | undefined,
+): boolean {
+  if (!startedAfter) {
+    return true;
+  }
+  const baseline = Date.parse(startedAfter);
+  if (!Number.isFinite(baseline)) {
+    return true;
+  }
+  const sessionTime = Date.parse(session.startedAt ?? session.lastEventAt ?? "");
+  return Number.isFinite(sessionTime) && sessionTime >= baseline;
 }
 
 function compareSessionFreshness(

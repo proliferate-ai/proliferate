@@ -1739,6 +1739,214 @@ class TestCloudCommandsApi:
         )
 
     @pytest.mark.asyncio
+    async def test_worker_rejected_web_send_prompt_fails_pending_prompt_interaction(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-pending-prompt-result",
+        )
+        target_id, worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="pending-prompt-result",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="pending-prompt-result",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-pending-prompt-result",
+        )
+        await db_session.commit()
+
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "web-pending-prompt-result",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-pending-prompt-result",
+                "kind": "send_prompt",
+                "source": "web",
+                "payload": {
+                    "text": "prompt that the worker rejects",
+                    "promptId": "web:pending-prompt-result",
+                },
+            },
+        )
+        assert created.status_code == 200
+        command_id = created.json()["commandId"]
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["send_prompt", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert lease.status_code == 200
+        leased_command = lease.json()["command"]
+        assert leased_command["commandId"] == command_id
+
+        result = await client.post(
+            f"/v1/cloud/worker/commands/{command_id}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": leased_command["leaseId"],
+                "slotGeneration": leased_command["slotGeneration"],
+                "status": "rejected",
+                "errorCode": "runtime_rejected_prompt",
+                "errorMessage": "Runtime rejected the prompt.",
+            },
+        )
+        assert result.status_code == 200
+        assert result.json()["status"] == "rejected"
+
+        pending = (
+            await db_session.execute(
+                select(CloudPendingInteraction).where(
+                    CloudPendingInteraction.target_id == target_uuid,
+                    CloudPendingInteraction.session_id == "session-pending-prompt-result",
+                    CloudPendingInteraction.request_id == "web:pending-prompt-result",
+                )
+            )
+        ).scalar_one()
+        assert pending.status == "failed"
+        assert pending.description == "Runtime rejected the prompt."
+        assert pending.payload_json is not None
+        interaction_payload = json.loads(pending.payload_json)
+        assert interaction_payload["commandId"] == command_id
+        assert interaction_payload["status"] == "rejected"
+        assert interaction_payload["errorCode"] == "runtime_rejected_prompt"
+
+    @pytest.mark.asyncio
+    async def test_worker_failed_delivery_web_send_prompt_fails_pending_prompt_interaction(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-pending-prompt-delivery",
+        )
+        target_id, worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="pending-prompt-delivery",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="pending-prompt-delivery",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-pending-prompt-delivery",
+        )
+        await db_session.commit()
+
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "web-pending-prompt-delivery",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-pending-prompt-delivery",
+                "kind": "send_prompt",
+                "source": "web",
+                "payload": {
+                    "text": "prompt that the worker cannot deliver",
+                    "promptId": "web:pending-prompt-delivery",
+                },
+            },
+        )
+        assert created.status_code == 200
+        command_id = created.json()["commandId"]
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["send_prompt", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert lease.status_code == 200
+        leased_command = lease.json()["command"]
+        assert leased_command["commandId"] == command_id
+
+        delivery = await client.post(
+            f"/v1/cloud/worker/commands/{command_id}/delivery",
+            headers=worker_headers,
+            json={
+                "leaseId": leased_command["leaseId"],
+                "slotGeneration": leased_command["slotGeneration"],
+                "status": "failed_delivery",
+                "errorCode": "runtime_delivery_failed",
+                "errorMessage": "Runtime delivery failed.",
+            },
+        )
+        assert delivery.status_code == 200
+        assert delivery.json()["status"] == "failed_delivery"
+
+        pending = (
+            await db_session.execute(
+                select(CloudPendingInteraction).where(
+                    CloudPendingInteraction.request_id == "web:pending-prompt-delivery"
+                )
+            )
+        ).scalar_one()
+        assert pending.status == "failed"
+        assert pending.description == "Runtime delivery failed."
+        assert pending.payload_json is not None
+        interaction_payload = json.loads(pending.payload_json)
+        assert interaction_payload["commandId"] == command_id
+        assert interaction_payload["status"] == "failed_delivery"
+        assert interaction_payload["errorCode"] == "runtime_delivery_failed"
+
+    @pytest.mark.asyncio
     async def test_web_queued_command_status_expires_stale_command(
         self,
         client: AsyncClient,
@@ -2092,6 +2300,107 @@ class TestCloudCommandsApi:
                 "refresh_worker_enrollment_on_restart": True,
             }
         ]
+
+    @pytest.mark.asyncio
+    async def test_managed_slot_wake_billing_failure_fails_pending_prompt_interaction(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-wake-blocked",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="wake-blocked",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="wake-blocked",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-wake-blocked",
+        )
+        await db_session.commit()
+        monkeypatch.setattr(
+            command_service,
+            "kick_off_managed_slot_wake",
+            lambda _target_id, _command_id=None: None,
+        )
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-wake-blocked",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-wake-blocked",
+                "kind": "send_prompt",
+                "source": "web",
+                "payload": {
+                    "text": "wake blocked prompt",
+                    "promptId": "web:wake-blocked-prompt",
+                },
+            },
+        )
+        assert created.status_code == 200, created.text
+        command_id = UUID(created.json()["commandId"])
+
+        class _Denied:
+            allowed = False
+            message = "Billing blocked sandbox wake."
+            start_block_reason = "usage_limit"
+
+        async def _deny_sandbox_start(**_kwargs: object) -> _Denied:
+            return _Denied()
+
+        monkeypatch.setattr(
+            runtime_wake,
+            "authorize_sandbox_start_for_billing_subject",
+            _deny_sandbox_start,
+        )
+
+        await runtime_wake.run_managed_slot_wake_job(target_uuid, command_id=command_id)
+
+        command = await db_session.get(CloudCommand, command_id)
+        assert command is not None
+        await db_session.refresh(command)
+        assert command.status == "failed_delivery"
+        assert command.error_code == "sandbox_wake_blocked"
+        pending = (
+            await db_session.execute(
+                select(CloudPendingInteraction).where(
+                    CloudPendingInteraction.request_id == "web:wake-blocked-prompt"
+                )
+            )
+        ).scalar_one()
+        assert pending.status == "failed"
+        assert pending.description == "Billing blocked sandbox wake."
+        assert pending.payload_json is not None
+        interaction_payload = json.loads(pending.payload_json)
+        assert interaction_payload["commandId"] == str(command_id)
+        assert interaction_payload["status"] == "failed_delivery"
+        assert interaction_payload["errorCode"] == "sandbox_wake_blocked"
 
     @pytest.mark.asyncio
     async def test_managed_slot_wake_hydrates_environment_from_runtime_access(
