@@ -11,6 +11,7 @@ def test_web_redirect_uri_allows_configured_loopback_alias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings, "frontend_base_url", "http://localhost:5175")
+    monkeypatch.setattr(settings, "cors_allow_origins", "")
 
     validate_redirect_uri("web", "http://localhost:5175/auth/callback")
     validate_redirect_uri("web", "http://127.0.0.1:5175/auth/callback")
