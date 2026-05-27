@@ -22,26 +22,36 @@ import type {
 } from "@proliferate/cloud-sdk";
 import {
   useClaimCloudWorkspace,
+  useCloudAgentCatalog,
+  useCloudCapabilities,
   useCloudClient,
   useCloudSessionEvents,
   useCloudTranscriptSnapshot,
   useCloudWorkspaceSnapshot,
   useCommandStatus,
   useEnqueueCloudCommand,
+  useAgentAuthCredentials,
   useSessionLive,
   useWorkspaceLive,
   invalidateCloudWorkspaceLists,
 } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudChatComposerControls,
+  buildLaunchSessionConfigUpdates,
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,
   DEFAULT_DIRECT_PROMPT_MODEL_ID,
   getLiveConfigControlValue,
   pendingConfigChangeKey,
   readSessionLiveConfig,
+  resolveCloudLaunchSelection,
   type CloudChatComposerControlView,
+  type CloudLaunchComposerSelection,
   type PendingConfigChange,
 } from "@proliferate/product-model/chats/cloud/composer-controls";
+import {
+  readySyncedCloudAgentKinds,
+  resolveCloudHarnessAvailability,
+} from "@proliferate/product-model/chats/cloud/harness-availability";
 import {
   buildCloudTranscriptView,
   cloudTranscriptHasAgentProgressAfterPrompt,
@@ -113,9 +123,17 @@ export function MobileChatScreen({
 }: MobileChatScreenProps) {
   const queryClient = useQueryClient();
   const client = useCloudClient();
+  const agentCatalog = useCloudAgentCatalog();
+  const cloudCapabilities = useCloudCapabilities();
+  const agentAuthCredentials = useAgentAuthCredentials();
   const [draft, setDraft] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(chat.sessionId);
-  const [draftModelId, setDraftModelId] = useState(DEFAULT_DIRECT_PROMPT_MODEL_ID);
+  const [launchSelection, setLaunchSelection] = useState<CloudLaunchComposerSelection>({
+    agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
+    modelId: DEFAULT_DIRECT_PROMPT_MODEL_ID,
+    modeId: null,
+    controlValues: {},
+  });
   const [newSessionMode, setNewSessionMode] = useState(false);
   const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
   const [latestConfigCommandId, setLatestConfigCommandId] = useState<string | null>(null);
@@ -200,15 +218,95 @@ export function MobileChatScreen({
   const observedPromptCommandId = pendingPromptCommandId ?? latestCommandId;
   const commandStatus = useCommandStatus(observedPromptCommandId);
   const configCommandStatus = useCommandStatus(latestConfigCommandId);
+  const workspaceReadyAgentKindsKey = workspace?.readyAgentKinds?.join("\0") ?? "";
+  const workspaceAllowedAgentKindsKey = workspace?.allowedAgentKinds?.join("\0") ?? "";
+  const workspaceUsesManagedRuntime =
+    !workspace || workspace.sandboxType === "managed_personal" || workspace.sandboxType === "managed_shared";
+  const agentGateway = cloudCapabilities.data?.agentGateway;
+  const readySyncedAgentKinds = useMemo(
+    () => readySyncedCloudAgentKinds(agentAuthCredentials.data),
+    [agentAuthCredentials.data],
+  );
+  const readySyncedAgentKindsKey = readySyncedAgentKinds.join("\0");
+  const agentGatewayManagedCreditKindsKey = agentGateway?.managedCreditAgentKinds?.join("\0") ?? "";
+  const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
+  const workspaceHarnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
+    catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
+    allowedAgentKinds: workspace?.allowedAgentKinds,
+    readyAgentKinds: workspace?.readyAgentKinds
+      ?? (workspaceUsesManagedRuntime
+        ? readySyncedAgentKinds
+        : agentCatalog.data?.agents.map((agent) => agent.kind)),
+    agentGateway: workspaceUsesManagedRuntime ? agentGateway : null,
+    assumeFallbackAgentKindsLaunchable: !workspaceUsesManagedRuntime,
+  }), [
+    agentCatalog.data,
+    readySyncedAgentKindsKey,
+    agentGateway?.enabled,
+    agentGateway?.managedCreditsOrganizationEnabled,
+    agentGateway?.managedCreditsPersonalEnabled,
+    agentGateway?.opencodeGatewayEnabled,
+    agentGatewayManagedCreditKindsKey,
+    catalogAgentKindsKey,
+    workspaceAllowedAgentKindsKey,
+    workspaceReadyAgentKindsKey,
+    workspaceUsesManagedRuntime,
+  ]);
+  const workspaceLaunchableAgentKinds = workspaceHarnessAvailability.launchableAgentKinds;
+  const canStartNewSession = workspaceLaunchableAgentKinds.length > 0;
   const liveConfig = readSessionLiveConfig(session);
+  const sessionModelId = session && liveConfig ? getLiveConfigControlValue(liveConfig, "model") : null;
+  const resolvedLaunchSelection = useMemo(
+    () => resolveCloudLaunchSelection({
+      catalog: agentCatalog.data,
+      launchableAgentKinds: workspaceLaunchableAgentKinds,
+      selection: launchSelection,
+    }),
+    [agentCatalog.data, launchSelection, workspaceLaunchableAgentKinds],
+  );
   const composerControls = buildCloudChatComposerControls({
     session,
     liveConfig,
     pendingConfigChanges,
-    launchModelId: draftModelId,
-    onLaunchModelSelect: setDraftModelId,
+    launchCatalog: agentCatalog.data,
+    launchableAgentKinds: workspaceLaunchableAgentKinds,
+    launchSelection: resolvedLaunchSelection,
+    launchModelId: resolvedLaunchSelection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID,
+    onLaunchAgentModelSelect: (agentKind, modelId) => {
+      setLaunchSelection((current) => ({
+        agentKind,
+        modelId,
+        modeId: current.agentKind === agentKind ? current.modeId : null,
+        controlValues: current.agentKind === agentKind ? current.controlValues : {},
+      }));
+    },
+    onLaunchControlSelect: ({ controlKey, value }) => {
+      setLaunchSelection((current) => {
+        if (controlKey === "mode") {
+          return { ...current, modeId: value };
+        }
+        return {
+          ...current,
+          controlValues: {
+            ...current.controlValues,
+            [controlKey]: value,
+          },
+        };
+      });
+    },
+    onLaunchModelSelect: (modelId) => {
+      setLaunchSelection((current) => ({ ...current, modelId }));
+    },
     onSessionConfigSelect: (rawConfigId, value) => {
       void submitSessionConfig(rawConfigId, value);
+    },
+    onSessionAgentModelSelect: ({ agentKind, modelId }) => {
+      startNewSession({
+        agentKind,
+        modelId,
+        modeId: null,
+        controlValues: {},
+      });
     },
   });
   const hasActiveOptimisticPrompt = useMemo(
@@ -488,6 +586,33 @@ export function MobileChatScreen({
   ]);
 
   useEffect(() => {
+    if (!pendingPrompt || pendingPromptFailed || pendingPrompt.failedAt) {
+      return;
+    }
+    const failedInteraction = failedPendingInteractionForPendingPrompt(
+      pendingPrompt,
+      pendingInteractions,
+    );
+    if (!failedInteraction) {
+      return;
+    }
+    const message = failedPendingInteractionMessage(failedInteraction);
+    const failedPrompt = markPendingPromptFailed(pendingPrompt, message);
+    setPendingPrompt(failedPrompt);
+    setPendingPromptStatus(message);
+    setPendingPromptFailed(true);
+    if (ownerUserId && workspace) {
+      void savePendingMobilePrompt(workspace.id, ownerUserId, failedPrompt);
+    }
+  }, [
+    ownerUserId,
+    pendingInteractions,
+    pendingPrompt,
+    pendingPromptFailed,
+    workspace?.id,
+  ]);
+
+  useEffect(() => {
     const command = commandStatus.data;
     if (!command || command.commandId !== pendingPromptCommandId) {
       return;
@@ -690,13 +815,29 @@ export function MobileChatScreen({
       if (directPromptDispatchingRef.current || (pendingPrompt && !pendingPromptFailed)) {
         return;
       }
+      if (!canStartNewSession) {
+        setPendingPromptStatus(
+          workspaceHarnessAvailability.message ?? "No cloud agent is ready for a new session.",
+        );
+        return;
+      }
+      const promptSelection = resolveCloudLaunchSelection({
+        catalog: agentCatalog.data,
+        launchableAgentKinds: workspaceLaunchableAgentKinds,
+        selection: resolvedLaunchSelection,
+      });
       directPromptDispatchingRef.current = true;
       const prompt: MobilePendingPrompt = {
         id: `mobile-chat:${workspace.id}:${Date.now().toString(36)}`,
         text,
-        agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
-        modelId: draftModelId,
-        modeId: null,
+        agentKind: promptSelection.agentKind,
+        modelId: promptSelection.modelId,
+        modeId: promptSelection.modeId,
+        sessionConfigUpdates: buildLaunchSessionConfigUpdates({
+          catalog: agentCatalog.data,
+          launchableAgentKinds: workspaceLaunchableAgentKinds,
+          selection: promptSelection,
+        }),
         createdAt: Date.now(),
       };
       setDraft("");
@@ -737,8 +878,8 @@ export function MobileChatScreen({
       await ensureMobileWorkspaceReadyForCloudCommands({
         client,
         workspace,
-        agentKind: resolveAgentKind(workspace),
-        modelId: draftModelId,
+        agentKind: session.sourceAgentKind ?? resolveAgentKind(workspace),
+        modelId: sessionModelId,
         idempotencyKey: `${optimisticPrompt.id}:target-config`,
         setLatestCommandId,
         onStatus: setPendingPromptStatus,
@@ -806,8 +947,8 @@ export function MobileChatScreen({
       await ensureMobileWorkspaceReadyForCloudCommands({
         client,
         workspace,
-        agentKind: resolveAgentKind(workspace),
-        modelId: null,
+        agentKind: session.sourceAgentKind ?? resolveAgentKind(workspace),
+        modelId: sessionModelId,
         idempotencyKey: `mobile:${workspace.id}:${session.sessionId}:config:${rawConfigId}:${mutationId}:target-config`,
         setLatestCommandId,
         onStatus: setPendingPromptStatus,
@@ -864,10 +1005,13 @@ export function MobileChatScreen({
     }
   }
 
-  function startNewSession() {
+  function startNewSession(selection?: CloudLaunchComposerSelection) {
     if (pendingDispatchRunRef.current) {
       pendingDispatchRunRef.current.active = false;
       pendingDispatchRunRef.current = null;
+    }
+    if (selection) {
+      setLaunchSelection(selection);
     }
     if (pendingPrompt) {
       setPendingPrompt(null);
@@ -910,6 +1054,7 @@ export function MobileChatScreen({
       && !isUnclaimed
       && !promptSubmitting
       && !sessionChoiceRequired
+      && (session ? true : canStartNewSession)
       && workspaceCommandReady,
   );
   const title = newSessionMode
@@ -923,6 +1068,7 @@ export function MobileChatScreen({
     pendingPromptStatus ??
     commandStatus.data?.errorMessage ??
     (commandStatus.data?.status ? `Command ${commandStatus.data.status}` : null) ??
+    (!session && !canStartNewSession ? workspaceHarnessAvailability.message : null) ??
     (!workspaceCommandReady && workspaceStatus === "ready" ? commandReadiness?.message ?? null : null);
   const emptyTitle = !session
     ? sessionChoiceRequired ? "Choose a session" : newSessionMode ? "New session" : "No active session yet."
@@ -935,6 +1081,8 @@ export function MobileChatScreen({
       ? "Choose a session or start a new one"
     : session
       ? "Message this session"
+      : !canStartNewSession
+        ? "Choose an available cloud agent"
       : workspaceCommandReady
         ? "Start a session with a message"
         : "Waiting for workspace";
@@ -1371,12 +1519,37 @@ function pendingInteractionMatchesPendingPrompt(
   return pendingInteractions.some((interaction) =>
     interaction.kind === "send_prompt"
     && (interaction.status === "pending" || interaction.status === "failed")
-    && (
-      interaction.requestId === prompt.id
-      || interaction.requestId === `${prompt.id}:send`
-      || pendingInteractionPromptId(interaction) === prompt.id
-    )
+    && pendingInteractionMatchesPendingPromptIdentity(prompt, interaction)
   );
+}
+
+function failedPendingInteractionForPendingPrompt(
+  prompt: MobilePendingPrompt,
+  pendingInteractions: readonly CloudPendingInteraction[],
+): CloudPendingInteraction | null {
+  return pendingInteractions.find((interaction) =>
+    interaction.kind === "send_prompt"
+    && interaction.status === "failed"
+    && pendingInteractionMatchesPendingPromptIdentity(prompt, interaction)
+  ) ?? null;
+}
+
+function pendingInteractionMatchesPendingPromptIdentity(
+  prompt: MobilePendingPrompt,
+  interaction: CloudPendingInteraction,
+): boolean {
+  return interaction.requestId === prompt.id
+    || interaction.requestId === `${prompt.id}:send`
+    || pendingInteractionPromptId(interaction) === prompt.id;
+}
+
+function failedPendingInteractionMessage(interaction: CloudPendingInteraction): string {
+  const payloadMessage = interaction.payload?.errorMessage;
+  return interaction.description
+    || (typeof payloadMessage === "string" && payloadMessage.trim()
+      ? payloadMessage.trim()
+      : null)
+    || "Queued prompt could not be sent.";
 }
 
 function pendingInteractionCommandId(interaction: CloudPendingInteraction): string | null {

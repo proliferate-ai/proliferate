@@ -251,6 +251,7 @@ async def test_create_cloud_workspace_returns_pending_after_queueing_provision(
     user = SimpleNamespace(id=uuid4())
     workspace = SimpleNamespace(id=uuid4(), status=workspace_service.CloudWorkspaceStatus.pending)
     scheduled: list[object] = []
+    create_kwargs: dict[str, object] = {}
 
     async def _resolve_new_cloud_workspace_create(*_args, **_kwargs):
         return workspace_service.ResolvedCloudWorkspaceCreate(
@@ -266,6 +267,7 @@ async def test_create_cloud_workspace_returns_pending_after_queueing_provision(
         )
 
     async def _create_cloud_workspace_for_user(**_kwargs):
+        create_kwargs.update(_kwargs)
         return workspace
 
     async def _build_workspace_detail(_workspace):
@@ -301,10 +303,13 @@ async def test_create_cloud_workspace_returns_pending_after_queueing_provision(
         base_branch="main",
         branch_name="feature/cloud",
         display_name=None,
+        source="mobile",
     )
 
     assert payload.status == workspace_service.CloudWorkspaceStatus.pending
     assert scheduled == [workspace.id]
+    assert create_kwargs["origin"] == "manual_mobile"
+    assert create_kwargs["origin_json"] == '{"kind":"human","entrypoint":"mobile"}'
 
 
 @pytest.mark.asyncio

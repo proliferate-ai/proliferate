@@ -156,7 +156,7 @@ function isRecoverableLaunchReadinessError(error: unknown): boolean {
 }
 
 function sleep(delayMs: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 function freeCreditFailureCanFallThrough(

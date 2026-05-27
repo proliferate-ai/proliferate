@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   useCloudAgentCatalog,
+  useCloudCapabilities,
   useCloudRepoConfigs,
   useCloudTargets,
+  useAgentAuthCredentials,
   useTargetLive,
 } from "@proliferate/cloud-sdk-react";
 import {
@@ -12,6 +14,10 @@ import {
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
 } from "@proliferate/product-model/chats/cloud/composer-controls";
+import {
+  readySyncedCloudAgentKinds,
+  resolveCloudHarnessAvailability,
+} from "@proliferate/product-model/chats/cloud/harness-availability";
 
 import {
   buildMobileRepoOptions,
@@ -29,9 +35,11 @@ export function useMobileHomeLaunchModel() {
   });
   const repoConfigs = useCloudRepoConfigs();
   const targets = useCloudTargets();
+  const agentAuthCredentials = useAgentAuthCredentials();
   const liveTargetId = runtimeId === "cloud" ? null : runtimeId;
   const targetLive = useTargetLive(liveTargetId, { enabled: Boolean(liveTargetId) });
   const agentCatalog = useCloudAgentCatalog();
+  const cloudCapabilities = useCloudCapabilities();
   const repoOptions = useMemo(
     () => buildMobileRepoOptions(repoConfigs.data?.configs ?? []),
     [repoConfigs.data?.configs],
@@ -56,16 +64,45 @@ export function useMobileHomeLaunchModel() {
   const selectedRepo = repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null;
   const selectedRuntime =
     runtimeOptions.find((runtime) => runtime.id === runtimeId) ?? runtimeOptions[0] ?? null;
+  const agentGateway = cloudCapabilities.data?.agentGateway;
+  const readySyncedAgentKinds = useMemo(
+    () => readySyncedCloudAgentKinds(agentAuthCredentials.data),
+    [agentAuthCredentials.data],
+  );
+  const readySyncedAgentKindsKey = readySyncedAgentKinds.join("\0");
+  const agentGatewayManagedCreditKindsKey = agentGateway?.managedCreditAgentKinds?.join("\0") ?? "";
+  const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
+  const harnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
+    catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
+    readyAgentKinds: selectedRuntime?.kind === "target"
+      ? agentCatalog.data?.agents.map((agent) => agent.kind)
+      : readySyncedAgentKinds,
+    agentGateway: selectedRuntime?.kind === "target" ? null : agentGateway,
+    assumeFallbackAgentKindsLaunchable: selectedRuntime?.kind === "target",
+  }), [
+    agentCatalog.data,
+    readySyncedAgentKindsKey,
+    agentGateway?.enabled,
+    agentGateway?.managedCreditsOrganizationEnabled,
+    agentGateway?.managedCreditsPersonalEnabled,
+    agentGateway?.opencodeGatewayEnabled,
+    agentGatewayManagedCreditKindsKey,
+    catalogAgentKindsKey,
+    selectedRuntime?.kind,
+  ]);
+  const launchableAgentKinds = harnessAvailability.launchableAgentKinds;
   const resolvedLaunchSelection = useMemo(
     () => resolveCloudLaunchSelection({
       catalog: agentCatalog.data,
+      launchableAgentKinds,
       selection: launchSelection,
     }),
-    [agentCatalog.data, launchSelection],
+    [agentCatalog.data, launchSelection, launchableAgentKinds],
   );
   const launchComposerControls = useMemo(
     () => buildCloudLaunchComposerControls({
       catalog: agentCatalog.data,
+      launchableAgentKinds,
       selection: resolvedLaunchSelection,
       onAgentModelSelect: (agentKind, modelId) => {
         setLaunchSelection((current) => ({
@@ -90,7 +127,7 @@ export function useMobileHomeLaunchModel() {
         });
       },
     }),
-    [agentCatalog.data, resolvedLaunchSelection],
+    [agentCatalog.data, launchableAgentKinds, resolvedLaunchSelection],
   );
 
   useEffect(() => {
@@ -107,6 +144,10 @@ export function useMobileHomeLaunchModel() {
 
   return {
     agentCatalog,
+    agentAuthCredentials,
+    cloudCapabilities,
+    harnessAvailability,
+    launchableAgentKinds,
     launchComposerControls,
     repoConfigs,
     repoId,

@@ -185,6 +185,11 @@ MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'
 CLOUD_DESKTOP_REMOTE_ACCESS_ORIGIN_JSON = '{"kind":"human","entrypoint":"desktop"}'
 CLOUD_SYSTEM_ORIGIN_JSON = '{"kind":"system","entrypoint":"cloud"}'
+CREATE_WORKSPACE_ORIGIN_BY_SOURCE = {
+    "desktop": ("manual_desktop", '{"kind":"human","entrypoint":"desktop"}'),
+    "web": ("manual_web", '{"kind":"human","entrypoint":"web"}'),
+    "mobile": ("manual_mobile", '{"kind":"human","entrypoint":"mobile"}'),
+}
 CLOUD_REMOTE_ACCESS_TEMPLATE_VERSION = "desktop-remote-access-v1"
 CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION = "desktop-target-launch-v1"
 TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT = timedelta(seconds=240)
@@ -1715,6 +1720,7 @@ async def create_cloud_workspace(
     branch_name: str,
     display_name: str | None,
     required_agent_kind: str | None = None,
+    source: str = "desktop",
     owner_selection: OwnerSelection | None = None,
 ) -> WorkspaceDetail:
     if owner_selection is not None and owner_selection.owner_scope == "organization":
@@ -1741,6 +1747,10 @@ async def create_cloud_workspace(
     )
 
     try:
+        origin, origin_json = CREATE_WORKSPACE_ORIGIN_BY_SOURCE.get(
+            source,
+            CREATE_WORKSPACE_ORIGIN_BY_SOURCE["desktop"],
+        )
         workspace = await create_cloud_workspace_for_user(
             user_id=user.id,
             display_name=resolved.display_name,
@@ -1749,7 +1759,8 @@ async def create_cloud_workspace(
             git_repo_name=resolved.git_repo_name,
             git_branch=resolved.git_branch,
             git_base_branch=resolved.git_base_branch,
-            origin_json=CLOUD_HUMAN_ORIGIN_JSON,
+            origin=origin,
+            origin_json=origin_json,
             template_version=get_configured_sandbox_provider().template_version,
             cloud_repo_limit=resolved.cloud_repo_limit,
         )

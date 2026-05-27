@@ -9,6 +9,7 @@ import type {
 } from "@proliferate/cloud-sdk";
 import {
   useAgentRunConfigActions,
+  useAgentAuthCredentials,
   useAutomationActions,
   useAutomationDetail,
   useAutomationRuns,
@@ -46,6 +47,7 @@ import {
   type CloudLaunchComposerSelection,
 } from "@proliferate/product-model/chats/cloud/composer-controls";
 import {
+  readySyncedCloudAgentKinds,
   resolveCloudHarnessAvailability,
 } from "@proliferate/product-model/chats/cloud/harness-availability";
 import {
@@ -95,6 +97,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const repoConfigs = useCloudRepoConfigs();
   const agentCatalog = useCloudAgentCatalog();
   const cloudCapabilities = useCloudCapabilities();
+  const agentAuthCredentials = useAgentAuthCredentials();
   const actions = useAutomationActions();
   const runConfigActions = useAgentRunConfigActions();
   const [createOpen, setCreateOpen] = useState(false);
@@ -184,13 +187,20 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     [repoConfigs.data?.configs],
   );
   const agentGateway = cloudCapabilities.data?.agentGateway;
+  const readySyncedAgentKinds = useMemo(
+    () => readySyncedCloudAgentKinds(agentAuthCredentials.data),
+    [agentAuthCredentials.data],
+  );
+  const readySyncedAgentKindsKey = readySyncedAgentKinds.join("\0");
   const agentGatewayManagedCreditKindsKey = agentGateway?.managedCreditAgentKinds?.join("\0") ?? "";
   const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
   const harnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
     catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
+    readyAgentKinds: readySyncedAgentKinds,
     agentGateway,
   }), [
     agentCatalog.data,
+    readySyncedAgentKindsKey,
     agentGateway?.enabled,
     agentGateway?.managedCreditsOrganizationEnabled,
     agentGateway?.managedCreditsPersonalEnabled,

@@ -48,15 +48,19 @@ from proliferate.server.cloud.runtime.wake import kick_off_managed_slot_wake
 from proliferate.server.cloud.workspaces.access import cloud_workspace_user_can_read_with_db
 from proliferate.utils.time import utcnow
 
-_WEB_COMMAND_QUEUE_EXPIRATION = timedelta(minutes=4)
-_WEB_EXPIRABLE_QUEUED_COMMAND_KINDS = {
+_CLIENT_COMMAND_QUEUE_EXPIRATION = timedelta(minutes=4)
+_CLIENT_EXPIRABLE_QUEUED_COMMAND_KINDS = {
     CloudCommandKind.start_session.value,
     CloudCommandKind.send_prompt.value,
     CloudCommandKind.update_session_config.value,
 }
-_WEB_COMMAND_QUEUE_TIMEOUT_CODE = "web_command_queue_timeout"
-_WEB_COMMAND_QUEUE_TIMEOUT_MESSAGE = (
-    "Cloud runtime did not pick up this Web command before it timed out. "
+_CLIENT_EXPIRABLE_QUEUED_COMMAND_SOURCES = {
+    CloudCommandSource.web.value,
+    CloudCommandSource.mobile.value,
+}
+_CLIENT_COMMAND_QUEUE_TIMEOUT_CODE = "client_command_queue_timeout"
+_CLIENT_COMMAND_QUEUE_TIMEOUT_MESSAGE = (
+    "Cloud runtime did not pick up this command before it timed out. "
     "Retry after the workspace shows Live."
 )
 
@@ -1270,28 +1274,28 @@ async def get_command_status(
             user_id,
             command.cloud_workspace_id,
         )
-    command = await _expire_stale_web_command_if_needed(db, command)
+    command = await _expire_stale_client_command_if_needed(db, command)
     return command
 
 
-async def _expire_stale_web_command_if_needed(
+async def _expire_stale_client_command_if_needed(
     db: AsyncSession,
     command: commands_store.CloudCommandSnapshot,
 ) -> commands_store.CloudCommandSnapshot:
     if command.status != CloudCommandStatus.queued.value:
         return command
-    if command.source != CloudCommandSource.web.value:
+    if command.source not in _CLIENT_EXPIRABLE_QUEUED_COMMAND_SOURCES:
         return command
-    if command.kind not in _WEB_EXPIRABLE_QUEUED_COMMAND_KINDS:
+    if command.kind not in _CLIENT_EXPIRABLE_QUEUED_COMMAND_KINDS:
         return command
     now = utcnow()
-    if now - command.created_at < _WEB_COMMAND_QUEUE_EXPIRATION:
+    if now - command.created_at < _CLIENT_COMMAND_QUEUE_EXPIRATION:
         return command
     expired = await commands_store.expire_command_if_not_terminal(
         db,
         command_id=command.id,
-        error_code=_WEB_COMMAND_QUEUE_TIMEOUT_CODE,
-        error_message=_WEB_COMMAND_QUEUE_TIMEOUT_MESSAGE,
+        error_code=_CLIENT_COMMAND_QUEUE_TIMEOUT_CODE,
+        error_message=_CLIENT_COMMAND_QUEUE_TIMEOUT_MESSAGE,
         now=now,
         eligible_statuses=(CloudCommandStatus.queued.value,),
     )
@@ -1303,26 +1307,30 @@ async def _expire_stale_web_command_if_needed(
     return expired
 
 
-async def expire_stale_web_commands_for_target(
+async def expire_stale_client_commands_for_target(
     db: AsyncSession,
     *,
     target_id: UUID,
 ) -> tuple[commands_store.CloudCommandSnapshot, ...]:
     now = utcnow()
-    expired_commands = await commands_store.expire_stale_queued_commands(
-        db,
-        target_id=target_id,
-        source=CloudCommandSource.web.value,
-        command_kinds=tuple(_WEB_EXPIRABLE_QUEUED_COMMAND_KINDS),
-        older_than=now - _WEB_COMMAND_QUEUE_EXPIRATION,
-        error_code=_WEB_COMMAND_QUEUE_TIMEOUT_CODE,
-        error_message=_WEB_COMMAND_QUEUE_TIMEOUT_MESSAGE,
-        now=now,
-    )
+    expired_commands: list[commands_store.CloudCommandSnapshot] = []
+    for source in _CLIENT_EXPIRABLE_QUEUED_COMMAND_SOURCES:
+        expired_commands.extend(
+            await commands_store.expire_stale_queued_commands(
+                db,
+                target_id=target_id,
+                source=source,
+                command_kinds=tuple(_CLIENT_EXPIRABLE_QUEUED_COMMAND_KINDS),
+                older_than=now - _CLIENT_COMMAND_QUEUE_EXPIRATION,
+                error_code=_CLIENT_COMMAND_QUEUE_TIMEOUT_CODE,
+                error_message=_CLIENT_COMMAND_QUEUE_TIMEOUT_MESSAGE,
+                now=now,
+            )
+        )
     for command in expired_commands:
         await _mark_pending_prompt_interaction_failed_for_command(db, command)
         await publish_command_status_after_commit(db, command)
-    return expired_commands
+    return tuple(expired_commands)
 
 
 async def _mark_pending_prompt_interaction_failed_for_command(
