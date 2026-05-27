@@ -40,7 +40,7 @@ export async function runMobileOAuthFlow(input: {
   const pkce = await createPkcePair();
   const clientState = await createOAuthState();
   const start = await startAuthProvider(
-    "web",
+    "mobile",
     input.provider,
     {
       purpose,
